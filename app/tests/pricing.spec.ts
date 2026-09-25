@@ -205,6 +205,9 @@ async function open(
      *  (D156). A run with one is OPEN whatever it owes; the chip says how
      *  many. */
     unsent?: Record<string, number>
+    /** What each run still owes, by run name, in the server's words. Absent reads as the
+     *  default: nothing once emitted, and "never emitted" before. */
+    owes?: Record<string, string[]>
     /** What no worklist can send, as the server names it. */
     unreachable?: { captured: number; in_review: number; unjoined: { run: string; cards: number }[]; reallocated: { run: string; box: number | null; cards: number | null }[] }
     /** WHICH ANSWERS A MASS-CLEAR MAY REMOVE, as the server names them — SKU to age in whole
@@ -560,7 +563,7 @@ async function open(
         runs: options.noRun === true && listed.length === 0 ? [] : listed.map(summary),
         roster: listed.map((row) => ({
           ...summary(row),
-          owes: options.emitted === true ? [] : ['never emitted'],
+          owes: options.owes?.[row.run] ?? (options.emitted === true ? [] : ['never emitted']),
           open: options.emitted !== true || (options.unsent?.[row.run] ?? 0) > 0,
           unsent: options.unsent?.[row.run] ?? 0,
         })),
@@ -912,8 +915,8 @@ test('the run picker leads with the box, and the directory is what tells two run
 
   /* WHAT IS LEFT, WHICH THE CHIP COULD NOT SAY BEFORE D86. `counts.skus` is the SIZE of a job
      and never the job: box 2's 108 SKUs are one `floor` press. This fixture's runs have not
-     emitted, so every chip owes that. */
-  await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Not sent yet')
+     emitted, so every chip says it was never sent. */
+  await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never sent')
 })
 
 test('an emitted run with copies still unsent stays open, and the chip counts them', async ({
@@ -968,6 +971,30 @@ test('an emitted run with copies still unsent stays open, and the chip counts th
   await expect(line).not.toContainText('not matched')
   await expect(line).not.toContainText('2 readings over a deleted box')
   await expect(line.getByRole('link', { name: '1 in Review' })).toHaveAttribute('href', '#/review')
+})
+
+/* THE REVIEWER'S CASE (the delta review, R4 F2): a run that WAS sent and still owes a price
+ * for a card with no market price. "Not sent yet" was false for it. The chip tells the two
+ * apart, and says how many cards owe the price. */
+test('a sent run that owes a price says so, apart from a run never sent', async ({ page }) => {
+  await open(page, {
+    noRun: true,
+    emitted: true,
+    runs: [
+      { run: '2026-08-24-box2-01', box: 2, box_name: 'Pokemon bulk', skus: 3, created_at: '2026-08-24T18:00:00+00:00' },
+      { run: '2026-09-02-box6-01', box: 6, box_name: 'Riftbound rares', skus: 2, created_at: '2026-09-02T18:00:00+00:00' },
+    ],
+    unsent: { '2026-08-24-box2-01': 1, '2026-09-02-box6-01': 2 },
+    owes: {
+      '2026-08-24-box2-01': ['1 card with no market price needs a price'],
+      '2026-09-02-box6-01': ['never emitted'],
+    },
+  })
+  await page.getByRole('button', { name: /^(Every run|\d+ runs?)$/ }).click()
+  const chips = page.locator('.pricing-run')
+  await expect(chips).toHaveCount(2)
+  await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never sent')
+  await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('1 needs a price')
 })
 
 test('an unknown card count is still warned about, and a known zero is not', async ({ page }) => {

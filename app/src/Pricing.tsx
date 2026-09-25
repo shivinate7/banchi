@@ -53,7 +53,7 @@ import type {
 import { WITHHOLD_KEYS, WITHHOLD_LABELS, WITHHOLD_REASONS, type WithholdReason } from './holds'
 import { isEditableTarget } from './keys'
 import { FLAT_KEY, subThresholdSkus } from './readiness'
-import { isWithheld, rowShare } from './standing'
+import { isWithheld, owesOf, rowShare } from './standing'
 import { TrendCell, type TrendRead } from './PriceTrend'
 import { ClearPrices } from './ClearPrices'
 import { runBoxLabel } from './runScope'
@@ -494,6 +494,7 @@ function PickRuns({
           const label = runBoxLabel(row)
           const day = row.created_at ? absoluteDate(row.created_at) : null
           const on = picked.has(row.run)
+          const owe = owesOf(row.owes)
           return (
             <button
               key={row.run}
@@ -519,13 +520,17 @@ function PickRuns({
               {/* THREE STATES, NOT TWO (D156): a run that owes nothing and still holds unsent
                   copies is OPEN, and the chip says how many. */}
               <Pill tone={row.open ? 'warn' : 'ok'} className="pricing-run-owes">
-                {row.owes.length > 0
-                  ? 'Not sent yet'
-                  : (row.unsent ?? 0) > 0
-                    ? `${row.unsent} unsent`
-                    : row.box_former === true
-                      ? 'Box deleted'
-                      : 'All sent'}
+                {owe.priceCards > 0
+                  ? `${owe.priceCards} ${owe.priceCards === 1 ? 'needs' : 'need'} a price`
+                  : owe.blocked
+                    ? 'Needs a price'
+                    : owe.neverSent
+                      ? 'Never sent'
+                      : (row.unsent ?? 0) > 0
+                        ? `${row.unsent} unsent`
+                        : row.box_former === true
+                          ? 'Box deleted'
+                          : 'All sent'}
               </Pill>
             </button>
           )

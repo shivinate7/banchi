@@ -113,7 +113,20 @@ export function rowShare(
 
 /** The `owes` reason `_run_owes` adds for a card left out of the send for want of a price. It
  *  owes a price and does not block the run, so it never counts as a run that cannot be sent. */
-const LEFT_OUT_FOR_PRICE = / with no market price needs? a price$/
+const LEFT_OUT_FOR_PRICE = /^(\d+) cards? with no market price needs? a price$/
+
+/** What a run's `owes` says, as the run picker's chip draws it (R4 F2): cards left out for want
+ *  of a price, with their count; a reason that stops the whole run; or only the first send. */
+export function owesOf(owes: readonly string[]): { priceCards: number; blocked: boolean; neverSent: boolean } {
+  let priceCards = 0
+  let blocked = false
+  for (const reason of owes) {
+    const m = LEFT_OUT_FOR_PRICE.exec(reason)
+    if (m) priceCards += Number(m[1])
+    else if (reason !== NOT_YET_WRITTEN) blocked = true
+  }
+  return { priceCards, blocked, neverSent: owes.includes(NOT_YET_WRITTEN) }
+}
 
 /** THE ONE `owes` REASON THAT IS NOT A PRICE. `server/pipeline_routes.py:_run_owes` appends it
  *  to a joined run that has never written a file: the run waits on the SEND, and counting it
