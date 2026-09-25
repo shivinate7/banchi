@@ -1,6 +1,8 @@
 import type {
   AnswerResult,
+  LiveMove,
   PriceChange,
+  ConfirmResult,
   CorrectResult,
   CodeExportResult,
   CodeLedger,
@@ -144,7 +146,7 @@ import type {
  * A bundle built without that define — a bare `tsc`, a test harness, an editor's type server,
  * a bundler that never read `vite.config.ts` — cannot know its tree's port: the browser cannot
  * hash a path. It used to guess `http://localhost:8000`, the primary checkout's LIVE server,
- * which is the guess that must never be made (D-no-git-no-live-port, a copied tree never gets
+ * which is the guess that must never be made (D268, a copied tree never gets
  * the live port). It now has NO address. `about:invalid` opens no socket, so a photo or file
  * link built on it loads nothing, and `request` refuses by name before any fetch.
  *
@@ -152,8 +154,8 @@ import type {
  * OPENED FROM ANOTHER DEVICE. `VITE_CAPTURE_DEFAULT` is a whole URL and its host is
  * `localhost`, which is correct at the desk and catastrophic anywhere else: on a phone,
  * `localhost` IS THE PHONE, so every request goes to a server that is not there. The capture
- * server has bound `0.0.0.0` since it was written and was reachable the whole time — the
- * client was the half that could not be told.
+ * server has bound every interface since it was written and was reachable the whole time —
+ * the client was the half that could not be told.
  *
  * So the derived default is composed here from `location` plus the checkout's port. It keeps
  * every property the injected URL had — the port still comes from the same slot as the Vite
@@ -249,11 +251,16 @@ export class ServerError extends Error {
    *  is the case where nothing was sent. */
   readonly status: number
 
-  constructor(code: string, message: string, status: number) {
+  /** What a screen can act on beside the sentence, when the refusal carries any (round 7):
+   *  a send's refused rows, so it can offer to send again with the live price named. */
+  readonly data: unknown
+
+  constructor(code: string, message: string, status: number, data?: unknown) {
     super(message)
     this.name = 'ServerError'
     this.code = code
     this.status = status
+    this.data = data
   }
 }
 
@@ -266,6 +273,8 @@ export type Failure = {
    *  server was not reached, it failed inside, or it was busy. `refusal` is a "no" that the
    *  same press will get again. Optional, so a failure a screen builds by hand still types. */
   kind?: 'refusal' | 'retry'
+  /** What the refusal carries beside its sentence, when it carries any (round 7). */
+  data?: unknown
 }
 
 /** The codes a second press can clear: nothing answered, or the store was mid-write. */
@@ -305,7 +314,7 @@ function failureKind(code: string, status: number): 'refusal' | 'retry' {
  * "finish the job" by wiring this into it.
  */
 export function describeFailure(err: unknown): Failure {
-  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status) }
+  if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status), data: err.data }
   const detail = err instanceof Error ? err.message : String(err)
   return {
     kind: 'refusal',
@@ -552,13 +561,13 @@ function parseJson(text: string): unknown {
  * the operator as "undefined is not an object". Returns null and lets the caller fall back
  * to the status line instead.
  */
-function errorEnvelope(body: unknown): { code: string; message: string } | null {
+function errorEnvelope(body: unknown): { code: string; message: string; data?: unknown } | null {
   if (typeof body !== 'object' || body === null) return null
   const wrapped: unknown = (body as { error?: unknown }).error
   if (typeof wrapped !== 'object' || wrapped === null) return null
-  const { code, message } = wrapped as { code?: unknown; message?: unknown }
+  const { code, message, data } = wrapped as { code?: unknown; message?: unknown; data?: unknown }
   if (typeof code !== 'string' || typeof message !== 'string') return null
-  return { code, message }
+  return { code, message, data }
 }
 
 /* WHICH PROCESS IS ANSWERING, observed on traffic the app is already making (D73).
@@ -747,7 +756,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
 
   if (!response.ok) {
     const named = errorEnvelope(body)
-    if (named !== null) throw new ServerError(named.code, named.message, response.status)
+    if (named !== null) throw new ServerError(named.code, named.message, response.status, named.data)
     /* Not from this server, then — a proxy, or a dev-server 404 from a misconfigured base
      * URL. The status line is all there is, so quote it with the URL that produced it
      * rather than inventing an explanation for a response nobody in this repo wrote. */
@@ -1299,6 +1308,46 @@ async function correctCall(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })) as CorrectResult
+}
+
+/**
+ * Confirm a held card's own listing as the right card — `POST /inventory/<box>/<index>/confirm`
+ * (`docs/specs/identity-follows-sku.md` §8.1).
+ *
+ * THE SIBLING CASE `correctAnswer` DOES NOT REACH: a card whose SKU is already right but whose
+ * drawn name is the camera's, not the listing's (`identity_source: 'read'`) — the owner's own
+ * examples are a misread "Rell" and "Jax". This route takes NO `sku`: the listing already on
+ * the card is what gets confirmed, never a new one, which is the one thing that tells this
+ * press apart from `correctAnswer` at the call site as much as on screen.
+ *
+ * REFUSES `card_not_found`, `card_departed`, `not_identified`, `already_confirmed` or
+ * `sku_unknown` — `CardHero.tsx`'s own control is offered only where none of the four
+ * conflicts would fire, the same discipline `ListingCorrection`'s `eligible` already keeps for
+ * `correctAnswer`.
+ */
+export function confirmIdentity(box: number, index: number): Promise<ConfirmResult> {
+  return confirmCall(box, index, {})
+}
+
+/**
+ * Take one confirm back — `{"undo": true}` on the same route, D28's shape once more. Refuses
+ * `not_confirmed` once the card has moved on: a second confirm, a correction, or a fresh
+ * answer, since this one.
+ */
+export function undoConfirmIdentity(box: number, index: number): Promise<ConfirmResult> {
+  return confirmCall(box, index, { undo: true })
+}
+
+async function confirmCall(
+  box: number,
+  index: number,
+  body: Record<string, unknown>,
+): Promise<ConfirmResult> {
+  return (await request(`/inventory/${box}/${index}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })) as ConfirmResult
 }
 
 /**
@@ -2365,7 +2414,7 @@ export async function publishMarkdown(stamp: string): Promise<MarkdownPublish> {
 
 /**
  * ONE PRESS for a mark-down: read what is live, then push and publish this markdown's file
- * (`D-one-press-sends-and-makes-live`). **This changes what buyers pay.** A failed publish
+ * (`D273`). **This changes what buyers pay.** A failed publish
  * rolls the push back server-side, so no half-sent state is left for a screen to explain.
  */
 export async function sendMarkdown(stamp: string): Promise<MarkdownPublish> {
@@ -2377,7 +2426,7 @@ export async function sendMarkdown(stamp: string): Promise<MarkdownPublish> {
 }
 
 /**
- * THE ONE PRESS for listings (`D-one-press-sends-and-makes-live`): the server reads what is
+ * THE ONE PRESS for listings (`D273`): the server reads what is
  * live first and refuses whole if it cannot, writes the file behind the double-send guard,
  * sends it and makes it live. **This changes what buyers see.**
  *
@@ -2392,6 +2441,8 @@ export async function sendCopies(
     quantities?: Record<string, number>
     /** The price changes the button named. Only these may ride the send (round 6). */
     prices?: readonly PriceChange[]
+    /** The live copies the button said listing rows move (round 7). */
+    moves?: readonly LiveMove[]
   } = {},
 ): Promise<SendAnswer> {
   return (await request('/pipeline/send', {
@@ -2403,6 +2454,9 @@ export async function sendCopies(
       ...(options.download && options.splitThreshold ? { split_threshold: true } : {}),
       ...quantitiesClaim(options.quantities),
       ...(options.prices !== undefined && options.prices.length > 0 ? { prices: options.prices } : {}),
+      ...(options.moves !== undefined && options.moves.length > 0
+        ? { moves: options.moves.map((move) => ({ sku: move.sku, price: move.price, copies: move.copies })) }
+        : {}),
     }),
   })) as SendAnswer
 }

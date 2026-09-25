@@ -163,7 +163,7 @@ def _new_batch_id() -> str:
     """128 unguessable bits, and the id IS the access control.
 
     `GET` is in `capture_server.SAFE_METHODS`, so the download is NOT behind the origin
-    gate, and `HOST` is `0.0.0.0`. Anything on the network that can reach this port can ask
+    gate, and `HOST` binds every interface, IPv4 and IPv6 both. Anything on the network that can reach this port can ask
     for a batch's file; what it cannot do is name one. A counter or a timestamp here would
     make a buyer's address enumerable from the LAN.
     """

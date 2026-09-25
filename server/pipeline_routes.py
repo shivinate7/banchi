@@ -138,6 +138,7 @@ from cli import runs as run_files  # noqa: E402
 from pipeline import corpus, decisions, games as game_registry, join, reprice, tcgcsv  # noqa: E402
 from pipeline import readings as readings_walk  # noqa: E402
 from pipeline import selection as selection_mod  # noqa: E402
+from pipeline import skus as sku_fill  # noqa: E402
 from pipeline import worklist  # noqa: E402
 # ALIASED, BECAUSE `pricing` IS A LOCAL IN THIS MODULE. Two handlers bind the name to a
 # run's parsed `pricing.json`; importing the module under it would make which one you
@@ -361,10 +362,14 @@ class PipelineRefusal(Exception):
     is imported BY that file. The seam is one `except` clause at the dispatch site.
     """
 
-    def __init__(self, status: HTTPStatus, code: str, message: str):
+    def __init__(self, status: HTTPStatus, code: str, message: str, data: Optional[dict] = None):
         super().__init__(message)
         self.status = status
         self.code = code
+        #: WHAT A SCREEN CAN ACT ON, beside the sentence (round 7): the refused rows of a send,
+        #: so it can offer to send again at the owner's price with the live price shown. Most
+        #: refusals carry none.
+        self.data = data
 
 
 # ------------------------------------------------------------------------------- scoping
@@ -3025,6 +3030,19 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
     )
     unreachable["reallocated"] = reallocated
 
+    # WHAT TCGPLAYER HOLDS NOW, OFF THE NEWEST LIVE EXPORT ON DISK (round 7, R6-1). Every send
+    # and every check writes one, so this is minutes old where the join's export can be days.
+    # The screen names a price change and a move of live copies against it, and the send
+    # refuses if TCGplayer moved again since.
+    live_name, live_now = _newest_live_listing()
+    for row in merged.values():
+        held = live_now.get(str(row.get("sku")))
+        row["live_now"] = (
+            None
+            if live_name is None
+            else {"export": live_name, "copies": held[1] if held else 0, "price": held[0] if held else None}
+        )
+
     return {
         "runs": summaries,
         "skus": list(merged.values()),
@@ -4180,6 +4198,43 @@ LIVE_DIR = files.LIVE_DIRNAME
 LIVE_PREFIX = files.LIVE_PREFIX
 
 
+_NEWEST_LIVE: Dict[str, object] = {}
+
+
+def _newest_live_listing() -> Tuple[Optional[str], Dict[str, Tuple[Optional[str], int]]]:
+    """`(name, SKU -> (the asking price, live copies))` off the newest live export on disk, or
+    `(None, {})` when none was ever fetched. Read once per file: the name is the cache key, and a
+    fetch writes a new name (round 7, R6-1)."""
+    directory = files.inventory_dir() / LIVE_DIR
+    fetched = sorted(directory.glob(f"{LIVE_PREFIX}*.csv")) if directory.is_dir() else []
+    if not fetched:
+        return None, {}
+    newest = fetched[-1]
+    if _NEWEST_LIVE.get("name") != str(newest):
+        try:
+            rows = tcgcsv.read_export(newest).rows
+        except (tcgcsv.MalformedCsv, OSError):
+            return None, {}
+        listing: Dict[str, Tuple[Optional[str], int]] = {}
+        for row in rows:
+            sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+            if not sku:
+                continue
+            try:
+                price = tcgcsv.parse_price(str(row.get(tcgcsv.PRICE_COLUMN) or ""))
+            except ArithmeticError:
+                price = None
+            held = tcgcsv.parse_quantity(str(row.get(tcgcsv.LIVE_QUANTITY_COLUMN) or ""))
+            before = listing.get(sku, (None, 0))
+            listing[sku] = (
+                tcgcsv.format_price(price) if price is not None else before[0],
+                before[1] + max(0, held),
+            )
+        _NEWEST_LIVE.clear()
+        _NEWEST_LIVE.update({"name": str(newest), "listing": listing})
+    return newest.name, dict(_NEWEST_LIVE["listing"])  # type: ignore[arg-type]
+
+
 def do_live_export() -> dict:
     """`POST /pipeline/live-export` — fetch the operator's own live listings from TCGplayer.
 
@@ -4264,6 +4319,15 @@ def do_live_export() -> dict:
             writable.readings.replace_source(
                 store_readings.KIND_LIVE, name, live_found, live_source,
                 supersede=stale_live or [name],
+            )
+            # identity-follows-sku.md §3.2, fill point 2: "A fetched live export (D104), in
+            # server/pipeline_routes.do_live_export." Same transaction as the readings
+            # replace above — one fetch, one write — and the same `at`/`source` pair
+            # `reading_from_export` just used, so the two never disagree about this file's
+            # age.
+            sku_fill.apply_rows(
+                export.rows, at=at, source=name, skus=writable.skus,
+                events=writable.inventory.events,
             )
 
     return {
@@ -7144,6 +7208,24 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
     # let the NEXT press answer out of an export this one was about to tear down.
     if fresh:
         _write_note(target, asked, len(body))
+        # identity-follows-sku.md §3.2, fill point 1: "A fetched Filtered Export (D64,
+        # D166), in server/pipeline_routes._keep_export, in the same press that keeps the
+        # file." `fresh` is the SAME condition `_keep_export` itself answers `True` for —
+        # bytes nothing on disk carried before this press — so a REUSE (`fresh=False`, the
+        # `else` branch above) folds in nothing, on the spec's own reasoning: "the file is
+        # already in", meaning its rows were folded the press that first wrote it.
+        # `fetched_export` is already parsed (`tcgcsv.read_export(target)` above), so this
+        # never re-reads the file. `at` is the file's OWN stamp, off its name — never the
+        # moment of this press — matching `pipeline/skus.py`'s own rule (D166: "a reuse
+        # never touches the reading's time") so a later `skus adopt` walking this same file
+        # computes the identical `at`.
+        stamp = sku_fill.stamp_of(target.name)
+        if stamp is not None:
+            with Store().write() as writable:
+                sku_fill.apply_rows(
+                    fetched_export.rows, at=stamp, source=target.name,
+                    skus=writable.skus, events=writable.inventory.events,
+                )
 
     report = _export_report(target, answers_for)
     report.update(

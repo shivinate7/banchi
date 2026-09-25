@@ -19,7 +19,7 @@ import type {
 /* THE BUILDER FUNCTIONS `run-panel.spec.ts`, `orders.spec.ts` AND `shipping.spec.ts` ALREADY
  * WROTE, MOVED HERE SO A FOURTH AND FIFTH FILE CAN REUSE THEM RATHER THAN INVENT A COMPETING
  * SHAPE (a gap D194 closed in the PR that named it; D194 is superseded by
- * `D-text-shape-checks`, and this module's job did not go with it).
+ * `D284`, and this module's job did not go with it).
  *
  * `app/tests/text-shape.spec.ts` and `app/tests/machine-words.spec.ts` render `#/runs`,
  * `#/orders`, `#/shipping`, `#/codes` and `#/graveyard` off `sealEveryTest({ store: true,
@@ -430,7 +430,7 @@ export async function seedPopulatedOrders(page: Page): Promise<void> {
    * wrong for this one: these three orders ARE held. MEASURED 2026-09-24: with the empty
    * answer, `#/orders` re-asks for the missing keys without end (4,934 requests in 10s), so
    * the screen never settles. That loop is a product defect for the orders lane (the screen
-   * re-asks forever for a key the answer leaves out), recorded in `D-text-shape-checks`. */
+   * re-asks forever for a key the answer leaves out), recorded in `D284`. */
   await page.route(/\/orders\/picks$/, (route) => {
     const asked = new Set<string>((route.request().postDataJSON() as { keys?: string[] } | null)?.keys ?? [])
     const held = severalOrders().resolution.orders.filter((one) => asked.has(one.key))

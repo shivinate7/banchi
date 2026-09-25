@@ -22,7 +22,7 @@ import { DEV_URL } from './devPort'
 // fault; the flag was doing its job.
 //
 // THE PORT WAS NOT ENOUGH, AND ON 2026-09-24 THE PREMISE ABOVE FAILED
-// (D-a-claimed-slot-and-a-server-that-names-its-checkout). A slot is a hash into 300, and two
+// (D261). A slot is a hash into 300, and two
 // live worktrees shared one. Design-check in one of them reused the other's Vite and passed.
 // So reuse now needs proof, not a port: `globalSetup` runs after the `webServer` is up and
 // refuses the whole run unless that server names THIS checkout (`checkoutIdentity.ts`).

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""DELETE THE STALE ENTRIES FROM THE TWO SHRINKING OFFENDER LISTS, AND RE-KEY A RENAMED FILE.
+"""DELETE THE STALE ENTRIES FROM THE THREE SHRINKING OFFENDER LISTS, AND RE-KEY A RENAMED FILE.
 
     scripts/offenders-prune.py            what it would delete and re-key. Writes nothing.
     scripts/offenders-prune.py --write    apply it.
     scripts/offenders-prune.py --selftest its own cases, in memory and in a throwaway repo.
 
-THE TWO LISTS (D-ratchets-become-offender-lists): `scripts/ste-offenders.json`, which
-`make docs-audit`'s `ste offenders` row reads, and `scripts/typed-interpunct-allow.json`,
-which its `typed interpunct` row reads. Each row fails on a STALE entry, one that matches
+THE THREE LISTS (D280): `scripts/ste-offenders.json`, which
+`make docs-audit`'s `ste offenders` row reads, `scripts/typed-interpunct-allow.json`, which
+its `typed interpunct` row reads, and `scripts/line-anchor-offenders.json`, which its `line
+anchor offenders` row reads. Each row fails on a STALE entry, one that matches
 nothing now because the fix landed. The prose list holds more than 14,000 lines, and a stale
 entry there is a hash, so a hand delete is slow and a merge conflict is worse. This does the
 delete.
@@ -15,9 +16,8 @@ delete.
 THIS IS A GENERATOR AND IT GATES NOTHING (D18: "A generator may write. Nothing that writes
 may gate a commit."). It is on no hook and in no `make check`. A person runs it, or an agent
 whose commit a row has just refused for a stale entry. The rows keep their job: they read,
-they refuse, they never write. It writes a data file under `scripts/`, the standing
-`scripts/line-anchors-pin.py` already has, so it opens no seam in D18's list, which governs
-the prose files agents read as argument.
+they refuse, they never write. It writes data files under `scripts/` only, so it opens no
+seam in D18's list, which governs the prose files agents read as argument.
 
 IT ONLY EVER DELETES, AND RE-KEYS. It never adds an entry. An offender the list does not name
 stays unlisted, and the row stays red on it: the fix for new prose or a new dot is to rewrite
@@ -245,6 +245,17 @@ def interpunct_inputs(audit):
             lambda path: path, lambda entry: entry, {audit.TYPED_INTERPUNCT_RULE})
 
 
+def line_anchor_inputs(audit):
+    """The same six for the line-anchor list. A decision entry is keyed by its file tail, as
+    the prose list is."""
+    ste_measure = audit._sibling("ste_measure.py")
+    list_key = ste_measure.list_key if ste_measure is not None else (lambda path: path)
+    found = audit._line_anchor_found(audit.markdown_files())
+    keys_now = {list_key(audit.rel(p)) for p in audit.markdown_files()}
+    return (audit.LINE_ANCHOR_OFFENDERS, found, keys_now.__contains__, list_key,
+            lambda entry: entry, {audit.LINE_ANCHOR_RULE})
+
+
 # ------------------------------------------------------------------------------------ main
 
 
@@ -294,7 +305,8 @@ def main() -> int:
 
     audit = _audit()
     renames = git_renames(ROOT)
-    inputs = [("ste offenders", ste_inputs(audit))]
+    inputs = [("ste offenders", ste_inputs(audit)),
+              ("line anchor offenders", line_anchor_inputs(audit))]
     dots = interpunct_inputs(audit)
     if dots is None:
         print("typed interpunct: not read. `node` or app/node_modules/typescript is missing, "

@@ -133,6 +133,20 @@ jobs:
           DEMO_REQUIRED: '1'
         run: npx playwright test tests/demo-coverage.spec.ts --reporter=line
 
+      # RUNS NOWHERE ELSE (D173: a rule with no reader is advice). `demo-freshness` proves
+      # the bundle still fits the WIRE SHAPE; it cannot see the seed rewriting its own DATA
+      # on every run, which is exactly what happened before `Inventory.bind_sku` took an
+      # `at` parameter — 97 `bound_at` values differed between two runs and every check
+      # above stayed green throughout (identity-follows-sku.md lane 6/7). Two more full
+      # seed-and-record passes, so this step is real minutes — the same cost `demo-static`
+      # above already paid once, paid again into two scratch `PKMNSCAN_HOME`s that never
+      # touch `dist-demo/` or the artefact the next step scans. Not on the commit path
+      # anywhere (D18: a generator may write, and nothing that writes may gate a commit) —
+      # `make demo-determinism` is a press, run by hand locally and by this workflow on
+      # every push that would touch the published demo.
+      - name: Prove the seed is deterministic
+        run: make demo-determinism
+
       - name: Prove nothing private reached the bundle
         # The recorder already refuses to write a dirty bundle. This asserts the same thing
         # against what is ACTUALLY about to be uploaded, because the check that matters is

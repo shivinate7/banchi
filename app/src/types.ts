@@ -479,8 +479,90 @@ export type InventoryCard = {
   number: string | null
   printed_total: string | null
   confidence: string | null
+
+  /** THE EVIDENCE GROUP'S OWN COPY OF WHAT THE CAMERA READ
+   *  (`docs/specs/identity-follows-sku.md` §3.1/§3.4/§4.1, lane 1). `record_identification`
+   *  writes these three — never `name`/`number`/`printed_total` directly on a card `bind_sku`
+   *  has bound — so a reading and a catalogue-derived identity can coexist and disagree
+   *  without either overwriting the other. `read_number`/`read_printed_total` keep the
+   *  model's raw shape, set code and all (D67, D55): unlike `number`/`printed_total`, no
+   *  fold ever runs on these two. Null on every card identified before these fields existed.
+   *  Never searchable (§5.2, ruling 4) and never rendered outside Details' own "Read as"
+   *  line below (§5.4), which draws only when `read_disputes` is true.
+   *
+   *  OPTIONAL, on `types.ts`'s own standing rule for a server decoration: a server that
+   *  predates this change sends no such key at all, and every fixture built before this
+   *  change stays a valid `InventoryCard` rather than needing three new nulls typed in. */
+  read_name?: string | null
+  read_number?: string | null
+  read_printed_total?: string | null
+
   sku: string | null
   condition: string | null
+
+  /** THE BINDING GROUP (§3.1, lane 1): which SKU this card is, who chose it, and when —
+   *  written only by `Inventory.bind_sku`/`unbind_sku`, never by `set_state`.
+   *
+   *  `identity_source` is `"sku"` when `name`/`number`/`printed_total`/`rarity`/`set_name`
+   *  equal the SKU table's own row for `sku`, and `"read"` when the card has no SKU yet, is a
+   *  HELD card (a SKU whose own reading disputes it, or a migration leftover, §7), or the SKU
+   *  is absent from the table — in which case those same fields equal the evidence fields
+   *  instead. There is no third value. `POST /inventory/<box>/<index>/confirm`
+   *  (`server.ts:confirmIdentity`) is the press that turns a held card's `"read"` into
+   *  `"sku"` with no new SKU; `CardHero.tsx:ListingCorrection` is where it lives, beside the
+   *  D252 correction and inside the same reserved slot (D118).
+   *
+   *  `bound_by` is one of `join`, `answer`, `group_answer`, `correction`, `confirm`,
+   *  `migration` — the act that last wrote the binding. `bound_at` is when.
+   *
+   *  Null on every card written before this change (a pre-migration record on a server that
+   *  has not yet run `cards identity --write`, §7). Optional for the same reason the
+   *  evidence group above is: an older server sends no such key. */
+  identity_source?: string | null
+  bound_by?: string | null
+  bound_at?: string | null
+
+  /** `pipeline/join.name_disputes(read_name, [identity name])` (§3.1), computed by the
+   *  server at every write that changes either side and stored rather than joined live —
+   *  `#/inventory` is a polled route. Gates the "Read as" line in Details (§5.4): a card
+   *  whose read agrees draws nothing new. Optional and read as false where absent — a card
+   *  from a server that predates this field, or a fixture that predates it, is a card with
+   *  no recorded dispute rather than a third state. */
+  read_disputes?: boolean
+
+  /** identity-follows-sku.md §5.4/§8.1, the owner's ruling on Details' two identity lines
+   *  (2026-09-24, verbatim: "show listing name and/or hide when identical i dont think it's
+   *  an or situation") — BOTH rules, never an either/or. Computed server-side, every
+   *  request, off the card's CURRENT shown `name`/`number`
+   *  (`server/capture_server.py:_listing_decoration`) — never off `read_disputes` above,
+   *  which answers a different question once, at bind time. The screen holds no fold logic
+   *  of its own (CLAUDE.md: "No pipeline logic in the browser").
+   *
+   *  `listing` is the card's current SKU, read off the `skus` table (§3.2) and composed the
+   *  same way `Inventory.bind_sku` composes one onto a card. `null` when the card carries no
+   *  SKU, or a SKU the table does not (yet) hold (§3.2's escape hatch) — nothing to compare.
+   *
+   *  `listing_differs` draws "Listed as": the listing's own name or number disagrees with
+   *  what `name`/`number` already show, so the photo's reading and the listing can be read
+   *  side by side right above the confirm press. False on a card `identity_source: "sku"`
+   *  except the rare case the row's own facts changed since the bind (§9, risk 3).
+   *
+   *  `reading_differs` draws "Read as": `read_name`/`read_number` disagree with the same
+   *  shown pair. Always false on a HELD card (`identity_source: "read"`) — there the shown
+   *  pair equals the read pair by construction, which is the fix: the line no longer
+   *  repeats "Card:"/"Number:" word for word. It draws only after a confirm, or on a
+   *  SKU-bound card whose reading disputes it.
+   *
+   *  Both folds are `pipeline/join.name_disputes` and §6's per-game number rule, never a
+   *  raw string compare — a spelling-only difference lights neither line.
+   *
+   *  Optional, `types.ts`'s own standing rule for a server decoration: a server that
+   *  predates this, or a route that omits it (`GET /inventory`, unscoped), sends no such
+   *  key — read as `null`/`false`, never a third state. */
+  listing?: { name: string; number: string | null; printed_total: string | null } | null
+  listing_differs?: boolean
+  reading_differs?: boolean
+
   state: string
   state_at: string | null
 
@@ -1169,6 +1251,45 @@ export type CorrectResult = {
   card: InventoryCard
 }
 
+/** `POST /inventory/<box>/<index>/confirm`, both directions
+ *  (`docs/specs/identity-follows-sku.md` §8.1).
+ *
+ *  THE RIGHT SKU, THE WRONG NAME. `CorrectResult` above answers "this listing is the wrong
+ *  card"; this route answers the sibling case — a HELD card (`identity_source: 'read'`)
+ *  whose SKU is already correct, so nothing needs to move. It NEVER TAKES A `sku` IN THE
+ *  BODY: the listing already on the card is what gets confirmed, never a new one. The
+ *  server's three refusals mirror `do_confirm_identity`'s own checks — `card_not_found`
+ *  (404); `card_departed`, `not_identified`, `already_confirmed`, `sku_unknown` (409); on
+ *  undo, `not_confirmed` (409) — so `CardHero.tsx`'s own control offers this press only
+ *  where the server would not refuse it: an on-hand, SKU-carrying, held card.
+ *
+ *  UNLIKE `CorrectResult`, there is no `restores_to` to read before offering Undo:
+ *  `do_confirm_identity` always captures the full identity snapshot before it writes, so a
+ *  fresh confirm's own reversal is never refused for want of one — only for having moved on
+ *  since (a second confirm, a correction, a fresh answer). */
+export type ConfirmResult = {
+  /** `"<box>/<index>"`, the store's own key. */
+  position: string
+  box: number
+  index: number
+
+  /** True on the write direction — the SKU already on the card is now confirmed. */
+  confirmed: boolean
+
+  /** True when this call took a confirm back rather than recording one —
+   *  `AnswerResult`/`CorrectResult`'s own field, under the same name. */
+  undone: boolean
+
+  /** The SKU the card carries — unchanged by this route in either direction, since a
+   *  confirm never moves the SKU (§8.1). Read for the receipt's own words. */
+  sku: string
+  condition: string
+
+  /** The card as `GET /inventory` would draw it, after this write — `identity_source` is
+   *  `'sku'` after a confirm and `'read'` after its undo. */
+  card: InventoryCard
+}
+
 /** One member of a group answer, as `POST /review/group-answer` reports it back.
  *
  *  THE CLEARED FLAGS ARE TYPED BOOLEANS HERE AND DELIBERATELY ABSENT FROM `AnswerResult`,
@@ -1470,7 +1591,7 @@ export type SearchGroup = {
    *  (D213). `set_hint` above is the
    *  operator's own claim, typed at the shutter; this is read off the export row the SKU
    *  resolved to at identification time. `null` on every card identified before this field
-   *  existed, until `./pkmnscan cards variants --write` or the next identification fills
+   *  existed, until `./pkmnscan cards identity --write` or the next identification fills
    *  it — a screen prefers this and falls back to `set_hint`. */
   set: string | null
 
@@ -2096,6 +2217,12 @@ export type PricingSku = {
    *  NEVER READ IT BARE. `cardState.ts:forSale` takes the pair and `soldSince` takes this
    *  one; both coerce, and the `?` here is what makes the compiler say so. */
   listing: { pushed: number; staged: number; live: number; sold_here?: number } | null
+  /** What TCGplayer holds now, off the NEWEST live export on disk, or null when none was
+   *  ever fetched (round 7, R6-1). Every send and every check writes one, so this is minutes
+   *  old where `snap.now` is the join's. A price change and a move of live copies are named
+   *  against it, and the send refuses if TCGplayer moved again since. Optional: an older
+   *  server sends none. */
+  live_now?: { export: string; copies: number; price: string | null } | null
 }
 
 export type PricingTable = {
@@ -4006,7 +4133,7 @@ export type ValueTable = {
 
 /* ============================================================ the one press (send to live)
  *
- * `server/send_routes.py`, `D-one-press-sends-and-makes-live`. One press reads what is live,
+ * `server/send_routes.py`, `D273`. One press reads what is live,
  * writes the listing file behind the double-send guard, sends it and makes it live. */
 
 /** Where one send stands. `server/send_routes.py:state_of` is the one rule. `sending` is a press
@@ -4043,6 +4170,8 @@ export type SendSummary = {
   } | null
   /** Price changes the button named that the press left out, and why (round 6). */
   prices_left: { sku: string; name: string; why: 'already' | 'not_live' | 'adds_copies' }[]
+  /** Live copies this send's listing rows moved to their price (the owner's ruling, round 7). */
+  moves: { sku: string; name: string; copies: number; price: string; was: string | null }[]
   /** True when the upload may still wait in TCGplayer's Staged list, including a press that
    *  died mid-push with no `unknown` (round 6). The Staged warning reads this. */
   staged: boolean
@@ -4082,6 +4211,23 @@ export type SendSummary = {
 /** One price change the screen names to a send: the price the button counts, and the live
  *  price the row drew beside it. The server sends no price it was not named (round 6). */
 export type PriceChange = { sku: string; price: string; was: string | null }
+
+/** Live copies a listing row moves, as the button names them: the new copy carries Banchi's
+ *  stored price, and every live copy of the card moves with it (the owner's ruling, round 7). */
+export type LiveMove = { sku: string; name: string; copies: number; price: string; was: string | null }
+
+/** One row a send refused, as data (round 7, R6-1): `live_moved` is a named price whose live
+ *  price moved since the screen read it; `move_unnamed` is live copies a listing row would
+ *  move that the button did not name. Both can be sent again, named. */
+export type RefusedPrice = {
+  sku: string
+  name: string
+  why: 'live_moved' | 'move_unnamed' | 'move_count' | 'below_floor' | 'not_saved' | 'not_in_send'
+  price: string | null
+  live: string | null
+  shown: string | null
+  copies: number
+}
 
 /** `GET /pipeline/sends`. `due` is the one bit the timer and the visit check both read. */
 export type SendsStatus = {

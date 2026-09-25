@@ -1,6 +1,6 @@
 /* THE ONE FILTER BAR (`kit/filters.tsx`). `--bn-*` tokens only.
 
-   ONE LINE, AT EVERY WIDTH (the owner, 2026-09-24, D-one-filter-control): search, then one
+   ONE LINE, AT EVERY WIDTH (the owner, 2026-09-24, D270): search, then one
    "Filters" trigger with a count badge. There is no wide inline row any more — every facet, the
    sort and the hide toggle live behind the trigger, in a `Popover` on a desk or a `Sheet` on a
    phone (`compact`, `kit/filters.tsx`). No container query decides this file's own layout any
@@ -38,7 +38,7 @@
 .bn-filterbar .bn-filterchips-clear,
 .bn-filterbar-sheet-body .bn-filterchips-clear { display: none; }
 
-/* ALWAYS VISIBLE (D-one-filter-control): the trigger sits beside the search in
+/* ALWAYS VISIBLE (D270): the trigger sits beside the search in
    `.bn-filterbar-controls`'s own flex-wrap row. It wraps to its own line only where the search
    already needed to, the same as any other flex item — no rule of its own decides that. */
 .bn-filterbar-compact { display: block; }

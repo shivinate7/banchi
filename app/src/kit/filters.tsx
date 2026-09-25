@@ -23,7 +23,7 @@ import './filters.css'
  * `FilterChips`' own "Clear all" is not drawn inside a FilterBar (filters.css), so two clear
  * presses never sit side by side, and its reserved slot leaves no blank band in the sheet.
  *
- * ONE LINE, AT EVERY WIDTH (the owner, 2026-09-24, D-one-filter-control): "i question whether
+ * ONE LINE, AT EVERY WIDTH (the owner, 2026-09-24, D270): "i question whether
  * they deserve all that real estate frankly it's egregious i imagined we had a plan to tighten
  * them up immensely". A filter bar is search plus one "Filters" trigger with a count badge.
  * Every facet, the sort and the hide toggle live behind that one press — never inline, at any
@@ -32,7 +32,7 @@ import './filters.css'
  * inline row is gone, in every direction, not only the narrow one.
  *
  * `compact` PICKS THE OVERLAY, NEVER WHETHER THERE IS ONE (default `'popover'`,
- * D-one-filter-control): `'popover'` opens a small floating panel anchored to the trigger (`kit/overlay`'s
+ * D270): `'popover'` opens a small floating panel anchored to the trigger (`kit/overlay`'s
  * `Popover`), the shape a desk press expects. `'sheet'` opens the kit's `Sheet` instead — a
  * phone's own thumb reach, which `BoxBrowse` (the inventory lane) passes explicitly
  * (`compact={phone ? 'sheet' : 'popover'}`) because a floating panel is the wrong shape once a
@@ -94,7 +94,7 @@ export type FilterBarProps<K extends string = string> = {
    *  "Filters". */
   readonly label?: string
   /** WHICH OVERLAY the "Filters" trigger opens — never whether it opens one
-   *  (D-one-filter-control, the owner, 2026-09-24): `'popover'` (the default) is a small panel anchored to
+   *  (D270, the owner, 2026-09-24): `'popover'` (the default) is a small panel anchored to
    *  the trigger, right for a desk press. `'sheet'` is the kit's full sheet, right for a
    *  phone's thumb reach — pass it explicitly when the screen already knows its own width is
    *  phone-sized (`compact={phone ? 'sheet' : 'popover'}`, the inventory lane's own call). */
@@ -217,7 +217,7 @@ export function FilterBar<K extends string = string>({
           </div>
         )}
 
-        {/* ONE LINE, ALWAYS: one trigger, one overlay (D-one-filter-control). No wide inline
+        {/* ONE LINE, ALWAYS: one trigger, one overlay (D270). No wide inline
             row exists any more, at any width. */}
         {facets.length > 0 || sort !== undefined || hide !== undefined ? (
           <div className="bn-filterbar-compact">

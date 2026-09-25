@@ -163,7 +163,7 @@ const RAIL = '[data-specimen-rail]'
 const POPOVER = '[data-bn-overlay="popover"]'
 const SHEET = '[data-bn-overlay="sheet"]'
 
-/** Opens `scope`'s "Filters" trigger and waits for its overlay (D-one-filter-control's
+/** Opens `scope`'s "Filters" trigger and waits for its overlay (D270's
  *  amendment: one line, at every width — the trigger is the only way to reach a facet, the
  *  sort or the hide toggle now, and its `compact` prop picks a `Popover` or a `Sheet`). */
 async function openTrigger(page: Page, scope: string, kind: 'popover' | 'sheet' = 'popover') {
@@ -199,7 +199,7 @@ for (const theme of ['light', 'dark'] as const) {
  * ============================================================================================ */
 
 test.describe('FilterBar', () => {
-  /* ONE LINE, AT EVERY WIDTH (D-one-filter-control's amendment, 2026-09-24): there is no wide
+  /* ONE LINE, AT EVERY WIDTH (D270's amendment, 2026-09-24): there is no wide
    *  row any more. `BAR`'s own trigger (default `compact="popover"`) opens a `Popover` at
    *  every width, 1440 down to 390 — never a container query. The search field stays outside
    *  the popover, in the bar's own line; the facets, the sort and the hide toggle live inside
@@ -413,7 +413,7 @@ test.describe('FilterBar', () => {
     const rail = page.locator(RAIL)
     await expect(rail.locator('.bn-filterbar-trigger')).toBeVisible()
     /* And the full-width bar, at the same window width, is also the trigger alone — no wide
-       row at any width (D-one-filter-control's amendment). */
+       row at any width (D270's amendment). */
     await expect(page.locator(`${BAR} .bn-filterbar-trigger`)).toBeVisible()
 
     await rail.locator('.bn-filterbar-trigger').click()

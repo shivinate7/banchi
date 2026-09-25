@@ -439,7 +439,7 @@ export function EmptyState({
 /* ---- Notice ---------------------------------------------------------------------------- */
 /** A refusal, a warning, a standing condition. The sentence is the person's; the machine's own
  *  words — the `code`, and any server text with a path or a command in it (`detail`) — sit
- *  behind "What the server said", closed by default (D-notice-detail, amends D196). They are
+ *  behind "What the server said", closed by default (D269, amends D196). They are
  *  one press away for a bug report and never in plain view (UX-038).
  *
  *  `compact` draws one line that fits `StatusSlot`, and the disclosure opens OVER the page, so
@@ -564,7 +564,7 @@ export function Retry({
 }
 
 /** The shape `server.ts:describeFailure` says a failure is: a refusal or a retry. The server's
- *  own text is NEVER the title (D196, D-notice-detail): the title is a plain sentence, the one
+ *  own text is NEVER the title (D196, D269): the title is a plain sentence, the one
  *  passed, or a default that says only whether trying again can help. The server's words and its
  *  code sit behind "What the server said". */
 export function FailureNotice({
@@ -906,7 +906,7 @@ export function applyTheme(theme: Theme): void {
 
 /* ---- the page scaffold and the overlays ----------------------------------------------------
    Every screen imports these from here and never from the files behind them, so one import line
-   is how a new screen inherits every other screen's frame (D-one-page-width). */
+   is how a new screen inherits every other screen's frame (D272). */
 export { Page, PageRouteContext, usePageRoute, Verdict, Toolbar, StatusSlot, Loading, Section } from './Page'
 export type { PageProps, PageRoute } from './Page'
 export { Sheet, Modal, Popover, ConfirmSheet, SheetHost, useFocusTrap, useReturnFocus, useOverlayLayer, overlayOpen, useInOverlay } from './overlay'

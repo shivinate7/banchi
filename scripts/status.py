@@ -873,6 +873,18 @@ def serving() -> List[str]:
     else:
         out.append(field("banchi", f":{port} not answering"))
 
+    # THE 2026-09-23 INCIDENT, READ RATHER THAN RELIVED: `serve.port_split()` groups every
+    # LISTEN socket on this port by pid. More than one means `localhost` and `127.0.0.1`
+    # can reach two different processes — this only ever WARNS (D127), it kills nothing.
+    split = data.get("capture_port_split")
+    if split == "split":
+        out.append(field("banchi", "WARNING: this port is split across processes"))
+        for line in data.get("capture_port_split_lines") or []:
+            out.append(cont(line))
+        out.append(cont("`localhost` may reach a different one than `127.0.0.1` does."))
+    elif split == "unknown":
+        out.append(field("port split check", "not known — `lsof` could not be asked"))
+
     # THE APP IS A BUILD NOW, NOT A SECOND PORT (D138), so what there is to report is whether
     # the bundle is current and what the last build said. This and the supervisor log are the
     # only two places a failed build is ever reported: the app cannot say anything about the
