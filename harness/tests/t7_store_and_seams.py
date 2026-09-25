@@ -863,6 +863,53 @@ def refusal(checks: Checks, fn, code: str, label: str) -> None:
         checks.ok(False, label, "did not refuse")
 
 
+_STRATEGY_BY_GAME = {"pokemon": "number_and_printed_total", "riftbound": "printed_code"}
+_PRODUCT_LINE_BY_GAME = {
+    "pokemon": "Pokemon",
+    "riftbound": "Riftbound League of Legends Trading Card Game",
+}
+
+
+def _bind(
+    snapshot,
+    key: str,
+    sku: str,
+    *,
+    condition: str = "Near Mint",
+    game: str = "pokemon",
+    set_name: str = "T7 Fixture Set",
+    product_name: str = "T7 Fixture Card",
+    number: str = "001/999",
+    rarity: str = "Common",
+    bound_by: str = "answer",
+):
+    """The sanctioned writer, in place of `set_state`'s retired `sku=`/`condition=`
+    shortcut (D258, "seven writers... `set_state` is a flagged, temporary deviation").
+    Builds a one-row `Skus` table naming `sku` and binds through it — `scripts/
+    identity-store-selftest.py`'s own recipe, narrowed to what a fixture that only needs
+    `card.sku`/`card.condition` set needs. Call `inventory.set_state(key, state)` first for
+    the state transition; this never touches `state`, exactly as `bind_sku` itself does not.
+    """
+    snapshot.skus.entries[sku] = SkuRow(
+        product_line=_PRODUCT_LINE_BY_GAME[game],
+        set_name=set_name,
+        product_name=product_name,
+        number=number,
+        rarity=rarity,
+        condition=condition,
+        grade=condition,
+        printing=None,
+        first_seen=1_700_000_000,
+        last_seen=1_700_000_000,
+        source="t7-fixture",
+        raw={},
+    )
+    return snapshot.inventory.bind_sku(
+        key, sku, bound_by=bound_by, skus=snapshot.skus,
+        number_strategy=_STRATEGY_BY_GAME[game],
+    )
+
+
 def _refusal_text(fn) -> Optional[Tuple[str, str]]:
     """`(code, message)` off the refusal `fn` raised, or None if it did not refuse.
 
@@ -2429,9 +2476,8 @@ def check_undo(checks: Checks) -> None:
             "cannot be reached for by accident",
         )
         with Store().write() as snapshot:
-            snapshot.inventory.set_state(
-                "3/2", master.IDENTIFIED, sku="8608859", condition="Near Mint Holofoil"
-            )
+            snapshot.inventory.set_state("3/2", master.IDENTIFIED)
+            _bind(snapshot, "3/2", "8608859", condition="Near Mint Holofoil")
             snapshot.inventory.listing("8608859", condition="Near Mint Holofoil").bump(
                 master.PUSHED, 1
             )
@@ -2779,9 +2825,8 @@ def check_queue_refresh(checks: Checks) -> None:
             # EACH TERMINAL STATE THROUGH THE DOOR THAT SETS IT, never by assigning `state`:
             # `move_card` writes `moved_to` and leaves a live record in box 2, and `retire`
             # writes `retire_reason`. A hand-set state would be a card no route could produce.
-            snapshot.inventory.set_state(
-                "1/4", master.SOLD, sku=DUNSPARCE_SKU, condition="Near Mint"
-            )
+            snapshot.inventory.set_state("1/4", master.SOLD)
+            _bind(snapshot, "1/4", DUNSPARCE_SKU, condition="Near Mint")
             snapshot.inventory.retire("1/5", "damaged")
             snapshot.inventory.move_card("1/6", 2)
 
@@ -3514,9 +3559,13 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.set_state("3/4", master.IDENTIFIED)
 
-        # A listed SKU above blocks it too — its row is already in a file.
+        # A listed SKU above blocks it too — its row is already in a file. DIRECT FIELD
+        # WRITE, NOT `_bind`: this card's own name ("N3", from the fixture's earlier
+        # identification loop) must survive untouched — `bind_sku` always overwrites it
+        # from the row, which is not this refusal's own subject.
         with Store().write() as snapshot:
-            snapshot.inventory.set_state("3/3", master.IDENTIFIED, sku="8608859")
+            snapshot.inventory.set_state("3/3", master.IDENTIFIED)
+            snapshot.inventory.cards["3/3"].sku = "8608859"
             snapshot.inventory.listing("8608859").bump(master.PUSHED, 1)
         caught = checks.raises(
             capture_server.BadRequest,
@@ -3694,7 +3743,8 @@ def check_remove_and_box_delete(checks: Checks) -> None:
         move_result = capture_server.do_move_card(3, 3, {"capture_id": "r4", "to_box": 9})
         moved_to = move_result["to"]
         with Store().write() as snapshot:
-            snapshot.inventory.set_state("3/1", master.IDENTIFIED, sku="8608859")
+            snapshot.inventory.set_state("3/1", master.IDENTIFIED)
+            _bind(snapshot, "3/1", "8608859")
             snapshot.inventory.listing("8608859", condition="Near Mint").set(
                 master.PUSHED, 1
             )
@@ -4807,9 +4857,16 @@ def check_review_answer(checks: Checks) -> None:
             # reopen. first_seen is seeded to a fixed day on both, because "the undo does
             # not reset how long the card has been waiting" is unfalsifiable against
             # today().
-            snapshot.inventory.set_state(
-                "3/1", master.IDENTIFIED, sku=prior["sku"], condition=prior["condition"]
-            )
+            # DIRECT FIELD WRITE, NOT `_bind`/`bind_sku`: the whole point of this fixture is
+            # a card whose `sku`/`condition` are set and whose `set_name`/`rarity` are NOT —
+            # exactly `do_review_answer`'s own narrow, four-field `restores_to` shape below
+            # (D213: "an undo puts the card back to carrying no answer, set and rarity
+            # included"). `bind_sku` always derives all five together, so it cannot build
+            # this state; `harness/` sits outside the `identity writers` row's scope for
+            # this reason.
+            snapshot.inventory.set_state("3/1", master.IDENTIFIED)
+            snapshot.inventory.cards["3/1"].sku = prior["sku"]
+            snapshot.inventory.cards["3/1"].condition = prior["condition"]
             snapshot.review.upsert(entry(3, 1, market="12.00"))
             snapshot.parked.upsert(
                 entry(3, 1, market="0.05", candidates=[dict(STALE_CANDIDATE)])
@@ -4820,12 +4877,10 @@ def check_review_answer(checks: Checks) -> None:
             # and the card carries a SKU, but its `answered` line records only what was
             # written. Hand-built inside the store's own write, because no current route
             # can produce this line any more; that is the point of the case.
-            snapshot.inventory.set_state(
-                "3/2",
-                master.IDENTIFIED,
-                sku=DUNSPARCE_REVERSE_SKU,
-                condition="Near Mint Reverse Holofoil",
-            )
+            # SAME REASON, direct field write: `set_name`/`rarity` stay unset.
+            snapshot.inventory.set_state("3/2", master.IDENTIFIED)
+            snapshot.inventory.cards["3/2"].sku = DUNSPARCE_REVERSE_SKU
+            snapshot.inventory.cards["3/2"].condition = "Near Mint Reverse Holofoil"
             snapshot.review.upsert(entry(3, 2, market="12.00"))
             snapshot.review.entries["3/2"].cleared_by_human = True
             capture_server._history(
@@ -5696,9 +5751,14 @@ def check_mark_sold(checks: Checks) -> None:
             capture_server.do_capture(capture_payload(3))
 
         with Store().write() as snapshot:
-            snapshot.inventory.set_state(
-                "3/1", master.IDENTIFIED, sku="8608859", condition="Near Mint Holofoil"
-            )
+            # DIRECT FIELD WRITE, NOT `_bind`: `bind_sku` logs its own `sku_bound` history
+            # line, which would put a fifth line in the four-line sequence this function's
+            # own history assertion checks below — fields set BEFORE `set_state` so its one
+            # logged line already carries them, exactly as the retired `sku=`/`condition=`
+            # parameters did in one call.
+            card = snapshot.inventory.cards["3/1"]
+            card.sku, card.condition = "8608859", "Near Mint Holofoil"
+            snapshot.inventory.set_state("3/1", master.IDENTIFIED)
             # The SKU is out on TCGplayer, and 3/1 is one of its copies. Under the
             # per-position model this card would have WORN `live`; here the quantity sits on
             # the listing and the card's own state is what the reversal must read.
@@ -6000,9 +6060,8 @@ def check_mark_sold_releases_ledger(checks: Checks) -> None:
         # sends one; `Ledger.record_pull`'s `CopyNotIdentifiable` refuses a card with none.
         capture_server.do_capture(capture_payload(4, capture_id="u1-copy"))
         with Store().write() as snapshot:
-            snapshot.inventory.set_state(
-                "4/1", master.IDENTIFIED, sku="9191486", condition="Near Mint"
-            )
+            snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+            _bind(snapshot, "4/1", "9191486")
             capture_id = str(snapshot.inventory.cards["4/1"].capture_id)
             checks.equal(capture_id, "u1-copy", "the fixture's capture id round-trips")
             snapshot.ledger.ingest([
@@ -6125,9 +6184,12 @@ def check_retire(checks: Checks) -> None:
             capture_server.do_capture(capture_payload(3))
 
         with Store().write() as snapshot:
-            snapshot.inventory.set_state(
-                "3/1", master.IDENTIFIED, sku="8608859", condition="Near Mint Holofoil"
-            )
+            # DIRECT FIELD WRITE, NOT `_bind`: same reason as `check_mark_sold` — `bind_sku`
+            # would add a `sku_bound` line to the exact history sequence this function
+            # checks below.
+            card = snapshot.inventory.cards["3/1"]
+            card.sku, card.condition = "8608859", "Near Mint Holofoil"
+            snapshot.inventory.set_state("3/1", master.IDENTIFIED)
             # The SKU is out on TCGplayer with one live copy — the shape that makes the
             # no-decrement assertion below able to fail in either direction.
             snapshot.inventory.listing("8608859", condition="Near Mint Holofoil").set(
@@ -7068,7 +7130,8 @@ def check_history(checks: Checks) -> None:
         # it appends the same `removed` line for the same reason. 4/2 is the top of its
         # box, so this is the empty-shift case and no `renumbered` line accompanies it.
         with Store().write() as snapshot:
-            snapshot.inventory.set_state("4/2", master.IDENTIFIED, sku="8608860")
+            snapshot.inventory.set_state("4/2", master.IDENTIFIED)
+            _bind(snapshot, "4/2", "8608860")
             snapshot.cache.put("4/2", {"name": "Rhyhorn"}, "sha-of-photo", "prompt-1")
         capture_server.do_remove_card(4, 2, {"capture_id": None})
         paid = last_event("4/2")
@@ -11808,9 +11871,12 @@ def check_correct_answer(checks: Checks) -> None:
                 snapshot.inventory.cards[key].run = "2026-09-23-box4-01"
             # 4/1 — answered wrong, already pushed AND live, and IN NO QUEUE — the exact
             # shape D28's undo refuses on and this route exists to reach anyway.
-            snapshot.inventory.set_state(
-                "4/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
-            )
+            # DIRECT FIELD WRITE, NOT `_bind`: `rarity` must stay unset going in — the
+            # same "never carried a rarity at all" shape this function's undo checks
+            # elsewhere. `bind_sku` always derives `rarity` alongside `sku`/`condition`.
+            snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+            snapshot.inventory.cards["4/1"].sku = old_sku
+            snapshot.inventory.cards["4/1"].condition = "Near Mint"
             snapshot.inventory.cards["4/1"].name = old_name
             snapshot.inventory.cards["4/1"].number = old_number
             snapshot.inventory.listing(old_sku, condition="Near Mint").set(
@@ -11821,9 +11887,9 @@ def check_correct_answer(checks: Checks) -> None:
             )
             # 4/2 — captured, never identified. Nothing here to correct.
             # 4/3 — identified, then departed. A correction there is a different question.
-            snapshot.inventory.set_state(
-                "4/3", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
-            )
+            snapshot.inventory.set_state("4/3", master.IDENTIFIED)
+            snapshot.inventory.cards["4/3"].sku = old_sku
+            snapshot.inventory.cards["4/3"].condition = "Near Mint"
             snapshot.inventory.set_state("4/3", master.SOLD)
 
         refusal(
@@ -12043,9 +12109,13 @@ def check_correct_answer(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.cards["4/1"].game = "riftbound"
             snapshot.inventory.cards["4/1"].run = "2026-09-23-box4-01"
-            snapshot.inventory.set_state(
-                "4/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
-            )
+            snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+            # DIRECT FIELD WRITE, NOT `_bind`: this card must carry no `rarity`/`number` at
+            # all going in — "never carried a number or a rarity at all" is the exact shape
+            # the undo assertion below checks the correction restores to. `bind_sku` always
+            # derives both together with `sku`/`condition`, so it cannot build this state.
+            snapshot.inventory.cards["4/1"].sku = old_sku
+            snapshot.inventory.cards["4/1"].condition = "Near Mint"
             snapshot.inventory.cards["4/1"].name = old_name
             snapshot.inventory.listing(old_sku, condition="Near Mint").set(
                 master.PUSHED, 1
@@ -12157,9 +12227,11 @@ def check_correct_answer(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.cards["7/1"].game = "pokemon"
             snapshot.inventory.cards["7/1"].run = "2026-09-23-box7-01"
-            snapshot.inventory.set_state(
-                "7/1", master.IDENTIFIED, sku=wrong_sku, condition="Near Mint"
-            )
+            # DIRECT FIELD WRITE, NOT `_bind`: `rarity` stays unset going in, matching this
+            # function's other fixtures — `bind_sku` always derives it with `sku`/`condition`.
+            snapshot.inventory.set_state("7/1", master.IDENTIFIED)
+            snapshot.inventory.cards["7/1"].sku = wrong_sku
+            snapshot.inventory.cards["7/1"].condition = "Near Mint"
             snapshot.inventory.cards["7/1"].name = "Alolan Geodude"
             snapshot.inventory.cards["7/1"].number = "044"
             snapshot.inventory.cards["7/1"].printed_total = "159"
@@ -12227,9 +12299,11 @@ def check_correct_answer(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.cards["4/1"].game = "riftbound"
             snapshot.inventory.cards["4/1"].run = "2026-09-23-box4-01"
-            snapshot.inventory.set_state(
-                "4/1", master.IDENTIFIED, sku=new_sku, condition="Near Mint"
-            )
+            # DIRECT FIELD WRITE, NOT `_bind`: `rarity` stays unset, this function's own
+            # recurring shape — `bind_sku` always derives it with `sku`/`condition`.
+            snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+            snapshot.inventory.cards["4/1"].sku = new_sku
+            snapshot.inventory.cards["4/1"].condition = "Near Mint"
             snapshot.inventory.cards["4/1"].name = new_name
             # WHATEVER THE CARD CARRIES NOW — this run wrote it after the hand-crafted
             # correction below, exactly as a real one-time repair or a later re-identify
@@ -12328,9 +12402,8 @@ def check_correct_answer_live_release(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.cards["5/1"].game = "riftbound"
             snapshot.inventory.cards["5/1"].run = "2026-09-23-box5-01"
-            snapshot.inventory.set_state(
-                "5/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
-            )
+            snapshot.inventory.set_state("5/1", master.IDENTIFIED)
+            _bind(snapshot, "5/1", old_sku, game="riftbound")
             # `pushed` and `staged` are BOTH zero — the one copy the correction gives up can
             # only come from `live`, which is the branch under test.
             snapshot.inventory.listing(old_sku, condition="Near Mint").set(master.LIVE, 2)
@@ -12564,9 +12637,8 @@ def check_identity_binding(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.cards["62/1"].game = "riftbound"
             snapshot.inventory.cards["62/1"].run = "2026-09-24-box62-01"
-            snapshot.inventory.set_state(
-                "62/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
-            )
+            snapshot.inventory.set_state("62/1", master.IDENTIFIED)
+            _bind(snapshot, "62/1", old_sku, game="riftbound")
         before_correction = Store().read().inventory.identity_snapshot("62/1")
         answers(
             checks,
@@ -12634,27 +12706,38 @@ def check_identity_binding(checks: Checks) -> None:
             snapshot.skus.entries[held_sku] = held_row
             # 63/1 — the held card: a SKU already on it, a read that disputes it, and
             # `identity_source = read` — §7.3's own T5 shape ("write identity_source =
-            # read. Leave every identity field exactly as it is today").
-            snapshot.inventory.set_state("63/1", master.IDENTIFIED, sku=held_sku)
+            # read. Leave every identity field exactly as it is today"). `hold_sku`, the
+            # sanctioned writer for exactly this shape (§4.1), in place of the retired
+            # `set_state(sku=...)` shortcut.
+            snapshot.inventory.set_state("63/1", master.IDENTIFIED)
+            snapshot.inventory.hold_sku(
+                "63/1", held_sku, skus=snapshot.skus, read_disputes=True
+            )
             snapshot.inventory.cards["63/1"].game = "riftbound"
             snapshot.inventory.cards["63/1"].read_name = "Yi, Ionia"
             # §3.1: "read: ...the identity fields equal the evidence fields" — a real held
             # card's `name` already equals its own `read_name`, so the fixture sets both
             # rather than leaving `name` at its default and asking the confirm's undo to
-            # derive one restore_identity was never built to derive.
+            # derive one restore_identity was never built to derive. `identity_source` and
+            # `read_disputes` are already `hold_sku`'s own doing, above.
             snapshot.inventory.cards["63/1"].name = "Yi, Ionia"
-            snapshot.inventory.cards["63/1"].read_disputes = True
-            snapshot.inventory.cards["63/1"].identity_source = master.IDENTITY_READ
             # 63/2 — never identified, for `not_identified`.
-            # 63/3 — sold, for `card_departed`.
-            snapshot.inventory.set_state(
-                "63/3", master.IDENTIFIED, sku=held_sku, condition="Near Mint"
+            # 63/3 — sold, for `card_departed`. `held_row`'s own row, already in the
+            # table above — `bind_sku` directly rather than `_bind`, which would plant a
+            # second, different fake row under the same `held_sku` key.
+            snapshot.inventory.set_state("63/3", master.IDENTIFIED)
+            snapshot.inventory.bind_sku(
+                "63/3", held_sku, bound_by="answer", skus=snapshot.skus,
+                number_strategy="printed_code",
             )
             snapshot.inventory.set_state("63/3", master.SOLD)
-            # 63/4 — a SKU with no row in the table, for `sku_unknown`.
-            snapshot.inventory.set_state(
-                "63/4", master.IDENTIFIED, sku="7000404", condition="Near Mint"
-            )
+            # 63/4 — a SKU with no row in the table, for `sku_unknown`. DIRECT FIELD
+            # WRITE: this is the one state neither `bind_sku` nor `hold_sku` can build —
+            # both refuse `SkuUnknown` on a sku with no row, and this fixture needs the
+            # card to already carry one anyway, to prove the route refuses it too.
+            snapshot.inventory.set_state("63/4", master.IDENTIFIED)
+            snapshot.inventory.cards["63/4"].sku = "7000404"
+            snapshot.inventory.cards["63/4"].condition = "Near Mint"
             snapshot.inventory.cards["63/4"].game = "riftbound"
 
         refusal(
@@ -12822,7 +12905,11 @@ def check_identity_binding(checks: Checks) -> None:
             snapshot.skus.entries[disputed_sku] = disputed_row
             snapshot.skus.entries[other_sku] = other_row
             for i in (1, 2):
-                snapshot.inventory.set_state(f"64/{i}", master.IDENTIFIED, sku=disputed_sku)
+                snapshot.inventory.set_state(f"64/{i}", master.IDENTIFIED)
+                snapshot.inventory.bind_sku(
+                    f"64/{i}", disputed_sku, bound_by="answer", skus=snapshot.skus,
+                    number_strategy="printed_code",
+                )
                 snapshot.inventory.cards[f"64/{i}"].game = "riftbound"
                 snapshot.inventory.cards[f"64/{i}"].read_name = "Jax, Icathia"
             disputed_candidates = [
@@ -12941,11 +13028,11 @@ def check_identity_binding(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.skus.entries[held_sku_a] = held_row_a
             for i in (1, 2):
-                snapshot.inventory.set_state(f"65/{i}", master.IDENTIFIED, sku=held_sku_a)
+                snapshot.inventory.set_state(f"65/{i}", master.IDENTIFIED)
+                snapshot.inventory.hold_sku(f"65/{i}", held_sku_a, skus=snapshot.skus)
                 snapshot.inventory.cards[f"65/{i}"].game = "riftbound"
                 snapshot.inventory.cards[f"65/{i}"].read_name = "Jax, Icathia"
                 snapshot.inventory.cards[f"65/{i}"].name = "Jax, Icathia"
-                snapshot.inventory.cards[f"65/{i}"].identity_source = master.IDENTITY_READ
             # 65/3, an ordinary metadata_detection_disagreement entry, offering the SAME
             # sku and condition — proving the `listing_disputed` refusal fires ahead of
             # the ordinary reasons/uniformity check (which this mixed-reason group would

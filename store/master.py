@@ -249,7 +249,7 @@ IDENTITY_FIELDS = (
 # migration HELD class both route through now, replacing the `card.sku = ...` /
 # `card.identity_source = ...` lines each wrote directly before this lane.
 #
-# THREE MORE ARE PRE-EXISTING, ALREADY-ARGUED HOLDOVERS FROM EARLIER LANES, NOT THIS ONE'S
+# TWO MORE ARE PRE-EXISTING, ALREADY-ARGUED HOLDOVERS FROM EARLIER LANES, NOT THIS ONE'S
 # OWN INVENTION — this row is the first thing to read them together, and each one's own
 # docstring already carries the argument this comment only points at:
 #   `record_identification`  writes the identity fields (never the binding ones) exactly
@@ -257,18 +257,19 @@ IDENTITY_FIELDS = (
 #                            "not a second writer of the identity — it is the same writer
 #                            bind_sku becomes the moment a binding exists, continuous rather
 #                            than switched" (§4.2).
-#   `set_state`              still takes `sku`/`condition`/`set_name`/`rarity`/`name` as of
-#                            lane 1, and its own docstring names this as "A DEVIATION FROM
-#                            §11's OWN 'done when' LINE, FLAGGED RATHER THAN MADE SILENTLY":
-#                            `cli/cmd_emit.py` (lane 3b) still calls it this way, and lane
-#                            1's own fence forbade moving that caller. A later lane trims
-#                            this signature; this row does not force that lane's hand.
 #   `move_card`              clears `sku`/`condition` on the tombstone it leaves behind
 #                            (D83) — spec §4.2: "clears sku and condition on the tombstone;
 #                            the transplant keeps both | unchanged".
+#
+# `set_state` WAS A THIRD HOLDOVER, THROUGH D258, AND IS NOT ANY MORE. Its own docstring
+# once flagged "A DEVIATION FROM §11's OWN 'done when' LINE" — it took `sku`, `condition`,
+# `set_name`, `rarity` and `name` as of lane 1, because `cli/cmd_emit.py` (lane 3b) still
+# called it that way. `cli/cmd_emit.py` moved off before this entry landed (both of its own
+# calls pass only `run=`); the five parameters and this row's own membership were removed
+# together, D258.
 IDENTITY_WRITERS = (
     "bind_sku", "unbind_sku", "restore_identity", "hold_sku",
-    "record_identification", "set_state", "move_card",
+    "record_identification", "move_card",
 )
 
 
@@ -2035,11 +2036,6 @@ class Inventory:
         key: str,
         state: str,
         *,
-        sku: Optional[str] = None,
-        condition: Optional[str] = None,
-        set_name: Optional[str] = None,
-        rarity: Optional[str] = None,
-        name: Optional[str] = None,
         run: Optional[str] = None,
     ) -> bool:
         """Move one card to a new state. Returns False if this position has no record.
@@ -2049,30 +2045,17 @@ class Inventory:
         happened, and did not — so callers check it and report the gap rather than
         assuming the write landed.
 
-        `set_name` AND `rarity` FOLLOW `sku`/`condition`'s OWN RULE: written only when the
-        caller has an answer, because the moment a SKU is committed is the moment the
-        catalogue row is in hand — `cli/cmd_emit.py`'s `SkuMatch` carries both beside the
-        SKU it resolved. A caller with no catalogue row (a bare state transition) passes
-        neither and leaves them as they were.
-
-        `name` FOLLOWS THE SAME RULE, AND IS NARROWER STILL (D253). It
-        is not the model's identification — `record_identification` owns that write and
-        this never touches it — it is the catalogue's own spelling of a card whose read
-        name agreed with its row without being identical to it (`Corfish` for `Corphish`).
-        `cli/cmd_emit.py` passes it only for that one case, out of
-        `pipeline/join.py:JoinReport.name_corrections`; every other commit passes `None`
-        and this leaves `card.name` exactly as `record_identification` last wrote it.
-
-        THIS SIGNATURE IS UNCHANGED BY LANE 1, AND THAT IS A DEVIATION FROM §11's OWN
-        "done when" LINE ("set_state takes no identity field"), FLAGGED RATHER THAN MADE
-        SILENTLY. Lane 1's fence forbids touching a caller of `set_state` — `cli/cmd_emit.py`
-        (lane 3b) still calls this with `sku=`/`condition=`/`set_name=`/`rarity=`/`name=`,
-        and `harness/tests/t7_store_and_seams.py` (lane 3a) asserts several of the same
-        calls — so dropping these five parameters here would break both across a lane
-        boundary this brief says to stop at rather than cross. `bind_sku` below is the NEW
-        one writer (§4.1); this method keeps writing state plus these five fields, side by
-        side, until lanes 2/3a/3b move every caller onto `bind_sku` and a later lane trims
-        this signature the way §11 describes.
+        TAKES NO IDENTITY FIELD (`docs/specs/identity-follows-sku.md` §11's Lane 1 "done
+        when" line, now true). Until this commit it also took `sku`, `condition`,
+        `set_name`, `rarity` and `name`, flagged as a deviation because two callers still
+        used them: `cli/cmd_emit.py` had already moved off before this commit (both of its
+        own `set_state` calls pass only `run=`), and the remaining callers were 24 test
+        fixtures under `harness/tests/`, none of them product code. Every one now calls
+        `bind_sku` or `hold_sku` instead, or writes the field directly on the `Card` where
+        neither can build the exact state a fixture needed (`harness/` sits outside the
+        `identity writers` row's own scope, so a direct write there is not the back door
+        this rule forbids under `server/`, `store/`, `pipeline/`, `cli/`, `codes/` or
+        `scripts/`). `set_state` is no longer in `IDENTITY_WRITERS`.
         """
         check_state(state)
         card = self.cards.get(key)
@@ -2080,16 +2063,6 @@ class Inventory:
             return False
         card.state = state
         card.state_at = now()
-        if sku is not None:
-            card.sku = sku
-        if condition is not None:
-            card.condition = condition
-        if set_name is not None:
-            card.set_name = set_name
-        if rarity is not None:
-            card.rarity = rarity
-        if name is not None:
-            card.name = name
         if run is not None:
             card.run = run
         self._log(state, key, sku=card.sku, run=card.run)
