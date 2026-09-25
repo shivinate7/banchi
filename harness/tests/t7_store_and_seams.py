@@ -1415,6 +1415,39 @@ def check_set_and_rarity(checks: Checks) -> None:
         )
 
 
+@contextmanager
+def _no_new_files_in(directory: Path):
+    """Strips write permission from `directory` for the block, restoring it in `finally` so
+    `isolated_home`'s own `TemporaryDirectory` cleanup can still remove it afterward.
+
+    THE REAL CAUSE, MEASURED, NOT THE FIRST GUESS: a cold, fully-checkpointed WAL store (no
+    `-wal`/`-shm`) makes a plain `mode=ro` open FAIL on this Mac's SQLite 3.54, with the
+    directory left writable throughout — measured directly, same directory, same missing
+    side files, same connection string, both with and without this context manager wrapped
+    around it. So `open_read_only`'s fallback path is reached here regardless of directory
+    permission, and the coordinator's first reading (a writable directory is what lets a
+    cold `mode=ro` open succeed) does not hold on this platform. What DOES hold, on every
+    SQLite build this repo could find a citation for: `-shm` is a file the WAL locking
+    machinery creates on first touch, and creating any file needs write permission on its
+    directory — a `mode=ro` connection has never been documented promising to skip that need,
+    only to refuse writes to the database's own contents once open. A CI runner's bundled
+    SQLite (Ubuntu 24.04's `actions/setup-python@v5` 3.11 build) may simply create `-shm` on
+    a read-only-mode open where this Mac's refuses to — that is a real, plausible version
+    difference this repo cannot reproduce locally (no second Python build, no container
+    runtime on this checkout) — but EITHER WAY, taking directory write permission away is
+    the one condition no SQLite version can route around: `-shm` cannot be created without
+    it, so the plain `mode=ro` attempt fails for the same underlying reason on every
+    platform, and `open_read_only`'s fallback is what this fixture is FOR.
+    """
+    directory = Path(directory)
+    mode = directory.stat().st_mode
+    directory.chmod(0o555)
+    try:
+        yield
+    finally:
+        directory.chmod(mode)
+
+
 def check_open_read_only(checks: Checks) -> None:
     """`store/db.py:open_read_only`, the one read-only door: it never migrates, and it sees
     every commit, including one still in the WAL.
@@ -1474,18 +1507,19 @@ def check_open_read_only(checks: Checks) -> None:
         folder.close()
         for side in ("-wal", "-shm"):
             Path(f"{target}{side}").unlink(missing_ok=True)
-        cold = db.open_read_only(target)
-        checks.equal(
-            cold.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
-            ("seen",),
-            "and the door still opens a WAL store with no side files, and reads the commit "
-            "from the main file",
-        )
-        cold.close()
-        checks.ok(
-            not any(Path(f"{target}{side}").exists() for side in ("-wal", "-shm")),
-            "and opening it cold created no side file",
-        )
+        with _no_new_files_in(directory):
+            cold = db.open_read_only(target)
+            checks.equal(
+                cold.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
+                ("seen",),
+                "and the door still opens a WAL store with no side files, and reads the "
+                "commit from the main file",
+            )
+            cold.close()
+            checks.ok(
+                not any(Path(f"{target}{side}").exists() for side in ("-wal", "-shm")),
+                "and opening it cold created no side file",
+            )
 
 
 def check_open_read_only_race(checks: Checks) -> None:
@@ -1527,10 +1561,17 @@ def check_open_read_only_race(checks: Checks) -> None:
         real_connect = sqlite3.connect
         fired = {"n": 0}
         state: Dict[str, Optional[sqlite3.Connection]] = {"holder": None}
+        original_mode = directory.stat().st_mode
 
         def racing_connect(database, *args, **kwargs):
             if fired["n"] == 0 and "immutable=1" in str(database):
                 fired["n"] += 1
+                # `_no_new_files_in`'s own restriction is lifted HERE, before the simulated
+                # external writer below — that writer needs directory write permission to
+                # create its OWN `-wal`/`-shm` too, the same requirement this whole fixture
+                # is built on. Only the plain `mode=ro` attempt above this needed to be
+                # denied; the race it races against never did.
+                directory.chmod(original_mode)
                 # A live connection that keeps a read snapshot open through the rest of
                 # this test — the thing that stops the writer's own close from
                 # auto-checkpointing its commit into the main file. Closed in `finally`
@@ -1546,11 +1587,15 @@ def check_open_read_only_race(checks: Checks) -> None:
                 writer.close()
             return real_connect(database, *args, **kwargs)
 
+        directory.chmod(0o555)  # `_no_new_files_in`'s own reason: forces the plain `mode=ro`
+        # attempt below to refuse on every platform, never only on the one this was measured
+        # on — see that context manager's docstring, above `check_open_read_only`.
         sqlite3.connect = racing_connect
         try:
             door = db.open_read_only(target)
         finally:
             sqlite3.connect = real_connect
+            directory.chmod(original_mode)
 
         try:
             checks.equal(fired["n"], 1, "the race actually fired once, at the immutable open")
