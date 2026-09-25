@@ -33,7 +33,7 @@ import { sayPlace } from './position'
 import { RETIRE_REASONS, reasonWord } from './cardState'
 import { useSearch } from './useSearch'
 import { isEditableTarget } from './keys'
-import { Button, Icon, Loading, Notice, Page, Pill, Select } from './kit'
+import { Button, Icon, Loading, Notice, Page, Pill, Select, boxesMostRecentFirst } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
@@ -1064,7 +1064,12 @@ function MovePanel({
   onCancel: () => void
 }) {
   const [to, setTo] = useState<string | null>(null)
-  const others = boxes.filter((record) => record.box !== copy.place.box && record.state !== 'closed')
+  /* S4: MOST RECENT FIRST, the same primitive the rail sorts by — `others` used to be the
+     server's own `GET /boxes` order (box number), which said nothing about which box the hand
+     was likeliest to reach for. */
+  const others = boxesMostRecentFirst(
+    boxes.filter((record) => record.box !== copy.place.box && record.state !== 'closed'),
+  )
   return (
     <Overlay kind="dialog" label={`Move: ${sayPlace(copy.place.label ?? copy.key)}`} onClose={onCancel} className="inventory-confirm">
       <div className="inv-dialog-head">

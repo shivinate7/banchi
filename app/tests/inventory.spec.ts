@@ -4372,6 +4372,50 @@ test('UX-244 — one copy moves to another box from its own row, and the receipt
   expect(sent[0]?.body).toMatchObject({ to_box: 7 })
 })
 
+test('S4 — the move panel offers boxes most recent first, never by number', async ({ page }) => {
+  /* S4: `MovePanel`'s own comment said "most recent first" while `others` was the server's
+   * `GET /boxes` order — box number, since nothing sorted it. Box 9 is a lower recency than
+   * box 7's stored visit but a HIGHER number, so number order and recency order disagree and
+   * this case can tell them apart. */
+  const boxes = {
+    boxes: [
+      ...TWO_BOXES.boxes,
+      { box: 9, name: 'Extra shelf', sections: [1], state: 'open', capacity: null, fill: 3, next_index: 4, cards: 3, sold: 0, retired: 0, listed: 0, moved: 0, sections_detail: [{ section: 1, start: 1, end: 3, count: 3 }] },
+    ],
+  }
+  await page.addInitScript(() => {
+    /* eslint-disable-next-line no-restricted-syntax -- SEEDING THE KEY UNDER TEST (D132),
+       `dataRules.ts:boxesMostRecentFirst`'s own subject. */
+    window.localStorage.setItem('banchi.box-recency', JSON.stringify({ '9': '2026-09-09T10:00:00.000Z' }))
+  })
+  await open(page, boxes, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+
+  await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Move to another box' }).click()
+  const dialog = page.getByRole('dialog', { name: /^Move/ })
+  await expect(dialog).toBeVisible()
+  await dialog.locator('.bn-pick').click()
+  await expect(page.locator('.bn-pick-opt')).toHaveText(['Extra shelf', 'ME01 spares'])
+})
+
+test('S4 — the BoxOps "Move to box" select offers boxes most recent first, never by number', async ({
+  page,
+}) => {
+  const boxes = {
+    boxes: [
+      ...TWO_BOXES.boxes,
+      { box: 9, name: 'Extra shelf', sections: [1], state: 'open', capacity: null, fill: 3, next_index: 4, cards: 3, sold: 0, retired: 0, listed: 0, moved: 0, sections_detail: [{ section: 1, start: 1, end: 3, count: 3 }] },
+    ],
+  }
+  await page.addInitScript(() => {
+    /* eslint-disable-next-line no-restricted-syntax -- SEEDING THE KEY UNDER TEST (D132). */
+    window.localStorage.setItem('banchi.box-recency', JSON.stringify({ '9': '2026-09-09T10:00:00.000Z' }))
+  })
+  await open(page, boxes, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+  await openBoxOps(page)
+  await page.getByRole('button', { name: 'Move to box' }).click()
+  await expect(page.locator('select.bn-select option')).toHaveText(['Choose a box…', 'Extra shelf', 'ME01 spares'])
+})
+
 test('the neighbours are ranked, not joined — the names are the only thing drawn at ink', async ({
   page,
 }) => {
@@ -6022,7 +6066,46 @@ test('D132 — the Hide sold chip counts what the fold actually hides, not every
   await expect(chip.locator('.bn-hidetoggle-count')).toHaveText('2')
 })
 
-test('D132 — the rail draws names and no numbers, ordered by this browser\'s recency, then cards on hand, then number', async ({ page }) => {
+test('B3 — a sale does not reorder the rail, on a device that has never opened either box', async ({ page }) => {
+  /* B3 (the review's own repro was 26 vs 25, this is the same shape at the smallest gap that
+   * shows it): two boxes tied on recency — NEITHER stored, "every box the browser has not
+   * opened, so every box on a new device" — and tied on-hand too, so the box number decides
+   * and RB Epics (2) leads MEG Bulk (6). A sale in RB Epics takes it to 24 on hand; MEG Bulk's
+   * 25 is now the bigger number, and the OLD comparator's on-hand term put MEG Bulk on top —
+   * moving every row under the pointer with no press behind it.
+   * `kit/dataRules.ts:boxesMostRecentFirst` ties on the box's own `bid`, then its number —
+   * neither of which a sale ever touches. */
+  const boxes = {
+    boxes: [
+      { ...BOXES.boxes[0], box: 2, name: 'RB Epics', cards: 25, on_hand: 25, sold: 0, retired: 0 },
+      { ...BOXES.boxes[0], box: 6, name: 'MEG Bulk', cards: 25, on_hand: 25, sold: 0, retired: 0, sections: [], sections_detail: [] },
+    ],
+  }
+  const sale = movesOnSale(() => {
+    const rbEpics = boxes.boxes.find((record) => record.box === 2)
+    if (rbEpics !== undefined) {
+      rbEpics.on_hand -= 1
+      rbEpics.sold += 1
+    }
+  })
+  await open(page, boxes, STORE, () => PRICING, sale, { settle: '.browse-boxcell' })
+
+  const names = page.locator('.browse-boxcell .browse-boxcell-name')
+  await expect(names).toHaveText(['RB Epics', 'MEG Bulk'])
+
+  /* WAITED FOR EXPLICITLY, not sampled after a guessed delay: `Mark sold`'s own re-read
+     (`doSell`'s `setReloads`) re-fetches `GET /boxes`, and `toHaveText` above would otherwise
+     pass on the PRE-refetch order and finish before the async reorder this case is about ever
+     lands — the exact race this file's own `SaleStub` comment warns against, one layer up. */
+  const boxesRefetched = page.waitForResponse((response) => /\/boxes(\?|$)/.test(response.url()))
+  await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Mark sold' }).click()
+  await boxesRefetched
+  await expect(page.locator('.card-locations-row.is-current').getByRole('button', { name: /Undo/ })).toBeVisible()
+
+  await expect(names, 'the rail reordered under a sale with no press on it').toHaveText(['RB Epics', 'MEG Bulk'])
+})
+
+test('D132 — the rail draws names and no numbers, ordered by this browser\'s recency, then the box\'s own index, then number', async ({ page }) => {
   const boxes = {
     boxes: [
       { ...BOXES.boxes[0] },
@@ -6048,15 +6131,16 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
   await open(page, boxes, STORE, () => PRICING, SALE, { settle: '.browse-boxcell' })
 
   const names = page.locator('.browse-boxcell .browse-boxcell-name')
-  /* Recency first (7), then on hand descending (40, 5), then the number breaks the tie (7 is
-     recent; 9 and 7 both hold 12 — 9 is the only one left of the pair here). */
-  await expect(names).toHaveText(['Box 7', 'Bulk', 'Twelve too', 'ME01 commons'])
+  /* Recency first (7), then the box's own index (none of these four carries a `bid`, so this
+     fixture cannot tell that term apart from the number that follows it — B3 dropped `on_hand`
+     as the one thing here that a sale can move), then the number breaks every other tie. */
+  await expect(names).toHaveText(['Box 7', 'ME01 commons', 'Bulk', 'Twelve too'])
   await expect(page.locator('.browse-boxcell-num')).toHaveCount(0)
   /* The number survives where it is READ rather than looked at. `, 40 captured` is S16's own
      fix, landed beside this test: the bare `.browse-boxcell-count` figure had no unit and no
      accessible name of its own, so the count is now named in the one aria-label the button
      already carries (Bulk holds 40 cards per its own fixture, above). */
-  await expect(page.locator('.browse-boxcell').nth(1)).toHaveAttribute('aria-label', 'Bulk, 40 captured')
+  await expect(page.locator('.browse-boxcell').nth(2)).toHaveAttribute('aria-label', 'Bulk, 40 captured')
 
   /* A PAGE LOAD IS NOT AN OPENING: the walk landed on box 7 (recency put it first) and the
      order is exactly what storage said, untouched. A press IS one, and it is written at once.
@@ -6064,7 +6148,7 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
      keeps its row until the next visit, and then it leads. */
   await page.locator('.browse-boxcell', { hasText: 'Bulk' }).click()
   await expect(page.locator('.browse-boxcell', { hasText: 'Bulk' })).toHaveAttribute('aria-current', 'true')
-  await expect(names).toHaveText(['Box 7', 'Bulk', 'Twelve too', 'ME01 commons'])
+  await expect(names).toHaveText(['Box 7', 'ME01 commons', 'Bulk', 'Twelve too'])
   const stored = await page.evaluate(
     /* eslint-disable-next-line no-restricted-syntax -- READING THE SAME KEY BACK, to see that a
        press wrote it and a page load did not. */
@@ -6075,7 +6159,7 @@ test('D132 — the rail draws names and no numbers, ordered by this browser\'s r
 
   /* THE NEXT VISIT. */
   await page.reload()
-  await expect(names).toHaveText(['Bulk', 'Box 7', 'Twelve too', 'ME01 commons'])
+  await expect(names).toHaveText(['Bulk', 'Box 7', 'ME01 commons', 'Twelve too'])
 })
 
 test('D132 — the address leads with the name and the index is its note, on the row the walk stands on and on every other', async ({ page }) => {

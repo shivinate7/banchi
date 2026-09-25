@@ -52,7 +52,7 @@ import {
 import { IDENTIFIED, stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Loading, Notice, Pill, countFacets, filterRows } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Loading, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows } from './kit'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
 import { storedBoxRecency, touchBox } from './deviceMemory'
@@ -893,16 +893,16 @@ export function BoxBrowse({
   const filtered = searching && matched !== null
 
   /* THE RAIL'S ORDER IS THE HAND'S (D132): the box opened most recently on this browser first,
-     then the box holding the most cards, then the number — which is the LAST thing the owner
-     thinks in, so it is the last thing this sorts by. `on_hand` and not `cards`: a box full of
-     sold records is not a box worth reaching for. */
+     then its own true index (`bid`, newest box first), then the number — `kit/dataRules.ts:
+     boxesMostRecentFirst`, the one primitive for a box order every list of boxes now shares.
+     B3: `on_hand` USED TO BREAK THE RECENCY TIE, AND A SALE MOVES `on_hand`. Two boxes neither
+     side of this browser has ever opened tie on recency (both unstored) and used to fall to
+     whichever held more copies — so a sale that took RB Epics from 26 to 25 dropped it under
+     MEG Bulk IN THE SAME SESSION, with no press on the rail at all. `bid` and the box number
+     are both facts about the DRAWER, not the count inside it, so nothing a sale touches can
+     move this tie-break again. */
   const order = useMemo(() => {
-    const onHandOf = new Map(
-      boxRecords.map((record) => [
-        record.box,
-        record.on_hand ?? record.cards - record.sold - record.retired - record.moved,
-      ]),
-    )
+    const rankOf = new Map(boxesMostRecentFirst(boxRecords, recency).map((record, i) => [record.box, i]))
     /* UNDER A SEARCH THE BOX WHOSE FULLEST SECTION HOLDS THE MOST LIVE COPIES OF THE ANSWER
        LEADS (D132, amended on the owner's rule of 2026-09-11): "the largest quantity of
        whatever I searched, BY SECTION, is the order". A box is ranked by its best section and
@@ -933,12 +933,9 @@ export function BoxBrowse({
       const ma = liveMatches.get(a) ?? 0
       const mb = liveMatches.get(b) ?? 0
       if (ma !== mb) return mb - ma
-      const ra = recency.get(a) ?? ''
-      const rb = recency.get(b) ?? ''
-      if (ra !== rb) return ra > rb ? -1 : 1
-      const ha = onHandOf.get(a) ?? -1
-      const hb = onHandOf.get(b) ?? -1
-      if (ha !== hb) return hb - ha
+      const rra = rankOf.get(a) ?? Number.MAX_SAFE_INTEGER
+      const rrb = rankOf.get(b) ?? Number.MAX_SAFE_INTEGER
+      if (rra !== rrb) return rra - rrb
       return a - b
     }
   }, [boxRecords, recency, filtered, results, activeGroups, frozen])

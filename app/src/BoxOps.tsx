@@ -32,7 +32,7 @@ import {
 import { spansOf } from './position'
 import { ReadingAge } from './CardLocations'
 import { readingAgo } from './cardState'
-import { Button, Icon, Notice, Pill, Stat, type IconName } from './kit'
+import { Button, Icon, Notice, Pill, Stat, boxesMostRecentFirst, type IconName } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { toast } from './kit/toast'
 import { Overlay } from './InventoryOverlay'
@@ -527,7 +527,10 @@ export function BoxOps({
 
   if (!open) return null
 
-  const others = boxes.filter((candidate) => candidate.box !== record.box)
+  /* S4: MOST RECENT FIRST — the same rule `Inventory.tsx:MovePanel` and the rail sort by.
+     `boxes` arrives in the server's own order (box number), which said nothing about which
+     box the hand was likeliest to reach for. */
+  const others = boxesMostRecentFirst(boxes.filter((candidate) => candidate.box !== record.box))
 
   return (
     <Overlay kind="sheet" label={`Manage ${record.name ?? UNNAMED_BOX}`} onClose={onClose} className="boxops-sheet">
