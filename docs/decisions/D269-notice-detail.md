@@ -1,4 +1,4 @@
-## D-notice-detail — The machine's words go behind "What the server said"
+## D269 — The machine's words go behind "What the server said"
 
 **This amends D196's one exemption.** D196 exempted `Notice`'s `code` prop from the rule that no user-visible string names a mechanism. Its premise was that the raw string "stays available on hover and in the run log". The review found that premise false (UX-038, COPY-24). The code drew in plain view, under every refusal, on eight screens. Server text drew verbatim, so request paths and a repository command reached the owner.
 

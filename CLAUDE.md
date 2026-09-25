@@ -211,7 +211,7 @@ make suite-lock-selftest # the lock, proved by violating it, including a holder 
                     #   In `check`.
 make browser-scope-selftest # the browser-matrix classifier's spec map, on fixtures and the
                     #   real tree (D215). In `check`.
-make text-density   # the owner's third D194 replacement (`D-text-shape-checks`): an
+make text-density   # the owner's third D194 replacement (`D284`): an
                     #   ON-DEMAND density pass, never a gate (D18: it writes one receipt,
                     #   `.serve/text-density.json`). Runs `text-shape.spec.ts` in a report
                     #   mode (`TEXT_DENSITY=1`), so it reads the SAME seeded screens as the
@@ -286,7 +286,7 @@ make token-literal-check-selftest  # that checker, on fixtures in both direction
                     #   each proved.
 make kit-adoption   # every ROUTES view renders <Page> from the kit, and no screen hand-rolls
                     #   a kit primitive: a dialog role, a search input, a <select>, a kit
-                    #   class, a date format, a money format (D-page-scaffold). TypeScript
+                    #   class, a date format, a money format (D275). TypeScript
                     #   AST. `scripts/kit-adoption-allow.json` is a SHRINKING offender list,
                     #   file -> rule -> lane: an unlisted violation fails, a stale entry fails,
                     #   and a key that the list at the merge-base with origin/main does not
@@ -486,7 +486,7 @@ below).
                               it, by SKU. Off-nav, deep-linked (D227)
 ```
 
-**A new screen is one `ROUTES` entry plus a view that returns `<Page>`** (D-page-scaffold).
+**A new screen is one `ROUTES` entry plus a view that returns `<Page>`** (D275).
 `Page` in `app/src/kit/Page.tsx` carries what every page shares. That is one width, one top
 gap and one h1 from the route's `title ?? label`. It is also the verdict, the toolbar, the
 status slot and the loading shape. `make kit-adoption` fails a route view that does not render
@@ -552,7 +552,7 @@ are a real sentence and one action. **No user-visible string may name a decision
 path, or a pipeline-internal noun** (D196). Mechanized by `make docs-audit`'s
 `no mechanism on screen` row over `scripts/user-strings.mjs`.
 
-**D194's pinned word ceiling is retired** (superseded by `D-text-shape-checks`, 2026-09-23, the
+**D194's pinned word ceiling is retired** (superseded by `D284`, 2026-09-23, the
 owner's ruling). Three checks replace it, none of them a count.
 `app/tests/text-shape.spec.ts` catches four shapes. A repeated sentence on three-plus
 repeating cards or rows. A number-plus-noun fact stated twice. A sentence over 25 words. A
@@ -745,7 +745,7 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   `~/.pkmnscan/port-slots.json` (`scripts/port-slots.py`). `make dev`, `server`, `up`,
   `design-check` and `scripts/launch-config.py` claim first. A test run refuses a reused dev server
   that does not name this checkout (`app/checkoutIdentity.ts`,
-  D-a-claimed-slot-and-a-server-that-names-its-checkout).
+  D261).
 - **Real CSV libraries only** — PapaParse (JS), `csv` (Python). Never `split(",")`.
 - **Not a Claude artifact.** No `window.storage`, no `facingMode: "environment"`, nothing
   about a card in `localStorage`. **Eleven keys are stored on the device**, each a fact about
@@ -939,7 +939,7 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   `scripts/user-strings.mjs`'s extraction. It fails on every typed dot that
   `scripts/typed-interpunct-allow.json` does not list, by file and by string. It also fails on
   a stale entry, and on an entry the list at the merge-base did not hold. No count is pinned.
-  See D218 and D-ratchets-become-offender-lists.
+  See D218 and D280.
 
 ## Working agreement
 
@@ -1277,6 +1277,33 @@ D255 One SKU, two stored names: the sibling check D242 cannot see
 D256 A literal that duplicates a token is caught by family, and the ratchet is pinned per file
 D257 a worktree's node_modules is provisioned, not reported
 D258 Identity follows the SKU
+D259 A box is shown only by its name, and a box with no name gets a stored default name
+D260 A card's number counts within its section, card 1 is at the far back, and the ruler marks the card
+D261 A checkout claims its port slot once, and a reused server must name its checkout
+D262 A join follows a moved card by its own link, checked by its name
+D263 A sort press re-sorts at once, a sold row folds on the next load, and box lists lead with the most recent
+D264 A section is an object that moves whole, and the box map is a view inside Inventory
+D265 A card's place in its box is an order key apart from its stored index
+D266 The phone drawer has no fixed foot, and its items join the one scrolling list
+D267 Every dollar figure takes the mono face, and a check that reads the rendered page enforces it
+D268 A copied tree never gets the live port, and only a `.git` directory keeps 8000
+D269 The machine's words go behind "What the server said"
+D270 One filter bar, everywhere a list is filtered
+D271 Every search field uses one forgiving matcher, on the server and in the browser
+D272 One page width, one top gap, and a scaffold every screen inherits
+D273 Banchi sends the listing file itself, one press makes it live, and the checks after it run by themselves
+D274 Orders and Shipping are two sidebar rows with no tabs, and the walk gets the full height
+D275 Every screen inherits the page scaffold, and a shrinking list holds the exceptions
+D276 The palette is "Go to", it lists every screen and finds cards, and the rail starts at 640
+D277 Pricing shows every row with the rows that need the owner on top, one slim bar holds Send, and the value list moves to Inventory
+D278 One product view, two frames, and the trap it had is fixed first
+D279 Cards to pull asks for a count of a card, and shows where every copy is
+D280 The typed-dot count and the prose ratio become lists of offenders, and no count is pinned
+D281 A decision's argument is not screen copy, and a note about zero does not draw
+D282 Sales leads with a summary band and the best sellers, and a line with no price gets its price from TCGplayer
+D283 The send press's review record: each round's findings, and the fix for each
+D284 Three checks replace one ceiling, and none of them is a pinned number
+D285 A screen's filter, sort, search and hide state lives in the URL
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

@@ -364,7 +364,7 @@ NEVER_BOUND_IDENTITY_SNAPSHOT = {
 
 
 def stored_label(box: int, index: int) -> str:
-    """`Position.label` for a card, against the box's STORED name (D-a-box-is-shown-by-its-name).
+    """`Position.label` for a card, against the box's STORED name (D259).
 
     A box created with no name carries its stored default (`Inventory.default_box_name`), so a
     bare `join.Position(box, index).label` (the `Box <number>` fallback for a caller with no
@@ -3437,7 +3437,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
                 and "card 4 is retired" not in str(caught),
                 "and the refusal NAMES the blocker with its reason, in the SAME SHAPE a "
                 "card row reads — Section n, Card m, never the bare store index "
-                "(D-a-box-is-shown-by-its-name)",
+                "(D259)",
                 f"message was: {caught}",
             )
             # THE LISTED CARD'S TEXT MATCHES ITS OWN LABEL. Box 3 got no typed name, so it
@@ -3669,7 +3669,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
                 and "was moved" not in str(caught),
                 "and the refusal names only the listed copy, in the SAME SHAPE a card "
                 "row reads — Section n, Card m, never the bare store index "
-                "(D-a-box-is-shown-by-its-name) — the sold, retired and moved records "
+                "(D259) — the sold, retired and moved records "
                 "no longer stand in the way (D134)",
                 f"message was: {caught}",
             )
@@ -3746,7 +3746,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             and by_key["3/2"].get("sku") is None
             and by_key["3/2"].get("box") == 3
             and by_key["3/2"].get("index") == 2
-            # A BOX CREATED WITH NO NAME CARRIES ITS STORED DEFAULT (D-a-box-is-shown-by-its-name).
+            # A BOX CREATED WITH NO NAME CARRIES ITS STORED DEFAULT (D259).
             and by_key["3/2"].get("box_name") == "Box 1"
             and by_key["3/2"].get("capture_id") == "r3"
             and by_key["3/2"].get("order") is None
@@ -9072,7 +9072,7 @@ def check_box_names(checks: Checks) -> None:
         )
 
         # --- clearing stores the default name ---------------------------------------------
-        # A box is shown by its name only (D-a-box-is-shown-by-its-name), so a clear cannot
+        # A box is shown by its name only (D259), so a clear cannot
         # leave it with none: it stores the default `Box <count+1>`, the orchestrator's call
         # on the locating review, 2026-09-24 — ANOTHER ORCHESTRATOR CALL, 2026-09-24, AMENDS
         # THE COUNT: the box being cleared is already in the registry when this runs, and its
@@ -9193,7 +9193,7 @@ def check_box_claims(checks: Checks) -> None:
                 "Section 1, Card 3" in str(caught) and "card 3:" not in str(caught),
                 "naming the card whose game rejected it, in the SAME SHAPE a card row "
                 "reads — Section n, Card m, never the bare store index "
-                "(D-a-box-is-shown-by-its-name)",
+                "(D259)",
                 f"message was: {caught}",
             )
             # THE LISTED CARD MATCHES ITS OWN LABEL — a second code path, `said_place`,
@@ -9782,14 +9782,14 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
     """A box is shown by its name, and a place label is box name, section and card in section.
 
     THE OWNER'S RULINGS OF 2026-09-23, both argued in their own entries:
-    D-a-box-is-shown-by-its-name (the box number never reaches a screen; an unnamed box gets the
+    D259 (the box number never reaches a screen; an unnamed box gets the
     stored name `Box <count+1>`; the boxes that had no name are backfilled `Box <number>`) and
-    D-a-card-is-counted-in-its-section (the card number restarts at every divider). Four parts:
+    D260 (the card number restarts at every divider). Four parts:
     the label's shape, where a departed card says it was, the default name at creation, and the
     backfill as a previewed, idempotent, one-transaction write.
     """
     checks.note("")
-    checks.note("BOX NAMES AND PLACE LABELS — D-a-box-is-shown-by-its-name")
+    checks.note("BOX NAMES AND PLACE LABELS — D259")
 
     # --- the label's shape -------------------------------------------------------------------
     view = join.BoxView(sections=(1, 6), occupied=(1, 2, 3, 4, 6, 7, 8), departed=(5,),
@@ -10085,7 +10085,7 @@ def check_consolidated_numbering(checks: Checks) -> None:
         capture_server.do_create_box({"box": 3, "sections": [1, 7]})
         for _ in range(12):
             capture_server.do_capture(capture_payload(3))
-        # THE LABEL SAYS THE BOX'S NAME (D-a-box-is-shown-by-its-name), and a box created with
+        # THE LABEL SAYS THE BOX'S NAME (D259), and a box created with
         # no name carries its stored default. Read back, so this check is about numbering.
         box_title = Store().read().inventory.box(3).name
 
@@ -10134,7 +10134,7 @@ def check_consolidated_numbering(checks: Checks) -> None:
             f"{box_title}, Section 1, Card 3",
             "the DEPARTED card's label keeps the PLACE it left: the box's name, its section, "
             "and the number it would take going back (the owner's ruling, "
-            "D-a-box-is-shown-by-its-name). No word says it left and no store key is "
+            "D259). No word says it left and no store key is "
             "printed; the screen draws a mark for that, off `slot` being null",
         )
         checks.equal(
@@ -10538,7 +10538,7 @@ def check_origin_gate(checks: Checks) -> None:
     with tempfile.TemporaryDirectory() as plain:
         checks.ok(
             ports.dev_port(Path(plain)) != 5173,
-            "and a root with NO .git does not derive 5173 (D-no-git-no-live-port, a copied "
+            "and a root with NO .git does not derive 5173 (D268, a copied "
             "tree never gets the live port): a scratch copy of main once derived the main "
             "tree's ports and its app read the owner's live store",
         )
@@ -13979,7 +13979,7 @@ def check_review_stand_down(checks: Checks) -> None:
             and "box 3" not in not_in_queue_text[1].lower(),
             "a card in no queue has no question to stand down from, and the refusal NAMES "
             "THE PLACE — Section n, Card m — never the store key `3/4` "
-            "(D-a-box-is-shown-by-its-name)",
+            "(D259)",
             f"got {not_in_queue_text!r}",
         )
 
@@ -14036,7 +14036,7 @@ def check_review_stand_down(checks: Checks) -> None:
             )
             and "3/2" not in already_cleared_text[1],
             "a second stand-down refuses rather than re-writing a settled question, and "
-            "the refusal names the place, never `3/2` (D-a-box-is-shown-by-its-name)",
+            "the refusal names the place, never `3/2` (D259)",
             f"got {already_cleared_text!r}",
         )
 
@@ -14069,7 +14069,7 @@ def check_review_stand_down(checks: Checks) -> None:
             and "3/2" not in second_reversal_text[1],
             "a second reversal refuses — the first reopened the entry, so nothing has to "
             "remember that a reversal happened — and the refusal names the place, never "
-            "`3/2` (D-a-box-is-shown-by-its-name)",
+            "`3/2` (D259)",
             f"got {second_reversal_text!r}",
         )
 
@@ -14091,7 +14091,7 @@ def check_review_stand_down(checks: Checks) -> None:
             "a card closed by an ANSWER refuses this reversal — taking back a real "
             "identification through the un-dismiss control is the one thing it must not "
             "do — and the refusal names the place, never the store key "
-            "(D-a-box-is-shown-by-its-name)",
+            "(D259)",
             f"got {answer_guard_text!r}",
         )
         still = Store().read().inventory.cards["3/1"]
@@ -16290,7 +16290,7 @@ def check_cli_refusals(checks: Checks) -> None:
         sorted(entry.COMMANDS),
         ["archive", "boxes", "cards", "emit", "identify", "join", "prices", "queue",
          "readings", "reconcile", "reprice", "rescue", "scan", "skus"],
-        # `boxes` IS THE FOURTEENTH (D-a-box-is-shown-by-its-name): `boxes names` gives every
+        # `boxes` IS THE FOURTEENTH (D259): `boxes names` gives every
         # unnamed box its stored default name. Previews by default; `--write` is one transaction.
         "fourteen commands are registered, and only fourteen",
     )
@@ -18909,7 +18909,7 @@ def _route_refusal(fn) -> Optional[str]:
 def check_send_guard(checks: Checks) -> None:
     """The double-send guard, at the command: TCGplayer never ends up holding more than is here.
 
-    THE OWNER'S RULING (`D-one-press-sends-and-makes-live`): a send "never doubles a quantity".
+    THE OWNER'S RULING (`D273`): a send "never doubles a quantity".
     THE DEFECT IS SHOWN FIRST, THEN THE GUARD. A store whose bookkeeping says nothing is out,
     while TCGplayer's own export says all three copies are live — the D100 §2 shape, a file
     uploaded by hand. `emit` alone writes all three again. `emit --live-guard` over the same
@@ -22827,7 +22827,7 @@ def check_pricing_labels(checks: Checks) -> None:
         joined_bytes = run_dir.path(runs.PRICING).read_bytes()
 
         # The box was created with no name, so it carries its stored default, `Box 1`
-        # (D-a-box-is-shown-by-its-name): the first box in this store.
+        # (D259): the first box in this store.
         at_join = {
             "3/1": "Box 1, Section 1, Card 1",
             "3/2": "Box 1, Section 1, Card 2",
@@ -22861,7 +22861,7 @@ def check_pricing_labels(checks: Checks) -> None:
                 "3/4": "Box 1, Section 2, Card 2",
             },
             "SELL A COPY AND THE CARD BEHIND IT TAKES THE NUMBER IT VACATED (D58), while the "
-            "sold copy's caption names the place it LEFT (D-a-box-is-shown-by-its-name). The "
+            "sold copy's caption names the place it LEFT (D259). The "
             "two strings are equal on purpose: the screen tells them apart by the departed "
             "mark it draws off a null `slot`, never by a word or a store key in the string",
         )
@@ -31233,7 +31233,7 @@ def check_order_screen(checks: Checks) -> None:
                     join.box_title(Store().read().inventory.box(3).name, 3), 1, 1
                 ),
                 "AND A `_Places` BUILT AFTER THE CALL NAMES THE SAME PLACE THROUGH THE DEPARTED "
-                "COMPOSER (D-a-box-is-shown-by-its-name): the place the card left. Its `slot` "
+                "COMPOSER (D259): the place the card left. Its `slot` "
                 "is null, which is what a screen draws the departure from, and the response "
                 "still carries the receipt composed before the write",
             )
@@ -31372,7 +31372,7 @@ def check_order_screen(checks: Checks) -> None:
             and "3/2" not in refused_aim[1]
             and "box 3" not in refused_aim[1].lower(),
             "and the message NAMES THE PLACE, not the store position — the section and "
-            "card within it, never `3/2` or the box number (D-a-box-is-shown-by-its-name)",
+            "card within it, never `3/2` or the box number (D259)",
             f"where: {where_3_2!r}; got: {refused_aim!r}",
         )
         checks.equal(
@@ -31567,7 +31567,7 @@ def check_order_screen(checks: Checks) -> None:
             and f"{where_3_4}: copy_not_identifiable" in aggregate[1]
             and "3/3:" not in aggregate[1] and "3/4:" not in aggregate[1],
             "THREE TARGETS, TWO REFUSALS, AND EACH IS NAMED BY ITS PLACE, WITH ITS OWN "
-            "CODE — never the store position `3/3` or `3/4` (D-a-box-is-shown-by-its-name). "
+            "CODE — never the store position `3/3` or `3/4` (D259). "
             "A per-position refusal is collected rather than raised and the whole set is "
             "answered at once — `group_entry_refused`'s shape — because a pull half-refused "
             "is an operator holding cards with no record of which ones went",

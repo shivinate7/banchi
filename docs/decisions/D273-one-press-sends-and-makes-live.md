@@ -1,4 +1,4 @@
-## D-one-press-sends-and-makes-live — Banchi sends the listing file itself, one press makes it live, and the checks after it run by themselves
+## D273 — Banchi sends the listing file itself, one press makes it live, and the checks after it run by themselves
 
 **The owner's rulings, 2026-09-23, on the flow from captured cards to live listings.** The
 owner asked for an agent to review the whole flow in depth, not for a multiple-choice answer.
@@ -210,6 +210,6 @@ The pricing lane follows, with the rest of the screen and the Live tab.
 ### The review rounds
 
 Rounds 2 to 6 of the adversarial review, each finding and its fix, are the entry
-`D-send-review-rounds` (the send press's review record). Round 5 built the mixed send above.
+`D283` (the send press's review record). Round 5 built the mixed send above.
 It also ordered two presses in one second by press time, and it folded the taken-back warning
 to one line on a phone. Round 6 limited the price rows to the prices the screen named.

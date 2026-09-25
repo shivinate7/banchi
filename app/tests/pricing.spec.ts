@@ -225,7 +225,7 @@ async function open(
      *  request that had not finished. */
     pricingDelayMs?: number
     /** What `POST /pipeline/send` answers, as a function of the body the card sent — the one
-     *  press (`D-one-press-sends-and-makes-live`). `status` other than 200 answers the server's
+     *  press (`D273`). `status` other than 200 answers the server's
      *  refusal envelope with `code`. Default: a send that went live. */
     send?: (body: Record<string, unknown>) => { status: number; body?: unknown; code?: string; data?: unknown }
     /** HOLD `POST /pipeline/send` OPEN THIS LONG, so a case can measure the card WHILE the press

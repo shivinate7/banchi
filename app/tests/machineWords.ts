@@ -3,7 +3,7 @@
  * not close over anything from this file's outer scope — the word list and the repo-top-dirs
  * list are passed IN as its argument instead, both read once from `scripts/machine-words.json`
  * by the spec, so the dictionary itself still lives in exactly one file (see D196,
- * `D-text-shape-checks`).
+ * `D284`).
  *
  * D196's OWN GAP, closed here. `scripts/docs-audit.py`'s `no mechanism on screen` row reads
  * `app/src`'s JSX literals through an AST walk — real, but blind to anything COMPOSED at
@@ -16,7 +16,7 @@
  * A CLOSED `<details>` CONTRIBUTES NOTHING, and it needs no special-casing: `innerText`
  * (unlike `textContent`) only reads what is actually RENDERED, and the UA stylesheet sets
  * `display: none` on everything under a closed `<details>` but its `<summary>`. That is
- * `D-notice-detail`'s own argument for why "the machine-words browser check reads what the
+ * `D269`'s own argument for why "the machine-words browser check reads what the
  * owner sees" is literally true once codes and server text move behind "What the server
  * said" — read `innerText`, never `textContent`, or this reads the hidden disclosure body too.
  */

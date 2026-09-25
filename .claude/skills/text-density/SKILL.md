@@ -5,10 +5,10 @@ description: Run the on-demand text-density pass over Banchi's own screens and r
 
 # Text density pass
 
-`D-text-shape-checks` replaced D194's pinned word ceiling with three things. None of them is
+`D284` replaced D194's pinned word ceiling with three things. None of them is
 a count. Two are gates: `app/tests/text-shape.spec.ts` (repetition and sentence shape) and
 `app/tests/machine-words.spec.ts` (D196's own rendered-text gap). The third is this pass. A
-session runs it on demand. It is never a gate. `D-text-shape-checks` carries the argument.
+session runs it on demand. It is never a gate. `D284` carries the argument.
 
 ## Running it
 

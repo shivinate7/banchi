@@ -1,4 +1,4 @@
-## D-card-order-key — A card's place in its box is an order key apart from its stored index
+## D265 — A card's place in its box is an order key apart from its stored index
 
 **The owner's ruling, 2026-09-23, in the box map interview.** A section drops before or after
 any section of another box. Sections reorder within a box. That is all the owner ruled on

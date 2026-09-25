@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The on-demand text-density pass (D-text-shape-checks, the third piece of the owner's
+// The on-demand text-density pass (D284, the third piece of the owner's
 // 2026-09-23 ruling: "kill ceilings ... use a different way ... I don't like keeping a
 // stagnant static pin"). It prints a CUT TABLE: per route and width, the largest prose blocks
 // with their word counts, the repeated sentences and facts, and the sentences over 25 words.

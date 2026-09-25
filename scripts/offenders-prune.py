@@ -5,7 +5,7 @@
     scripts/offenders-prune.py --write    apply it.
     scripts/offenders-prune.py --selftest its own cases, in memory and in a throwaway repo.
 
-THE THREE LISTS (D-ratchets-become-offender-lists): `scripts/ste-offenders.json`, which
+THE THREE LISTS (D280): `scripts/ste-offenders.json`, which
 `make docs-audit`'s `ste offenders` row reads, `scripts/typed-interpunct-allow.json`, which
 its `typed interpunct` row reads, and `scripts/line-anchor-offenders.json`, which its `line
 anchor offenders` row reads. Each row fails on a STALE entry, one that matches

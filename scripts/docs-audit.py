@@ -1517,7 +1517,7 @@ def check_line_anchors(report: Report, docs: List[Path], allowed: Dict[str, str]
     report.add("line anchors", MECHANICAL, findings, summary, scanned=len(anchors))
 
 
-# ------------------------------------------------ line anchor offenders (D245, D-ratchets-become-offender-lists)
+# ------------------------------------------------ line anchor offenders (D245, D280)
 
 # CLAUSE C: A SHRINKING OFFENDER LIST OF LINE ANCHORS, NEVER A PINNED COUNT. The owner's ruling,
 # 2026-09-24, "convert both of the last pins": D229's per-file count is retired here the way the
@@ -2837,6 +2837,21 @@ def decision_heading_lines_across(paths: Iterable[Path], letter: str) -> List[Tu
     return out
 
 
+def decision_id_code_haystack() -> List[Path]:
+    """Every non-markdown file `decision ids in code` reads for a D/C citation.
+
+    ITS OWN FUNCTION, SO `scripts/claim-ids.py`'s SELF-TEST CAN CALL IT DIRECTLY, rather than
+    retyping the suffix list this scan reads. The claimer's own walk once skipped every
+    dotted directory (`.claude/skills/`), so a slug cited in
+    `.claude/skills/text-density/SKILL.md` survived a claim commit unrewritten and this very
+    row refused PR #462's merge over it (commits 34c54259/eaef7ce7) — `check_decision_ids`
+    calling this function, and the claimer's self-test importing it too, is what keeps the
+    two walks from drifting apart again the way `.js` already once did (see the paragraph
+    below).
+    """
+    return python_files() + _walk(ROOT, (".ts", ".tsx", ".css", ".js"))
+
+
 def check_decision_ids(report: Report, docs: List[Path]) -> None:
     singles = {i for i, _, _ in decision_heading_lines_across(decision_files(), "D")}
     codes = decision_headings(ROOT / "docs" / "CODES-DECISIONS.md", "C")
@@ -2927,7 +2942,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     # ONE HAYSTACK, BUILT BEFORE THE SCAN, so the row can declare how many files it read.
     # It was two `scan()` calls with the count nowhere, which is the shape that let this
     # file print `ok` over a walk that had found nothing.
-    code_haystack = python_files() + _walk(ROOT, (".ts", ".tsx", ".css", ".js"))
+    code_haystack = decision_id_code_haystack()
     scan(code_haystack, in_code)
 
     report.add("decision ids", MECHANICAL, in_docs,
@@ -6484,7 +6499,7 @@ BINARY_SUFFIXES = frozenset({
 # retired per-file prose pin, whose keys were decision FILENAMES. Its replacement,
 # `scripts/ste-offenders.json`, keys a decision entry by its tail and folds every decision id in
 # a label (`scripts/ste_measure.py:list_key`, `fold`), so it holds no id to skip, and the skip
-# was deleted with its only member (D-ratchets-become-offender-lists).
+# was deleted with its only member (D280).
 
 
 def cited_decisions(path: Path) -> Set[str]:
@@ -12837,7 +12852,7 @@ USER_STRINGS_SCRIPT = ROOT / "scripts" / "user-strings.mjs"
 APP_TS_COMPILER = ROOT / "app" / "node_modules" / "typescript" / "lib" / "typescript.js"
 
 # THE ONE PLACE THIS LIST LIVES IS scripts/machine-words.json, not a Python dict, since D196's
-# 2026-09-23 amendment (D-text-shape-checks) put a SECOND reader on it: `app/tests/
+# 2026-09-23 amendment (D284) put a SECOND reader on it: `app/tests/
 # machine-words.spec.ts` reads the rendered TEXT every route draws, catching server- and
 # demo-composed strings this AST walk cannot (it only sees JSX literals). One file, so growing
 # the list edits one dictionary rather than two that can drift apart. `run`, `box`, `export`,
@@ -12977,7 +12992,7 @@ def _no_mechanism_exempt(where_file: str) -> bool:
 
 # THE SHRINKING OFFENDER LIST, on `scripts/kit-adoption-allow.json`'s own precedent and the
 # owner's Q3 ruling, 2026-09-23: file -> word -> the lane that owes the fix. Growing
-# `scripts/machine-words.json`'s word list (D-text-shape-checks) put ten new pipeline nouns —
+# `scripts/machine-words.json`'s word list (D284) put ten new pipeline nouns —
 # `emit`, `sub-threshold`, `index`, `span`, `parked`, `Pushed`, `Staged`, `make demo`,
 # `/pipeline/`, `manual:c` — in front of this row for the first time, and several of them are
 # real, on screens no wave-2 lane has reached yet. A hard gate with no allow list would fail
@@ -13154,10 +13169,10 @@ def check_no_mechanism_on_screen(report: Report) -> None:
     )
 
 
-# ------------------------------------------ shrinking offender lists (D-ratchets-become-offender-lists)
+# ------------------------------------------ shrinking offender lists (D280)
 #
 # THE OWNER'S RULING, 2026-09-24: no pinned count survives. D194's word ceiling went first
-# (D-text-shape-checks). D218's typed-dot count and D229's per-file prose ratio follow it
+# (D284). D218's typed-dot count and D229's per-file prose ratio follow it
 # here. Each is replaced by a RULE check and a SHRINKING OFFENDER LIST in the shape
 # `scripts/kit-adoption-allow.json` set: file -> rule -> entries, with the lane that owes the
 # fix. Three things fail, and a count is none of them:
@@ -13323,7 +13338,7 @@ def _read_offender_list(path: Path) -> Tuple[Optional[object], Optional[str]]:
 # D41 deleted the dot-joined address string from the screen on 2026-08-29 and moved the
 # separator into CSS (`.boxops-identity-part::before { content: '·' }` and its siblings) —
 # the separator is a STYLE now, drawn beside a fact, never typed INTO one. D218 is the full
-# argument. Its pinned count is retired (D-ratchets-become-offender-lists): the row now fails
+# argument. Its pinned count is retired (D280): the row now fails
 # on every typed dot that `scripts/typed-interpunct-allow.json` does not name.
 
 # U+00B7 MIDDLE DOT and U+2022 BULLET — the two characters the survey named. Kept as a fixed
@@ -13450,7 +13465,7 @@ def _typed_interpunct_found(strings: List[Dict[str, object]]) -> Dict[str, Dict[
 
 def check_typed_interpunct(report: Report) -> None:
     """No user-visible string may TYPE a middle dot or bullet as a separator (D41's own
-    ruling, generalised repo-wide 2026-09-19). See D218, and D-ratchets-become-offender-lists
+    ruling, generalised repo-wide 2026-09-19). See D218, and D280
     for the list that replaced its pinned count.
 
     THE EXTRACTION IS THE SAME AST WALK `no mechanism on screen` USES, `scripts/user-
@@ -13552,7 +13567,7 @@ def check_typed_interpunct(report: Report) -> None:
 # vendored `scripts/ste/ste_lint.py` (MIT, pure standard-library Python, so the bare-`python3`
 # pre-commit hook can run it with nothing new installed).
 #
-# THE PINNED RATIO IS RETIRED (D-ratchets-become-offender-lists, superseding D229's ratchet).
+# THE PINNED RATIO IS RETIRED (D280, superseding D229's ratchet).
 # A per-file ratio let a new bad sentence pass wherever an old one was fixed in the same file,
 # and it had to be re-pinned by hand. The row now names every OFFENDER — one sentence that
 # breaks one of the four ERROR-severity rules, after D226's four exemption classes — and fails
@@ -13579,7 +13594,7 @@ STE_OFFENDERS_JSON = ROOT / "scripts" / "ste-offenders.json"
 
 def check_ste_offenders(report: Report) -> None:
     """No markdown sentence may break one of the four ERROR-severity STE rules unless
-    `scripts/ste-offenders.json` names it (D226; D-ratchets-become-offender-lists).
+    `scripts/ste-offenders.json` names it (D226; D280).
 
     READS THE WHOLE TRACKED MARKDOWN TREE EVERY RUN, staged or not — `markdown_files()`
     resolves to the committed INDEX under `--staged` and to `git ls-files` otherwise, so this
@@ -20865,7 +20880,7 @@ def self_test() -> int:
         ok(pairs == [("Runs.tsx", "RunsX.tsx")],
            "and a staged `git mv` in a throwaway repository is one rename pair", f"{pairs}")
 
-    # THE SHRINKING LIST'S OWN ARITHMETIC (D-ratchets-become-offender-lists), in memory: plain
+    # THE SHRINKING LIST'S OWN ARITHMETIC (D280), in memory: plain
     # dicts in, findings out, no file read and none written (D18). Each arm below is one of the
     # three failures the list exists for, or one of the two things it must let through.
     print("\ntyped interpunct: the shrinking list, in memory")
