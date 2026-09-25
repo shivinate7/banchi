@@ -6751,7 +6751,7 @@ COMPONENTS = [
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
                 "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D32", "D69",
-                                "D83", "D93", "D125", "D172", "D192", "D193", "D212", "D218",
+                                "D83", "D93", "D94", "D125", "D172", "D192", "D193", "D212", "D218",
                                 "D-a-box-is-shown-by-its-name"],
             },
             "src/Fulfillment.css": {

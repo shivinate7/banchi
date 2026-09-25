@@ -53,6 +53,7 @@ import { IDENTIFIED, stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
 import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Loading, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows } from './kit'
+import { UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
 import { storedBoxRecency, touchBox } from './deviceMemory'
@@ -2788,10 +2789,12 @@ function CardOps({
     setTrouble(null)
     try {
       // NOT `positionLabel`: for a departed card that reads "Box 1 · departed · B1 #1"
-      // (D68), which would say a card just brought back is still departed. The store key,
-      // spelled the way a departed row's own slot cell already spells it (`storeKeyText`),
-      // names the same physical card without the tense clash.
-      const label = storeKeyText(row.card.box, row.card.index)
+      // (D68), which would say a card just brought back is still departed. The box's own
+      // NAME (S1: never its number) plus the store index names the same physical card
+      // without the tense clash `storeKeyText`'s box number used to carry.
+      // sigil-ok: a store key, `storeKeyText`'s own shape (D92) with the box respelled from
+      // its number to its name — this card is not in a slot to count, same as that one.
+      const label = `${row.card.place?.box_name ?? UNNAMED_BOX} #${row.card.index}`
       if (row.card.state === 'sold') {
         const result: SaleResult = await undoSale(row.card.box, row.card.index)
         toast({

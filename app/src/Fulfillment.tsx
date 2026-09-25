@@ -31,6 +31,7 @@ import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, placeWordsOf, sayPlace } from './position'
 import { Icon, Logo, Modal, useOverlayLayer } from './kit'
+import { UNNAMED_BOX } from './kit/data'
 import { isEditableTarget } from './keys'
 import { useSearch } from './useSearch'
 import './Fulfillment.css'
@@ -376,17 +377,24 @@ function copiesInWalkOrder(copies: SearchCopy[]): SearchCopy[] {
   )
 }
 
-/** `in Box 6`, `in Boxes 4 and 6`, `in Boxes 4, 6 and 7` — where a set of copies is. */
-function inBoxNumbers(numbers: number[]): string {
-  const boxes = [...new Set(numbers)].sort((a, b) => a - b)
-  if (boxes.length === 0) return ''
-  if (boxes.length === 1) return `in Box ${boxes[0]}`
-  const last = boxes[boxes.length - 1]
-  return `in Boxes ${boxes.slice(0, -1).join(', ')} and ${last}`
+/** `in Bulk`, `in Bulk and RB Epics`, `in Bulk, RB Epics and Singles` — where a set of copies
+ *  is, by the box's own NAME (N7/S1: never its number). Ordered by the box number underneath,
+ *  a stable order names alone do not carry, and de-duplicated by it too — two boxes may share
+ *  a name (D94's own note on `box_name`). */
+function inBoxNames(places: readonly { box: number; box_name: string | null }[]): string {
+  const named = new Map<number, string>()
+  for (const place of places) {
+    if (!named.has(place.box)) named.set(place.box, place.box_name ?? UNNAMED_BOX)
+  }
+  const names = [...named.entries()].sort(([a], [b]) => a - b).map(([, name]) => name)
+  if (names.length === 0) return ''
+  if (names.length === 1) return `in ${names[0]}`
+  const last = names[names.length - 1]
+  return `in ${names.slice(0, -1).join(', ')} and ${last}`
 }
 
 function inBoxes(copies: SearchCopy[]): string {
-  return inBoxNumbers(copies.map((copy) => copy.place.box))
+  return inBoxNames(copies.map((copy) => copy.place))
 }
 
 function groupKey(group: SearchGroup, at: number): string {

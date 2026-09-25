@@ -3857,7 +3857,7 @@ test('the control that reclaims does not exist until the free count has answered
   await page.route(/\/boxes\/\d+\/photos$/, async () => {
     /* deliberately never fulfilled */
   })
-  await page.getByRole('button', { name: /Reclaim the photographs of 1 sold card in box 2/ }).click()
+  await page.getByRole('button', { name: /Reclaim the photographs of 1 sold card in ME01 commons/ }).click()
   await expect(page.locator('.boxops-confirm')).toContainText('No undo')
   await expect(page.getByRole('button', { name: /permanently$/ })).toHaveCount(0)
   expect(wire.filter((sent) => sent.path.endsWith('/photos/reclaim'))).toHaveLength(0)
@@ -3868,7 +3868,7 @@ test('the reclaim names the count and the bytes, sends confirm, and both presses
 }) => {
   const wire = await open(page)
   await openBoxOps(page)
-  await page.getByRole('button', { name: /Reclaim the photographs of 1 sold card in box 2/ }).click()
+  await page.getByRole('button', { name: /Reclaim the photographs of 1 sold card in ME01 commons/ }).click()
 
   const panel = page.locator('.boxops-confirm')
   /* THE NUMBER AND THE SIZE, BEFORE THE PRESS. `3_612_000` bytes is `3.6 MB`; the sentence
@@ -3882,7 +3882,7 @@ test('the reclaim names the count and the bytes, sends confirm, and both presses
   expect(read?.method).toBe('GET')
   expect(wire.filter((sent) => sent.path.endsWith('/photos/reclaim'))).toHaveLength(0)
 
-  const fire = page.getByRole('button', { name: 'Delete 2 photographs from box 2 permanently' })
+  const fire = page.getByRole('button', { name: 'Delete 2 photographs from ME01 commons permanently' })
   await expect(fire).toBeVisible()
   await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible()
   await fire.click()
@@ -3895,7 +3895,7 @@ test('the reclaim names the count and the bytes, sends confirm, and both presses
   expect(sent?.body).toEqual({ confirm: true })
 
   /* The receipt names the keys, which is the only evidence left: the bytes are gone. */
-  await expect(page.locator('.boxops-receipt')).toContainText('Reclaimed 2 photographs from box 2')
+  await expect(page.locator('.boxops-receipt')).toContainText('Reclaimed 2 photographs from ME01 commons')
   await expect(page.locator('.boxops-receipt')).toContainText('2/3, 2/7')
 })
 
@@ -3977,12 +3977,12 @@ test('the plan names what each SKU gives up, what it keeps, and which box holds 
   /* THE BUDGET, VISIBLE. The owner's ruling of 2026-08-24: each SKU gives up at most the
      copies this box holds, so a release reached from box 2 can never give up what only box
      7's copies could account for. The line says both halves. */
-  await expect(panel).toContainText('8937370 2 staged keeps 3 staged also box 7 (3)')
+  await expect(panel).toContainText('8937370 2 staged keeps 3 staged also ME01 spares (3)')
 
   /* AND THE OUTCOME A PERSON WOULD OTHERWISE READ AS A BUG. A shared SKU leaves a remainder,
      a remainder keeps the card listing-held, so the box stays refused after a release that
      did exactly what it said. The panel says so before the press, not after. */
-  await expect(panel).toContainText('This will not free box 2')
+  await expect(panel).toContainText('This will not free ME01 commons')
 })
 
 test('the release sends confirm, and only after the plan is on screen', async ({ page }) => {
@@ -4345,6 +4345,26 @@ test('UX-190 — a sale says which card took its number, and the rows hold still
      list does not move to show it (FLT-22). */
   await expect(receiptToast(page)).toContainText('Conscription is now card')
   expect(await rects()).toEqual(before)
+})
+
+test('S1 — bringing a card back names the box, never its number', async ({ page }) => {
+  /* `BoxBrowse.tsx:CardOps`'s resurrect toast used to say `B2 #4 is back in its box` off
+   * `storeKeyText` — the server's own machine spelling of the store key, a raw box number,
+   * on the owner's screen. The box's own name, off `place.box_name`, is what the fix reads. */
+  const wire = await open(page)
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  await page.getByRole('button', { name: 'Card actions' }).click()
+  const bring = page.getByRole('menuitem', { name: 'Bring this card back' })
+  await expect(bring).toBeVisible()
+  await bring.click()
+
+  const toast = page.locator('.bn-toast', { hasText: 'Card brought back' })
+  await expect(toast).toContainText('ME01 commons #4 is back in its box')
+  await expect(toast).not.toContainText('B2 #4')
+
+  const sent = wire.find((entry) => entry.path === '/inventory/2/4/sold')
+  expect(sent?.body).toEqual({ undo: true })
 })
 
 test('UX-244 — one copy moves to another box from its own row, and the receipt names the box', async ({ page }) => {

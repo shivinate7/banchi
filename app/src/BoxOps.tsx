@@ -447,7 +447,7 @@ export function BoxOps({
   const scope =
     selection.length > 0
       ? `the ${count(selection.length, 'selected card', 'selected cards')}`
-      : `all ${count(record.cards, 'card', 'cards')} in box ${record.box}`
+      : `all ${count(record.cards, 'card', 'cards')} in ${record.name ?? UNNAMED_BOX}`
 
   const applyClaims = async (patch: ClaimPatch) => {
     const result = await write(() =>
@@ -692,12 +692,12 @@ export function BoxOps({
               </section>
             ) : null}
 
-            {claimed === null ? null : <ClaimReceipt result={claimed} />}
+            {claimed === null ? null : <ClaimReceipt result={claimed} boxLabel={record.name ?? UNNAMED_BOX} />}
 
             {moved === null ? null : (
               <Notice
                 tone="ok"
-                title={`Moved ${count(moved.moved, 'card', 'cards')} from box ${moved.box} to box ${moved.to_box}.`}
+                title={`Moved ${count(moved.moved, 'card', 'cards')} from ${record.name ?? UNNAMED_BOX} to ${boxName(boxes, moved.to_box)}.`}
               >
                 The {count(moved.moved, 'position', 'positions')} left behind
                 {moved.moved === 1 ? ' stays' : ' stay'} permanently empty — the same gap a sale
@@ -788,7 +788,7 @@ export function BoxOps({
               <p className="bn-field-hint">
                 {selection.length > 0
                   ? `Moves the ${count(selection.length, 'selected card', 'selected cards')}. The positions here stay permanently empty.`
-                  : `Moves all ${count(record.on_hand ?? 0, 'card', 'cards')} on hand in box ${record.box} — the same operation a merge is, from this side.`}
+                  : `Moves all ${count(record.on_hand ?? 0, 'card', 'cards')} on hand in ${record.name ?? UNNAMED_BOX} — the same operation a merge is, from this side.`}
               </p>
             </div>
             {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
@@ -1365,7 +1365,7 @@ function PlainInput({
 
 /** The receipt a box-wide apply leaves: what the scope reached, what actually changed, and
  *  which sold or retired cards the route stepped over. */
-function ClaimReceipt({ result }: { result: BoxClaimResult }) {
+function ClaimReceipt({ result, boxLabel }: { result: BoxClaimResult; boxLabel: string }) {
   return (
     <div className="boxops-receipt">
       <Notice
@@ -1375,7 +1375,7 @@ function ClaimReceipt({ result }: { result: BoxClaimResult }) {
             ? 'Nothing changed — every card in scope already said this.'
             : `${count(result.applied, 'card', 'cards')} changed.`
         }
-        code={`box ${result.box}: eligible ${result.eligible}, applied ${result.applied}, unchanged ${result.unchanged}, sidecars ${result.sidecars_rewritten}, skipped ${result.skipped_terminal}`}
+        code={`${boxLabel}: eligible ${result.eligible}, applied ${result.applied}, unchanged ${result.unchanged}, sidecars ${result.sidecars_rewritten}, skipped ${result.skipped_terminal}`}
       >
         {result.skipped.length === 0
           ? null
@@ -1390,7 +1390,24 @@ function ClaimReceipt({ result }: { result: BoxClaimResult }) {
 }
 
 /** One SKU's line in the plan and in the receipt, with the age of the figures it is quoting. */
-function ListingLine({ row, at }: { row: BoxListingRow; at?: string | null }) {
+/** A box's own NAME off the registry (S1: never the number a person reads on the drawer).
+ *  'another box' when the registry does not carry this box at all — the same fallback the
+ *  release receipt above already used for a box this screen never loaded. */
+function boxName(boxes: readonly BoxRecord[], box: number): string {
+  const found = boxes.find((candidate) => candidate.box === box)
+  return found === undefined ? 'another box' : (found.name ?? UNNAMED_BOX)
+}
+
+function ListingLine({
+  row,
+  at,
+  boxes = [],
+}: {
+  row: BoxListingRow
+  at?: string | null
+  /** The registry, to name the other boxes a SKU is also held in (S1: never the number). */
+  boxes?: readonly BoxRecord[]
+}) {
   const gives = Object.entries(row.releases)
   const keeps = Object.entries(row.after)
   return (
@@ -1407,7 +1424,9 @@ function ListingLine({ row, at }: { row: BoxListingRow; at?: string | null }) {
         {row.also_in_boxes.length === 0 ? null : (
           <>
             {' '}
-            <span>also {row.also_in_boxes.map((o) => `box ${o.box} (${o.copies})`).join(', ')}</span>
+            <span>
+              also {row.also_in_boxes.map((o) => `${boxName(boxes, o.box)} (${o.copies})`).join(', ')}
+            </span>
           </>
         )}
       </span>
@@ -1504,13 +1523,13 @@ function ReleaseListings({
               account for
               {receipt.also_in_boxes.length === 0
                 ? ''
-                : `, and ${receipt.also_in_boxes.map((b) => boxes.find((one) => one.box === b)?.name ?? 'another box').join(', ')} hold copies of them`}
+                : `, and ${receipt.also_in_boxes.map((b) => boxName(boxes, b)).join(', ')} hold copies of them`}
               , so the delete will go on refusing.
             </>
           )}
         </Notice>
         {receipt.listings.map((row) => (
-          <ListingLine key={row.sku} row={row} at={listings[row.sku]?.live_as_of} />
+          <ListingLine key={row.sku} row={row} at={listings[row.sku]?.live_as_of} boxes={boxes} />
         ))}
       </div>
     )
@@ -1533,7 +1552,7 @@ function ReleaseListings({
       {!open ? null : (
         <div className="boxops-confirm">
           <p className="boxops-confirm-text">
-            {count(record.listed, 'card', 'cards')} in box {box}{' '}
+            {count(record.listed, 'card', 'cards')} in {record.name ?? UNNAMED_BOX}{' '}
             {record.listed === 1 ? 'belongs' : 'belong'} to a SKU this store believes TCGplayer
             holds. Release only if{' '}
             <strong>you've checked TCGplayer and it holds none of them</strong> — nothing here
@@ -1547,21 +1566,21 @@ function ReleaseListings({
               <Notice tone={plan.frees_box ? 'info' : 'warn'}>
                 Each SKU gives up at most the copies this box holds.{' '}
                 {plan.frees_box ? (
-                  <>This releases box {box} completely.</>
+                  <>This releases {record.name ?? UNNAMED_BOX} completely.</>
                 ) : (
                   <>
-                    <strong>This will not free box {box}.</strong>{' '}
+                    <strong>This will not free {record.name ?? UNNAMED_BOX}.</strong>{' '}
                     {count(plan.still_held.length, 'SKU', 'SKUs')} will keep copies
                     {plan.also_in_boxes.length === 0
                       ? ''
-                      : ` also held by ${plan.also_in_boxes.map((b) => `box ${b}`).join(', ')}`}
+                      : ` also held by ${plan.also_in_boxes.map((b) => boxName(boxes, b)).join(', ')}`}
                     .
                   </>
                 )}
               </Notice>
               <div className="boxops-lines">
                 {plan.listings.map((row) => (
-                  <ListingLine key={row.sku} row={row} at={listings[row.sku]?.live_as_of} />
+                  <ListingLine key={row.sku} row={row} at={listings[row.sku]?.live_as_of} boxes={boxes} />
                 ))}
               </div>
             </>
@@ -1648,7 +1667,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
       <div className="boxops-receipt">
         <Notice
           tone="ok"
-          title={`Reclaimed ${count(receipt.reclaimed, 'photograph', 'photographs')} from box ${receipt.box}, ${megabytes(receipt.bytes)}.`}
+          title={`Reclaimed ${count(receipt.reclaimed, 'photograph', 'photographs')} from ${record.name ?? UNNAMED_BOX}, ${megabytes(receipt.bytes)}.`}
           code={receipt.keys.join(', ')}
         >
           Records stay sold; each keeps its photograph's digest. No undo.
@@ -1669,7 +1688,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
         danger
         label="Reclaim photographs"
         detail={count(record.sold, 'sold card', 'sold cards')}
-        said={`Reclaim the photographs of ${count(record.sold, 'sold card', 'sold cards')} in box ${box}…`}
+        said={`Reclaim the photographs of ${count(record.sold, 'sold card', 'sold cards')} in ${record.name ?? UNNAMED_BOX}…`}
         busy={false}
         expanded={open}
         onClick={() => setOpen((held) => !held)}
@@ -1677,7 +1696,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
       {!open ? null : (
         <div className="boxops-confirm">
           <p className="boxops-confirm-text">
-            Deletes the <strong>photograph</strong> of every sold card in box {box}; records
+            Deletes the <strong>photograph</strong> of every sold card in {record.name ?? UNNAMED_BOX}; records
             stay.{' '}
             <strong>No undo</strong> — a photograph can't be regenerated.
           </p>
@@ -1688,7 +1707,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
             <Notice tone={plan.reclaimable.cards === 0 ? 'info' : 'warn'}>
               {plan.reclaimable.cards === 0 ? (
                 <>
-                  Nothing to reclaim: no sold card in box {box} still has a photograph on disk
+                  Nothing to reclaim: no sold card in {record.name ?? UNNAMED_BOX} still has a photograph on disk
                   {plan.reclaimed.cards > 0
                     ? ` — ${count(plan.reclaimed.cards, 'was', 'were')} reclaimed already`
                     : ''}
@@ -1724,7 +1743,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
             </Button>
             {plan === null || plan.reclaimable.cards === 0 ? null : (
               <Button variant="danger-solid" icon="trash" busy={busy} onClick={() => void run()}>
-                Delete {count(plan.reclaimable.cards, 'photograph', 'photographs')} from box {box}{' '}
+                Delete {count(plan.reclaimable.cards, 'photograph', 'photographs')} from {record.name ?? UNNAMED_BOX}{' '}
                 permanently
               </Button>
             )}
