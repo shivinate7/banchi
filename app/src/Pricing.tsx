@@ -410,11 +410,11 @@ function flagOf(row: PricingSku, standing: unknown, locked: boolean, cut: string
      would put every cheap card on top, which is the opposite of "zero attention per card". */
   const floor = cents(cut)
   const clamped = typed !== null && floor !== null && typed === floor && market < floor
-  if (typed !== null && market > 0 && !clamped) {
-    const pct = Math.round(((typed - market) / market) * 100)
-    if (Math.abs(pct) >= DRIFT_PCT) {
-      return { kind: 'drift', text: `Your price is ${Math.abs(pct)}% ${pct < 0 ? 'under' : 'over'} market`, tone: 'warn' }
-    }
+  /* EXACT, IN WHOLE CENTS (Q2 says "25% or more"): no rounding decides which side of the edge
+     a row is on. Only the words round the figure they print. */
+  if (typed !== null && market > 0 && !clamped && Math.abs(typed - market) * 100 >= DRIFT_PCT * market) {
+    const pct = Math.round((Math.abs(typed - market) / market) * 100)
+    return { kind: 'drift', text: `Your price is ${pct}% ${typed < market ? 'under' : 'over'} market`, tone: 'warn' }
   }
   if (market >= WORTH_A_LOOK) {
     return {
@@ -1074,10 +1074,14 @@ export function Pricing() {
         closed += 1
         continue
       }
-      if (isWithheld(answerFor(row))) {
+      const standing = answerFor(row)
+      if (isWithheld(standing)) {
         heldCount += 1
         continue
       }
+      /* A ROW WITH NO MARKET PRICE AND NO ANSWER IS NOT READY (Q3): the send leaves it out, so
+         its copies are counted under "needs a price" and never among the ready ones. */
+      if (row.bucket === 'no_market_data' && typeof standing !== 'string') continue
       const asked = askedFor(row.sku)
       if (asked !== undefined) byHand += 1
       const going = asked === undefined ? row.add_to_quantity : Math.min(asked, row.add_to_quantity)

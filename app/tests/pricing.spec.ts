@@ -3462,6 +3462,11 @@ test('the rows that need the owner come first, each with its reason, and the res
   await expect(page.locator('.pricing-group').nth(1).locator('.pricing-flag')).toHaveCount(0)
   /* THE BAR NAMES WHAT STAYS BACK (Q3). */
   await expect(page.locator('.pricing-bar-says')).toContainText('1 needs a price')
+  /* AND ITS COPIES ARE NOT READY (the delta review, R3-1): four rows of three copies go, the
+     unpriced row's three do not. The bar and the press both say twelve, which is what the file
+     will carry. */
+  await expect(page.locator('.pricing-bar-says')).toContainText('12 copies ready')
+  await expect(sendPress(page)).toHaveText('Send 12 copies to TCGplayer')
 })
 
 test('a price typed far from market gives the row its flag, and the row does not move', async ({ page }) => {
@@ -3653,4 +3658,42 @@ test('Write the file keeps its words and its place while it writes', async ({ pa
     expect(Math.abs((during?.[side] ?? 0) - (before?.[side] ?? 0)), side).toBeLessThanOrEqual(0.5)
   }
   await expect.poll(() => sendPosts(wire).length).toBe(1)
+})
+
+test('the 25% edge is exact: 25% away needs the owner, 24.5% does not, on either side', async ({ page }) => {
+  /* Q2 SAYS "25% OR MORE". A ROUNDED PERCENTAGE TREATED THE TWO SIDES UNEVENLY (the delta review,
+     R3-6): 24.5% over rounded up into the flag and 24.5% under rounded down out of it. */
+  const at = (sku: string, name: string) =>
+    ({ sku, name, snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: null } }) as const
+  await open(page, {
+    skus: [
+      sku(at('1', 'Over by 24.5')),
+      sku(at('2', 'Under by 24.5')),
+      sku(at('3', 'Over by 25')),
+      sku(at('4', 'Under by 25')),
+    ],
+    decisions: { rule: 'match', basis: 'market', overrides: { '1': '12.45', '2': '7.55', '3': '12.50', '4': '7.50' } },
+  })
+  const flag = (name: string) => page.locator('.pricing-row', { hasText: name }).locator('.pricing-flag')
+  /* A $10.00 CARD IS WORTH $5 OR MORE, so a row inside the band still carries that flag, and
+     only the drift text tells the two cases apart. */
+  await expect(flag('Over by 24.5')).toHaveText('Worth $5.00 or more')
+  await expect(flag('Under by 24.5')).toHaveText('Worth $5.00 or more')
+  await expect(flag('Over by 25')).toHaveText('Your price is 25% over market')
+  await expect(flag('Under by 25')).toHaveText('Your price is 25% under market')
+})
+
+test('the keyboard sheet lists the keys the rows answer, and nothing the screen dropped', async ({ page }) => {
+  await open(page)
+  await page.locator(`${VIEW} h1`).click()
+  await page.keyboard.press('?')
+  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+  await expect(sheet).toBeVisible()
+  /* THE SNAP KEYS ARE THE COLUMNS THE ROW DRAWS (m, l, and n on the Live tab), and T OPENS THE
+     PRODUCT VIEW WITH ONE PRESS (the delta review, R3-4). */
+  await expect(sheet).toContainText('Open the product view')
+  await expect(sheet).toContainText('Snap the price to Lowest')
+  await expect(sheet).not.toContainText('Low with shipping')
+  await expect(sheet).not.toContainText('Direct low')
+  await expect(sheet).not.toContainText('Hold to read')
 })
