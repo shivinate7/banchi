@@ -918,21 +918,26 @@ rather than disabled until its preflight has answered. What changed is reading o
 zero inside the panel — which is the one form of it no future relocation can quietly falsify.
 
 **Reason codes: human label large, machine string small beneath it.** The pipeline defines
-fifteen strings and the screen labels FOURTEEN of them — six from the variant ladder in
-`pipeline/variant.py`
-(`no_catalog_row`, `metadata_not_stocked`,
-`detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition`, and D23's
-`rarity_claim_mismatch`, the stack claim contradicting every candidate row) and EIGHT from
-routing in `pipeline/routing.py` (`low_confidence`, `no_position`, `identification_failed`,
-`set_ambiguous`, `card_not_detected`, `no_market_data`, `name_disputed` — the name read off
-the photograph matching none of the rows its number found, which is D23's cross-check run
-backwards and the only signal that catches a confidently misread number — and D35's
-`number_unread_name_matched` — the only reason the JOIN writes over a successful ladder
-resolution, keeping that row so the entry offers exactly one candidate, which is what makes a
-queue of them one D29 group. It is *not* the only reason sitting on a card the ladder resolved:
-`low_confidence` and `no_market_data` do too, and the difference is that they reach
-`routing.route` still resolved and are re-routed there, where this one arrives already
-un-resolved). Showing only a friendly label
+named strings, and the screen labels every live one. Six come from the variant ladder in
+`pipeline/variant.py` (`no_catalog_row`, `metadata_not_stocked`,
+`detected_finish_not_stocked`, `ambiguous_no_signal`, `duplicate_condition` and D23's
+`rarity_claim_mismatch`). D23's reason is the stack claim contradicting every candidate row.
+The rest come from routing in `pipeline/routing.py` (`low_confidence`, `no_position`,
+`identification_failed`, `set_ambiguous`, `card_not_detected`, `no_market_data`,
+`name_disputed`, D35's `number_unread_name_matched` and `listing_disputed`).
+`name_disputed` is the name read off the photograph matching none of the rows its number
+found. It is D23's cross-check run backwards. It is the only signal that catches a
+confidently misread number. `number_unread_name_matched` is the only reason the JOIN writes
+over a successful ladder resolution. It keeps that row, so the entry offers exactly one
+candidate, and a queue of them is one D29 group. It is *not* the only reason sitting on a
+card the ladder resolved. `low_confidence` and `no_market_data` do too. The difference is
+that they reach `routing.route` still resolved and are re-routed there. This one arrives
+already un-resolved.
+
+identity-follows-sku.md §7.3 (lane 2) opens `listing_disputed`. `./pkmnscan cards identity
+--write` opens it for a held, identified card. `routing.route` never opens it.
+
+Showing only a friendly label
 creates a second vocabulary that nothing audits — the drift D16 exists to catch — and
 leaves no way to get from what you saw on screen to what the pipeline actually said.
 Showing only the raw string is honest and unreadable. Both, at two sizes, costs one line of

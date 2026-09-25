@@ -267,6 +267,11 @@ const RECORDED = {
     'liveCheck',                                  // press, its way back, and the check after it
     'matchRun',                                   // flow interview Q4: the match runs by itself
     'dismissSendWarning',                         // the round-3 review's H2: a taken-back warning read
+    'confirmIdentity', 'undoConfirmIdentity', // identity-follows-sku.md §8.1, the confirm
+                                               // press beside D252's correction — its own
+                                               // pair, same shape: `ListingCorrection` folds
+                                               // the response into `written` the identical
+                                               // way `correctAnswer`/`undoCorrectAnswer` do
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.

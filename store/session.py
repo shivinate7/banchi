@@ -56,6 +56,7 @@ from store.queues import MAIN, PARKED, Queue
 from store.readings import Readings
 from store.rows import Rows
 from store.sendclaims import SendClaims
+from store.skus import Skus
 from store.submissions import Submissions
 
 
@@ -94,6 +95,11 @@ class Snapshot:
     # `Store.write()` with `db.append_postings`, in the same transaction as everything else
     # a press touches.
     postings: Postings
+    # EVERY TCGPLAYER SKU THIS STORE HAS EVER READ OUT OF A CACHED EXPORT (lane 0,
+    # `docs/specs/identity-follows-sku.md` §3.2). Bound like every other table so a
+    # `Store.write()` from `skus adopt` commits it atomically with everything else D88
+    # already protects; nothing else in this lane writes it.
+    skus: Skus
 
     def queue(self, name: str) -> Queue:
         return self.review if name == MAIN else self.parked
@@ -121,6 +127,7 @@ class Snapshot:
             self.readings.sources,
             self.archive.entries,
             self.archive.sources,
+            self.skus.entries,
         ]
 
 
@@ -173,6 +180,7 @@ class Store:
                 entries=bound(PriceArchive.ENTRIES, "price_history"),
                 sources=bound(PriceArchive.SOURCES, "price_history_sources"),
             ),
+            skus=Skus(entries=bound(Skus.ENTRIES, "skus")),
             # NOT `bound()` — nothing to load, only to append to, exactly like
             # `snapshot.inventory.events` beside it. A read-only `Store.read()` snapshot gets
             # one too, empty and unused: nothing here ever calls `.record()` on it, since

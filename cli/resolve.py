@@ -381,6 +381,90 @@ def _rarity_claim(raw) -> Optional[Tuple[str, ...]]:
     return cleaned or None
 
 
+# ------------------------------------------------------------ the shared evidence reader
+# (identity-follows-sku.md §5.1, lane 4 — REVIEWED 2026-09-24, this section added on the
+# review's own word)
+#
+# EVERY CARD IDENTIFIED BEFORE LANE 1 LANDED CARRIES `read_name IS None` FOREVER, UNTIL
+# LANE 2'S MIGRATION BACKFILLS IT. A builder that always read `card.read_name` — this
+# module's first draft of `store_payload`, and `cli/requeue.py`'s first draft of
+# `identified` — went blind on deploy: on a copy of the owner's real store, EVERY card's
+# `read_name` was `None`, so `store_payload` built `{"name": None, "number": None}` for a
+# card that had plainly been identified, and `requeue.identified` returned `None` for
+# every open entry, turning `queue refresh` into a silent, store-wide no-op with no reason
+# printed anywhere. Both are the SAME bug: reading `read_*` unconditionally, with no
+# account for a card `record_identification` (store/master.py) never touched since this
+# field was added.
+#
+# THE RULE FOLLOWS FROM LANE 1'S OWN MODEL, not a new one invented here.
+# `record_identification`'s docstring: "on a card with no SKU the identity follows the
+# read" — so for a card `bind_sku` has never bound, `name`/`number`/`printed_total` ARE a
+# reading, either the CURRENT one (an identification after lane 1 landed set both `read_*`
+# and the identity fields to the same values in the same call) or an OLD one (a card
+# identified before lane 1 existed, whose `read_*` triple is still the Python default
+# `None` and whose identity fields carry the only reading this store has ever recorded for
+# it). Once `bind_sku` DOES bind the card, `name`/`number`/`printed_total` stop being a
+# reading at all — they become the SKU's own catalog row (§3.1) — so falling back to them
+# on a bound card is exactly the "compare the SKU against itself" hole D253 exists to
+# close, whether or not `read_name` happens to be set.
+#
+# `read_name is None`, NOT `not read_name`, IS THE SIGNAL A CARD HAS NEVER BEEN TOUCHED BY
+# THE NEW WRITE PATH. `record_identification` writes `card.read_name = name`
+# UNCONDITIONALLY on every call, even where the model read no name at all (`name == ""`),
+# so `read_name` moves from `None` to *some* string — possibly empty — the first time that
+# call ever runs for this card, or the first time lane 2's migration backfills it from the
+# card's own `identifications` cache entry. A genuinely blank reading (`read_name == ""`,
+# `read_number` carrying the card's only signal) is not this case, and falls through to
+# the ordinary "nothing to resolve" outcome below, unchanged from before this lane.
+READING_OK = "ok"
+# NOTHING TO RESOLVE, on an unbound card or a bound card with a real (if blank) recorded
+# reading — `cli/requeue.py`'s pre-lane-4 `NO_READING`, unrenamed: this is the same
+# outcome it has always named.
+READING_NONE = "none"
+# A SKU-BOUND CARD WHOSE EVIDENCE WAS NEVER RECORDED (`read_name is None`) — bound by a
+# migration, or bound before this call was ever wired to record `read_*`. THERE IS NO
+# READING TO OFFER, and falling back to the identity fields would compare the SKU against
+# itself. A caller MUST refuse this card loudly and name why, never file a blank or a
+# catalog-echoing identification.
+READING_UNAVAILABLE = "unavailable"
+
+
+class CardReading(NamedTuple):
+    """`card_reading`'s own answer — never constructed by a caller."""
+
+    outcome: str
+    name: str = ""
+    number: Optional[str] = None
+    printed_total: Optional[str] = None
+
+
+def card_reading(card: master.Card) -> CardReading:
+    """The MODEL's reading for `card` — never a bound SKU's own catalog identity. See the
+    section comment above for the rule and why it exists; every evidence reader in this
+    lane (`cli/requeue.py:identified`, `cli/resolve.py:store_payload`) calls this rather
+    than reading `card.read_name`/`card.name` itself, so the rule lives in one place.
+    """
+    bound = card.identity_source == master.IDENTITY_SKU
+    touched = card.read_name is not None
+    if bound and not touched:
+        return CardReading(READING_UNAVAILABLE)
+    if touched:
+        name = card.read_name or ""
+        number = (card.read_number or "").strip() or None
+        total = (card.read_printed_total or "").strip() or None
+    else:
+        # UNBOUND, NEVER TOUCHED BY THE NEW WRITE PATH — a card identified before lane 1
+        # existed. Its identity fields are the only reading this store has ever recorded
+        # for it (`record_identification`'s own "identity follows the read" rule, run
+        # every time under the OLD code this card was last identified under).
+        name = card.name or ""
+        number = (card.number or "").strip() or None
+        total = (card.printed_total or "").strip() or None
+    if not name and not number:
+        return CardReading(READING_NONE)
+    return CardReading(READING_OK, name, number, total if number else None)
+
+
 def box_views(
     inventory: master.Inventory, boxes: Optional[Iterable[int]] = None
 ) -> Dict[int, join.BoxView]:
@@ -1945,13 +2029,36 @@ def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str,
     store-backed payload is already at today's slots by construction (see `load_from_store`).
 
     A CARD ALREADY IDENTIFIED, EVER, IS NOT RE-DETECTED BY STATE ALONE. `record_identification`
-    writes `confidence` UNCONDITIONALLY together with `name`/`number`/`printed_total` and
-    never with the Python `None` a field predating identification carries — `routing.py`'s
-    `CONFIDENCE_NONE` is the STRING `"none"` the model answers with, never a null — so
-    `card.confidence is not None` is the same fact `record_identification` last wrote and
-    survives a card that skipped straight from `captured` to `retired` (a card can be marked
-    `pulled`/`damaged`/`lost`/`given_away` before it is ever identified), which `state !=
-    captured` alone would have misread as identified.
+    writes `confidence` UNCONDITIONALLY together with `read_name`/`read_number`/
+    `read_printed_total` and never with the Python `None` a field predating identification
+    carries — `routing.py`'s `CONFIDENCE_NONE` is the STRING `"none"` the model answers with,
+    never a null — so `card.confidence is not None` is the same fact `record_identification`
+    last wrote and survives a card that skipped straight from `captured` to `retired` (a card
+    can be marked `pulled`/`damaged`/`lost`/`given_away` before it is ever identified), which
+    `state != captured` alone would have misread as identified.
+
+    THE `identification` DICT BELOW READS `card_reading(card)`, NEVER `card.read_name`/
+    `card.read_number`/`card.read_printed_total` DIRECTLY AND NEVER `card.name`/
+    `card.number`/`card.printed_total` DIRECTLY (identity-follows-sku.md §5.1, lane 4 —
+    REVIEWED 2026-09-24). Once `Inventory.bind_sku` has run, `name`/`number`/
+    `printed_total` equal the bound SKU's own row — the catalog's own answer, not the
+    model's reading — but a card the OLD code identified, before `read_name` existed, has
+    `read_name is None` forever until a migration backfills it, and reading `read_*`
+    unconditionally answered `{"name": None, "number": None}` for a plainly-identified
+    card, MEASURED on a copy of the owner's real store: every one of its cards. `_resolve`'s
+    loop below compares this dict's `name`/`number` against the catalog to find a dispute
+    (`join.name_disputes`, D253); handing it the catalog's own values on a bound card would
+    make that comparison agree with itself and never fire again, which is why `card_reading`
+    never falls back to the identity fields once a card is bound — see its own docstring.
+    The dict's OWN keys stay `name`/`number`/`printed_total` — that is `_resolve`'s
+    established wire shape, unchanged since `Run.read_identifications()` — only the VALUES
+    that fill them move.
+
+    A BOUND CARD WITH NO RECORDED EVIDENCE (`card_reading` answers `READING_UNAVAILABLE`)
+    IS REFUSED THE SAME WAY AN UNIDENTIFIED CARD IS — `identification: None`, a `status`
+    naming the refusal rather than pretending success — which `_resolve`'s existing `if not
+    identification` branch already routes to a `PreJoinFailure` with an explicit reason,
+    never a blank or catalog-echoing identification.
 
     A KEY WITH NO CARD IS REFUSED, NEVER SILENTLY DROPPED — `CLAUDE.md`'s standing rule. A
     typo'd key names no card, and a card this store has never captured is not this pipeline's
@@ -1968,6 +2075,8 @@ def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str,
             missing.append(key)
             continue
         identified = card.confidence is not None
+        reading = card_reading(card) if identified else None
+        unavailable = identified and reading.outcome == READING_UNAVAILABLE
         cards[key] = {
             "photo": card.photo,
             "box": card.box,
@@ -1976,21 +2085,28 @@ def store_payload(keys: Sequence[str], inventory: master.Inventory) -> Dict[str,
             "metadata_finish": card.metadata_finish,
             "rarity_claim": card.rarity_claim,
             "game": card.game,
-            "status": "succeeded" if identified else "not_identified",
+            "status": (
+                "not_identified" if not identified
+                else "no_reading" if unavailable
+                else "succeeded"
+            ),
             "error": (
-                None
-                if identified
-                else "this card has not been identified yet — run `pkmnscan identify` first"
+                "this card has not been identified yet — run `pkmnscan identify` first"
+                if not identified
+                else "this card is bound to a SKU but carries no recorded reading to "
+                     "compare it against — re-identify it to refresh the evidence"
+                if unavailable
+                else None
             ),
             "identification": (
                 {
-                    "name": card.name,
-                    "number": card.number,
-                    "printed_total": card.printed_total,
+                    "name": reading.name,
+                    "number": reading.number,
+                    "printed_total": reading.printed_total,
                     "confidence": card.confidence,
                     "finish": card.detected_finish,
                 }
-                if identified
+                if identified and not unavailable
                 else None
             ),
         }

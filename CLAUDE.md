@@ -194,7 +194,8 @@ make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACH
                     #   Backgrounds itself. Read `.serve/design-check.json` ONCE when the run
                     #   lands. It says `"running"` until it finishes, so a stale `running`
                     #   after exit means the run died. No file at all means it never reached
-                    #   Playwright. Never poll it. Never pipe it through `tail` (both
+                    #   Playwright. A run with zero tests says `"empty"`, never `"pass"`, and
+                    #   a `--list` run writes nothing. Never poll it. Never pipe it through `tail` (both
                     #   documented traps in `docs/debts/`). Guarded twice: `make docs-audit`'s
                     #   `verdict file` row, and `make verdict-selftest` (D129, floor 1.58.0).
                     #   No browser, no dev server: in `check` and `ci-check`, no lock.
@@ -245,6 +246,10 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   identity-checks-selftest + price-postings-selftest +
                     #   product-history-selftest +
                     #   sku-number-contradictions-selftest + readings-selftest +
+                    #   skus-selftest + identity-store-selftest +
+                    #   identity-binding-selftest +
+                    #   identity-readers-selftest +
+                    #   identity-cli-selftest +
                     #   janitor-selftest +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
                     #   coordinator-selftest + suite-lock-selftest +
@@ -252,7 +257,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
                     #   subagent-override-selftest + guard-scope-selftest +
                     #   token-literal-check-selftest + kit-adoption-selftest +
-                    #   port-slots-selftest,
+                    #   port-slots-selftest + demo-determinism-selftest,
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
                     #   row reconciles this against the `check:` recipe both ways.
@@ -357,22 +362,23 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #   refuse on mismatch, hard link, re-hash destination, THEN
                                    #   unlink source. The bytes exist under a name at every
                                    #   instant.
-./pkmnscan cards    sku-names [--verbose]
-                                   # one SKU, two stored names (D242's sibling).
-                                   #   A card's stored name disagrees with its SKU's
-                                   #   product name in the newest cached export.
-                                   #   Free, read-only, no network ever.
-                                   #   Three verdicts: pass, fail, not known.
-                                   #   Ranks the likely SKU by the card's own claims.
-                                   #   Never picks one.
-./pkmnscan cards    variants [--write]
-                                   # backfill `set`/`rarity` from whatever export a card's own
-                                   #   game already has on disk. Governed by
-                                   #   D213.
-                                   #   Previews by default.
-                                   #   Never guesses: a SKU that resolves to nothing keeps a
-                                   #   null set. Re-runnable — a card already carrying a set
-                                   #   is left alone.
+./pkmnscan cards    identity [--write]
+                                   # THE MIGRATION'S OWN CLASSIFIER, AND THE MERGED
+                                   #   `contradictions`/`sku-names` REPORT (identity-follows-
+                                   #   sku.md §5.5, §7). Every card's class (T1-T6,
+                                   #   sku_unknown), the store's own audit, and the name/
+                                   #   number contradiction halves. Previews by default;
+                                   #   `--write` performs the one-time migration — held
+                                   #   cards (T4s, T5) never change identity, only
+                                   #   `identity_source`, and a held, identified card gets a
+                                   #   `listing_disputed` review entry.
+./pkmnscan cards    contradictions / sku-names
+                                   # RETIRED into `cards identity` (owner's ruling, "Merge
+                                   #   them"). Each prints one line naming it and exits.
+./pkmnscan cards    variants
+                                   # RETIRED into `cards identity --write`, which fills
+                                   #   `set`/`rarity` from the SKU table through `bind_sku`.
+                                   #   It prints one line, writes nothing, and exits 2.
 ./pkmnscan prices   adopt [--write] # fold every run's legacy decisions.json into the corpus.
                                    #   Previews. Newest-wins. Names the holds it replaces.
 ./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view.
@@ -380,6 +386,14 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #   (D189). Previews. `--write` is a FULL REPLACE of both
                                    #   tables.
 ./pkmnscan readings show           # what the table holds, and which files it last credited.
+./pkmnscan skus     adopt [--write] # THE STORE-OWNED SKU TABLE (identity-follows-sku.md
+                                   #   §3.2, lane 0). Folds every cached export
+                                   #   (.exports/<game>/*.csv, .live/*.csv) in, keyed on the
+                                   #   TCGplayer Id. Previews. NEVER A FULL REPLACE — unlike
+                                   #   `readings adopt`, this table never deletes a row.
+                                   #   Newest file wins by its OWN NAME, never its mtime. A
+                                   #   changed fact writes the new row and logs one
+                                   #   `sku_facts_changed` event with the old facts.
 ./pkmnscan archive  sweep [--write] # THE PRICE-HISTORY ARCHIVE (D219).
                                    #   The source's 357-day window slides. This press reads
                                    #   every range for every sku this store has sold or holds,
@@ -1261,6 +1275,7 @@ D254 A product is resolved from its SKU, never from a card's own read fields
 D255 One SKU, two stored names: the sibling check D242 cannot see
 D256 A literal that duplicates a token is caught by family, and the ratchet is pinned per file
 D257 a worktree's node_modules is provisioned, not reported
+D258 Identity follows the SKU
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

@@ -38,6 +38,7 @@ import socket
 import subprocess
 import sys
 import time
+from collections import OrderedDict
 from pathlib import Path
 from typing import Iterable, List, NamedTuple, Optional, Tuple
 
@@ -840,6 +841,72 @@ def port_holder(port: int) -> Optional[Tuple[int, str]]:
     return pid, _command_of(pid)
 
 
+def port_listeners(port: int) -> Optional[List[Tuple[int, str, str]]]:
+    """Every LISTEN socket on this port, both families: `(pid, family, command)`.
+
+    `None` is "not known" — `lsof` missing or erroring, the same fail-open `port_holder`
+    above already uses — and is never confused with an empty list, which means `lsof` ran
+    cleanly and nothing is listening. Same tool, same shell-out shape as `port_holder`,
+    minus its `-t` (terse, pid-only) so this can also read the `TYPE` (`IPv4`/`IPv6`) and
+    `COMMAND` columns `port_holder` throws away — the two things needed to say WHICH pid
+    holds WHICH family, for `port_split` below.
+    """
+    try:
+        out = subprocess.run(
+            ["lsof", "-nP", "-iTCP:%d" % port, "-sTCP:LISTEN"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    rows: List[Tuple[int, str, str]] = []
+    for line in out.stdout.splitlines()[1:]:  # header: COMMAND PID USER FD TYPE ...
+        fields = line.split()
+        if len(fields) < 5:
+            continue
+        try:
+            pid = int(fields[1])
+        except ValueError:
+            continue
+        rows.append((pid, fields[4], _command_of(pid)))
+    return rows
+
+
+def port_split(port: int) -> Tuple[str, List[str]]:
+    """Is `localhost` and `127.0.0.1` at risk of reaching two different processes here.
+
+    `("unknown", [])` | `("ok", [])` | `("split", <lines>)`. THE 2026-09-23 INCIDENT: a
+    stray IPv4-only and a stray IPv6-only listener can BOTH bind one port (measured), so
+    macOS resolving `localhost` to `::1` first sends every request to whichever one holds
+    the IPv6 half while `127.0.0.1` keeps reaching the other. Grouped by PID, not by
+    family: Task 1's own dual-stack bind is ONE process answering both families over ONE
+    socket, which `lsof` reports as two rows sharing a pid, and that is not a split.
+
+    ONLY EVER WARNS (D127). Nothing here kills, signals, or restarts anything — it reads
+    `lsof`'s answer and says what it found. `"unknown"` (missing/erroring `lsof`) is never
+    reported as `"ok"`: a probe that fails silently into "clear" is a worse signal than no
+    probe.
+    """
+    listeners = port_listeners(port)
+    if listeners is None:
+        return "unknown", []
+    pids: "OrderedDict[int, List[str]]" = OrderedDict()
+    commands: dict = {}
+    for pid, family, command in listeners:
+        families = pids.setdefault(pid, [])
+        if family not in families:
+            families.append(family)
+        commands[pid] = command
+    if len(pids) <= 1:
+        return "ok", []
+    lines = [
+        f":{port} is SPLIT across {len(pids)} processes — `localhost` may reach a "
+        "different one than `127.0.0.1` does:"
+    ]
+    for pid, families in pids.items():
+        lines.append(f"  pid {pid} ({'/'.join(families)}) {short_command(commands[pid])}")
+    return "split", lines
+
+
 def short_command(command: str, width: int = 108) -> str:
     """The TAIL of a command line, not the head.
 
@@ -895,11 +962,18 @@ def report(root: Path = REPO_ROOT) -> dict:
     sup = supervisor_pid(root)
     capture = live_pid(CAPTURE, root)
     verdict = read_build_verdict(root)
+    split_status, split_lines = port_split(capture_port)
     return {
         "supervisor": sup,
         "capture_pid": capture,
         "capture_port": capture_port,
         "capture_answering": port_answering(capture_port),
+        # `"split"` — more than one process is listening on this port, over the two
+        # families, and `localhost` may reach a different one than `127.0.0.1` does (the
+        # 2026-09-23 incident). `"unknown"` when `lsof` could not be asked — never folded
+        # into `"ok"`, which is reserved for an actual clean read.
+        "capture_port_split": split_status,
+        "capture_port_split_lines": split_lines,
         # THE APP IS THIS PROCESS NOW, so what there is to report is the BUILD rather than a
         # second pid and a second port (D138). `dev_port` stays because `make dev` still uses
         # it and `make status` still has to say which port that would be.

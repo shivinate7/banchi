@@ -19,7 +19,7 @@ PATH GATED, THE NINETEENTH (D247, owner's word 2026-09-23, on the same ground as
 sit here ("already covered by T7's harness sweep over the CLI surface") had gone stale for a
 second, independent reason beyond the dead precedent it cited: `grep -rl identity_checks
 harness/` names nothing — `harness/tests/t7_store_and_seams.py` drives `cli/cmd_cards.py`
-through `cards_action = "variants"` alone, never `"checks"`. This module's one caller
+through `cards_action = "variants"` and `"identity"` alone, never `"checks"`. This module's one caller
 (`cli/cmd_cards.py:checks`, `./pkmnscan cards checks`) was tested nowhere until now.
 """
 

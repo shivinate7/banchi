@@ -4178,6 +4178,174 @@ def check_import_layering(report: Report) -> None:
     )
 
 
+# docs/specs/identity-follows-sku.md §4.1/§4.3 (lane 7): the directories a real card mutation
+# can reach — the same six the spec's own text names for this row.
+_IDENTITY_WRITERS_ROOTS = ("server", "store", "pipeline", "cli", "codes", "scripts")
+
+# EMPTY, AND PINNED AT ZERO. The two entries lane 7 pinned here were
+# `cli/cmd_cards.py:_variants`'s direct `set_name`/`rarity` writes. That press is now a
+# stub that refuses and names `cards identity --write` (identity-follows-sku.md §4.2:
+# "retired"), so the list is empty. `UNSCOPED_WALK_ALLOWED`'s own idiom: an entry here is a
+# debt this row can SEE, never one it hides, and the ratchet below cannot silently grow.
+IDENTITY_WRITERS_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset()
+IDENTITY_WRITERS_ALLOWED_EXPECTED = 0
+
+
+def _identity_field_assignments(
+    path: Path, fields: FrozenSet[str]
+) -> List[Tuple[int, Optional[str], Optional[str], str]]:
+    """Every `card.<field> = ...` (or `+=`) in `path`, for a `field` in `fields`, tagged with
+    the enclosing class and function ('' / None at module scope) — so the caller can tell a
+    sanctioned writer's own body from everywhere else, `_pipeline_imports`'s own shape
+    (module-level or nested, a lazy write hidden in a function body is exactly the risk).
+
+    ONLY A BASE NAMED EXACTLY `card` COUNTS. Measured over every file under `server/`,
+    `store/`, `pipeline/`, `cli/`, `codes/` and `scripts/`: every genuine `Card` mutation in
+    the tree already uses that one local name, and filtering on it is what keeps this row
+    from flooding on an unrelated class that happens to share a field name — `Row.sku` in
+    `scripts/demo-seed.py`, `Box.name`, `Listing.condition`, a test fixture's own
+    `automatic_card.rarity` in `scripts/identity-binding-selftest.py`. WHAT IT CANNOT SEE: a
+    real `Card` write through a variable named anything else. None exists in the scanned
+    roots today — `harness/tests/` fixtures use `resolved`/`ghost`/`transplant` and are not
+    scanned at all (outside the six roots) — so this is a live gap, stated rather than
+    quietly closed by a cleverer reader that would cost this row its whole simplicity.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (SyntaxError, UnicodeDecodeError, OSError):
+        return []
+    found: List[Tuple[int, Optional[str], Optional[str], str]] = []
+
+    def visit(node: ast.AST, cls: Optional[str], func: Optional[str]) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.ClassDef):
+                visit(child, child.name, None)
+                continue
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                visit(child, cls, child.name)
+                continue
+            if isinstance(child, (ast.Assign, ast.AugAssign)):
+                targets = child.targets if isinstance(child, ast.Assign) else [child.target]
+                for target in targets:
+                    if (
+                        isinstance(target, ast.Attribute)
+                        and target.attr in fields
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "card"
+                    ):
+                        found.append((child.lineno, cls, func, target.attr))
+            visit(child, cls, func)
+
+    visit(tree, None, None)
+    return found
+
+
+def check_identity_writers(report: Report) -> None:
+    """docs/specs/identity-follows-sku.md §4.1/§4.3 (lane 7): ONE WRITER, CHECKED BY A
+    MACHINE (CLAUDE.md D173: "a rule that can be mechanically enforced must be").
+    `store/master.py` exports two constants this row reads — never copies — `IDENTITY_
+    FIELDS` (the eleven identity/binding fields) and `IDENTITY_WRITERS` (the method names
+    allowed to assign one). A `card.<field> = ...` anywhere else under `server/`, `store/`,
+    `pipeline/`, `cli/`, `codes/` or `scripts/` is this row's own defect to report.
+
+    SEVEN WRITERS ARE SANCTIONED, NOT THE FOUR LANE 7'S OWN BRIEF NAMED (`bind_sku`,
+    `unbind_sku`, `restore_identity`, and `hold_sku`, this lane's own addition) — and that
+    gap is worth stating rather than quietly resolved either way (CLAUDE.md: "surface
+    ambiguity instead of resolving it silently"). Three more are PRE-EXISTING, ALREADY-
+    ARGUED holdovers from earlier lanes, each with its own docstring in `store/master.py`
+    making the case this row only points at: `record_identification` ("not a second writer
+    of the identity — it is the same writer bind_sku becomes the moment a binding exists,
+    continuous rather than switched"), `set_state` (its own docstring: "A DEVIATION...
+    FLAGGED RATHER THAN MADE SILENTLY", pending a later lane trimming its signature), and
+    `move_card` (D83's tombstone clear, spec §4.2: "clears sku and condition on the
+    tombstone... unchanged"). A row that recognised only the four lane 7's brief named would
+    fail the merged tree on sight, over writes three earlier review rounds already settled —
+    `IDENTITY_WRITERS` in `store/master.py` is the constant that says so, not this file.
+
+    ONLY A `card.<field>` ASSIGNMENT COUNTS — see `_identity_field_assignments`'s own
+    docstring for the heuristic and what it cannot see. `IDENTITY_WRITERS_ALLOWED` above is
+    a SEPARATE, RATCHETED exception list, `UNSCOPED_WALK_ALLOWED`'s own idiom. It is empty
+    and pinned at zero since `cards variants` retired — see that constant's own comment.
+
+    TRUSTED ONLY ONCE IT GOES RED ON THE DEFECT IT GUARDS (owner's rule): a planted
+    `card.name = "whatever"` inside `cli/cmd_cards.py`'s `_audit` function is how this row
+    was proved, by hand, before this docstring was written — never checked in, because a
+    fixture that stayed would be the violation this row exists to catch.
+    """
+    path = ROOT / "store" / "master.py"
+    if not exists(path):
+        report.add("identity writers", MECHANICAL,
+                   [Finding(rel(path), "store/master.py does not exist.")])
+        return
+    literals = literals_from_module(path)
+    fields, writers = literals.get("IDENTITY_FIELDS"), literals.get("IDENTITY_WRITERS")
+    if not fields or not writers:
+        report.add("identity writers", MECHANICAL, [Finding(
+            rel(path),
+            "`IDENTITY_FIELDS`/`IDENTITY_WRITERS` could not be read as module-level "
+            "literal tuples. They are parsed with `ast.literal_eval` and never imported, "
+            "so each must stay a plain tuple of strings.",
+        )])
+        return
+    fields = frozenset(fields)
+    writers = frozenset(writers)
+
+    scanned_files: List[Path] = []
+    for name in _IDENTITY_WRITERS_ROOTS:
+        root = ROOT / name
+        if exists(root):
+            scanned_files += _walk(root, (".py",))
+
+    findings: List[Finding] = []
+    scanned = 0
+    allowed_seen: Set[Tuple[str, str, str]] = set()
+    for file in scanned_files:
+        for lineno, cls, func, field in _identity_field_assignments(file, fields):
+            scanned += 1
+            if file == path and cls == "Inventory" and func in writers:
+                continue
+            key = (rel(file), func or "", field)
+            if key in IDENTITY_WRITERS_ALLOWED:
+                allowed_seen.add(key)
+                continue
+            findings.append(Finding(
+                f"{rel(file)}:{lineno}",
+                f"`{func or '<module scope>'}` assigns `card.{field}` directly. The only "
+                f"code identity-follows-sku.md §4.1 allows to do that is one of "
+                f"Inventory.{{{', '.join(sorted(writers))}}} in store/master.py — route "
+                f"this write through `bind_sku` (the SKU is trusted), `hold_sku` (it is "
+                f"known but the read disputes it), or `unbind_sku`/`restore_identity` for "
+                f"an undo.",
+            ))
+
+    for key in sorted(IDENTITY_WRITERS_ALLOWED - allowed_seen):
+        findings.append(Finding(
+            "scripts/docs-audit.py -> IDENTITY_WRITERS_ALLOWED",
+            f"names {key!r}, and this scan finds no such direct assignment there any more.\n"
+            f"  Either the site moved to a shape this reader does not recognise, or it was "
+            f"genuinely fixed and the entry was not deleted with it. Delete the entry and "
+            f"lower IDENTITY_WRITERS_ALLOWED_EXPECTED in the same commit, or say why the "
+            f"shape changed.",
+        ))
+
+    if len(IDENTITY_WRITERS_ALLOWED) != IDENTITY_WRITERS_ALLOWED_EXPECTED:
+        findings.append(Finding(
+            "scripts/docs-audit.py -> IDENTITY_WRITERS_ALLOWED",
+            f"has {len(IDENTITY_WRITERS_ALLOWED)} entries where "
+            f"{IDENTITY_WRITERS_ALLOWED_EXPECTED} are pinned. Raise the pin only alongside "
+            f"a new, deliberately-kept exception named in the commit message, and lower it "
+            f"in the same commit that fixes one away.",
+        ))
+
+    report.add(
+        "identity writers", MECHANICAL, findings,
+        f"{scanned} direct card.<field> assignment(s) found, all inside the "
+        f"{len(writers)} sanctioned writers or the {len(IDENTITY_WRITERS_ALLOWED)} pinned "
+        f"exception(s)" if scanned else "no direct card.<field> assignment found anywhere",
+        scanned=scanned,
+    )
+
+
 # The two routes that write a claim. D70 gives a card a `product`, D101 says a claim a screen
 # names is a claim a screen can fix, and these are the two doors that ruling opened.
 _CLAIM_WRITERS = ("do_put_card", "do_put_box_claims")
@@ -21541,6 +21709,7 @@ def audit(staged_only: bool) -> Report:
     check_shell_substitution(report)
     check_unscoped_walk(report)
     check_import_layering(report)
+    check_identity_writers(report)
     check_rule_enforcement(report)
     # Last, and it is the row that says the rows above are all of them. It reconciles this
     # file's check definitions against the calls in this function.

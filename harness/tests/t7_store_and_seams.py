@@ -172,6 +172,7 @@ import base64
 import codecs
 import contextlib
 import csv
+import errno
 import io
 import json
 import hashlib
@@ -229,12 +230,20 @@ from pipeline import (  # noqa: E402
     pricing,
     readings,
     reprice,
+    routing,
     selection,
     sendguard,
     shipping,
     tcgcsv,
     variant,
 )
+# `pipeline.skus`, aliased — this module's own `skus` name would collide with
+# `store.skus`'s `Skus`/`SkuRow` classes imported right below, and both are used by
+# `_seed_sku_table` (identity-follows-sku.md §4.2's review round: a review answer now
+# refuses a SKU the `skus` table does not already hold, so fixtures that answer a
+# hand-built candidate seed the table first, through the real fold).
+from pipeline import skus as sku_pipeline  # noqa: E402
+from store.skus import SkuRow  # noqa: E402
 from server import (  # noqa: E402
     capture_server,
     order_transport,
@@ -331,6 +340,27 @@ STALE_CANDIDATE = {
     "market": "0.05",
 }
 
+# identity-follows-sku.md §8, lane 3a review round: what `Inventory.identity_snapshot`
+# reads off a card that was captured, identified and never bound — the full eleven-field
+# shape every forward writer's HISTORY EVENT now carries in `restores_to` (D28: undo must
+# be exact), replacing the four-field `{sku, condition, set_name, rarity}` literal this
+# file used before that review round. The WIRE RESPONSE's own `restores_to` (what a screen
+# reads to decide whether to draw an undo control) is UNCHANGED and stays the narrow
+# four-field shape — only the history line widened.
+NEVER_BOUND_IDENTITY_SNAPSHOT = {
+    "sku": None,
+    "condition": None,
+    "name": None,
+    "number": None,
+    "printed_total": None,
+    "set_name": None,
+    "rarity": None,
+    "identity_source": None,
+    "bound_by": None,
+    "bound_at": None,
+    "read_disputes": False,
+}
+
 
 
 def stored_label(box: int, index: int) -> str:
@@ -373,6 +403,57 @@ def entry(box: int, index: int, **extra) -> queues.QueueEntry:
     }
     fields.update(extra)
     return queues.QueueEntry(**fields)
+
+
+def _assert_identity_round_trip(checks: Checks, before: dict, after: dict, label: str) -> None:
+    """identity-follows-sku.md §8, lane 3a review round: D28's "undo must be exact" — a
+    forward write then its own undo must leave the card byte-identical to `before`, except
+    `bound_at`, which `Inventory.restore_identity` re-stamps rather than restores verbatim
+    (its own docstring, `Inventory.unbind_sku`'s established precedent: "a restore is
+    itself an act happening now").
+    """
+    fields = [f for f in master.Inventory.IDENTITY_SNAPSHOT_FIELDS if f != "bound_at"]
+    checks.equal(
+        {f: after.get(f) for f in fields},
+        {f: before.get(f) for f in fields},
+        f"{label}: every identity and bookkeeping field except bound_at is restored "
+        f"EXACTLY (D28: undo must be exact) — bound_by/identity_source/read_disputes "
+        f"included, not only sku/condition/name/number/printed_total/set_name/rarity",
+    )
+
+
+def _seed_sku_table(snapshot, candidates, *, product_line: str = "Pokemon") -> None:
+    """Fold candidate-shaped fixture rows into the store's `skus` table directly, through
+    the real `pipeline/skus.py:apply_rows` fold — identity-follows-sku.md §4.2's review
+    round, the fixture-setup half of "no partial upsert into skus": a review answer now
+    REFUSES a SKU the table does not already hold (`sku_unknown`), so any section below
+    that answers a hand-built candidate seeds it here first, exactly as a real fetch or
+    `pkmnscan skus adopt` would have — never a shortcut that skips the fold.
+
+    `candidates` IS THE SAME NORMALIZED SHAPE `entry()`'s own `candidates` FIELD CARRIES
+    (`sku`, `name`, `set`, `number`, `condition`, optional `rarity`) — the literal already
+    used to build the queue entry, so a section's seed and its offer are the same data,
+    never two hand-typed copies that can drift apart. `product_line` defaults to `"Pokemon"`
+    because `CANDIDATES`/`STALE_CANDIDATE` (this file's own default candidates) carry
+    Pokemon-shaped sets (`SV09`/`SV08`); a section using its own Riftbound-shaped literals
+    passes its own.
+    """
+    rows = [
+        {
+            tcgcsv.SKU_COLUMN: str(c["sku"]),
+            tcgcsv.PRODUCT_LINE_COLUMN: product_line,
+            tcgcsv.SET_COLUMN: str(c.get("set") or ""),
+            tcgcsv.NAME_COLUMN: str(c.get("name") or ""),
+            tcgcsv.NUMBER_COLUMN: str(c.get("number") or ""),
+            tcgcsv.RARITY_COLUMN: str(c.get("rarity") or ""),
+            tcgcsv.CONDITION_COLUMN: str(c.get("condition") or ""),
+        }
+        for c in candidates
+    ]
+    sku_pipeline.apply_rows(
+        rows, at=int(time.time()), source="t7-fixture", skus=snapshot.skus,
+        events=snapshot.inventory.events,
+    )
 
 
 @contextmanager
@@ -1077,7 +1158,8 @@ def check_store(checks: Checks) -> None:
 
 def check_set_and_rarity(checks: Checks) -> None:
     """D213: the schema migration
-    (`store/db.py:_add_set_columns`) and the backfill (`cli/cmd_cards.py`'s `variants`).
+    (`store/db.py:_add_set_columns`) and the backfill, which is `cards identity --write`
+    since identity-follows-sku.md retired `cards variants` (§4.2).
 
     THE MIGRATION HALF: an old store, stamped 7, gains `set_name` and `rarity` with every
     row preserved and the 99 `UNL` rows swept to `Unleashed` in the same pass — built by
@@ -1085,13 +1167,15 @@ def check_set_and_rarity(checks: Checks) -> None:
     `store/db.py`'s own docstring for `_add_search_index` argues an upgrade must be additive
     against.
 
-    THE BACKFILL HALF: a SKU that resolves against the export on disk gets a real set and
-    rarity; a SKU that resolves to nothing keeps a null set and its own record — never
-    guessed, never dropped, over `./pkmnscan cards variants --write`'s own code path rather
-    than a re-implementation of it.
+    THE BACKFILL HALF: `./pkmnscan cards variants --write` refuses, names `cards identity`,
+    and writes nothing. That is the arm a restored direct `card.set_name = ...` turns red.
+    Then the replacement, over its own code path: `skus adopt`'s fill, then
+    `./pkmnscan cards identity --write`. A SKU the table holds gets a real set and rarity
+    through `bind_sku`. A SKU the table lacks keeps a null set and its own record — never
+    guessed, never dropped.
     """
     checks.note("")
-    checks.note("SET + RARITY — store/db.py schema 8, cli/cmd_cards.py `variants`")
+    checks.note("SET + RARITY — store/db.py schema 8, cli/cmd_cards.py `identity`")
 
     # ---------------------------------------------------------------- the migration itself
     with isolated_home():
@@ -1166,11 +1250,13 @@ def check_set_and_rarity(checks: Checks) -> None:
     with isolated_home() as home:
         exports = home / "inventory" / ".exports" / "riftbound"
         exports.mkdir(parents=True)
-        (exports / "export.csv").write_text(
+        # A STAMPED NAME, `_keep_export`'s own shape: `skus adopt` skips a file whose name
+        # carries no stamp (pipeline/skus.py:stamp_of), and the old `export.csv` has none.
+        (exports / "export-tcgplayer-20260901-120000-0123abcd.csv").write_text(
             "TCGplayer Id,Product Line,Set Name,Product Name,Number,Rarity,Condition,"
             "TCG Market Price,Total Quantity\r\n"
             "CR-VEN-001,Riftbound League of Legends Trading Card Game,Vendetta,"
-            "Mind Rune (R03a),R03a,Showcase,Near Mint Foil,1.00,0\r\n",
+            "Mind Rune,R03a,Showcase,Near Mint Foil,1.00,0\r\n",
             encoding="utf-8",
         )
         with Store().write() as snapshot:
@@ -1192,26 +1278,58 @@ def check_set_and_rarity(checks: Checks) -> None:
             card2.state = master.IDENTIFIED
 
         class Args:
-            def __init__(self, write: bool):
-                self.cards_action = "variants"
+            def __init__(self, action: str, write: bool):
+                self.cards_action = action
                 self.write = write
 
         say_lines: List[str] = []
-        cmd_cards.run(Args(write=True), say_lines.append)
+        code = cmd_cards.run(Args("variants", write=True), say_lines.append)
+        checks.equal(code, 2, "`cards variants --write` is retired, and refuses with exit 2")
+        checks.ok(
+            any("cards identity" in line for line in say_lines),
+            "and its one line names `cards identity`, the press that replaced it",
+            f"said: {say_lines!r}",
+        )
+        retired = Store().read().inventory.cards[resolvable_key]
+        checks.equal(
+            (retired.set_name, retired.rarity),
+            (None, None),
+            "and it writes nothing — no card field is assigned outside the one writer "
+            "(identity-follows-sku.md §4.1)",
+        )
+
+        # A READ SNAPSHOT HELD OPEN ACROSS THE FILL AND THE PRESS, ON PURPOSE. An open
+        # connection stops SQLite from checkpointing the WAL on close, so the fill's commit
+        # stays in `store.sqlite-wal`. The live rig is always in this state, because the
+        # capture server holds connections. `cmd_cards._read_only` once opened the store
+        # `immutable=1`, which never reads the WAL: it saw an empty `skus` table and bound
+        # nothing. CI caught it only when garbage collection happened to leave the read
+        # above open. Holding one here makes the case run every time, on every platform.
+        open_reader = Store().read()
+        open_reader.inventory.cards.get(resolvable_key)
+        with Store().write() as snapshot:
+            sku_pipeline.fill(snapshot.skus, snapshot.inventory.events)
+        say_lines = []
+        code = cmd_cards.run(Args("identity", write=True), say_lines.append)
+        checks.equal(code, 0, "`cards identity --write` runs over the same store")
+        del open_reader
 
         after_inv = Store().read().inventory
         resolved = after_inv.cards[resolvable_key]
         checks.equal(
-            (resolved.set_name, resolved.rarity),
-            ("Vendetta", "Showcase"),
-            "the backfill resolves a real SKU against the export on disk",
+            (resolved.set_name, resolved.rarity, resolved.identity_source, resolved.bound_by),
+            ("Vendetta", "Showcase", master.IDENTITY_SKU, "migration"),
+            "the replacement fills a real SKU's set and rarity from the SKU table, through "
+            "bind_sku",
         )
         ghost = after_inv.cards[unresolvable_key]
         checks.ok(
-            ghost.set_name is None and ghost.rarity is None and ghost.sku == "CR-GHOST-999",
-            "and a SKU that resolves to nothing keeps a null set and its own record — "
+            ghost.set_name is None and ghost.rarity is None and ghost.sku == "CR-GHOST-999"
+            and ghost.identity_source != master.IDENTITY_SKU,
+            "and a SKU the table lacks keeps a null set and its own record — "
             "never guessed and never dropped",
-            f"card: sku={ghost.sku!r} set_name={ghost.set_name!r}",
+            f"card: sku={ghost.sku!r} set_name={ghost.set_name!r} "
+            f"identity_source={ghost.identity_source!r}",
         )
 
     # ------------------------------------------------------- the real collision, on the wire
@@ -1246,6 +1364,79 @@ def check_set_and_rarity(checks: Checks) -> None:
             all(g["set_hint"] is None for g in result["groups"]),
             "and `set_hint` stays null on both — the real collision this was measured "
             "against, not a fixture that quietly gives the chooser an easier field",
+        )
+
+
+def check_open_read_only(checks: Checks) -> None:
+    """`store/db.py:open_read_only`, the one read-only door: it never migrates, and it sees
+    every commit, including one still in the WAL.
+
+    THE CASE THAT BROKE: one connection holds a read snapshot open, so SQLite cannot
+    checkpoint on close, and a second connection's commit stays in `store.sqlite-wal`. An
+    always-immutable open never reads the WAL. The fixture proves it builds that state (the
+    old open misses the commit) before it asks the door, so a green here is not a fixture
+    that never made the case.
+    """
+    checks.note("")
+    checks.note("READ-ONLY DOOR — store/db.py open_read_only")
+    with isolated_home():
+        directory = files.inventory_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        db.connect(directory).close()
+        target = db.path(directory)
+
+        holder = sqlite3.connect(str(target), isolation_level=None)
+        holder.execute("BEGIN")
+        holder.execute("SELECT count(*) FROM meta").fetchone()
+        writer = sqlite3.connect(str(target), isolation_level=None)
+        writer.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('door', 'seen')")
+        writer.close()
+
+        old = sqlite3.connect(f"file:{target}?mode=ro&immutable=1", uri=True)
+        checks.equal(
+            old.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
+            None,
+            "the fixture really leaves the commit in the WAL: an always-immutable open "
+            "misses it",
+        )
+        old.close()
+
+        door = db.open_read_only(target)
+        checks.equal(
+            door.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
+            ("seen",),
+            "the door sees a commit still in the WAL, while another connection holds a "
+            "snapshot open",
+        )
+        refused = False
+        try:
+            door.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('door', 'wrote')")
+        except sqlite3.OperationalError:
+            refused = True
+        checks.ok(refused, "and it refuses a write")
+        door.close()
+        holder.execute("ROLLBACK")
+        holder.close()
+
+        # THE COLD STATE, BUILT BY HAND. Whether SQLite deletes the side files on the last
+        # close varies by build (this Mac's keeps them), so the fixture checkpoints the WAL
+        # empty and removes both, `db.py`'s own import step's shape.
+        folder = sqlite3.connect(str(target), isolation_level=None)
+        folder.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        folder.close()
+        for side in ("-wal", "-shm"):
+            Path(f"{target}{side}").unlink(missing_ok=True)
+        cold = db.open_read_only(target)
+        checks.equal(
+            cold.execute("SELECT value FROM meta WHERE key = 'door'").fetchone(),
+            ("seen",),
+            "and the door still opens a WAL store with no side files, and reads the commit "
+            "from the main file",
+        )
+        cold.close()
+        checks.ok(
+            not any(Path(f"{target}{side}").exists() for side in ("-wal", "-shm")),
+            "and opening it cold created no side file",
         )
 
 
@@ -4258,6 +4449,7 @@ def check_review_answer(checks: Checks) -> None:
             snapshot.review.upsert(entry(3, 6, candidates=[], reason="card_not_detected"))
             snapshot.parked.upsert(entry(3, 6, market="0.05"))
             # 3/2 is captured and identified and in no queue at all.
+            _seed_sku_table(snapshot, [*CANDIDATES, STALE_CANDIDATE])
 
         good = {"sku": reverse["sku"], "condition": reverse["condition"]}
 
@@ -4386,10 +4578,12 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             last_event("3/1").get("restores_to"),
-            {"sku": None, "condition": None, "set_name": None, "rarity": None},
-            "and the `answered` HISTORY line carries the same pair — THE BLOCKER'S "
+            NEVER_BOUND_IDENTITY_SNAPSHOT,
+            "and the `answered` HISTORY line carries the FULL snapshot — THE BLOCKER'S "
             "REGRESSION: the line used to log only what the route WROTE, never what it "
-            "overwrote, so nothing anywhere could say what an undo should put back",
+            "overwrote, so nothing anywhere could say what an undo should put back — "
+            "widened past the wire's own four fields on review (D28: undo must be exact, "
+            "over every field bind_sku can touch, not only the pair a screen draws)",
         )
 
         answered = Store().read()
@@ -4611,6 +4805,7 @@ def check_review_answer(checks: Checks) -> None:
             snapshot.review.upsert(entry(3, 4, market="12.00"))
             snapshot.review.upsert(entry(3, 5, market="12.00"))
             snapshot.review.upsert(entry(3, 6, market="12.00"))
+            _seed_sku_table(snapshot, [*CANDIDATES, STALE_CANDIDATE])
 
         # The refusals that need no answer standing, first.
         refusal(
@@ -4652,6 +4847,7 @@ def check_review_answer(checks: Checks) -> None:
         )
 
         # ------------------------------------------------ the pair the answer overwrote
+        before_overwrite = Store().read().inventory.identity_snapshot("3/1")
         overwrote = capture_server.do_review_answer(3, 1, good)
         checks.equal(
             overwrote["restores_to"],
@@ -4662,10 +4858,10 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             last_event("3/1").get("restores_to"),
-            dict(prior),
-            "and the `answered` line carries the same real pair — the other half of the "
-            "blocker's regression: the null-pair line above cannot tell `logged the prior "
-            "pair` from `logged a default`",
+            before_overwrite,
+            "and the `answered` line carries the same real pair, as a FULL snapshot — the "
+            "other half of the blocker's regression: the null-pair line above cannot tell "
+            "`logged the prior pair` from `logged a default`",
         )
 
         # THE D28 BOUNDARY, FIRST SIDE: while the answer stands, store/queues.py holds the
@@ -4832,8 +5028,8 @@ def check_review_answer(checks: Checks) -> None:
         )
         checks.equal(
             last_event("3/6").get("restores_to"),
-            {"sku": None, "condition": None, "set_name": None, "rarity": None},
-            "while the `answered` history line still records the pair — the two "
+            NEVER_BOUND_IDENTITY_SNAPSHOT,
+            "while the `answered` history line still records the FULL snapshot — the two "
             "deliberately disagree: the log states what is true, the field answers "
             "whether to draw a button",
         )
@@ -5028,6 +5224,16 @@ def check_group_answer(checks: Checks) -> None:
             # The listing-hold pair.
             snapshot.review.upsert(entry(4, 10, candidates=[own_row("9110")]))
             snapshot.review.upsert(entry(4, 11, candidates=[own_row("9111")]))
+            _seed_sku_table(
+                snapshot,
+                [
+                    own_row("9101"), own_row("9102"), own_row("9103"), own_row("9104"),
+                    dict(STALE_CANDIDATE), own_row("9105"), own_row("9107"), own_row("9108"),
+                    dict(CANDIDATES[1], sku="9218"), dict(STALE_CANDIDATE, sku="9109"),
+                    dict(CANDIDATES[0], sku="9112", condition=tcgcsv.SEALED_CONDITION),
+                    own_row("9113"), own_row("9110"), own_row("9111"),
+                ],
+            )
 
         # ------------------------------------------------------------- the body's shape
         refusal(
@@ -5323,8 +5529,8 @@ def check_group_answer(checks: Checks) -> None:
         )
         checks.equal(
             [line.get("restores_to") for line in answered_lines],
-            [{"sku": None, "condition": None, "set_name": None, "rarity": None}] * 3,
-            "and each line carries its own restores_to, exactly as a single answer "
+            [NEVER_BOUND_IDENTITY_SNAPSHOT] * 3,
+            "and each line carries its own FULL restores_to, exactly as a single answer "
             "writes it — which is what makes the per-card undo below possible at all",
         )
 
@@ -5405,10 +5611,10 @@ def check_group_answer(checks: Checks) -> None:
         held_lines = [last_event("4/10"), last_event("4/11")]
         checks.equal(
             [line.get("restores_to") for line in held_lines],
-            [{"sku": None, "condition": None, "set_name": None, "rarity": None}] * 2,
-            "while BOTH history lines still record the pair — the log states what is "
-            "true, the field answers whether to draw a button, and the two deliberately "
-            "disagree",
+            [NEVER_BOUND_IDENTITY_SNAPSHOT] * 2,
+            "while BOTH history lines still record the FULL snapshot — the log states "
+            "what is true, the field answers whether to draw a button, and the two "
+            "deliberately disagree",
         )
         checks.equal(
             [line.get("group") for line in held_lines],
@@ -6871,6 +7077,7 @@ def check_history(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.set_state("5/1", master.IDENTIFIED)
             snapshot.review.upsert(entry(5, 1, market="12.00"))
+            _seed_sku_table(snapshot, CANDIDATES)
 
         before = len(Store().history())
         refusal(
@@ -6924,16 +7131,26 @@ def check_history(checks: Checks) -> None:
         )
         checks.equal(
             answered.get("restores_to"),
-            {"sku": None, "condition": None, "set_name": None, "rarity": None},
-            "and the pair the answer REPLACED — the blocker's regression (D28): this "
-            "line used to log only what was written, so the log held everything needed "
-            "to audit an answer and nothing needed to reverse one",
+            NEVER_BOUND_IDENTITY_SNAPSHOT,
+            "and the FULL snapshot the answer REPLACED — the blocker's regression (D28):"
+            " this line used to log only what was written, so the log held everything "
+            "needed to audit an answer and nothing needed to reverse one — widened past "
+            "the wire's own four fields on review (D28: undo must be exact, over every "
+            "field bind_sku can touch: identity_source/bound_by/bound_at/read_disputes "
+            "too, not only sku/condition/set_name/rarity)",
         )
 
         # ------------------------------------------------- the answer's reversal (D28)
         # Wrapped for `answers`' reason: the reversal refusing IS a failure mode of the
         # lines under test, and an escape here would hide the hazard walk at the end of
         # this section — the one case in this file that guards a live-bug shape.
+        #
+        # READ BEFORE THE UNDO, so `withdrew`'s own expectation is the card's REAL state
+        # at that instant rather than a hand-typed guess at `bound_at`'s timestamp — the
+        # one field `Inventory.restore_identity` re-stamps rather than restores verbatim
+        # (its own docstring, `unbind_sku`'s precedent), so it cannot be predicted, only
+        # read.
+        before_undo_snapshot = Store().read().inventory.identity_snapshot("5/1")
         answers(
             checks,
             lambda: capture_server.do_review_answer(5, 1, {"undo": True}),
@@ -6948,14 +7165,15 @@ def check_history(checks: Checks) -> None:
         )
         checks.equal(
             unanswered.get("withdrew"),
-            {"sku": reverse["sku"], "condition": reverse["condition"]},
-            "carrying what came OFF the card...",
+            before_undo_snapshot,
+            "carrying what came OFF the card — the FULL identity and its binding "
+            "bookkeeping, not only sku/condition, so the log states the complete fact",
         )
         checks.equal(
             unanswered.get("restored"),
-            {"sku": None, "condition": None, "set_name": None, "rarity": None},
-            "...and what went back on — both pairs, because neither is derivable from "
-            "the other once the card has moved on again",
+            NEVER_BOUND_IDENTITY_SNAPSHOT,
+            "...and what went back on — both are FULL snapshots now, because neither is "
+            "derivable from the other once the card has moved on again",
         )
         checks.equal(
             unanswered.get("queues"),
@@ -10943,6 +11161,63 @@ def check_app_serve(checks: Checks) -> None:
     capture_server.APP_DIST = original
 
 
+def check_dual_stack_bind(checks: Checks) -> None:
+    """The 2026-09-23 incident, proved and closed (D43).
+
+    MEASURED ON THE OWNER'S MAC: an IPv4 `0.0.0.0` bind and a LATER IPv6 `::` bind (with
+    `IPV6_V6ONLY` cleared) both succeed on the same port — two unrelated processes, one per
+    family. A stray `python3 -m http.server 8000` took the IPv6 half while the capture
+    server already held the IPv4 half, and macOS resolves `localhost` to `::1` first, so
+    `http://localhost:8000` silently 404'd every route while `127.0.0.1:8000` still worked.
+
+    `capture_server._capture_server()` closes this by binding `::` itself, dual-stack, so
+    ONE socket answers both families and there is no second family left for a stray process
+    to take. This proves the closed door rather than the open one: after this server binds,
+    both a later `::` dual-stack bind AND a later plain `0.0.0.0` bind on the same port must
+    be refused. Bind IPv4-only here (revert `_capture_server` to the old
+    `CaptureServer((host, port), ...)` with no `::` branch) and the `0.0.0.0`-refusal
+    assertion goes red — the IPv6 half is free again and the split is back.
+    """
+    checks.note("")
+    checks.note("dual-stack bind — the port split behind the 2026-09-23 incident (D43)")
+
+    httpd, host = capture_server._capture_server("::", 0)
+    try:
+        checks.equal(host, "::", "binds IPv6 dual-stack by default")
+
+        reached = False
+        with contextlib.suppress(OSError), \
+                socket.create_connection(("127.0.0.1", httpd.server_address[1]), timeout=1):
+            reached = True
+        checks.ok(reached, "an IPv4 client (127.0.0.1) reaches the same socket")
+
+        port = httpd.server_address[1]
+        refused_v6 = False
+        try:
+            second = capture_server._DualStackCaptureServer(("::", port), capture_server.CaptureHandler)
+            second.server_close()
+        except OSError as exc:
+            refused_v6 = exc.errno == errno.EADDRINUSE
+        checks.ok(
+            refused_v6,
+            "a SECOND `::` dual-stack bind on the same port is refused, not merely slow",
+        )
+
+        refused_v4 = False
+        try:
+            third = capture_server.CaptureServer(("0.0.0.0", port), capture_server.CaptureHandler)
+            third.server_close()
+        except OSError as exc:
+            refused_v4 = exc.errno == errno.EADDRINUSE
+        checks.ok(
+            refused_v4,
+            "and a plain `0.0.0.0` bind on the same port is ALSO refused — the split the "
+            "incident measured cannot recur",
+        )
+    finally:
+        httpd.server_close()
+
+
 def check_cli_seams(checks: Checks) -> None:
     """The wiring that feeds rules T3-T5 already check.
 
@@ -11544,6 +11819,14 @@ def check_review_catalog(checks: Checks) -> None:
             # Has candidates of its own, so the catalog path must never reach it.
             snapshot.inventory.cards["1/3"].run = "2026-08-29-box1-01"
             snapshot.review.upsert(entry(1, 3, market="12.00"))
+            # identity-follows-sku.md §4.2's review round: a review answer now refuses a
+            # SKU the `skus` table does not already hold. The REAL export this run was
+            # joined against is right here, so the fixture seeds the table off the SAME
+            # file through the real fold — a real fetch's own shape, not a synthetic one.
+            sku_pipeline.apply_rows(
+                tcgcsv.read_export(run_dir / "export.csv").rows, at=int(time.time()),
+                source="export.csv", skus=snapshot.skus, events=snapshot.inventory.events,
+            )
 
         # --- the lookup ---
 
@@ -11627,6 +11910,7 @@ def check_review_catalog(checks: Checks) -> None:
 
         before = Store().read().inventory.cards["1/1"].sku
         checks.ok(before is None, "and neither refusal wrote anything")
+        before_catalog_answer = Store().read().inventory.identity_snapshot("1/1")
 
         answered = answers(
             checks,
@@ -11674,11 +11958,11 @@ def check_review_catalog(checks: Checks) -> None:
         )
         if undone is not None:
             checks.equal(undone.get("undone"), True, "and it reports which direction it went")
-        checks.equal(
-            Store().read().inventory.cards["1/1"].rarity,
-            None,
-            "and rarity comes back too — this card never carried one before the answer, "
-            "and `restores_to` says so",
+        _assert_identity_round_trip(
+            checks,
+            before_catalog_answer,
+            Store().read().inventory.identity_snapshot("1/1"),
+            "the D46 from_catalog answer's own undo",
         )
         line = [
             event
@@ -12387,6 +12671,613 @@ def check_correct_answer_live_release(checks: Checks) -> None:
             checks.ok(True, "and the route itself answered")
 
 
+def check_identity_binding(checks: Checks) -> None:
+    """identity-follows-sku.md, lane 3a's own coverage. Every server writer that sets a SKU
+    binds through `Inventory.bind_sku` — never `set_state` with an identity kwarg — the new
+    confirm press and its undo, and how a `listing_disputed` answer routes on `#/review`.
+
+    D252's own three checks (`check_correct_answer`, `check_correct_answer_live_release`,
+    `check_catalog_set_rarity_match`, right beside this one) already prove
+    `do_correct_answer`'s field values are unchanged now that it writes them through
+    `bind_sku` — the point of THIS section is the bookkeeping those checks never looked at:
+    `bound_by`, `identity_source`, and the `skus` table row each writer upserts before it
+    binds.
+    """
+    checks.note("")
+    checks.note("IDENTITY BINDING — every SKU writer through bind_sku "
+                "(identity-follows-sku.md)")
+
+    # ------------------------------------------------------ do_review_answer: bound_by=answer
+    with isolated_home():
+        capture_server.do_capture(capture_payload(60))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("60/1", master.IDENTIFIED)
+            snapshot.review.upsert(entry(60, 1))  # default candidates: both of CANDIDATES
+
+        picked = CANDIDATES[0]
+
+        # §4.2's review round: "no partial upsert into skus" — a review answer REFUSES a
+        # SKU the table does not already hold, rather than inventing a partial row off the
+        # candidate's own abbreviated shape. Checked BEFORE seeding, so this is a real red
+        # rather than an assumed one.
+        refusal(
+            checks,
+            lambda: capture_server.do_review_answer(
+                60, 1, {"sku": picked["sku"], "condition": picked["condition"]}
+            ),
+            "sku_unknown",
+            "answering a sku the `skus` table has never seen refuses — a review answer "
+            "binds to a row the table ALREADY holds, never one it invents",
+        )
+        checks.ok(
+            Store().read().inventory.cards["60/1"].sku is None,
+            "and that refusal wrote nothing onto the card",
+        )
+
+        # THE TABLE IS SEEDED THE WAY A REAL FETCH OR `pkmnscan skus adopt` WOULD FILL IT —
+        # never by this route. `_seed_sku_table` folds through the real
+        # `pipeline/skus.py:apply_rows`, the SAME fold `do_pipeline_export`/`do_live_export`
+        # use (proved by `check_export_fetch`'s own two new assertions).
+        with Store().write() as snapshot:
+            _seed_sku_table(snapshot, CANDIDATES)
+
+        answers(
+            checks,
+            lambda: capture_server.do_review_answer(
+                60, 1, {"sku": picked["sku"], "condition": picked["condition"]}
+            ),
+            "and now that the table holds the row, an ordinary D4 answer succeeds",
+        )
+        card = Store().read().inventory.cards["60/1"]
+        checks.equal(
+            (card.sku, card.bound_by, card.identity_source),
+            (picked["sku"], "answer", master.IDENTITY_SKU),
+            "§4.1: the answer binds through `bind_sku`, and `bound_by`/`identity_source` "
+            "say so — two fields no version of this route wrote before lane 3a",
+        )
+        checks.equal(
+            card.name,
+            picked["name"],
+            "and the identity name follows the SKU rather than being left as the read "
+            "(§4.2: the OLD route 'leaves name and number as the read')",
+        )
+        events = Store().history()
+        checks.ok(
+            any(
+                e.get("event") == "sku_bound" and e.get("position") == "60/1"
+                for e in events
+            ),
+            "bind_sku's own history line lands beside the route's",
+        )
+        checks.ok(
+            any(
+                e.get("event") == "answered" and e.get("position") == "60/1"
+                for e in events
+            ),
+            "and the route's own `answered` line is UNCHANGED — every existing D4 reader "
+            "still finds it",
+        )
+
+        # D28: UNDO MUST BE EXACT. The card started never-bound; its undo must restore
+        # exactly that, through `Inventory.restore_identity` — no field-by-field code left
+        # in `_reverse_answer` (review round, identity-follows-sku.md §8).
+        answers(
+            checks,
+            lambda: capture_server.do_review_answer(60, 1, {"undo": True}),
+            "the answer's own undo goes through",
+        )
+        _assert_identity_round_trip(
+            checks,
+            NEVER_BOUND_IDENTITY_SNAPSHOT,
+            Store().read().inventory.identity_snapshot("60/1"),
+            "do_review_answer's undo",
+        )
+
+    # ------------------------------------------------ do_review_group_answer: group_answer
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(61))
+        cond = CANDIDATES[0]["condition"]
+        with Store().write() as snapshot:
+            for i in range(1, 4):
+                snapshot.inventory.set_state(f"61/{i}", master.IDENTIFIED)
+            for i, sku in ((1, "9201"), (2, "9202"), (3, "9203")):
+                snapshot.review.upsert(
+                    entry(61, i, candidates=[dict(CANDIDATES[0], sku=sku)])
+                )
+            _seed_sku_table(
+                snapshot,
+                [dict(CANDIDATES[0], sku=sku) for sku in ("9201", "9202", "9203")],
+            )
+        answers(
+            checks,
+            lambda: capture_server.do_review_group_answer(
+                {
+                    "answers": [
+                        {"box": 61, "index": 1, "sku": "9201", "condition": cond},
+                        {"box": 61, "index": 2, "sku": "9202", "condition": cond},
+                        {"box": 61, "index": 3, "sku": "9203", "condition": cond},
+                    ]
+                }
+            ),
+            "a homogeneous group answers",
+        )
+        for i, sku in ((1, "9201"), (2, "9202"), (3, "9203")):
+            card = Store().read().inventory.cards[f"61/{i}"]
+            checks.equal(
+                (card.sku, card.bound_by, card.identity_source),
+                (sku, "group_answer", master.IDENTITY_SKU),
+                f"§4.2: 61/{i} binds through `bind_sku(bound_by=group_answer)` too, one "
+                f"bind per card, against the row the table already held",
+            )
+
+        # D28: undo must be exact — one member's own undo, per D29's shape (the write is
+        # all-or-nothing, the reversal is per card, through `do_review_answer`).
+        answers(
+            checks,
+            lambda: capture_server.do_review_answer(61, 1, {"undo": True}),
+            "one group member's own undo goes through",
+        )
+        _assert_identity_round_trip(
+            checks,
+            NEVER_BOUND_IDENTITY_SNAPSHOT,
+            Store().read().inventory.identity_snapshot("61/1"),
+            "do_review_group_answer's per-card undo",
+        )
+
+    # ------------------------------------------------ do_correct_answer: bound_by=correction
+    with isolated_home() as home:
+        old_sku, new_sku = "8926937", "8925897"
+        run_dir = home / "runs" / "2026-09-24-box62-01"
+        run_dir.mkdir(parents=True)
+        shutil.copy(RIFTBOUND_EXPORT, run_dir / "export.csv")
+        (run_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "created_at": "2026-09-24T00:00:00+00:00",
+                    "joined": True,
+                    "exports": {"riftbound": {"path": str(run_dir / "export.csv")}},
+                }
+            )
+        )
+        capture_server.do_capture(capture_payload(62, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["62/1"].game = "riftbound"
+            snapshot.inventory.cards["62/1"].run = "2026-09-24-box62-01"
+            snapshot.inventory.set_state(
+                "62/1", master.IDENTIFIED, sku=old_sku, condition="Near Mint"
+            )
+        before_correction = Store().read().inventory.identity_snapshot("62/1")
+        answers(
+            checks,
+            lambda: capture_server.do_correct_answer(62, 1, {"sku": new_sku}),
+            "a correction succeeds",
+        )
+        card = Store().read().inventory.cards["62/1"]
+        checks.equal(
+            (card.bound_by, card.identity_source),
+            ("correction", master.IDENTITY_SKU),
+            "§4.2: `do_correct_answer` binds through `bind_sku(bound_by=correction)` too — "
+            "the D252 field values themselves are proved unchanged by "
+            "`check_correct_answer`, right beside this section",
+        )
+        checks.ok(
+            Store().read().skus.entries.get(new_sku) is not None,
+            "and the new row is upserted into the `skus` table before the bind — "
+            "`do_correct_answer` is the one writer left that still fills the table, "
+            "because it re-reads a real row off the export (D46) and folds it whole "
+            "through `_fold_export_row`, never a partial one",
+        )
+        last = last_event("62/1")
+        checks.equal(
+            last.get("event"),
+            "sku_corrected",
+            "and `sku_corrected` is STILL the last event — bind_sku's own `sku_bound` line "
+            "lands first, so `_reverse_correction`'s `last-event` reader is unaffected",
+        )
+
+        undone = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(62, 1, {"undo": True}),
+            "and its undo goes through `Inventory.restore_identity` (§8, review round) — "
+            "no field-by-field code left in `_reverse_correction`",
+        )
+        if undone is not None:
+            checks.equal(undone["sku"], old_sku, "the old sku is restored")
+        _assert_identity_round_trip(
+            checks,
+            before_correction,
+            Store().read().inventory.identity_snapshot("62/1"),
+            "do_correct_answer's undo",
+        )
+
+    # ---------------------------------------------------- POST .../confirm and its undo (§8.1)
+    with isolated_home():
+        held_sku = "7000001"
+        held_row = SkuRow(
+            product_line="Riftbound League of Legends Trading Card Game",
+            set_name="Origins",
+            product_name="Master Yi, Wuju Master",
+            number="191/219",
+            rarity="Rare",
+            condition="Near Mint",
+            grade="Near Mint",
+            printing=None,
+            first_seen=1_700_000_000,
+            last_seen=1_700_000_000,
+            source="t7-fixture",
+            raw={},
+        )
+        for _ in range(4):
+            capture_server.do_capture(capture_payload(63))
+        with Store().write() as snapshot:
+            snapshot.skus.entries[held_sku] = held_row
+            # 63/1 — the held card: a SKU already on it, a read that disputes it, and
+            # `identity_source = read` — §7.3's own T5 shape ("write identity_source =
+            # read. Leave every identity field exactly as it is today").
+            snapshot.inventory.set_state("63/1", master.IDENTIFIED, sku=held_sku)
+            snapshot.inventory.cards["63/1"].game = "riftbound"
+            snapshot.inventory.cards["63/1"].read_name = "Yi, Ionia"
+            # §3.1: "read: ...the identity fields equal the evidence fields" — a real held
+            # card's `name` already equals its own `read_name`, so the fixture sets both
+            # rather than leaving `name` at its default and asking the confirm's undo to
+            # derive one restore_identity was never built to derive.
+            snapshot.inventory.cards["63/1"].name = "Yi, Ionia"
+            snapshot.inventory.cards["63/1"].read_disputes = True
+            snapshot.inventory.cards["63/1"].identity_source = master.IDENTITY_READ
+            # 63/2 — never identified, for `not_identified`.
+            # 63/3 — sold, for `card_departed`.
+            snapshot.inventory.set_state(
+                "63/3", master.IDENTIFIED, sku=held_sku, condition="Near Mint"
+            )
+            snapshot.inventory.set_state("63/3", master.SOLD)
+            # 63/4 — a SKU with no row in the table, for `sku_unknown`.
+            snapshot.inventory.set_state(
+                "63/4", master.IDENTIFIED, sku="7000404", condition="Near Mint"
+            )
+            snapshot.inventory.cards["63/4"].game = "riftbound"
+
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(99, 99, {}),
+            "card_not_found",
+            "a confirm for a position with no record refuses",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 3, {}),
+            "card_departed",
+            "a confirm on a sold card refuses — a departed card's identity is frozen (D134)",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 2, {}),
+            "not_identified",
+            "a confirm on a card with no SKU refuses — there is no listing to confirm",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 4, {}),
+            "sku_unknown",
+            "a confirm whose SKU is not in the `skus` table refuses rather than guessing",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 1, {"sku": "anything"}),
+            "field_not_settable",
+            "confirm never takes a `sku` in the body — it confirms the card's own current "
+            "one, or it is `do_correct_answer`'s job",
+        )
+
+        # identity-follows-sku.md §5.4/§8.1, review round: "Listed as"/"Read as" ride on
+        # `GET /inventory/<box>` too — the route Details' initial render reads, before any
+        # press. 63/1 is held: shown (`name`) equals the read by construction, so
+        # `listing_differs` is the only one of the two that should be true here.
+        before_box = capture_server.do_inventory_box(63)["cards"]["63/1"]
+        checks.equal(
+            before_box.get("listing"),
+            {"name": "Master Yi, Wuju Master", "number": "191/219", "printed_total": None},
+            "`_listing_decoration` reads the `skus` table off the card's own SKU and "
+            "composes it exactly as `bind_sku` would",
+        )
+        checks.equal(
+            before_box.get("listing_differs"),
+            True,
+            "and `listing_differs` is true — the listing's own name disputes the shown "
+            "name (\"Yi, Ionia\" against \"Master Yi, Wuju Master\")",
+        )
+        checks.equal(
+            before_box.get("reading_differs"),
+            False,
+            "while `reading_differs` is false — a held card's shown pair equals the read "
+            "pair by construction, which is the fix for \"Read as\" repeating "
+            "Card:/Number: word for word",
+        )
+
+        before_confirm = Store().read().inventory.identity_snapshot("63/1")
+        confirmed = answers(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 1, {}),
+            "confirming a held card succeeds",
+        )
+        if confirmed is not None:
+            checks.equal(confirmed.get("confirmed"), True, "and it reports which direction")
+            confirmed_card = confirmed.get("card") or {}
+            checks.equal(
+                confirmed_card.get("listing_differs"),
+                False,
+                "§5.4/§8.1: the confirm's own response carries `listing_differs` too, and "
+                "it is now false — the identity equals the listing by construction "
+                "(`bind_sku` wrote it off this same row)",
+            )
+            checks.equal(
+                confirmed_card.get("reading_differs"),
+                True,
+                "while `reading_differs` turns true — the camera's read (\"Yi, Ionia\") "
+                "still disagrees with the now-bound catalog name, exactly the case "
+                "\"Read as\" exists for",
+            )
+        card = Store().read().inventory.cards["63/1"]
+        checks.equal(
+            (card.sku, card.bound_by, card.identity_source),
+            (held_sku, "confirm", master.IDENTITY_SKU),
+            "§8.1: `bind_sku(current sku, bound_by=confirm)` — the SKU never moves",
+        )
+        checks.equal(
+            (card.name, card.number),
+            ("Master Yi, Wuju Master", "191/219"),
+            "and the identity now follows the table row — Riftbound's `printed_code` "
+            "strategy stores the number verbatim",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 1, {}),
+            "already_confirmed",
+            "confirming an already-SKU-bound card refuses — there is nothing left to do",
+        )
+
+        undone = answers(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 1, {"undo": True}),
+            "the undo puts the confirm back",
+        )
+        if undone is not None:
+            checks.equal(undone.get("undone"), True, "and it reports which direction")
+            undone_card = undone.get("card") or {}
+            checks.equal(
+                undone_card.get("listing_differs"),
+                True,
+                "§5.4/§8.1: the undo's own response shows `listing_differs` back to true "
+                "— the card is held again and the listing disputes the shown name",
+            )
+            checks.equal(
+                undone_card.get("reading_differs"),
+                False,
+                "and `reading_differs` back to false — the shown pair equals the read "
+                "pair again",
+            )
+        card = Store().read().inventory.cards["63/1"]
+        checks.equal(
+            (card.sku, card.identity_source, card.name),
+            (held_sku, master.IDENTITY_READ, "Yi, Ionia"),
+            "§8.1: the undo returns `identity_source` to `read` — the SKU stays exactly "
+            "where it was (a confirm never moves it, so nothing here releases anything), "
+            "and the name comes back off `read_name`",
+        )
+        _assert_identity_round_trip(
+            checks,
+            before_confirm,
+            Store().read().inventory.identity_snapshot("63/1"),
+            "do_confirm_identity's undo",
+        )
+
+        refusal(
+            checks,
+            lambda: capture_server.do_confirm_identity(63, 1, {"undo": True}),
+            "not_confirmed",
+            "a second undo refuses — the ground truth is the card's own `bound_by`, not a "
+            "flag on an event",
+        )
+
+    # ------------------------------- a `listing_disputed` answer, routed inside do_review_answer
+    with isolated_home():
+        disputed_sku = "7100001"
+        other_sku = "7100002"
+        disputed_row = SkuRow(
+            product_line="Riftbound League of Legends Trading Card Game",
+            set_name="Origins", product_name="Jax, Icathia", number="1/14",
+            rarity="Epic", condition="Near Mint", grade="Near Mint", printing=None,
+            first_seen=1_700_000_000, last_seen=1_700_000_000, source="t7-fixture", raw={},
+        )
+        other_row = SkuRow(
+            product_line="Riftbound League of Legends Trading Card Game",
+            set_name="Origins", product_name="Jax, Unmatched", number="2/14",
+            rarity="Epic", condition="Near Mint", grade="Near Mint", printing=None,
+            first_seen=1_700_000_000, last_seen=1_700_000_000, source="t7-fixture", raw={},
+        )
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(64))
+        with Store().write() as snapshot:
+            snapshot.skus.entries[disputed_sku] = disputed_row
+            snapshot.skus.entries[other_sku] = other_row
+            for i in (1, 2):
+                snapshot.inventory.set_state(f"64/{i}", master.IDENTIFIED, sku=disputed_sku)
+                snapshot.inventory.cards[f"64/{i}"].game = "riftbound"
+                snapshot.inventory.cards[f"64/{i}"].read_name = "Jax, Icathia"
+            disputed_candidates = [
+                {
+                    "sku": disputed_sku, "name": "Jax, Icathia", "set": "Origins",
+                    "number": "1/14", "condition": "Near Mint", "market": "1.00",
+                    "rarity": "Epic",
+                },
+                {
+                    "sku": other_sku, "name": "Jax, Unmatched", "set": "Origins",
+                    "number": "2/14", "condition": "Near Mint", "market": "1.00",
+                    "rarity": "Epic",
+                },
+            ]
+            snapshot.review.upsert(
+                entry(
+                    64, 1, reason=routing.LISTING_DISPUTED, candidates=disputed_candidates,
+                )
+            )
+            snapshot.review.upsert(
+                entry(
+                    64, 2, reason=routing.LISTING_DISPUTED, candidates=disputed_candidates,
+                )
+            )
+
+        # --------------------------------------------------------- "the listing is right"
+        confirmed = answers(
+            checks,
+            lambda: capture_server.do_review_answer(
+                64, 1, {"sku": disputed_sku, "condition": "Near Mint"}
+            ),
+            "§8.1: answering a `listing_disputed` entry with the card's OWN current sku "
+            "confirms rather than re-answering",
+        )
+        if confirmed is not None:
+            checks.equal(
+                (confirmed.get("confirmed"), confirmed.get("corrected")),
+                (True, False),
+                "the response says which press this was",
+            )
+            checks.ok(
+                confirmed.get("review_cleared"),
+                "and the queue entry is cleared like any other answer",
+            )
+        card = Store().read().inventory.cards["64/1"]
+        checks.equal(
+            (card.bound_by, card.identity_source, card.name),
+            ("confirm", master.IDENTITY_SKU, "Jax, Icathia"),
+            "the same sku, bound through `bind_sku(bound_by=confirm)` — never `answer`",
+        )
+
+        # ------------------------------------------------- "the listing is the wrong card"
+        before_disputed_correction = Store().read().inventory.identity_snapshot("64/2")
+        corrected = answers(
+            checks,
+            lambda: capture_server.do_review_answer(
+                64, 2, {"sku": other_sku, "condition": "Near Mint"}
+            ),
+            "§8.1: answering with any OTHER sku is the D252 correction, unchanged in "
+            "meaning",
+        )
+        if corrected is not None:
+            checks.equal(
+                (corrected.get("confirmed"), corrected.get("corrected")),
+                (False, True),
+                "the response says which press this was",
+            )
+            checks.equal(
+                corrected.get("previous_sku"), disputed_sku,
+                "and it reports the sku it replaced, `do_correct_answer`'s own field",
+            )
+            checks.ok(
+                corrected.get("review_cleared"),
+                "and the queue entry is cleared here too",
+            )
+        card = Store().read().inventory.cards["64/2"]
+        checks.equal(
+            (card.sku, card.bound_by, card.name),
+            (other_sku, "correction", "Jax, Unmatched"),
+            "the card now carries the OTHER row, bound through "
+            "`bind_sku(bound_by=correction)`",
+        )
+        last = last_event("64/2")
+        checks.equal(
+            last.get("event"),
+            "sku_corrected",
+            "and the same `sku_corrected` line `do_correct_answer` itself writes — the two "
+            "doors write one shape, exactly as §8.1 says: unchanged in meaning",
+        )
+        undone = answers(
+            checks,
+            lambda: capture_server.do_correct_answer(64, 2, {"undo": True}),
+            "and the SAME reversal `do_correct_answer` uses on `#/inventory` takes it back, "
+            "because the two doors wrote the identical event shape",
+        )
+        if undone is not None:
+            checks.equal(undone["sku"], disputed_sku, "the disputed sku is restored")
+        _assert_identity_round_trip(
+            checks,
+            before_disputed_correction,
+            Store().read().inventory.identity_snapshot("64/2"),
+            "a listing_disputed correction's undo, through do_correct_answer",
+        )
+
+    # -------------------- §4, review round: a group answer refuses listing_disputed entries
+    with isolated_home():
+        held_sku_a = "7200001"
+        held_row_a = SkuRow(
+            product_line="Riftbound League of Legends Trading Card Game",
+            set_name="Origins", product_name="Jax, Icathia", number="1/14",
+            rarity="Epic", condition="Near Mint", grade="Near Mint", printing=None,
+            first_seen=1_700_000_000, last_seen=1_700_000_000, source="t7-fixture", raw={},
+        )
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(65))
+        with Store().write() as snapshot:
+            snapshot.skus.entries[held_sku_a] = held_row_a
+            for i in (1, 2):
+                snapshot.inventory.set_state(f"65/{i}", master.IDENTIFIED, sku=held_sku_a)
+                snapshot.inventory.cards[f"65/{i}"].game = "riftbound"
+                snapshot.inventory.cards[f"65/{i}"].read_name = "Jax, Icathia"
+                snapshot.inventory.cards[f"65/{i}"].name = "Jax, Icathia"
+                snapshot.inventory.cards[f"65/{i}"].identity_source = master.IDENTITY_READ
+            # 65/3, an ordinary metadata_detection_disagreement entry, offering the SAME
+            # sku and condition — proving the `listing_disputed` refusal fires ahead of
+            # the ordinary reasons/uniformity check (which this mixed-reason group would
+            # also fail), never folded into `group_not_uniform`'s own findings.
+            snapshot.inventory.set_state("65/3", master.IDENTIFIED)
+            disputed_candidates = [
+                {
+                    "sku": held_sku_a, "name": "Jax, Icathia", "set": "Origins",
+                    "number": "1/14", "condition": "Near Mint", "market": "1.00",
+                    "rarity": "Epic",
+                },
+            ]
+            snapshot.review.upsert(
+                entry(65, 1, reason=routing.LISTING_DISPUTED, candidates=disputed_candidates)
+            )
+            snapshot.review.upsert(
+                entry(65, 2, reason=routing.LISTING_DISPUTED, candidates=disputed_candidates)
+            )
+            snapshot.review.upsert(entry(65, 3, candidates=disputed_candidates))
+
+        def member65(index: int) -> dict:
+            return {"box": 65, "index": index, "sku": held_sku_a, "condition": "Near Mint"}
+
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member65(1), member65(2), member65(3)]}
+            ),
+            "§4, review round: a group carrying a `listing_disputed` entry refuses — the "
+            "confirm/correct decision is per card and a group write has no way to make it "
+            "safely",
+        )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None), "group_listing_disputed",
+                "refused by its own name, not folded into group_not_uniform",
+            )
+            checks.ok(
+                "65/1" in str(caught) and "65/2" in str(caught) and "65/3" not in str(caught),
+                "and it names the DISPUTED members only — 65/3 is an ordinary entry and "
+                "was never the problem",
+                str(caught),
+            )
+        checks.ok(
+            Store().read().inventory.cards["65/1"].bound_by is None
+            and Store().read().inventory.cards["65/2"].bound_by is None
+            and Store().read().inventory.cards["65/3"].sku is None,
+            "and nothing was written — not even the ordinary member, because the group is "
+            "refused whole",
+        )
+
+
 def check_catalog_number_fields_round_trip(checks: Checks) -> None:
     """`join.catalog_number_fields`, round-tripped over every distinct `Number` cell in the
     four committed exports — item 2 of the review on the D252 amendment. `store/numbers.py:
@@ -12956,6 +13847,7 @@ def check_review_stand_down(checks: Checks) -> None:
             snapshot.review.upsert(entry(3, 3, market="12.00"))
             snapshot.parked.upsert(entry(3, 3, market="0.05"))
             # 3/4 is identified and in no queue at all.
+            _seed_sku_table(snapshot, CANDIDATES)
 
         refusal(
             checks,
@@ -15300,13 +16192,20 @@ def check_cli_refusals(checks: Checks) -> None:
     # show` only reads. Unlike `readings adopt`, `sweep --write` is never a full replace —
     # a bucket a pass does not mention survives, because the source's own 357-day window
     # means it may be the only copy of that observation left anywhere.
+    #
+    # `skus` IS THE THIRTEENTH, AND IT ARRIVED WITH LANE 0 OF
+    # `docs/specs/identity-follows-sku.md` (owner's ruling, 2026-09-24: "yes I'd been saying
+    # we build this"). `skus adopt` writes the store-owned SKU table on `--write` and
+    # nowhere else. Unlike every other writer here, it never fully replaces and never
+    # deletes — `store/skus.py`'s own argument, `price_history`'s shape and not
+    # `readings`'s — so a SKU an export no longer lists keeps its row.
     checks.equal(
         sorted(entry.COMMANDS),
         ["archive", "boxes", "cards", "emit", "identify", "join", "prices", "queue",
-         "readings", "reconcile", "reprice", "rescue", "scan"],
-        # `boxes` IS THE THIRTEENTH (D-a-box-is-shown-by-its-name): `boxes names` gives every
+         "readings", "reconcile", "reprice", "rescue", "scan", "skus"],
+        # `boxes` IS THE FOURTEENTH (D-a-box-is-shown-by-its-name): `boxes names` gives every
         # unnamed box its stored default name. Previews by default; `--write` is one transaction.
-        "thirteen commands are registered, and only thirteen",
+        "fourteen commands are registered, and only fourteen",
     )
 
     # No command may read stdin. Asserted against the source of every module the dispatch
@@ -20110,6 +21009,95 @@ def check_send_review_r7(checks: Checks) -> None:
         )
 
 
+def check_schema_eleven_then_twelve(checks: Checks) -> None:
+    """Two branches each took schema 11. Main's identity lane took it for `skus` and
+    `cards.identity_source`. The send lane took it for `send_claims`, which is now 12.
+
+    A store at 10 must pass through 11 and then 12. A store that main already moved to 11
+    must still get `send_claims`, and keep its `skus` rows. Each case builds the older shape
+    from a fresh store, stamps the older number, and lets the next ordinary read upgrade it.
+    """
+    def shape(store_path):
+        conn = sqlite3.connect(store_path)
+        try:
+            stamp = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
+            tables = {
+                row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+            views = {
+                row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='view'")
+            }
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
+            skus_rows = (
+                conn.execute("SELECT COUNT(*) FROM skus").fetchone()[0] if "skus" in tables else None
+            )
+        finally:
+            conn.close()
+        return stamp, tables, views, columns, skus_rows
+
+    checks.equal(db.SCHEMA_VERSION, 12, "the current schema is 12: skus at 11, send_claims at 12")
+
+    # --- a store at 10 has neither table -------------------------------------------------
+    with isolated_home():
+        capture_server.do_capture(capture_payload(1))
+        store_path = str(files.inventory_dir() / "store.sqlite")
+        conn = sqlite3.connect(store_path, isolation_level=None)
+        try:
+            conn.execute("DROP VIEW IF EXISTS sku_products")
+            conn.execute("DROP VIEW IF EXISTS sku_printings")
+            conn.execute("DROP TABLE IF EXISTS skus")
+            conn.execute("DROP TABLE IF EXISTS send_claims")
+            conn.execute("ALTER TABLE cards DROP COLUMN identity_source")
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', '10')")
+        finally:
+            conn.close()
+        stamp, tables, _views, columns, _rows = shape(store_path)
+        checks.equal(
+            (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns),
+            (("10",), False, False, False),
+            "the fixture really is a schema-10 store",
+        )
+        Store().read()
+        stamp, tables, views, columns, _rows = shape(store_path)
+        checks.equal(
+            (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns,
+             {"sku_products", "sku_printings"} <= views),
+            (("12",), True, True, True, True),
+            "a schema-10 store passes through 11 and then 12, and gains both tables",
+        )
+        checks.equal(
+            sorted(Store().read().inventory.cards), ["1/1"], "and its card survives the upgrade"
+        )
+
+    # --- a store main already moved to 11 has `skus` and no `send_claims` ----------------
+    with isolated_home():
+        capture_server.do_capture(capture_payload(1))
+        store_path = str(files.inventory_dir() / "store.sqlite")
+        conn = sqlite3.connect(store_path, isolation_level=None)
+        try:
+            conn.execute("DROP TABLE IF EXISTS send_claims")
+            conn.execute(
+                "INSERT INTO skus (key, product_name, payload) VALUES ('7777', 'Venusaur', ?)",
+                (json.dumps({"sku": "7777", "product_name": "Venusaur"}),),
+            )
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', '11')")
+        finally:
+            conn.close()
+        stamp, tables, _views, _columns, rows = shape(store_path)
+        checks.equal(
+            (stamp, "skus" in tables, "send_claims" in tables, rows),
+            (("11",), True, False, 1),
+            "the fixture really is a schema-11 store from main, with one skus row",
+        )
+        Store().read()
+        stamp, tables, _views, _columns, rows = shape(store_path)
+        checks.equal(
+            (stamp, "send_claims" in tables, rows),
+            (("12",), True, 1),
+            "a schema-11 store from main gains send_claims at 12 and keeps its skus row",
+        )
+
+
 def check_send_review_r8(checks: Checks) -> None:
     """Round 8: the review of round 7 (R7-1, R7-3, R7-4), each red first on the round-7 build
     (19c3bc3e). A move of live copies under the floor is refused and never offered back; a move
@@ -22499,6 +23487,15 @@ def check_committed_copies_are_the_oldest(checks: Checks) -> None:
         export = write_export(first.path("export.csv"))
         command(checks, "join", str(first.directory), "--export", str(export))
         command(checks, "emit", str(runs.open_run(first.directory).directory))
+        # identity-follows-sku.md §4.2's review round: `do_review_answer` below (tonight's
+        # copy) now refuses a SKU the `skus` table does not already hold. `cli/cmd_join.py
+        # --export` is Lane 3b's own fill point and is not on this base, so the fixture
+        # seeds the table directly off the same real export, through the real fold.
+        with Store().write() as writable:
+            sku_pipeline.apply_rows(
+                tcgcsv.read_export(export).rows, at=int(time.time()), source=export.name,
+                skus=writable.skus, events=writable.inventory.events,
+            )
 
         listing = Store().read().inventory.listing_for(DUNSPARCE_SKU)
         checks.equal(
@@ -25800,6 +26797,25 @@ def check_export_fetch(checks: Checks) -> None:
                     "many SKUs came back, and which game the file answers for off its own "
                     "Product Line cells rather than off its name",
                 )
+                # identity-follows-sku.md §3.2, fill point 1: THE SAME FETCH ALSO FOLDS ITS
+                # ROWS INTO THE `skus` TABLE, in the same press that keeps the file — never a
+                # second request. All three of `write_export`'s own seam SKUs land, and the
+                # ordinary Pokemon SKU splits into a grade and a printing.
+                sku_table = Store().read().skus.entries
+                checks.ok(
+                    all(sku in sku_table for sku in SEAM_SKUS),
+                    "every SKU the fetch carried is in the table after the press, with no "
+                    "second call",
+                    f"table keys: {sorted(sku_table.keys())}",
+                )
+                if DUNSPARCE_SKU in sku_table:
+                    dunsparce_row = sku_table[DUNSPARCE_SKU]
+                    checks.equal(
+                        (dunsparce_row.product_line, dunsparce_row.grade),
+                        ("Pokemon", "Near Mint"),
+                        "and the row carries the game's own Product Line cell and the grade "
+                        "`store/skus.py:split_condition` reads off its own Condition cell",
+                    )
                 kept_now = fetched_files()
                 checks.equal(
                     len(kept_now), 1, "exactly one file is kept, it is the one just fetched"
@@ -26445,6 +27461,16 @@ def check_export_fetch(checks: Checks) -> None:
                 checks.ok(
                     (files.inventory_dir() / pipeline_routes.LIVE_DIR / answer["fetched"]).is_file(),
                     "and it is on disk under a name `_open_live_export` will accept",
+                )
+                # identity-follows-sku.md §3.2, fill point 2: the live export folds into the
+                # `skus` table in the SAME transaction as the readings replace above it, no
+                # second write.
+                live_sku_table = Store().read().skus.entries
+                checks.ok(
+                    all(sku in live_sku_table for sku in SEAM_SKUS),
+                    "the live export's own SKUs are in the table too, through the identical "
+                    "fold the Filtered Export used",
+                    f"table keys: {sorted(live_sku_table.keys())}",
                 )
 
                 # THE SILENT FAILURE, MADE LOUD. This endpoint answers a request it cannot
@@ -34929,6 +35955,7 @@ def run() -> Result:
     check_send_review_r6(checks)
     check_send_review_r7(checks)
     check_send_review_r8(checks)
+    check_schema_eleven_then_twelve(checks)
     check_run_match(checks)
     check_publish_lag(checks)
     check_withholding(checks)
@@ -34941,6 +35968,7 @@ def run() -> Result:
     check_boxes_and_listings(checks)
     check_store(checks)
     check_set_and_rarity(checks)
+    check_open_read_only(checks)
     check_store_of_record(checks)
     check_photo_reclaim(checks)
     check_server_routes(checks)
@@ -34986,6 +36014,7 @@ def run() -> Result:
     check_origin_gate(checks)
     check_photo_cache(checks)
     check_app_serve(checks)
+    check_dual_stack_bind(checks)
     check_cli_seams(checks)
     check_code_ledger(checks)
     check_identify_preflight_stage(checks)
@@ -34993,6 +36022,7 @@ def run() -> Result:
     check_review_catalog(checks)
     check_correct_answer(checks)
     check_correct_answer_live_release(checks)
+    check_identity_binding(checks)
     check_catalog_number_fields_round_trip(checks)
     check_catalog_set_rarity_match(checks)
     check_run_realignment(checks)

@@ -15,7 +15,7 @@ The review of round 1 failed. Each finding is fixed at its cause, and each has a
   Now the server takes one press at a time and refuses a second by name. The rule that holds
   across processes and restarts is a store claim in D174's shape: `emit` checks every live
   claim, and writes its own, in the same store write that counts the copies sent
-  (`store/sendclaims.py`, schema 11). A plan whose basis moved while it was deciding is
+  (`store/sendclaims.py`, schema 12). A plan whose basis moved while it was deciding is
   refused. Each press writes its file into its own directory, and a stamp can no longer clash
   inside one second.
 - **A dropped connection.** The receipt is written before the first byte leaves, and it says

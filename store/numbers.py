@@ -52,6 +52,21 @@ from typing import Optional, Tuple
 # `UNL 029/219`, `OGN 019/298`, ...), none of them a real printed code losing a character.
 _SET_CODE_PREFIX = re.compile(r"^[A-Za-z]{2,5}(?:\s*[•·/-]\s*|\s+(?=\d))")
 
+# THE NUMBER A CATALOG ROW DECORATES A `Product Name` WITH, WHEN IT DECORATES ONE AT ALL
+# (docs/specs/identity-follows-sku.md §3.3, lane 1). Anchored at the end and requiring the
+# slash, so only a TRAILING collector number matches: `Ho-Oh`, `Wally's Compassion` and
+# `Team Rocket's Mewtwo` keep every character they have.
+#
+# PUBLIC (no leading underscore), UNLIKE `_SET_CODE_PREFIX` ABOVE, BECAUSE
+# `pipeline/join.py:name_index_key` IMPORTS IT RATHER THAN KEEPING ITS OWN COPY (review
+# finding, identity-follows-sku.md lane 1, 2026-09-24): `join_key`/`display_number`/
+# `strip_set_code` already made this exact trip and left a re-export behind
+# (`from store.numbers import ...`, under the same names); this pattern is that trip's
+# fourth member, imported by name rather than re-derived, so ONE fold answers both jobs —
+# this module's own case-preserving `strip_name_suffix` below, and `pipeline/join.py`'s
+# uppercased, whitespace-collapsed `name_index_key`.
+NAME_NUMBER_SUFFIX = re.compile(r"\s*-\s*[A-Za-z0-9]+\s*/\s*[A-Za-z0-9]+\s*$")
+
 
 def join_key(number, printed_total) -> str:
     """zfill(3)(number) + "/" + printedTotal. `161/159` is a secret rare, not an error.
@@ -130,6 +145,24 @@ def strip_set_code(text) -> str:
     return _SET_CODE_PREFIX.sub("", str(text or "").strip()).strip()
 
 
+def strip_name_suffix(text) -> str:
+    """A catalog `Product Name` with its trailing collector number dropped, case and all —
+    THE COMPOSER, NOT THE INDEX FOLD (docs/specs/identity-follows-sku.md §3.3, lane 1).
+
+    `pipeline/join.py:name_index_key` runs the SAME `NAME_NUMBER_SUFFIX` pattern (imported
+    from here, not re-derived — see its own comment above) and then UPPERCASES and
+    collapses whitespace, because that function's job is matching two spellings against
+    each other. This one's job is what a SCREEN draws: `Inventory.bind_sku` writes its
+    answer straight onto `card.name`, so `Stufful - 111/132` becomes `Stufful`, not
+    `STUFFUL`.
+
+    ANCHORED AT THE END AND REQUIRING THE SLASH: `Ho-Oh`, `Wally's Compassion` and `Team
+    Rocket's Mewtwo` keep every character they have. Measured (§3.3): 150 of the 3,502
+    SKU-bound cards on the owner's store carry a name of this shape.
+    """
+    return NAME_NUMBER_SUFFIX.sub("", str(text or "").strip())
+
+
 def split_catalog_number(text) -> Tuple[Optional[str], Optional[str]]:
     """The reverse of `join_key`: a catalog row's own `Number` cell, taken apart into the
     pair a card record stores.
@@ -185,6 +218,59 @@ def split_catalog_number(text) -> Tuple[Optional[str], Optional[str]]:
     if not number:
         return raw, None
     return number, (total or None)
+
+
+# THE ONE STRATEGY NAME THIS MODULE KNOWS, KEPT AS A LITERAL AND NOT A CONSTANT IMPORTED
+# FROM `pipeline/games.py` — `store/` may not import `pipeline/` (D63), so the STRING
+# `"number_and_printed_total"` is the contract between the two modules, not a shared name.
+# `pipeline/join.py:catalog_number_fields` reads it off `games.get(game)["join_key"]`
+# before calling this function, so a THIRD strategy value never reaches here silently
+# wrong: it falls into the verbatim branch below, the same safe default `pipeline/
+# join.py`'s own (now retired) copy of this dispatch used.
+NUMBER_AND_PRINTED_TOTAL = "number_and_printed_total"
+
+
+def catalog_number_fields(strategy: str, raw_number) -> Tuple[Optional[str], Optional[str]]:
+    """The `(number, printed_total)` pair a CORRECTED card should carry, off a catalog
+    row's raw `Number` cell — THE ONE PLACE THIS DISPATCH RUNS (review finding, identity-
+    follows-sku.md lane 1, 2026-09-24). It used to live in `pipeline/join.py`, keyed on
+    `game` and reading `pipeline/games.py`'s registry itself; `store/master.py:bind_sku`
+    needed the identical fold and could not import that registry (D63), so a first pass
+    made `number`/`printed_total` parameters `bind_sku` trusted from its caller instead —
+    and a caller could then hand it ANY pair, including one that disagreed with the very
+    SKU row `bind_sku` had just looked up. Keyed on the STRATEGY NAME rather than the game
+    closes that: the caller resolves `games.get(game)["join_key"]` (a `pipeline/`-only
+    lookup) and hands over the STRATEGY, never the numbers, and this function is the only
+    code that turns a strategy plus a row's own `Number` cell into the pair a card stores.
+    `pipeline/join.py:catalog_number_fields(game, raw_number)` is now a two-line delegator
+    to this one, so `identify/prompt.py`'s own writer, a fresh identification and a
+    catalog-driven bind all produce the identical shape off the identical fold.
+
+    `NUMBER_AND_PRINTED_TOTAL` (Pokemon): `split_catalog_number` — the catalog cell IS
+    `join_key`'s own composed output, so decomposing it is exactly reversing that fold.
+
+    EVERY OTHER STRATEGY — `printed_code` (Riftbound, One Piece), `name_only`,
+    `not_joined`, or a strategy this function has never heard of — STORES THE CELL
+    VERBATIM AND LEAVES `printed_total` EMPTY, because that is what every OTHER writer for
+    those games already does. `_key_printed_code`'s own docstring (`pipeline/join.py`):
+    "these games print ONE identifier and the export's `Number` cell carries that same
+    string, so there is nothing to compose and nothing to pad" — and `printed_total` is
+    "not consulted at all, in either direction. A game keyed this way has no denominator to
+    disagree with." Splitting Riftbound's `179/298` into `("179", "298")` would fill
+    `card.number` with a key `_key_printed_code` no longer matches (it expects `179/298`
+    whole) and fill `number_key`, which `pipeline/pricearchive.py`'s own comment documents
+    as EMPTY BY DESIGN for a game with no denominator. Riftbound's real cells also include
+    a double-sided token, `T01 // T02` — a `/`-splitting rule finds two candidate splits in
+    that string and both are wrong, which is what makes "split on the composed shape" the
+    wrong tool here rather than merely an unnecessary one.
+
+    A BLANK CELL RETURNS `(None, None)` either way, matching `split_catalog_number`'s own
+    rule for nothing to compose from nothing.
+    """
+    if strategy == NUMBER_AND_PRINTED_TOTAL:
+        return split_catalog_number(raw_number)
+    raw = str(raw_number or "").strip()
+    return (raw or None), None
 
 
 def box_title(name: Optional[str], number: int) -> str:
