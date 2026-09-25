@@ -35,7 +35,7 @@ import { readingAgo } from './cardState'
 import { Button, Icon, IconButton, Notice, Pill, Select, Stat, boxesMostRecentFirst, type IconName } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { toast } from './kit/toast'
-import { Overlay } from './InventoryOverlay'
+import { Dialog as Overlay } from './kit/overlay'
 import './BoxOps.css'
 
 /* The box operations — D20's object, made visible and editable.

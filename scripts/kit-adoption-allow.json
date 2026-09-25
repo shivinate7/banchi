@@ -46,10 +46,6 @@
       "R2-class": "home",
       "R2-date": "home"
     },
-    "app/src/InventoryOverlay.tsx": {
-      "R2-dialog": "inventory",
-      "R2-icon-only-button": "icons"
-    },
     "app/src/LiveReconcile.tsx": {
       "R2-dialog": "b-runs",
       "R2-class": "b-runs",

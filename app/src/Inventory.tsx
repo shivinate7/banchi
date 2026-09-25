@@ -38,7 +38,7 @@ import { UNNAMED_BOX } from './kit/data'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
 import { RANK_IS_CURRENT, type FrozenRank } from './frozenRank'
-import { Overlay } from './InventoryOverlay'
+import { Dialog as Overlay } from './kit/overlay'
 import './Inventory.css'
 
 /* THE INVENTORY — one owner-side view of stored cards: find a card by name or SKU, or walk a

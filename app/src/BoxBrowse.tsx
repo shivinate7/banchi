@@ -59,7 +59,7 @@ import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
 import { storedBoxRecency, touchBox } from './deviceMemory'
 import { toast } from './kit/toast'
-import { Overlay } from './InventoryOverlay'
+import { Dialog as Overlay } from './kit/overlay'
 import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, type FrozenRank } from './frozenRank'
 import './BoxBrowse.css'
 

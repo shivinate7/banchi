@@ -6032,8 +6032,22 @@ COMPONENTS = [
                                             "one only, portalled to <body>. `SheetHost` draws the "
                                             "sheet that `openSheet` opened, read through "
                                             "`useOpenSheet` (kit/sheets.ts). Seeded from the local "
-                                            "sheet on the code-card screen.",
+                                            "sheet on the code-card screen. `Dialog` (round 4, "
+                                            "promoted from its own file, `InventoryOverlay.tsx`, "
+                                            "now deleted) is the bare "
+                                            "panel for a caller that builds its own head: four "
+                                            "kinds (sheet, bottom, dialog, lightbox), no title or "
+                                            "Close of its own except the lightbox's single "
+                                            "`IconButton`, mounted only while its caller's own "
+                                            "`open` state is true rather than taking one, and on "
+                                            "the same `useOverlayLayer` stack every other layer "
+                                            "here joins — which the file it replaced never did.",
                                     "governed_by": ["D94", "D95", "D118", "D-icon-buttons"]},
+            "src/kit/dialog.css": {"does": "`Dialog`'s own inner rhythm — the sheet's width, the "
+                                           "head padding, the lightbox's 44px circular Close and "
+                                           "its backdrop blur. The panels themselves are the "
+                                           "kit's `.bn-sheet`/`.bn-dialog` (kit.css).",
+                                    "governed_by": ["D5", "D31", "D94"]},
             "src/kit/filters.tsx": {"does": "THE ONE FILTER BAR (FLT-15, the owner's gripes about "
                                             "Inventory's game-then-set-then-rarity lock and Orders' "
                                             "four-width strip): `FilterBar` composes `Select`, "
@@ -6940,27 +6954,6 @@ COMPONENTS = [
                         "sentence, which the copy row and the phone action bar both render.",
                 "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D71", "D118", "D125", "D119"],
             },
-            "src/InventoryOverlay.tsx": {"does": "ONE OVERLAY PRIMITIVE FOR THE INVENTORY "
-                                                 "SCREEN, in four kinds: a right-side sheet, "
-                                                 "the phone's bottom sheet, a centred dialog "
-                                                 "and the photograph's lightbox. Portalled to "
-                                                 "<body> so no ancestor transform can pin it "
-                                                 "— which is the kit's own motion rule stated "
-                                                 "as a consequence — focus-trapped, Escape "
-                                                 "closes, the body stops scrolling behind it, "
-                                                 "and focus returns to whatever opened it. "
-                                                 "`passKeys` is off by default: a sheet over "
-                                                 "the screen must not let the walk's arrow "
-                                                 "keys step the card behind it, and the "
-                                                 "phone's box sheet is the one case that "
-                                                 "wants them through. The panels wear the "
-                                                 "kit's `bn-sheet`/`bn-dialog` classes; what "
-                                                 "is here is the behavior.",
-                                         "governed_by": ["D5", "D31", "D45", "D94"]},
-            "src/InventoryOverlay.css": {"does": "those four panels' inner rhythm — the kit "
-                                                 "draws the panel, this sets what is inside "
-                                                 "it and how wide the sheet is.",
-                                         "governed_by": ["D5", "D31", "D94"]},
             "src/BoxOps.tsx": {
                 "does": "D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER "
                         "since D31 merged #/boxes away. One header per "
@@ -7610,10 +7603,11 @@ COMPONENTS = [
                                            "mounted, so a close costs a reopen, but nothing "
                                            "aborts a fetch and its receipt would toast for a "
                                            "sheet that is gone. Its "
-                                           "own comment says what it is: the behavior "
-                                           "`InventoryOverlay` has, waiting to be promoted to a "
-                                           "kit Dialog so the product has one of these rather "
-                                           "than two.",
+                                           "own comment says what it is: worth promoting to a "
+                                           "kit Dialog itself, the same move InventoryOverlay.tsx "
+                                           "already took (round 4) — that promotion did not "
+                                           "reach this file, whose three overlays stay on their "
+                                           "own hook.",
                                    "governed_by": ["D5", "D33", "D87", "D94", "D100", "D128"]},
             # ---- the pricing screen (D49, 2026-08-30) ----
             #

@@ -5,6 +5,7 @@ import { Icon, type IconName } from './Icon'
 import { Button, IconButton, useLeave } from './index'
 import { usePageRoute } from './Page'
 import { closeSheet, useOpenSheet, type OpenSheet } from './sheets'
+import './dialog.css'
 
 /* ONE SHEET, ONE MODAL, ONE POPOVER, AND ONE STACK OF LAYERS (UX-057, UX-090, UX-091).
  *
@@ -342,6 +343,108 @@ export const OverlayContext = createContext(false)
 
 export function useInOverlay(): boolean {
   return useContext(OverlayContext)
+}
+
+/* ---- Dialog: the bare panel, for a caller that builds its own head -------------------------------- */
+
+/** PROMOTED FROM `InventoryOverlay.tsx` (round 4, docs/map.py's own note on `runsOverlay.ts`:
+ *  "the behavior `InventoryOverlay` has, waiting to be promoted to a kit Dialog so the product
+ *  has one of these rather than two"). Unlike `Sheet`/`Modal`, `Dialog` owns no title, no icon
+ *  and no Close of its own — every caller here already builds its own head (BoxOps' sheet
+ *  title, Inventory's Move dialog, the lightbox's own single control) and mounting IS opening:
+ *  a caller renders it only while its own `open` state is true, so there is no `open` prop and
+ *  no leave animation, matching what `InventoryOverlay.tsx` always did. Four kinds: a
+ *  right-side sheet, the phone's bottom sheet, a centred dialog, and the photograph's
+ *  lightbox — the fourth closes on any press and carries one visible control, the kit's own
+ *  `IconButton` now rather than an inline `<svg>`. Joins the ONE STACK above through the same
+ *  `useOverlayLayer` every other layer here does, which `InventoryOverlay.tsx` never did — a
+ *  nested kit `Popover` opened from inside one of these did not z-index above it correctly
+ *  before this promotion. */
+export type DialogKind = 'sheet' | 'bottom' | 'dialog' | 'lightbox'
+
+const DIALOG_PANEL: Record<DialogKind, string> = {
+  sheet: 'bn-sheet inv-sheet',
+  bottom: 'bn-sheet bn-sheet-bottom inv-sheet-bottom',
+  dialog: 'bn-dialog inv-dialog',
+  lightbox: 'inv-lightbox',
+}
+
+export function Dialog({
+  kind,
+  label,
+  onClose,
+  children,
+  className,
+  /** Let the walk's arrow keys through (the phone's box sheet wants them). Off by default so a
+   *  sheet over the screen does not step the card behind it. */
+  passKeys = false,
+}: {
+  readonly kind: DialogKind
+  readonly label: string
+  readonly onClose: () => void
+  readonly children: ReactNode
+  readonly className?: string
+  readonly passKeys?: boolean
+}) {
+  const panel = useRef<HTMLDivElement | null>(null)
+  const scrim = useRef<HTMLDivElement | null>(null)
+  const close = useRef(onClose)
+  useEffect(() => {
+    close.current = onClose
+  })
+  useReturnFocus()
+  useOverlayLayer(panel, { active: true, onEscape: () => close.current(), scrim })
+  useScrollLock(true)
+  useFirstFocus(panel, true)
+
+  /* passKeys is this component's own concern, outside what useOverlayLayer covers: it stops
+     ArrowLeft/ArrowRight reaching the walk behind the panel, except where a caller says the
+     panel itself wants them through. */
+  useEffect(() => {
+    if (passKeys) return
+    const onKey = (event: KeyboardEvent) => {
+      const root = panel.current
+      if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && root !== null && isTop(root)) {
+        event.stopPropagation()
+      }
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [passKeys])
+
+  return createPortal(
+    <>
+      <div ref={scrim} className="bn-scrim" onClick={() => close.current()} />
+      <div
+        ref={panel}
+        className={[DIALOG_PANEL[kind], className].filter(Boolean).join(' ')}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        tabIndex={-1}
+        data-bn-overlay={kind}
+        onClick={kind === 'lightbox' ? () => close.current() : undefined}
+      >
+        {/* The lightbox closes on any press, which a mouse learns from `cursor: zoom-out` and a
+            thumb learns from nothing. So it gets one visible control — which is also the only
+            focusable thing inside it, so the focus trap has somewhere to land. */}
+        {kind === 'lightbox' ? (
+          <IconButton
+            icon="x"
+            label="Close photo"
+            className="inv-lightbox-close"
+            /* The 44px circular face, the backdrop blur and the stage-palette colors are
+               `dialog.css`'s own (`.inv-lightbox-close`) — sized here, not at a kit face size,
+               the same escape hatch `BoxBrowse.css`'s stepper buttons use. */
+            style={{ width: 44, height: 44 }}
+            onClick={() => close.current()}
+          />
+        ) : null}
+        {children}
+      </div>
+    </>,
+    document.body,
+  )
 }
 
 /* ---- sheet and modal ---------------------------------------------------------------------------- */
