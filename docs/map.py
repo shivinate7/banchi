@@ -5946,8 +5946,8 @@ COMPONENTS = [
                                           "`banchi.theme` — device-local like the camera's "
                                           "deviceId (D27), and nothing about a card.",
                                   "governed_by": ["D5", "D13", "D27", "D32", "D50", "D94", "D95",
-                                                  "D118", "D125", "D196", "D269",
-                                                  "D272", "D117", "D-icon-buttons"]},
+                                                  "D117", "D118", "D125", "D196", "D269", "D272",
+                                                  "D-icon-buttons"]},
             "src/kit/Icon.tsx": {"does": "one icon set, 73 paths on a 24-unit grid at 1.75 stroke "
                                          "with round joins, drawn in the Lucide idiom so the whole "
                                          "product speaks one line weight. `currentColor` and "
@@ -6025,15 +6025,30 @@ COMPONENTS = [
                                          "top gap, one left edge, and the page is the `bn-page` "
                                          "query container. `Section` draws an h2. A new screen is "
                                          "one ROUTES entry plus a view that returns `<Page>`.",
-                                 "governed_by": ["D94", "D118", "D197", "D272", "D-icon-buttons"]},
+                                 "governed_by": ["D94", "D118", "D197", "D272",
+                                                 "D-icon-buttons"]},
             "src/kit/overlay.tsx": {"does": "the kit's overlays: `Sheet`, `Modal`, `Popover` and "
                                             "`ConfirmSheet`, each with one header and one Close, "
                                             "focus kept inside and given back, Escape for the top "
                                             "one only, portalled to <body>. `SheetHost` draws the "
                                             "sheet that `openSheet` opened, read through "
                                             "`useOpenSheet` (kit/sheets.ts). Seeded from the local "
-                                            "sheet on the code-card screen.",
+                                            "sheet on the code-card screen. `Dialog` (round 4, "
+                                            "promoted from its own file, `InventoryOverlay.tsx`, "
+                                            "now deleted) is the bare "
+                                            "panel for a caller that builds its own head: four "
+                                            "kinds (sheet, bottom, dialog, lightbox), no title or "
+                                            "Close of its own except the lightbox's single "
+                                            "`IconButton`, mounted only while its caller's own "
+                                            "`open` state is true rather than taking one, and on "
+                                            "the same `useOverlayLayer` stack every other layer "
+                                            "here joins — which the file it replaced never did.",
                                     "governed_by": ["D94", "D95", "D118", "D-icon-buttons"]},
+            "src/kit/dialog.css": {"does": "`Dialog`'s own inner rhythm — the sheet's width, the "
+                                           "head padding, the lightbox's 44px circular Close and "
+                                           "its backdrop blur. The panels themselves are the "
+                                           "kit's `.bn-sheet`/`.bn-dialog` (kit.css).",
+                                    "governed_by": ["D5", "D31", "D94"]},
             "src/kit/filters.tsx": {"does": "THE ONE FILTER BAR (FLT-15, the owner's gripes about "
                                             "Inventory's game-then-set-then-rarity lock and Orders' "
                                             "four-width strip): `FilterBar` composes `Select`, "
@@ -6041,10 +6056,13 @@ COMPONENTS = [
                                             "`SearchField` into one toolbar. It draws \"N of M\" by "
                                             "construction and names every narrowing in it (the "
                                             "picks, the search, the hide toggle), with the one "
-                                            "clear-all. Every facet trigger in one bar is one width. "
-                                            "It opens a popover in a wide bar and one sheet behind a "
-                                            "single trigger in a narrow one, by the bar's own width. "
-                                            "A slot beside the search takes a screen's own control, "
+                                            "clear-all. ONE LINE AT EVERY WIDTH (the owner, "
+                                            "2026-09-24, amending D270): search "
+                                            "plus one \"Filters\" trigger, never a wide inline row. "
+                                            "`compact` (default `'popover'`) picks the overlay the "
+                                            "trigger opens: a floating `Popover`, or `'sheet'` for "
+                                            "the kit's `Sheet` (the inventory lane's own call on a "
+                                            "phone). A slot beside the search takes a screen's own control, "
                                             "and the search takes `useSearch`'s busy and failure "
                                             "states. Also the quiet `HideToggle` (one shape for "
                                             "\"Hide sold\" / \"Hide never-seen\" / \"Holding\", "
@@ -6053,13 +6071,14 @@ COMPONENTS = [
                                             "per-column first direction, re-sorting at once, "
                                             "FLT-01).",
                                     "governed_by": ["D118", "D132", "D209", "D270"]},
-            "src/kit/filters.css": {"does": "the filter bar's styles. A container query on the "
-                                            "bar's own width: below 480px of bar (a phone column, "
-                                            "Inventory's rail) the wide row hides and the compact "
-                                            "trigger and its sheet take over — both trees are always "
-                                            "mounted, CSS alone decides which is visible. The facet "
-                                            "triggers share one grid track width.",
-                                    "governed_by": ["D50", "D118", "D195", "D270", "D270", "D-icon-buttons"]},
+            "src/kit/filters.css": {"does": "the filter bar's styles. One line at every width "
+                                            "(amending D270, 2026-09-24): no "
+                                            "container query decides the layout any more — the "
+                                            "compact trigger is always shown, and its overlay "
+                                            "(`.bn-menu.bn-filterbar-popover`, or the kit's own "
+                                            "`Sheet` styling) is picked by the `compact` prop.",
+                                    "governed_by": ["D50", "D118", "D195", "D270",
+                                                     "D-icon-buttons"]},
             "src/kit/filters.specimens.tsx": {"does": "`FilterBar` (full width, and in a 280px "
                                                        "rail), `HideToggle`, `SortHeader` and "
                                                        "`Highlight`, on invented rows whose counts "
@@ -6754,8 +6773,9 @@ COMPONENTS = [
             "governed_by": ["D6", "D8", "D9", "D10", "D16", "D19", "D20", "D21", "D22", "D23",
                             "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41",
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
-                            "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
-                            "D192", "D213", "D218", "D252", "D259", "D264", "D265"]},
+                            "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D159", "D172",
+                            "D181", "D192", "D213", "D218", "D221", "D252", "D259", "D263",
+                            "D275", "D285", "D264", "D265"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -6770,7 +6790,9 @@ COMPONENTS = [
                                   "only stylesheet that ever filled it.",
                                   "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33",
                                                   "D38", "D39", "D40", "D41", "D90", "D117", "D118",
-                                                  "D119", "D132", "D213"]},
+                                                  "D119", "D132", "D213",
+                                                  "D259",
+                                                  "D-inventory-walk-first"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #
@@ -6904,8 +6926,9 @@ COMPONENTS = [
                 # was removed on purpose rather than lost.
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
-                                "D58", "D68", "D71", "D90", "D93", "D118", "D119", "D125", "D132",
-                                "D172", "D181", "D192", "D213", "D218", "D264", "D285"],
+                                "D58", "D68", "D71", "D83", "D90", "D93", "D118", "D119", "D125",
+                                "D132", "D172", "D181", "D192", "D196", "D213", "D218",
+                                "D260", "D275", "D264", "D285"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -6931,27 +6954,6 @@ COMPONENTS = [
                         "sentence, which the copy row and the phone action bar both render.",
                 "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D71", "D118", "D125", "D119"],
             },
-            "src/InventoryOverlay.tsx": {"does": "ONE OVERLAY PRIMITIVE FOR THE INVENTORY "
-                                                 "SCREEN, in four kinds: a right-side sheet, "
-                                                 "the phone's bottom sheet, a centred dialog "
-                                                 "and the photograph's lightbox. Portalled to "
-                                                 "<body> so no ancestor transform can pin it "
-                                                 "— which is the kit's own motion rule stated "
-                                                 "as a consequence — focus-trapped, Escape "
-                                                 "closes, the body stops scrolling behind it, "
-                                                 "and focus returns to whatever opened it. "
-                                                 "`passKeys` is off by default: a sheet over "
-                                                 "the screen must not let the walk's arrow "
-                                                 "keys step the card behind it, and the "
-                                                 "phone's box sheet is the one case that "
-                                                 "wants them through. The panels wear the "
-                                                 "kit's `bn-sheet`/`bn-dialog` classes; what "
-                                                 "is here is the behavior.",
-                                         "governed_by": ["D5", "D31", "D45", "D94"]},
-            "src/InventoryOverlay.css": {"does": "those four panels' inner rhythm — the kit "
-                                                 "draws the panel, this sets what is inside "
-                                                 "it and how wide the sheet is.",
-                                         "governed_by": ["D5", "D31", "D94"]},
             "src/BoxOps.tsx": {
                 "does": "D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER "
                         "since D31 merged #/boxes away. One header per "
@@ -6995,7 +6997,7 @@ COMPONENTS = [
                         "off the wire.",
                 "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
                                 "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115",
-                                "D132", "D134", "D218"],
+                                "D132", "D134", "D196", "D218", "D259"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -7047,7 +7049,8 @@ COMPONENTS = [
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
                 "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D32", "D69",
-                                "D83", "D93", "D125", "D172", "D192", "D193", "D212", "D218", "D265"],
+                                "D83", "D93", "D94", "D125", "D172", "D192", "D193", "D212", "D218",
+                                "D259", "D265"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -7146,8 +7149,12 @@ COMPONENTS = [
                                          "React Refresh reloaded the whole page on every edit to that "
                                          "file. `stateLabel` is the one map every state pill on the "
                                          "owner's screens draws through, so a raw wire value is never "
-                                         "printed as a label.",
-                                 "governed_by": ["D5", "D26", "D31", "D83", "D92", "D115"]},
+                                         "printed as a label. Also `RETIRE_REASONS` and "
+                                         "`reasonWord`: the four ways a card leaves without a sale, "
+                                         "one label and one sentence each, the one table the "
+                                         "Retire dialog and Graveyard read (UX-241). The stored "
+                                         "code never reaches the screen (D196).",
+                                 "governed_by": ["D5", "D26", "D31", "D83", "D92", "D115", "D196"]},
             "src/frozenRank.ts": {"does": "THE ORDER IS TAKEN ONCE AND HELD UNTIL SOMEBODY ASKS "
                                           "FOR A NEW ONE — the copies that have left since the "
                                           "ranking on screen was computed, as a set of store keys, "
@@ -7224,7 +7231,7 @@ COMPONENTS = [
                                                       "D26", "D28", "D30", "D31", "D38", "D41",
                                                       "D45", "D58", "D67", "D68", "D71", "D92",
                                                       "D115", "D118", "D119", "D132", "D172",
-                                                      "D181", "D218", "D259"]},
+                                                      "D181", "D196", "D218", "D259"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
@@ -7596,10 +7603,11 @@ COMPONENTS = [
                                            "mounted, so a close costs a reopen, but nothing "
                                            "aborts a fetch and its receipt would toast for a "
                                            "sheet that is gone. Its "
-                                           "own comment says what it is: the behavior "
-                                           "`InventoryOverlay` has, waiting to be promoted to a "
-                                           "kit Dialog so the product has one of these rather "
-                                           "than two.",
+                                           "own comment says what it is: worth promoting to a "
+                                           "kit Dialog itself, the same move InventoryOverlay.tsx "
+                                           "already took (round 4) — that promotion did not "
+                                           "reach this file, whose three overlays stay on their "
+                                           "own hook.",
                                    "governed_by": ["D5", "D33", "D87", "D94", "D100", "D128"]},
             # ---- the pricing screen (D49, 2026-08-30) ----
             #
@@ -8899,7 +8907,7 @@ COMPONENTS = [
                         "floor. The roster comes off the drawer's own nav links rather than a "
                         "typed list of hashes, plus `#/gallery`, which the nav deliberately does "
                         "not hold.",
-                "governed_by": ["D50", "D95", "D117", "D204", "D266", "D266", "D-icon-buttons"],
+                "governed_by": ["D50", "D95", "D117", "D204", "D266", "D-icon-buttons"],
                 "note": "THE OWNER-SIDE SHELL HAD NO TEST AT ANY WIDTH. `nav.spec.ts` scopes "
                         "itself to `.bn-side` on purpose; `cursor.spec.ts` harvests its routes "
                         "from `.bn-side a.bn-nav-link`, which is `display: none` below 768, so "
@@ -9049,7 +9057,7 @@ COMPONENTS = [
                         "sheet, `aria-sort` on the `<th>` with axe clean, a quiet one-height hide "
                         "toggle, compact mode by the bar's own width, and a hand-edited URL read "
                         "safely. Run by `make design-check`.",
-                "governed_by": ["D118", "D132", "D270", "D285", "D-icon-buttons", "D270", "D285"],
+                "governed_by": ["D118", "D132", "D270", "D285", "D-icon-buttons"],
             },
             "tests/filters/index.html": {
                 "does": "a test page the dev server serves and the build never ships: it mounts "
@@ -9525,8 +9533,8 @@ COMPONENTS = [
                                 "D38", "D40", "D41", "D43", "D45", "D49", "D55", "D57", "D58",
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
-                                "D136", "D142", "D155", "D172", "D181", "D192", "D194", "D213",
-                                "D218", "D259"],
+                                "D136", "D142", "D155", "D159", "D172", "D181", "D192", "D194",
+                                "D196", "D213", "D218", "D259"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
@@ -9652,8 +9660,8 @@ COMPONENTS = [
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
                 "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D93", "D115",
-                                "D118", "D125", "D136", "D193", "D212", "D218",
-                                "D259", "D259", "D-icon-buttons"],
+                                "D118", "D125", "D136", "D193", "D212", "D218", "D259",
+                                "D-icon-buttons"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

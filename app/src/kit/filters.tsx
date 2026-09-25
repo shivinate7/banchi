@@ -1,9 +1,9 @@
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { Icon } from './Icon'
 import { FailureNotice, IconButton } from './index'
-import { Sheet } from './overlay'
+import { Popover, Sheet } from './overlay'
 import { FilterChips, FilterCount, SortControl, type FilterFacet, type FilterValue, type SortOption, type SortValue } from './data'
 import { SearchField } from '../SearchField'
 import './filters.css'
@@ -23,17 +23,22 @@ import './filters.css'
  * `FilterChips`' own "Clear all" is not drawn inside a FilterBar (filters.css), so two clear
  * presses never sit side by side, and its reserved slot leaves no blank band in the sheet.
  *
- * EVERY FACET TRIGGER IN ONE BAR IS ONE WIDTH (the orchestrator's call on the owner's gripe,
- * 2026-09-24): the widest any of them needs, in one shared grid track (filters.css). Each
- * trigger already holds the width of its widest value (`PickTrigger`'s sizer), so a pick
- * changes no width (D118).
+ * ONE LINE, AT EVERY WIDTH (the owner, 2026-09-24, D270): "i question whether
+ * they deserve all that real estate frankly it's egregious i imagined we had a plan to tighten
+ * them up immensely". A filter bar is search plus one "Filters" trigger with a count badge.
+ * Every facet, the sort and the hide toggle live behind that one press — never inline, at any
+ * width. This SUPERSEDES the bar's earlier width-driven layout (a container query that showed
+ * every facet inline above 480px of the bar's own width, and folded them below it): that
+ * inline row is gone, in every direction, not only the narrow one.
  *
- * A POPOVER ON THE DESK, A SHEET IN A NARROW COLUMN. Below `--bn-filterbar-stack` of the BAR'S
- * OWN WIDTH (a container query, not the viewport: Inventory's rail is 268-300px wide on a
- * 1440px desk) every facet, the sort and the hide toggle move into ONE sheet behind a single
- * "Filters" trigger. Opening it never pushes a row underneath (D118): a `Sheet` is an overlay.
- * BOTH TREES ARE ALWAYS MOUNTED, and CSS alone decides which one is visible and so which one is
- * in the tab order. No `matchMedia`, no width read in this file. */
+ * `compact` PICKS THE OVERLAY, NEVER WHETHER THERE IS ONE (default `'popover'`,
+ * D270): `'popover'` opens a small floating panel anchored to the trigger (`kit/overlay`'s
+ * `Popover`), the shape a desk press expects. `'sheet'` opens the kit's `Sheet` instead — a
+ * phone's own thumb reach, which `BoxBrowse` (the inventory lane) passes explicitly
+ * (`compact={phone ? 'sheet' : 'popover'}`) because a floating panel is the wrong shape once a
+ * screen is phone width. No caller needs a third value: nothing here reads `matchMedia` or a
+ * container query any more — the CALLER decides the shape, once, from what it already knows
+ * about its own width. */
 
 export type FilterBarSearch = {
   readonly query: string
@@ -88,6 +93,12 @@ export type FilterBarProps<K extends string = string> = {
   /** The group's own label, for the facet row and the phone sheet's title. Defaults to
    *  "Filters". */
   readonly label?: string
+  /** WHICH OVERLAY the "Filters" trigger opens — never whether it opens one
+   *  (D270, the owner, 2026-09-24): `'popover'` (the default) is a small panel anchored to
+   *  the trigger, right for a desk press. `'sheet'` is the kit's full sheet, right for a
+   *  phone's thumb reach — pass it explicitly when the screen already knows its own width is
+   *  phone-sized (`compact={phone ? 'sheet' : 'popover'}`, the inventory lane's own call). */
+  readonly compact?: 'popover' | 'sheet'
   readonly className?: string
 }
 
@@ -154,10 +165,12 @@ export function FilterBar<K extends string = string>({
   hide,
   beside,
   label = 'Filters',
+  compact = 'popover',
   className,
 }: FilterBarProps<K>) {
   const id = useId().replace(/:/g, '')
-  const [sheetOpen, setSheetOpen] = useState(false)
+  const [overlayOpen, setOverlayOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
   const active = activeFacetCount(facets, value)
 
   const rest = sort === undefined ? null : sortAtRest(sort)
@@ -183,7 +196,7 @@ export function FilterBar<K extends string = string>({
   }
 
   return (
-    <div className={['bn-filterbar', className].filter(Boolean).join(' ')} data-bn-filterbar>
+    <div className={['bn-filterbar', className].filter(Boolean).join(' ')} data-bn-filterbar data-compact={compact}>
       <div className="bn-filterbar-controls">
         {search === undefined && beside === undefined ? null : (
           <div className="bn-filterbar-lead">
@@ -204,16 +217,12 @@ export function FilterBar<K extends string = string>({
           </div>
         )}
 
-        {/* THE WIDE ROW: every facet, the sort and the hide toggle inline. Hidden in a narrow
-            bar (filters.css, a container query). */}
-        <div className="bn-filterbar-row" role="group" aria-label={label}>
-          <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hide} label={label} />
-        </div>
-
-        {/* THE COMPACT ROW: one trigger, one sheet. Hidden in a wide bar. */}
+        {/* ONE LINE, ALWAYS: one trigger, one overlay (D270). No wide inline
+            row exists any more, at any width. */}
         {facets.length > 0 || sort !== undefined || hide !== undefined ? (
           <div className="bn-filterbar-compact">
             <IconButton
+              ref={trigger}
               icon="filter"
               label={label}
               /* The badge is aria-hidden (D118: its arrival moves nothing, kit.css), so the
@@ -221,16 +230,30 @@ export function FilterBar<K extends string = string>({
                  finding: before IconButton, the count sat in the button's own text. */
               name={badge > 0 ? `${label}, ${badge} on` : label}
               badge={badge > 0 ? badge : undefined}
+              /* Sized to the field beside it through the SAME inline `style` IconButton already
+                 merges a caller's `style` into — never a CSS override (FLT-24), the same pattern
+                 `SortControl`'s own direction button uses. Without it the trigger sat at its
+                 default (smaller) size: 28px beside a 34px search field, under the 40px thumb
+                 floor at 390 (the orders lane's own finding, ux/orders 555d6b62). */
+              style={{ width: 'var(--bn-control-h)', height: 'var(--bn-control-h)' }}
               className="bn-filterbar-trigger"
               aria-haspopup="dialog"
-              aria-expanded={sheetOpen}
-              onClick={() => setSheetOpen(true)}
+              aria-expanded={overlayOpen}
+              onClick={() => setOverlayOpen(true)}
             />
-            <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={label} icon="filter">
-              <div className="bn-filterbar-sheet-body" id={`${id}-sheet`}>
-                <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hide} label={label} />
-              </div>
-            </Sheet>
+            {compact === 'sheet' ? (
+              <Sheet open={overlayOpen} onClose={() => setOverlayOpen(false)} title={label} icon="filter">
+                <div className="bn-filterbar-sheet-body" id={`${id}-sheet`}>
+                  <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hide} label={label} />
+                </div>
+              </Sheet>
+            ) : (
+              <Popover open={overlayOpen} onClose={() => setOverlayOpen(false)} anchor={trigger} label={label} className="bn-filterbar-popover">
+                <div className="bn-filterbar-sheet-body" id={`${id}-sheet`}>
+                  <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hide} label={label} />
+                </div>
+              </Popover>
+            )}
           </div>
         ) : null}
       </div>

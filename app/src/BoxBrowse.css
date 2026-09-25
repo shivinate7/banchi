@@ -6,7 +6,6 @@
   gap: var(--bn-5);
   min-width: 0;
 }
-.browse > .bn-head { margin-bottom: var(--bn-1); }
 
 /* ---- the body: rail beside pane ---- */
 .browse-body {
@@ -20,7 +19,7 @@
 @media (max-width: 1279px) {
   .browse-body { grid-template-columns: 268px minmax(0, 1fr); gap: var(--bn-4); }
 }
-@media (max-width: 767px) {
+@media (max-width: 639px) {
   .browse-body { grid-template-columns: minmax(0, 1fr); }
   .browse-body > .browse-map { display: none; }
 }
@@ -29,33 +28,23 @@
 .browse-map {
   position: sticky;
   top: var(--bn-4);
-  max-height: calc(100vh - var(--bn-8));
+  /* THE RAIL FITS THE WINDOW AT REST (UX-227). It is sticky, but at rest it starts under the
+     page head, so a rail as tall as the window ran past its bottom and the list's last rows sat
+     under the fold. `--browse-rail-rest` is the rail's own top at rest, measured by
+     `BoxBrowse.tsx`. */
+  max-height: calc(100dvh - var(--browse-rail-rest, var(--bn-4)) - var(--bn-4));
   display: flex;
   flex-direction: column;
   gap: var(--bn-3);
   min-height: 0;
   min-width: 0;
 }
-.browse-map-top { display: flex; align-items: center; gap: var(--bn-2); }
 .browse-rail-toggle { flex: none; color: var(--bn-ink-3); }
 .browse-rail-toggle:hover { color: var(--bn-ink); }
 
-/* D213's game/set/rarity filter. The three `.bn-select`s wrap, three rows at every measured
- * width in the rail's own ~270-300px, rather than being squeezed unreadably thin — the rail
- * is narrower than a comfortable three-up row of native selects, and wrapping costs nothing
- * a dropdown's own open state would not already cost. `min-width: 0` on each is what lets
- * flex shrink a `<select>` at all; browsers give it an intrinsic width from its longest
- * option otherwise. */
-.browse-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--bn-2);
-}
-.browse-filters > select {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.browse-filters > .bn-btn { flex: none; }
+/* D213's filter is the kit's FilterBar (FLT-09). The rail is narrower than its wide row, so
+ * its container query shows the one Filters press, which opens a popover on a desk. */
+.browse-filterbar { flex: none; }
 
 /* the collapsed rail */
 .browse-rail-mini {
@@ -116,7 +105,11 @@
   display: flex;
   flex-direction: column;
   padding: var(--bn-1);
-  max-height: 264px;
+  /* THREE AND A HALF BOXES (D-inventory-walk-first), the half row saying the list scrolls
+     (UX-206): the walk list below is
+     the thing the rail is for, and at 1440x900 it was a 183px window. Most recent first (D132),
+     so the box the hand wants is at the top. */
+  max-height: 164px;
   overflow-y: auto;
   flex: none;
 }
@@ -149,6 +142,14 @@
   color: var(--bn-ink-3);
 }
 .browse-hidesold { flex: none; }
+/* ONE TOOLBAR LINE (UX-269): in the walk's status line the toggle takes the line's own small
+   height and type, so `tick shown` no longer wraps alone onto a second row. */
+.browse-status .bn-hidetoggle {
+  height: var(--bn-control-h-sm);
+  padding: 0 var(--bn-2);
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+}
 .browse-boxcell-mini { font-size: var(--bn-fs-xs); letter-spacing: 0; padding: 0 2px; overflow: hidden; }
 .browse-boxcell-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .browse-boxcell-name {
@@ -213,9 +214,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--bn-1) var(--bn-2);
+  gap: var(--bn-1);
   min-height: 34px;
-  padding: var(--bn-1) var(--bn-3) var(--bn-1) var(--bn-3);
+  padding: var(--bn-1) var(--bn-2);
   border-bottom: 1px solid var(--bn-line);
   font-size: var(--bn-fs-xs);
   color: var(--bn-ink-3);
@@ -321,6 +322,7 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.browse-sectcount[data-empty='true'] { visibility: hidden; }
 .browse-sectcount {
   flex: none;
   min-width: 22px;
@@ -401,19 +403,19 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
 .browse-rowline:hover .browse-row { background: var(--bn-hover); color: var(--bn-ink); }
-/* THE SLOT CELL IS AS WIDE AS THE LABEL THE SALE WILL PUT IN IT, NOT AS WIDE AS THE ONE IN IT
-   NOW (D118). This column is `max-content`, and selling the copy rewrites the slot from `#1` to
-   the store key `B2 #1` in the mono face — wider, so the column grew and the name, the badges
-   and everything after them slid right ON THE PRESS. The 34px floor was absorbing it on the
-   rig and nowhere else: the key renders 33.0px in macOS's monospace fallback and over 34px in
-   Linux's, so `make design-check` was green here and red in CI on the same tree, over a real
-   movement. And the floor covers only the shortest key there is — box 2, card 1. `B3 #96`,
-   which the owner's own store draws, is 40px, so that sale moved the name six pixels on every
-   platform and no case ever saw it.
-   `::before` reserves the future label's length in the face it will be drawn in, so the track is
-   already that wide before the write and unchanged after it. A row whose key is wider than its
-   slot therefore starts its name further right than it used to; that is the price of the press
-   not moving anything, and it is paid once at render rather than at the moment of the sale. */
+/* THE SLOT CELL IS AS WIDE AS THE STRING A DEPARTURE WILL PUT IN IT, NOT AS WIDE AS THE ONE IN
+   IT NOW (D118). This column is `max-content`, and `departedSlot` (S5) is what BoxBrowse.tsx's
+   ghost reserves — the row's OWN struck `#N`, unchanged in width by its own departure since
+   D259 (2026-09-23) stopped drawing the store key there at all, except
+   as that function's own fallback for a pre-ruling record with no label to read a number off:
+   `B3 #96`, in the mono face, wider than any `#N` this box will ever show. Reserving that
+   fallback UNCONDITIONALLY, the first build of this rule, made every ordinary row's ghost
+   wider than its own slot ever draws once a box's numbers reach two digits — pushing the name
+   and everything after it six pixels right on every row from the one where that starts, with
+   no sale in sight to blame it on.
+   `::before` reserves the string's length in the face it will be drawn in, so the track is
+   already the right width before a departure and unchanged after it — paid once at render,
+   never at the moment of the write. */
 .browse-row-position {
   display: grid;
   font-size: var(--bn-fs-xs);
@@ -467,18 +469,6 @@
 .browse-row[aria-current='true'] .browse-row-name { font-weight: 600; }
 .browse-row:focus-visible { outline: 2px solid var(--bn-accent); outline-offset: -2px; }
 
-.browse-listkeys {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--bn-1) var(--bn-2);
-  padding: var(--bn-2) var(--bn-3);
-  border-top: 1px solid var(--bn-line);
-  font-size: var(--bn-fs-xs);
-  color: var(--bn-ink-3);
-}
-.browse-listkeys span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
-.browse-listkeys .bn-kbd { height: 17px; min-width: 17px; font-size: var(--bn-fs-xs); }
 
 /* ---- the pane ---- */
 .browse-side {
@@ -520,6 +510,11 @@
 }
 .browse-hero-sub > span + span::before { content: '·'; margin-right: var(--bn-2); color: var(--bn-ink-4); }
 .browse-hero-number { font-family: var(--bn-font-mono); font-weight: 600; color: var(--bn-ink-2); }
+/* The place beside the name, only where the pane is one column (UX-187). */
+.browse-hero-place { display: none; font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); }
+@container pane (max-width: 559px) {
+  .browse-hero-place { display: block; }
+}
 .browse-hero-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
 .browse-queuechip { text-decoration: none; }
 .browse-queuechip:hover { text-decoration: none; filter: brightness(0.95); }
@@ -720,7 +715,7 @@
 @container pane (max-width: 559px) {
   .browse-shot { max-width: 300px; }
 }
-@media (max-width: 767px) {
+@media (max-width: 639px) {
   .browse-shot { max-width: none; align-items: center; }
   .browse-photo-frame,
   .browse-absent { width: auto; height: min(44vh, 420px); max-width: 100%; }
@@ -780,12 +775,6 @@
 }
 .browse-fact-live .bn-tnum { font-weight: 600; }
 
-/* ---- loading ---- */
-.browse-skel-search { height: 40px; }
-.browse-skel-panel { padding: var(--bn-2); display: flex; flex-direction: column; gap: var(--bn-2); }
-.browse-skel-row { height: 40px; }
-.browse-skel-photo { aspect-ratio: 63 / 88; width: 100%; border-radius: var(--bn-r-lg); background: var(--bn-stage-bg); }
-
 /* ---- the phone ---- */
 .browse-mobilebar {
   position: sticky;
@@ -829,7 +818,6 @@
 }
 .browse-railsheet .browse-boxes { max-height: 224px; }
 .browse-railsheet .browse-list { max-height: 44vh; }
-.browse-railsheet .browse-listkeys { display: none; }
 
 .browse-actionbar {
   position: fixed;
@@ -855,12 +843,10 @@
   background: var(--bn-surface-2);
   flex: none;
 }
+/* Sizing is `IconButton`'s own (the `size="lg"` face plus its `::before` 40px thumb floor,
+   kit.css) — this class only sets the segmented-control chrome around that face. */
 .browse-stepper-btn {
-  width: 40px;
-  height: 36px;
   border-radius: var(--bn-r);
-  display: grid;
-  place-items: center;
   color: var(--bn-ink);
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
@@ -881,7 +867,7 @@
    card above until that was deleted — where it is the icon-only ghost beside `Mark sold`. */
 .browse-actionbar-slot .bn-btn-ghost { display: none; }
 
-@media (max-width: 767px) {
+@media (max-width: 639px) {
   .browse { padding-bottom: 64px; }
   /* the toast stack rises above the screen's own action bar */
   body:has(.browse-actionbar) .bn-toasts { bottom: calc(64px + 60px + env(safe-area-inset-bottom)); }
@@ -889,7 +875,7 @@
 
 /* ---- thumb sizes: 40px+ for anything a thumb presses, 44 for the two it presses most.
        A tablet is a thumb too, so this rides the pointer and not the width alone. ---- */
-@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+@media (max-width: 639px), (hover: none) and (pointer: coarse) {
   .browse-row { min-height: 44px; padding-top: 8px; padding-bottom: 8px; }
   .browse-row-name { font-size: var(--bn-fs-base); }
   .browse-sectfold { min-height: 44px; }
@@ -913,12 +899,19 @@
   .browse-railsheet .search-field-input { height: 44px; }
   .browse-box-head .bn-btn-sm { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); font-size: var(--bn-fs-md); }
   .browse-cardops > .bn-btn { --btn-h: var(--bn-control-h-lg); }
-  .card-locations-owner .inventory-copy-actions .bn-btn { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); font-size: var(--bn-fs-md); }
+  /* `:not(.bn-icon-btn)` (round 3): Retire, Move and Undo in this row are the kit's
+     `IconButton` now, which sizes its own face off its `size` prop (FACE_PX,
+     kit/index.tsx) and gives itself the 40px thumb floor through its own `::before` at any
+     face size (kit.css). This rule predates that — it boosted the old `Button iconOnly`'s
+     height through `--btn-h` and this padding, which IconButton never reads, so the padding
+     alone was landing on it unopposed and stretching a square 24px face into a 34x24
+     rectangle, UNDER the 40px floor on its short axis. `.bn-btn-icon` (the old class,
+     kept for any caller still on it) still gets padding zeroed the same way it always did. */
+  .card-locations-owner .inventory-copy-actions .bn-btn:not(.bn-icon-btn) { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); font-size: var(--bn-fs-md); }
   .card-locations-owner .inventory-copy-actions .bn-btn-icon { padding: 0; }
   /* The receipt's Undo is the same press as the `Mark sold` it replaced, so it is the same
      height — `sm` alone is 40px, which is the thumb FLOOR and not this row's size (D119). */
-  .card-locations-owner .bn-receipt .bn-btn { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); }
-  .browse-stepper-btn { width: 44px; height: 40px; }
+  .card-locations-owner .bn-receipt .bn-btn:not(.bn-icon-btn) { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); }
   .browse-stepper-count { font-size: var(--bn-fs-base); }
   .browse-boxcell { min-height: 48px; }
   .browse-details-summary { min-height: 48px; }
@@ -926,7 +919,7 @@
 
 /* THE THUMB FLOOR (D117). The walk's status line squeezes to 34px and carries `.browse-quiet`
    controls inside it. */
-@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+@media (max-width: 639px), (hover: none) and (pointer: coarse) {
   .browse-status { min-height: var(--bn-control-h-sm); }
   /* AN INLINE LINK INSIDE A SENTENCE IS STILL A TARGET (D117). The queued notice ends with
      `Open the review queue`, which is the only way out of a card the pipeline could not place —

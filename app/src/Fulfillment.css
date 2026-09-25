@@ -518,24 +518,8 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
 .ff-box-head:hover { background: var(--bn-hover); }
-.ff-box-num {
-  flex: none;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  background: var(--bn-ink);
-  color: var(--bn-bg);
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-2xl);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
 .ff-box-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0; }
 .ff-box-name { font-weight: 700; font-size: var(--bn-fs-2xl); line-height: 1.3; overflow-wrap: anywhere; }
-/* D218: the box's own name is its own span; the seam is CSS. */
-.ff-box-namepart::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .ff-box-count { color: var(--bn-ink-2); line-height: 1.3; }
 .ff-box-chev { flex: none; color: var(--bn-ink-2); transition: transform var(--bn-t) var(--bn-ease-spring); }
 .ff-box-head[aria-expanded='true'] .ff-box-chev { transform: rotate(180deg); }
@@ -1349,7 +1333,7 @@
 .ff-keys-list li { display: flex; align-items: center; gap: var(--bn-4); }
 /* THE FLOOR TABLE REACHES THE KEY CAP TOO — `--ff-fs-base` is this screen's own 20px body
    floor, not the kit's `.bn-kbd` (10px, sized for a dense reference sheet nobody but the
-   owner reads). Boxed like `.ff-box-num`'s own chip, at the same corner radius family. Fixed
+   owner reads). Boxed as a chip, at the corner radius family the box head used. Fixed
    `width`, wide enough for the longest cap this screen names ("Esc"), so a shorter one ("?")
    still occupies the same column. */
 .ff-keys-key {

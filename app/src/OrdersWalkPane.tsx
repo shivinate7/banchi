@@ -29,7 +29,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { CardDetailsSection, CardHeroHead, marketTable, PhotoPanel, type MarketRead, type Row } from './CardHero'
 import { CardLocations } from './CardLocations'
-import { Overlay } from './InventoryOverlay'
+import { Dialog as Overlay } from './kit/overlay'
 import { Button, Icon, Pill } from './kit'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { SectionTitle } from './SectionTitle'

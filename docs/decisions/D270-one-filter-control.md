@@ -101,3 +101,82 @@ way the four-width strip did.
   Game/Set/Rarity roster, if a screen's own filters differ.
 - **The exact word for "Any."** Each screen may need its own: a set, a status, a lane. That is
   a wave-2 question, not this entry's.
+
+### What the inventory lane built (2026-09-24)
+
+- **Inventory's rail uses the bar.** Game, Set and Rarity each take several picks, in any
+  order. No pick clears another. The picks live in the URL.
+- **The counts come from one read.** `GET /boxes` sends `facet_cells`: the store's cards,
+  grouped by box, game, set, rarity and whether they left. The screen folds them with
+  `kit/facets.ts:countFacets`. So a pick asks the server nothing. Each count follows the
+  other picks and Hide sold. The unclassified value is the blank pick, `?set=`.
+- **A popover on a desk.** `FilterBar` takes `compact="popover"`. A narrow bar on a desk then
+  opens its facets under the Filters press, not in a sheet at the far right of the window. The
+  phone keeps the sheet. In the popover bar the Filters press shares the search's line.
+
+## Amendment, 2026-09-24 — one line at every width, never only the narrow one
+
+**The owner's ruling.** From the tighten interview (RULINGS.md):
+
+```
+well i think add orders, cards to pull, and all the filters, i question whether they deserve
+all that real estate frankly it's egregious i imagined we had a plan to tighten them up
+immensely
+```
+
+and, on the phone column:
+
+```
+literally 50% of the phone view is a wasted upper currently
+```
+
+**The premise that no longer holds.** This entry's own line, above: "a popover in a wide bar,
+and one sheet behind a single 'Filters' trigger in a narrow one." That line was true on
+2026-09-23. One day later, the owner looked at a built screen. He judged the WIDE case a
+defect too, not only the narrow one. The container query's arithmetic was never wrong. Its
+premise was: a wide bar has room, so show everything that fits. The owner's gripe is that
+fitting is not the same as deserving the room.
+
+**The fix.** `FilterBar` drops the width-driven inline row (`kit/filters.tsx`,
+`kit/filters.css`). It is search plus one "Filters" trigger with a count badge, at 1440, 720
+and 390 alike. `compact` (default `'popover'`) picks what the trigger opens. A floating
+`Popover` (`kit/overlay.tsx`, anchored to the trigger) suits a desk. The kit's `Sheet` suits a
+phone. A caller passes `'sheet'` once it already knows its own width is phone-sized
+(`compact={phone ? 'sheet' : 'popover'}`, the inventory lane's own planned call for
+`BoxBrowse.tsx`). No caller needs a third value. Nothing in the kit reads `matchMedia` or a
+container query for this any more. The caller decides the shape once, from what it already
+knows.
+
+**Measured**, `#/gallery`'s own `FilterBar` and `Rail` specimens
+(`kit/filters.specimens.tsx`), 1440 / 720 / 390, before this amendment and after
+(`.bn-filterbar` outer height, headless Chromium, `getBoundingClientRect`):
+
+| width | before (main / rail) | after (main / rail) |
+|------:|----------------------|----------------------|
+| 1440  | 154px / 106px        | 70px / 70px          |
+|  720  | 190px / 126px        | 90px / 90px          |
+|  390  | 126px / 126px        | 90px / 90px          |
+
+The "before" wide-bar figures wrap across one or two lines. It depends on how many facets fit
+that width. The "after" figures are the trigger row alone. `main` and `rail` converge on two
+numbers once neither has a row left to wrap. These are the KIT SPECIMEN's own numbers, not a
+real screen's. No screen on this branch renders `<FilterBar>` yet: `ux/kit-icons`' own
+ancestry predates the filtering lane's merge. Orders is the reference screen the ruling names.
+The kit-tighten lane's own input already measured it (LANES-ADDENDUM, "kit-tighten lane
+input"): 70→34px at 1440, 190→42px at 720, 140→42px at 390. That was the move from Orders'
+own stopgap CSS (`Orders.css`, forcing compact mode by hand, `ux/orders` commit 1d821470) to
+this amendment as the kit default. The stopgap becomes redundant once this lands. The orders
+lane's own file deletes it.
+
+**What this does to a screen already built against the old default.** A screen that adopted
+`FilterBar` before this merges needed no code change beyond one deletion: a now-redundant
+override. Orders already forced `compact` behaviour by hand. The inventory lane's own plan for
+`BoxBrowse.tsx` (`review/inventory/boxbrowse.diff`) already passed `compact` explicitly.
+Neither file is this entry's to touch. Each lane owns its own screen.
+
+**A page header holds at most one worded primary too** (the same ruling, same quote). The rest
+of a header's actions are `IconButton`s or a More menu. `make kit-adoption`'s
+`R2-header-actions` rule checks this. A companion `R2-filter-row` rule refuses a screen built
+by hand from `SearchField` and a facet control, in place of `FilterBar`
+(`scripts/kit-adoption.mjs`). Current offenders are listed in `scripts/kit-adoption-allow.json`,
+keyed to the lane that owns each screen.

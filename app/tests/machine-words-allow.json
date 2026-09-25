@@ -1,13 +1,9 @@
 {
-  "_about": "THE SHRINKING PENDING LIST for `machine-words.spec.ts` (D196, amended 2026-09-23 by `D284`: 'a new browser check reads the rendered text of every route'). KEY SHAPE: route -> word or path (lower-cased) -> the lane that owes the fix. There is NO wildcard route: the fixture is deterministic (`routeSweep.ts` registers every seed once and reads each screen only once it is loaded), so a word lands on the same route every run. A different list from `scripts/machine-words-allow.json` on purpose: that one keys by FILE, for the AST walk over JSX literals; this one keys by ROUTE, for rendered `innerText`, which carries no source file. `machine-words.spec.ts` fails on a hit not listed here AND on a listed entry that matches nothing (stale — delete it). `#/orders`'s pair is `CardLocations`'s 'Pushed 0 Staged 0' count, drawn in the order walk; that component is the inventory lane's. Both it and `#/codes`'s 'Box 12index 1' were invisible to a `\\b` word boundary, because innerText joins adjacent spans with no space; the matcher uses a LETTER boundary for that reason (`machineWords.ts:wordPattern`). Measured at 1440 and 390, 2026-09-24: every entry below matched at both widths.",
+  "_about": "THE SHRINKING PENDING LIST for `machine-words.spec.ts` (D196, amended 2026-09-23 by `D284`: 'a new browser check reads the rendered text of every route'). KEY SHAPE: route -> word or path (lower-cased) -> the lane that owes the fix. There is NO wildcard route: the fixture is deterministic (`routeSweep.ts` registers every seed once and reads each screen only once it is loaded), so a word lands on the same route every run. A different list from `scripts/machine-words-allow.json` on purpose: that one keys by FILE, for the AST walk over JSX literals; this one keys by ROUTE, for rendered `innerText`, which carries no source file. `machine-words.spec.ts` fails on a hit not listed here AND on a listed entry that matches nothing (stale — delete it). `#/orders`'s own 'Pushed 0 Staged 0' pair (`CardLocations`, the inventory lane's own component) is gone as of round 3 — cut list #7 already removed the string this component draws, and the entry here just outlived it. `#/runs`'s 'emit' entry is also stale as of round 3's own `machine-words.spec.ts` run and is deleted on the same rule, not investigated further here (b-runs' own file). `#/codes`'s 'Box 12index 1' stays: it was invisible to a `\\b` word boundary, because innerText joins adjacent spans with no space; the matcher uses a LETTER boundary for that reason (`machineWords.ts:wordPattern`). Measured at 1440 and 390, 2026-09-24: every entry below matched at both widths.",
   "#/capture": {
     "index": "capture",
     "span": "capture",
     "manual:c": "capture"
-  },
-  "#/orders": {
-    "pushed": "inventory",
-    "staged": "inventory"
   },
   "#/codes": {
     "index": "library"

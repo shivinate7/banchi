@@ -18,6 +18,7 @@ import {
   getOrders,
   isDeparted,
   markSold,
+  moveCard,
   photoUrl,
   retireCard,
   undoRetire,
@@ -31,13 +32,15 @@ import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
 import { sayPlace } from './position'
+import { RETIRE_REASONS, reasonWord } from './cardState'
 import { useSearch } from './useSearch'
 import { isEditableTarget } from './keys'
-import { Button, Icon, Notice, Pill } from './kit'
+import { Button, Icon, IconButton, Loading, Notice, Page, Pill, Select, boxesMostRecentFirst } from './kit'
+import { UNNAMED_BOX } from './kit/data'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
 import { RANK_IS_CURRENT, type FrozenRank } from './frozenRank'
-import { Overlay } from './InventoryOverlay'
+import { Dialog as Overlay } from './kit/overlay'
 import './Inventory.css'
 
 /* THE INVENTORY — one owner-side view of stored cards: find a card by name or SKU, or walk a
@@ -66,18 +69,14 @@ const UNDO_KEY_LABEL = 'U'
 /* The refusal codes this screen branches on. `already_sold` on a sale is not this device's
  * sale: a receipt with NO undo. `not_sold` on a reversal is success. The retirement pair
  * applies the same two rulings. Codes, never messages. */
+/* WHAT A RECEIPT SAYS WHEN THE STORE CANNOT PUT A COPY BACK (UX-207, D196): the stored reason
+ * (`sold_origin_unknown`, `retired_origin_unknown`) stays off the screen. */
+const NO_UNDO = 'No undo for this one.'
+
 const ALREADY_SOLD = 'already_sold'
 const NOT_SOLD = 'not_sold'
 const ALREADY_RETIRED = 'already_retired'
 const NOT_RETIRED = 'not_retired'
-
-/** The four reasons a card leaves without a sale, in the store's own vocabulary (D26). */
-const REASONS: readonly { reason: RetireReason; label: string; said: string }[] = [
-  { reason: 'pulled', label: 'Pulled out', said: 'Taken out of the box for something else.' },
-  { reason: 'damaged', label: 'Damaged', said: 'Not in a condition to sell.' },
-  { reason: 'lost', label: 'Lost', said: 'The slot is empty and nobody knows where it went.' },
-  { reason: 'given_away', label: 'Given away', said: 'Left the store as a gift or a trade.' },
-]
 
 const NO_LAYOUTS: ReadonlyMap<number, readonly SectionDetail[]> = new Map()
 
@@ -106,13 +105,26 @@ function refusalCode(err: unknown): string {
   return err instanceof ServerError ? err.code : ''
 }
 
-/** The retire reason as the panel labels it — `given_away` is `Given away` in a sentence.
- *  Exported so Graveyard reads the one label table rather than the raw enum (UX review,
- *  2026-09-20, "Retired · pulled"). Takes `string` rather than `RetireReason` because
- *  `DepartedCard.retire_reason` is stored untyped (`types.ts:825`); an unrecognized value
- *  still falls back to itself, same as the panel's own call. */
-export function reasonWord(reason: string): string {
-  return REASONS.find((candidate) => candidate.reason === reason)?.label ?? reason
+/* Graveyard reads the one label table through here (UX review, 2026-09-20). */
+export { reasonWord }
+
+/** WHO TAKES THE NUMBER (UX-190). A card counts the cards in its section (D58, amended by
+ *  D260), so when one leaves, the card in front of it (toward the
+ *  owner, `neighbors.next`) takes its number, and every card after it steps down one. The rows
+ *  hold still (FLT-22), so the receipt says it: `Tinkatink is now card 3.` Nothing when the card
+ *  was the last of its section, when the store sent no neighbours, or for a pooled card. */
+function renumberNote(place: SearchCopy['place']): string | null {
+  const next = place.neighbors?.next ?? null
+  if (next === null || place.card === null || place.slot === null) return null
+  if (place.section_end !== null && place.slot >= place.section_end) return null
+  const who = next.name ?? 'The unread card in front'
+  return `${who} is now card ${place.card}.`
+}
+
+/** The receipt's second line, in sentences: who took the number, then any note. */
+function receiptBody(place: string, ...lines: readonly (string | null)[]): string {
+  const said = lines.filter((line): line is string => line !== null && line !== '')
+  return said.length === 0 ? place : `${place}. ${said.join(' ')}`
 }
 
 /** An open order that names one copy, by the copy's store key (`3/103`). */
@@ -286,6 +298,8 @@ function InventoryWalk({ onView }: { readonly onView: (next: 'walk' | 'shelf') =
   /* The copy waiting on a retire panel, or null. A retirement without a reason is refused, so
    * the four reason buttons ARE the confirm. */
   const [retiring, setRetiring] = useState<SearchCopy | null>(null)
+  /* The copy waiting on the move panel, or null (UX-244). */
+  const [moving, setMoving] = useState<SearchCopy | null>(null)
 
   /* One write in flight at a time, by copy key. */
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -391,7 +405,7 @@ function InventoryWalk({ onView }: { readonly onView: (next: 'walk' | 'shelf') =
       kind: full.canUndo ? 'receipt' : 'status',
       icon: full.kind === 'sale' ? 'check' : 'archive',
       title: full.said,
-      body: full.note === null ? full.place : `${full.place} — ${full.note}`,
+      body: receiptBody(full.place, full.note),
       ttlMs: UNDO_WINDOW_MS,
       action: full.canUndo ? { label: 'Undo', onPress: () => void doUndoRef.current(full) } : undefined,
     })
@@ -419,10 +433,7 @@ function InventoryWalk({ onView }: { readonly onView: (next: 'walk' | 'shelf') =
           kind: 'sale',
           said: 'Marked sold',
           canUndo: reversible,
-          note: reversible
-            ? null
-            : 'The store cannot say what state this copy was in before the sale, so it ' +
-              'cannot be put back from here (sold_origin_unknown).',
+          note: [renumberNote(copy.place), reversible ? null : NO_UNDO].filter(Boolean).join(' ') || null,
         })
         setReloads((n) => n + 1)
       } catch (err) {
@@ -472,13 +483,9 @@ function InventoryWalk({ onView }: { readonly onView: (next: 'walk' | 'shelf') =
         remember({
           ...seat,
           kind: 'retirement',
-          said: 'Retired',
+          said: `Retired: ${reasonWord(reason)}`,
           canUndo: reversible,
-          note: reversible
-            ? reasonWord(reason)
-            : `${reasonWord(reason)} — the store cannot say what state this copy was in ` +
-              'before the retirement, so it cannot be put back from here ' +
-              '(retired_origin_unknown).',
+          note: [renumberNote(copy.place), reversible ? null : NO_UNDO].filter(Boolean).join(' ') || null,
         })
         setReloads((n) => n + 1)
       } catch (err) {
@@ -501,6 +508,32 @@ function InventoryWalk({ onView }: { readonly onView: (next: 'walk' | 'shelf') =
       }
     },
     [busyKey, remember, holdRank],
+  )
+
+  /* D83's third door, for one copy (UX-244). No undo here: undo is its own later session. */
+  const doMove = useCallback(
+    async (copy: SearchCopy, toBox: number) => {
+      if (busyKey !== null) return
+      setBusyKey(copy.key)
+      try {
+        await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox)
+        setMoving(null)
+        holdRank(copy.key)
+        const where = boxRecords.find((record) => record.box === toBox)?.name ?? UNNAMED_BOX
+        toast({
+          kind: 'ok',
+          icon: 'package',
+          title: `Moved to ${where}`,
+          body: receiptBody(sayPlace(copy.place.label ?? copy.key), renumberNote(copy.place)),
+        })
+        setReloads((n) => n + 1)
+      } catch (err) {
+        report(describeFailure(err))
+      } finally {
+        setBusyKey(null)
+      }
+    },
+    [busyKey, holdRank, boxRecords],
   )
 
   const doUndo = useCallback(
@@ -622,6 +655,7 @@ function InventoryWalk({ onView }: { readonly onView: (next: 'walk' | 'shelf') =
       onSell={sell}
       onUndo={undo}
       onRetire={openRetire}
+      onMove={setMoving}
     />
   )
 
@@ -648,9 +682,16 @@ function InventoryWalk({ onView }: { readonly onView: (next: 'walk' | 'shelf') =
     )
 
   return (
-    <main className="inventory bn-page">
+    /* THE KIT'S PAGE (D275): the one h1 off the route, the one width and top gap. */
+    <Page
+      icon="box"
+      /* SILENT WITH NO BOX: the empty state says "No boxes yet" once, not the lede too. */
+      lede={boxRecords.length === 0 ? undefined : 'Sell, retire or move any card.'}
+      /* The Walk / Shelf switch (D264): the Shelf draws the same header with it. */
+      actions={<ShelfSwitch view="walk" onView={onView} />}
+      className="inventory"
+    >
       <BoxBrowse
-        head="Inventory"
         detail={detail}
         onSelect={setSelected}
         onBoxes={setBoxRecords}
@@ -664,7 +705,6 @@ function InventoryWalk({ onView }: { readonly onView: (next: 'walk' | 'shelf') =
         onQuery={rerank}
         boxPanel={<BoxRuns box={runScope.box} indices={runScope.indices} />}
         actionBar={currentCopy === null || selected === null || currentCopy.key !== selected.key ? null : actionFor(currentCopy, true)}
-        viewSwitch={<ShelfSwitch view="walk" onView={onView} />}
       />
 
       {retiring === null ? null : (
@@ -676,7 +716,16 @@ function InventoryWalk({ onView }: { readonly onView: (next: 'walk' | 'shelf') =
           onCancel={() => setRetiring(null)}
         />
       )}
-    </main>
+      {moving === null ? null : (
+        <MovePanel
+          copy={moving}
+          boxes={boxRecords}
+          busy={busyKey !== null}
+          onMove={(toBox) => void doMove(moving, toBox)}
+          onCancel={() => setMoving(null)}
+        />
+      )}
+    </Page>
   )
 }
 
@@ -751,6 +800,21 @@ function CopiesPanel({
 
   const settled = results !== null && results.query === (handle ?? '')
 
+  /* B1: THE LOADER MUST GIVE UP. `settled` above asks whether the answer ON HAND matches the
+     query ON HAND — a strict check the D118 comment above needs to avoid flashing a stale
+     group. It says nothing about whether a fetch is actually running, so a query the server
+     never echoes back correctly (measured: the shared route-sweep fixture's `/search` stub
+     always answers `query: ''`) leaves `settled` false forever even after `loading` has gone
+     back to false — `group === null && (loading || !settled)` then never turns false, and the
+     kit's `aria-busy` `<Loading>` spins for good. `askedFor` remembers the handle a fetch was
+     actually LAUNCHED for; once `loading` returns to false for that same handle, the fetch is
+     over — settled or not — and there is nothing left to wait for. */
+  const askedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (loading) askedFor.current = handle
+  }, [loading, handle])
+  const gaveUp = !loading && askedFor.current === handle
+
   /* The copy the walk is pointing at, as the search knows it — or the lone copy when the
      search cannot reach it. */
   const lone = useMemo(() => (handle === null ? loneCopy(row) : null), [handle, row])
@@ -792,18 +856,8 @@ function CopiesPanel({
             figures", which is context for the thing above it and reads wrong before it. */}
         <div className="inventory-lone">
           <Notice tone="info" title="No name and no SKU yet.">
-            {lone === null ? (
-              <>
-                The store sent no position for this record, so there is no copy to draw.{' '}
-                <span className="inventory-machine bn-facts">
-                  <span>place: absent</span> <span>key {row.key}</span>
-                </span>
-              </>
-            ) : (
-              <>This is one copy at one position, and the panel above is that copy alone.</>
-            )}{' '}
-            A SKU appears only after <code className="inventory-inline">emit</code> writes
-            it.
+            {lone === null ? 'The store sent no place for this card.' : 'This is the only copy.'} It gets a SKU
+            when a run matches it.
           </Notice>
         </div>
       </section>
@@ -821,15 +875,14 @@ function CopiesPanel({
           y=79 to y=181 and back on an ~93ms answer. Draw it only when there is nothing to stand
           on — a fresh card on the walk (`group` is null because `row.key` is not in the still-
           old `results`) or the very first read. A re-read of the SAME card keeps its `group`
-          (found by key in the stale `results`) and the list stays put while the fetch runs. */}
-      {group === null && (loading || !settled) ? (
-        <div className="inventory-looking">
-          <span className="bn-skeleton" style={{ width: 140, height: 14 }} />
-          <span className="bn-skeleton" style={{ width: '100%', height: 64 }} />
-        </div>
+          (found by key in the stale `results`) and the list stays put while the fetch runs.
+          `!gaveUp` rather than `loading || !settled` (B1): the fetch this handle asked for is
+          over the moment `loading` goes back to false, whether or not it ever settled. */}
+      {group === null && !gaveUp ? (
+        <Loading rows={1} className="inventory-looking" label="Reading this card's copies" />
       ) : null}
 
-      {group === null && settled && !loading ? (
+      {group === null && gaveUp ? (
         <Notice tone="warn" title="The search did not return this card's own row." code={`key ${row.key}, query ${query}`}>
           That should not happen; a reload usually settles it.
         </Notice>
@@ -874,7 +927,7 @@ function skuOrName(card: InventoryCard): string | null {
  *
  *  `primary` IS A SIZE, NOT A SHAPE, AS OF D119. It used to mean "the location card's form —
  *  the one solid button on the screen"; that card is gone, and its last caller is the phone's
- *  sticky action bar (`actionBar` below → `BoxBrowse`, rendered only under `max-width: 767px`).
+ *  sticky action bar (`actionBar` below → `BoxBrowse`, rendered only under `max-width: 639px`).
  *  So `primary` is phone-only from here, and what it decides is emphasis and control size —
  *  never whether a state is drawn at all. */
 function Action({
@@ -888,6 +941,7 @@ function Action({
   onSell,
   onUndo,
   onRetire,
+  onMove,
 }: {
   copy: SearchCopy
   primary: boolean
@@ -900,17 +954,18 @@ function Action({
   onSell: (copy: SearchCopy) => void
   onUndo: (receipt: Receipt) => void
   onRetire: (copy: SearchCopy) => void
+  onMove: (copy: SearchCopy) => void
 }) {
   const busy = busyKey === copy.key
   if (copy.state === 'sold' || soldKeys.has(copy.key)) {
     const standing = undoableSales.get(copy.key)
-    /* After the undo window the state is a pill, in the register of every other state on the
-       screen. UNCHANGED BY D119, AND DELIBERATELY: a copy row's own state pill already says
-       `sold` once the re-read lands, so the row draws a second one ONLY for an optimistic sale
-       still in flight. The phone bar has no state pill beside it and so always draws one. Two
-       `Sold` markers on one row is what this condition exists to prevent. */
+    /* After the undo window the state is a pill, ONLY FOR AN OPTIMISTIC SALE STILL IN FLIGHT
+       (S2): the struck number this row already draws is the confirmed-sold mark, and the hero
+       chips above say `Sold` once for the copy the walk stands on. That covers the phone's
+       sticky bar too — it used to draw its own `Sold` unconditionally once `primary` was true,
+       which was a THIRD `Sold` on the one row a phone actually shows all three at once. */
     return standing === undefined ? (
-      primary || copy.state !== 'sold' ? (
+      copy.state !== 'sold' ? (
         <Pill tone="ok" icon="check">
           Sold
         </Pill>
@@ -936,22 +991,26 @@ function Action({
         {primary ? <span className="inventory-receipt-said">Marked sold.</span> : null}
         {/* The undo window draining, the same clock the toast for this sale shows. */}
         <span className="bn-receipt-bar" aria-hidden="true" />
-        <Button
-          size={primary ? 'md' : 'sm'}
+        {/* ICON, U IN THE TOOLTIP (ICONOGRAPHY): Undo is reversed by pressing it again, so it
+            keeps no words in either sector — the row and the phone bar both read it from the
+            sentence/clock beside it. */}
+        <IconButton
+          size={primary ? 'xl' : 'sm'}
           icon="undo"
-          aria-label={`Undo the sale at ${standing.place}`}
+          label="Undo"
+          name={`Undo the sale at ${standing.place}`}
           busy={busy}
           disabled={busyKey !== null && !busy}
           kbd={undoKeyOn ? UNDO_KEY_LABEL : undefined}
           onClick={() => onUndo(standing)}
-        >
-          Undo
-        </Button>
+        />
       </span>
     )
   }
   if (copy.state === 'retired' || retiredKeys.has(copy.key)) {
-    return primary || copy.state !== 'retired' ? (
+    /* S2's own reasoning applies here too: an optimistic pill only, never once the state is
+       confirmed — the struck number and the hero chip already say `Retired`. */
+    return copy.state !== 'retired' ? (
       <Pill tone="warn" icon="archive">
         Retired
       </Pill>
@@ -959,34 +1018,92 @@ function Action({
   }
   return (
     <span className={primary ? 'inventory-copy-actions is-primary' : 'inventory-copy-actions'}>
-      <Button
-        variant={primary ? 'primary' : 'default'}
-        size={primary ? 'lg' : 'sm'}
-        icon="check"
-        busy={busy}
-        disabled={busyKey !== null && !busy}
-        onClick={() => onSell(copy)}
-      >
-        Mark sold
-      </Button>
-      {/* A BARE `—` READ AS UNCLEAR ICON-ONLY (owner's ruling, 2026-09-20: "clearer icon
-          only"). `archive` — a lidded box — reads as "put away" rather than "delete"; the
-          accessible name is explicit here too, rather than leaning on the kit's `.bn-sr`
-          children alone, because a design-check assertion needs to find it by name without
-          depending on that implementation detail. */}
-      <Button
-        variant="ghost"
-        size={primary ? 'md' : 'sm'}
+      {/* MARK SOLD KEEPS ITS WORDS ONLY WHERE IT IS THE ONE PRIMARY IN ITS SECTOR, the phone's
+          sticky action bar (ICONOGRAPHY). The row form is the icon vocabulary's own `sold`
+          glyph — a round seal, never confused with Retire's box. */}
+      {primary ? (
+        <Button variant="primary" size="lg" icon="check" busy={busy} disabled={busyKey !== null && !busy} onClick={() => onSell(copy)}>
+          Mark sold
+        </Button>
+      ) : (
+        <IconButton size="sm" icon="sold" label="Mark sold" busy={busy} disabled={busyKey !== null && !busy} onClick={() => onSell(copy)} />
+      )}
+      {/* ICON IN BOTH SECTORS (ICONOGRAPHY): Retire is reversible (Undo), so it never spends
+          words. `archive` — a lidded box — reads as "put away" rather than "delete". */}
+      <IconButton
+        size={primary ? 'xl' : 'sm'}
         icon="archive"
-        iconOnly={!primary}
-        title={primary ? undefined : 'Retire'}
-        aria-label={primary ? undefined : 'Retire'}
+        label="Retire"
         disabled={busyKey !== null}
         onClick={() => onRetire(copy)}
-      >
-        Retire
-      </Button>
+      />
+      {/* MOVE ONE COPY FROM THE CARD IN VIEW (UX-244): it was only in Manage, over ticked cards,
+          and with nothing ticked it moved the whole box. A pooled copy has no box to leave.
+          ICON IN BOTH SECTORS, the same vocabulary as Retire beside it. */}
+      {copy.place.located === false ? null : (
+        <IconButton
+          size={primary ? 'xl' : 'sm'}
+          icon="moveTo"
+          label="Move to another box"
+          disabled={busyKey !== null}
+          onClick={() => onMove(copy)}
+        />
+      )}
     </span>
+  )
+}
+
+/* THE MOVE PANEL (UX-244, D83): one copy, one destination, one press. The other boxes by name,
+ * most recent first as everywhere (the owner's box-order ruling). */
+function MovePanel({
+  copy,
+  boxes,
+  busy,
+  onMove,
+  onCancel,
+}: {
+  copy: SearchCopy
+  boxes: readonly BoxRecord[]
+  busy: boolean
+  onMove: (toBox: number) => void
+  onCancel: () => void
+}) {
+  const [to, setTo] = useState<string | null>(null)
+  /* S4: MOST RECENT FIRST, the same primitive the rail sorts by — `others` used to be the
+     server's own `GET /boxes` order (box number), which said nothing about which box the hand
+     was likeliest to reach for. */
+  const others = boxesMostRecentFirst(
+    boxes.filter((record) => record.box !== copy.place.box && record.state !== 'closed'),
+  )
+  return (
+    <Overlay kind="dialog" label={`Move: ${sayPlace(copy.place.label ?? copy.key)}`} onClose={onCancel} className="inventory-confirm">
+      <div className="inv-dialog-head">
+        <span className="bn-eyebrow">Move</span>
+        <h2 className="inv-dialog-title">Which box does this copy go to?</h2>
+      </div>
+      <div className="inv-dialog-body">
+        <p className="bn-muted">It goes to the front of that box. No other card changes box.</p>
+        {others.length === 0 ? (
+          <Notice tone="info" title="There is no other open box." />
+        ) : (
+          <Select
+            label="Box"
+            value={to}
+            placeholder="Choose a box"
+            options={others.map((record) => ({ value: String(record.box), label: record.name ?? UNNAMED_BOX }))}
+            onChange={setTo}
+          />
+        )}
+      </div>
+      <div className="inv-dialog-foot">
+        <Button variant="ghost" onClick={onCancel} data-autofocus="">
+          Cancel
+        </Button>
+        <Button variant="primary" icon="package" busy={busy} disabled={to === null} onClick={() => to !== null && onMove(Number(to))}>
+          Move
+        </Button>
+      </div>
+    </Overlay>
   )
 }
 
@@ -1046,13 +1163,10 @@ function RetirePanel({
           </div>
         </div>
 
-        <p className="bn-muted">
-          The card leaves the inventory without a sale. Its record and photo stay, and the
-          position is never reused.
-        </p>
+        <p className="bn-muted">Leaves the box without a sale. The record stays.</p>
 
         <div className="inventory-retire-reasons" role="group" aria-label="Reason">
-          {REASONS.map(({ reason, label, said }) => (
+          {RETIRE_REASONS.map(({ reason, label, said }) => (
             <button
               key={reason}
               className="inventory-retire-reason"
@@ -1064,7 +1178,6 @@ function RetirePanel({
                 <span className="inventory-retire-label">{label}</span>
                 <span className="inventory-retire-said">{said}</span>
               </span>
-              <span className="inventory-machine">{reason}</span>
             </button>
           ))}
         </div>

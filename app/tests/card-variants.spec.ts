@@ -227,7 +227,7 @@ sealEveryTest()
 test.describe('the name -> variant chooser draws real collisions distinctly', () => {
   test('two SKUs identical but for set, with set_hint null on both, render as two tiles a person could tell apart', async ({ page }) => {
     await open(page)
-    await page.getByPlaceholder('Card name, number or SKU').fill('Mind Rune')
+    await page.getByPlaceholder('Search').fill('Mind Rune')
 
     const chooser = page.locator('.browse-variants')
     await expect(chooser).toBeVisible()
@@ -247,7 +247,7 @@ test.describe('the name -> variant chooser draws real collisions distinctly', ()
 
   test('two SKUs identical but for condition render as two tiles — already correct, asserted rather than assumed', async ({ page }) => {
     await open(page)
-    await page.getByPlaceholder('Card name, number or SKU').fill('Vanguard Armory')
+    await page.getByPlaceholder('Search').fill('Vanguard Armory')
 
     const chooser = page.locator('.browse-variants')
     await expect(chooser).toBeVisible()
@@ -262,7 +262,7 @@ test.describe('the name -> variant chooser draws real collisions distinctly', ()
 
   test('a single printing draws no chooser at all — unchanged from before this item', async ({ page }) => {
     await open(page)
-    await page.getByPlaceholder('Card name, number or SKU').fill('Solo Print')
+    await page.getByPlaceholder('Search').fill('Solo Print')
 
     await expect(page.locator('.browse-variants')).toHaveCount(0)
     // It drops straight into the walk: the hero card for the one match is on screen with
@@ -272,7 +272,7 @@ test.describe('the name -> variant chooser draws real collisions distinctly', ()
 
   test('a set hint shared by two different cards draws no chooser — the walk stays as it was', async ({ page }) => {
     await open(page)
-    await page.getByPlaceholder('Card name, number or SKU').fill('TW01')
+    await page.getByPlaceholder('Search').fill('TW01')
 
     // THE REGRESSION: `results.groups.length > 1` used to be the whole test, and two SKUs
     // sharing nothing but a set hint would draw the chooser and swallow the walk underneath

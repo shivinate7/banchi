@@ -183,15 +183,16 @@ export function FilterSpecimens() {
         </div>
       </Specimen>
 
-      {/* A BAR IN A RAIL: 280px, Inventory's own rail width. The bar asks its own width, so it
-          is the compact trigger here even on a desk, with the rail's collapse press beside the
-          search, and the search waiting on its answer. */}
+      {/* A BAR IN A RAIL: 280px, Inventory's own rail width, and `compact="sheet"` — the
+          inventory lane's own call (`compact={phone ? 'sheet' : 'popover'}`), demonstrated here
+          explicitly since the default panel would have little room in a 280px column. */}
       <Specimen name="Rail">
         <div style={{ width: '280px', maxWidth: '100%' }} data-specimen-rail>
           <FilterBar
             facets={rail.facets}
             value={railFilters}
             onChange={setRailFilters}
+            compact="sheet"
             search={{ query: railQuery, onChange: setRailQuery, loading: true }}
             beside={
               <Button iconOnly icon="chevronLeft" variant="ghost">

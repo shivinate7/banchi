@@ -5,27 +5,12 @@
       "R2-icon-only-button": "icons"
     },
     "app/src/BoxBrowse.tsx": {
-      "R2-select": "inventory",
-      "R2-class": "inventory",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/BoxOps.tsx": {
-      "R2-select": "inventory",
-      "R2-class": "inventory",
       "R2-icon-only-button": "icons"
     },
     "app/src/CaptureScreen.tsx": {
       "R1": "capture",
       "R2-search": "capture",
       "R2-class": "capture",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/CardHero.tsx": {
-      "R2-date": "inventory",
-      "R2-money": "inventory",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/CardLocations.tsx": {
       "R2-icon-only-button": "icons"
     },
     "app/src/ClearPrices.tsx": {
@@ -60,14 +45,6 @@
       "R1": "home",
       "R2-class": "home",
       "R2-date": "home"
-    },
-    "app/src/Inventory.tsx": {
-      "R2-class": "inventory",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/InventoryOverlay.tsx": {
-      "R2-dialog": "inventory",
-      "R2-icon-only-button": "icons"
     },
     "app/src/LiveReconcile.tsx": {
       "R2-dialog": "b-runs",
@@ -126,7 +103,8 @@
       "R2-class": "review",
       "R2-date": "review",
       "R2-money": "review",
-      "R2-icon-only-button": "icons"
+      "R2-icon-only-button": "icons",
+      "R2-header-actions": "review"
     },
     "app/src/RunPanel.tsx": {
       "R2-select": "b-runs",
@@ -141,7 +119,8 @@
     "app/src/Runs.tsx": {
       "R1": "b-runs",
       "R2-class": "b-runs",
-      "R2-icon-only-button": "icons"
+      "R2-icon-only-button": "icons",
+      "R2-header-actions": "b-runs"
     },
     "app/src/RunsComposer.tsx": {
       "R2-dialog": "b-runs",
@@ -165,9 +144,6 @@
     "app/src/ValueBands.tsx": {
       "R2-class": "b-pricing",
       "R2-money": "b-pricing"
-    },
-    "app/src/cardState.ts": {
-      "R2-date": "inventory"
     }
   },
   "runtime": {
@@ -212,11 +188,6 @@
       "page": "sales",
       "width": "sales",
       "top": "sales"
-    },
-    "/inventory": {
-      "page": "inventory",
-      "width": "inventory",
-      "top": "inventory"
     },
     "/graveyard": {
       "page": "library",

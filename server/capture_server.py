@@ -10999,7 +10999,7 @@ def _card_matches_filters(card: master.Card, filters: Dict[str, Optional[str]]) 
     )
 
 
-def _card_facets(inventory: master.Inventory) -> dict:
+def _card_facets(inventory: master.Inventory, cells: Optional[List[dict]] = None) -> dict:
     """The game/set/rarity vocabulary THIS STORE ACTUALLY HOLDS, with counts (D213).
 
     ONE INDEXED-COLUMN SCAN, NEVER A HARDCODED LIST. `game`, `set_name` and `rarity` are
@@ -11032,17 +11032,14 @@ def _card_facets(inventory: master.Inventory) -> dict:
     games: Dict[Optional[str], int] = {}
     sets: Dict[Optional[str], Dict[Optional[str], int]] = {}
     rarities: Dict[Optional[str], Dict[Optional[str], int]] = {}
-    for _, (game, set_name, rarity) in inventory.cards.select(
-        ("game", "set_name", "rarity")
-    ):
-        game = _facet_norm(game)
-        games[game] = games.get(game, 0) + 1
-        set_name = _facet_norm(set_name)
+    # FOLDED FROM THE FACET CELLS (FLT-09), so `GET /boxes` pays ONE scan for both blocks.
+    for cell in cells if cells is not None else _facet_cells(inventory):
+        game, set_name, rarity, n = cell["game"], cell["set"], cell["rarity"], cell["count"]
+        games[game] = games.get(game, 0) + n
         sets.setdefault(game, {})
-        sets[game][set_name] = sets[game].get(set_name, 0) + 1
-        rarity = _facet_norm(rarity)
+        sets[game][set_name] = sets[game].get(set_name, 0) + n
         rarities.setdefault(game, {})
-        rarities[game][rarity] = rarities[game].get(rarity, 0) + 1
+        rarities[game][rarity] = rarities[game].get(rarity, 0) + n
 
     def _rows(counts: Dict[Optional[str], int], key: str) -> List[dict]:
         # Real values first, alphabetically; the null bucket always last, so a screen
@@ -11058,6 +11055,41 @@ def _card_facets(inventory: master.Inventory) -> dict:
         "sets": {(game or ""): _rows(counts, "set") for game, counts in sets.items()},
         "rarities": {(game or ""): _rows(counts, "rarity") for game, counts in rarities.items()},
     }
+
+
+def _facet_cells(inventory: master.Inventory) -> List[dict]:
+    """The store's cards, grouped by box, game, set, rarity and whether they left, with counts
+    (the filtering ruling FLT-09: "filters must work in any order and combine").
+
+    `#/inventory`'s filter picks several values per facet, in any order, and each option shows
+    how many cards it would show under the OTHER picks and Hide sold. A query per combination
+    cannot answer that without a round trip per press. These cells can: the screen folds them
+    with `app/src/kit/facets.ts:countFacets` for the counts and sums them per box for the rail,
+    so a pick costs no request at all. One indexed-column scan, the same one `_card_facets`
+    already pays. The cell count is bounded by the distinct combinations, never by the cards.
+
+    `gone` is D26's two doors plus D83's third: sold, retired and moved. It is the set the
+    rail's Hide sold hides, so a count under Hide sold is a count of what the walk draws.
+
+    The null bucket is kept, never dropped (D213): a card with no set is a cell with `set` None.
+    """
+    gone_states = {master.SOLD, master.RETIRED, master.MOVED}
+    cells: Dict[Tuple[Optional[int], Optional[str], Optional[str], Optional[str], bool], int] = {}
+    for _, (box, game, set_name, rarity, state) in inventory.cards.select(
+        ("box", "game", "set_name", "rarity", "state")
+    ):
+        try:
+            number: Optional[int] = int(box) if box is not None else None
+        except (TypeError, ValueError):
+            number = None
+        key = (number, _facet_norm(game), _facet_norm(set_name), _facet_norm(rarity), state in gone_states)
+        cells[key] = cells.get(key, 0) + 1
+    return [
+        {"box": box, "game": game, "set": set_name, "rarity": rarity, "gone": gone, "count": n}
+        for (box, game, set_name, rarity, gone), n in sorted(
+            cells.items(), key=lambda kv: tuple((part is None, str(part)) for part in kv[0])
+        )
+    ]
 
 
 def _box_row(
@@ -11310,9 +11342,11 @@ def do_boxes(
         filters = active
 
     places = _Places(inventory)
+    cells = _facet_cells(inventory)
     return {
         "boxes": [_box_row(inventory, box, places, filters=filters) for box in sorted(numbers)],
-        "facets": _card_facets(inventory),
+        "facets": _card_facets(inventory, cells),
+        "facet_cells": cells,
     }
 
 
