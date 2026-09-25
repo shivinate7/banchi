@@ -53,7 +53,7 @@ import {
 import { IDENTIFIED, stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Loading, Money, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows, type SortValue } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows, type SortValue } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
@@ -1944,15 +1944,12 @@ export function BoxBrowse({
         }}
         beside={
           phone ? undefined : (
-            <Button
-              variant="ghost"
+            <IconButton
               icon="chevronLeft"
-              iconOnly
+              label="Collapse the box rail"
               className="browse-rail-toggle"
               onClick={() => setRailCollapsed(true)}
-            >
-              Collapse the box rail
-            </Button>
+            />
           )
         }
       />
@@ -2062,16 +2059,14 @@ export function BoxBrowse({
                     : null
                 }
                 actions={
-                  <Button
-                    variant="quiet"
+                  <IconButton
                     size="sm"
                     icon="settings"
+                    label="Manage this box"
                     className="browse-manage"
                     aria-haspopup="dialog"
                     onClick={() => setManage(true)}
-                  >
-                    Manage
-                  </Button>
+                  />
                 }
               />
             ) : shelf === 'pooled' ? (
@@ -2360,14 +2355,11 @@ export function BoxBrowse({
 
   const miniRail = (
     <div className="browse-rail-mini">
-      <Button
-        variant="ghost"
+      <IconButton
         icon="chevronRight"
-        iconOnly
+        label="Expand the box rail"
         onClick={() => setRailCollapsed(false)}
-      >
-        Expand the box rail
-      </Button>
+      />
       {cells
         .flatMap(({ shelf: cell }) => (typeof cell === 'number' ? [cell] : []))
         .map((cell) => (
@@ -2472,9 +2464,7 @@ export function BoxBrowse({
                 {at >= 0 ? <span className="browse-boxchip-count">{at + 1}/{visible.length}</span> : null}
                 <Icon name="chevronDown" size={14} className="browse-boxchip-chev" />
               </button>
-              <Button variant="quiet" icon="search" iconOnly onClick={() => setRailOpen(true)}>
-                Search cards
-              </Button>
+              <IconButton icon="search" label="Search cards" onClick={() => setRailOpen(true)} />
             </div>
           ) : null}
 
@@ -2684,27 +2674,25 @@ export function BoxBrowse({
           {phone ? (
             <div className="browse-actionbar">
               <div className="browse-stepper" role="group" aria-label="Step through the box">
-                <button
-                  type="button"
+                <IconButton
                   className="browse-stepper-btn"
-                  aria-label="Previous card"
+                  icon="chevronLeft"
+                  label="Previous card"
+                  size="lg"
                   disabled={visible.length === 0 || at <= 0}
                   onClick={() => stepSelection(-1)}
-                >
-                  <Icon name="chevronLeft" size={18} />
-                </button>
+                />
                 <span className="browse-stepper-count">
                   {at >= 0 ? `${at + 1} / ${visible.length}` : '—'}
                 </span>
-                <button
-                  type="button"
+                <IconButton
                   className="browse-stepper-btn"
-                  aria-label="Next card"
+                  icon="chevronRight"
+                  label="Next card"
+                  size="lg"
                   disabled={visible.length === 0 || at >= visible.length - 1}
                   onClick={() => stepSelection(1)}
-                >
-                  <Icon name="chevronRight" size={18} />
-                </button>
+                />
               </div>
               <div className="browse-actionbar-slot">{actionBar}</div>
             </div>
@@ -2927,16 +2915,13 @@ function CardOps({
 
   return (
     <div className="browse-cardops" ref={anchor}>
-      <Button
-        variant="quiet"
+      <IconButton
         icon="more"
-        iconOnly
+        label="Card actions"
         aria-haspopup="menu"
         aria-expanded={menu}
         onClick={() => setMenu((held) => !held)}
-      >
-        Card actions
-      </Button>
+      />
       {!menu ? null : (
         <div className="bn-menu browse-menu" role="menu">
           <button
@@ -2949,7 +2934,7 @@ function CardOps({
               setOpen('claims')
             }}
           >
-            <Icon name="wand" size={16} /> Correct claims
+            <Icon name="pencil" size={16} /> Correct claims
           </button>
           {/* The screen re-reads after every write of its own; this is for a write made on
               another device. */}
@@ -3024,9 +3009,7 @@ function CardOps({
               <h2 className="inv-sheet-title">Correct claims</h2>
               <p className="browse-claims-who">{nameOf(row.card) ?? 'Not identified yet'}</p>
             </div>
-            <Button variant="ghost" icon="x" iconOnly onClick={() => setOpen(null)}>
-              Close
-            </Button>
+            <IconButton icon="x" label="Close" onClick={() => setOpen(null)} />
           </header>
           <div className="inv-sheet-body">
             {reshoot === undefined ? null : (

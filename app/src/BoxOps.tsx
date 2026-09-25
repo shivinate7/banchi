@@ -32,7 +32,7 @@ import {
 import { spansOf } from './position'
 import { ReadingAge } from './CardLocations'
 import { readingAgo } from './cardState'
-import { Button, Icon, Notice, Pill, Stat, boxesMostRecentFirst, type IconName } from './kit'
+import { Button, Icon, IconButton, Notice, Pill, Select, Stat, boxesMostRecentFirst, type IconName } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { toast } from './kit/toast'
 import { Overlay } from './InventoryOverlay'
@@ -539,9 +539,7 @@ export function BoxOps({
           <span className="bn-eyebrow">{sealed ? 'Sealed box' : 'Open box'}</span>
           <h2 className="inv-sheet-title">{record.name ?? UNNAMED_BOX}</h2>
         </div>
-        <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
-          Close
-        </Button>
+        <IconButton icon="x" label="Close" onClick={onClose} />
       </header>
 
       <div className="inv-sheet-body boxops-body">
@@ -594,7 +592,7 @@ export function BoxOps({
             <section className="boxops-group">
               <h3 className="bn-label">Box</h3>
               <div className="boxops-ops">
-                <Op icon="tag" label="Rename" detail={record.name ?? 'unnamed'} busy={busy} onClick={() => startEdit('name')} />
+                <Op icon="pencil" label="Rename" detail={record.name ?? 'unnamed'} busy={busy} onClick={() => startEdit('name')} />
                 <Op
                   icon="divider"
                   label="Edit sections"
@@ -607,7 +605,7 @@ export function BoxOps({
                   onClick={() => startEdit('sections')}
                 />
                 <Op
-                  icon="tag"
+                  icon="pencil"
                   label="Name sections"
                   detail={
                     record.sections_detail.length === 0
@@ -664,7 +662,7 @@ export function BoxOps({
                 <div className="boxops-ops">
                   {selection.length > 0 || record.cards > 0 ? (
                     <Op
-                      icon="wand"
+                      icon="pencil"
                       label="Set claims"
                       detail={
                         selection.length > 0
@@ -677,7 +675,7 @@ export function BoxOps({
                   ) : null}
                   {selection.length > 0 || (record.on_hand ?? 0) > 0 ? (
                     <Op
-                      icon="package"
+                      icon="moveTo"
                       label="Move to box"
                       detail={
                         selection.length > 0
@@ -750,29 +748,19 @@ export function BoxOps({
         ) : editing === 'move' ? (
           <EditorFrame title="Move to box" onBack={closeEdit}>
             <div className="bn-field">
-              <label className="bn-field-label" htmlFor={moveId}>
-                Destination box
-              </label>
               {others.length > 0 ? (
-                <select
-                  id={moveId}
-                  className="bn-select"
-                  value={moveTo}
-                  data-autofocus=""
-                  onChange={(event) => setMoveTo(event.target.value)}
-                >
-                  <option value="">Choose a box…</option>
-                  {others.map((candidate) => {
-                    // `<option>` renders plain text only, so the name and the sealed state
-                    // fold into one parenthetical rather than a typed separator (D218).
-                    return (
-                      <option key={candidate.box} value={String(candidate.box)}>
-                        {candidate.name ?? UNNAMED_BOX}
-                        {candidate.state === CLOSED ? ' (sealed)' : ''}
-                      </option>
-                    )
-                  })}
-                </select>
+                <Select
+                  label="Destination box"
+                  value={moveTo === '' ? null : moveTo}
+                  placeholder="Choose a box…"
+                  options={others.map((candidate) => ({
+                    // The name and the sealed state fold into one parenthetical rather than a
+                    // typed separator (D218).
+                    value: String(candidate.box),
+                    label: `${candidate.name ?? UNNAMED_BOX}${candidate.state === CLOSED ? ' (sealed)' : ''}`,
+                  }))}
+                  onChange={setMoveTo}
+                />
               ) : (
                 <input
                   id={moveId}
@@ -794,7 +782,10 @@ export function BoxOps({
             {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
             <Trouble failure={trouble} />
             <div className="boxops-actions">
-              <Button variant="ghost" onClick={closeEdit}>
+              {/* THE PANEL'S FOCUS LANDS HERE, not the kit Select (round 2's own convention,
+                  Inventory.tsx's MovePanel): `Select` is a button of its own with no
+                  `data-autofocus` pass-through, so Cancel is the safe, always-present target. */}
+              <Button variant="ghost" onClick={closeEdit} data-autofocus="">
                 Cancel
               </Button>
               <Button variant="primary" busy={busy} onClick={() => void doMove()}>
@@ -1148,20 +1139,13 @@ export function ClaimEditor({
       <p className="bn-field-hint">Switch a field on to change it. Empty clears it.</p>
 
       <ClaimRow field="game" label="Game" armed={isArmed('game')} onArm={arm} says="required — nothing to clear it to">
-        <select
-          className="bn-select"
-          value={key ?? ''}
-          disabled={entries === null}
-          onChange={(event) => setPickedGame(event.target.value)}
-          aria-label="Game"
-        >
-          {entries === null ? <option value="">reading the registry…</option> : null}
-          {(entries ?? []).map((candidate) => (
-            <option key={candidate.key} value={candidate.key}>
-              {candidate.display}
-            </option>
-          ))}
-        </select>
+        <Select
+          label="Game"
+          value={entries === null ? null : key}
+          placeholder={entries === null ? 'reading the registry…' : 'Choose a game'}
+          options={(entries ?? []).map((candidate) => ({ value: candidate.key, label: candidate.display }))}
+          onChange={setPickedGame}
+        />
       </ClaimRow>
 
       <ClaimRow field="setHint" label="Set hint" armed={isArmed('setHint')} onArm={arm} says="leave empty to clear it">
@@ -1245,19 +1229,13 @@ export function ClaimEditor({
           says="which sealed product the stack came out of — none chosen clears it"
         >
           <div className="boxops-product">
-            <select
-              className="bn-select"
-              value={product}
-              onChange={(event) => setProduct(event.target.value)}
-              aria-label="Product"
-            >
-              <option value="">No claim</option>
-              {productList.map((candidate) => (
-                <option key={candidate.key} value={candidate.key}>
-                  {candidate.display}
-                </option>
-              ))}
-            </select>
+            <Select
+              label="Product"
+              value={product === '' ? null : product}
+              placeholder="No claim"
+              options={productList.map((candidate) => ({ value: candidate.key, label: candidate.display }))}
+              onChange={setProduct}
+            />
             {/* Outlined off the premium lane: a default pill's fill is `--bn-surface-2`, which
                 is this row's own ground, so Bulk would read as bare text. */}
             {picked === null ? null : (

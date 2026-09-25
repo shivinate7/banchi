@@ -32,8 +32,10 @@ import { useRef, useState, type ReactNode } from 'react'
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
 import { readingAgo, stateLabel, stateTone } from './cardState'
-import { Button, Icon, Pill } from './kit'
+import { Button, Icon, IconButton, Pill } from './kit'
 import { toast } from './kit/toast'
+import { money } from './money'
+import { relativeDate, toDate } from './dates'
 import { sayPlace } from './position'
 // D46's own picker, reused rather than forked — this file's own header rule: "added to
 // inventory and both screens get it, not a fork" (D252).
@@ -132,8 +134,9 @@ function marketText(card: InventoryCard, read: MarketRead | undefined): string {
   if (price === null) return 'no_market_data'
 
   const ago = read.at === null ? null : readingAgo(new Date(read.at * 1000).toISOString())
-  if (ago === null) return `$${price} · no age`
-  return `$${price} · read ${ago}`
+  const said = money(Number(price))
+  if (ago === null) return `${said} · no age`
+  return `${said} · read ${ago}`
 }
 
 /* `mono` is a machine string; `money` is Inter with tabular figures. `node` draws instead of
@@ -152,7 +155,7 @@ function marketFact(card: InventoryCard, read: MarketRead | undefined): Detail {
     kind: 'money',
     node: (
       <span className="browse-fact-live">
-        <span className="bn-tnum">${price}</span>
+        <span className="bn-tnum">{money(Number(price))}</span>
         <ReadingAge at={read.at === null ? null : new Date(read.at * 1000).toISOString()} />
       </span>
     ),
@@ -210,19 +213,14 @@ function listingFact(card: InventoryCard, listings: Readonly<Record<string, List
   }
 }
 
-/** When this card was photographed, as a person says it. */
+/** When this card was photographed, as a person says it. THE TWO SANCTIONED FORMATS
+ *  (`dates.ts`, "a screen picks one of the two, it never builds a third") — `relativeDate`
+ *  is the fit here: a fact about WHEN something happened, which is exactly what it is for,
+ *  and it already hands over to `absoluteDate` once the moment is more than a week old. */
 function capturedText(stamp: string | null): string {
   if (stamp === null) return 'not recorded'
-  const at = new Date(stamp)
-  if (Number.isNaN(at.getTime())) return stamp
-
-  const clock = at
-    .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    .replace(/\s?([AP])M/i, (_m, half: string) => half.toLowerCase() + 'm')
-  const day = at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  const year = at.getFullYear()
-  const suffix = year === new Date().getFullYear() ? '' : ` ${year}`
-  return `${clock} · ${day}${suffix}`
+  if (toDate(stamp) === null) return stamp
+  return relativeDate(stamp)
 }
 
 type FactGroup = { title: string; facts: Detail[] }
@@ -752,9 +750,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
             >
               <div className="bn-panel-head">
                 <span className="bn-section-title">Correct the listing</span>
-                <Button size="sm" variant="ghost" iconOnly icon="x" onClick={() => setOpen(false)}>
-                  Close
-                </Button>
+                <IconButton size="sm" icon="x" label="Close" onClick={() => setOpen(false)} />
               </div>
               <div className="bn-panel-body">
                 <CatalogPanel

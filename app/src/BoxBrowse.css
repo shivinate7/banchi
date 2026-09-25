@@ -843,12 +843,10 @@
   background: var(--bn-surface-2);
   flex: none;
 }
+/* Sizing is `IconButton`'s own (the `size="lg"` face plus its `::before` 40px thumb floor,
+   kit.css) — this class only sets the segmented-control chrome around that face. */
 .browse-stepper-btn {
-  width: 40px;
-  height: 36px;
   border-radius: var(--bn-r);
-  display: grid;
-  place-items: center;
   color: var(--bn-ink);
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
@@ -906,7 +904,6 @@
   /* The receipt's Undo is the same press as the `Mark sold` it replaced, so it is the same
      height — `sm` alone is 40px, which is the thumb FLOOR and not this row's size (D119). */
   .card-locations-owner .bn-receipt .bn-btn { --btn-h: var(--bn-control-h-lg); padding: 0 var(--bn-4); }
-  .browse-stepper-btn { width: 44px; height: 40px; }
   .browse-stepper-count { font-size: var(--bn-fs-base); }
   .browse-boxcell { min-height: 48px; }
   .browse-details-summary { min-height: 48px; }

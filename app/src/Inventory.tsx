@@ -33,7 +33,7 @@ import { sayPlace } from './position'
 import { RETIRE_REASONS, reasonWord } from './cardState'
 import { useSearch } from './useSearch'
 import { isEditableTarget } from './keys'
-import { Button, Icon, Loading, Notice, Page, Pill, Select, boxesMostRecentFirst } from './kit'
+import { Button, Icon, IconButton, Loading, Notice, Page, Pill, Select, boxesMostRecentFirst } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
@@ -978,17 +978,19 @@ function Action({
         {primary ? <span className="inventory-receipt-said">Marked sold.</span> : null}
         {/* The undo window draining, the same clock the toast for this sale shows. */}
         <span className="bn-receipt-bar" aria-hidden="true" />
-        <Button
+        {/* ICON, U IN THE TOOLTIP (ICONOGRAPHY): Undo is reversed by pressing it again, so it
+            keeps no words in either sector — the row and the phone bar both read it from the
+            sentence/clock beside it. */}
+        <IconButton
           size={primary ? 'md' : 'sm'}
           icon="undo"
-          aria-label={`Undo the sale at ${standing.place}`}
+          label="Undo"
+          name={`Undo the sale at ${standing.place}`}
           busy={busy}
           disabled={busyKey !== null && !busy}
           kbd={undoKeyOn ? UNDO_KEY_LABEL : undefined}
           onClick={() => onUndo(standing)}
-        >
-          Undo
-        </Button>
+        />
       </span>
     )
   }
@@ -1003,48 +1005,36 @@ function Action({
   }
   return (
     <span className={primary ? 'inventory-copy-actions is-primary' : 'inventory-copy-actions'}>
-      <Button
-        variant={primary ? 'primary' : 'default'}
-        size={primary ? 'lg' : 'sm'}
-        icon="check"
-        busy={busy}
-        disabled={busyKey !== null && !busy}
-        onClick={() => onSell(copy)}
-      >
-        Mark sold
-      </Button>
-      {/* A BARE `—` READ AS UNCLEAR ICON-ONLY (owner's ruling, 2026-09-20: "clearer icon
-          only"). `archive` — a lidded box — reads as "put away" rather than "delete"; the
-          accessible name is explicit here too, rather than leaning on the kit's `.bn-sr`
-          children alone, because a design-check assertion needs to find it by name without
-          depending on that implementation detail. */}
-      <Button
-        variant="ghost"
+      {/* MARK SOLD KEEPS ITS WORDS ONLY WHERE IT IS THE ONE PRIMARY IN ITS SECTOR, the phone's
+          sticky action bar (ICONOGRAPHY). The row form is the icon vocabulary's own `sold`
+          glyph — a round seal, never confused with Retire's box. */}
+      {primary ? (
+        <Button variant="primary" size="lg" icon="check" busy={busy} disabled={busyKey !== null && !busy} onClick={() => onSell(copy)}>
+          Mark sold
+        </Button>
+      ) : (
+        <IconButton size="sm" icon="sold" label="Mark sold" busy={busy} disabled={busyKey !== null && !busy} onClick={() => onSell(copy)} />
+      )}
+      {/* ICON IN BOTH SECTORS (ICONOGRAPHY): Retire is reversible (Undo), so it never spends
+          words. `archive` — a lidded box — reads as "put away" rather than "delete". */}
+      <IconButton
         size={primary ? 'md' : 'sm'}
         icon="archive"
-        iconOnly={!primary}
-        title={primary ? undefined : 'Retire'}
-        aria-label={primary ? undefined : 'Retire'}
+        label="Retire"
         disabled={busyKey !== null}
         onClick={() => onRetire(copy)}
-      >
-        Retire
-      </Button>
+      />
       {/* MOVE ONE COPY FROM THE CARD IN VIEW (UX-244): it was only in Manage, over ticked cards,
-          and with nothing ticked it moved the whole box. A pooled copy has no box to leave. */}
+          and with nothing ticked it moved the whole box. A pooled copy has no box to leave.
+          ICON IN BOTH SECTORS, the same vocabulary as Retire beside it. */}
       {copy.place.located === false ? null : (
-        <Button
-          variant="ghost"
+        <IconButton
           size={primary ? 'md' : 'sm'}
-          icon="package"
-          iconOnly={!primary}
-          title={primary ? undefined : 'Move to another box'}
-          aria-label={primary ? undefined : 'Move to another box'}
+          icon="moveTo"
+          label="Move to another box"
           disabled={busyKey !== null}
           onClick={() => onMove(copy)}
-        >
-          Move
-        </Button>
+        />
       )}
     </span>
   )

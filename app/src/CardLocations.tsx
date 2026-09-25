@@ -8,7 +8,7 @@ import { PositionBar } from './PositionBar'
 import { placePartsOf, sayPlace, type Persona } from './position'
 import { PositionLabel } from './PositionLabel'
 import { collectorNumber } from './cardNumber'
-import { Button, Chip, Icon, Pill } from './kit'
+import { Chip, Icon, IconButton, Pill } from './kit'
 import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, stalenessSentence, type FrozenRank } from './frozenRank'
 import './CardLocations.css'
 import { forSale, IDENTIFIED, readingAgo, readingExact, RETIRED, SOLD, stateLabel, stateTone } from './cardState'
@@ -611,14 +611,17 @@ function OwnerRows({
                 ) : sold ? (
                   copy.state === SOLD || copy.state === RETIRED ? null : <Pill tone="ok">Sold</Pill>
                 ) : (
-                  <Button
+                  /* ICON (ICONOGRAPHY): this default fallback row (no per-card renderAction
+                     caller) reads Mark sold from the kit's own `sold` glyph, same as
+                     Inventory.tsx's own row form. */
+                  <IconButton
                     size="sm"
+                    icon="sold"
+                    label="Mark sold"
                     busy={busyKey === copy.key}
                     disabled={busyKey !== null && busyKey !== copy.key}
                     onClick={() => onSell(copy)}
-                  >
-                    Mark sold
-                  </Button>
+                  />
                 )}
               </span>
             </li>
