@@ -345,7 +345,7 @@ def join_code_span_breaks(text: str, mode: str = "descriptive") -> str:
         remaining = sum(ticks)
         seen = 0
         head = linenos[0]
-        for index, lineno in enumerate(linenos[:-1]):
+        for index in range(len(linenos) - 1):
             seen += ticks[index]
             remaining -= ticks[index]
             if seen % 2 == 1 and remaining > 0:
