@@ -348,6 +348,25 @@ def _take_back_after(record: dict) -> Optional[datetime]:
     return wait + _lag() if wait is not None else None
 
 
+def _prices_live(record: dict) -> Optional[bool]:
+    """Did the check find every price-only row's price live? None when the send carried none,
+    or when no check has compared them yet."""
+    if not record.get("prices"):
+        return None
+    compared = record.get("price_check")
+    if not isinstance(compared, dict):
+        return None
+    return int(compared.get("matched", 0)) >= int(compared.get("expected", 0))
+
+
+def _found_all(record: dict) -> bool:
+    """The check found every copy AND every price the send carried. A price the check found
+    wrong makes a send `short`, as a missing copy does, but it offers nothing back: the way a
+    live price changes again is another price change (the no-put-back ruling)."""
+    check = record.get("check") or {}
+    return int(check.get("found", 0)) >= int(check.get("expected", 0)) and _prices_live(record) is not False
+
+
 def state_of(record: dict, now: Optional[datetime] = None) -> str:
     """One word for where a send stands. The screen draws one sentence per word.
 
@@ -370,7 +389,10 @@ def state_of(record: dict, now: Optional[datetime] = None) -> str:
         return "sending"
     uncertain = _uncertain(record)
     if record.get("kind") == KIND_DOWNLOAD and not uncertain:
-        if check and check.get("found", 0) >= check.get("expected", 0) > 0:
+        # A FILE OF PRICE CHANGES ONLY counts as found once its prices are live: it has no
+        # copy for `expected` to count.
+        carried = check.get("expected", 0) > 0 or _prices_live(record) is not None
+        if check and carried and _found_all(record):
             return "checked"
         if check and _take_back_ready(record):
             return "short"
@@ -378,14 +400,12 @@ def state_of(record: dict, now: Optional[datetime] = None) -> str:
     if uncertain:
         if not _checked_past_wait(record):
             return "unknown"
-        return "short" if check.get("found", 0) < check.get("expected", 0) else "checked"
+        return "checked" if _found_all(record) else "short"
     if not record.get("published_at"):
         return "failed"
     if not record.get("checked_at"):
         return "waiting"
-    if check.get("found", 0) < check.get("expected", 0):
-        return "short"
-    return "checked"
+    return "checked" if _found_all(record) else "short"
 
 
 def _next_check(record: dict, now: Optional[datetime] = None) -> Optional[datetime]:
@@ -457,6 +477,9 @@ def _summary(stamp: str, record: dict, now: datetime, held: frozenset = frozense
         "state": state,
         "at": record.get("at"),
         "copies": int(record.get("copies_total") or 0),
+        # THE PRICE-ONLY ROWS: how many, and what the check past the wait found of them.
+        "prices": len(record.get("prices") or {}),
+        "price_check": record.get("price_check"),
         "rows": int(rows or 0),
         "published_at": record.get("published_at"),
         "check_after": _iso(wait) if wait is not None else None,
@@ -598,6 +621,16 @@ def _copies(path: Path) -> Dict[str, int]:
         if sku:
             out[sku] = out.get(sku, 0) + tcgcsv.parse_quantity(row.get(tcgcsv.QUANTITY_COLUMN, ""))
     return out
+
+
+def _price_rows(path: Path) -> Dict[str, str]:
+    """SKU -> price, for the file's PRICE-ONLY rows (Add to Quantity 0). The file is the record,
+    so the receipt names the price changes the file carries, never what `emit` said about it."""
+    return {
+        str(row.get(tcgcsv.SKU_COLUMN) or "").strip(): str(row.get(tcgcsv.PRICE_COLUMN) or "")
+        for row in tcgcsv.read_export(path).rows
+        if tcgcsv.parse_quantity(row.get(tcgcsv.QUANTITY_COLUMN, "")) == 0
+    }
 
 
 def _names(path: Path) -> Dict[str, str]:
@@ -825,6 +858,9 @@ def _write_and_send(
     argv = [str(pipeline_routes.PKMNSCAN), "emit", *[str(d) for d in directories]]
     argv += ["--live-guard", str(live_path), "--send-dir", str(directory)]
     argv += ["--send-claim", stamp, "--claim-holder", str(os.getpid())]
+    # THE MIXED SEND (the owner's ruling, 2026-09-24: "Allow mixed"). A card already live whose
+    # typed price moved rides this press as a price-only row, Add to Quantity 0.
+    argv.append("--reprice-live")
     if download and payload.get("split_threshold"):
         argv.append("--split-threshold")
     argv += pipeline_routes._quantity_flags(payload)
@@ -832,8 +868,12 @@ def _write_and_send(
     guard = _guard_line(console) or {}
     claim = Store().read().send_claims.get(stamp)
     written = sorted(directory.glob("import*.csv"))
+    changes = list((_json_line(console, "send_prices") or {}).get("rows") or [])
+    # A FILE OF PRICE CHANGES ONLY holds no copy, so `emit` claims nothing (a row that adds no
+    # copy holds no copy). It is still a send: the file was written and `emit` said so.
+    prices_only = claim is None and code == 0 and bool(changes) and bool(written)
 
-    if claim is None:
+    if claim is None and not prices_only:
         # NOTHING WAS COUNTED SENT: `emit` refused, or wrote nothing new. The claim and the
         # count are one store write, so no claim means no copy counted. The press's own
         # directory is its scratch and goes with it; no receipt is left for a press that sent
@@ -863,17 +903,29 @@ def _write_and_send(
         raise RuntimeError("the copies were counted and no file was found")
 
     kept = [path.name for path in written]
+    was = {str(row.get("sku")): row.get("was") for row in changes}
     copies: Dict[str, int] = {}
     names: Dict[str, str] = {}
     for path in written:
         for sku, count in _copies(path).items():
-            copies[sku] = copies.get(sku, 0) + count
+            # A PRICE-ONLY ROW IS NO COPY. It stays out of `copies`, so the credit ledger,
+            # Take back and every count of what went live never see it.
+            if count > 0:
+                copies[sku] = copies.get(sku, 0) + count
         names.update(_names(path))
     record.update(
         {
             "files": kept,
             "copies": copies,
             "copies_total": sum(copies.values()),
+            # THE PRICE-ONLY ROWS, SKU -> the price the file carries and the live price it
+            # replaces. The check past the wait compares TCGplayer's price with `price`, the
+            # mark-down's own test (`_resolve_markdown`), and never offers one back.
+            "prices": {
+                sku: {"price": price, "was": was.get(sku)}
+                for path in written
+                for sku, price in _price_rows(path).items()
+            },
             "names": names,
             "live_before": {sku: live_before.get(sku, 0) for sku in copies},
             "sold_before": _sold_by_sku(copies),
@@ -1456,6 +1508,27 @@ def _credits(
     return out
 
 
+def _price_check(record: dict, live_prices: Dict[str, str]) -> dict:
+    """Did TCGplayer's price become the file's, for every price-only row? The mark-down's own
+    test (`_resolve_markdown`), per row. A row whose price differs is named, and nothing is
+    offered back for it: another price change is the way a live price moves again."""
+    missing = []
+    prices = record.get("prices") or {}
+    for sku, entry in sorted(prices.items()):
+        wanted = _price(str((entry or {}).get("price") or ""))
+        live = live_prices.get(sku, "")
+        if wanted is None or _price(live) != wanted:
+            missing.append(
+                {
+                    "sku": sku,
+                    "name": (record.get("names") or {}).get(sku, ""),
+                    "price": (entry or {}).get("price"),
+                    "live": live or None,
+                }
+            )
+    return {"expected": len(prices), "matched": len(prices) - len(missing), "missing": missing}
+
+
 def _live_check(force: bool) -> dict:
     now = _now()
     receipts = _receipts()
@@ -1477,6 +1550,8 @@ def _live_check(force: bool) -> dict:
         for stamp, record in receipts
         if not record.get("failure")
     }
+    # THE PRICES A SEND CHANGED ARE READ OFF THE SAME EXPORT, once, only when one carried any.
+    live_prices = _live_prices(path) if any(record.get("prices") for _, record in due) else {}
     due_stamps = frozenset(stamp for stamp, _ in due)
     sold_now = _sold_by_sku({sku for stamp in due_stamps for sku in sent_by.get(stamp, {})})
     credits = _credits(receipts, due_stamps, sent_by, live_now, sold_now, now)
@@ -1506,6 +1581,8 @@ def _live_check(force: bool) -> dict:
             # THE LEDGER'S ENTRY FOR THIS RECEIPT: what a later check takes off the rise.
             "found_by_sku": {sku: int(credits[stamp].get(sku, 0)) for sku in sorted(copies)},
         }
+        if record.get("prices"):
+            record["price_check"] = _price_check(record, live_prices)
         record.setdefault("copies", copies)
         record["copies_total"] = record.get("copies_total") or sum(copies.values())
         record["checked_at"] = _iso(now)

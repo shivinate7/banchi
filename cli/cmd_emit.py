@@ -169,16 +169,20 @@ def _out(run_dir, name, args):
     return Path(own) / name if own else run_dir.path(name)
 
 
-def _claim_or_refuse(writable, going, basis, args) -> None:
+def _claim_or_refuse(writable, going, basis, args, priced=()) -> None:
     """Check every live send claim and the plan's basis, then claim. One transaction.
 
     `going` is SKU -> the copies this press's file adds. Called at the top of the store write
     that counts them sent; raises `SendClaimRefused` to roll that write back.
+
+    `priced` is the SKUs of this press's PRICE-ONLY rows. They are CHECKED against every live
+    claim, so a price change never races a mark-down or a send still in flight over the same
+    card, and they are NEVER CLAIMED: a row that adds no copy holds no copy.
     """
     from store import sendclaims
 
     own = getattr(args, "send_claim", None)
-    conflicts = writable.send_claims.overlap(going, excluding=own)
+    conflicts = writable.send_claims.overlap(set(going) | set(priced), excluding=own)
     stale = []
     for sku in sorted(going):
         entry = writable.inventory.listings.get(sku)
@@ -313,6 +317,105 @@ def _say_guard(applied, would_by_sku, names, say) -> None:
     say(json.dumps(sendguard.report(applied["name"], len(would_by_sku), trimmed), sort_keys=True))
 
 
+def _typed_skus(choice) -> set:
+    """The SKUs whose price is the owner's own: an `overrides` price, or a hand-entered
+    `no_market_data` price. Never a price the standing rule gives, and never a hold."""
+    from decimal import Decimal
+
+    out = set(choice.dispositions())
+    out |= {sku for sku, value in choice.no_market_data.items() if isinstance(value, Decimal)}
+    return out
+
+
+class PriceRefused(Exception):
+    """`--reprice-live` was asked for in a shape this press cannot honour. A sentence."""
+
+
+def _price_changes(args, guarded, candidates, typed):
+    """The price-only rows this press writes, or [] when it asked for none (`--reprice-live`).
+
+    `candidates` is SKU -> (name, the plan's price) for every SKU this press prices and adds
+    NO copy of. The live figures come off the same export the double-send guard read, so the
+    two halves of one press never disagree about what TCGplayer holds.
+    """
+    if not getattr(args, "reprice_live", False):
+        return []
+    if guarded is None:
+        raise PriceRefused(
+            "--reprice-live needs --live-guard: a price change is only ever measured against "
+            "what TCGplayer holds right now"
+        )
+    try:
+        prices = sendguard.live_prices(tcgcsv.read_export(Path(args.live_guard)).rows)
+    except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
+        raise PriceRefused(f"the live export's prices could not be read: {exc}") from None
+    return sendguard.price_changes(candidates, typed, guarded["live"], prices)
+
+
+def _say_prices(changes, args, say) -> None:
+    """Name every price-only row, then print the one JSON line the route reads."""
+    if not getattr(args, "reprice_live", False):
+        return
+    import json
+
+    say("")
+    say(f"{'price changes':<16} {len(changes)} card(s) already live, Add to Quantity 0")
+    for change in changes[:8]:
+        was = f"${change.was}" if change.was is not None else "no price"
+        say(f"{'':<16} {change.sku} {change.name} — {was} to ${change.price}")
+    if len(changes) > 8:
+        say(f"{'':<16} ...and {len(changes) - 8} more")
+    say(json.dumps(sendguard.price_report(changes), sort_keys=True))
+
+
+def _record_prices(writable, changes, run) -> None:
+    """D243: a price that reached a file is a posting, and `replaced` is the live price it
+    moves. Inside the store write that commits the press, so a refused press posts nothing."""
+    for change in changes:
+        writable.postings.record(
+            sku=change.sku, price=change.price, source="emit-price", run=run, replaced=change.was
+        )
+
+
+def _price_row(match, price):
+    """One price-only row: the catalogue's own row, Add to Quantity 0, the plan's price."""
+    return tcgcsv.set_writable(match.row, add_to_quantity=0, marketplace_price=price)
+
+
+def _keep_listed(changes, sub_skus, args, say):
+    """`--listed-only` drops the sub-threshold rows, price-only rows too, and names them."""
+    if not args.listed_only:
+        return list(changes)
+    left = [change for change in changes if change.sku in sub_skus]
+    if left:
+        say(f"{'price changes':<16} {len(left)} under the cut-off left for a later emit "
+            "— --listed-only")
+    return [change for change in changes if change.sku not in sub_skus]
+
+
+def _zero_rows_single(resolved, priced, changes, args, say):
+    """The single-run path's price-only rows, per game and bucket: `(by_game, kept changes)`.
+
+    `by_game` is game -> {"listed": rows, "sub": rows}. The bucket is the SKU's own, read off the
+    same report the listing rows are partitioned by, so `--split-threshold` files a price-only
+    row beside the listing rows of its own bucket.
+    """
+    below = {
+        sku for game_join in resolved.joins.values() for sku in game_join.report.below_threshold.skus
+    }
+    changes = _keep_listed(changes, below, args, say)
+    wanted = {change.sku for change in changes}
+    by_game = {}
+    for game_join in resolved.joins.values():
+        game = game_join.game
+        rows = {"listed": [], "sub": []}
+        for sku, match in game_join.report.matches.items():
+            if sku in wanted and sku in priced[game]:
+                rows["sub" if sku in below else "listed"].append(_price_row(match, priced[game][sku]))
+        by_game[game] = rows
+    return by_game, changes
+
+
 def _would(match, typed) -> int:
     """What one match adds with the operator's own figure applied and no guard."""
     room = match.room
@@ -387,7 +490,7 @@ def _game_only(report, priced):
     return listed & writable, set(report.below_threshold.skus) & writable
 
 
-def _write(game_join, path, only, choice, say, label):
+def _write(game_join, path, only, choice, say, label, extra=()):
     """Write one import file, or leave it alone. Returns the SKUs that reached it.
 
     ROWS ARE COMPUTED, THEN LOOKED AT, THEN WRITTEN — never computed inside the writer. D54:
@@ -400,7 +503,7 @@ def _write(game_join, path, only, choice, say, label):
     it rather than assumes it. It is one branch against a file the operator has already been
     told to import.
     """
-    if not only:
+    if not only and not extra:
         say(f"{label:<16} nothing to write")
         return []
     rows = join.import_rows(
@@ -414,16 +517,24 @@ def _write(game_join, path, only, choice, say, label):
         # and scoping it would be machinery guarding nothing.
         withheld=set(choice.withheld()),
         only=only,
-    )
+    ) if only else []
+    # THE PRICE-ONLY ROWS OF THIS BUCKET, after the listing rows. Their SKUs are disjoint from
+    # `only` (a SKU in `only` adds a copy), so the file still holds one row per SKU.
+    rows = list(rows) + list(extra)
     if not rows:
         say(f"{label:<16} nothing new to write — {path.name} left as it is")
         return []
     data = join.write_import(game_join.catalog, path, rows)
     written = tcgcsv.parse(data)
-    skus = [row[tcgcsv.SKU_COLUMN] for row in written.rows]
     quantity = sum(int(row[tcgcsv.QUANTITY_COLUMN] or 0) for row in written.rows)
-    say(f"{label:<16} {len(skus)} row(s), {quantity} card(s) -> {path}")
-    return skus
+    say(f"{label:<16} {len(written.rows)} row(s), {quantity} card(s) -> {path}")
+    # THE SKUS THAT ADD A COPY, and only those: `emitted` raises `pushed` off this list, and a
+    # price-only row adds nothing to raise it by.
+    return [
+        row[tcgcsv.SKU_COLUMN]
+        for row in written.rows
+        if tcgcsv.parse_quantity(row[tcgcsv.QUANTITY_COLUMN]) > 0
+    ]
 
 
 class SplitRefused(Exception):
@@ -471,7 +582,7 @@ def _merged_targets(rows_by_game, run_dir, split_games, out=None):
     return [(place(runs.import_merged_name()), carrying[0][1].catalog, merged)]
 
 
-def _write_merged(resolved, priced, choice, run_dir, args, say):
+def _write_merged(resolved, priced, choice, run_dir, args, say, zero=None):
     """The default: one import file, both buckets in it. Returns (listed SKUs, sub SKUs).
 
     THE TWO BUCKETS ARE ONE `import_rows` CALL PER GAME, NOT TWO CONCATENATED. `only` is the
@@ -509,6 +620,10 @@ def _write_merged(resolved, priced, choice, run_dir, args, say):
             if only
             else []
         )
+        # THE PRICE-ONLY ROWS, after the listing rows (`_zero_rows_single`). `--listed-only`
+        # already left the sub-threshold ones out and named them.
+        extra = (zero or {}).get(game) or {}
+        rows = list(rows) + list(extra.get("listed") or []) + list(extra.get("sub") or [])
         rows_by_game[game] = (game_join, rows)
         if args.listed_only and sub:
             say(f"{'sub-threshold':<16} {len(sub)} SKU(s) left for a later emit "
@@ -787,6 +902,23 @@ def run(args, say) -> int:
                 withheld=withheld,
             )
 
+        # THE PRICE-ONLY ROWS (the owner's ruling, 2026-09-24: "Allow mixed"). A SKU this run
+        # prices and adds no copy of, already live, whose typed price differs from the live one.
+        # Built here, off the same `priced` mapping the listing rows use, so a price-only row
+        # and a listing row can never carry two prices for one card.
+        changes = _price_changes(
+            args,
+            guarded,
+            {
+                sku: (resolved.matches[sku].name, price)
+                for by_game in priced.values()
+                for sku, price in by_game.items()
+                if resolved.matches[sku].add_to_quantity == 0
+            },
+            _typed_skus(choice),
+        )
+        zero, changes = _zero_rows_single(resolved, priced, changes, args, say)
+
         # TWO SHAPES, ONE SET OF ROWS. Whichever branch runs, the rows come out of the same
         # `priced` mapping and the same `_game_only` partition, so the flag decides how many
         # files the rows are spread over and never which rows exist. That is what keeps
@@ -806,6 +938,7 @@ def run(args, say) -> int:
                     choice,
                     say,
                     "listed",
+                    extra=zero[game]["listed"],
                 )
                 if args.listed_only:
                     # NAMED, NOT SILENTLY SKIPPED. `--listed-only` with `--split-threshold`
@@ -823,16 +956,18 @@ def run(args, say) -> int:
                     choice,
                     say,
                     "sub-threshold",
+                    extra=zero[game]["sub"],
                 )
         else:
             listed_skus, sub_skus = _write_merged(
-                resolved, priced, choice, run_dir, args, say
+                resolved, priced, choice, run_dir, args, say, zero
             )
     except (
         join.OutputSuppressed,
         join.Undecided,
         tcgcsv.ReadOnlyColumn,
         SplitRefused,
+        PriceRefused,
     ) as exc:
         say("REFUSING to write. Nothing was written.")
         for line in str(exc).splitlines():
@@ -854,6 +989,7 @@ def run(args, say) -> int:
         for match in at_cap[:8]:
             say(f"{'':<16} {match.sku} — {match.nothing_to_add}")
     _say_quantities(_quantities_for(args), resolved.matches, say)
+    _say_prices(changes, args, say)
 
     # ---------------------------------------------------------- pushed, and the audit trail
     #
@@ -872,8 +1008,9 @@ def run(args, say) -> int:
     }
     try:
         with store.write() as writable:
-            _claim_or_refuse(writable, going, basis, args)
+            _claim_or_refuse(writable, going, basis, args, [c.sku for c in changes])
             pushed, pushed_skus = _stamp_single(writable, resolved, emitted, priced_flat, run_dir)
+            _record_prices(writable, changes, run_dir.name)
             queue_line = writable.queue_summary
             stages = writable.inventory.listing_counts()
     except SendClaimRefused as refusal:
@@ -881,7 +1018,7 @@ def run(args, say) -> int:
         return 1
     return _after_single(
         args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus,
-        queue_line, stages,
+        queue_line, stages, len(changes),
     )
 
 
@@ -1033,7 +1170,8 @@ def _stamp_single(writable, resolved, emitted, priced_flat, run_dir):
 
 
 def _after_single(
-    args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus, queue_line, stages
+    args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus, queue_line, stages,
+    repriced=0,
 ) -> int:
     """What the single-run path says once its write has committed."""
     # ONLY WHEN SOMETHING REACHED A FILE. D54: the record is created by the first emit that
@@ -1069,6 +1207,11 @@ def _after_single(
         ) or runs.IMPORT_MERGED
     else:
         listed_names = runs.IMPORT_MERGED
+    if not wrote_any and repriced:
+        # A FILE OF PRICE CHANGES ONLY: every row carries Add to Quantity 0, so no copy was
+        # counted, and the file above is the one to send.
+        say(f"price changes only — {repriced} card(s) already live, no copy added.")
+        return 0
     if not wrote_any:
         # NOTHING NEW WENT ANYWHERE, AND SAYING SO IS THE POINT OF THIS BRANCH. Every copy
         # this run holds is already at `pushed`, so there is no row left to send and the
@@ -1266,6 +1409,28 @@ def run_merged(args, say) -> int:
     )
 
     rows = merged_plan.rows(listed_only=args.listed_only)
+    # THE PRICE-ONLY ROWS OVER THE MERGED PLAN (the owner's ruling, 2026-09-24). Each is the
+    # plan's own row with `add_to_quantity` 0, so `merge.import_rows` writes it as Add to
+    # Quantity 0 at the plan's price, with no second code path.
+    try:
+        changes = _price_changes(
+            args,
+            guarded,
+            {
+                row.sku: (row.match.name, row.price)
+                for row in merged_plan.skus
+                if row.match.add_to_quantity == 0
+            },
+            _typed_skus(choice),
+        )
+    except PriceRefused as refusal:
+        say(f"REFUSING to write: {refusal}. Nothing was written.")
+        return 1
+    changes = _keep_listed(
+        changes, {row.sku for row in merged_plan.skus if row.sub_threshold}, args, say
+    )
+    changed = {change.sku for change in changes}
+    rows = rows + [row for row in merged_plan.skus if row.sku in changed]
     if not rows:
         say("nothing to write — every matched SKU is held back, unlisted, or has no room")
         for sku, why in list(merged_plan.dropped.items())[:8]:
@@ -1305,6 +1470,7 @@ def run_merged(args, say) -> int:
     _say_quantities(
         _quantities_for(args), {row.sku: row.match for row in merged_plan.skus}, say
     )
+    _say_prices(changes, args, say)
 
     by_game = {None: rows}
     if args.split_games:
@@ -1369,7 +1535,9 @@ def run_merged(args, say) -> int:
     # room toward `pushed`.
     pushed = 0
     pushed_skus = 0
-    shipped = {row.sku for _, group in written for row in group}
+    # A PRICE-ONLY ROW IS NOT SHIPPED: it adds no copy, so it stamps no copy and raises no
+    # count. Its posting is `_record_prices`, below.
+    shipped = {row.sku for _, group in written for row in group} - changed
     going = {
         row.sku: int(row.match.add_to_quantity)
         for row in merged_plan.skus
@@ -1378,14 +1546,17 @@ def run_merged(args, say) -> int:
     store = Store()
     try:
         with store.write() as writable:
-            _claim_or_refuse(writable, going, basis, args)
+            _claim_or_refuse(writable, going, basis, args, sorted(changed))
             pushed, pushed_skus = _stamp_merged(writable, merged_plan, shipped, resolved_by_run)
+            _record_prices(writable, changes, ",".join(d.name for d in dirs))
             queue_line = writable.queue_summary
             stages = writable.inventory.listing_counts()
     except SendClaimRefused as refusal:
         _say_claim_refusal(refusal, args, say)
         return 1
-    return _after_merged(dirs, written, pushed, pushed_skus, queue_line, stages, say)
+    # THE RUN'S EMIT RECORD NAMES THE SKUS THAT ADDED A COPY (D54), never a price-only row.
+    copied = [(target, [row for row in group if row.sku not in changed]) for target, group in written]
+    return _after_merged(dirs, copied, pushed, pushed_skus, queue_line, stages, say)
 
 
 def _stamp_merged(writable, merged_plan, shipped, resolved_by_run):

@@ -16,7 +16,8 @@ D100 §2 measured (nine SKUs at `2 x pushed - sold`) happened on exactly the pat
 bookkeeping cannot see: a file uploaded by hand, twice. This rule reads NOTHING the store
 wrote about listings. It reads the export (what TCGplayer holds) and the shelf (what is
 physically here), so a wrong `pushed` or a stale `live` cannot open it. It only ever takes
-copies OUT of a file; it never puts one in.
+copies OUT of a file; it never puts one in. The price-only rows at the foot (`price_changes`)
+put no copy in either: each carries Add to Quantity 0.
 
 "ON HAND" IS THE UNION OF TWO SETS OF POSITIONS, AND BOTH HALVES ARE NEEDED. The store's cards
 that already carry the SKU (every copy an earlier send wrote), and the positions this send's
@@ -173,3 +174,84 @@ def report(export: str, checked: int, trimmed: Sequence[Trim]) -> dict:
             "trimmed_copies": sum(trim.would - trim.goes for trim in trimmed),
         }
     }
+
+
+# ------------------------------------------------------------------- the price-only rows
+
+
+@dataclass(frozen=True)
+class PriceChange:
+    """One card already live at TCGplayer whose typed price this send changes, adding no copy.
+
+    THE OWNER'S RULING, 2026-09-24 ("Allow mixed", `D-one-press-sends-and-makes-live`): one
+    press lists new copies AND reprices live ones. A price change is a row with Add to
+    Quantity 0, so it moves no copy, claims no copy, and a second upload of it changes nothing
+    (D100's own reason for its zero rule). `was` is TCGplayer's live price at the read, or
+    None where the export carried none.
+    """
+
+    sku: str
+    name: str
+    price: str
+    was: Optional[str]
+
+    def as_dict(self) -> dict:
+        return {"sku": self.sku, "name": self.name, "price": self.price, "was": self.was}
+
+
+def live_prices(rows: Iterable[Mapping[str, str]]) -> Dict[str, Optional[str]]:
+    """SKU -> TCGplayer's live marketplace price, two decimals, or None where the cell is blank.
+
+    A CELL THAT IS NOT MONEY IS A REFUSAL (`ValueError`), NEVER A BLANK. A blank reads as "no
+    price live", and this module would then propose a price change over it.
+    """
+    out: Dict[str, Optional[str]] = {}
+    for row in rows:
+        sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+        if not sku:
+            continue
+        text = str(row.get(tcgcsv.PRICE_COLUMN) or "").strip()
+        try:
+            value = tcgcsv.parse_price(text)
+        except ArithmeticError:
+            raise ValueError(f"the live export prices {sku} at {text!r}, which is not money") from None
+        out[sku] = None if value is None else tcgcsv.format_price(value)
+    return out
+
+
+def price_changes(
+    candidates: Mapping[str, tuple],
+    typed: Iterable[str],
+    live: Mapping[str, int],
+    prices: Mapping[str, Optional[str]],
+) -> List[PriceChange]:
+    """The price-only rows one send carries. `candidates` is SKU -> (name, the plan's price) for
+    every SKU the send prices and adds NO copy of.
+
+    THE SMALLEST HONEST READING OF "A PRICE THE OWNER CHANGED ON A LIVE CARD". Three tests,
+    and a row needs all three:
+
+      - TYPED. The owner's own price for the card (`overrides` or `no_market_data`). A price
+        the standing rule gives is never sent to a live listing: the rule speaks about most
+        live listings on a store, and one press would move them all.
+      - LIVE. TCGplayer holds at least one copy in the fresh export. A card with nothing live
+        has no price there to change.
+      - DIFFERENT. The typed price is not what TCGplayer already shows, to the cent. A row
+        that changes nothing is not written.
+    """
+    wanted = {str(sku) for sku in typed}
+    out: List[PriceChange] = []
+    for sku, (name, price) in candidates.items():
+        if sku not in wanted or int(live.get(sku, 0)) <= 0:
+            continue
+        now = tcgcsv.format_price(price)
+        was = prices.get(sku)
+        if was == now:
+            continue
+        out.append(PriceChange(sku=sku, name=str(name or ""), price=now, was=was))
+    return out
+
+
+def price_report(changes: Sequence[PriceChange]) -> dict:
+    """The JSON object `cli/cmd_emit.py` prints for the price-only rows it wrote."""
+    return {"send_prices": {"rows": [change.as_dict() for change in changes]}}

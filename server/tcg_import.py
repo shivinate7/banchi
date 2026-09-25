@@ -298,13 +298,13 @@ def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
 
     `listing` IS THE ONE DOOR FOR A FILE THAT ADDS COPIES (`D-one-press-sends-and-makes-live`),
     and it is a keyword so no existing caller can reach it by position. A price file keeps
-    D100's zero rule exactly as it was. A listing row must add a whole number of copies, 1 or
+    D100's zero rule exactly as it was. A listing row adds a whole number of copies, 0 or
     more: the listing file is written by `emit` behind the double-send guard
     (`pipeline/sendguard.py`), and a negative figure is a file this repo did not write. A row
-    adding 0 would change only a price, and a price goes through the price door, where D100's
-    zero rule stays whole (the round-2 review). WHETHER
-    THIS DOOR SHOULD EXIST IS STILL THE OWNER'S OPEN QUESTION (the decision entry's "D100's
-    check on the transport"), and nothing sends through it before the owner's first test.
+    adding 0 is a PRICE-ONLY row, D100's own shape (the owner's ruling, 2026-09-24: "Allow
+    mixed"). Every guard on the rows that add copies stays whole, and the check past the wait
+    compares a price-only row's price with TCGplayer's. Nothing sends through this door before
+    the owner's first test.
     """
     if not rows:
         raise FetchRefusal("tcg_import_empty", "That file has no rows, so there is nothing to push.")
@@ -338,15 +338,18 @@ def _check(rows: Sequence[dict], *, listing: bool = False) -> None:
                 f"SKU {sku} carries an Add to Quantity that is not an integer. Nothing was sent.",
             ) from None
         if listing:
-            if quantity <= 0:
-                # A LISTING ROW ADDS AT LEAST ONE COPY. A row adding none would only move a
-                # price, and a price moves through a mark-down's door, where D100's zero rule
-                # holds whole (the round-2 review). `emit` never writes such a row.
+            if quantity < 0:
+                # A LISTING ROW ADDS COPIES OR CHANGES A PRICE, AND NEVER TAKES ONE AWAY. A
+                # negative figure is a file this repo did not write.
                 raise FetchRefusal(
                     "tcg_import_moves_quantity",
-                    f"SKU {sku} carries Add to Quantity {quantity}. A listing file only ever "
-                    f"adds copies, so nothing was sent.",
+                    f"SKU {sku} carries Add to Quantity {quantity}. A listing file adds copies "
+                    f"or changes a price, and never takes a copy away, so nothing was sent.",
                 )
+            # A ROW ADDING 0 IS A PRICE-ONLY ROW (the owner's ruling, 2026-09-24: "Allow
+            # mixed"). It is D100's own shape, so a second upload of it changes nothing, and
+            # `emit --reprice-live` writes it only for a card already live whose typed price
+            # moved (`pipeline/sendguard.py:price_changes`).
             continue
         if quantity != 0:
             # NOT TCGPLAYER'S RULE — THIS REPO'S. D100 is built on every row of every file
