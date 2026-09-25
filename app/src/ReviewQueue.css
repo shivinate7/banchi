@@ -446,7 +446,11 @@
   white-space: nowrap;
 }
 
-.review-claims { display: flex; gap: var(--bn-2); flex-wrap: wrap; }
+/* UX-251: a RESERVED FRAME (D28's pattern, the same one the photo already uses), so a card
+   with fewer chips — or none — never moves the rows below it by however many lines its own
+   chips did not need. Two rows is the most one card can offer at once (D23's rarity claim
+   beside the finish pair). */
+.review-claims { display: flex; gap: var(--bn-2); flex-wrap: wrap; min-height: calc(60px + var(--bn-2)); align-content: flex-start; }
 .review-chip {
   display: inline-flex;
   align-items: center;

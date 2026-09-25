@@ -2038,7 +2038,10 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
       )
     }
   }
-  if (chips.length === 0) return null
+  /* UX-251/D28: always the reserved frame, chips or not, so a card with no evidence chips
+   * does not pull the candidate rows below it up into the space a neighbouring card's chips
+   * used. The frame's own min-height (ReviewQueue.css) does the actual reserving; an empty
+   * `<div>` here is what lets it apply on a card with nothing to show. */
   return <div className="review-claims">{chips}</div>
 }
 
