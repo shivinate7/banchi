@@ -8814,7 +8814,7 @@ COMPONENTS = [
                 "does": ("the shrinking pending list `machine-words.spec.ts` reads, route -> "
                     "word/path -> lane, no wildcard. A separate list from `scripts/machine-"
                     "words-allow.json` on purpose: rendered text carries no source file."),
-                "governed_by": ["D196", "D284"],
+                "governed_by": ["D196", "D274", "D284"],
             },
             "tests/moneyFace.ts": {
                 "does": ("`scanMoneyFace`, the one measurement `money-face.spec.ts` runs, "
