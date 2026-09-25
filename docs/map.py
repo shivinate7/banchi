@@ -6473,7 +6473,9 @@ COMPONENTS = [
                                   "only stylesheet that ever filled it.",
                                   "governed_by": ["D5", "D6", "D13", "D30", "D31", "D32", "D33",
                                                   "D38", "D39", "D40", "D41", "D90", "D117", "D118",
-                                                  "D119", "D132", "D213", "D-inventory-walk-first"]},
+                                                  "D119", "D132", "D213",
+                                                  "D-a-box-is-shown-by-its-name",
+                                                  "D-inventory-walk-first"]},
 
             # ---- 7b's screens. Built 2026-08-13, BEFORE Gate B; routed the same day ----
             #

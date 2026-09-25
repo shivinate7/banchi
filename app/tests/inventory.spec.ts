@@ -1986,6 +1986,37 @@ test('the slot column is already as wide as the key the sale will write into it'
   expect((await name.boundingBox())?.x ?? -2, 'the name slid right on the press').toBe(nameWas)
 })
 
+test('S5 — the slot ghost reserves what a departure actually draws, not the old store key', async ({
+  page,
+}) => {
+  /* Two live rows in the same box (so the box digit count cannot confound this), each alone in
+   * its own one-card section, so both draw the identical visible slot text `#1`. Their raw
+   * `box/index` pair differs a lot — 12/1 against 12/133 — so `B12 #1` and `B12 #133`, the OLD
+   * unconditional ghost reservation, differ by two characters while the two rows' OWN visible
+   * text does not differ at all. If the ghost reserves the right string (S5), the two names
+   * land at the same x; reserving the old store key instead pushes the wider one's name right
+   * of the other's, though neither row has departed and both show the same "#1". */
+  const cards: Cards = {
+    '12/1': card({ index: 1, state: 'identified', name: 'Mantine', sku: '8937372', box: 12, boxName: 'RB epics', boxTotal: 2, section: 1, sectionStart: 1, sectionEnd: 1 }),
+    '12/133': wideKeyCard('identified'),
+  }
+  const boxes = { boxes: [{ ...WIDE_KEY_BOXES.boxes[0], cards: 2, on_hand: 2, fill: 2, next_index: 134, sections: [1, 133], sections_detail: [{ section: 1, start: 1, end: 1, count: 1 }, { section: 2, start: 133, end: 133, count: 1 }] }] }
+  const store: Store = { cards, search: (query) => searchAnswer(query, cards) }
+  await open(page, boxes, store)
+  await expandAll(page)
+  await settleFonts(page)
+
+  const narrowKeyRow = page.locator('.browse-row', { hasText: 'Mantine' })
+  const wideKeyRow = page.locator('.browse-row', { hasText: 'Thievul' })
+  await expect(narrowKeyRow.locator('.browse-row-slot')).toHaveText('#1')
+  await expect(wideKeyRow.locator('.browse-row-slot')).toHaveText('#1')
+
+  const narrowX = (await narrowKeyRow.locator('.browse-row-name').boundingBox())?.x ?? -1
+  const wideX = (await wideKeyRow.locator('.browse-row-name').boundingBox())?.x ?? -2
+
+  expect(wideX, 'a row with a wider store key had its name pushed right, though both show "#1"').toBe(narrowX)
+})
+
 test('the card panel holds one height for the whole walk', async ({ page }) => {
   await open(page)
   await expandAll(page)

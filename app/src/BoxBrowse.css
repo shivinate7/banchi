@@ -403,19 +403,19 @@
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
 .browse-rowline:hover .browse-row { background: var(--bn-hover); color: var(--bn-ink); }
-/* THE SLOT CELL IS AS WIDE AS THE LABEL THE SALE WILL PUT IN IT, NOT AS WIDE AS THE ONE IN IT
-   NOW (D118). This column is `max-content`, and selling the copy rewrites the slot from `#1` to
-   the store key `B2 #1` in the mono face — wider, so the column grew and the name, the badges
-   and everything after them slid right ON THE PRESS. The 34px floor was absorbing it on the
-   rig and nowhere else: the key renders 33.0px in macOS's monospace fallback and over 34px in
-   Linux's, so `make design-check` was green here and red in CI on the same tree, over a real
-   movement. And the floor covers only the shortest key there is — box 2, card 1. `B3 #96`,
-   which the owner's own store draws, is 40px, so that sale moved the name six pixels on every
-   platform and no case ever saw it.
-   `::before` reserves the future label's length in the face it will be drawn in, so the track is
-   already that wide before the write and unchanged after it. A row whose key is wider than its
-   slot therefore starts its name further right than it used to; that is the price of the press
-   not moving anything, and it is paid once at render rather than at the moment of the sale. */
+/* THE SLOT CELL IS AS WIDE AS THE STRING A DEPARTURE WILL PUT IN IT, NOT AS WIDE AS THE ONE IN
+   IT NOW (D118). This column is `max-content`, and `departedSlot` (S5) is what BoxBrowse.tsx's
+   ghost reserves — the row's OWN struck `#N`, unchanged in width by its own departure since
+   D-a-box-is-shown-by-its-name (2026-09-23) stopped drawing the store key there at all, except
+   as that function's own fallback for a pre-ruling record with no label to read a number off:
+   `B3 #96`, in the mono face, wider than any `#N` this box will ever show. Reserving that
+   fallback UNCONDITIONALLY, the first build of this rule, made every ordinary row's ghost
+   wider than its own slot ever draws once a box's numbers reach two digits — pushing the name
+   and everything after it six pixels right on every row from the one where that starts, with
+   no sale in sight to blame it on.
+   `::before` reserves the string's length in the face it will be drawn in, so the track is
+   already the right width before a departure and unchanged after it — paid once at render,
+   never at the moment of the write. */
 .browse-row-position {
   display: grid;
   font-size: var(--bn-fs-xs);

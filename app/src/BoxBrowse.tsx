@@ -364,17 +364,27 @@ function sectionsOf(rows: Row[]): Section[] {
  * `card` decoration; the fallbacks for a departed, pooled or unlabelled record. */
 function rowSlot(row: Row): string {
   if (row.card.card !== undefined) return `#${row.card.card}`
-  /* A DEPARTED ROW KEEPS THE NUMBER OF THE PLACE IT LEFT (the owner's ruling, 2026-09-23,
-     D-a-box-is-shown-by-its-name): the server's departed label carries it, and the row's own
-     mark (`.is-departed`, struck through by the stylesheet) says it left, never a word or the
-     store key. A label from before the ruling names no card, so the store key is the fallback. */
-  if (hasDeparted(row.card)) {
-    const was = placePartsOf(positionLabel(row.card))?.card ?? null
-    return was === null ? departedKey(row.card) : `#${was}`
-  }
+  if (hasDeparted(row.card)) return departedSlot(row.card)
   const label = positionLabel(row.card)
   if (label !== null) return label
   return isPooled(row.card) ? pooledText(row.card, row.key) : `no label, ${row.key}`
+}
+
+/** WHAT A DEPARTED ROW'S SLOT SAYS (the owner's ruling, 2026-09-23,
+ *  D-a-box-is-shown-by-its-name): the server's departed label carries the number of the place
+ *  it left, and the row's own mark (`.is-departed`, struck through by the stylesheet) says it
+ *  left, never a word or the store key. A label from before the ruling names no card, so the
+ *  store key is the fallback.
+ *
+ *  A FUNCTION OF ITS OWN (S5), SO THE GHOST BELOW CAN ASK IT TOO. It used to reserve the store
+ *  key unconditionally, on the premise that a sale rewrites `#1` into that wider spelling —
+ *  true before this ruling, false since: a departed row keeps its own number's width
+ *  unchanged. Reserving the store key regardless left the ghost wider than the slot ever
+ *  draws once a box's card numbers reach two digits, and every name after it sat those pixels
+ *  too far right. */
+function departedSlot(card: InventoryCard): string {
+  const was = placePartsOf(positionLabel(card))?.card ?? null
+  return was === null ? departedKey(card) : `#${was}`
 }
 
 /** `join.departed_label`'s store key, in the server's spelling (`B3 #96`, D68).
@@ -2201,29 +2211,31 @@ export function BoxBrowse({
                                 title={departed ? 'Departed — no longer in this box' : undefined}
                                 onClick={() => pickRow(row.key)}
                               >
-                                {/* THE WIDTH THE SALE WILL NEED, RESERVED BEFORE IT IS SPENT
-                                    (D118). Selling this copy rewrites the slot from `#1` to the
-                                    store key `B2 #1`, which is wider — so the column grew and
-                                    the name and the badges slid right ON THE PRESS. The ghost
-                                    holds that exact string, in the face it will be set in, so
-                                    the track is already that wide and the write changes only
-                                    which of the two is painted.
+                                {/* THE WIDTH A DEPARTURE WILL NEED, RESERVED BEFORE IT IS
+                                    SPENT (D118). `departedSlot` (S5) is what the slot cell
+                                    ITSELF draws once this row departs — its own struck `#N`
+                                    in the ordinary case, the store key only for the rare
+                                    pre-ruling record with no label to read a number off. The
+                                    ghost holds that exact string, in the face it will be set
+                                    in, so the track is already that wide and a departure
+                                    changes only which of the two is painted.
                                     IT IS `content:` AND NOT A TEXT NODE, AND IT IS
-                                    `aria-hidden`. A hidden twin in the DOM would put `B2 #1`
-                                    into every row's text content, where the census, the walk's
-                                    locators and this button's own accessible name all read;
-                                    pseudo content is in none of those, and the attribute keeps
-                                    the pseudo out of the accessibility tree as well. And it is
-                                    the STRING rather than a `ch` count of it: the count was the
-                                    first build and it is an estimate — a face whose weight is
-                                    synthesized does not set five characters at five times the
-                                    advance of `0`, which is the register the whole 1px is in. */}
+                                    `aria-hidden`. A hidden twin in the DOM would put the
+                                    reserved string into every row's text content, where the
+                                    census, the walk's locators and this button's own
+                                    accessible name all read; pseudo content is in none of
+                                    those, and the attribute keeps the pseudo out of the
+                                    accessibility tree as well. And it is the STRING rather
+                                    than a `ch` count of it: the count was the first build and
+                                    it is an estimate — a face whose weight is synthesized does
+                                    not set five characters at five times the advance of `0`,
+                                    which is the register the whole 1px is in. */}
                                 <span className="browse-row-position">
                                   <span className="browse-row-slot">{rowSlot(row)}</span>
                                   <span
                                     className="browse-row-slotghost"
                                     aria-hidden="true"
-                                    style={{ '--bn-slot-key': JSON.stringify(departedKey(row.card)) } as CSSProperties}
+                                    style={{ '--bn-slot-key': JSON.stringify(departedSlot(row.card)) } as CSSProperties}
                                   />
                                 </span>
                                 {/* NEVER the state word here: the row would read `#1
