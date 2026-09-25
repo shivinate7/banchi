@@ -329,6 +329,32 @@ function whatMoved(before: Record<string, string>, after: Record<string, string>
   return moved
 }
 
+/** `outsideThePanel`, held until two reads 75ms apart agree, or `tries` runs out.
+ *
+ *  THE RACE THIS CLOSES: the box rail opens the walk's first section as a consequence of
+ *  landing on it (`BoxBrowse.tsx`, the effect keyed on `selected`) — including on the very
+ *  first render, so the walk never arrives with its own selection hidden. That fold's chevron
+ *  (`.browse-sectmark`) rotates in over `.2s`, entirely on MOUNT and independent of the
+ *  confirm press. This file's `open()` waits only for the card hero's name, not for
+ *  `.browse-sectfold` the way `inventory.spec.ts`'s own `open()` does, so on a slow enough
+ *  runner a "before" sample taken right after can still catch that rotation mid-flight.
+ *  MEASURED (CI run 36089115485's trace, reproduced locally by throttling the CPU 6x): the
+ *  chevron's own svg and path, unsettled — `svg @ 303,477 h16 -> svg @ 304,478 h14` — settled
+ *  into the SAME shape by the next sample, and the confirm press never touched it. Sampling
+ *  twice and requiring agreement reads the chevron once it has stopped moving, on its own,
+ *  never on the press's schedule — so a press that genuinely moves something still fails this
+ *  every time, because two samples of a REAL move never agree either. */
+async function settled(page: Page, tries = 40): Promise<Record<string, string>> {
+  let last = await outsideThePanel(page)
+  for (let i = 0; i < tries; i += 1) {
+    await page.waitForTimeout(75)
+    const next = await outsideThePanel(page)
+    if (JSON.stringify(next) === JSON.stringify(last)) return next
+    last = next
+  }
+  return last
+}
+
 test('the confirm press moves nothing outside the panel it lands in', async ({ page }) => {
   await open(page)
 
@@ -345,14 +371,14 @@ test('the confirm press moves nothing outside the panel it lands in', async ({ p
   const rightCard = page.getByRole('button', { name: 'The listing is right' })
   await rightCard.scrollIntoViewIfNeeded()
 
-  const before = await outsideThePanel(page)
+  const before = await settled(page)
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   const at = await page.evaluate(() => window.scrollY)
 
   await rightCard.click()
   await expect(page.locator('.bn-toast', { hasText: 'Listing confirmed' })).toBeVisible()
 
-  const after = await outsideThePanel(page)
+  const after = await settled(page)
   const moved = whatMoved(before, after)
   expect(moved, `${moved.length} elements outside the panel moved on the press:\n${moved.slice(0, 12).join('\n')}`)
     .toHaveLength(0)
