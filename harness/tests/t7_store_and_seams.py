@@ -884,8 +884,9 @@ def _bind(
     bound_by: str = "answer",
 ):
     """The sanctioned writer, in place of `set_state`'s retired `sku=`/`condition=`
-    shortcut (D258, "seven writers... `set_state` is a flagged, temporary deviation").
-    Builds a one-row `Skus` table naming `sku` and binds through it — `scripts/
+    shortcut — D258's "six writers are sanctioned" as of `66442b32`, which closed the
+    entry's own former "`set_state` is a flagged, temporary deviation" line. Builds a
+    one-row `Skus` table naming `sku` and binds through it — `scripts/
     identity-store-selftest.py`'s own recipe, narrowed to what a fixture that only needs
     `card.sku`/`card.condition` set needs. Call `inventory.set_state(key, state)` first for
     the state transition; this never touches `state`, exactly as `bind_sku` itself does not.

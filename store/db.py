@@ -1504,6 +1504,18 @@ def _open(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+# `open_read_only`'s own bound on its retry — see the function's own docstring for why 3
+# and never a bare `while True`. Every real race measured closes on its second attempt.
+OPEN_READ_ONLY_MAX_ATTEMPTS = 3
+
+
+class TooManyRaces(RuntimeError):
+    """`open_read_only` hit `OPEN_READ_ONLY_MAX_ATTEMPTS` without a clean open — see its
+    own docstring. Not a `sqlite3` exception, so a caller can tell this refusal apart from
+    a genuine database error.
+    """
+
+
 def open_read_only(db_path: Path) -> sqlite3.Connection:
     """The one read-only door onto a store file. It never migrates, and it sees every commit.
 
@@ -1550,6 +1562,13 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
     plain `mode=ro` open is tried again — which now succeeds, because the commit that raced
     it left side files behind for it to read.
 
+    THE RETRY IS BOUNDED AT `OPEN_READ_ONLY_MAX_ATTEMPTS`, NEVER A BARE `while True`. Every
+    real race closes on its second attempt — the retry's own plain `mode=ro` open succeeds
+    because the commit that raced it left side files behind. A bound that low would still
+    self-terminate in every case measured; it stays a stated bound rather than an unbounded
+    waiter loop on principle, and raises `TooManyRaces` by name if a commit somehow keeps
+    landing in this exact gap on every attempt, rather than spinning forever.
+
     `harness/tests/t7_store_and_seams.py:check_open_read_only` proves the store half.
     `check_open_read_only_race` forces the gap deterministically, by monkeypatching
     `sqlite3.connect` to land a commit the instant this function asks for the `immutable=1`
@@ -1558,7 +1577,7 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
     if not db_path.is_file():
         raise FileNotFoundError(f"no store at {db_path}")
     wal = Path(f"{db_path}-wal")
-    while True:
+    for _attempt in range(OPEN_READ_ONLY_MAX_ATTEMPTS):
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         try:
             conn.execute("PRAGMA schema_version")  # forces the lazy open now, not later
@@ -1574,6 +1593,12 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
         # immutable one. Side files exist now, so the retry's plain `mode=ro` open succeeds
         # and reads the commit correctly — never trust the immutable connection we just made.
         conn.close()
+    raise TooManyRaces(
+        f"open_read_only({db_path}): a commit landed in the immutable-fallback gap on "
+        f"every one of {OPEN_READ_ONLY_MAX_ATTEMPTS} attempts. Every measured real race "
+        f"closes on its second attempt, so this means either a pathological write rate or "
+        f"a bug in the retry itself — refusing rather than looping forever."
+    )
 
 
 def connect(directory: Path, *, locked: bool = False) -> sqlite3.Connection:
