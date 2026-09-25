@@ -36,7 +36,7 @@
 }
 
 .revenue-summary-lead { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
-.revenue-summary-figure { font-size: var(--bn-fs-3xl); font-weight: 700; letter-spacing: -0.02em; }
+.revenue-summary-figure { font-size: var(--bn-fs-3xl); font-weight: 700; letter-spacing: var(--bn-tracking-tight); }
 .revenue-verdict-said {
   font-size: var(--bn-fs-base);
   color: var(--bn-ink-2);
@@ -75,7 +75,7 @@
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
-  gap: 4px;
+  gap: var(--bn-1);
 }
 .revenue-month-bar {
   width: 100%;
@@ -187,7 +187,7 @@
 .revenue-tile-money .bn-money { font-size: var(--bn-fs-2xl); font-weight: 600; }
 .revenue-tile-money small { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
 .revenue-tile-foot { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
-.revenue-tile-foot + .revenue-tile-foot { margin-top: 2px; }
+.revenue-tile-foot + .revenue-tile-foot { margin-top: var(--bn-0-5); }
 
 .revenue-mix { padding: var(--bn-5); }
 .revenue-mix h3 { margin: 0 0 var(--bn-3); }
@@ -196,7 +196,7 @@
   height: 10px;
   border-radius: var(--bn-r-full);
   overflow: hidden;
-  gap: 2px;
+  gap: var(--bn-0-5);
   background: var(--bn-surface-2);
 }
 .revenue-mix-split span:first-child { background: var(--bn-accent); }
@@ -237,7 +237,7 @@
 .revenue-board-rk { font: 700 var(--bn-fs-md) / 1 var(--bn-font-display); color: var(--bn-ink-3); text-align: right; }
 .revenue-board-who { min-width: 0; }
 .revenue-board-track { position: relative; height: 22px; display: flex; align-items: center; gap: var(--bn-2); }
-.revenue-board-track i { height: 10px; border-radius: 0 4px 4px 0; background: var(--bn-accent); min-width: 3px; }
+.revenue-board-track i { height: 10px; border-radius: 0 var(--bn-r-xs) var(--bn-r-xs) 0; background: var(--bn-accent); min-width: 3px; }
 .revenue-board-track .bn-money { font-weight: 600; font-size: var(--bn-fs-md); }
 .revenue-board-c, .revenue-board-d { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); text-align: right; white-space: nowrap; }
 .revenue-showall { display: flex; justify-content: center; padding: var(--bn-4); border-top: 1px solid var(--bn-line); }
@@ -253,7 +253,7 @@
   .revenue-board-who { grid-column: 3; grid-row: 1; }
   .revenue-board-rk { grid-row: 1 / 3; }
   .revenue-board .bn-thumb { grid-row: 1 / 3; }
-  .revenue-board-c { grid-column: 4; grid-row: 1 / 3; display: grid; gap: 2px; text-align: right; }
+  .revenue-board-c { grid-column: 4; grid-row: 1 / 3; display: grid; gap: var(--bn-0-5); text-align: right; }
 }
 
 /* ---- the full table --------------------------------------------------------------------- */
