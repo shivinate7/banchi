@@ -1166,12 +1166,6 @@ def run(args, say) -> int:
         say(f"REFUSING to write: {refusal}. Nothing was written.")
         return 1
     typed = _quantities_for(args)
-    trimmed_out = _say_guard(
-        guarded,
-        {sku: _would(match, typed) for sku, match in resolved.matches.items()},
-        {sku: match.name for sku, match in resolved.matches.items()},
-        say,
-    )
 
     # --------------------------------------------------- reported before any output exists
     missing = sorted(
@@ -1252,6 +1246,18 @@ def run(args, say) -> int:
         ]
         _say_no_price(no_price, say)
 
+        # THE GUARD'S TRIMS ARE NAMED HERE, OVER THE PRICED CARDS ONLY (R8-2), as the merged
+        # path names them over its plan. A card with no price or a withheld card has its own
+        # reason: never "TCGplayer already holds every copy", and never in the trimmed list the
+        # Send card draws. The guard itself ran above, before any file.
+        priced_skus = {sku for by_game in priced.values() for sku in by_game}
+        trimmed_out = _say_guard(
+            guarded,
+            {sku: _would(match, typed) for sku, match in resolved.matches.items() if sku in priced_skus},
+            {sku: match.name for sku, match in resolved.matches.items() if sku in priced_skus},
+            say,
+        )
+
         # THE PRICE-ONLY ROWS (the owner's ruling, 2026-09-24: "Allow mixed"). A SKU this run
         # prices and adds no copy of, already live, whose typed price differs from the live one.
         # Built here, off the same `priced` mapping the listing rows use, so a price-only row
@@ -1297,7 +1303,6 @@ def run(args, say) -> int:
         sendable = len(adding) > len(cut_back)
         if (no_price or cut_back) and not sendable and not changes:
             # EVERY LEFT-OUT CARD IS NAMED, as the merged path names it (R6-5).
-            priced_skus = {sku for by_game in priced.values() for sku in by_game}
             unpriced = {sku for sku, _ in no_price}
             under = {sku for sku, _ in cut_back}
             left_out = []
@@ -1376,7 +1381,8 @@ def run(args, say) -> int:
     # computation of a price, only a lookup of the one `priced[game]` already decided
     # (D243). A SKU belongs to exactly one game, so this cannot collide.
     priced_flat = {sku: price for by_game in priced.values() for sku, price in by_game.items()}
-    at_cap = [m for g in resolved.joins.values() for m in g.report.at_cap]
+    # PRICED CARDS ONLY (R8-2): a card with no price or a withheld card is named for that.
+    at_cap = [m for g in resolved.joins.values() for m in g.report.at_cap if m.sku in priced_flat]
     if at_cap:
         # NAMED PER SKU, because "already at the live cap" is almost never the reason
         # (D59): `live_before` reads 0 on every copy of an import this pipeline has not

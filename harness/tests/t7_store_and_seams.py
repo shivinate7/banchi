@@ -36296,7 +36296,7 @@ def _m_cases() -> Dict[str, dict]:
             says=[f"{_M_D} — {_M_SENT}", f"{_M_R} — {_M_SENT}", _M_A, _M_ONLY_PRICE],
             route=("needs_price", ["Every card on this list needs a price first"]),
             home={"line": "price 1 card", "behind": None, "tile": "run to price",
-                  "chip": "Sent, 1 needs a price", "failed": None})
+                  "chip": "Sent, 1 needs a price"})
         # R6-3 and R6-9: a live-guard trim is named as a trim, and the headline and the title
         # state every reason the send was empty, never only the price.
         for flag, named in (("guard", None), ("guard+named", _M_NONE_NAMED)):
@@ -36309,6 +36309,18 @@ def _m_cases() -> Dict[str, dict]:
         add("mix/guard+part", market=_M_MIX, live={_M_D: 1, _M_R: 0, _M_A: 0}, named=_M_NONE_NAMED, exit=0,
             files={last: [r_mix]}, says=[f"{_M_D} Dunsparce — TCGplayer holds 1 of 1 on hand", f"{_M_D} — {_M_LIVE}"],
             never=[_M_ASKED0], home=send2)
+        # R8-2: A SEND THAT IS NOT EMPTY, WITH A LIVE CARD THAT HAS ANOTHER REASON. A card with
+        # no price and a withheld card are named for that reason alone, on both paths: never in
+        # the "no room" list as live, never in the guard's trimmed list the Send card draws.
+        add("own/sub-listed+Alive", market=_M_SUB, flags=["--listed-only"], live={_M_D: 0, _M_R: 0, _M_A: 1},
+            named=_M_NONE_NAMED, exit=0, files={last: [r_mix]},
+            says=[f"{_M_D} — under the cut-off (Dunsparce)", _M_A],
+            never=[f"{_M_A} — {_M_LIVE}", f'"sku": "{_M_A}", "would"', _M_ASKED0], home=send2)
+        add("own/held+live", market=_M_MIX, pre=(_M_D,), live={_M_D: 1, _M_R: 0, _M_A: 0}, named=_M_NONE_NAMED,
+            exit=0, files={last: [r_mix]}, says=[_M_A],
+            never=[f"{_M_D} — {_M_LIVE}", f'"sku": "{_M_D}", "would"', _M_ASKED0],
+            home={"line": "send 1 copy to TCGplayer", "behind": "1 card needs a price", "tile": "run to price, 1 ready",
+                  "failed": "send 2 copies to TCGplayer"})
         # R7 F4: a card with no price that TCGplayer also holds has one reason, the price. It is
         # counted once, and never named among the live cards.
         add("mix/unpricedlive", market=_M_MIX, live={_M_D: 1, _M_R: 1, _M_A: 1}, named=_M_NONE_NAMED, exit=1,
@@ -36418,7 +36430,7 @@ def _m_home(worklists: Dict[str, dict]) -> Dict[str, dict]:
             "    const say = s.standing({status, statusFailed: false, orders, ordersFailed: false,"
             "      pricing: c.pricing, pricingFailed: false, runs: [], runsFailed: false, unconfirmed: 0,"
             "      book, bookFailed: failed});"
-            "    return say === null ? null : {text: say.say.map((x) => x.text).join(''),"
+            "    return say === null ? null : {lead: say.lead, text: say.say.map((x) => x.text).join(''),"
             "      behind: say.behind.map((b) => `${b.figure ?? ''} ${b.label}`.trim())};"
             "  };"
             "  const ready = s.sendCounts(c.pricing, c.book).ready;"
@@ -36512,18 +36524,22 @@ def check_send_matrix(checks: Checks) -> None:
             checks.ok(want["behind"] in (got["line"] or {}).get("behind", []),
                       f"{name}: Home names {want['behind']!r} behind the line", str(got["line"]))
         checks.ok(want["tile"] in got["tile"], f"{name}: the Pricing tile says {want['tile']!r}", got["tile"])
-        # R6-4 AND R7 F7: a failed read of typed prices degrades to the worklist's own count, a
-        # Pricing line names that read, and no card is counted as needing a price, because
-        # with the answers unknown a priced card cannot be told from an unpriced one. A line
-        # from a rank below Pricing still draws.
+        # R6-4 AND R8-1: a failed read of typed prices degrades to the worklist's own counts, the
+        # no-price count included, and a Pricing line names that read. A line from a rank below
+        # Pricing still draws.
         failed = (got["failed"] or {})
+        # R8-1: A FAILED READ IS NEVER CLEAR. `standing.ts` says Clear only from a complete
+        # reading, so a store whose typed prices could not be read never reads as owing nothing.
+        checks.ok(
+            failed.get("lead") != "Clear" and "nothing is owed" not in failed.get("text", ""),
+            f"{name}: with typed prices unread, Home never says Clear",
+            str(failed),
+        )
         checks.ok(
             "the pricing worklist" not in failed.get("text", "")
-            and not any("needs a price" in b or "need a price" in b for b in failed.get("behind", []))
             and (
-                ("send" not in failed.get("text", "") and "price" not in failed.get("text", ""))
-                if want.get("failed", want["line"]) is None
-                else (
+                want.get("failed", want["line"]) is None
+                or (
                     want.get("failed", want["line"]) in failed.get("text", "")
                     and any("typed prices" in b for b in failed.get("behind", []))
                 )

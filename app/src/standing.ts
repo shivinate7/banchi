@@ -282,9 +282,10 @@ export function standing(input: StandingInput): Standing | null {
   const book = input.book ?? (bookFailed ? NO_ANSWERS : null)
   const counts = pricing === null || book === null ? null : sendCounts(pricing, book)
   const readyCopies = counts === null ? null : counts.ready
-  /* WITH THE ANSWERS UNKNOWN, NO CARD IS COUNTED AS NEEDING A PRICE (R7 F7): a priced card
-     cannot be told from an unpriced one, so the figure would be a guess. */
-  const needsPrice = counts === null ? null : bookFailed ? 0 : counts.needsPrice
+  /* WITH THE ANSWERS UNKNOWN, THE WORKLIST'S OWN NO-PRICE COUNT STANDS (R8-1), and the note
+     behind the line says the counts may be off. Counting none instead let a store with only
+     unpriced cards fall through to Clear on a read that failed. */
+  const needsPrice = counts === null ? null : counts.needsPrice
   /* A run whose own reason stops the whole send (the cut-off price unset), apart from a card
      left out for want of a price and from a run that only waits on the send. */
   const blocked =
@@ -499,7 +500,12 @@ export function standing(input: StandingInput): Standing | null {
   }
 
   /* 7 — clear, and only from a complete reading. Every branch that could not read something
-         has already returned above, so arriving here means every queue answered. */
+         has already returned above, so arriving here means every queue answered.
+
+         A FAILED READ OF TYPED PRICES IS NOT A COMPLETE READING (R8-1). Ranks above drew from
+         the worklist's own counts, but nothing owed is a claim about every card, and it cannot
+         be made while the answers are unknown. */
+  if (bookFailed) return unknown('pricing-answers-failed', 'your typed prices could not be read.', problem)
   if (runs === null) {
     return unknown(
       'runs-unknown',

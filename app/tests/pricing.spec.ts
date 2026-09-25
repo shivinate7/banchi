@@ -3787,6 +3787,9 @@ for (const width of [390, 820]) {
               ],
               copies: 2,
               add_to_quantity: 1,
+              /* R8-3: A LIVE COUNT WITH ITS SALES, "2 live (3 when read, 1 sold since)", which
+                 ran 57px past the phone's card column. */
+              listing: { pushed: 3, staged: 0, live: 3, sold_here: 1 },
             }),
             in: [{ run: RUN, add_to_quantity: 2 }],
             claimed_add: 2,
@@ -3835,6 +3838,7 @@ for (const width of [390, 820]) {
       return { outside, overlaps, glyphs, more: more.textContent }
     })
     expect(layout.more).toBe('and 1 more')
+    await expect(where.locator('.pricing-live')).toContainText('2 live')
     expect(layout.outside, 'every part of the place line stays inside the card column').toEqual([])
     expect(layout.overlaps, '"and 1 more" overlaps nothing beside it').toEqual([])
     expect(layout.glyphs, 'no part draws a separator a wrap can strand').toEqual([])

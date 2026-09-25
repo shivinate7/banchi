@@ -193,6 +193,9 @@
    when the place fills the line, so it never draws over the card number. */
 .pricing-where > .pricing-place { flex-wrap: wrap; }
 .pricing-where .pricing-more { flex: none; white-space: nowrap; }
+/* THE LIVE COUNT WRAPS INSIDE THE COLUMN (R8-3): "2 live (3 when read, 1 sold since)" is wider
+   than the phone's card column, and it ran 57px past it into the price. */
+.pricing-where > .pricing-live { white-space: normal; max-width: 100%; }
 /* NO GLYPH ON A LINE THAT WRAPS (R7 F3). A "·" drawn after an item stays at the line end when
    the next item wraps, so the place line is separated by its gap alone. */
 .pricing-where { column-gap: var(--bn-3); }
