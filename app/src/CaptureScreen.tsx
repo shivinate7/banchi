@@ -788,7 +788,14 @@ export function CaptureScreen() {
      PASSED AS A FUNCTION, NOT CALLED. An initialiser EXPRESSION is evaluated on every render
      and thrown away, and this one touches a synchronous store; a function is read on the first
      render and never again. That was already the rule for the per-key readers this replaced,
-     and it matters more now that one read serves six values. */
+     and it matters more now that one read serves six values.
+
+     A FRESH DEVICE ALWAYS ASKS (D-capture-always-asks, amends D142): `storedCaptureSetup`
+     reads `restored.box` as `null` when this device has never written `banchi.capture.setup`,
+     and nothing below seeds it from anywhere else — not Home's own figure, not
+     `banchi.box-recency`'s top entry, not the store's highest-numbered box. The Box row opens
+     `No box yet. Pick one` on that device's first visit, by construction rather than by a
+     check that runs and happens to say no. */
   const [restored] = useState<CaptureSetup>(storedCaptureSetup)
 
   // Box, game, set hint and finish are client state resent on every capture (spec 5.2). The
@@ -2429,7 +2436,14 @@ export function CaptureScreen() {
         const rest = prev.filter((entry) => entry.box !== record.box)
         return [...rest, record].sort((left, right) => left.box - right.box)
       })
-      const spans = record.sections_detail
+      /* UX-024: `sections_detail` itself can be MISSING from the answer, not only empty —
+       * measured against the demo server, whose `openSection` reply carries no such field at
+       * all. `spans[spans.length - 1]` on `undefined` is `Cannot read properties of
+       * undefined (reading 'length')`, a raw exception on screen instead of the receipt this
+       * whole function exists to produce. `?? []` first, so a box the server could not
+       * render a layout for falls through to the same "no detail" receipt as an EMPTY array
+       * already did, rather than crashing before it gets there. */
+      const spans = record.sections_detail ?? []
       /* `?? null` because `noUncheckedIndexedAccess` is on and is right to be: a record
        * that came back with no spans at all is a box the server could not render a layout
        * for, and the receipt then says the act's name with no detail rather than
@@ -2882,7 +2896,13 @@ export function CaptureScreen() {
               <h2 className="capture-halt-title">
                 {halt.where === 'camera'
                   ? 'Captures are paused — no frame came from the camera.'
-                  : 'Captures are paused — the card was not recorded.'}
+                  /* UX-023: this used to say "the card was not recorded", a certainty the
+                     next line already contradicted ("if it was already recorded..."). A
+                     server halt means the response was lost, not that the write was — the
+                     replay on the next capture (`captureId`) exists exactly because the
+                     server may have already committed it. The headline now says what is
+                     actually known: the run stopped, and the card's fate is unconfirmed. */
+                  : 'Captures are paused — check whether that card was recorded.'}
               </h2>
               <p className="capture-halt-message">
                 {halt.where === 'camera'
