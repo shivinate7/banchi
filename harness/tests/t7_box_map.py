@@ -145,7 +145,7 @@ def _sections(box: int) -> List[Tuple[Optional[str], int]]:
 
 def _label(box: int, name: str) -> str:
     inv = Store().read().inventory
-    for _, key, card in inv.records_in(box):
+    for _, _key, card in inv.records_in(box):
         if card.name == name and card.state not in master.TERMINAL_STATES:
             return join.said_place(inv, card.box, card.index)
     return "missing"

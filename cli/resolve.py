@@ -1684,7 +1684,7 @@ def realign(
     # Followed first, and taken out of the per-box check below, because a whole box merged
     # away would otherwise read as `unverified` and pass its tombstone keys through.
     followed: Dict[str, str] = {}
-    for box, records in by_box.items():
+    for records in by_box.values():
         for key in sorted(records):
             dest, gone_reason = follow_moved(inventory, key, records[key].get("photo_sha256"))
             if dest is not None:

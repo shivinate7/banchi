@@ -10689,7 +10689,7 @@ def _section_spans(
     total: int,
     occupied: Tuple[int, ...],
     names: Optional[Dict[int, str]] = None,
-    order: master.BoxOrder = master.BoxOrder(),
+    order: Optional[master.BoxOrder] = None,
     about: Optional[Dict[int, Tuple[Optional[str], Optional[str]]]] = None,
 ) -> List[dict]:
     """Every section of one box: where it starts, where it ends, how many cards are in it.
@@ -10724,6 +10724,7 @@ def _section_spans(
     it back through the same `occupied` before the store sees an index.
     """
     # `occupied` is in physical order and `order` maps it (D265).
+    order = order if order is not None else master.BoxOrder()
     position_of = _positioner(box, layout, occupied, order)
     per_section: Dict[int, int] = {}
     for index in occupied:
