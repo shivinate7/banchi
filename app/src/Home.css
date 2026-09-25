@@ -85,7 +85,17 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
 /* THE ONLY LINK OFF HOME INTO SALES (UX-032): styled as plain text at rest, so it reads as
    part of the sentence and not as a stray button, and picks up the accent only on hover —
    the same "an alpha over what is already there" rule as every other link on this page. */
-.home-foot-sold { color: inherit; text-decoration: none; }
+.home-foot-sold { position: relative; color: inherit; text-decoration: none; }
+/* THE THUMB FLOOR (D117) WITHOUT A LAYOUT CHANGE: a link set as sentence text is 16px tall, so
+   its 40px hit area is a `::before` centred by inset alone, the kit's `.bn-icon-btn` idiom. */
+.home-foot-sold::before {
+  content: '';
+  position: absolute;
+  top: min(0px, calc((100% - 40px) / 2));
+  right: min(0px, calc((100% - 40px) / 2));
+  bottom: min(0px, calc((100% - 40px) / 2));
+  left: min(0px, calc((100% - 40px) / 2));
+}
 .home-foot-sold:hover { color: var(--bn-accent); text-decoration: none; }
 .home-foot-sold:hover b { color: var(--bn-accent); }
 .home-foot-last { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); line-height: 1.5; }

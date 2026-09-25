@@ -1,4 +1,6 @@
-import { useEffect, useLayoutEffect, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
+
+import { useOverlayLayer } from './kit/overlay'
 
 /* DIALOG FOCUS FOR THE RUNS OVERLAYS — the composer and the store-wide reconcile sheet.
  *
@@ -24,16 +26,6 @@ import { useEffect, useLayoutEffect, type RefObject } from 'react'
  * there on the next opening. Where a FIELD owns Escape for itself — `Pricing.tsx`'s price cell,
  * which reverts and blurs — the guard belongs on that field's own handler, and it is there. */
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
-  'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-
-function focusables(root: HTMLElement): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
-    (node) => node.offsetParent !== null || node === document.activeElement,
-  )
-}
-
 export function useOverlayFocus(
   node: RefObject<HTMLElement | null>,
   open: boolean,
@@ -53,47 +45,26 @@ export function useOverlayFocus(
     }
   }, [node, open])
 
-  /* A LAYOUT EFFECT, NOT A PASSIVE ONE, BECAUSE THE HANDLER MUST MATCH WHAT IS PAINTED (D128).
-     `hold` is in this effect's dependencies, and a passive effect re-registers AFTER the browser
-     paints: for one task the screen shows the drop zone disabled while the listener still attached
-     is the previous render's, whose closure has `hold === false` — and an Escape landing in that
-     task closes a sheet with a request in flight, the one thing this argument says cannot happen.
-     Nothing sees that window on a fast machine; the Ubuntu runner saw it three times in sixteen
-     runs, the sheet gone under `toBeVisible` after an Escape pressed the moment `disabled` drew.
-     A layout effect runs inside the commit, before paint, so a state the screen shows is a state
-     the listener already has. */
+  /* THESE SHEETS JOIN THE KIT'S ONE STACK (`kit/overlay.tsx:useOverlayLayer`), found at the PR 2
+     integration. The review lane opens the runs screen inside a kit `Sheet`, and this hook used to
+     keep its own key handler and its own static z-index. So a reconcile or rescue sheet opened
+     from there painted UNDER the kit sheet it was opened from, and the kit sheet's body took every
+     press ("Match the store" could not be clicked). The stack now decides which layer is on top,
+     traps Tab in the top layer only, and gives Escape to the top layer only.
+
+     ESCAPE STILL MATCHES WHAT IS PAINTED (D128). The stack reads its `onEscape` through a ref that
+     a passive effect refreshes, which would reopen the window D128 closed: for one task the drop
+     zone draws disabled while the handler still holds the old `hold === false`. So the function
+     handed to it is one stable closure that reads `hold` and `onClose` from refs this hook sets in
+     a LAYOUT effect, inside the commit and before paint. */
+  const holdNow = useRef(hold)
+  const closeNow = useRef(onClose)
   useLayoutEffect(() => {
-    if (!open) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (hold) return
-        onClose()
-        return
-      }
-      if (event.key !== 'Tab') return
-      const root = node.current
-      if (root === null) return
-      const items = focusables(root)
-      if (items.length === 0) {
-        event.preventDefault()
-        root.focus()
-        return
-      }
-      const first = items[0]!
-      const last = items[items.length - 1]!
-      const active = document.activeElement
-      const inside = active !== null && root.contains(active)
-      if (event.shiftKey) {
-        if (!inside || active === first || active === root) {
-          event.preventDefault()
-          last.focus()
-        }
-      } else if (!inside || active === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [node, open, onClose, hold])
+    holdNow.current = hold
+    closeNow.current = onClose
+  })
+  const escape = useRef(() => {
+    if (!holdNow.current) closeNow.current()
+  })
+  useOverlayLayer(node, { active: open, onEscape: escape.current })
 }

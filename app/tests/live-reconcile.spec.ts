@@ -92,6 +92,12 @@ async function open(page: Page): Promise<Wire[]> {
   await page.route(/\/games$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"games":[]}' }),
   )
+  /* `#/runs` REDIRECTS TO `#/review` since the review lane folded the runs screen into it, and
+     the review queue reads `GET /queues` on mount. Empty, for the claims stub's reason: this
+     file is about one sheet. */
+  await page.route(/\/queues$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"review":[],"parked":[]}' }),
+  )
   await page.goto(VIEW)
   await settleFonts(page)
   await opener(page).click()
@@ -148,6 +154,12 @@ test('the sheet is not open until it is asked for, and Escape puts it away', asy
   )
   await page.route(/\/games$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"games":[]}' }),
+  )
+  /* `#/runs` REDIRECTS TO `#/review` since the review lane folded the runs screen into it, and
+     the review queue reads `GET /queues` on mount. Empty, for the claims stub's reason: this
+     file is about one sheet. */
+  await page.route(/\/queues$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"review":[],"parked":[]}' }),
   )
   await page.goto(VIEW)
   await settleFonts(page)
