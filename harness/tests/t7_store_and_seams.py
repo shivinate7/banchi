@@ -1282,11 +1282,21 @@ def check_set_and_rarity(checks: Checks) -> None:
             "(identity-follows-sku.md §4.1)",
         )
 
+        # A READ SNAPSHOT HELD OPEN ACROSS THE FILL AND THE PRESS, ON PURPOSE. An open
+        # connection stops SQLite from checkpointing the WAL on close, so the fill's commit
+        # stays in `store.sqlite-wal`. The live rig is always in this state, because the
+        # capture server holds connections. `cmd_cards._read_only` once opened the store
+        # `immutable=1`, which never reads the WAL: it saw an empty `skus` table and bound
+        # nothing. CI caught it only when garbage collection happened to leave the read
+        # above open. Holding one here makes the case run every time, on every platform.
+        open_reader = Store().read()
+        open_reader.inventory.cards.get(resolvable_key)
         with Store().write() as snapshot:
             sku_pipeline.fill(snapshot.skus, snapshot.inventory.events)
         say_lines = []
         code = cmd_cards.run(Args("identity", write=True), say_lines.append)
         checks.equal(code, 0, "`cards identity --write` runs over the same store")
+        del open_reader
 
         after_inv = Store().read().inventory
         resolved = after_inv.cards[resolvable_key]
