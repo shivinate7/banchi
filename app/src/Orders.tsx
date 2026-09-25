@@ -3248,10 +3248,11 @@ function PullStage({
             </span>
             <Icon name="chevronDown" size={14} />
           </button>
+          {/* DOM order is the desk's visual order (buyers, walk, card), so Tab reads as the eye does. */}
+          {walkColumn}
           <div className="orders-cardcol">
             <WalkCardPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} />
           </div>
-          {walkColumn}
         </div>
       </div>
 

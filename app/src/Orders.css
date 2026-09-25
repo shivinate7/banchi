@@ -6,6 +6,9 @@
 .orders-hub .bn-verdict strong { color: var(--bn-ink); font-weight: 700; }
 .orders-stage { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
 .orders-handoff .bn-icon:last-child { color: var(--bn-ink-4); }
+.orders-handoff { min-height: var(--bn-control-h-lg); }
+.orders-card-market { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.orders-card-market .bn-money { color: var(--bn-ink-2); }
 
 /* ---- the layout: buyers, the walk, the card (UX-169, UX-194, D-orders-and-shipping-are-two-rows)
    THE WALK GETS THE HEIGHT. There is one scroll, the page's (UX-201): no column scrolls on its
@@ -37,6 +40,9 @@
   top: var(--bn-2);
   left: var(--bn-2);
   z-index: 100;
+  min-height: var(--bn-control-h-lg);
+  display: inline-flex;
+  align-items: center;
   padding: var(--bn-2) var(--bn-3);
   border-radius: var(--bn-r);
   background: var(--bn-accent);
@@ -86,6 +92,22 @@
     gap: var(--bn-5);
   }
   .orders-cardcol { position: sticky; top: var(--bn-4); }
+}
+
+/* ---- THE FILTER BAR IS ONE LINE at every width (the owner, 2026-09-24: "i question whether
+   they deserve all that real estate"): the search, ONE Filters button with its count badge, and
+   the count line beside them. Show, the TCGplayer status, the sort and the hide toggle live in
+   the Filters sheet. This forces the kit bar's own compact mode at every width. STOPGAP: the
+   kit should take this as a prop (the inventory lane's `compact="popover"`), and then this goes. */
+.orders-filterbar { flex-direction: row; align-items: center; gap: var(--bn-3); }
+.orders-filterbar .bn-filterbar-controls { flex: 0 1 auto; flex-wrap: nowrap; min-width: 0; }
+.orders-filterbar .bn-filterbar-lead { flex: 0 1 28rem; min-width: 10rem; max-width: 28rem; }
+.orders-filterbar .bn-filterbar-row { display: none; }
+.orders-filterbar .bn-filterbar-compact { display: block; flex: none; }
+.orders-filterbar .bn-filtercount { flex: 1 1 auto; min-width: 0; margin: 0; }
+@container bn-page (max-width: 559px) {
+  .orders-filterbar .bn-filterbar-lead { flex: 1 1 auto; max-width: none; }
+  .orders-filterbar .bn-filtercount { display: none; }
 }
 
 /* ---- WALK MODE (the owner's ruling, 2026-09-24) -------------------------------------------

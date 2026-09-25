@@ -282,10 +282,29 @@ async function openStore(page: Page): Promise<void> {
   await page.locator('main.orders .bn-head').getByRole('button', { name: 'Add orders' }).click()
 }
 
-/** Pick one option of a FilterBar facet, from the bar's wide row. */
+/** THE FILTER BAR IS ONE LINE (the owner, 2026-09-24): every facet, the sort and the hide toggle
+ *  are in the Filters sheet. Open it, returning the sheet's body. */
+async function openFilters(page: Page): Promise<Locator> {
+  await page.locator(`${VIEW} .bn-filterbar-trigger`).click()
+  const body = page.locator('.bn-filterbar-sheet-body')
+  await expect(body).toBeVisible()
+  return body
+}
+
+/** Close the Filters sheet: a first Escape may only close a pick list inside it. */
+async function closeFilters(page: Page): Promise<void> {
+  const body = page.locator('.bn-filterbar-sheet-body')
+  await page.keyboard.press('Escape')
+  if (await body.isVisible()) await page.keyboard.press('Escape')
+  await expect(body).toBeHidden()
+}
+
+/** Pick one option of a facet, through the Filters sheet. */
 async function pickFacet(page: Page, facet: string, option: RegExp): Promise<void> {
-  await page.locator(`${VIEW} .bn-filterbar-row`).getByRole('button', { name: new RegExp(`^${facet}`) }).click()
+  const body = await openFilters(page)
+  await body.getByRole('button', { name: new RegExp(`^${facet}`) }).click()
   await page.getByRole('listbox', { name: facet }).getByRole('option', { name: option }).click()
+  await closeFilters(page)
 }
 
 /** The default world: one open order, one resolved line, one copy in box 3. */
@@ -893,13 +912,14 @@ test('the Show facet lists a buyer only in its own state, and each count is the 
   await open(page, { orders: threeBuyerPayload() })
   await expect(page.locator('.orders-index-row')).toHaveCount(3)
 
-  await page.locator(`${VIEW} .bn-filterbar-row`).getByRole('button', { name: /^Show/ }).click()
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
   /* EACH COUNT IS BUYERS, THE ROWS THE LIST WILL DRAW, never lines. */
   await expect(list.getByRole('option', { name: /^Short/ })).toContainText('1')
   await expect(list.getByRole('option', { name: /^Ready/ })).toContainText('1')
   await expect(list.getByRole('option', { name: /^Needs a look/ })).toContainText('1')
   await list.getByRole('option', { name: /^Short/ }).click()
+  await closeFilters(page)
 
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Bob')
@@ -2099,7 +2119,7 @@ test('"Walk all N buyers" ticks every row, and "Walk one buyer" clears them', as
 
 test('the TCGplayer status options are built from the payload, with buyer counts', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await page.locator(`${VIEW} .bn-filterbar-row`).getByRole('button', { name: /^TCGplayer status/ }).click()
+  await (await openFilters(page)).getByRole('button', { name: /^TCGplayer status/ }).click()
   const list = page.getByRole('listbox', { name: 'TCGplayer status' })
   await expect(list.getByRole('option', { name: /^Ready to Ship/ })).toContainText('2')
   await expect(list.getByRole('option', { name: /^Zorbo Pending/ })).toContainText('1')
@@ -2114,8 +2134,10 @@ test('each control narrows; they compose', async ({ page }) => {
   await expect(page.locator('.orders-index-row')).toContainText('Bob')
 
   /* BACK TO ALL, THEN HIDE UNKNOWN CARDS: Carol's line names a card the store never saw. */
-  await page.getByRole('button', { name: 'Clear TCGplayer status' }).click()
-  await page.getByRole('button', { name: /^Hide unknown cards/ }).first().click()
+  const body = await openFilters(page)
+  await body.getByRole('button', { name: 'Clear TCGplayer status' }).click()
+  await body.getByRole('button', { name: /^Hide unknown cards/ }).click()
+  await closeFilters(page)
   await expect(page.locator('.orders-index-row')).toHaveCount(2)
   await expect(page.locator('.orders-buyers')).not.toContainText('Carol')
 
@@ -2141,7 +2163,8 @@ test('the sort press re-orders the list at once, Ready to ship first, and the li
   expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
   await expect(page.locator('.orders-buyers-note')).toHaveText('Ready to ship first')
 
-  await page.getByRole('button', { name: /^Order: Newest first/ }).first().click()
+  await (await openFilters(page)).getByRole('button', { name: /^Order: Newest first/ }).click()
+  await closeFilters(page)
   await expect.poll(() => buyerOrder(page)).toEqual(['Alice', 'Carol', 'Bob'])
 })
 
@@ -2151,7 +2174,8 @@ test('the filters, the search and the sort survive a reload through the URL', as
   await open(page, { orders: threeBuyerPayload() })
 
   await pickFacet(page, 'TCGplayer status', /^Ready to Ship/)
-  await page.getByRole('button', { name: /^Order: Newest first/ }).first().click()
+  await (await openFilters(page)).getByRole('button', { name: /^Order: Newest first/ }).click()
+  await closeFilters(page)
   await expect(page).toHaveURL(/status=Ready\+to\+Ship/)
   await expect(page).toHaveURL(/dir=asc/)
 
@@ -2843,7 +2867,7 @@ test('the buyer search is the filter bar\'s SearchField, one height with its fac
   const box = page.locator('.bn-filterbar-search .search-field-box')
   await expect(box).toBeVisible()
   const height = await box.evaluate((el) => el.getBoundingClientRect().height)
-  const facet = page.locator(`${VIEW} .bn-filterbar-row`).getByRole('button', { name: /^Show/ })
+  const facet = page.locator(`${VIEW} .bn-filterbar-trigger`)
   const facetHeight = await facet.evaluate((el) => el.getBoundingClientRect().height)
   expect(Math.abs(height - facetHeight)).toBeLessThanOrEqual(1)
 
@@ -3239,3 +3263,28 @@ test('at 390, choosing a buyer enters walk mode: the first walk row sits in the 
   await expect(page).not.toHaveURL(/walk=1/)
   await expect(page.locator(`${VIEW} .orders-filterbar`)).toBeVisible()
 })
+
+test('the card pane carries one quiet market line that opens the product view (the owner picked B)', async ({ page }) => {
+  await open(page, { orders: oneOpenOrder(), walkPlan: volcanionPlan() })
+  const line = page.locator('.orders-card-pane .orders-card-market')
+  await expect(line).toBeVisible()
+  /* No reading in this fixture: a quiet dash, never a made-up figure. */
+  await expect(line).toContainText('— market')
+  await expect(line.getByRole('link')).toHaveAttribute('href', /product/)
+})
+
+for (const [width, height] of [
+  [1440, 900],
+  [720, 900],
+  [390, 844],
+] as const) {
+  test(`at ${width}, the filter bar is one line: the search and one Filters button`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await open(page, { orders: threeBuyerPayload() })
+    const bar = page.locator(`${VIEW} .orders-filterbar`)
+    const box = await bar.boundingBox()
+    expect(box?.height ?? 999, 'the filter bar takes more than one line').toBeLessThanOrEqual(48)
+    await expect(bar.locator('.bn-filterbar-trigger')).toBeVisible()
+    await expect(bar.getByRole('button', { name: /^Show/ })).toBeHidden()
+  })
+}

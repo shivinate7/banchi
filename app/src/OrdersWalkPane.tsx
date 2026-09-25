@@ -17,13 +17,14 @@
  * is first. The card's full inventory detail stays on `#/inventory`.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { PhotoPanel, type Row } from './CardHero'
+import { marketTable, PhotoPanel, type MarketRead, type Row } from './CardHero'
+import { forSale } from './cardState'
 import { Overlay } from './InventoryOverlay'
-import { Button, Icon, Loading, Location, Notice, Pill } from './kit'
+import { Button, Icon, Loading, Location, Money, Notice, Pill, ProductLink } from './kit'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
-import { describeFailure, photoUrl, walkPlan } from './server'
+import { describeFailure, getPricing, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   InventoryCard,
@@ -661,6 +662,27 @@ export function WalkCardPane({
     setZoomed(false)
   }, [currentRow?.copy.key])
 
+  /* THE MARKET READING, ONE READ PER RUN (the owner's pick, 2026-09-24: B, one quiet line under
+     the card). The same per-run cache the old pane kept. A failed read is a quiet dash. */
+  const [priced, setPriced] = useState<Record<string, MarketRead>>({})
+  const asked = useRef<Set<string>>(new Set())
+  const pricedRun = currentCard?.run ?? null
+  useEffect(() => {
+    if (pricedRun === null || asked.current.has(pricedRun)) return
+    asked.current.add(pricedRun)
+    let live = true
+    getPricing(pricedRun)
+      .then((payload) => {
+        if (live) setPriced((held) => ({ ...held, [pricedRun]: marketTable(payload) }))
+      })
+      .catch(() => {
+        if (live) setPriced((held) => ({ ...held, [pricedRun]: { kind: 'absent', why: 'could not be read' } }))
+      })
+    return () => {
+      live = false
+    }
+  }, [pricedRun])
+
   if (currentGroup === null || currentRow === null) return null
   const take = currentRow.take
   /* NEVER A PHOTOGRAPH OF A POOLED CARD: a code card's photo is a live code (D24, opsec). */
@@ -670,6 +692,10 @@ export function WalkCardPane({
   const sub = [take.number_display, take.set].filter((part): part is string => Boolean(part))
 
   const here = currentGroup.copies.find((copy) => copy.key === currentRow.copy.key) ?? null
+  const read = currentCard?.run == null ? undefined : priced[currentCard.run]
+  const rawMarket = read?.kind === 'table' && currentCard !== null ? read.rows[`${currentCard.box}/${currentCard.index}`] : null
+  const market = rawMarket === null || rawMarket === undefined || Number.isNaN(Number(rawMarket)) ? null : Number(rawMarket)
+  const liveNow = take.listed === undefined ? null : forSale(take.listed.live, take.sold_here ?? 0)
   const hereWords = currentRow.copy.place.label === null ? null : sayPlace(currentRow.copy.place.label)
 
   return (
@@ -733,6 +759,11 @@ export function WalkCardPane({
             Pick <strong>{take.wanted}</strong> of {of}
           </p>
           {showBuyers ? <p className="orders-card-for">For {takeBuyers(take)}</p> : null}
+          <p className="orders-card-market">
+            <ProductLink sku={take.sku} name={take.name ?? undefined}>
+              {market === null ? '—' : <Money value={market} />} market, {liveNow === null ? '—' : liveNow} live
+            </ProductLink>
+          </p>
         </div>
       </div>
       <ul className="orders-card-copies" aria-label="Every copy of this card">
