@@ -521,3 +521,39 @@
   D58 are amended. The boxmap lane owns this — it already owns `store/master.py`'s move path.
 - Q2, the 25% edge (orchestrator, applying the owner's words "25% or more"): compare exactly,
   with no rounding.
+
+## Live store, demo seed and integration calls (2026-09-25)
+- Live store (owner, 2026-09-25, paraphrased): the live store is not precious to the owner.
+  The owner does not use the app now, and said that the live server or better demo seed data
+  are both fine. Orchestrator use: measure on a copy of the live store first, which has no
+  cost and no risk. The live server still has 4 request slots (DEBT11), so one agent at a
+  time. Nothing contacts TCGplayer or spends money: that still needs the owner present.
+- Review close word "Closed" (owner, 2026-09-25, on the screenshots, verbatim): "sure it looks
+  decent". Accepted. D-review-narrow-layout records it.
+- Measured on a copy of the owner's store, 2026-09-25: 3,510 cards, 2,455 on hand, 916 SKUs,
+  5 boxes and 13 runs. Q2's "Needs you" holds 9 of 33 unsent SKU rows: 0 with no market, 4
+  worth $5 or more, and 5 typed 25% or more away. Q9: no single rule fits (the best is market
+  plus $0.23, at 16.9%), so "Make this the rule" has little to offer. Sales lines at $0: 0 of
+  1,406. Sealed boxes: 1 (ME01 C/UC). Box-name backfill: every box has a name, so the item
+  is closed.
+- Demo seed (owner, 2026-09-25, verbatim): "send a haiku agent to just populate the demo with
+  more data from my actual data". Card facts only. Buyer and order data stay invented,
+  because the demo is public.
+- Demo seed, widened (owner, 2026-09-25, verbatim): "card photos is ok and sales dollars are
+  ok". Real single-card photos are allowed if each one passes the QR-clear check. Real sale
+  dollars are allowed. Buyers and orders stay invented.
+- Search payload ceiling (orchestrator, under the owner's "fast on a real-sized store"
+  condition): the copy of the real store stays fast, at 359ms p95 or less for a hostile query
+  and 33ms mid-word. Broad hostile queries on 3,000-plus synthetic cards go past 500ms p95
+  over HTTP, because of the payload size. D271 records that as known, with paging as the
+  upgrade. No cap was added.
+- Demo seed shape (owner, 2026-09-25, paraphrased): copy data that already exists so that the
+  demo is not empty, and touch or break nothing. The test seed does not change. Real cards
+  are added as extra boxes, only in the published build, behind an opt-in flag.
+- Home "Cannot be filled" against the Orders filter removal (orchestrator, an integration
+  conflict): option 2. Home opens `#/orders?show=<facet>`, chosen from the dominant reason.
+  UX-077's intent is kept at buyer level, and the orders lane is not reopened.
+  D-home-owed-line records the build.
+- PR 2 scope rule (orchestrator, process-only): search-server or b-pricing may not pass by
+  the time the integration branch is otherwise green. Then that lane moves to PR 3, and PR 2
+  goes without it.
