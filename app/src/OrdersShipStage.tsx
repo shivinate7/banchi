@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 
 import { readUpload } from './csvUpload'
-import { Button, EmptyState, Icon, Money, Notice, OrderLink, type IconName } from './kit'
+import { Button, EmptyState, Icon, IconButton, Money, Notice, OrderLink, type IconName } from './kit'
 import { toast } from './kit/toast'
 import { SHIP_LANES, setHub, useHub } from './OrdersHubStore'
 import { describeFailure, fillShippingStamps, forgetShippingExport, readShippingExport, shippingFileUrl } from './server'
@@ -60,17 +60,24 @@ const LANE_ICON: Record<ShippingLane, IconName> = {
   unjudged: 'alert',
 }
 
-const LANE_SAYS: Record<ShippingLane, string> = {
-  envelope: 'Cards only and under $50. A stamped envelope.',
-  parcel: '$50 or more, or something that is not a card. Tracked.',
+/* THE $50 THRESHOLD, MONO (D221): a plain string here would be a bare dollar figure in the
+   wrong face, the money-face check's own job to catch. `<Money>` gives it two decimal places
+   ("$50.00") where the rest of the screen's figures do the same, rather than inventing a
+   whole-dollar-only formatter for one word. One element, reused: it is never on screen twice
+   at once (the guide tiles below show before a file is read, the chip head after). */
+const THRESHOLD = <Money value={50} />
+
+const LANE_SAYS: Record<ShippingLane, ReactNode> = {
+  envelope: <>Cards only and under {THRESHOLD}. A stamped envelope.</>,
+  parcel: <>{THRESHOLD} or more, or something that is not a card. Tracked.</>,
   unjudged: 'The export could not say. Open each order and decide.',
 }
 
 /* The column head's helper line: short enough to stay whole beside the count at every width the
    three columns get. The long form above is for the guide tiles, where there is room for it. */
-const LANE_HEAD: Record<ShippingLane, string> = {
-  envelope: 'Cards only, under $50',
-  parcel: '$50 or more, or not all cards',
+const LANE_HEAD: Record<ShippingLane, ReactNode> = {
+  envelope: <>Cards only, under {THRESHOLD}</>,
+  parcel: <>{THRESHOLD} or more, or not all cards</>,
   unjudged: 'Could not judge — decide by hand',
 }
 
@@ -432,7 +439,12 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
             actions={
               <>
                 {picker('Read another file', 'upload', 'primary')}
-                <Button variant="danger" icon="trash" onClick={onForget} busy={busy === 'forget'} disabled={busy !== null}>
+                {/* ICON-MAP.md "Shipping": stays WORDS, alone in an empty state. `danger-solid`
+                    (not the quieter `danger` the loaded state used before its own button
+                    became an IconButton): the kit's R2-icon-only-button rule only leaves a
+                    vocabulary-verb label ("Forget…") unflagged on `primary` or `danger-solid`,
+                    and this is the one other action offered here, beside primary. */}
+                <Button variant="danger-solid" icon="trash" onClick={onForget} busy={busy === 'forget'} disabled={busy !== null}>
                   Forget this export
                 </Button>
               </>
@@ -470,9 +482,10 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
           </div>
           <div className="shipping-file-actions">
             {picker('Read another file', 'upload')}
-            <Button variant="danger" icon="trash" onClick={onForget} busy={busy === 'forget'} disabled={busy !== null}>
-              Forget this file
-            </Button>
+            {/* ICON-MAP.md "Shipping": Forget converts (UX-108's risk note applies to the
+                empty-state Button below, not this one — this drops the read batch from
+                memory only, and reading the file again brings it straight back). */}
+            <IconButton icon="trash" label="Forget this file" tone="danger" onClick={onForget} busy={busy === 'forget'} disabled={busy !== null} />
           </div>
         </section>
 
