@@ -7975,6 +7975,55 @@ def check_inventory_filter_facets(checks: Checks) -> None:
             "the same route, the same rows, nothing left over from the last question asked",
         )
 
+        # --- UX-210: hide_sold narrows both `matches` and `facets`, ANY ORDER of the OTHER
+        # active filters, the owner's own measured shape ("9 matches" against a 7-row walk,
+        # a games total of 122 that was every card ever captured). One more Riftbound card
+        # in box 1, sold, added here rather than in the setup above so the first half of
+        # this test stays the ground D213 was originally measured against.
+        with Store().write() as snapshot:
+            rift_c, _ = snapshot.inventory.allocate_capture(1, game="riftbound", cid=fake_cid("facet-rift-sold"))
+            snapshot.inventory.cards[rift_c.key].set_name = "Unleashed"
+            snapshot.inventory.cards[rift_c.key].rarity = "Rare"
+            snapshot.inventory.set_state(rift_c.key, master.SOLD)
+
+        no_hide = capture_server.do_boxes(game="riftbound")
+        checks.equal(
+            {row["box"]: row["matches"] for row in no_hide["boxes"]},
+            {1: 3, 2: 0},
+            "before this fix's toggle: game=riftbound counts the newly-sold third card too "
+            "— sold cards are still on hand as far as a bare game filter is concerned",
+        )
+        with_hide = capture_server.do_boxes(game="riftbound", hide_sold=True)
+        checks.equal(
+            {row["box"]: row["matches"] for row in with_hide["boxes"]},
+            {1: 2, 2: 0},
+            "and with hide_sold=True the sold copy drops out of `matches` — the figure the "
+            "box rail's badge draws — while `cards`/`sold` (D58's own promise) are untouched",
+        )
+        checks.equal(
+            capture_server.do_boxes()["boxes"][0]["sold"],
+            1,
+            "and the plain `sold` count on the unfiltered row still counts it — hide_sold "
+            "narrows `matches` and `facets` alone, never the box's own census",
+        )
+        hidden_facets = capture_server.do_boxes(hide_sold=True)["facets"]
+        rift_games = {row["game"]: row["count"] for row in hidden_facets["games"]}
+        checks.equal(
+            rift_games["riftbound"], 2,
+            "and the GAMES facet drops the sold card too — before this fix it summed every "
+            "card ever captured regardless of Hide sold, which is the owner's own "
+            "'Pokémon (37) + Riftbound (85) = 122, every card ever captured' measurement",
+        )
+        combined_hide = capture_server.do_boxes(rarity="Rare", hide_sold=True)
+        checks.equal(
+            {row["game"]: row["count"] for row in combined_hide["facets"]["games"]},
+            {"riftbound": 1},
+            "filters compose in ANY ORDER: rarity=Rare picked before hide_sold gives the "
+            "identical games count as hide_sold picked first — one live Rare Riftbound "
+            "card, the sold Rare one excluded, and the unclassified Pokemon card excluded "
+            "by rarity alone",
+        )
+
         # --- the wire itself: `?set=` (blank) means the unclassified bucket, not "unset" --
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]

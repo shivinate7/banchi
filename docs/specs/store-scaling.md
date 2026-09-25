@@ -232,6 +232,25 @@ Proof: T7 asserts the index and the deleted walk agree on single-word and number
 over the fixture store, that a capture, a sale, a move and a rename are searchable in the
 same transaction, and that dropping one trigger fails it.
 
+**UX-173, 2026-09-25 (search-server lane, FLT-06/04).** The candidate query missed two
+shapes. A number typed without its own leading zeros: `number_key` always zfills to three
+digits, so a query for `54/132` never matched the indexed `054/132`. A hyphenated name:
+`-` is a tokenchars character, so `heimerdinger-inventor` was one token to the index. The
+field it should find tokenized its comma into two separate words instead. `_fts_query`
+now widens each term into an OR of spellings: zero-padded, a hyphen read as the
+collector-number slash, and a hyphen split into separate words. `_match_rank` compares
+numbers on their canonical form and folds accents the way the index already does. A bare
+substring never matches, so `54` cannot match `154/200`. `server/match.py` is the one
+shared matcher this repo argued for. `scripts/match-selftest.py` proves it against
+`app/src/kit/match.cases.json`, in `make check`. See `D-one-forgiving-search-matcher` for
+the owner's own ruling.
+
+**UX-210, 2026-09-25 (search-server lane).** `_card_facets` and `_box_row`'s `matches`
+field take an optional `hide_sold` flag. `GET /boxes?hide_sold=true` is the wire form.
+Every facet count follows the OTHER active filters plus Hide sold. The order picked does
+not matter: rarity before Hide sold gives the same count as the reverse. The client wiring
+(`app/src/server.ts`, `Inventory.tsx`, `BoxBrowse.tsx`) is the inventory lane's own build.
+
 **~9–11 days of one session; fewer on the wall clock under `00-phases.md`'s layout**, which
 runs items 2–5 in parallel worktrees once the guard is in, and 6–8 in parallel once those
 four have merged. Items 1–4 are the floor — they fix every per-press cost and the two

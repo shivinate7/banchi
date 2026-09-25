@@ -10468,15 +10468,19 @@ def _card_matches_filters(card: master.Card, filters: Dict[str, Optional[str]]) 
     )
 
 
-def _card_facets(inventory: master.Inventory) -> dict:
+def _card_facets(
+    inventory: master.Inventory,
+    filters: Optional[Dict[str, Optional[str]]] = None,
+    hide_sold: bool = False,
+) -> dict:
     """The game/set/rarity vocabulary THIS STORE ACTUALLY HOLDS, with counts (D213).
 
-    ONE INDEXED-COLUMN SCAN, NEVER A HARDCODED LIST. `game`, `set_name` and `rarity` are
-    three of the columns `store/db.py:TABLES["cards"]` declares beside the payload, so this
-    is `select` over three columns for every card, and never a walk that builds a `Card`
-    object per row — the same trade `_positions_in` already makes. Measured on the owner's
-    store: 3,510 rows, negligible beside `do_boxes`'s own existing per-box scan, which this
-    route already pays.
+    ONE INDEXED-COLUMN SCAN, NEVER A HARDCODED LIST. `game`, `set_name`, `rarity` and
+    `state` are four of the columns `store/db.py:TABLES["cards"]` declares beside the
+    payload, so this is `select` over four columns for every card, and never a walk that
+    builds a `Card` object per row — the same trade `_positions_in` already makes. Measured
+    on the owner's store: 3,510 rows, negligible beside `do_boxes`'s own existing per-box
+    scan, which this route already pays.
 
     SETS AND RARITIES ARE SCOPED PER GAME, NEVER ONE FLAT LIST. D213's own ruling for the
     control is a dropdown "because dropdowns would allow for standardization across card
@@ -10497,21 +10501,55 @@ def _card_facets(inventory: master.Inventory) -> dict:
     (`pipeline/games.py`'s registry has no blank entry) — so `""` cannot collide with a real
     game and is free to mean "no claim", the same read-side backfill D21 already applies
     everywhere else a `Card.game` of `None` is rendered.
+
+    EVERY COUNT FOLLOWS THE OTHER ACTIVE FILTERS, HIDE SOLD INCLUDED (UX-210, a CORRECTION
+    against the original, which counted every card in the store regardless of what the
+    screen was actually filtering on or hiding). With Hide sold on, the owner measured the
+    rail saying "9 matches" while the walk — which excludes sold — showed 7; and
+    `Pokémon (37)` plus `Riftbound (85)` summed to 122, every card ever captured, sold
+    included. `hide_sold` is a blanket cut applied first, matching what D132's toggle
+    hides. Each of the three DIMENSIONS is then counted under the OTHER TWO active
+    facets — never its own, or picking "Rare" would make every other rarity's count read
+    zero — which is what makes the filters compose IN ANY ORDER: picking rarity first and
+    set second gives the identical counts as the reverse. The GAME bucket a set or a
+    rarity nests under is not itself a "filter" in this sense; it is the bucket key the
+    client already selects by, so an active `game` filter changes nothing here.
     """
+    filters = filters or {}
+
+    def _other(*skip: str) -> Dict[str, Optional[str]]:
+        return {k: v for k, v in filters.items() if k not in skip}
+
+    def _passes(card_filters: Dict[str, Optional[str]], **values: Optional[str]) -> bool:
+        for key, wanted in card_filters.items():
+            if _facet_norm(values.get(key)) != _facet_norm(wanted):
+                return False
+        return True
+
+    games_filters = _other("game")
+    sets_filters = _other("game", "set_name")
+    rarities_filters = _other("game", "rarity")
+
     games: Dict[Optional[str], int] = {}
     sets: Dict[Optional[str], Dict[Optional[str], int]] = {}
     rarities: Dict[Optional[str], Dict[Optional[str], int]] = {}
-    for _, (game, set_name, rarity) in inventory.cards.select(
-        ("game", "set_name", "rarity")
+    for _, (game, set_name, rarity, state) in inventory.cards.select(
+        ("game", "set_name", "rarity", "state")
     ):
+        if hide_sold and state == master.SOLD:
+            continue
         game = _facet_norm(game)
-        games[game] = games.get(game, 0) + 1
         set_name = _facet_norm(set_name)
-        sets.setdefault(game, {})
-        sets[game][set_name] = sets[game].get(set_name, 0) + 1
         rarity = _facet_norm(rarity)
-        rarities.setdefault(game, {})
-        rarities[game][rarity] = rarities[game].get(rarity, 0) + 1
+        values = {"game": game, "set_name": set_name, "rarity": rarity}
+        if _passes(games_filters, **values):
+            games[game] = games.get(game, 0) + 1
+        if _passes(sets_filters, **values):
+            sets.setdefault(game, {})
+            sets[game][set_name] = sets[game].get(set_name, 0) + 1
+        if _passes(rarities_filters, **values):
+            rarities.setdefault(game, {})
+            rarities[game][rarity] = rarities[game].get(rarity, 0) + 1
 
     def _rows(counts: Dict[Optional[str], int], key: str) -> List[dict]:
         # Real values first, alphabetically; the null bucket always last, so a screen
@@ -10534,6 +10572,7 @@ def _box_row(
     box: int,
     places: "Optional[_Places]" = None,
     filters: Optional[Dict[str, Optional[str]]] = None,
+    hide_sold: bool = False,
 ) -> dict:
     """One box, as `GET /boxes` renders it and as both write routes answer with it.
 
@@ -10578,6 +10617,13 @@ def _box_row(
     call on an object already in hand. `None` (the default) means no filter is active and
     no `matches` key is added at all — the box rail's "N on hand" stays what it always was
     for a screen that never turned the filter on.
+
+    `hide_sold` NARROWS `matches` THE SAME WAY (UX-210). A sold card never leaves the
+    `cards`/`sold` counts above — those answer "what is recorded here", D58's own promise —
+    but it must leave `matches`, because that count answers a DIFFERENT question: "how many
+    of these will the walk show", and the walk hides sold cards by default (D132). Before
+    this, the rail's "N matches" and the walk's own row count disagreed by exactly the sold
+    cards under the current filter — measured by the owner: 9 against 7.
     """
     entry = inventory.box(box)
     view = (places or _Places(inventory)).view(box)
@@ -10615,7 +10661,11 @@ def _box_row(
         # fact about the SKU that a sold copy has as much as an identified one.
         if _listing_hold(inventory, card):
             listed += 1
-        if filters is not None and _card_matches_filters(card, filters):
+        if (
+            filters is not None
+            and not (hide_sold and card.state == master.SOLD)
+            and _card_matches_filters(card, filters)
+        ):
             matches += 1
 
     try:
@@ -10721,6 +10771,7 @@ def do_boxes(
     game: object = _FACET_UNSET,
     set_name: object = _FACET_UNSET,
     rarity: object = _FACET_UNSET,
+    hide_sold: bool = False,
 ) -> dict:
     """Every box this store knows about: the registry, plus any box a card names.
 
@@ -10741,6 +10792,13 @@ def do_boxes(
     `_FACET_UNSET` (the default) means "not filtering this facet" — passing `None`
     explicitly means "filter for no claim", which `_box_row`/`_card_matches_filters` fold
     the same way `_card_facets`'s menu does.
+
+    `hide_sold` IS A FOURTH INPUT AND NOT A FOURTH FACET (UX-210): it is a plain bool, no
+    null bucket to distinguish, so it needs none of `_FACET_UNSET`'s three-state care —
+    `False` (the default, and what an old caller sends by sending nothing) means what it
+    always meant, count every card. Threaded into BOTH `_box_row`'s `matches` and
+    `_card_facets`'s counts, because a "matches" figure that disagreed with a `facets`
+    figure over the identical toggle would be the same defect this closes, one field over.
 
     `facets` RIDES ALONG UNCONDITIONALLY, FILTERED OR NOT — it is what the filter's own
     dropdowns are populated from, and it costs one indexed-column scan regardless of
@@ -10771,8 +10829,11 @@ def do_boxes(
 
     places = _Places(inventory)
     return {
-        "boxes": [_box_row(inventory, box, places, filters=filters) for box in sorted(numbers)],
-        "facets": _card_facets(inventory),
+        "boxes": [
+            _box_row(inventory, box, places, filters=filters, hide_sold=hide_sold)
+            for box in sorted(numbers)
+        ],
+        "facets": _card_facets(inventory, filters=filters, hide_sold=hide_sold),
     }
 
 
@@ -13979,6 +14040,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     kwargs["set_name"] = params["set"][0] or None
                 if "rarity" in params:
                     kwargs["rarity"] = params["rarity"][0] or None
+                # `hide_sold` (UX-210) is a PLAIN BOOL, not a three-state facet — `?set=`'s
+                # blank-means-null-bucket rule does not apply here, so its absence is simply
+                # `False`, the same answer an old caller who never sends it always got.
+                if "hide_sold" in params:
+                    kwargs["hide_sold"] = params["hide_sold"][0].strip().lower() in (
+                        "1", "true", "yes",
+                    )
                 return self._json(HTTPStatus.OK, do_boxes(**kwargs))
             # D134's graveyard: an exact string, matched by no other route's pattern, over
             # a lock-free read on both its sources.
