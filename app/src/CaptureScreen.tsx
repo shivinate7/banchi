@@ -1029,6 +1029,21 @@ export function CaptureScreen() {
   
   const [boxRecords, setBoxRecords] = useState<BoxRecord[]>([])
 
+  /* D58, THE R1D FIX: `on_hand` is a fact off `GET /boxes`, fetched once on mount and
+   * again only when the Box field opens or closes, a box is created, or a divider goes in
+   * — never on a capture, an undo or a remove. Those three DO change on-hand, and nothing
+   * else told this screen so, so `newCardNumber` below kept answering the same number for
+   * every capture in a sitting. Each of the three write handlers now calls this with the
+   * server's own fresh count — never client arithmetic on a number the server can (and
+   * now does) say outright. A box `GET /boxes` never listed (known only from `/status`)
+   * is left alone: patching a record that does not exist would invent one with every
+   * other field guessed, and the next `GET /boxes` still corrects it. */
+  const patchOnHand = useCallback((forBox: number, onHand: number) => {
+    setBoxRecords((prev) =>
+      prev.map((record) => (record.box === forBox ? { ...record, on_hand: onHand } : record)),
+    )
+  }, [])
+
   /* WHETHER `GET /boxes` HAS ACTUALLY ANSWERED, which `boxRecords` cannot say: `[]` is both
      the starting value and what a store with no boxes returns. Only the restored-box check
      reads it, and only because judging a restore against a list that has not arrived would
@@ -2379,6 +2394,10 @@ export function CaptureScreen() {
             : [...prev, { card, setHint: hint ?? null, finish, game: gameEntry, at: Date.now() }],
         )
         setNextIndex((prev) => ({ ...prev, [String(card.box)]: card.index + 1 }))
+        // D58, R1d: the box's on-hand count after THIS capture, off the same response —
+        // never a client increment, which would drift the moment the server refused a
+        // replay or another device wrote into the same box.
+        patchOnHand(card.box, card.place.box_total)
         setRevision((prev) => prev + 1)
         setFlash((prev) => prev + 1)
         setUndoNote(null)
@@ -2410,7 +2429,18 @@ export function CaptureScreen() {
     // It belongs here for the same reason `finish` and `rarityClaim` do, and it costs what
     // they cost: the identity moves when the operator makes a claim, which is an act, not a
     // render. The seam re-arms on a keypress the operator made and not on a paint.
-  }, [box, camera, finish, gameEntry, halt, product, rarityClaim, rememberCaptureId, setHint])
+  }, [
+    box,
+    camera,
+    finish,
+    gameEntry,
+    halt,
+    patchOnHand,
+    product,
+    rarityClaim,
+    rememberCaptureId,
+    setHint,
+  ])
 
   
   const undoBack = useCallback(
@@ -2426,13 +2456,15 @@ export function CaptureScreen() {
       try {
         for (const target of plan) {
           try {
-            /* The response is discarded on purpose. Its `deleted` is the store's own key —
-             * "3/7" — and that is not a thing the operator has ever seen on this screen or
-             * anywhere else; `types.ts` says as much where it defines the field ("Not a
-             * label and not a SKU"). What goes on screen is the rendered position that was
-             * under the control a moment ago, which is the same string the server sent when
-             * the card was captured. */
-            await undoCapture(target.box, target.index)
+            /* `deleted` is the store's own key — "3/7" — and that is not a thing the
+             * operator has ever seen on this screen or anywhere else; `types.ts` says as
+             * much where it defines the field ("Not a label and not a SKU"). What goes on
+             * screen is the rendered position that was under the control a moment ago,
+             * which is the same string the server sent when the card was captured.
+             * `on_hand`, unlike `deleted`, is NOT discarded (D58, R1d): it is the box's
+             * counted number after this undo, off the same response. */
+            const undone = await undoCapture(target.box, target.index)
+            patchOnHand(target.box, undone.on_hand)
           } catch (err) {
             // STOP, do not carry on down the plan. The next card is only undoable because
             // this one was going to be gone, so continuing would aim at a card that is no
@@ -2489,7 +2521,7 @@ export function CaptureScreen() {
         setBusy(false)
       }
     },
-    [undoStack],
+    [patchOnHand, undoStack],
   )
 
   /** One card, which is what `U` and the trigger seam mean by undo. Kept as its own
@@ -2537,6 +2569,8 @@ export function CaptureScreen() {
             ),
         )
         setNextIndex((prev) => ({ ...prev, [String(target.box)]: result.next_index }))
+        // D58, R1d: same as the undo path — the box's counted number after this remove.
+        patchOnHand(target.box, result.on_hand)
         setRevision((prev) => prev + 1)
         setReplayed(null)
         setUndoNote({
@@ -2570,7 +2604,7 @@ export function CaptureScreen() {
         setRemoveBusy(false)
       }
     },
-    [],
+    [patchOnHand],
   )
 
 

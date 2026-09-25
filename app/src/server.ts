@@ -1027,9 +1027,15 @@ export async function updateCard(
  * the grounds that the card is still physically in your hand — the remedy for a wrong undo
  * is to photograph it again.
  */
-export async function undoCapture(box: number, index: number): Promise<{ deleted: string }> {
+export async function undoCapture(
+  box: number,
+  index: number,
+): Promise<{ deleted: string; on_hand: number }> {
   return (await request(`/inventory/${box}/${index}`, { method: 'DELETE' })) as {
     deleted: string
+    // D58's counted number for the box, after this undo — see `RemoveResult.on_hand`'s own
+    // note (R1c/R1d).
+    on_hand: number
   }
 }
 

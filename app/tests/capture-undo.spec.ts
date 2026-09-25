@@ -195,6 +195,10 @@ async function open(
         created: true,
         photo: `/tmp/${box}-${index}.jpg`,
         capture_id: null,
+        // D58, R1d: `place.box_total`, the box's on-hand count after this capture. Every
+        // box this file captures into starts empty with nothing ever departed, so the
+        // count is the same number as the index this stub just allocated.
+        place: { box_total: index },
       }),
     })
   })
@@ -234,6 +238,10 @@ async function open(
         cache_deleted: true,
         shifted: Math.max(0, higher),
         next_index: Number(allocated[box] ?? 1) - 1,
+        // D58, R1d: on-hand after this remove. Removing any one card (middle or newest)
+        // drops the on-hand count by exactly one, from the same fixture-shape argument the
+        // undo stub's own comment makes.
+        on_hand: Number(allocated[box] ?? 1) - 2,
       }),
     })
   })
@@ -260,10 +268,18 @@ async function open(
         }),
       })
     }
+    // D58, R1d: `on_hand` after this undo. Every box this file captures into is a plain
+    // append with nothing ever departed, so deleting the newest card (index `N`) always
+    // leaves `N - 1` on hand — the same number `store/master.py`'s own `_Places.total`
+    // would answer for this fixture's shape.
+    const deletedIndex = Number(path.split('/').pop())
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ deleted: path.replace('/inventory/', '') }),
+      body: JSON.stringify({
+        deleted: path.replace('/inventory/', ''),
+        on_hand: deletedIndex - 1,
+      }),
     })
   })
 
@@ -681,6 +697,59 @@ test('a box with a sold card shows the counted number, never the stored slot (D5
    * so the foot is live. */
   await expect(page.locator('.capture-foot-next')).toContainText('card 10')
   await expect(page.locator('.capture-foot-next')).not.toContainText('11')
+})
+
+/** Reads the same number off all three surfaces (Box row, odometer, stage foot) and fails
+ *  loudly if they disagree — the R1d bug's own shape. */
+async function nextCardEverywhere(page: Page): Promise<number> {
+  const boxText = await page
+    .locator('.capture-row')
+    .filter({ hasText: /Box/ })
+    .innerText()
+  const boxMatch = /card (\d+)/.exec(boxText)
+  const odoText = await page
+    .locator('.capture-odo .bn-stat')
+    .nth(1)
+    .locator('.bn-stat-value')
+    .innerText()
+  const footText = await page.locator('.capture-foot-next').innerText()
+  const footMatch = /card (\d+)/.exec(footText)
+  if (boxMatch === null || footMatch === null) {
+    throw new Error(`"next card N" not found: box="${boxText}" foot="${footText}"`)
+  }
+  expect(boxMatch[1], 'box row vs odometer').toBe(odoText)
+  expect(footMatch[1], 'stage foot vs odometer').toBe(odoText)
+  return Number(odoText)
+}
+
+test('the counted number stays true across a sitting: every capture, every undo (D58, R1d)', async ({
+  page,
+}) => {
+  /* THE BUG THIS CASE CATCHES: `on_hand` is a fact off `GET /boxes`, and nothing re-fetches
+   * it on a capture or an undo — only a field open/close, a box creation or a divider do.
+   * So three captures with no field touched, using the R1c fix alone, drew the SAME "next
+   * card N" three times running: the number came from a `boxRecords` entry that never
+   * moved. Red on d452b5c4 for exactly that reason. */
+  await open(page)
+
+  await page.keyboard.press('c')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 1$/)
+  const afterFirst = await nextCardEverywhere(page)
+
+  await page.keyboard.press('c')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 2$/)
+  const afterSecond = await nextCardEverywhere(page)
+  expect(afterSecond).toBe(afterFirst + 1)
+
+  await page.keyboard.press('c')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 3$/)
+  const afterThird = await nextCardEverywhere(page)
+  expect(afterThird).toBe(afterFirst + 2)
+
+  await page.keyboard.press('u')
+  await expect(rows(page)).toHaveCount(2)
+  const afterUndo = await nextCardEverywhere(page)
+  expect(afterUndo).toBe(afterSecond)
 })
 
 test('the strip does not change height when the drawer label appears (D118)', async ({
