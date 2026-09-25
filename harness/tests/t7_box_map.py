@@ -787,9 +787,46 @@ def check_merge_speed(checks: Checks) -> None:
         checks.ok(took < 1.0, "a 500-into-500 merge takes under a second", f"{took:.2f} s")
 
 
+def check_r5_links_and_empty_sections(checks: Checks) -> None:
+    """R5 review. Item 1: the capture-undo delete clears a dead move link too, so the next
+    capture at that index is never taken for the moved card. Item 2: an unchanged editor save
+    keeps an empty section (the plastic is still in the box) instead of refusing a repeat.
+    Both were red before the fix."""
+    checks.note("")
+    checks.note("BOX MAP R5 — capture-undo move links, and a save over an empty section")
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_range(1, {"indices": [2], "to_box": 2, "section_end": 2})
+        capture_server.do_delete_card(2, 5)
+        capture_server.do_capture(capture_payload(2))
+        checks.equal(
+            Store().read().inventory.cards["1/2"].moved_to, None,
+            "the tombstone no longer points at 2/5, which holds a new card now",
+        )
+        chain, _ = resolve.follow_moved(Store().read().inventory, "1/2")
+        checks.equal(chain, None, "and the join does not follow it onto that new card")
+
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_range(1, {"indices": [4, 5, 6, 7], "to_box": 2, "section_end": 2})
+        before = _sections(1)
+        row = next(b for b in capture_server.do_boxes()["boxes"] if b["box"] == 1)
+        try:
+            capture_server.do_put_box(1, {"sections": [d["start"] for d in row["sections_detail"]]})
+            saved = True
+        except Exception as caught:  # noqa: BLE001 — the refusal is the failure
+            saved = f"{type(caught).__name__}: {caught}"
+        checks.equal(saved, True, "an unchanged save over an empty section is taken")
+        checks.equal(
+            _sections(1), before,
+            "and the empty section stays, name and all: its divider is still in the box",
+        )
+
+
 CHECKS = (
     check_box_map_safety, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
     check_undo_keeps_paid_answers, check_front_of_box, check_card_move_refusals,
     check_divider_editor_keys, check_delete_keeps_dividers, check_merge_speed,
+    check_r5_links_and_empty_sections,
 )

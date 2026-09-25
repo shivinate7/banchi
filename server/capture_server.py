@@ -2031,8 +2031,13 @@ def _optional_sections(payload: dict) -> Optional[Tuple[int, ...]]:
             f"like [1, 31, 56]. Send [] to go back to the default divider size.",
         )
     try:
-        return master.check_sections(raw)
-    except master.BadSections as exc:
+        # A REPEATED START IS AN EMPTY SECTION, which the editor draws with the start of the
+        # section after it (the R5 review). The list is checked with repeats folded, and kept
+        # with them, so `do_put_box` can keep each empty section's own divider. A repeat that
+        # is not an existing empty section still refuses there, once mapped to keys.
+        master.check_sections(list(dict.fromkeys(raw)))
+        return tuple(int(v) for v in raw)
+    except (master.BadSections, TypeError, ValueError) as exc:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "sections_invalid",
@@ -4262,6 +4267,24 @@ def _drop_from_stores(snapshot, key: str) -> Tuple[bool, bool, bool]:
     return review_deleted, parked_deleted, cache_deleted
 
 
+def _move_links(inventory: master.Inventory) -> Dict[str, List[master.Card]]:
+    """Every tombstone with a move link, by the key its link names (D262). One indexed read."""
+    pointing: Dict[str, List[master.Card]] = {}
+    for tomb in inventory.cards.where(state=master.MOVED):
+        if tomb.moved_to:
+            pointing.setdefault(tomb.moved_to, []).append(tomb)
+    return pointing
+
+
+def _clear_move_links(pointing: Dict[str, List[master.Card]], key: str) -> None:
+    """A MOVE LINK TO A DELETED CARD IS CLEARED (the R4 and R5 reviews). It names nothing now,
+    and after a capture-undo the same key can hold a new card. The join already refuses a
+    link whose card has another name (`cli/resolve.py:follow_moved`), and the record says so
+    too. Both deletes, `do_delete_card` and `do_remove_card`, call this."""
+    for tomb in pointing.pop(key, ()):
+        tomb.moved_to = None
+
+
 def do_delete_card(box: int, index: int) -> dict:
     """Undo one capture: the record, the queue entries and the paid answer, then the files.
 
@@ -4456,6 +4479,9 @@ def do_delete_card(box: int, index: int) -> dict:
         sidecar = sidecar_for(inventory, card)
 
         del inventory.cards[key]
+        # The next capture takes this index again, so a move link to it must not survive to
+        # name that new card (the R5 review).
+        _clear_move_links(_move_links(inventory), key)
 
         # `_drop_from_stores` has the argument in full — the wreckage undo used to leave in
         # the queue files and the answer cache, and why the pops are unconditional where
@@ -4776,15 +4802,10 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         del inventory.cards[key]
         review_deleted, parked_deleted, cache_deleted = _drop_from_stores(snapshot, key)
 
-        # Tombstones anywhere whose move link names a card about to slide (D262).
-        pointing: Dict[str, List[master.Card]] = {}
-        for tomb in inventory.cards.where(state=master.MOVED):
-            if tomb.moved_to:
-                pointing.setdefault(tomb.moved_to, []).append(tomb)
-        # A MOVE LINK TO THE DELETED CARD IS CLEARED (the R4 review): it names nothing now, and
-        # the join already refuses to follow it. The record says so too.
-        for tomb in pointing.pop(key, ()):
-            tomb.moved_to = None
+        # Tombstones anywhere whose move link names a card about to slide (D262), after the
+        # links to the deleted card itself are cleared.
+        pointing = _move_links(inventory)
+        _clear_move_links(pointing, key)
         for at, old_key, other in movers:
             new_index = at - 1
             new_key = master.position_key(box, new_index)
@@ -11539,6 +11560,14 @@ def do_put_box(box: int, payload: dict) -> dict:
             # THE FRONT OF THE BOX IS INDEX 1 WHATEVER HAS SOLD OUT OF IT, which is what
             # keeps `check_sections`' own rule — a layout starts at 1, because there is no
             # card before the front of a box — true when card 1 itself has left.
+            # AN UNCHANGED START KEEPS ITS STORED DIVIDER (the R5 review). The editor sends
+            # every start it was seeded with, and an EMPTY section shares the start of the
+            # section after it, so mapping both back through the cards gave one key twice and
+            # the save was refused. A start the operator did not touch is the divider that is
+            # already there; only an edited start is mapped through the cards.
+            stored = list(inventory.sections_for(box))
+            seeded = [int(d["start"]) for d in _box_row(inventory, box)["sections_detail"]]
+            keep = stored if len(stored) == len(seeded) else []
             occupied = _Places(inventory).occupied(box)
             if occupied is not None:
                 # IN ORDER SPACE (D265): the dividers are stored as orders.
@@ -11552,7 +11581,11 @@ def do_put_box(box: int, payload: dict) -> dict:
                 )
                 in_order = tuple(order.of(i) for i in occupied)
                 sections = master.check_sections(
-                    [join.divider_index(k, in_order, gone) for k in sections]
+                    [
+                        keep[at] if keep and at < len(seeded) and seeded[at] == k
+                        else join.divider_index(k, in_order, gone)
+                        for at, k in enumerate(sections)
+                    ]
                 )
             inventory.set_sections(box, sections)
         if section_names is not None:

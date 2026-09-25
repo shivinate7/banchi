@@ -75,9 +75,26 @@ equals main's index-space formula. The routes are `POST /boxes/<box>/sections/mo
 `POST /boxes/<box>/cards/move` and `POST /boxes/sections/undo`. T7's `t7_box_map.py` covers
 the migration, the per-card keys after each kind of move, and the card and range moves.
 
+### The divider editor after a placement
+
+The editor speaks card numbers, and the store keeps keys. A start the operator did not change
+keeps the divider already stored, so a save never moves a divider it was not asked to move. An
+edited start maps to the key of the card at that number, never `int()` of it (the R4 review).
+
+**An empty section is kept** (the R5 review). A card move can leave a section with no card. Its
+divider is still in the box, so an unchanged save keeps it, name and all. The editor draws an
+empty section with the start of the section after it. That repeat is taken as the empty
+section, and it is not refused. Dropping the section is the owner's act: the operator removes
+that start in the editor, and the save removes the divider.
+
 ### Planned, not built
 
 - **Two receipt lines** from `docs/specs/box-map.md` section 5.4: the cards owed to open orders,
   and the next capture that joins a moved last section.
 - **The public demo** answers no move. Its stub server has no handler for the three routes, so
   a press on the demo is refused.
+
+- **A save moves a divider past departed records** (the R5 review, LOW, older than this lane).
+  The cards in front of a divider can have left. Then the editor's number maps to the first
+  card on hand, and a save of that edited start lands after the departed records. Not fixed
+  here.
