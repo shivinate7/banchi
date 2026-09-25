@@ -1,6 +1,6 @@
 """The one press that sends copies to TCGplayer and makes them live, and the checks around it.
 
-THE OWNER'S RULINGS, 2026-09-23 AND 2026-09-24 (`D-one-press-sends-and-makes-live`):
+THE OWNER'S RULINGS, 2026-09-23 AND 2026-09-24 (`D273`):
 
   - Banchi sends the listing file itself. "Download the file instead" stays as a second door.
   - ONE PRESS sends AND makes live. It amends D106 (the push and the publish are two presses).

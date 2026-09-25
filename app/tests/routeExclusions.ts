@@ -6,7 +6,7 @@
  * D70's new routes go unswept for two days, its own header's account. That heuristic is
  * right for a roster and wrong for what these three files do: TWO deliberate, individually
  * argued exclusions (`#/fulfillment`, a persona `docs/DESIGN.md` governs separately;
- * `#/gallery`, the kit's own specimen sheet — `D-text-shape-checks` argues both), never a list of every
+ * `#/gallery`, the kit's own specimen sheet — `D284` argues both), never a list of every
  * screen. A regex is not a quoted `#/…` literal, so it does not trip that row, and it is not
  * an evasion of it either: nothing here enumerates routes, so there is no roster to declare.
  */

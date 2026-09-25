@@ -372,7 +372,7 @@ test('one press writes the file, sends it and makes it live', async ({ page }) =
   await field.type('17.50')
   await field.blur()
 
-  /* ONE PRESS (`D-one-press-sends-and-makes-live`, Q7): the file is written, then the server
+  /* ONE PRESS (`D273`, Q7): the file is written, then the server
      reads what is live, sends it and makes it live. No check press and no second press. */
   await expect(page.getByRole('button', { name: 'Check these prices' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()

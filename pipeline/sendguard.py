@@ -1,6 +1,6 @@
 """The double-send guard: a send never leaves TCGplayer holding more copies than the shelf.
 
-THE OWNER'S RULING, 2026-09-23 (`D-one-press-sends-and-makes-live`), in their words: "maybe
+THE OWNER'S RULING, 2026-09-23 (`D273`), in their words: "maybe
 before submitting prices there's a mandatory reconciliation that auto runs seeing my sales and
 live inventory". So every send first reads a FRESH live export, and this module is the
 arithmetic it is read for:
@@ -184,7 +184,7 @@ def report(export: str, checked: int, trimmed: Sequence[Trim]) -> dict:
 class PriceChange:
     """One card already live at TCGplayer whose typed price this send changes, adding no copy.
 
-    THE OWNER'S RULING, 2026-09-24 ("Allow mixed", `D-one-press-sends-and-makes-live`): one
+    THE OWNER'S RULING, 2026-09-24 ("Allow mixed", `D273`): one
     press lists new copies AND reprices live ones. A price change is a row with Add to
     Quantity 0, so it moves no copy, claims its card at 0 copies (round 6, S3), and a second upload of it changes nothing
     (D100's own reason for its zero rule). `was` is TCGplayer's live price at the read, or

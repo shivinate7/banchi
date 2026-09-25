@@ -1,4 +1,4 @@
-## D-money-is-mono-everywhere — Every dollar figure takes the mono face, and a check that reads the rendered page enforces it
+## D267 — Every dollar figure takes the mono face, and a check that reads the rendered page enforces it
 
 **The owner's ruling, 2026-09-23.** The owner asked to see both options drawn before a choice.
 After the pictures, the owner picked option A. Every dollar figure on every screen takes the
