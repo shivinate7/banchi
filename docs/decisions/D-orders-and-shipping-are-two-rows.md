@@ -75,6 +75,17 @@ own "Add orders" sheet. The panel's `Manage` keeps only that buyer's own orders.
   store, 0 of 834 orders have no buyer name (measured 2026-09-24, read-only). The label is for a
   pasted order.
 
+- **Walk mode** (the owner's ruling, 2026-09-24): "try being super shrunk instead, and look at
+  how much space is wasted by stuff i dont need to see when im in the order walk hogging real
+  estate", and "literally 50% of the phone view is a wasted upper currently". Choosing a buyer
+  enters walk mode, `?walk=1`. It is a navigation (D118), and Back leaves it. Under 1000px of
+  column the title and a walk line share one slim row, and the card pane becomes one thin row:
+  thumbnail, name, place and a Mark sold icon. The filter bar, the buyer list, the order header
+  and the walk's tools hide. At 1000px and wider only the verdict hides. Measured on the seeded
+  store: the first walk row moved from 894 px (106% of the 844 px viewport) to 206 px (24%) at
+  390x844, and from 815 px (91%) to 154 px (17%) at 720x900. The owner accepted it as built:
+  "much better, a little overkill, but much better than before".
+
 `app/tests/orders.spec.ts` and `app/tests/order-walk.spec.ts` assert each part. They check
 the widths 1440, 820, 720 and 390.
 

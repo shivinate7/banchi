@@ -973,6 +973,37 @@ const ORDER_PARAM = 'order'
  *  typed URL both select (FLT-11). Written with `replaceState` (`patchViewQuery`), so stepping
  *  through twenty buyers leaves one history entry. */
 const BUYER_PARAM = 'buyer'
+/** WALK MODE (the owner's ruling, 2026-09-24: "look at how much space is wasted by stuff i dont
+ *  need to see when im in the order walk"). `?walk=1` while a buyer is walked. Under 1000px of
+ *  column, everything the walk does not need folds into one line and a thin card row. It is
+ *  in the URL, so entering and leaving it is a navigation (D118), and Back leaves it. */
+const WALK_PARAM = 'walk'
+
+/** Walk one buyer: select them and enter walk mode. A NEW history entry the first time, so Back
+ *  leaves the walk. Already walking, a new buyer replaces the entry. */
+function walkTo(buyerKey: string): void {
+  const hash = window.location.hash
+  const at = hash.indexOf('?')
+  const query = new URLSearchParams(at === -1 ? '' : hash.slice(at + 1))
+  if (query.get(WALK_PARAM) === '1') {
+    patchViewQuery({ [BUYER_PARAM]: buyerKey, [ORDER_PARAM]: null })
+    return
+  }
+  query.set(BUYER_PARAM, buyerKey)
+  query.delete(ORDER_PARAM)
+  query.set(WALK_PARAM, '1')
+  window.location.hash = `#/orders?${query.toString()}`
+}
+
+/** Hands the walk line to the page header, which draws it (the header is the hub's). */
+function WalkLinePublisher({ words }: { readonly words: readonly string[] | null }) {
+  const sig = words === null ? null : words.join('\n')
+  useEffect(() => {
+    setHub({ walkLine: sig === null ? null : sig.split('\n') })
+    return () => setHub({ walkLine: null })
+  }, [sig])
+  return null
+}
 
 
 /* ---- the copy map: where a card's copies are, ranked by density ---------------------------- */
@@ -2123,12 +2154,29 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   return (
     <Page
       icon="cart"
-      className="orders-hub orders"
+      className={hub.walkLine === null ? 'orders-hub orders' : 'orders-hub orders is-walking'}
       verdict={populated ? verdictOf(open) : undefined}
       lede={populated ? undefined : 'Which copies each buyer gets, and where they are.'}
       actions={
         populated ? (
           <>
+            {/* THE WALK LINE (walk mode, under 1000px of column): who, how many, what is next,
+                opening the buyer list, and one press out of the walk. CSS draws it only there. */}
+            {hub.walkLine === null ? null : (
+              <span className="orders-walkline">
+                <button type="button" className="orders-walkchip" aria-haspopup="dialog" onClick={() => setHub({ buyersOpen: true })}>
+                  <span className="orders-walkchip-text bn-facts">
+                    {hub.walkLine.map((word, at) => (
+                      <span key={at}>{word}</span>
+                    ))}
+                  </span>
+                  <Icon name="chevronDown" size={14} />
+                </button>
+                <Button variant="ghost" iconOnly icon="x" className="orders-walkleave" onClick={() => patchViewQuery({ [WALK_PARAM]: null })}>
+                  Leave the walk
+                </Button>
+              </span>
+            )}
             {/* THE STORE'S OWN CONTROLS (UX-165, UX-193): fetch, paste and the two stand-downs act
                 on the whole store, so they open from the page, never from one buyer's sheet. */}
             <Button variant="primary" icon="plus" onClick={() => setStoreOpen(true)}>
@@ -2727,7 +2775,8 @@ function PullStage({
   const [manageOpen, setManageOpen] = useState(false)
 
   /** The buyer list as a sheet, on a column too narrow to draw it beside the walk (UX-194). */
-  const [buyersOpen, setBuyersOpen] = useState(false)
+  const buyersOpen = hub.buyersOpen
+  const setBuyersOpen = (open: boolean) => setHub({ buyersOpen: open })
 
   /** Hide sold (D132) — `#/inventory`'s own persisted `banchi.inventory.hide-sold`, on the
    *  owner's word: same preference, same screen family, one key. No new key. */
@@ -2793,6 +2842,7 @@ function PullStage({
   }, [tickableKeys])
 
   const [buyerQ] = useViewParam(BUYER_PARAM)
+  const [walking] = useViewFlag(WALK_PARAM)
   const [orderQ] = useViewParam(ORDER_PARAM)
   const selected = buyerQ !== '' ? buyerQ : orderQ !== '' ? (groupForOrderKey(groups, orderQ)?.key ?? null) : null
 
@@ -2901,7 +2951,7 @@ function PullStage({
   }, [walk])
 
   const select = (key: string) => {
-    patchViewQuery({ [BUYER_PARAM]: key, [ORDER_PARAM]: null })
+    walkTo(key)
     setBuyersOpen(false)
   }
 
@@ -3168,7 +3218,8 @@ function PullStage({
   ]
 
   return (
-    <div className="orders-stage">
+    <div className={walking ? 'orders-stage is-walking' : 'orders-stage'}>
+      <WalkLinePublisher words={walking && selectedGroup !== null ? chipWords : null} />
       {filterBar}
       {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
       {/* THE DEGRADED MAP, SAID ONCE (UX-266), in the kit's notice shape. The ledger answered and

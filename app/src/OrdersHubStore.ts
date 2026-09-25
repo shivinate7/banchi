@@ -44,6 +44,12 @@ export type HubState = {
    *  re-armed by a clock — `until` is read at the moment `U` is pressed, the same "no window,
    *  no clock" ruling every other undo in this store answers to. */
   readonly lastPull: { readonly target: PullTarget; readonly place: string; readonly name: string; readonly until: number } | null
+  /** WALK MODE'S ONE LINE (the owner's ruling, 2026-09-24): who is walked, how many cards to
+   *  pick, what is next. The Orders screen writes it and the page header draws it. Null when
+   *  nothing is walked. */
+  readonly walkLine: readonly string[] | null
+  /** The buyer list as a sheet, opened from the walk line or the chip. */
+  readonly buyersOpen: boolean
 }
 
 let state: HubState = {
@@ -56,6 +62,8 @@ let state: HubState = {
   busy: null,
   version: 0,
   lastPull: null,
+  walkLine: null,
+  buyersOpen: false,
 }
 
 const listeners = new Set<() => void>()

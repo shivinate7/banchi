@@ -470,6 +470,7 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
   bn-page 640   kit — a `Page`'s toolbar folds into equal cells, and its actions take a line;
                 Gallery — the specimen grids go to one column
   bn-page 879   Gallery — the section index becomes a strip over the specimens
+  bn-page 999   Orders — walk mode folds the header, the filters and the card into one line each
 
 COLUMN-BLIND    a sheet allowed to ask the VIEWPORT a question at or above 1024, with why.
   Fulfillment.css   `persona: 'fulfiller'` draws no shell (D5), so the viewport IS its column

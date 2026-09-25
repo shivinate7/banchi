@@ -650,6 +650,12 @@ async function open(
    `test.beforeEach`, which is what `make docs-audit`'s `spec seal` row checks. */
 sealEveryTest()
 
+/* THE DESK THESE CASES ARE ABOUT: the three columns (1000px of column and wider). Choosing a
+   buyer enters walk mode, which folds the list and the order header under 1000px, so a case
+   about the list or the panel reads them where they stay. Cases about narrower widths set their
+   own viewport. */
+test.use({ viewport: { width: 1440, height: 900 } })
+
 test('the route resolves, and the nav offers it under its own chord', async ({ page }) => {
   await open(page)
 
@@ -3209,4 +3215,27 @@ test('a typed ?buyer= selects that buyer, and Back selects the one before (FLT-1
   await expect(page.locator('.orders-panel-name')).toHaveText('Alice')
   await page.goBack()
   await expect(page.locator('.orders-panel-name')).toHaveText('Bob')
+})
+
+/* ------------------------------------------------------------ walk mode (the owner's ruling, 2026-09-24) */
+
+test('at 390, choosing a buyer enters walk mode: the first walk row sits in the top quarter, and Back leaves', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, { orders: secondBuyerPayload().payload, walkPlan: bothPlan() })
+  await page.locator('.orders-buyerchip').click()
+  await page.locator('.orders-buyers-sheet .orders-index-row', { hasText: 'Ada' }).click()
+
+  await expect(page).toHaveURL(/walk=1/)
+  const walkline = page.locator('.orders-walkchip')
+  await expect(walkline).toBeVisible()
+  await expect(walkline).toContainText('Ada Lovelace')
+  await expect(page.locator(`${VIEW} .orders-filterbar`)).toBeHidden()
+  await expect(page.locator('.orders-card-thin')).toBeVisible()
+  const first = await page.locator('.orders-walk-press').first().boundingBox()
+  expect(first?.y ?? 9999, 'the first walk row is below the top quarter').toBeLessThanOrEqual(844 / 4)
+
+  /* ONE PRESS, OR BACK, LEAVES THE WALK. */
+  await page.goBack()
+  await expect(page).not.toHaveURL(/walk=1/)
+  await expect(page.locator(`${VIEW} .orders-filterbar`)).toBeVisible()
 })

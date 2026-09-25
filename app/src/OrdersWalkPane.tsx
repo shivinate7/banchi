@@ -603,20 +603,37 @@ export function WalkList({
 }
 
 /** The press on a copy row. `Undo` stands only on the newest sale (`newestUndoKey`). */
-function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly copy: SearchCopy }) {
+function RowAction({ walk, copy, thin = false }: { readonly walk: OrderWalk; readonly copy: SearchCopy; readonly thin?: boolean }) {
   const receipt = walk.receipts.get(copy.key)
   const busy = walk.busyCopy === copy.key
+  const where = copy.place.label === null ? copy.key : sayPlace(copy.place.label)
   if (receipt !== undefined) {
     if (copy.key !== walk.newestUndoKey) return <Pill tone="ok" icon="check">Sold</Pill>
     return (
-      <Button size="sm" icon="undo" busy={busy} disabled={walk.busyCopy !== null && !busy} onClick={() => walk.undoCopy(copy.key)}>
-        Undo
+      <Button
+        size="sm"
+        icon="undo"
+        iconOnly={thin}
+        title={thin ? `Undo: ${where}` : undefined}
+        busy={busy}
+        disabled={walk.busyCopy !== null && !busy}
+        onClick={() => walk.undoCopy(copy.key)}
+      >
+        {thin ? `Undo: ${where}` : 'Undo'}
       </Button>
     )
   }
   return (
-    <Button size="sm" busy={busy} disabled={walk.busyCopy !== null && !busy} onClick={() => walk.onSell(copy)}>
-      Mark sold
+    <Button
+      size="sm"
+      icon={thin ? 'check' : undefined}
+      iconOnly={thin}
+      title={thin ? `Mark sold: ${where}` : undefined}
+      busy={busy}
+      disabled={walk.busyCopy !== null && !busy}
+      onClick={() => walk.onSell(copy)}
+    >
+      {thin ? `Mark sold: ${where}` : 'Mark sold'}
     </Button>
   )
 }
@@ -652,8 +669,39 @@ export function WalkCardPane({
   const of =Math.max(take.wanted, owedBySku.get(take.sku) ?? take.wanted)
   const sub = [take.number_display, take.set].filter((part): part is string => Boolean(part))
 
+  const here = currentGroup.copies.find((copy) => copy.key === currentRow.copy.key) ?? null
+  const hereWords = currentRow.copy.place.label === null ? null : sayPlace(currentRow.copy.place.label)
+
   return (
     <section className="orders-card-pane bn-panel" aria-label="The card to pick">
+      <div className="orders-card-thin">
+        <button
+          type="button"
+          className="orders-card-thumb"
+          aria-label="Open the photograph"
+          disabled={row === null}
+          onClick={() => setZoomed(true)}
+        >
+          {row === null ? (
+            <Icon name="image" size={18} />
+          ) : (
+            <img src={photoUrl(row.card.box, row.card.index, row.card.cid)} alt="" loading="lazy" />
+          )}
+        </button>
+        <span className="orders-card-thin-text">
+          <span className={take.name === null ? 'orders-card-thin-name is-unnamed' : 'orders-card-thin-name'}>
+            {take.name ?? 'Not identified yet'}
+          </span>
+          <span className="orders-card-thin-place">
+            {hereWords === null ? `Pick ${take.wanted} of ${of}` : `${hereWords}, pick ${take.wanted} of ${of}`}
+          </span>
+        </span>
+        {here === null ? null : (
+          <span className="orders-card-thin-action">
+            <RowAction walk={walk} copy={here} thin />
+          </span>
+        )}
+      </div>
       <div className="orders-card-top">
         <div className="orders-card-shot">
           {row === null ? (
