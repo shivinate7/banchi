@@ -138,6 +138,7 @@ from cli import runs as run_files  # noqa: E402
 from pipeline import corpus, decisions, games as game_registry, join, reprice, tcgcsv  # noqa: E402
 from pipeline import readings as readings_walk  # noqa: E402
 from pipeline import selection as selection_mod  # noqa: E402
+from pipeline import skus as sku_fill  # noqa: E402
 from pipeline import worklist  # noqa: E402
 # ALIASED, BECAUSE `pricing` IS A LOCAL IN THIS MODULE. Two handlers bind the name to a
 # run's parsed `pricing.json`; importing the module under it would make which one you
@@ -4257,6 +4258,15 @@ def do_live_export() -> dict:
                 store_readings.KIND_LIVE, name, live_found, live_source,
                 supersede=stale_live or [name],
             )
+            # identity-follows-sku.md §3.2, fill point 2: "A fetched live export (D104), in
+            # server/pipeline_routes.do_live_export." Same transaction as the readings
+            # replace above — one fetch, one write — and the same `at`/`source` pair
+            # `reading_from_export` just used, so the two never disagree about this file's
+            # age.
+            sku_fill.apply_rows(
+                export.rows, at=at, source=name, skus=writable.skus,
+                events=writable.inventory.events,
+            )
 
     return {
         "ok": True,
@@ -7129,6 +7139,24 @@ def do_pipeline_export(name: str, payload: dict) -> dict:
     # let the NEXT press answer out of an export this one was about to tear down.
     if fresh:
         _write_note(target, asked, len(body))
+        # identity-follows-sku.md §3.2, fill point 1: "A fetched Filtered Export (D64,
+        # D166), in server/pipeline_routes._keep_export, in the same press that keeps the
+        # file." `fresh` is the SAME condition `_keep_export` itself answers `True` for —
+        # bytes nothing on disk carried before this press — so a REUSE (`fresh=False`, the
+        # `else` branch above) folds in nothing, on the spec's own reasoning: "the file is
+        # already in", meaning its rows were folded the press that first wrote it.
+        # `fetched_export` is already parsed (`tcgcsv.read_export(target)` above), so this
+        # never re-reads the file. `at` is the file's OWN stamp, off its name — never the
+        # moment of this press — matching `pipeline/skus.py`'s own rule (D166: "a reuse
+        # never touches the reading's time") so a later `skus adopt` walking this same file
+        # computes the identical `at`.
+        stamp = sku_fill.stamp_of(target.name)
+        if stamp is not None:
+            with Store().write() as writable:
+                sku_fill.apply_rows(
+                    fetched_export.rows, at=stamp, source=target.name,
+                    skus=writable.skus, events=writable.inventory.events,
+                )
 
     report = _export_report(target, answers_for)
     report.update(

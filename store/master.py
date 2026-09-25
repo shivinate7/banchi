@@ -68,7 +68,19 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import (
+    TYPE_CHECKING, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union,
+)
+
+# `Skus` (`store/skus.py`) IS A TYPE-CHECKING-ONLY IMPORT, NEVER A RUNTIME ONE.
+# `Inventory.bind_sku`/`unbind_sku` (docs/specs/identity-follows-sku.md §4.1) take the
+# caller's own `snapshot.skus` and call nothing on it but `.entries.get(sku)` — the same
+# duck-typed shape `Rows` already gives every caller — so a real import would buy this
+# module a fourth dependency to type-check a parameter it only ever reads through. Guarded
+# so `store/skus.py` (which imports `store/rows.py`, exactly as this module does) never
+# becomes a second intra-package import at import time.
+if TYPE_CHECKING:
+    from store.skus import Skus
 
 # THE ONE INTRA-PACKAGE IMPORT THIS MODULE MAKES, and it is a container rather than a disk.
 # The comment beside `BadPosition` below explains why nothing here reaches `store/files.py`;
@@ -85,7 +97,9 @@ from store.rows import Rows, TableSpec, int_or_none
 # to, with no imports beyond the stdlib, and `pipeline/join.py` imports them back and
 # re-exports under the same names — so `_card_columns` reuses one fold (D55/D67) the same
 # as every other reader, without `store/` crossing the one edge it may not cross.
-from store.numbers import display_number, join_key
+from store.numbers import (
+    catalog_number_fields, display_number, join_key, strip_name_suffix,
+)
 
 VERSION = 2
 
@@ -192,6 +206,23 @@ LEGACY_STATES = (PUSHED, STAGED, LIVE)
 # earning. Now a property of a SKU's listing rather than of a position.
 STAGED_STALE_DAYS = 14
 
+# `Card.identity_source` (docs/specs/identity-follows-sku.md §3.1, lane 1). `sku`: the
+# identity fields (`name`, `number`, `printed_total`, `rarity`, `set_name`, `condition`)
+# equal the `skus` table's row for `Card.sku`, written by `Inventory.bind_sku`/`unbind_sku`
+# and by NOTHING ELSE. `read`: no active binding — the card has never been bound, its SKU is
+# absent from the table, or it is a held migration card (§7.3) — and the identity fields
+# equal the evidence fields instead. THERE IS NO THIRD VALUE, and `None` (every card written
+# before this column existed) reads as `read` at every point that matters, the same
+# read-side default `pipeline/games.DEFAULT_GAME` sets for `Card.game`.
+IDENTITY_SKU = "sku"
+IDENTITY_READ = "read"
+
+# `Card.bound_by` (§4.1): "the act", a closed vocabulary for the same reason
+# `RETIRE_REASONS` is one — a typo here would silently misname who bound a card, and
+# `check_bound_by` below refuses one the way `check_retire_reason` already refuses a bad
+# `retire_reason`.
+BOUND_BY_ACTS = ("join", "answer", "group_answer", "correction", "confirm", "migration")
+
 
 class UnknownState(ValueError):
     """A listing state outside the enum. Never coerced."""
@@ -238,6 +269,41 @@ class CardDeparted(ValueError):
     """
 
 
+class UnknownBoundBy(ValueError):
+    """`bind_sku`/`unbind_sku` was asked to record an act outside `BOUND_BY_ACTS`.
+
+    `check_retire_reason`'s own shape, applied to the other closed vocabulary
+    `docs/specs/identity-follows-sku.md` §4.1 names.
+    """
+
+
+class SkuUnknown(ValueError):
+    """`bind_sku`/`unbind_sku` was asked for a SKU the `skus` table (§3.2) does not hold.
+
+    Refuses and writes nothing (§3.2: "A SKU the table lacks... `bind_sku` refuses
+    `sku_unknown` and changes nothing"). Every writer the spec's own table (§3.2, §4.2)
+    names already upserts the row it is about to bind, in the same transaction, before
+    calling — the confirm press binds a SKU the table already holds by construction — so
+    this should fire only on the migration's own residue (§7.3) or a caller that skipped
+    the upsert.
+    """
+
+
+class GameMismatch(ValueError):
+    """`bind_sku`/`unbind_sku` was asked to bind a SKU whose `skus` row disagrees with the
+    card's own game on `product_line` (§3.2: "the writer compares the card's game entry's
+    product_line with the row's product_line. A difference is the refusal game_mismatch").
+
+    `store/` CANNOT RESOLVE A GAME TO ITS `product_line` ITSELF — `pipeline/games.py` owns
+    that registry, and `store/` imports nothing from `pipeline/` (D63), the exact reason
+    `store/numbers.py` is a leaf module. So the CALLER resolves `games.get(card.game)
+    ["product_line"]` and passes it as `expected_product_line`; a caller that passes a
+    falsy value (`None`, the `misc` game's own `product_line` — §2: "There is no single
+    cell... inventing a string would be exactly the guess D22 refuses") makes no claim,
+    and this can never fire for it.
+    """
+
+
 def check_state(state: str) -> str:
     if state not in STATES:
         raise UnknownState(f"{state!r} not in {STATES}")
@@ -248,6 +314,12 @@ def check_retire_reason(reason: str) -> str:
     if reason not in RETIRE_REASONS:
         raise UnknownRetireReason(f"{reason!r} not in {RETIRE_REASONS}")
     return reason
+
+
+def check_bound_by(act: str) -> str:
+    if act not in BOUND_BY_ACTS:
+        raise UnknownBoundBy(f"{act!r} not in {BOUND_BY_ACTS}")
+    return act
 
 
 def position_key(box: int, index: int) -> str:
@@ -467,6 +539,24 @@ class Card:
     # reading rather than a gap to backfill: the store does not know, and a value copied
     # from a queue entry would be another reading's answer wearing this one's name.
     detected_finish: Optional[str] = None
+    # THE EVIDENCE GROUP'S OWN COPY OF WHAT THE CAMERA READ (docs/specs/
+    # identity-follows-sku.md §3.1, lane 1). `record_identification` writes these three —
+    # never `name`/`number`/`printed_total` directly on a card `bind_sku` has bound — so a
+    # reading and a catalogue-derived identity can coexist and disagree without either
+    # overwriting the other. `read_number`/`read_printed_total` KEEP THE MODEL'S RAW SHAPE,
+    # set code and all (§6: "`read_number` holds exactly what the model returned... D55 and
+    # D67 keep repairing and stripping it where a read is drawn or joined") — this is a
+    # fourth copy of the reading (§3.4), never a key, and D36's warning about a derived copy
+    # going stale does not apply: `record_identification` writes it in the same call that
+    # writes the reading it has always written, so the copy moves with its source.
+    #
+    # None ON EVERY CARD IDENTIFIED BEFORE THESE FIELDS EXISTED — `cards identity`'s
+    # migration (lane 2, §7.3) backfills them from that card's own `identifications` cache
+    # entry, keyed by `cid`, never guessed and never copied off `name`/`number` once those
+    # can mean something a SKU chose instead of something a camera read.
+    read_name: Optional[str] = None
+    read_number: Optional[str] = None
+    read_printed_total: Optional[str] = None
     sku: Optional[str] = None
     condition: Optional[str] = None
     # THE SET, AS THE CATALOGUE NAMES IT (D213).
@@ -493,6 +583,26 @@ class Card:
     # what TCGplayer calls the product — a disagreement is itself information and both are
     # kept on the record for that reason. Same source and same write moment as `set_name`.
     rarity: Optional[str] = None
+    # THE BINDING GROUP (§3.1, lane 1): WHICH SKU THIS CARD IS, WHO CHOSE IT, AND WHEN —
+    # written only by `Inventory.bind_sku`/`unbind_sku`, never by `set_state`. `bound_by` is
+    # ONE OF `BOUND_BY_ACTS` and lives HERE, bound to the card's own `cid`, rather than only
+    # in the position-keyed `events` table — §3.1's own measured reason: a human answered
+    # `6/53` on 2026-09-02, that card then moved (D83), and the store captured a NEW card at
+    # the same key on 2026-09-14, so a scan of `events` by position would credit the new
+    # card with the old card's answer. `bound_at` is the moment of that act, restamped by
+    # `unbind_sku` on a restore — an undo is itself an act, not a time machine.
+    bound_by: Optional[str] = None
+    bound_at: Optional[str] = None
+    # `IDENTITY_SKU` or `IDENTITY_READ` — see that pair's own comment above `BOUND_BY_ACTS`.
+    identity_source: Optional[str] = None
+    # `pipeline/join.name_disputes(read_name, [identity name])` (§3.1), computed by the
+    # CALLER — `store/` cannot import `pipeline/join` any more than it can `pipeline/games`
+    # (D63) — and handed to `bind_sku`/`unbind_sku`/`record_identification` as their answer,
+    # `§4.1`'s own phrase: "the dispute test runs in the caller, and bind_sku takes its
+    # answer". STORED rather than recomputed per request, because `#/inventory` is a polled
+    # route (D213's first ground) — the same argument that put `set_name`/`rarity` on the
+    # card instead of behind a live join.
+    read_disputes: bool = False
     state: str = CAPTURED
     state_at: Optional[str] = None
     # Why a retired card left — one of `RETIRE_REASONS`, set by `retire()` and cleared by
@@ -1363,6 +1473,13 @@ def _card_columns(card: "Card") -> Dict[str, object]:
             card.number and card.printed_total
         ) else "",
         "number_display": display_number(card.number, card.printed_total) or "",
+        # LANE 0's INERT COLUMN (docs/specs/identity-follows-sku.md §3.1), FILLED HERE —
+        # `store/db.py:_add_skus` added `cards.identity_source` at schema 11 and
+        # deliberately left it NULL, because filling it is `Inventory.bind_sku` (lane 1),
+        # never a migration bound to `SCHEMA_VERSION`. This is that fill: the one line that
+        # turns the column from inert to live, so the residue count (§4.3) is one indexed
+        # probe rather than a walk the day a later lane reads it.
+        "identity_source": card.identity_source,
     }
 
 
@@ -1810,21 +1927,49 @@ class Inventory:
         confidence: Optional[str],
         run: Optional[str] = None,
         detected_finish: Optional[str] = None,
+        read_disputes: Optional[bool] = None,
     ) -> None:
+        """One identification. Writes the EVIDENCE (`read_name`, `read_number`,
+        `read_printed_total`, `confidence`, `detected_finish`) unconditionally — an
+        identification REPLACES the reading, it does not merge into it — and writes the
+        IDENTITY (`name`, `number`, `printed_total`) only where nothing else is answering
+        for it (docs/specs/identity-follows-sku.md §4.2: "On a card with no SKU the
+        identity follows the read. On a SKU-bound card the identity stays, and the caller
+        recomputes read_disputes").
+
+        `card.identity_source != IDENTITY_SKU` COVERS EVERY CASE THAT KEEPS THE OLD
+        BEHAVIOUR: a card that has never been bound (`None`, every card identified before
+        lane 1), a held migration card (`IDENTITY_READ`, §7.3), and a card whose SKU fell
+        out of the table (§3.2). In every one of those the identity fields ARE the read, so
+        writing them here is not a second writer of the identity — it is the same writer
+        `bind_sku` becomes the moment a binding exists, continuous rather than switched.
+
+        `read_disputes` IS THE CALLER'S ANSWER, `bind_sku`'s own reason (§4.1):
+        `pipeline/join.name_disputes` needs `pipeline/games`, and `store/` imports neither
+        (D63). `None` (the default) leaves the stored flag exactly as it was — a caller
+        that has not computed a fresh answer must not overwrite a real one with a stale
+        `False`.
+        """
         card = self.cards.get(key)
         if card is None:
             return
-        card.name = name
-        card.number = number
-        card.printed_total = printed_total
+        card.read_name = name
+        card.read_number = number
+        card.read_printed_total = printed_total
         card.confidence = confidence
-        # WRITTEN UNCONDITIONALLY, LIKE THE FOUR ABOVE. An identification REPLACES the
+        # WRITTEN UNCONDITIONALLY, LIKE THE THREE ABOVE. An identification REPLACES the
         # reading; it does not merge into it. A caller that read no finish (a code card,
         # whose profile is not asked for one) means "this reading detected none", and
         # keeping the previous reading's answer here would be the stale-across-readings
         # defect this field was added to remove. Defaulted so `codes/scan.py` says that by
         # saying nothing.
         card.detected_finish = detected_finish
+        if card.identity_source != IDENTITY_SKU:
+            card.name = name
+            card.number = number
+            card.printed_total = printed_total
+        if read_disputes is not None:
+            card.read_disputes = bool(read_disputes)
         card.run = run or card.run
         if card.state == CAPTURED:
             self.set_state(key, IDENTIFIED, run=run)
@@ -1861,6 +2006,17 @@ class Inventory:
         `cli/cmd_emit.py` passes it only for that one case, out of
         `pipeline/join.py:JoinReport.name_corrections`; every other commit passes `None`
         and this leaves `card.name` exactly as `record_identification` last wrote it.
+
+        THIS SIGNATURE IS UNCHANGED BY LANE 1, AND THAT IS A DEVIATION FROM §11's OWN
+        "done when" LINE ("set_state takes no identity field"), FLAGGED RATHER THAN MADE
+        SILENTLY. Lane 1's fence forbids touching a caller of `set_state` — `cli/cmd_emit.py`
+        (lane 3b) still calls this with `sku=`/`condition=`/`set_name=`/`rarity=`/`name=`,
+        and `harness/tests/t7_store_and_seams.py` (lane 3a) asserts several of the same
+        calls — so dropping these five parameters here would break both across a lane
+        boundary this brief says to stop at rather than cross. `bind_sku` below is the NEW
+        one writer (§4.1); this method keeps writing state plus these five fields, side by
+        side, until lanes 2/3a/3b move every caller onto `bind_sku` and a later lane trims
+        this signature the way §11 describes.
         """
         check_state(state)
         card = self.cards.get(key)
@@ -1882,6 +2038,268 @@ class Inventory:
             card.run = run
         self._log(state, key, sku=card.sku, run=card.run)
         return True
+
+    def bind_sku(
+        self,
+        key: str,
+        sku: str,
+        *,
+        bound_by: str,
+        skus: "Skus",
+        number_strategy: str,
+        expected_product_line: Optional[str] = None,
+        read_disputes: bool = False,
+        event: str = "sku_bound",
+    ) -> Optional[Card]:
+        """THE ONE WRITER (docs/specs/identity-follows-sku.md §4.1): the only code that
+        sets `sku` together with the identity fields (`name`, `number`, `printed_total`,
+        `rarity`, `set_name`, `condition`) and the binding bookkeeping (`bound_by`,
+        `bound_at`, `identity_source`). Returns the updated card, or `None` if `key` names
+        no record — `record_identification`'s own silent no-op, since every real caller in
+        §4.2's table already holds a card it captured or is reviewing.
+
+        REFUSES `SkuUnknown`/`GameMismatch` AND WRITES NOTHING ON EITHER (§3.2, §3.3) — the
+        card, the history and `skus` are all untouched, checked before any assignment below.
+
+        READS THE SKU'S ROW FROM `skus` (§3.2), NEVER FROM AN EXPORT FILE. `skus` is the
+        caller's own `Snapshot.skus` (`store/skus.py`) — a parameter, not something this
+        class holds, because `Inventory` and `Skus` are SIBLINGS on `Snapshot`
+        (`store/session.py`), not parent and child.
+
+        `number`/`printed_total` ARE DERIVED HERE, OFF `row.number` ALONE, THROUGH
+        `store/numbers.catalog_number_fields(number_strategy, row.number)` — NEVER FROM A
+        CALLER-SUPPLIED PAIR (review finding, identity-follows-sku.md lane 1, 2026-09-24: a
+        first pass took `number`/`printed_total` as parameters, and a caller could then
+        hand this method any pair at all, including one the SKU row itself disagreed with
+        — `bind_sku(..., number="999", printed_total="999")` on a row whose `Number` cell
+        is `024/132`, accepted, the one field "the SKU owns identity" most needed to
+        protect). `number_strategy` is the caller's answer instead — `games.get(game)
+        ["join_key"]`, resolved by `pipeline/games.py`, which `store/` may not import
+        (D63) — and this method is what turns THAT plus the row's own cell into the pair a
+        card stores; a caller can no longer make it write a number the row does not own,
+        because there is no longer a parameter through which to hand one in.
+        `read_disputes` stays a caller-supplied answer, for the same reason it always was
+        (§4.1: "the dispute test runs in the caller, and bind_sku takes its answer") —
+        `pipeline/join.name_disputes` needs `pipeline/games` too, and unlike the number it
+        has no row of its own to be derived FROM.
+
+        `expected_product_line` IS THE CALLER'S RESOLUTION OF `games.get(card.game)
+        ["product_line"]` (see `GameMismatch`'s own docstring for why `store/` cannot
+        resolve it itself). A falsy value makes no claim and this can never refuse on it.
+
+        THE NAME IS COMPOSED HERE, because dropping a catalog row's trailing collector
+        number (`Stufful - 111/132` -> `Stufful`, §3.3) needs nothing `pipeline/` owns —
+        `store/numbers.strip_name_suffix` is the leaf that does it.
+
+        `condition` MOVES GROUPS BUT STAYS ONE FIELD (§3.1): `card.condition`, written here
+        instead of through `set_state`'s `condition=` parameter, exactly as `name`/`number`/
+        `printed_total`/`rarity`/`set_name` do.
+
+        THE HISTORY EVENT NAMES THE PREVIOUS BINDING (§8.3: "a line records the previous
+        binding (sku, bound_by)") IN `restores_to`, so `unbind_sku` below has something to
+        read back — `{"sku": None, "bound_by": None}` on a card's first ever binding, which
+        is itself the answer "there was no previous binding" rather than a missing key.
+        `event` lets a caller name a more specific line where the spec does (§8.1's own
+        `identity_confirmed` for the confirm press); every other caller leaves it as
+        `sku_bound`.
+        """
+        check_bound_by(bound_by)
+        card = self.cards.get(key)
+        if card is None:
+            return None
+        row = skus.entries.get(str(sku))
+        if row is None:
+            raise SkuUnknown(
+                f"{sku!r} is not in the skus table (identity-follows-sku.md §3.2) — every "
+                "writer upserts the row it is about to bind, in the same transaction, "
+                "before calling bind_sku; fill it first"
+            )
+        if expected_product_line and row.product_line != expected_product_line:
+            raise GameMismatch(
+                f"{sku!r} is a {row.product_line!r} SKU, and this card's game claims "
+                f"{expected_product_line!r}"
+            )
+        number, printed_total = catalog_number_fields(number_strategy, row.number)
+        restores_to = {"sku": card.sku, "bound_by": card.bound_by}
+        card.sku = str(sku)
+        card.name = strip_name_suffix(row.product_name)
+        card.number = number
+        card.printed_total = printed_total
+        card.rarity = row.rarity
+        card.set_name = row.set_name
+        card.condition = row.condition
+        card.bound_by = bound_by
+        card.bound_at = now()
+        card.identity_source = IDENTITY_SKU
+        card.read_disputes = bool(read_disputes)
+        self._log(
+            event, key, sku=card.sku, bound_by=bound_by, run=card.run,
+            restores_to=restores_to,
+        )
+        return card
+
+    def unbind_sku(
+        self,
+        key: str,
+        *,
+        skus: "Skus",
+        sku: Optional[str],
+        bound_by: Optional[str],
+        number_strategy: Optional[str] = None,
+        expected_product_line: Optional[str] = None,
+        read_disputes: bool = False,
+        event: str = "sku_unbound",
+    ) -> Optional[Card]:
+        """`bind_sku`'s companion, for an undo (§4.1). Takes the `(sku, bound_by)` pair a
+        `bind_sku` history line's own `restores_to` recorded and restores THAT binding —
+        or, when `sku` is falsy, restores "no binding at all", the state before any
+        `bind_sku` ever ran.
+
+        DERIVES THE IDENTITY AGAIN FROM `skus` RATHER THAN TRUSTING STORED FIELDS A LINE
+        MAY CARRY (§8.3: "A line written before the change still carries name, number,
+        rarity and set_name... unbind_sku ignores them and derives the identity again from
+        the SKU table"). When `sku` is given this is genuinely a second `bind_sku`-shaped
+        write — same refusals, same lookup, same composer — because the table never
+        deletes a row (§3.2) but a card's OWN game claim could still disagree with it, and
+        an undo is not exempt from the check that protects every other bind.
+
+        `sku` FALSY: the card had no binding before (its first ever `bind_sku`, or a card
+        that was never bound at all). This clears back to `identity_source = IDENTITY_READ`
+        and the identity fields become whatever `read_*` already holds (§3.1: "read: ...
+        the identity fields equal the evidence fields") — never a fabricated identity, and
+        never a refusal, because there is no SKU to look up.
+
+        `bound_at` IS RESTAMPED `now()` ON EITHER BRANCH, NEVER RESTORED VERBATIM: a
+        restore is itself an act happening now, not a trip back to the moment the original
+        bind wrote — `retire`/`set_state`/every other writer in this class stamps `now()`
+        on write for the same reason. A caller proving an exact round trip therefore
+        compares every OTHER field; `bound_at` is expected to differ, and later.
+        """
+        card = self.cards.get(key)
+        if card is None:
+            return None
+        if sku:
+            if number_strategy is None:
+                raise ValueError(
+                    "unbind_sku(sku=...) needs number_strategy to re-derive the number "
+                    "off the row's own cell — the same requirement bind_sku makes"
+                )
+            check_bound_by(bound_by)
+            row = skus.entries.get(str(sku))
+            if row is None:
+                raise SkuUnknown(
+                    f"{sku!r} is not in the skus table (identity-follows-sku.md §3.2) — "
+                    "the table never deletes a row, so a previously bound SKU missing here "
+                    "means it was never upserted at all"
+                )
+            if expected_product_line and row.product_line != expected_product_line:
+                raise GameMismatch(
+                    f"{sku!r} is a {row.product_line!r} SKU, and this card's game claims "
+                    f"{expected_product_line!r}"
+                )
+            number, printed_total = catalog_number_fields(number_strategy, row.number)
+            card.sku = str(sku)
+            card.name = strip_name_suffix(row.product_name)
+            card.number = number
+            card.printed_total = printed_total
+            card.rarity = row.rarity
+            card.set_name = row.set_name
+            card.condition = row.condition
+            card.bound_by = bound_by
+            card.identity_source = IDENTITY_SKU
+            card.read_disputes = bool(read_disputes)
+        else:
+            card.sku = None
+            card.condition = None
+            card.set_name = None
+            card.rarity = None
+            card.name = card.read_name
+            card.number = card.read_number
+            card.printed_total = card.read_printed_total
+            card.bound_by = None
+            card.identity_source = IDENTITY_READ
+            card.read_disputes = False
+        card.bound_at = now()
+        self._log(event, key, sku=card.sku, bound_by=card.bound_by, run=card.run)
+        return card
+
+    # identity-follows-sku.md §8, lane 3a review round: UNDO MUST BE EXACT (D28,
+    # docs/specs/undo.md). `bind_sku`/`unbind_sku` above are the two writers that CHOOSE an
+    # identity; this pair is what a reversal restores one back TO, and it is the third and
+    # last writer of these eleven fields — every server-side reversal of a `bind_sku` write
+    # (`_reverse_answer`, `_reverse_correction`, `_reverse_confirm`) calls `restore_identity`
+    # and sets none of them itself.
+    IDENTITY_SNAPSHOT_FIELDS = (
+        "sku", "condition", "name", "number", "printed_total", "set_name", "rarity",
+        "identity_source", "bound_by", "bound_at", "read_disputes",
+    )
+
+    def identity_snapshot(self, key: str) -> Optional[Dict[str, object]]:
+        """Every field `restore_identity` below can put back, read off `key`'s card RIGHT
+        NOW — the pair with that method, and the one a caller takes BEFORE a forward write
+        overwrites the card, so `restores_to` on the write's own history line is a full,
+        exact "how to undo this" rather than the four or seven fields the pre-lane-3a-review
+        routes used to remember by hand. `None` for a position with no card, `bind_sku`'s
+        own convention.
+        """
+        card = self.cards.get(key)
+        if card is None:
+            return None
+        return {field: getattr(card, field) for field in self.IDENTITY_SNAPSHOT_FIELDS}
+
+    def restore_identity(
+        self, key: str, snapshot: Mapping[str, object], *, event: str, **extra
+    ) -> Optional[Card]:
+        """Put a card's identity AND its binding bookkeeping back exactly as one earlier
+        `identity_snapshot()` recorded it — D28's standing rule, "undo must be exact",
+        applied to every field `bind_sku`/`unbind_sku` can touch: `sku`, `condition`,
+        `name`, `number`, `printed_total`, `set_name`, `rarity`, and now `identity_source`,
+        `bound_by`, `bound_at`, `read_disputes` too, none of which any reversal restored
+        before this review round — an undo that put the right SKU back while leaving
+        `bound_by` naming the write it had just undone was not exact, it only looked it.
+
+        A KEY ABSENT FROM `snapshot` MEANS "LEAVE THAT FIELD AS IT IS", NEVER A NULL CLAIM —
+        `do_correct_answer`'s own precedent (§4.2's amendment on review, "a missing key is
+        not a null claim"), generalised from `number`/`printed_total` alone to all eleven
+        fields: an event line written by a server that predates this method (the three real
+        `sku_corrected` lines on the owner's store, and every fixture built to look like
+        one) carries only the handful of fields ITS OWN route touched, and restoring the
+        rest to `None` would erase values that write was never responsible for losing. A
+        caller that means to CLEAR a field puts an explicit `None` in `snapshot` for it,
+        which this reads exactly like any other present value.
+
+        NO SKU LOOKUP AND NO REFUSAL, unlike `bind_sku` — the value going back onto the
+        card is a fact this card held a moment ago, not a fresh choice being validated
+        against `skus`. `event`/`**extra` are the SAME shape `Inventory._log` has always
+        taken, so the one route-specific history line each reversal needs (`unanswered`,
+        `sku_correction_undone`, `identity_confirm_undone`, carrying whatever extra fields
+        that reversal's own contract promises — `withdrew`, `restored`, `reclaimed`,
+        `queues`) is written HERE, in the one place all three fields it undoes are also
+        written, rather than the route logging a second time.
+
+        `bound_at` IS THE ONE FIELD NEVER RESTORED VERBATIM, whatever `snapshot` says —
+        `unbind_sku`'s own established rule, restated rather than a second one invented:
+        "a restore is itself an act happening now, not a trip back to the moment the
+        original bind wrote." It is always re-stamped `now()`. A caller proving an exact
+        round trip therefore compares every OTHER field; `bound_at` is expected to differ,
+        and later.
+        """
+        card = self.cards.get(key)
+        if card is None:
+            return None
+        for attr in self.IDENTITY_SNAPSHOT_FIELDS:
+            if attr == "bound_at":
+                # `bound_at` IS THE ONE EXCEPTION, and it is `unbind_sku`'s own precedent
+                # (that method's docstring, verbatim): "a restore is itself an act
+                # happening now, not a trip back to the moment the original bind wrote".
+                # Skipped in the verbatim-copy loop and re-stamped unconditionally below,
+                # whether or not `snapshot` even carries the key.
+                continue
+            if attr in snapshot:
+                setattr(card, attr, snapshot[attr])
+        card.bound_at = now()
+        self._log(event, key, sku=card.sku, bound_by=card.bound_by, run=card.run, **extra)
+        return card
 
     def retire(self, key: str, reason: str) -> bool:
         """Move one card to `retired`, carrying why it left. False if the position is empty.
@@ -2618,6 +3036,9 @@ class Inventory:
             # D213, matching
             # `store/db.py:TABLES["cards"]` and `_card_columns` above.
             "set_name", "rarity",
+            # LANE 0's inert column (identity-follows-sku.md §3.1), filled by `_card_columns`
+            # above as of lane 1 — matching `store/db.py:TABLES["cards"]`.
+            "identity_source",
         ),
     )
     BOXES = TableSpec(

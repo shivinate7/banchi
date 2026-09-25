@@ -260,6 +260,11 @@ const RECORDED = {
     'rescueRun',                              // D165/D210, the run rebind
     'correctAnswer', 'undoCorrectAnswer',     // D252, past D28's own
                                                // undo_too_late boundary
+    'confirmIdentity', 'undoConfirmIdentity', // identity-follows-sku.md §8.1, the confirm
+                                               // press beside D252's correction — its own
+                                               // pair, same shape: `ListingCorrection` folds
+                                               // the response into `written` the identical
+                                               // way `correctAnswer`/`undoCorrectAnswer` do
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.

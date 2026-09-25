@@ -86,11 +86,13 @@ from pipeline import games, pricing, routing, setnames, tcgcsv, variant
 # `join.display_number` / `join.strip_set_code` is unaffected — the names still resolve on
 # this module, they just live one file over.
 from store.numbers import (  # noqa: F401
+    NAME_NUMBER_SUFFIX,
     display_number,
     join_key,
     split_catalog_number,
     strip_set_code,
 )
+from store.numbers import catalog_number_fields as _catalog_number_fields_by_strategy
 
 
 def catalog_number_fields(game: str, raw_number) -> Tuple[Optional[str], Optional[str]]:
@@ -102,36 +104,25 @@ def catalog_number_fields(game: str, raw_number) -> Tuple[Optional[str], Optiona
     fresh identification's.
 
     GAME-AWARE THROUGH THE REGISTRY, NEVER A HAND-TYPED GAME LIST — reading
-    `JOIN_KEY_STRATEGIES` above the way every other consumer of it does, so a THIRD strategy
-    value never falls through silently: it lands in the verbatim branch below, which is the
-    safe default for a game this function has never heard of, exactly as `_key_printed_code`
-    is the safe fallback shape for one.
+    `games.get(game)["join_key"]` (this module's own edge into `pipeline/games.py`) and
+    handing the STRATEGY NAME, never the game, to `store/numbers.catalog_number_fields`
+    (review finding, identity-follows-sku.md lane 1, 2026-09-24 — moved there so
+    `store/master.py:bind_sku` can derive the identical pair off a `skus` table row without
+    `store/` importing this registry, D63). A THIRD strategy value never falls through
+    silently: `store/numbers.catalog_number_fields` lands it in the verbatim branch, the
+    safe default for a game this function has never heard of, exactly as
+    `_key_printed_code` is the safe fallback shape for one.
 
-    `number_and_printed_total` (Pokemon): `split_catalog_number` — the catalog cell IS
-    `join_key`'s own composed output, so decomposing it is exactly reversing that fold.
-
-    EVERY OTHER STRATEGY — `printed_code` (Riftbound, One Piece), `name_only`, `not_joined`
-    — STORES THE CELL VERBATIM AND LEAVES `printed_total` EMPTY, because that is what every
-    OTHER writer for those games already does. `_key_printed_code`'s own docstring: "these
-    games print ONE identifier and the export's `Number` cell carries that same string, so
-    there is nothing to compose and nothing to pad" — and `printed_total` is "not consulted
-    at all, in either direction. A game keyed this way has no denominator to disagree with."
-    Splitting Riftbound's `179/298` into `("179", "298")` would fill `card.number` with a
-    key `_key_printed_code` no longer matches (it expects `179/298` whole) and fill
-    `number_key`, which `pipeline/pricearchive.py`'s own comment documents as EMPTY BY
-    DESIGN for a game with no denominator. Riftbound's real cells also include a
-    double-sided token, `T01 // T02` — a `/`-splitting rule finds two candidate splits in
-    that string and both are wrong, which is what makes "split on the composed shape" the
-    wrong tool here rather than merely an unnecessary one.
-
-    A BLANK CELL RETURNS `(None, None)` either way, matching `split_catalog_number`'s own
-    rule for nothing to compose from nothing.
+    THIS FUNCTION IS NOW A TWO-LINE DELEGATOR. The dispatch rule itself — `number_and_
+    printed_total` (Pokemon) reverses `split_catalog_number`; every other strategy
+    (`printed_code` for Riftbound/One Piece, `name_only`, `not_joined`, or one this module
+    has never heard of) stores the cell verbatim and leaves `printed_total` empty — is
+    argued in full on `store/numbers.catalog_number_fields`'s own docstring, not restated
+    here. Every existing caller (`identify/prompt.py`, T3, T7) is unaffected: the name, the
+    signature and the game-keyed behaviour are all unchanged.
     """
     strategy = games.get(game)["join_key"]
-    if strategy == "number_and_printed_total":
-        return split_catalog_number(raw_number)
-    raw = str(raw_number or "").strip()
-    return (raw or None), None
+    return _catalog_number_fields_by_strategy(strategy, raw_number)
 
 # D7 — a playset. Configurable, but never guessed at. RE-EXPORTED rather than defined: the
 # figure lives in `pipeline/pricing.py`, which both this module and `pipeline/corpus.py`
@@ -716,12 +707,6 @@ def number_index_key(text) -> str:
     return "".join(out).upper()
 
 
-# The number this export decorates a `Product Name` with, when it decorates one at all.
-# Anchored at the end and requiring the slash, so only a trailing collector number matches:
-# `Ho-Oh`, `Wally's Compassion` and `Team Rocket's Mewtwo` keep every character they have.
-_NAME_NUMBER_SUFFIX = re.compile(r"\s*-\s*[A-Za-z0-9]+\s*/\s*[A-Za-z0-9]+\s*$")
-
-
 def name_index_key(text) -> str:
     """The one fold the NAME index and every name lookup pass through (D35).
 
@@ -751,7 +736,7 @@ def name_index_key(text) -> str:
     NOT APPLIED TO `Number`, EVER. That column is the primary key and it is folded by
     `number_index_key`, which is a different rule for a different string.
     """
-    text = _NAME_NUMBER_SUFFIX.sub("", str(text or "").strip())
+    text = NAME_NUMBER_SUFFIX.sub("", str(text or "").strip())
     return " ".join(text.split()).upper()
 
 

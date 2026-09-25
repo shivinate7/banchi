@@ -135,7 +135,19 @@ PHOTOS_RELOCATED = "photos_relocated"
 # table must never perform. An upgraded store's ledger is correctly empty until the first
 # `emit` or `reprice apply --write` after the upgrade — nothing before this table existed is
 # recoverable, which is the argument for landing it now rather than later.
-SCHEMA_VERSION = 10
+#
+# ELEVEN, FOR LANE 0 OF `docs/specs/identity-follows-sku.md` (owner's ruling, 2026-09-24:
+# "yes I'd been saying we build this"). `_add_skus` adds two things at once, deliberately one
+# step: `skus` — one row per TCGplayer Id this repo has ever read out of a cached export, the
+# six fact cells verbatim plus the split `Condition` cell, never cleared and never fully
+# replaced (`store/skus.py`'s own argument, `price_history`'s shape and not `readings`'s) —
+# and `cards.identity_source`, an inert `TEXT` column `_add_set_columns`'s own precedent: it
+# defaults to NULL and this step does not fill it, because filling it is `Inventory.bind_sku`
+# (a later lane), never a migration bound to `SCHEMA_VERSION`. An upgraded store's `skus`
+# table is correctly empty until the first `pkmnscan skus adopt --write`, which — unlike
+# `price_history` — can answer for every export this machine has ever cached, because none of
+# them ages out the way the live price-history endpoint's own window does.
+SCHEMA_VERSION = 11
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -169,6 +181,10 @@ TABLES: Dict[str, Tuple[str, ...]] = {
         # exactly what `pipeline/join.py:join_key`/`display_number` compose — see
         # `store/master.py:_card_columns`.
         "number_key", "number_display",
+        # LANE 0 OF `docs/specs/identity-follows-sku.md`: `sku` (`identity`) vs `read`
+        # (`evidence`) — inert until a later lane's `Inventory.bind_sku` writes it. See
+        # `_add_skus`'s comment above `SCHEMA_VERSION`.
+        "identity_source",
     ),
     "boxes": ("box", "bid", "name", "state"),
     "listings": ("condition", "pushed", "staged", "live"),
@@ -197,11 +213,19 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     ),
     # One row per range last swept — see `store/pricearchive.py:Source`.
     "price_history_sources": ("range", "at", "requested", "answered", "refused"),
+    # LANE 0 OF `docs/specs/identity-follows-sku.md` §3.2: one row per TCGplayer Id this
+    # repo has ever read out of a cached export, NEVER CLEARED and never fully replaced —
+    # see `store/skus.py`'s module docstring.
+    "skus": (
+        "product_line", "set_name", "product_name", "number", "rarity", "condition",
+        "grade", "printing", "first_seen", "last_seen", "source",
+    ),
 }
 
 _INTEGER = {
     "box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human", "pid", "at", "skus",
     "product_id", "width_days", "quantity", "transactions", "requested", "answered", "refused",
+    "first_seen", "last_seen",
 }
 
 _INDEXES = (
@@ -385,6 +409,16 @@ def _ensure_schema(
     # so `_add_search_index`'s backfill loop and its `rebuild` are both no-ops — only the DDL
     # (the table and its three triggers) actually does anything.
     _add_search_index(conn)
+    # THE FRESH PATH BUILDS THE SKU TABLE'S INDEX AND VIEWS TOO, FOR THE SAME REASON THE TWO
+    # STEPS ABOVE DO (lane 0, identity-follows-sku.md §3.2). `_upgrade`'s `if stored < 11`
+    # never runs here — this branch stamps `SCHEMA_VERSION` directly, and the `skus` table
+    # itself already came out of the `TABLES` loop above — so without this call the composite
+    # index and the two product-layer views would not exist on any newly created store.
+    # Cheap: the table has no rows yet.
+    for statement in _SKU_INDEXES:
+        conn.execute(statement)
+    for statement in _SKU_VIEWS:
+        conn.execute(statement)
     conn.execute(
         "INSERT OR IGNORE INTO meta (key, value) VALUES ('schema', ?)", (str(SCHEMA_VERSION),)
     )
@@ -454,6 +488,8 @@ def _upgrade(
                 _add_price_history(conn)     # D219
             if stored < 10:
                 _add_price_postings(conn)    # D243
+            if stored < 11:
+                _add_skus(conn)              # LANE 0, identity-follows-sku.md
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1210,6 +1246,86 @@ def _add_price_postings(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS price_postings_sku ON price_postings(sku)"
     )
+
+
+
+# LANE 0's composite index, alongside `_INDEXES`'s single-column entries rather than inside
+# that tuple: `_INDEXES` only ever names one column, and the product layer's own lookup
+# (`product_line`, `set_name`, `product_name`, `number` together) needs all four, `_CID_INDEXES`'
+# own reason for living apart from `_INDEXES`.
+_SKU_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS skus_product ON "
+    "skus(product_line, set_name, product_name, number)",
+)
+
+# THE TWO VIEWS SPEC SECTION 3.2 NAMES — "no second copy to drift". Both are read-only and
+# derive everything from `skus` alone, so a later lane can query either with no migration of
+# its own: `sku_products` groups every SKU down to one row per PHYSICAL CARD (product line,
+# set, product name, number), collapsing condition, grade and printing; `sku_printings` keeps
+# `printing` as a fifth grouping column, so a foil row and a normal row of the same card stay
+# apart. `rarity_variants` is `COUNT(DISTINCT rarity)` over the group — 1 for a product whose
+# SKUs agree, more than 1 for the audit (§4.3, a later lane) to report; `rarity` itself is
+# `MIN(rarity)`, a deterministic representative rather than a guess at which SKU is "the"
+# answer when they do not.
+_SKU_VIEWS = (
+    "CREATE VIEW IF NOT EXISTS sku_products AS "
+    "SELECT product_line, set_name, product_name, number, "
+    "MIN(rarity) AS rarity, COUNT(DISTINCT rarity) AS rarity_variants, "
+    "COUNT(*) AS sku_count, MIN(first_seen) AS first_seen, MAX(last_seen) AS last_seen "
+    "FROM skus GROUP BY product_line, set_name, product_name, number",
+    "CREATE VIEW IF NOT EXISTS sku_printings AS "
+    "SELECT product_line, set_name, product_name, number, printing, "
+    "MIN(rarity) AS rarity, COUNT(DISTINCT rarity) AS rarity_variants, "
+    "COUNT(*) AS sku_count, MIN(first_seen) AS first_seen, MAX(last_seen) AS last_seen "
+    "FROM skus GROUP BY product_line, set_name, product_name, number, printing",
+)
+
+
+def _add_skus(conn: sqlite3.Connection) -> None:
+    """Schema 11: the `skus` table, its two product-layer views, and `cards.identity_source`
+    (lane 0 of `docs/specs/identity-follows-sku.md` §3.2 — owner's ruling, 2026-09-24: "yes
+    I'd been saying we build this").
+
+    THE TABLE HALF IS ADDITIVE LIKE `_add_readings`/`_add_price_history`: nothing older has a
+    `skus` table, so there is nothing to backfill and nothing to read wrong. An upgraded
+    store's table is correctly empty until the first `pkmnscan skus adopt --write`, which
+    reads every export already cached under `inventory/.exports/` and `inventory/.live/` —
+    unlike `price_history`'s 357-day source window, nothing here ages out, so that first press
+    can answer for the store's WHOLE history of fetched exports, not merely what is left of it.
+
+    THE COLUMN HALF IS ADDITIVE LIKE `_add_set_columns`'S TWO COLUMNS: `identity_source`
+    defaults to NULL and this step does not fill it — filling it is a later lane's
+    `Inventory.bind_sku`, never a migration bound to `SCHEMA_VERSION`, `_add_set_columns`'s
+    own reason for leaving `set_name`/`rarity` NULL on every existing card.
+
+    THE VIEWS ARE CREATED HERE TOO, evaluated fresh on every query (`COUNT(DISTINCT rarity)`
+    etc. over a table this step just created, empty), so there is nothing to backfill for them
+    either — they read whatever `skus` holds at query time, always.
+
+    THE TABLE HALF ALSO ALTERS RATHER THAN ONLY CREATING, and that is not belt-and-braces —
+    it is load-bearing against T7's own `check_set_and_rarity` (D213), which builds its
+    schema-7 fixture by looping `db.TABLES.items()` and stripping `set_name`/`rarity` from
+    EVERY table's column list, `cards`'s own two D213 columns being the only ones that loop
+    ever meant. `skus` happens to carry columns of the same two names for an unrelated
+    reason (the CSV's own `Set Name`/`Rarity` cells), so that fixture's `skus` table — built
+    before this function ever runs — is missing exactly those two columns. A bare `CREATE
+    TABLE IF NOT EXISTS` would silently keep that shape forever. `PRAGMA table_info` plus an
+    `ALTER ... ADD COLUMN` per missing name is `_add_card_ids`/`_add_set_columns`'s own
+    idiom, applied here so this table is correct whatever partial shape created it first.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
+    if "identity_source" not in columns:
+        conn.execute("ALTER TABLE cards ADD COLUMN identity_source TEXT")
+    conn.execute(_ddl("skus", TABLES["skus"]))
+    sku_columns = {row[1] for row in conn.execute("PRAGMA table_info(skus)").fetchall()}
+    for column in TABLES["skus"]:
+        if column not in sku_columns:
+            typed = "INTEGER" if column in _INTEGER else "TEXT"
+            conn.execute(f"ALTER TABLE skus ADD COLUMN {column} {typed}")
+    for statement in _SKU_INDEXES:
+        conn.execute(statement)
+    for statement in _SKU_VIEWS:
+        conn.execute(statement)
 
 
 def _add_box_ids(conn: sqlite3.Connection) -> dict:

@@ -625,9 +625,10 @@ CHECKS = (
         "asserts": "D254's whole rebuild: resolve_by_sku's three "
                    "tiers (an archive-verified productId, the SKU's own row in a cached "
                    "Filtered Export, the card's own stored fields as the last resort), "
-                   "merged_export_rows_by_sku against real cached-export files on disk and "
-                   "against no `.exports` directory at all, pipeline/productview.py:"
-                   "row_for_sku preferring the export row over a misread stored name, and "
+                   "merged_export_rows_by_sku against the store's own `skus` table "
+                   "(identity-follows-sku.md lane 4) and against an empty one, "
+                   "pipeline/productview.py:"
+                   "row_for_sku preferring the skus-table row over a misread stored name, and "
                    "two end-to-end sweep() proofs — a misread card row still resolving "
                    "through its own export row, and an archive-verified id resolving "
                    "through a market that refuses every row it is actually asked to "
@@ -819,6 +820,136 @@ CHECKS = (
                                "submission-selftest and cid-selftest.",
         "gates": True,
         "governed_by": ("D189", "D18", "D86", "D88"),
+    },
+    {
+        "target": "skus-selftest",
+        "runs": "python3 scripts/skus-selftest.py",
+        "asserts": "the store-owned SKU table (store/skus.py) and the walk that fills it "
+                   "(pipeline/skus.py), docs/specs/identity-follows-sku.md §3.2 lane 0. "
+                   "split_condition over every recognized grade plus the sealed exception; "
+                   "an empty store; one export with a repeated SKU line folding to one row "
+                   "(rows equal distinct ids); a second adopt over an unchanged file "
+                   "(no-op); an older file arriving after a newer one already won (STALE, "
+                   "never overwrites); a newer file disagreeing with the table (CHANGED, "
+                   "exactly one sku_facts_changed event, durably recorded in the store's "
+                   "history); a source file vanishing from disk (the row it carried "
+                   "survives — no delete path, proved behaviourally and by inspecting "
+                   "Skus's own write surface); a live export folding in the same way a "
+                   "fetched export does; an unstamped filename skipped rather than "
+                   "guessed at; the sku_products/sku_printings views; a genuine "
+                   "schema-10-shaped file (table dropped, column dropped, re-stamped) "
+                   "opening to 11 with every other table's row count unchanged; and a "
+                   "timed fill of the real fixtures/riftbound_export_untouched.csv.",
+        "needs": ("python3",),
+        "writes": "one sqlite store per case, under `mktemp -d`. `PKMNSCAN_HOME` is "
+                  "repointed for the whole run, so the operator's own store is never opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
+                               "readings-selftest and pricearchive-selftest.",
+        "gates": True,
+        "governed_by": ("D88", "D166", "D189", "D219"),
+    },
+    {
+        "target": "identity-store-selftest",
+        "runs": "python3 scripts/identity-store-selftest.py",
+        "asserts": "Inventory.bind_sku/unbind_sku, the one writer (store/master.py, "
+                   "docs/specs/identity-follows-sku.md §4.1 lane 1), and "
+                   "record_identification's narrowed write — over an in-memory Inventory "
+                   "and a Skus table, no store, no disk. bind_sku stamps name/number/"
+                   "printed_total/rarity/set_name/condition off a skus row for a Pokemon "
+                   "card (the catalog Number cell split into numerator/denominator, DERIVED "
+                   "BY bind_sku ITSELF through store/numbers.catalog_number_fields off the "
+                   "caller's number_strategy and the row's own Number cell — a caller "
+                   "cannot make it write a number the row does not own, case 11's own "
+                   "regression proof), a Riftbound card (the cell kept "
+                   "verbatim) and a Riftbound double-sided token cell (`T02 // T03`, no "
+                   "`/`-split misfire); the name composer drops a trailing collector "
+                   "number (`Stufful - 111/132` -> `Stufful`) through the new store/"
+                   "numbers.strip_name_suffix. SkuUnknown and GameMismatch each refuse "
+                   "before the card, the events list or the skus table are touched; a "
+                   "falsy expected_product_line (the misc game) never refuses; "
+                   "UnknownBoundBy refuses an act outside BOUND_BY_ACTS. unbind_sku "
+                   "round-trips a rebind back to the first binding — every field but "
+                   "bound_at restored exactly, bound_at a fresh stamp on purpose — and "
+                   "clears to identity_source=read (identity falls back to read_*) when "
+                   "handed no previous sku. record_identification writes only read_name/"
+                   "read_number/read_printed_total on a card bind_sku has bound, and the "
+                   "identity too on a card with no active binding.",
+        "needs": ("python3",),
+        "writes": "nothing — an in-memory Inventory and Skus table only, never a store on "
+                  "disk.",
+        "commit_path": False,
+        "why_off_commit_path": "Not D18 — this self-test writes nothing. PATH GATED into "
+                               "`make check` alone (D247's own precedent for a self-test "
+                               "with nothing to write), never the hook.",
+        "gates": True,
+        "governed_by": ("D36", "D63", "D67", "D88", "D172", "D183", "D213", "D252"),
+    },
+    {
+        "target": "identity-binding-selftest",
+        "runs": "python3 scripts/identity-binding-selftest.py",
+        "asserts": "pipeline/identity_binding.py, the migration's classifier and the merged "
+                   "D242/D255 report (docs/specs/identity-follows-sku.md §5.5, §7, lane 2), "
+                   "over plain Card/SkuRow objects, no store. number_agrees's 'equal or "
+                   "blank' fold for both number strategies; name_fold_matches's exact-fold "
+                   "test; distinct_products_by_line/matching_products' D162 uniqueness "
+                   "count, including two SKUs of one product collapsing to one; "
+                   "newest_human_sku scoped by captured_at (the '6/53' finding — an act "
+                   "before this card's own capture is never credited to it) and taking the "
+                   "newest of two; backfill_read matching and falling back; classify_card "
+                   "over EVERY class in §7.2's own order (T1, T2, T3, T4s, T4u, T5 — both "
+                   "the disputed and the blank arm, T6, sku_unknown), including one arm "
+                   "proving T3 is tested before T5 (a human-chosen SKU derives even when "
+                   "the read disputes it); audit()'s three §4.3 failures, each proved to "
+                   "fire AND to stay silent on a clean fixture; the §5.5 human-bound "
+                   "exclusion over every member of HUMAN_BOUND_BY; held_review_candidates' "
+                   "found_by tagging (listing/name/number) and held_review_entry's reason; "
+                   "plan_migration/class_counts end to end.",
+        "needs": ("python3",),
+        "writes": "nothing — plain Card/SkuRow objects in memory only, never a store on "
+                  "disk.",
+        "commit_path": False,
+        "why_off_commit_path": "Not D18 — this self-test writes nothing. `identity-store-"
+                               "selftest`'s own precedent: PATH GATED into `make check` "
+                               "alone, never the hook.",
+        "gates": True,
+        "governed_by": ("D63", "D162", "D172", "D242", "D253", "D255"),
+    },
+    {
+        "target": "identity-readers-selftest",
+        "runs": "python3 scripts/identity-readers-selftest.py && "
+                "python3 scripts/identity-readers-selftest.py --mutate-identity-fields && "
+                "python3 scripts/identity-readers-selftest.py --mutate-no-fallback && "
+                "python3 scripts/identity-readers-selftest.py --mutate-no-refusal",
+        "asserts": "the evidence readers (identity-follows-sku.md §5.1, lane 4), added on "
+                   "a review finding, HIGH, 2026-09-24: reading read_name/read_number/"
+                   "read_printed_total unconditionally left cli/requeue.py:identified "
+                   "answering None for every open entry and cli/resolve.py:store_payload "
+                   "filing a blank identification for a plainly-identified card, on every "
+                   "real card measured on a copy of the owner's store. Both builders now "
+                   "call cli/resolve.py:card_reading, proved over three in-memory "
+                   "fixtures: an old, unbound card whose identity fields ARE its only "
+                   "recorded reading; a bound card whose read name DISPUTES its own "
+                   "catalog row (D253's own subject), both builders carrying the read, "
+                   "never the catalog's; a bound card with no recorded evidence, both "
+                   "builders refusing loudly (NoEvidenceRecorded; identification: None) "
+                   "rather than echoing the catalog. Three .bak-protected mutations on "
+                   "card_reading's own body, each red on exactly the case(s) it breaks: "
+                   "reverted to the identity fields outright, the read_* fallback removed "
+                   "(lane 4's own first, broken draft), and the refusal line alone "
+                   "removed.",
+        "needs": ("python3",),
+        "writes": "cli/resolve.py itself, three times, mutated and restored through a "
+                  "`.bak` copy each time (never `git checkout`) — an in-memory Inventory "
+                  "otherwise, never a store on disk.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes (transiently, restored before it returns) "
+                               "to a real tracked file rather than a throwaway one; a hook "
+                               "context that could be interrupted mid-mutation is not "
+                               "where that risk belongs. PATH GATED into `make check` "
+                               "alone, identity-store-selftest's own precedent.",
+        "gates": True,
+        "governed_by": ("D63", "D172", "D213", "D253"),
     },
     {
         "target": "janitor-selftest",

@@ -132,6 +132,33 @@ help:
 	@echo "  make readings-selftest  the cached market-reading table, proved against an"
 	@echo "                    independent reimplementation of its own two-source walk."
 	@echo "                    In \`check\`, never in the hook."
+	@echo "  make skus-selftest  the store-owned SKU table (identity-follows-sku.md lane 0):"
+	@echo "                    rows equal distinct ids, an older file never overwrites a"
+	@echo "                    newer one, a changed fact writes one event and keeps the row,"
+	@echo "                    no delete path, a version-10 store upgrades to 11 with every"
+	@echo "                    other table's rows intact. In \`check\`, never in the hook."
+	@echo "  make identity-store-selftest  the one writer (identity-follows-sku.md lane 1):"
+	@echo "                    bind_sku stamps the identity off a skus row for Pokemon,"
+	@echo "                    Riftbound and a double-sided token cell; unbind_sku round-trips"
+	@echo "                    it; SkuUnknown/GameMismatch both write nothing;"
+	@echo "                    record_identification writes only read_* on a bound card. No"
+	@echo "                    store, no disk write at all. In \`check\`, never in the hook."
+	@echo "  make identity-binding-selftest  the migration's classifier and the merged"
+	@echo "                    D242/D255 report (identity-follows-sku.md §5.5/§7, lane 2):"
+	@echo "                    every class T1-T6/sku_unknown in order, the human-bound"
+	@echo "                    exclusion, both report halves. No store. In \`check\`, never"
+	@echo "                    in the hook."
+	@echo "  make identity-replay ARGS=\"--store <copy.sqlite>\"  the replay, before any"
+	@echo "                    write (identity-follows-sku.md §7.4): the same classifier,"
+	@echo "                    against a COPY of a real store, asserting the six checks"
+	@echo "                    §7.4 names. Never \`check\`-gated — it needs a store copy the"
+	@echo "                    owner supplies, not a fixture."
+	@echo "  make identity-readers-selftest  the evidence readers (identity-follows-sku.md"
+	@echo "                    lane 4): requeue.identified and resolve.store_payload both"
+	@echo "                    carry a bound card's DISPUTED read name, never its bound"
+	@echo "                    SKU's own catalog row, and both refuse loudly on a bound"
+	@echo "                    card with no recorded evidence rather than echo the catalog."
+	@echo "                    No store, no disk write at all. In \`check\`, never in the hook."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
@@ -213,6 +240,9 @@ help:
 	@echo "                    identity-checks-selftest + price-postings-selftest +"
 	@echo "                    product-history-selftest +"
 	@echo "                    sku-number-contradictions-selftest + readings-selftest +"
+	@echo "                    skus-selftest + identity-store-selftest +"
+	@echo "                    identity-binding-selftest +"
+	@echo "                    identity-readers-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
@@ -582,6 +612,10 @@ check:
 	@$(MAKE) --no-print-directory product-history-selftest
 	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
 	@$(MAKE) --no-print-directory readings-selftest
+	@$(MAKE) --no-print-directory skus-selftest
+	@$(MAKE) --no-print-directory identity-store-selftest
+	@$(MAKE) --no-print-directory identity-binding-selftest
+	@$(MAKE) --no-print-directory identity-readers-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
@@ -639,6 +673,10 @@ ci-check:
 	@$(MAKE) --no-print-directory product-history-selftest
 	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
 	@$(MAKE) --no-print-directory readings-selftest
+	@$(MAKE) --no-print-directory skus-selftest
+	@$(MAKE) --no-print-directory identity-store-selftest
+	@$(MAKE) --no-print-directory identity-binding-selftest
+	@$(MAKE) --no-print-directory identity-readers-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -1235,7 +1273,75 @@ cid-audit:
 readings-selftest:
 	@$(PYTHON) scripts/readings-selftest.py
 
-.PHONY: submission-selftest readings-selftest
+# THE STORE-OWNED SKU TABLE, PROVED AGAINST A THROWAWAY STORE (identity-follows-sku.md §3.2,
+# lane 0). Rows equal distinct ids, a second adopt over unchanged files changes nothing, an
+# older file never overwrites a newer one's facts, a changed fact writes one
+# `sku_facts_changed` event and keeps the row, `store/skus.py` has no delete path anywhere,
+# and a version-10 store upgrades to 11 with every other table's rows intact.
+#
+# IN `check`, NEVER IN THE GIT HOOK: it writes a temp store under `mktemp -d` (D18). Answers
+# from the tree alone (its one real-fixture read is `fixtures/riftbound_export_untouched.csv`,
+# committed), so it is in `ci-check` too.
+skus-selftest:
+	@$(PYTHON) scripts/skus-selftest.py
+
+# THE ONE WRITER, PROVED IN MEMORY (identity-follows-sku.md §4.1, lane 1). `bind_sku` stamps
+# name/number/printed_total/rarity/set_name/condition off a skus table row for a Pokemon
+# card (the catalog Number split), a Riftbound card (kept verbatim) and a Riftbound
+# double-sided token cell (`T02 // T03`); `unbind_sku` round-trips a rebind back to the
+# first binding, every field but `bound_at` restored exactly; SkuUnknown and GameMismatch
+# both refuse before touching the card, the events list or the skus table;
+# `record_identification` writes only `read_*` on a bound card and the identity too on an
+# unbound one.
+#
+# IN `check`, NEVER IN THE GIT HOOK. Writes nothing to disk at all — no store, no `mktemp`
+# (D18 does not even apply) — so it is in `ci-check` too.
+identity-store-selftest:
+	@$(PYTHON) scripts/identity-store-selftest.py
+
+# THE MIGRATION'S CLASSIFIER AND THE MERGED D242/D255 REPORT, PROVED AGAINST LITERAL
+# FIXTURES (identity-follows-sku.md §5.5, §7, lane 2). Every class T1-T6 and `sku_unknown`,
+# in §7.2's own order; the human-bound exclusion §5.5 requires (`answer`/`group_answer`/
+# `correction`/`confirm` never re-flagged); both report halves (§4.3's three audit failures,
+# and §5.5's name half/number half). `./pkmnscan cards identity` and `scripts/
+# identity-replay.py` both import this module rather than re-deriving the classifier, so
+# this is the one place its logic is proved.
+#
+# IN `check`, NEVER IN THE GIT HOOK. Writes nothing to disk at all — no store, no `mktemp`
+# (D18 does not even apply) — so it is in `ci-check` too.
+identity-binding-selftest:
+	@$(PYTHON) scripts/identity-binding-selftest.py
+
+# THE REPLAY, BEFORE ANY WRITE (identity-follows-sku.md §7.4, lane 2). Takes a COPY of a
+# real store (`sqlite3 <store> ".backup <copy>"`, never the live file) and asserts the six
+# checks §7.4 names, importing `pipeline/identity_binding.py`'s own classifier rather than
+# re-deriving it. Never `check`-gated: it needs a store copy the owner supplies, and a
+# fixture cannot stand in for "did the owner's own store move in six minutes". Read-only —
+# never opens `Store().write()`, never touches the copy it is given.
+identity-replay:
+	@$(PYTHON) scripts/identity-replay.py $(ARGS)
+
+.PHONY: submission-selftest readings-selftest skus-selftest identity-store-selftest identity-binding-selftest identity-replay identity-readers-selftest
+
+# THE EVIDENCE READERS, PROVED IN MEMORY (identity-follows-sku.md §5.1, lane 4 — added on
+# a review finding, HIGH, 2026-09-24). `cli/requeue.py:identified` and
+# `cli/resolve.py:store_payload` both carry a bound card's DISPUTED read name, never its
+# bound SKU's own catalog row (D253's own subject), and both refuse loudly — never a
+# silent catalog echo — on a bound card whose evidence was never recorded. THREE SEPARATE
+# PROCESSES, `price-postings-selftest`'s own two-process shape extended to three: each
+# `--mutate-*` run mutates `cli/resolve.py:card_reading`'s own body through a `.bak` copy,
+# restored in its own `finally` before that process exits either way, and must turn at
+# least one assertion red or the run itself fails (a mutation that survives means the case
+# it names is not actually being tested).
+#
+# IN `check`, NEVER IN THE GIT HOOK — a hook context that could be interrupted mid-mutation
+# is not where writing (transiently) to a real tracked file belongs.
+identity-readers-selftest:
+	@$(PYTHON) scripts/identity-readers-selftest.py && \
+		$(PYTHON) scripts/identity-readers-selftest.py --mutate-identity-fields && \
+		$(PYTHON) scripts/identity-readers-selftest.py --mutate-no-fallback && \
+		$(PYTHON) scripts/identity-readers-selftest.py --mutate-no-refusal
+
 
 # A GIT WRITE MUST LEAVE A TRACE THE SESSION CAN READ. On 2026-09-12 a coordinator session
 # reported work as landed that had not landed, twice, through `git commit -q -F - >/dev/null
