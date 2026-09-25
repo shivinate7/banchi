@@ -126,6 +126,7 @@
 
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -661,11 +662,27 @@ export function growth(base, head, baseRules = { static: null, runtime: null }, 
     const cut = g.identity.indexOf(':')
     return { block: g.identity.slice(0, cut), key: g.identity.slice(cut + 1), rule: g.rule.slice(g.rule.indexOf(':') + 1), why: g.why }
   }
-  if (answer === null) {
-    /* Fails closed: with no helper, no growth can be shown to be allowed. */
-    return { refused: [{ block: 'static', key: '(the whole list)', rule: '', why: 'scripts/only_shrinks.py could not run, so no growth is allowed' }], allowed: [] }
-  }
+  /* FAILS CLOSED when the helper cannot RUN (no python3, a crash, a refused request): no
+     growth can be shown to be allowed. `allowAtBase` marks the same case `broken`, and
+     `compareWithBase` refuses there too, so a missing python3 never reads as "no list at the
+     merge-base". Fail open stays only for the reasons the helper itself reports. */
+  if (answer === null) return refuseAll(HELPER_DOWN)
   return { refused: answer.refused.map(back), allowed: answer.allowed.map(back) }
+}
+
+const HELPER_DOWN = 'scripts/only_shrinks.py could not run, so no growth is allowed'
+
+/** One refusal that stands for the whole list: growth that cannot be computed is refused. */
+function refuseAll(why) {
+  return { refused: [{ block: 'static', key: '(the whole list)', rule: '', why }], allowed: [] }
+}
+
+/** Growth against the merge-base, or null to fail open. Null ONLY for a reason the helper
+ *  reported (no merge-base, no list at the merge-base, a list there that is not JSON). A helper
+ *  that could not run refuses all growth. */
+function compareWithBase(atBase, allow, headRules) {
+  if (atBase.broken) return refuseAll(atBase.reason)
+  return growth(atBase.allow, allow, atBase.rules, headRules)
 }
 
 /** `scripts/only_shrinks.py`, THE ONE HELPER for every shrinking list's only-shrinks rules
@@ -730,7 +747,7 @@ const SELF_FILE = 'scripts/kit-adoption.mjs'
  *  written (D18). */
 function allowAtBase(reference = 'origin/main') {
   const at = onlyShrinks(['base', '--path', ALLOW_FILE, '--reference', reference, '--also', SELF_FILE, '--also', SPEC_FILE])
-  if (at === null) return { allow: null, reason: 'scripts/only_shrinks.py could not run' }
+  if (at === null) return { allow: null, reason: HELPER_DOWN, broken: true }
   if (at.document === null) return { allow: null, reason: at.reason }
   const idsAt = (file, shape) => (at.files[file] == null ? null : definedIds(at.files[file], shape))
   const rules = {
@@ -789,20 +806,20 @@ function run() {
     )
   }
   const atBase = allowAtBase()
-  const grown = growth(atBase.allow, allow, atBase.rules, rulesAtHead())
+  const grown = compareWithBase(atBase, allow, rulesAtHead())
   if (grown === null) {
     console.log(`kit-adoption: only-shrinks not compared: ${atBase.reason}. Failing open.`)
   } else {
     for (const g of grown.allowed) {
       console.log(
         `kit-adoption: ${ALLOW_FILE}: ${g.block} gained "${g.key}", ALLOWED by rule ${g.rule}: ${g.why} ` +
-          `(merge-base ${atBase.base.slice(0, 8)}).`,
+          `(merge-base ${(atBase.base ?? 'unread').slice(0, 8)}).`,
       )
     }
     for (const g of grown.refused) {
       console.error(
         `kit-adoption: ${ALLOW_FILE}: ${g.block} gained "${g.key}", which the merge-base ` +
-          `${atBase.base.slice(0, 8)} with origin/main does not hold. Refused: ${g.why}. Fix the ` +
+          `${(atBase.base ?? 'unread').slice(0, 8)} with origin/main does not hold. Refused: ${g.why}. Fix the ` +
           `screen instead of excusing it.`,
       )
     }
@@ -1093,6 +1110,23 @@ function selfTest() {
     return g.refused.length === 0 && g.allowed.length === 0
   })
   add('no allow list at the merge-base fails open (null), never a silent pass', () => growth(null, base) === null)
+  add('with no python3 on PATH the helper cannot run, and ALL growth is refused, never failed open', () => {
+    const saved = process.env.PATH
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'kit-adoption-nopython-'))
+    process.env.PATH = empty
+    let at
+    let viaGrowth
+    try {
+      at = allowAtBase('HEAD')
+      viaGrowth = growth(base, clone(base), baseRules, baseRules)
+    } finally {
+      process.env.PATH = saved
+      fs.rmSync(empty, { recursive: true, force: true })
+    }
+    const grown = compareWithBase(at, base, baseRules)
+    return at.broken === true && grown !== null && grown.refused.length === 1 &&
+      /could not run/.test(grown.refused[0].why) && viaGrowth.refused.length === 1
+  })
   add('the git read sees its subject: the committed list and both rule definitions at HEAD', () => {
     const at = allowAtBase('HEAD')
     if (at.allow === null) throw new Error(`nothing to read: ${at.reason}`)

@@ -134,44 +134,82 @@ def growth(
 # ------------------------------------------------------------------------------ the command
 
 
-def _pairs(raw: object) -> List[Pair]:
-    return [(str(rule), str(identity)) for rule, identity in (raw or [])]  # type: ignore[union-attr]
+class BadInput(ValueError):
+    """A command line or a request this command refuses (exit 64)."""
 
 
-def _rules(raw: object) -> Optional[Set[str]]:
-    return None if raw is None else {str(r) for r in raw}  # type: ignore[union-attr]
+def _pairs(raw: object, name: str) -> List[Pair]:
+    """A list of `[rule, identity]` string pairs, or BadInput."""
+    if not isinstance(raw, list) or not all(
+            isinstance(p, list) and len(p) == 2 and all(isinstance(x, str) for x in p) for p in raw):
+        raise BadInput(f"`{name}` must be a list of [rule, identity] string pairs")
+    return [(rule, identity) for rule, identity in raw]
+
+
+def _rules(raw: object, name: str) -> Optional[Set[str]]:
+    """A list of rule strings, or null (the rules could not be read), or BadInput. A bare
+    string is refused: read as a set it would be a set of letters."""
+    if raw is None:
+        return None
+    if not isinstance(raw, list) or not all(isinstance(r, str) for r in raw):
+        raise BadInput(f"`{name}` must be a list of rule strings, or null")
+    return set(raw)
+
+
+def _base_args(args: List[str]) -> Tuple[str, str, List[str]]:
+    """`--path`, `--reference` and each `--also`, or BadInput on a missing value or an
+    unknown flag."""
+    path, reference, also = None, REFERENCE, []
+    while args:
+        flag = args.pop(0)
+        if flag not in ("--path", "--reference", "--also"):
+            raise BadInput(f"unknown flag {flag!r}")
+        if not args or not args[0] or args[0].startswith("--"):
+            raise BadInput(f"{flag} needs a value")
+        value = args.pop(0)
+        if flag == "--path":
+            path = value
+        elif flag == "--reference":
+            reference = value
+        else:
+            also.append(value)
+    if path is None:
+        raise BadInput("--path <list> is required")
+    return path, reference, also
+
+
+def _growth_request(text: str) -> Tuple[List[Pair], List[Pair], Optional[Set[str]], Optional[Set[str]]]:
+    try:
+        request = json.loads(text)
+    except ValueError as exc:
+        raise BadInput(f"the request is not JSON ({exc})") from exc
+    if not isinstance(request, dict):
+        raise BadInput("the request must be a JSON object")
+    return (_pairs(request.get("base"), "base"), _pairs(request.get("head"), "head"),
+            _rules(request.get("base_rules"), "base_rules"),
+            _rules(request.get("head_rules"), "head_rules"))
 
 
 def main(argv: Sequence[str]) -> int:
-    if argv[:1] == ["--self-test"]:
-        return self_test()
-    if argv[:1] == ["base"]:
-        args = list(argv[1:])
-        path, reference, also = None, REFERENCE, []
-        while args:
-            flag = args.pop(0)
-            value = args.pop(0) if args else ""
-            if flag == "--path":
-                path = value
-            elif flag == "--reference":
-                reference = value
-            elif flag == "--also":
-                also.append(value)
-        if path is None:
-            print("only_shrinks base: --path <list> is required", file=sys.stderr)
-            return 64
-        document, where, base, files = list_at_merge_base(path, ROOT, reference, also)
-        print(json.dumps({"document": document, "base": base,
-                          "reason": None if document is not None else where, "files": files}))
-        return 0
-    if argv[:1] == ["growth"]:
-        request = json.load(sys.stdin)
-        refused, allowed = growth(_pairs(request.get("base")), _pairs(request.get("head")),
-                                  _rules(request.get("base_rules")),
-                                  _rules(request.get("head_rules")))
-        print(json.dumps({"refused": [g._asdict() for g in refused],
-                          "allowed": [g._asdict() for g in allowed]}))
-        return 0
+    """The command. Exit 0 with JSON on stdout, or 64 with the reason on stderr: a caller
+    reads anything but 0 as "the helper could not run", and refuses all growth."""
+    try:
+        if argv[:1] == ["--self-test"]:
+            return self_test()
+        if argv[:1] == ["base"]:
+            path, reference, also = _base_args(list(argv[1:]))
+            document, where, base, files = list_at_merge_base(path, ROOT, reference, also)
+            print(json.dumps({"document": document, "base": base,
+                              "reason": None if document is not None else where, "files": files}))
+            return 0
+        if argv[:1] == ["growth"]:
+            refused, allowed = growth(*_growth_request(sys.stdin.read()))
+            print(json.dumps({"refused": [g._asdict() for g in refused],
+                              "allowed": [g._asdict() for g in allowed]}))
+            return 0
+    except BadInput as exc:
+        print(f"only_shrinks: {exc}", file=sys.stderr)
+        return 64
     print(__doc__)
     return 64
 
@@ -194,6 +232,10 @@ def self_test() -> int:
             ok = False
             print(f"  FAIL {label}\n       got  {got!r}\n       want {want!r}")
 
+    def why(found: List[Growth]) -> str:
+        """The first answer's reason, or "" — never an IndexError on a regression."""
+        return found[0].why if found else ""
+
     rules = {"R1", "R2"}
     base = [("R1", "a"), ("R1", "a"), ("R2", "b")]
     print("only_shrinks: growth")
@@ -205,20 +247,20 @@ def self_test() -> int:
           ([(g.rule, g.identity, g.extra) for g in refused], allowed), ([("R1", "a", 1)], []))
     refused, _ = growth(base, base + [("R2", "c")], rules, rules)
     check("RED: a new identity under a rule the merge-base defines is refused, and says why",
-          len(refused) == 1 and "exists at the merge-base" in refused[0].why, True)
+          len(refused) == 1 and "exists at the merge-base" in why(refused), True)
     refused, allowed = growth(base, base + [("R3", "d")], rules, rules | {"R3"})
     check("a rule born on this branch may list its first offenders, and says why",
-          (refused, len(allowed) == 1 and "born on this branch" in allowed[0].why), ([], True))
+          (refused, len(allowed) == 1 and "born on this branch" in why(allowed)), ([], True))
     refused, allowed = growth(base, base + [("R3", "d")], rules, {"R2", "R3"})
     check("RED: a rule the merge-base defines is missing at HEAD, so no growth at all",
-          (len(refused), allowed, '"R1"' in refused[0].why and "missing at HEAD" in refused[0].why),
+          (len(refused), allowed, '"R1"' in why(refused) and "missing at HEAD" in why(refused)),
           (1, [], True))
     refused, _ = growth(base, base + [("R3", "d")], None, rules | {"R3"})
     check("RED: rules at the merge-base that cannot be read allow nothing",
-          len(refused) == 1 and "could not be read" in refused[0].why, True)
+          len(refused) == 1 and "could not be read" in why(refused), True)
     refused, _ = growth(base, base + [("R3", "d")], rules, None)
     check("RED: rules at HEAD that cannot be read allow nothing",
-          len(refused) == 1 and "HEAD could not be read" in refused[0].why, True)
+          len(refused) == 1 and "HEAD could not be read" in why(refused), True)
 
     print("\nonly_shrinks: the list at the merge-base, in a throwaway repository")
     with tempfile.TemporaryDirectory() as tmp:
@@ -263,6 +305,22 @@ def self_test() -> int:
     check("`growth` on stdin answers the same refusal as the function",
           [(g["rule"], g["identity"], g["extra"]) for g in answer.get("refused", [])],
           [("R1", "b", 1)])
+
+    def command(args: List[str], stdin: str = "") -> Tuple[int, str]:
+        done = subprocess.run([sys.executable, str(Path(__file__).resolve()), *args],
+                              input=stdin.encode(), stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, check=False)
+        return done.returncode, done.stderr.decode()
+
+    check("`base --path` with no value exits 64", command(["base", "--path"])[0], 64)
+    check("an unknown flag exits 64", command(["base", "--path", "x.json", "--nope", "y"])[0], 64)
+    check("rules sent as a string are refused (64), never read as a set of letters",
+          command(["growth"], json.dumps({"base": [], "head": [["R9", "x"]],
+                                          "base_rules": "R1", "head_rules": "R1R9"}))[0], 64)
+    check("a request that is not JSON exits 64", command(["growth"], "not json")[0], 64)
+    check("a pair of three exits 64",
+          command(["growth"], json.dumps({"base": [], "head": [["R1", "x", "y"]],
+                                          "base_rules": [], "head_rules": []}))[0], 64)
 
     print("\nself-test clean" if ok else "\nself-test FAILED")
     return 0 if ok else 1

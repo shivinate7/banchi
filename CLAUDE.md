@@ -874,7 +874,8 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   takes no `.py` before the symbol. Mechanized by three `make docs-audit` rows. `line anchors`
   refuses a line past the file's end, and any anchor into a split-record stub. `line anchor
   offenders` refuses an anchor that `scripts/line-anchor-offenders.json` does not list. That
-  list only shrinks, and a new file starts clean. `line anchor allowlist` refuses an exemption in `scripts/docs-audit-line-allow.txt` that has
+  list only shrinks. A new file starts clean, unless the anchor moved out of another file.
+  `line anchor allowlist` refuses an exemption in `scripts/docs-audit-line-allow.txt` that has
   stopped being true. The rot rate
   printed beside them is MEASURED and never gated. A citation pointing at a real line whose
   content has moved stays invisible, which D149 ruled no check can see.
