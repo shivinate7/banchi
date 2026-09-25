@@ -90,6 +90,9 @@ async function open(
     /** What `POST /pipeline/markdowns/<stamp>/send` answers: 200 with a receipt that went
      *  live, or a refusal code. Nothing here reaches TCGplayer. */
     send?: () => { status: number; code?: string }
+    /** HOLD THE SEND OPEN THIS LONG, so a case can measure the bar while the press runs
+     *  (round 9, D118). */
+    sendDelayMs?: number
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -97,6 +100,7 @@ async function open(
 
   await page.route(/\/pipeline\/markdowns\/[^/]+\/send$/, async (route) => {
     wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
+    if (options.sendDelayMs !== undefined) await new Promise((r) => setTimeout(r, options.sendDelayMs))
     const answer = options.send?.() ?? { status: 200 }
     await route.fulfill({
       status: answer.status,
@@ -633,3 +637,49 @@ test('the compact-tier price and actions land in their own tracks, not an implic
   await expect(field).toHaveValue(LONG_PRICE)
   await legible(page, 'Price for Articuno')
 })
+
+async function boxesOf(locators: Record<string, import('@playwright/test').Locator>) {
+  const out: Record<string, { x: number; y: number; width: number; height: number } | null> = {}
+  for (const [key, locator] of Object.entries(locators)) out[key] = await locator.boundingBox()
+  return out
+}
+
+function expectStill(
+  before: Record<string, { x: number; y: number; width: number; height: number } | null>,
+  during: Record<string, { x: number; y: number; width: number; height: number } | null>,
+) {
+  for (const key of Object.keys(before)) {
+    const a = before[key]
+    const b = during[key]
+    expect(b, `${key} is drawn during the press`).not.toBeNull()
+    for (const side of ['x', 'y', 'width', 'height'] as const) {
+      expect(Math.abs((b?.[side] ?? 0) - (a?.[side] ?? 0)), `${key} ${side}`).toBeLessThanOrEqual(0.5)
+    }
+  }
+}
+
+/* ROUND 9, D118: A PRESS CHANGES WHAT IS ON THE SCREEN, NEVER WHERE THE REST OF IT IS. The lens's
+   press read "Send 1 price to TCGplayer" and became "Checking TCGplayer, then sending…" while it
+   ran, so it changed its size under the finger and moved the door beside it. Measured before and
+   during a press held open. */
+for (const width of [390, 820]) {
+  test(`r9: the lens press keeps its place and size while it runs (${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    const wire = await open(page, { sendDelayMs: 1500 })
+    const field = page.locator('.pricing-input').first()
+    await field.click()
+    await field.fill('')
+    await field.type('17.50')
+    await field.blur()
+    const bar = page.getByRole('region', { name: 'Send these prices' })
+    await expect(bar.getByRole('button', { name: 'Send 1 price to TCGplayer' })).toBeVisible()
+    /* BY ITS PLACE AND NOT ITS NAME: the name is what changed under the finger. */
+    const press = bar.locator('.pricing-emit')
+    const locators = { press, door: bar.getByRole('button', { name: /Download/ }) }
+    const before = await boxesOf(locators)
+    await press.click()
+    await expect.poll(() => wire.filter((row) => row.path.endsWith('/send')).length).toBe(1)
+    await expect(press).toHaveAttribute('data-busy', 'true')
+    expectStill(before, await boxesOf(locators))
+  })
+}

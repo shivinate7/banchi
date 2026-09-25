@@ -3813,10 +3813,13 @@ export function Pricing() {
               disabled={push !== 'idle' || pushable.length === 0}
               onClick={() => setPush('sending')}
             >
-              {push === 'sending'
-                ? 'Checking TCGplayer, then sending…'
-                : `Send ${pushable.length} ${pushable.length === 1 ? 'price' : 'prices'} to TCGplayer`}
+              {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (round 9, D118): `busy` draws the
+                  spinner, and what it is doing is said to a screen reader beside it. */}
+              {`Send ${pushable.length} ${pushable.length === 1 ? 'price' : 'prices'} to TCGplayer`}
             </Button>
+            <span className="bn-sr" role="status">
+              {push === 'sending' ? 'Checking TCGplayer, then sending…' : ''}
+            </span>
             <Button
               variant="quiet"
               icon="download"
@@ -3826,7 +3829,10 @@ export function Pricing() {
             >
               {push === 'writing' ? 'Writing…' : 'Download the file instead'}
             </Button>
-            {!wroteUpload ? null : (
+            {/* THE FILE'S LINK WAITS FOR THE PRESS TO END (round 9, D118). The send writes the
+                file first, and a link appearing beside the press while it runs pushed the press
+                sideways under the finger. */}
+            {!wroteUpload || push !== 'idle' ? null : (
               <a className="bn-btn" href={markdownFileUrl(stamp, 'import.csv')} download="import.csv">
                 <Icon name="download" size={16} />
                 import.csv
