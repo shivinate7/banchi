@@ -321,6 +321,7 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.browse-sectcount[data-empty='true'] { visibility: hidden; }
 .browse-sectcount {
   flex: none;
   min-width: 22px;

@@ -1972,7 +1972,7 @@ export function BoxBrowse({
             ) : (
               <div className="browse-shelfnote">
                 <span className="boxops-identity-num">No box</span>
-                <p>These records have no valid box or index. See the server status page.</p>
+                <p>These cards have no box or place the store can read.</p>
               </div>
             )}
             {shelfBox === null ? null : boxPanel}
@@ -2055,20 +2055,8 @@ export function BoxBrowse({
             </div>
           ) : null}
 
-          {visible.length === 0 && !awaitingRows && filtered ? (
-            <div className="browse-empty">
-              <EmptyState
-                icon="search"
-                title="Nothing matches here"
-                body={`No card in ${shelfLabel(shelf, shelfName)} matches “${query.trim()}”.`}
-                actions={
-                  <Button size="sm" icon="x" onClick={() => setQuery('')}>
-                    Clear the search
-                  </Button>
-                }
-              />
-            </div>
-          ) : null}
+          {/* NO SECOND "NOTHING MATCHES" HERE (UX-260): the card pane says it once, with the
+              one Clear. */}
 
           {/* D213: the filter narrowed this box to nothing, told apart from a search's own
               empty state above — clearing the filter is a different action from clearing
@@ -2091,6 +2079,9 @@ export function BoxBrowse({
           {displaySections.length === 0 ? null : (
             <ul
               className="browse-list"
+              /* THE PHONE'S BOX SHEET OPENS ON THE LIST (UX-253): its overlay focuses this first,
+                 not the search, whose keyboard would cover the list the sheet was opened for. */
+              data-autofocus=""
               ref={listRef}
               style={listHoldStyle}
               tabIndex={awaitingRows ? -1 : 0}
@@ -2132,7 +2123,9 @@ export function BoxBrowse({
                           if (node !== null)
                             node.indeterminate = ticked > 0 && ticked < section.rows.length
                         }}
-                        aria-label={`Tick every card in ${section.title} (${census})`}
+                        /* SAID ONCE (UX-271): the section and its count are the fold's own name,
+                           beside this, so the tick names only what it ticks. */
+                        aria-label={`Tick all of ${section.parts.head}`}
                         onChange={(event) => tickSection(section, event.target.checked)}
                       />
                       <button
@@ -2143,11 +2136,16 @@ export function BoxBrowse({
                       >
                         <Icon name="chevronRight" size={14} className="browse-sectmark" />
                         <SectionTitle parts={section.parts} />
+                        {/* ONE COUNT PER HEADER (cut list #9): the title already says how many
+                            cards. The badge draws only a tick count, and keeps its slot while
+                            empty, so a tick moves nothing in the header (D118). */}
                         <span
                           className="browse-sectcount"
-                          title={ticked === 0 ? census : `${ticked} of ${section.rows.length} records ticked; ${census}`}
+                          data-empty={ticked === 0 ? 'true' : undefined}
+                          aria-hidden={ticked === 0 ? 'true' : undefined}
+                          title={ticked === 0 ? undefined : `${ticked} of ${section.rows.length} ticked; ${census}`}
                         >
-                          {ticked === 0 ? onHand : `${ticked}/${section.rows.length}`}
+                          {ticked === 0 ? '' : `${ticked}/${section.rows.length}`}
                         </span>
                       </button>
                     </div>
@@ -2744,21 +2742,11 @@ function CardOps({
       toast({
         kind: 'ok',
         icon: 'trash',
-        title:
+        title: `${nameOf(row.card) ?? 'The card'} is deleted`,
+        body:
           result.shifted === 0
-            ? 'Capture removed'
-            : `Capture removed. ${result.shifted} ${result.shifted === 1 ? 'card' : 'cards'} moved down.`,
-        body: `${
-          result.shifted === 0
-            ? 'It was the top of its box, so nothing moved.'
-            : 'Every card behind it moved down one index — every one of those labels has changed.'
-        } ${result.deleted} is removed and the box's next index is ${result.next_index}. ${
-          result.photo_deleted
-            ? result.sidecar_deleted
-              ? 'Its photograph and sidecar went with it.'
-              : 'Its photograph went with it; no sidecar was on disk.'
-            : 'No photograph was on disk to delete.'
-        }`,
+            ? 'It was the last card in its box, so no number changed.'
+            : `${result.shifted} ${result.shifted === 1 ? 'card after it takes' : 'cards after it take'} the number before.`,
         ttlMs: 12000,
       })
       setOpen(null)
@@ -2948,22 +2936,13 @@ function CardOps({
             <span className="bn-eyebrow bn-facts">
               <span>{positionLabel(row.card) ?? row.key}</span>
             </span>
-            <h2 className="inv-dialog-title">Remove this card and slide the box down?</h2>
+            <h2 className="inv-dialog-title">Delete {nameOf(row.card) ?? 'this card'}?</h2>
           </div>
           <div className="inv-dialog-body">
             <p>
-              This deletes the record, the photograph and the sidecar, and{' '}
-              <strong>every card behind it in box {row.card.box} moves down one index</strong> —
-              so every stored position above it changes. There is no undo, and this card is not
-              necessarily still in your hand.
+              Every card after it takes the number before it. <strong>No undo.</strong>
             </p>
-            <p className="bn-muted">
-              It is refused if any card behind it has been sold, retired or listed: those records
-              are departures and commitments rather than clutter.
-            </p>
-            <span className="browse-machine">
-              aiming at capture id {row.card.capture_id ?? 'null (written before ids existed)'}
-            </span>
+            <p className="bn-muted">Refused if a card after it was sold, retired or listed.</p>
             {trouble === null ? null : <Notice tone="danger" title={trouble.message} code={trouble.code} />}
           </div>
           <div className="inv-dialog-foot">
@@ -2971,7 +2950,7 @@ function CardOps({
               Cancel
             </Button>
             <Button variant="danger-solid" icon="trash" busy={busy} onClick={() => void remove()}>
-              Remove this card and slide the box down
+              Delete this card
             </Button>
           </div>
         </Overlay>

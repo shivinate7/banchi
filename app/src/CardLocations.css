@@ -109,7 +109,7 @@
 }
 /* Live is vermilion — the one register in the product that means "out there right now". The
    FIGURE carries it; the label stays in the ordinary voice so the strip is not two-thirds red. */
-.card-locations-owner .card-locations-live .bn-stat-value { color: var(--bn-live); }
+.card-locations-owner .card-locations-live[data-read='false'] .bn-stat-value { color: var(--bn-ink-3); }
 .card-locations-owner .card-locations-live .bn-dot { flex: none; }
 
 .card-locations-owner .card-locations-meta {

@@ -390,10 +390,14 @@ function OwnerRows({
           )}
         </div>
         <div className="card-locations-stats">
-          <div className="bn-stat card-locations-stat">
-            <span className="bn-stat-value">{group.copies.length}</span>
-            <span className="bn-stat-label">{group.copies.length === 1 ? 'copy' : 'copies'}</span>
-          </div>
+          {/* "1 copy" beside "1 in the boxes" said one fact twice (UX-258, cut list #6): the copy
+              count is drawn only when it differs from what is in the boxes. */}
+          {group.copies.length === group.on_hand ? null : (
+            <div className="bn-stat card-locations-stat">
+              <span className="bn-stat-value">{group.copies.length}</span>
+              <span className="bn-stat-label">{group.copies.length === 1 ? 'copy' : 'copies'}</span>
+            </div>
+          )}
           <div className="bn-stat card-locations-stat">
             <span className="bn-stat-value">{group.on_hand}</span>
             <span className="bn-stat-label">in the boxes</span>
@@ -407,10 +411,25 @@ function OwnerRows({
               information, and `· 0 sold here since` on the other 440 is noise that trains the
               eye to skip the line. */}
           {listing ? (
-            <div className="bn-stat card-locations-stat card-locations-live">
+            <div
+              className="bn-stat card-locations-stat card-locations-live"
+              data-read={listedAt || group.listed.live > 0 ? 'true' : 'false'}
+            >
+              {/* RED IS FOR A PROBLEM, AND A LIVE LISTING IS NOT ONE (UX-247). An unread figure is
+                  an unknown: a quiet dash, never a red 0. A read figure is ink, and its dot is
+                  the live mark only while copies are live. */}
               <span className="bn-stat-value">
-                <span className="bn-dot bn-dot-live" aria-hidden="true" />
-                {forSale(group.listed.live, group.sold_here)}
+                {listedAt || group.listed.live > 0 ? (
+                  <>
+                    <span
+                      className={forSale(group.listed.live, group.sold_here) > 0 ? 'bn-dot bn-dot-live' : 'bn-dot'}
+                      aria-hidden="true"
+                    />
+                    {forSale(group.listed.live, group.sold_here)}
+                  </>
+                ) : (
+                  '—'
+                )}
               </span>
               <span className="bn-stat-label">live on TCGplayer</span>
               <ReadingAge at={listedAt} />

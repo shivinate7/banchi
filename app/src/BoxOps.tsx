@@ -332,14 +332,12 @@ export function BoxIdentity({
     <div className="boxops-identity">
       <div className="boxops-identity-top">
         {/* THE NAME ALONE (D-a-box-is-shown-by-its-name): the number is the store's key, never
-            drawn. An unnamed box has a stored default name since the locating lane. */}
+            drawn. An unnamed box has a stored default name since the locating lane. THE STATE
+            PILL RIDES THE NAME'S LINE (UX-269): on the figures' line it sat inline for one box
+            and wrapped onto its own line for another, by how many figures the box had. */}
         <div className="boxops-identity-text">
           <h2 className="boxops-identity-name">{record.name ?? UNNAMED_BOX}</h2>
         </div>
-        {actions}
-      </div>
-
-      <div className="boxops-identity-line">
         <Pill
           tone={sealed ? 'default' : 'ok'}
           icon={sealed ? 'lock' : 'unlock'}
@@ -347,6 +345,10 @@ export function BoxIdentity({
         >
           {sealed ? 'sealed' : 'open'}
         </Pill>
+        {actions}
+      </div>
+
+      <div className="boxops-identity-line">
         {censusStats.length === 0 ? null : (
           <div className="boxops-stats bn-stat-row">
             {censusStats.map((stat) => (
@@ -572,24 +574,10 @@ export function BoxOps({
                       : boundHelp
                   }
                 />
-                {/* FILL and NEXT INDEX used to be the two bare labelled numbers on this sheet
-                    — every other control here already "says what it will do before it does
-                    it" (Seal, Edit dividers), and a hover-only `help` title said this without
-                    ever being read, since nothing on a touch device or a keyboard walk ever
-                    triggers one. `note` is the same visible-caption slot `Listing-held`
-                    already draws its reading age through, so this reaches for an existing
-                    mechanism rather than inventing new markup. */}
-                <Census
-                  label="Fill"
-                  value={known(record.fill)}
-                  help="Highest index ever captured — never comes down."
-                  note="Never comes down, even after a sale"
-                />
-                <Census
-                  label="Next index"
-                  value={known(record.next_index)}
-                  note="Where the next capture lands"
-                />
+                {/* THE TWO FIGURES KEEP NO NOTE (UX-259, cut list #17), and the second is named
+                    for what it is to the owner, never the store's "index" (D196). */}
+                <Census label="Fill" value={known(record.fill)} help="The highest card position ever captured in this box." />
+                <Census label="Next capture" value={known(record.next_index)} help="Where the next card captured into this box lands." />
                 {sealed ? <Census label="Sealed at" value={known(record.capacity)} /> : null}
               </dl>
             </section>
@@ -745,7 +733,7 @@ export function BoxOps({
               onChange={setDraft}
               placeholder="SV commons"
               autoFocus
-              hint="The box number is the identifier and can't change here."
+              hint="Each box has its own name. Leave it empty for a default name."
             />
             <Trouble failure={trouble} />
             <div className="boxops-actions">
@@ -899,8 +887,10 @@ function Census({
   return (
     <div className="boxops-census-cell" title={help}>
       <dt>{label}</dt>
-      <dd>{value === null ? '—' : value.toLocaleString()}</dd>
-      {note === undefined ? null : <div className="boxops-census-note">{note}</div>}
+      <dd>
+        {value === null ? '—' : value.toLocaleString()}
+        {note === undefined ? null : <span className="boxops-census-note">{note}</span>}
+      </dd>
     </div>
   )
 }
@@ -959,7 +949,7 @@ function Relabel({
         <Notice tone="info">Already the box's layout — nothing changes.</Notice>
       ) : (
         <Notice tone="warn" title="A relabel, not a renumber.">
-          No card moves, no index changes — cards from #{from} on are relabelled only.{' '}
+          No card moves. Cards from #{from} on get a new section only.{' '}
           {hit === null || hit.sections.length === 0
             ? 'How many cards that reaches could not be read from this box.'
             : `That reaches ${hit.sections.length === 1 ? 'section' : 'sections'} ${hit.sections.join(', ')} — ${count(hit.cards, 'card', 'cards')}, counted by whole section.`}
@@ -1153,10 +1143,7 @@ export function ClaimEditor({
   return (
     <div className="boxops-claims">
       <p className="boxops-claim-scope">Change claims on {scope}</p>
-      <p className="bn-field-hint">
-        Switch a field on to write it; a field left off is left alone. A field switched on and
-        left empty clears the claim.
-      </p>
+      <p className="bn-field-hint">Switch a field on to change it. Empty clears it.</p>
 
       <ClaimRow field="game" label="Game" armed={isArmed('game')} onArm={arm} says="required — nothing to clear it to">
         <select
@@ -1284,14 +1271,9 @@ export function ClaimEditor({
         <PlainInput value={note} onChange={setNote} placeholder="blue-eyes, japanese" label="Note" />
       </ClaimRow>
 
-      <p className="bn-field-hint">
-        Finish and rarity are per game, so the choices above come from the game selected here.
-        The server checks every card against its own game and refuses the whole apply, naming
-        the cards, rather than writing some of them.
-        {!showsProduct
-          ? null
-          : ' A code card with no product claim is refused by both channel lanes, so clearing this one takes the code out of every lot until it is claimed again.'}
-      </p>
+      {!showsProduct ? null : (
+        <p className="bn-field-hint">A code card with no product cannot be sold until it has one again.</p>
+      )}
       {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
 
       <div className="boxops-actions">
@@ -1789,11 +1771,9 @@ function DeleteBox({
         kind: 'ok',
         icon: 'trash',
         title: `${record.name ?? UNNAMED_BOX} is gone. There is no undo.`,
-        body: `${result.cards} ${result.cards === 1 ? 'card' : 'cards'} gone${
-          result.buried > 0 ? ` — ${count(result.buried, 'departed record', 'departed records')} buried in the graveyard` : ''
-        }, with ${result.photos} ${result.photos === 1 ? 'photograph' : 'photographs'} and ${result.sidecars} ${result.sidecars === 1 ? 'sidecar' : 'sidecars'}, and ${result.review_deleted} review, ${result.parked_deleted} parked and ${result.cache_deleted} cache ${result.cache_deleted === 1 ? 'entry' : 'entries'}.${
-          result.directory_removed ? '' : ' The photo directory was left in place: it still holds a file this delete did not account for.'
-        }`,
+        body: `${count(result.cards, 'card', 'cards')} and ${count(result.photos, 'photograph', 'photographs')} deleted.${
+          result.buried > 0 ? ` ${count(result.buried, 'sold or retired card', 'sold or retired cards')} moved to the graveyard.` : ''
+        }${result.directory_removed ? '' : ' One photo folder stays: it holds a file the delete did not expect.'}`,
         ttlMs: 12000,
       })
       onChanged()

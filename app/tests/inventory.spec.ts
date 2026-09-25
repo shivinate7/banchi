@@ -2904,18 +2904,11 @@ test('the census greps to the store, and the identity line says what the box hol
   await expect(censusValue(page, 'Sold')).toHaveText('1')
   await expect(censusValue(page, 'Retired')).toHaveText('1')
   await expect(censusValue(page, 'Fill')).toHaveText('7')
-  await expect(censusValue(page, 'Next index')).toHaveText('8')
+  await expect(censusValue(page, 'Next capture')).toHaveText('8')
 
-  /* FILL and NEXT INDEX used to be two bare numbers with no visible sentence — a `help` title
-     that only a hover ever reaches said what Fill was, and Next index said nothing at all.
-     Both now carry the same visible-caption slot `Listing-held`'s reading age already draws
-     through (`.boxops-census-note`), so a reader who never hovers still gets the sentence. */
-  await expect(
-    page.locator('.boxops-census-cell', { hasText: 'Fill' }).locator('.boxops-census-note'),
-  ).toHaveText('Never comes down, even after a sale')
-  await expect(
-    page.locator('.boxops-census-cell', { hasText: 'Next index' }).locator('.boxops-census-note'),
-  ).toHaveText('Where the next capture lands')
+  /* THE NOTES UNDER FILL AND NEXT CAPTURE ARE CUT (UX-259, cut list #17): the figures stand on
+     their labels, and the store's word "index" is not one of them (D196). */
+  await expect(page.locator('.boxops-census-cell', { hasText: 'Fill' }).locator('.boxops-census-note')).toHaveCount(0)
 
   /* Five, not seven: two of the seven records have left. THE CENSUS TRIAD (D41) REACHED THIS
      PANEL — `on hand` is a `bn-stat` figure now, the same primitive `CardLocations`' own three
@@ -2962,7 +2955,7 @@ test('the box panel draws its census as bn-stat figures, not the old dotted line
   /* THE PILL AND THE NOTE STAY OUTSIDE THE STAT ROW. `open`/`sealed` is the lid, not a count of
      what is in the box, and this fixture box is open so there is no `sealed at N` note to draw
      — `#/inventory`'s sealed-box case (this same file, "the seal names...") covers that text. */
-  await expect(page.locator('.boxops-identity-line .boxops-state')).toHaveText('open')
+  await expect(page.locator('.boxops-identity .boxops-state')).toHaveText('open')
 
   /* AND THE FOUR FIGURES SIT ON ONE ROW AT 1440 — the rail is 300px and this is the width the
      brief named as the floor for it. */
@@ -3409,7 +3402,7 @@ test('the mid-box delete aims with the target’s own capture id and reports the
   await page.locator('.browse-row', { hasText: 'Thievul' }).nth(1).click()
   await openCardOps(page)
   await page.getByRole('menuitem', { name: 'Remove this card…' }).click()
-  await page.getByRole('button', { name: /^Remove this card and slide/ }).click()
+  await page.getByRole('button', { name: 'Delete this card' }).click()
 
   const removed = wire.find((sent) => sent.path.endsWith('/remove'))
   expect(removed?.method).toBe('POST')
@@ -3420,7 +3413,7 @@ test('the mid-box delete aims with the target’s own capture id and reports the
 
   /* `shifted > 0` means every label above the deleted card has changed, and the receipt has to
      say so: it is the one operation in the product that renumbers. */
-  await expect(page.locator('.bn-toast')).toContainText('moved down one index')
+  await expect(page.locator('.bn-toast')).toContainText('the number before')
 })
 
 test('and the photograph follows the shift, because the URL names the capture', async ({
@@ -3486,7 +3479,7 @@ test('and the photograph follows the shift, because the URL names the capture', 
 
   await openCardOps(page)
   await page.getByRole('menuitem', { name: 'Remove this card…' }).click()
-  await page.getByRole('button', { name: /^Remove this card and slide/ }).click()
+  await page.getByRole('button', { name: 'Delete this card' }).click()
 
   /* After: the SAME slot, a different card, and therefore a different URL — so the picture
      is re-fetched rather than reused. The facts beside it moved on their own and always
@@ -4739,7 +4732,10 @@ test('the box and the runs survive a query that selects no card', async ({ page 
      for one condition. The status-bar line is gone when this box's own matches are zero; the
      `EmptyState` carries the message (and a "Clear the search" way out) alone now. */
   await expect(page.locator('.browse-status-text', { hasText: 'nothing matches' })).toHaveCount(0)
-  await expect(page.locator('.browse-empty', { hasText: 'Nothing matches here' })).toHaveCount(1)
+  /* UX-260: and the list draws none either. The card pane's empty state says it once, with the
+     one Clear. */
+  await expect(page.getByText(/^Nothing matches/)).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Clear the search' })).toHaveCount(1)
 
   await expect(page.locator('.boxruns')).toBeVisible()
   await expect(page.locator('.browse-map .boxops-identity')).toHaveCount(1)
@@ -4896,8 +4892,8 @@ test("the box's census and its forecast are told apart, and the fill says which 
   /* NEXT INDEX IS NOT A CENSUS FIGURE. `Captured`, `Sold` and `Fill` describe what is in the box;
      `Next index` is D10's high-water mark — what the allocator hands out next — and it is named
      apart from them rather than sitting in the row as a fourth count of cards. */
-  await expect(censusValue(page, 'Next index')).toHaveText('8')
-  await expect(page.locator('.boxops-census-cell', { hasText: 'Next index' })).toHaveCount(1)
+  await expect(censusValue(page, 'Next capture')).toHaveText('8')
+  await expect(page.locator('.boxops-census-cell', { hasText: 'Next capture' })).toHaveCount(1)
 
   /* D20's DENOMINATOR RULE, WHICH THIS LINE NEVER DISCHARGED. That entry is explicit that a
      number whose meaning switches silently between an open box and a sealed one is the failure
