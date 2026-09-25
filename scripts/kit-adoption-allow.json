@@ -160,11 +160,6 @@
       "width": "review",
       "top": "review"
     },
-    "/pricing": {
-      "page": "b-pricing",
-      "width": "b-pricing",
-      "top": "b-pricing"
-    },
     "/orders": {
       "page": "orders",
       "width": "orders",

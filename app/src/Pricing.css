@@ -427,3 +427,6 @@
   .pricing-bar .send-card { flex: 1 1 auto; }
   .pricing-body { padding-bottom: calc(var(--pricing-bar-h, 0px) + var(--bn-4)); }
 }
+
+/* THE HEADER'S ICON PRESSES SIT FAR ENOUGH APART THAT EACH 40PX HIT AREA IS ITS OWN (D117). */
+.pricing .bn-head-actions { gap: var(--bn-3); }
