@@ -50,6 +50,9 @@ contradict a settled decision on purpose. The owner weighs that.
 | `held-orders-review.md` | The held-screen pass on `#/orders` (HOR) |
 | `held-inventory-review.md` | The held-screen pass on `#/inventory` and `#/review` (HIR) |
 
+The icon map (the Opus planner's press-by-press table) is not copied here. The kit-icons lane
+lands it as `+docs/specs/iconography.md`.
+
 ## Before you rank anything, read this
 
 1. **The counts.** The first seven lenses logged 250 findings, which merged into 164 distinct
