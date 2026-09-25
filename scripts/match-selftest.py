@@ -699,7 +699,6 @@ def case_do_search_hostile_multiterm_query_stays_fast() -> None:
             )
             inv.cards[f"{box}/{idx}"] = card
 
-    n_cards = len(Store().read().inventory.cards)
     for label, query in (
         ("100 repeated 'a' terms", ("a " * 100).strip()),
         ("50 repeated '001' terms", ("001 " * 50).strip()),
@@ -710,9 +709,9 @@ def case_do_search_hostile_multiterm_query_stays_fast() -> None:
         took = time.monotonic() - start
         walked = cs._SEARCH_WORK_COUNTERS["rows_walked"]
         check(
-            walked in (0, n_cards),
-            f"{label}: rows_walked={walked} is 0 or exactly the store's {n_cards} "
-            "cards, never a multiple of it",
+            walked in (0, 1),
+            f"{label}: rows_walked={walked} SQL scans against `cards` — 0 or 1, never "
+            "a count that grows with the term count",
         )
         check(
             took < 5.0,
@@ -885,16 +884,26 @@ def case_do_search_hostile_repeated_terms_stay_fast_on_real_names() -> None:
     of this case went red at load average 16 with no code defect at all — a shared CI
     runner answers "how busy is the machine", never "how much work did this query do".
     `_SEARCH_WORK_COUNTERS`, reset before each query:
-      `rows_walked`     proves F6-3's own fix directly. `_fts_supplemental_candidates`
-                        used to run up to 32 separate O(store) scans for an 8-term
-                        query (4 sources × 8 terms); it is now ONE row walk for every
-                        term together, so this is either 0 (no widening needed at all)
-                        or exactly the store's own card count — NEVER a multiple of it.
-      `match_rank_calls` proves R5-1's own fix. Mutated (`if True:` in place of `if
-                        matched or token_count == 1:`) this measured 11,416 calls for
-                        the `/NNN` query alone, against 0 fixed — the bound below sits
-                        between the two, nowhere near either query's own legitimate
-                        match count for the other shapes.
+      `rows_walked`      COUNTS SQL SCANS, NOT ROWS, via `conn.set_trace_callback` on the
+                         connection (round-8, correcting round-7's own version — see
+                         `_count_cards_scan`'s docstring for why: a counter incremented
+                         inside ONE function's own loop only proves that loop ran, and
+                         loading round-6's four separate per-term SQL sources back in
+                         stayed green at `rows_walked=0`, because that counter never SAW
+                         a different code path's own scans). A connection-level trace
+                         counts a `cards` table scan no matter which code issues it, so
+                         this is 0 (no widening needed) or 1 (one combined walk) — NEVER
+                         a count that grows with the term count, which is F6-3's own
+                         claim, now checked against something that can see it break.
+      `match_rank_calls` proves R5-1's own fix, counted INSIDE `_match_rank` itself
+                         (round-8, correcting round-7's own call-site counter, which a
+                         caller-side mutation could defeat without changing how often
+                         `_match_rank` actually runs). Mutated (`if True:` in place of
+                         `if matched or token_count == 1:`) this measured 11,416 calls
+                         for the `/NNN` query alone, against 0 fixed.
+      `match_query_calls` bounded at 2x the store's own card count — generous against
+                         every legitimate shape measured (at most 1,427), nowhere near
+                         what an unbounded per-term blowup would produce.
     Wall time stays as a generous BACKSTOP (5s, over 6x every number either review ever
     measured even unfixed), which still catches a genuine algorithmic regression outright
     — it just never cries wolf over a busy machine alone.
@@ -905,6 +914,7 @@ def case_do_search_hostile_repeated_terms_stay_fast_on_real_names() -> None:
     from server import capture_server as cs
 
     n_cards = len(Store().read().inventory.cards)
+    query_bound = n_cards * 2
 
     for label, query, rank_bound in (
         ("100 repeated '1' terms", ("1 " * 100).strip(), 200),
@@ -916,6 +926,10 @@ def case_do_search_hostile_repeated_terms_stay_fast_on_real_names() -> None:
         ("50 repeated '001' terms", ("001 " * 50).strip(), 200),
         ("8 distinct '/NNN' terms", "/132 /298 /166 /198 /219 /221 /1 /2", n_cards * 2),
         ("a mixed digit/text hostile query", "/198 001 hooh izard ard eon ex v", n_cards * 2),
+        # F6-3's OWN SUBJECT, ROUND-8: 8 distinct 3+ letter mid-word terms measured
+        # 450-536ms p50, up to 860ms p95 on the real store, before the four widening
+        # sources merged into one walk.
+        ("8 distinct mid-word terms", "engar ion ard ing ter eon lex ade", n_cards * 2),
     ):
         cs._reset_search_work_counters()
         start = time.monotonic()
@@ -923,16 +937,21 @@ def case_do_search_hostile_repeated_terms_stay_fast_on_real_names() -> None:
         took = time.monotonic() - start
         counters = dict(cs._SEARCH_WORK_COUNTERS)
         check(
-            counters["rows_walked"] in (0, n_cards),
-            f"{label}: rows_walked={counters['rows_walked']} is 0 or exactly the "
-            f"store's {n_cards} cards — never a multiple of it (F6-3, one walk for "
-            "every term together)",
+            counters["rows_walked"] in (0, 1),
+            f"{label}: rows_walked={counters['rows_walked']} SQL scans against `cards` "
+            "— 0 (no widening needed) or 1 (one combined walk), never a count that "
+            "grows with the term count (F6-3)",
         )
         check(
             counters["match_rank_calls"] <= rank_bound,
             f"{label}: match_rank_calls={counters['match_rank_calls']}, at or under "
             f"{rank_bound} (R5-1: the rank loop only ranks a matched row, or a "
             "single-term query)",
+        )
+        check(
+            counters["match_query_calls"] <= query_bound,
+            f"{label}: match_query_calls={counters['match_query_calls']}, at or under "
+            f"{query_bound} (2x the store's own card count)",
         )
         check(
             took < 5.0,
@@ -1015,6 +1034,66 @@ def case_do_search_zero_pad_widens_a_digit_plus_letter_term() -> None:
     got = {g["sku"] for g in cs.do_search("24a")["groups"]}
     equal(got, expected, "do_search('24a') finds every SKU match_query accepts")
     check("9900" in got, "specifically, the digit-plus-letter number card is found")
+
+
+def case_do_search_substring_widens_a_two_char_digit_term() -> None:
+    """F6-2, STILL OPEN ON THE REAL COPY, round-8 Opus delta review, 2026-09-25 (on
+    f2d13ae7 — round 7 lowered only the ZERO-PAD rule's floor, never the SUBSTRING
+    rule's). `6a` missed "Order Rune (R06a)" on the real store (2 SKUs), and `1a`
+    through `6a` missed 40 real cards combined. `match.match_query` accepts `6a` by
+    rule 7's own substring check, which has NO floor at all — the candidate step's own
+    3-character floor (borrowed whole from R3, which is about mid-word TEXT) is what
+    refused it, even though `_is_floor_query` already treats a digit-bearing 2-character
+    term as NOT a floor term. The floor now agrees with that.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        card = master.Card(box=1, index=1, name="Order Rune (R06a)", sku="9800")
+        snapshot.inventory.cards["1/1"] = card
+
+    expected = _brute_force_matches("6a")
+    got = {g["sku"] for g in cs.do_search("6a")["groups"]}
+    equal(got, expected, "do_search('6a') finds every SKU match_query accepts")
+    check("9800" in got, "specifically, 'Order Rune (R06a)' is found")
+
+
+def case_do_search_known_gap_hash_prefixed_composed_letter_number() -> None:
+    """KNOWN GAP, round-8 Opus delta review, 2026-09-25 (item 5, the reviewer's own
+    call: "older than this lane", disclosed rather than fixed here). `#24a` for a card
+    numbered `024a/219` MISSES — measured on the real store: 11 of 22 distinct
+    hash-prefixed composed-letter queries sampled missed their target SKU entirely.
+
+    WHY: `#24a` fails `match._number_shape_ok` (the leading `#` is neither a letter nor
+    a digit), so the zero-pad widening refuses it before it ever runs. The BASE FTS
+    query's own `#`-stripped alternate spelling (which DOES rescue a query like `#r04a`
+    for a letter-prefixed number with no slash — a real FTS token, unchanged) cannot
+    rescue this shape either: the stored FTS token is the WHOLE composed number,
+    `024a/219`, which starts with `0`, never `2` or `#` — no prefix search from either
+    spelling reaches it.
+
+    THIS CASE ASSERTS THE GAP, NOT A FIX — a future change that closes it should make
+    this assertion FAIL, which is the signal to flip it (delete the `check(not ...)`,
+    assert the real find instead, and delete this docstring's own "known gap" framing).
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        card = master.Card(box=1, index=1, name="Composed Letter Card", number="024a/219", sku="9700")
+        snapshot.inventory.cards["1/1"] = card
+
+    expected = _brute_force_matches("#24a")
+    got = {g["sku"] for g in cs.do_search("#24a")["groups"]}
+    check("9700" in expected, "match_query itself accepts '#24a' for '024a/219' (sanity: the gap is in do_search, not match_query)")
+    check(
+        "9700" not in got,
+        "KNOWN GAP: do_search('#24a') does NOT find '024a/219' today — flip this "
+        "assertion when the gap closes",
+    )
 
 
 def case_do_search_widening_dedupes_case_variants() -> None:
@@ -1309,6 +1388,8 @@ CASES = [
     case_do_search_union_never_drops_a_row_a_single_term_widens,
     case_do_search_zero_pad_matches_a_composed_number,
     case_do_search_zero_pad_widens_a_digit_plus_letter_term,
+    case_do_search_substring_widens_a_two_char_digit_term,
+    case_do_search_known_gap_hash_prefixed_composed_letter_number,
     case_do_search_widening_dedupes_case_variants,
     case_do_search_permanent_fuzz_agrees_with_match_query,
     case_do_search_still_refuses_an_unrelated_number,

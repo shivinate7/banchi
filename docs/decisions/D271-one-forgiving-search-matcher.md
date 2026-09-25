@@ -260,12 +260,14 @@ target, not a mid-word measurement at all. Real fragments the owner's own names 
 **DISCLOSURE, R5-4: THE 1-2 CHARACTER FLOOR MEANS `do_search` RETURNS FEWER ROWS THAN `match.match_query` ACCEPTS.** `_fts_substring_candidates_for_term`'s 3-character floor
 (R3, the owner's own accepted condition) is a floor on the CANDIDATE step. It is not a
 floor on `match_query`'s own rule 7, which has none at all. A 1-2 character text token
-matches as a substring ANYWHERE in a folded field, with no length minimum. `sc` measured on
-the real store: `match_query` accepts 47 SKUs (195 CARDS — `do_search` groups by SKU, and
-a SKU count is never a card count, F6-7, round-7 Opus delta review, 2026-09-25, correcting
-this entry's own earlier unit error). `do_search` returns 14 SKUs (25 cards), DROPPING 33
-SKUs (170 cards). This is the floor's own known cost, accepted at the time R3 shipped,
-restated here in real numbers rather than only in principle.
+matches as a substring ANYWHERE in a folded field, with no length minimum. ONE UNIT
+THROUGHOUT THIS ENTRY, CARD RECORDS, NEVER SKUS (F6-7, round-8 Opus delta review,
+2026-09-25, correcting round-7's own SKU-counted version, which then also picked
+`on_hand` — excluding sold and departed copies — where `match_query`'s own count
+covers every state). `sc` measured on the real store: `match_query` accepts 195 card
+records, `do_search` returns 56, DROPPING 139. This is the floor's own known cost,
+accepted at the time R3 shipped, restated here in a real number rather than only in
+principle.
 
 **DISCLOSURE: A 9TH OR LATER DISTINCT TERM IS NEVER WIDENED.**
 `_SUPPLEMENTAL_TERM_CAP = 8` bounds how many distinct terms reach the candidate-widening
@@ -339,12 +341,12 @@ per query, measured at 11,416 calls under a reverted fix against 0 on the same q
 fixed. Wall time stays as a generous 5-second BACKSTOP, which still catches a genuine
 algorithmic regression outright, and never cries wolf over a busy machine alone.
 
-**F6-7: A SKU COUNT IS NOT A CARD COUNT.** R5-4's disclosure said `sc` drops "33 cards"
-on the real store. Those are 33 SKUs. `do_search` groups by SKU, and a SKU with several
-copies is several cards. Measured directly: `match_query` accepts 47 SKUs (195 cards).
-`do_search` returns 14 SKUs (25 cards), dropping 33 SKUs (170 cards). Corrected above,
-in place, with the count checked directly against a fresh real-store copy rather than
-carried forward.
+**F6-7: A SKU COUNT IS NOT A CARD COUNT. Round-7's own attempted fix was ITSELF wrong, corrected again in round 8, below.** R5-4's disclosure originally said `sc` drops
+"33 cards" on the real store, meaning 33 SKUs. Round 7 corrected the number to cards,
+but picked `on_hand` (excluding sold and departed copies) rather than the full count
+`match_query` itself counts — the two units still disagreed. Round 8's own re-measurement,
+using ONE unit throughout, card records in every state: `match_query` accepts 195,
+`do_search` returns 56, dropping 139. Corrected above, in place.
 
 **RE-TIMED ON A FRESH REAL-STORE COPY, R7-FIXED CODE, MACHINE QUIET:**
 
@@ -378,9 +380,101 @@ isolation, confirmed red, then restored:
 | M3 | R5-3 (case-folded widening dedupe) | 2 cases fail |
 | M4 | F6-1 (letter-prefixed number widening) | 2 cases fail, INCLUDING the fuzz |
 
-The rest of this entry, `harness/tests/t7_store_and_seams.py:check_search_fts5`'s own
-`midword` case, and `scripts/match-selftest.py`'s case 16 all now assert the FOUND
-direction. `docs/specs/store-scaling.md` item 8 and `docs/specs/store-scaling/
-08-search-fts5.md` keep their original text as the record of the earlier trade-off, each
-with a note pointing here. Item 8 is now marked SUPERSEDED on the mid-word point. The
-prefix-only design it argued for is not what shipped.
+**ROUND 8, OPUS DELTA REVIEW, 2026-09-25, ON f2d13ae7.** Four blocking items, narrow —
+0 false positives found in 7,000 fuzz queries, timing already inside bound, the
+wolf-crying gone. Three more disclosures.
+
+**1. F6-2 WAS STILL OPEN ON THE REAL COPY.** Round 7 lowered only the ZERO-PAD rule's
+floor. `6a` missed "Order Rune (R06a)" (2 card records). `1a`-`6a` missed 40 real cards
+combined. `match_query` accepts a 2-character digit-bearing term by rule 7's own
+SUBSTRING check, which has no floor at all. The borrowed 3-character TEXT floor on the
+SUBSTRING widening rule was the actual gate. Fixed: a digit-bearing 2-character term now
+also reaches the substring rule, matching `_is_floor_query`'s own definition of "not a
+floor term".
+
+**2. `rows_walked` COULD NOT SEE A SEPARATE CODE PATH'S OWN SCANS.** Round 7's counter
+lived inside `_fts_supplemental_candidates`'s own loop body. That was proof the loop
+ran, and nothing else. Loading round-6's four separate per-term SQL sources back in
+stayed green at `rows_walked=0`. A different function's own scans never touched that
+counter at all. Fixed: `conn.set_trace_callback(_count_cards_scan)`, attached to the
+connection itself, counts a `cards` table scan no matter which Python function issues
+the SQL. Confirmed by literally restoring the round-6 architecture: `rows_walked` now
+reads 16 (4 sources times up to 8 terms scanning independently), never 0.
+
+**3. `match_rank_calls` COUNTED AT THE CALL SITE, NOT INSIDE `_match_rank`.** A caller
+restructuring could defeat it. Moving the rank loop's own computation before
+`match_query` runs is the same shape as M1, arrived at by reordering rather than
+changing a condition. This could leave the call-site counter's own increment behind
+while `_match_rank` still ran just as often. Fixed: the counter is now the first line
+inside `_match_rank` itself. It fires whenever the function actually runs, regardless of
+how the caller decided to call it.
+
+**4. `match_query_calls` WAS NEVER ASSERTED.** Bounded now at 2x the store's own card
+count in the hostile timing case. This is generous against every legitimate shape
+measured (at most 1,427 calls), nowhere near what an unbounded blowup would produce.
+
+**5. THREE DISCLOSED GAPS, KNOWN, NOT BLOCKING. The reviewer's own call: "older than this lane."** Measured on the real store copy:
+  - **`#`-PREFIXED COMPOSED-LETTER NUMBERS.** `#24a` for a card numbered `024a/219`
+    MISSES. 11 of 22 distinct hash-prefixed composed-letter queries sampled missed
+    their target entirely. `#24a` fails `match._number_shape_ok`, since a leading `#`
+    is neither letter nor digit. The zero-pad widening never runs. The base FTS
+    query's own `#`-stripped alternate spelling cannot reach it either. The stored FTS
+    token is the WHOLE composed number (`024a/219`), which starts with `0`, never `2`
+    or `#`. Case-table row: `case_do_search_known_gap_hash_prefixed_composed_letter_
+    number`, asserting the miss so a future fix flips it.
+  - **COMPOSED FORMS WITH AN EXTRA LEADING ZERO** (`0024a` for a card stored `024a/219`)
+    and **A DIGIT WORD IN NAME TEXT** (`4` for a card whose name contains "spent 4")
+    were BOTH CHECKED against the real store. Neither reproduced as a miss in this
+    measurement. 0 extra-zero composed queries missed. The one real card in the store
+    with a standalone 1-2 digit word in its name was found correctly. Named here as
+    checked, not as confirmed gaps. A smaller or differently-shaped sample than the
+    reviewer's own might explain the disagreement. This entry does not claim to have
+    reproduced what it could not measure.
+
+**6. ONE UNIT THROUGHOUT THIS ENTRY, CARD RECORDS, NEVER SKUS.** R5-4's own disclosure,
+above, is corrected in place. F6-7's own round-7 fix was ITSELF wrong. It corrected the
+unit to cards but picked `on_hand`, excluding sold and departed copies, where
+`match_query`'s own count covers every state. `sc` measured on the real store:
+`match_query` accepts 195 card records, `do_search` returns 56, dropping 139.
+
+**7. THE FOLD-PREFIX RULE IS DELETED, NOT GUARDED. M10: "if it is redundant, delete it."** Checked empirically: removing it left every case in this file's own table, and
+the permanent fuzz, still green. The SUBSTRING rule's compact-containment check is a
+strict superset of a prefix check. F6-2 (above) closed the one gap that check would
+otherwise have left open. See `_fts_supplemental_candidates`'s own docstring for the
+argument in full.
+
+**RE-TIMED ON A FRESH REAL-STORE COPY, R8-FIXED CODE:**
+
+| Query shape | p50 / p95 | body |
+|---|---|---|
+| 1-char (`a`), floored | 121.6ms / 125.8ms | 351KB |
+| 2-char (`ab`), floored | 44.1ms / 48.8ms | 14KB |
+| Hostile 100×`1` | 231.0ms / 236.9ms | 12KB |
+| Hostile 100×`e` | 134.9ms / 141.8ms | 161KB |
+| Hostile 66×`ex` | 73.2ms / 76.4ms | 45KB |
+| Hostile 50×`001` | 59.4ms / 63.6ms | 12KB |
+| R6 hostile 8×`/NNN` | 143.0ms / 145.9ms | 63B |
+| R6 hostile mixed | 45.9ms / 48.1ms | 60B |
+| R7 hostile 8×mid-word | 64.8ms / 67.4ms | 61B |
+| Bare number (`132`) | 53.2ms / 56.8ms | 12KB |
+| Floor `sc` | 59.8ms / 64.3ms | 44KB |
+| F6-1 letter-prefixed (`tg5`) | 35.6ms / 39.4ms | 31B |
+| **F6-2 short number-shaped (`6a`)** | **47.4ms / 48.6ms** | **6KB, a real hit now** |
+
+Every shape stays under 240ms p95. F6-2's own `6a` row went from a 30-byte empty body
+(round 7) to a 6KB real result, at no measurable timing cost.
+
+**MUTATION RESULTS, ON THE FINAL HEAD, EACH CONFIRMED RED THEN RESTORED:**
+
+| Mutation | Reverts | Result |
+|---|---|---|
+| M1 | R5-1 (decisive check before the rank loop) | 4 cases fail |
+| M2 | R5-2 (composed-number `/%` widening) | 5 cases fail, including the fuzz |
+| M3 | R5-3 (case-folded widening dedupe) | 2 cases fail |
+| M4 | F6-1 (letter-prefixed number widening) | 3 cases fail, including the fuzz |
+| M5 | reorders the rank loop before `match_query`, not merely `if True:` | 4 cases fail. Round-7's own call-site counter would have missed this. The round-8 counter, inside `_match_rank` itself, does not |
+| M8 | F6-2 (the 2-character digit-bearing substring floor) | 2 cases fail |
+| M10 | the fold-prefix rule | deleted outright, nothing left to mutate |
+
+M6, M7, M9, M11 and M12 are not described in this round's brief. This entry names only
+the mutations it was given a definition for, rather than guessing at the rest.

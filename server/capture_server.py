@@ -9919,6 +9919,14 @@ def _match_rank(card: master.Card, query: str) -> Optional[int]:
     does, so the two agree. SKU stays a bare substring on purpose (see the header above this
     function): a `TCGplayer Id` is unique, so where its one group sorts costs nothing.
     """
+    # COUNTED HERE, NOT AT THE CALL SITE (F6-6's own robustness gap, round-8 Opus
+    # review, 2026-09-25). A call-site counter — `do_search` incrementing before it
+    # calls this function — only proves the CALLER'S OWN bookkeeping matches its OWN
+    # call, which a mutation of the caller's structure can silently defeat while this
+    # function still runs exactly as often. Counting inside the callee is robust to
+    # ANY caller-side mutation: the counter fires when `_match_rank` actually runs,
+    # never when some other line of code claims it will.
+    _SEARCH_WORK_COUNTERS["match_rank_calls"] += 1
     name = str(card.name or "")
     number = str(card.number or "")
     key = _card_number_key(card)
@@ -10164,13 +10172,41 @@ _SUPPLEMENTAL_TERM_CAP = 8
 # wall-clock time alone, which goes red on a loaded CI runner (measured: load average 16)
 # with no code defect at all — the exact "cry wolf" this repo's own working agreement
 # already names. These three counters — a `_match_rank` call, a `match.match_query`
-# call, and a candidate row `_fts_supplemental_candidates` walks — are WORK DONE, never
-# wall time, so a test can assert "this query does at most N units of work" and stay
-# true regardless of what else the machine is doing. Reset with `_reset_search_work_
-# counters()` before a timed run; read as a plain dict afterward. Never read in
-# production code, and the increment itself is one dict lookup plus one addition, cheap
-# enough that leaving it always-on costs nothing worth removing it for.
+# call, and an SQL SCAN of the `cards` table (STATEMENTS, not rows — see `_count_cards_
+# scan`'s own docstring, round-8) — are WORK DONE, never wall time, so a test can assert
+# "this query does at most N units of work" and stay true regardless of what else the
+# machine is doing. Reset with `_reset_search_work_counters()` before a timed run; read
+# as a plain dict afterward. Never read in production code, and the increment itself is
+# one dict lookup plus one addition, cheap enough that leaving it always-on costs
+# nothing worth removing it for.
 _SEARCH_WORK_COUNTERS = {"match_rank_calls": 0, "match_query_calls": 0, "rows_walked": 0}
+
+_CARDS_TABLE_SCAN = re.compile(r"\bFROM\s+cards\b", re.IGNORECASE)
+
+
+def _count_cards_scan(sql: str) -> None:
+    """Attached to a connection via `sqlite3.Connection.set_trace_callback` — fires for
+    EVERY SQL statement that connection runs, whichever Python function issued it (F6-6's
+    own robustness gap, round-8 Opus review, 2026-09-25). The round-7 version counted
+    inside `_fts_supplemental_candidates`'s own row-walk loop — proof that loop ran, and
+    nothing else. Loading round-6's four separate per-term SQL sources back in (each its
+    own `conn.execute`, a different code path entirely) stayed green at `rows_walked=0`,
+    because that counter never SAW those scans happen. A CONNECTION-LEVEL trace is tied
+    to the SQL itself, not to one function's own source text, so it counts a `cards`
+    table scan no matter which code — old, new, or a future rewrite — issues it.
+
+    STATEMENTS, NOT ROWS. `set_trace_callback` reports the SQL text run, never how many
+    rows it touched, and re-reading every cursor to count rows would cost more than the
+    query itself. A statement count still proves the thing this counter exists to prove
+    — ONE scan for a whole query, never one per term — which is a count of `conn.execute`
+    calls, not of rows.
+
+    `\\bFROM\\s+cards\\b`, NEVER A BARE SUBSTRING. `cards_fts`, the INDEXED base query,
+    contains the literal text `FROM cards_fts`, which a plain `"FROM cards" in sql` check
+    would also match — `\\b` (a word boundary) refuses that, because `_` is a word
+    character in regex and there is none between `cards` and `_fts`."""
+    if _CARDS_TABLE_SCAN.search(sql):
+        _SEARCH_WORK_COUNTERS["rows_walked"] += 1
 
 
 def _reset_search_work_counters() -> None:
@@ -10265,6 +10301,18 @@ def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tu
 
     A SUPERSET, like every candidate source here has always been: `match.match_query`
     (or `_match_rank`, for a single-term query) still decides which candidate is real.
+
+    THE FOLD-PREFIX RULE IS DELETED (M10, round-8 Opus delta review, 2026-09-25: "if it
+    is redundant, delete it"). It matched a hyphen/apostrophe-stripped compact PREFIX of
+    `name` alone, with no length floor at all. Checked empirically: removing it left
+    every case in this file's own table, and the permanent fuzz, still green — the
+    SUBSTRING rule's own compact-containment check (`compact_term in compact_field`,
+    below) is a strict SUPERSET of a prefix check (a prefix is a substring that happens
+    to start at position 0), and once F6-2 let a digit-bearing 2-character term into the
+    substring rule too, nothing was left that only the fold rule could reach. A term
+    short enough that ONLY the fold rule's no-floor prefix check would have found it is
+    a pure-text 1-2 character term with no digit — `_is_floor_query`'s own definition of
+    an accepted gap, not a case this rule was ever meant to rescue.
     """
     terms = _deduped_capped_terms(text, lower=True)
     if not terms:
@@ -10272,7 +10320,6 @@ def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tu
 
     slash_suffixes: Dict[str, set] = {}
     zero_pad_bare: Dict[str, str] = {}
-    fold_terms: Dict[str, str] = {}
     substring_terms: Dict[str, Tuple[str, str]] = {}
     for term in terms:
         found = _LEADING_SLASH_DIGITS.match(term)
@@ -10284,17 +10331,21 @@ def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tu
         # 0-2 trailing letters) — never the borrowed 3-character TEXT floor.
         if len(term) >= 2 and match._has_digit(term) and match._number_shape_ok(term):
             zero_pad_bare[term] = match._drop_leading_zeros(term)
-        if match._has_letter(term):
-            folded = match.compact_text(term)
-            if folded:
-                fold_terms[term] = folded
-        if len(term) >= 3 and match._has_letter(term):
+        # F6-2, STILL OPEN ON THE REAL COPY (round-8 Opus review, 2026-09-25). `6a`
+        # missed "Order Rune (R06a)" — `match_query` accepts it by rule 7's own
+        # SUBSTRING check (no floor at all there), but this rule's 3-character floor
+        # refused the term before the scan ever ran, R7's own fix having lowered only
+        # the ZERO-PAD floor, never this one. A digit-bearing 2-character term is the
+        # SAME shape `_is_floor_query` already treats as NOT a floor term (a floor term
+        # is 1-2 characters AND carries no digit) — so the floor here now agrees with
+        # that definition instead of contradicting it.
+        if (len(term) >= 3 or (len(term) == 2 and match._has_digit(term))) and match._has_letter(term):
             folded_term = match.fold_text(term)
             compact_term = match.compact_text(term)
             if folded_term:
                 substring_terms[term] = (folded_term, compact_term)
 
-    if not (slash_suffixes or zero_pad_bare or fold_terms or substring_terms):
+    if not (slash_suffixes or zero_pad_bare or substring_terms):
         return []
 
     out: Dict[str, str] = {}
@@ -10302,10 +10353,8 @@ def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tu
         "SELECT key, sku, number_key, number, number_display, name, set_hint, "
         "json_extract(payload, '$.note') FROM cards"
     ):
-        _SEARCH_WORK_COUNTERS["rows_walked"] += 1
         key = str(key)
         number_cols = (number_key, number, number_display)
-        compact_name = match.compact_text(name) if name else ""
         folded_fields = None  # computed lazily, only if a substring term needs it
 
         for term in terms:
@@ -10327,9 +10376,6 @@ def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tu
                     if col_bare == bare or col_bare.startswith(bare + "/"):
                         matched = True
                         break
-
-            if not matched and term in fold_terms and compact_name and compact_name.startswith(fold_terms[term]):
-                matched = True
 
             if not matched and term in substring_terms:
                 folded_term, compact_term = substring_terms[term]
@@ -10517,6 +10563,9 @@ def do_search(query: str) -> dict:
     loose: List[master.Card] = []
     if match_expr:
         conn = db.connect(files.inventory_dir())
+        # CONNECTION-LEVEL, so it counts a `cards` scan no matter which function issues
+        # it (round-8; see `_count_cards_scan`'s own docstring).
+        conn.set_trace_callback(_count_cards_scan)
         try:
             hits: "Dict[str, object]" = {}
             for key, sku in conn.execute(
@@ -10624,7 +10673,6 @@ def do_search(query: str) -> dict:
             _SEARCH_WORK_COUNTERS["match_query_calls"] += 1
             term_ranks: List[int] = []
             if matched or token_count == 1:
-                _SEARCH_WORK_COUNTERS["match_rank_calls"] += len(terms)
                 term_ranks = [r for r in (_match_rank(card, term) for term in terms) if r is not None]
             if not matched and token_count == 1:
                 # `terms[0]` — LOWERCASED, matching `term_ranks`'s own computation just
