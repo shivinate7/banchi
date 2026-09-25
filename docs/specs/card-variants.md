@@ -3,9 +3,12 @@
 **Status, 2026-09-17.** Sections 1, 2, 3a and 3b are BUILT. Section 3c is MEASURED and needs no
 build. The governing entry is D213.
 
-**The backfill has never run against the owner's store.** `./pkmnscan cards variants` is retired.
-`./pkmnscan cards identity --write` fills the set now, through `bind_sku` (D213, amended). The old
-measurement over the real store: 2,960 of 3,502 cards would gain a set.
+**The backfill ran against the owner's store, at some point after the 2026-09-17
+measurement.** A read-only query found 0 of 3,502 SKU-bound cards with a null `set_name` or
+`rarity`. It found no `sku_bound`, `sku_held` or `identity_migration_*` events. `./pkmnscan
+cards variants` is retired. `./pkmnscan cards identity --write` fills the set now, through
+`bind_sku` (D213, amended). The old measurement over the real store: 2,960 of 3,502 cards
+would gain a set.
 
 The owner's report: searching a card by name on `#/inventory` reaches one printing and offers no way
 to any other. The only move is to click around boxes until a copy of a different printing falls
