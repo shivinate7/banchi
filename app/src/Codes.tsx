@@ -21,8 +21,10 @@ import type {
   LotReceipt,
   LotResult,
 } from './types'
-import { Button, EmptyState, Icon, Notice, PageHeader, Pill, Segmented, Sheet, Stat, type IconName } from './kit'
+import { Button, EmptyState, Icon, IconButton, Loading, Notice, Page, Pill, ReloadButton, Segmented, Select, Sheet, Stat, type IconName } from './kit'
 import { toast } from './kit/toast'
+import { absoluteDate } from './dates'
+import { SearchField } from './SearchField'
 import './Codes.css'
 
 /* CODES — the code-card track on a route of its own (D14, D70).
@@ -137,13 +139,6 @@ function boxLabel(box: BoxRecord): string {
   return `${name}, ${plural(held, 'card')}`
 }
 
-function when(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const at = new Date(iso)
-  if (Number.isNaN(at.getTime())) return iso.slice(0, 10)
-  return at.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-}
-
 /* ---- sheet -----------------------------------------------------------------------------------
  * The kit's `Sheet` (`app/src/kit/overlay.tsx`) was seeded from this screen's own local one —
  * the portal, the focus return, the Escape handling and the scroll lock all moved there, plus
@@ -207,20 +202,20 @@ function CodeBlock({ codes, name }: { readonly codes: readonly string[]; readonl
       <div className="codes-block-bar">
         <span className="bn-label">{plural(codes.length, 'code')}</span>
         <span className="bn-spacer" />
-        <Button size="sm" variant="ghost" icon={shown ? 'lock' : 'eye'} onClick={() => setShown((s) => !s)} aria-pressed={shown}>
-          {shown ? 'Hide' : 'Reveal'}
-        </Button>
-        <Button
+        <IconButton
           size="sm"
-          variant={clip.copied ? 'ok' : undefined}
+          icon={shown ? 'eyeOff' : 'eye'}
+          label={shown ? 'Hide' : 'Reveal'}
+          pressed={shown}
+          onClick={() => setShown((s) => !s)}
+        />
+        <IconButton
+          size="sm"
           icon={clip.copied ? 'check' : 'copy'}
+          label={clip.copied ? 'Copied' : 'Copy all'}
           onClick={() => void clip.copy(codes.join('\n'))}
-        >
-          {clip.copied ? 'Copied' : 'Copy all'}
-        </Button>
-        <Button size="sm" icon="download" onClick={download}>
-          Download .txt
-        </Button>
+        />
+        <IconButton size="sm" icon="download" label="Download the codes" onClick={download} />
       </div>
       {clip.failed ? (
         <div className="codes-block-notice">
@@ -247,14 +242,12 @@ function ManifestPath({ path }: { readonly path: string }) {
     <>
       <div className="codes-path">
         <code>{path}</code>
-        <Button
+        <IconButton
           size="sm"
-          variant={clip.copied ? 'ok' : 'ghost'}
           icon={clip.copied ? 'check' : 'copy'}
+          label={clip.copied ? 'Copied' : 'Copy path'}
           onClick={() => void clip.copy(path)}
-        >
-          {clip.copied ? 'Copied' : 'Copy path'}
-        </Button>
+        />
       </div>
       {clip.failed ? (
         <Notice tone="danger" title="The clipboard refused">
@@ -699,25 +692,22 @@ export function Codes() {
     failure === null ? null : (
       <div className="codes-failure bn-anim-pop">
         <Notice tone="danger" title={failure.message} code={failure.code || undefined} />
-        <Button variant="ghost" size="sm" iconOnly icon="x" onClick={() => setFailure(null)}>
-          Dismiss
-        </Button>
+        <IconButton size="sm" icon="x" label="Dismiss" onClick={() => setFailure(null)} />
       </div>
     )
 
-  const boxField = (value: string, onChange: (next: string) => void, autoFocus?: boolean) => (
-    <label className="bn-field codes-field">
-      <span className="bn-field-label">Box</span>
-      {boxes !== null && boxes.length > 0 ? (
-        <select className="bn-select" value={value} onChange={(e) => onChange(e.target.value)} autoFocus={autoFocus}>
-          <option value="">Choose a box…</option>
-          {boxes.map((b) => (
-            <option key={b.box} value={String(b.box)}>
-              {boxLabel(b)}
-            </option>
-          ))}
-        </select>
-      ) : (
+  const boxField = (value: string, onChange: (next: string) => void, autoFocus?: boolean) =>
+    boxes !== null && boxes.length > 0 ? (
+      <Select
+        label="Box"
+        value={value === '' ? null : value}
+        onChange={onChange}
+        placeholder="Choose a box…"
+        options={boxes.map((b) => ({ value: String(b.box), label: boxLabel(b) }))}
+      />
+    ) : (
+      <label className="bn-field codes-field">
+        <span className="bn-field-label">Box</span>
         <input
           className="bn-input"
           inputMode="numeric"
@@ -726,9 +716,8 @@ export function Codes() {
           placeholder="Box number"
           autoFocus={autoFocus}
         />
-      )}
-    </label>
-  )
+      </label>
+    )
 
   const held = ledger === null ? 0 : ledger.lanes.premium + ledger.lanes.bulk + ledger.lanes.unclaimed
   const segments =
@@ -751,28 +740,25 @@ export function Codes() {
   /* ---- render -------------------------------------------------------------------------- */
 
   return (
-    <main className="codes bn-page">
-      {/* TXT-39: the lede restated D70 ("the QR is the code") to the owner. Deleted. */}
-      <PageHeader
-        title="Codes"
-        icon="qr"
-        actions={
-          <>
-            <Button variant="ghost" iconOnly icon="refresh" onClick={() => void load()} disabled={busy}>
-              Reload
+    // TXT-39: the lede restated D70 ("the QR is the code") to the owner. Deleted.
+    <Page
+      title="Codes"
+      icon="qr"
+      className="codes"
+      actions={
+        <>
+          <ReloadButton onReload={() => void load()} busy={busy} />
+          {/* UX-159: ONE first step. With nothing on file yet, the empty state's own "Go to
+              capture" is that step; this button would open a scan with nothing captured to
+              read. Once the ledger holds anything, this is the one persistent action again. */}
+          {ledger === null || ledger.total > 0 ? (
+            <Button variant="primary" icon="qr" onClick={() => openSheet('scan')}>
+              Read a box
             </Button>
-            {/* UX-159: ONE first step. With nothing on file yet, the empty state's own "Go to
-                capture" is that step; this button would open a scan with nothing captured to
-                read. Once the ledger holds anything, this is the one persistent action again. */}
-            {ledger === null || ledger.total > 0 ? (
-              <Button variant="primary" icon="qr" onClick={() => openSheet('scan')}>
-                Read a box
-              </Button>
-            ) : null}
-          </>
-        }
-      />
-
+          ) : null}
+        </>
+      }
+    >
       {sheet === null ? failureNode : null}
       {loadFailure !== null && ledger !== null ? (
         <div className="codes-failure bn-anim-pop">
@@ -787,55 +773,20 @@ export function Codes() {
 
       {ledger === null ? (
         loadFailure === null ? (
+          // R2-class: the pile/products/tasks regions stay (the real content below shares
+          // their layout), but every shimmer box now comes from the kit's own `Loading`
+          // rather than a hand-typed `bn-skeleton` div.
           <div className="codes-loading" aria-busy="true" aria-label="Reading codes">
             <div className="bn-panel codes-pile">
               <div className="codes-pile-main">
-                <div className="codes-pile-head">
-                  <div className="bn-skeleton" style={{ width: 96, height: 16 }} />
-                  <div className="bn-skeleton" style={{ width: 200, height: 14 }} />
-                </div>
-                <div className="codes-stats">
-                  {Array.from({ length: 6 }, (_, i) => (
-                    <div key={i} className="codes-skel-stat">
-                      <div className="bn-skeleton" style={{ width: 64, height: 36 }} />
-                      <div className="bn-skeleton" style={{ width: 72, height: 14 }} />
-                      <div className="bn-skeleton" style={{ width: 96, height: 12 }} />
-                    </div>
-                  ))}
-                </div>
-                <div className="codes-pile-bar">
-                  <div className="bn-skeleton" style={{ height: 14, borderRadius: 7 }} />
-                  <div className="codes-legend">
-                    {Array.from({ length: 3 }, (_, i) => (
-                      <div key={i} className="bn-skeleton" style={{ width: 84, height: 12 }} />
-                    ))}
-                  </div>
-                </div>
+                <Loading shape="summary" label="Reading the pile" />
               </div>
               <aside className="codes-products" aria-hidden="true">
-                <div className="codes-products-head">
-                  <div className="bn-skeleton" style={{ width: 92, height: 16 }} />
-                  <div className="bn-skeleton" style={{ width: 44, height: 12 }} />
-                </div>
-                <div className="codes-skel-products">
-                  {Array.from({ length: 4 }, (_, i) => (
-                    <div key={i} className="codes-skel-product">
-                      <div className="bn-skeleton" style={{ width: `${[62, 30, 74, 40][i]}%`, height: 14 }} />
-                      <div className="bn-skeleton" style={{ width: 48, height: 20, borderRadius: 999 }} />
-                      <div className="bn-skeleton" style={{ width: 36, height: 14 }} />
-                    </div>
-                  ))}
-                </div>
+                <Loading shape="cards" rows={4} label="Reading products" />
               </aside>
             </div>
             <div className="codes-tasks" aria-hidden="true">
-              {Array.from({ length: 3 }, (_, i) => (
-                <div key={i} className="codes-task codes-skel-task">
-                  <div className="bn-skeleton" style={{ width: 40, height: 40, borderRadius: 12 }} />
-                  <div className="bn-skeleton" style={{ width: '55%', height: 18 }} />
-                  <div className="bn-skeleton" style={{ width: '90%', height: 14 }} />
-                </div>
-              ))}
+              <Loading shape="cards" rows={3} label="Reading tasks" />
             </div>
           </div>
         ) : (
@@ -847,7 +798,7 @@ export function Codes() {
                 <>
                   <span className="codes-failure-msg">{loadFailure.message}</span>
                   Codes did not answer — nothing on this screen can be shown yet.
-                  {loadFailure.code ? <code className="bn-notice-code codes-failure-code">{loadFailure.code}</code> : null}
+                  {loadFailure.code ? <code className="codes-failure-code">{loadFailure.code}</code> : null}
                 </>
               }
               actions={
@@ -926,7 +877,7 @@ export function Codes() {
                           aria-label={shown ? 'Hide this code' : 'Reveal this code'}
                         >
                           <Code code={e.code} shown={shown} odd={!e.well_formed} />
-                          <Icon name={shown ? 'lock' : 'eye'} size={13} />
+                          <Icon name={shown ? 'eyeOff' : 'eye'} size={13} />
                         </button>
                         <span className="codes-dup-where">
                           {positions.map((p, i) =>
@@ -1020,22 +971,17 @@ export function Codes() {
                                 820 the row wraps, and a button that wrapped on its own sat
                                 under the box name rather than under the picker it answers. */}
                             <div className="codes-fix-do">
-                              <label className="bn-field codes-fix-field">
-                                <span className="bn-field-label">Product</span>
-                                <select
-                                  className="bn-select"
-                                  value={chosen}
-                                  disabled={busy}
-                                  onChange={(e) => setFixPick((held) => ({ ...held, [row.box]: e.target.value }))}
-                                >
-                                  <option value="">Choose a product…</option>
-                                  {ledger.products.map((p) => (
-                                    <option key={p.key} value={p.key}>
-                                      {p.display}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
+                              {/* kit's Select has no `disabled` prop yet (a real gap, not a
+                                  choice this lane made) — the commit press below still guards
+                                  itself with `disabled={busy}`, so a pick made mid-request
+                                  changes nothing until that press is live again. */}
+                              <Select
+                                label="Product"
+                                value={chosen === '' ? null : chosen}
+                                onChange={(next) => setFixPick((held) => ({ ...held, [row.box]: next }))}
+                                placeholder="Choose a product…"
+                                options={ledger.products.map((p) => ({ value: p.key, label: p.display }))}
+                              />
                               {/* OUTLINED WHEN IT IS NOT PREMIUM. A default pill's fill is
                                   `--bn-surface-2`, which is this row's own ground, so Bulk
                                   drew as bare text beside a filled Premium chip and the two
@@ -1219,17 +1165,14 @@ export function Codes() {
                 </button>
               </div>
               {tab === 'codes' ? (
-                <div className="bn-input-wrap codes-search">
-                  <Icon name="search" size={15} />
-                  <input
-                    className="bn-input"
-                    type="search"
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                    placeholder="Find a code, product, set or order"
-                    aria-label="Find a code"
-                  />
-                </div>
+                <SearchField
+                  value={filter}
+                  onChange={setFilter}
+                  persona="owner"
+                  label="Find a code"
+                  placeholder="Find a code, product, set or order"
+                  controlHeight="bar"
+                />
               ) : null}
             </div>
 
@@ -1285,9 +1228,13 @@ export function Codes() {
                     ))}
                   </div>
                   <span className="bn-spacer" />
-                  <Button size="sm" variant="ghost" icon={revealAll ? 'lock' : 'eye'} aria-pressed={revealAll} onClick={() => setRevealAll((r) => !r)}>
-                    {revealAll ? 'Hide codes' : 'Reveal codes'}
-                  </Button>
+                  <IconButton
+                    size="sm"
+                    icon={revealAll ? 'eyeOff' : 'eye'}
+                    label={revealAll ? 'Hide codes' : 'Reveal codes'}
+                    pressed={revealAll}
+                    onClick={() => setRevealAll((r) => !r)}
+                  />
                 </div>
 
                 {rows.length === 0 ? (
@@ -1333,7 +1280,7 @@ export function Codes() {
                                     aria-label={shown ? 'Hide this code' : 'Reveal this code'}
                                   >
                                     <Code code={e.code} shown={shown} odd={!e.well_formed} />
-                                    <Icon name={shown ? 'lock' : 'eye'} size={13} />
+                                    <Icon name={shown ? 'eyeOff' : 'eye'} size={13} />
                                   </button>
                                 </td>
                                 <td data-th="State">
@@ -1745,7 +1692,7 @@ export function Codes() {
             </div>
           )}
       </Sheet>
-    </main>
+    </Page>
   )
 }
 
@@ -1827,7 +1774,7 @@ function LotsTable({ lots, boxes }: { readonly lots: readonly LotReceipt[]; read
                   ))}
                 </span>
               </td>
-              <td data-th="Built">{when(l.built_at)}</td>
+              <td data-th="Built">{absoluteDate(l.built_at)}</td>
             </tr>
           ))}
         </tbody>

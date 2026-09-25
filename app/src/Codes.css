@@ -196,19 +196,23 @@
   .codes-product-list { padding: 0 var(--bn-2) var(--bn-2); }
   .codes-stat .bn-stat-value { font-size: var(--bn-fs-3xl); }
 }
-/* loading: the hero's own frame, with skeletons where the figures will be */
+/* loading: the hero's own frame, with the kit's own `Loading` where the figures will be
+   (R2-class: no more hand-typed `bn-skeleton`, so no more skeleton-only classes here either) */
 .codes-loading { display: flex; flex-direction: column; gap: var(--bn-5); }
-.codes-skel-stat { display: flex; flex-direction: column; gap: 8px; }
-.codes-skel-products { display: flex; flex-direction: column; gap: 4px; padding: 0 var(--bn-3) var(--bn-3); }
-.codes-skel-product { display: grid; grid-template-columns: minmax(0, 1fr) auto 52px; column-gap: var(--bn-3); align-items: center; justify-items: start; padding: 9px var(--bn-2); }
-.codes-skel-product > :last-child { justify-self: end; }
-.codes-skel-task { pointer-events: none; animation: none; }
-.codes-skel-task:hover { transform: none; box-shadow: var(--bn-shadow-1); }
 
 /* the ledger could not be read: the empty state carries the way back */
 .codes-unreadable .bn-empty-art { background: var(--bn-danger-tint); color: var(--bn-danger); }
 .codes-failure-msg { display: block; margin-bottom: var(--bn-2); color: var(--bn-ink); overflow-wrap: anywhere; }
-.codes-failure-code { display: block; margin-top: var(--bn-2); }
+/* R2-class: `bn-notice-code` is kit-reserved (kit.css), so the code's own look is repeated
+   here rather than borrowed by name — same face, font-family mono / fs-sm / ink-3 / wrap. */
+.codes-failure-code {
+  display: block;
+  margin-top: var(--bn-2);
+  font-family: var(--bn-font-mono);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+  overflow-wrap: anywhere;
+}
 
 /* the lane bar: premium, bulk, unclaimed, in proportion */
 .codes-lanebar {

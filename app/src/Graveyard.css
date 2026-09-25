@@ -33,9 +33,6 @@
   .graveyard-toolbar .bn-seg-item { flex: none; }
 }
 
-.graveyard-search { min-width: 220px; max-width: 320px; }
-@media (max-width: 767px) { .graveyard-search { max-width: none; } }
-
 /* THE SAME SCROLL-PROGRESS EDGE FADE AS ORDERS' CHIP ROW (D117) — a mask driven by the row's
    own scroll timeline, so a short row that does not actually overflow gets no fade at all
    rather than a decorative one nothing backs. See Orders.css for the full reasoning; this is
@@ -59,17 +56,8 @@
 }
 .graveyard-failure .bn-notice { flex: 1 1 auto; }
 
-/* ---- loading -------------------------------------------------------------------- */
-.graveyard-loading { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4); }
-.graveyard-skel-row {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-4);
-  padding-bottom: var(--bn-3);
-  border-bottom: 1px solid var(--bn-line);
-}
-.graveyard-skel-row:last-child { border-bottom: 0; padding-bottom: 0; }
-
+/* The loading skeleton is now `Page`'s own `Loading` (R2-class: no more hand-rolled
+   .bn-skeleton rows here). */
 .graveyard-unreadable { padding: var(--bn-6) var(--bn-4); }
 
 /* ---- the table -------------------------------------------------------------------- */

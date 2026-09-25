@@ -34,13 +34,7 @@
       "R2-icon-only-button": "icons"
     },
     "app/src/Codes.tsx": {
-      "R1": "library",
-      "R2-dialog": "library",
-      "R2-search": "library",
-      "R2-select": "library",
-      "R2-class": "library",
-      "R2-date": "library",
-      "R2-icon-only-button": "icons"
+      "R2-icon-only-button": "library"
     },
     "app/src/Fulfillment.tsx": {
       "R1": "fulfillment",
@@ -49,12 +43,6 @@
     "app/src/Gallery.tsx": {
       "R2-search": "kit-frame",
       "R2-money": "kit-frame"
-    },
-    "app/src/Graveyard.tsx": {
-      "R1": "library",
-      "R2-search": "library",
-      "R2-class": "library",
-      "R2-icon-only-button": "icons"
     },
     "app/src/Home.tsx": {
       "R1": "home",
