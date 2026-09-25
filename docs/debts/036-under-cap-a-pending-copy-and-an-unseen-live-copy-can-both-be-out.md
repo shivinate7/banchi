@@ -22,4 +22,9 @@ after an import. The larger reading never under-sends, and it accepts the oversh
 
 **What closes it.** One reading that knows which pending copies have landed.
 
+**A known wording gap beside it, left on the orchestrator's word (2026-09-25).** An empty send's
+headline has no clause for a card that the cap closes. Emit names that card on its own line,
+for example "1 live, at the cap of 1". But the headline counts only the other reasons. Only the
+CLI reaches it, because the send route passes no `--cap`.
+
 Cites D7 (emit's send controls) and D59 (the live cap is a per-SKU quantity).
