@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -132,6 +132,38 @@ help:
 	@echo "  make readings-selftest  the cached market-reading table, proved against an"
 	@echo "                    independent reimplementation of its own two-source walk."
 	@echo "                    In \`check\`, never in the hook."
+	@echo "  make skus-selftest  the store-owned SKU table (identity-follows-sku.md lane 0):"
+	@echo "                    rows equal distinct ids, an older file never overwrites a"
+	@echo "                    newer one, a changed fact writes one event and keeps the row,"
+	@echo "                    no delete path, a version-10 store upgrades to 11 with every"
+	@echo "                    other table's rows intact. In \`check\`, never in the hook."
+	@echo "  make identity-store-selftest  the one writer (identity-follows-sku.md lane 1):"
+	@echo "                    bind_sku stamps the identity off a skus row for Pokemon,"
+	@echo "                    Riftbound and a double-sided token cell; unbind_sku round-trips"
+	@echo "                    it; SkuUnknown/GameMismatch both write nothing;"
+	@echo "                    record_identification writes only read_* on a bound card. No"
+	@echo "                    store, no disk write at all. In \`check\`, never in the hook."
+	@echo "  make identity-binding-selftest  the migration's classifier and the merged"
+	@echo "                    D242/D255 report (identity-follows-sku.md §5.5/§7, lane 2):"
+	@echo "                    every class T1-T6/sku_unknown in order, the human-bound"
+	@echo "                    exclusion, both report halves. No store. In \`check\`, never"
+	@echo "                    in the hook."
+	@echo "  make identity-replay ARGS=\"--store <copy.sqlite>\"  the replay, before any"
+	@echo "                    write (identity-follows-sku.md §7.4): the same classifier,"
+	@echo "                    against a COPY of a real store, asserting the six checks"
+	@echo "                    §7.4 names. Never \`check\`-gated — it needs a store copy the"
+	@echo "                    owner supplies, not a fixture."
+	@echo "  make identity-readers-selftest  the evidence readers (identity-follows-sku.md"
+	@echo "                    lane 4): requeue.identified and resolve.store_payload both"
+	@echo "                    carry a bound card's DISPUTED read name, never its bound"
+	@echo "                    SKU's own catalog row, and both refuse loudly on a bound"
+	@echo "                    card with no recorded evidence rather than echo the catalog."
+	@echo "                    No store, no disk write at all. In \`check\`, never in the hook."
+	@echo "  make identity-cli-selftest  the CLI writers (identity-follows-sku.md lane 3b):"
+	@echo "                    emit upserts the matched row then binds through bind_sku;"
+	@echo "                    a re-identification writes only read_* on a bound card;"
+	@echo "                    join --export and reconcile --live fill the table from every"
+	@echo "                    row. In \`check\`, never in the hook."
 	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
 	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
 	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
@@ -180,6 +212,8 @@ help:
 	@echo "                    in its own property family — should have been var(...)."
 	@echo "                    Ratcheted per file; PKMNSCAN_TOKEN_LITERALS=off skips it."
 	@echo "  make token-literal-check-selftest  that checker, on fixtures in both directions."
+	@echo "  make demo-determinism-selftest  scripts/demo-determinism.py's own path-matcher,"
+	@echo "                    on fixtures — no subprocess, no \`make demo\`."
 	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
 	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
 	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
@@ -213,13 +247,18 @@ help:
 	@echo "                    identity-checks-selftest + price-postings-selftest +"
 	@echo "                    product-history-selftest +"
 	@echo "                    sku-number-contradictions-selftest + readings-selftest +"
+	@echo "                    skus-selftest + identity-store-selftest +"
+	@echo "                    identity-binding-selftest +"
+	@echo "                    identity-readers-selftest +"
+	@echo "                    identity-cli-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
 	@echo "                    coordinator-selftest + suite-lock-selftest +"
 	@echo "                    browser-scope-selftest +"
 	@echo "                    serve-selftest + sync-selftest + verdict-selftest +"
 	@echo "                    js-breakpoints-selftest + subagent-override-selftest +"
-	@echo "                    guard-scope-selftest + token-literal-check-selftest"
+	@echo "                    guard-scope-selftest + token-literal-check-selftest +"
+	@echo "                    demo-determinism-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -256,6 +295,7 @@ help:
 	@echo "                    DEMO_BASE=<path> is where it will be served from."
 	@echo "  make demo-preview serve dist-demo/ exactly as a static host would."
 	@echo "  make demo-freshness  whether the bundle still matches the wire it recorded."
+	@echo "  make demo-determinism  whether two \`make demo\` runs write the same bundle content."
 	@echo "  make lint         eslint over app/, ruff over the Python packages (D82)."
 	@echo "  make typecheck    tsc --noEmit over app/"
 	@echo
@@ -582,6 +622,11 @@ check:
 	@$(MAKE) --no-print-directory product-history-selftest
 	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
 	@$(MAKE) --no-print-directory readings-selftest
+	@$(MAKE) --no-print-directory skus-selftest
+	@$(MAKE) --no-print-directory identity-store-selftest
+	@$(MAKE) --no-print-directory identity-binding-selftest
+	@$(MAKE) --no-print-directory identity-readers-selftest
+	@$(MAKE) --no-print-directory identity-cli-selftest
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
@@ -596,6 +641,7 @@ check:
 	@$(MAKE) --no-print-directory subagent-override-selftest
 	@$(MAKE) --no-print-directory guard-scope-selftest
 	@$(MAKE) --no-print-directory token-literal-check-selftest
+	@$(MAKE) --no-print-directory demo-determinism-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
 # This exists because nothing ever re-ran the gate: `make check` failed in every fresh checkout
@@ -639,6 +685,11 @@ ci-check:
 	@$(MAKE) --no-print-directory product-history-selftest
 	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
 	@$(MAKE) --no-print-directory readings-selftest
+	@$(MAKE) --no-print-directory skus-selftest
+	@$(MAKE) --no-print-directory identity-store-selftest
+	@$(MAKE) --no-print-directory identity-binding-selftest
+	@$(MAKE) --no-print-directory identity-readers-selftest
+	@$(MAKE) --no-print-directory identity-cli-selftest
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory janitor-selftest
 	@$(MAKE) --no-print-directory reap-selftest
@@ -654,6 +705,7 @@ ci-check:
 	@$(MAKE) --no-print-directory subagent-override-selftest
 	@$(MAKE) --no-print-directory guard-scope-selftest
 	@$(MAKE) --no-print-directory token-literal-check-selftest
+	@$(MAKE) --no-print-directory demo-determinism-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
 	@$(MAKE) --no-print-directory readiness-agreement
@@ -752,6 +804,12 @@ token-literal-check:
 # self-tests, `make check`'s own D161 order, beside `guard-scope-selftest`.
 token-literal-check-selftest:
 	@python3 scripts/token-literal-check.py --self-test
+
+# identity-follows-sku.md, lane 7: scripts/demo-determinism.py's own ALLOWED_PATTERNS
+# matcher, proved on fixtures rather than by spending two full `make demo` runs. Pure
+# functions, no subprocess, no write — unlike `demo-determinism` itself (D18).
+demo-determinism-selftest:
+	@python3 scripts/demo-determinism-selftest.py
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
 # its own. D18 is the first: this writes — a bare repo, a clone, commits, pushes — and nothing
@@ -1235,7 +1293,89 @@ cid-audit:
 readings-selftest:
 	@$(PYTHON) scripts/readings-selftest.py
 
-.PHONY: submission-selftest readings-selftest
+# THE STORE-OWNED SKU TABLE, PROVED AGAINST A THROWAWAY STORE (identity-follows-sku.md §3.2,
+# lane 0). Rows equal distinct ids, a second adopt over unchanged files changes nothing, an
+# older file never overwrites a newer one's facts, a changed fact writes one
+# `sku_facts_changed` event and keeps the row, `store/skus.py` has no delete path anywhere,
+# and a version-10 store upgrades to 11 with every other table's rows intact.
+#
+# IN `check`, NEVER IN THE GIT HOOK: it writes a temp store under `mktemp -d` (D18). Answers
+# from the tree alone (its one real-fixture read is `fixtures/riftbound_export_untouched.csv`,
+# committed), so it is in `ci-check` too.
+skus-selftest:
+	@$(PYTHON) scripts/skus-selftest.py
+
+# THE ONE WRITER, PROVED IN MEMORY (identity-follows-sku.md §4.1, lane 1). `bind_sku` stamps
+# name/number/printed_total/rarity/set_name/condition off a skus table row for a Pokemon
+# card (the catalog Number split), a Riftbound card (kept verbatim) and a Riftbound
+# double-sided token cell (`T02 // T03`); `unbind_sku` round-trips a rebind back to the
+# first binding, every field but `bound_at` restored exactly; SkuUnknown and GameMismatch
+# both refuse before touching the card, the events list or the skus table;
+# `record_identification` writes only `read_*` on a bound card and the identity too on an
+# unbound one.
+#
+# IN `check`, NEVER IN THE GIT HOOK. Writes nothing to disk at all — no store, no `mktemp`
+# (D18 does not even apply) — so it is in `ci-check` too.
+identity-store-selftest:
+	@$(PYTHON) scripts/identity-store-selftest.py
+
+# THE MIGRATION'S CLASSIFIER AND THE MERGED D242/D255 REPORT, PROVED AGAINST LITERAL
+# FIXTURES (identity-follows-sku.md §5.5, §7, lane 2). Every class T1-T6 and `sku_unknown`,
+# in §7.2's own order; the human-bound exclusion §5.5 requires (`answer`/`group_answer`/
+# `correction`/`confirm` never re-flagged); both report halves (§4.3's three audit failures,
+# and §5.5's name half/number half). `./pkmnscan cards identity` and `scripts/
+# identity-replay.py` both import this module rather than re-deriving the classifier, so
+# this is the one place its logic is proved.
+#
+# IN `check`, NEVER IN THE GIT HOOK. Writes nothing to disk at all — no store, no `mktemp`
+# (D18 does not even apply) — so it is in `ci-check` too.
+identity-binding-selftest:
+	@$(PYTHON) scripts/identity-binding-selftest.py
+
+# THE REPLAY, BEFORE ANY WRITE (identity-follows-sku.md §7.4, lane 2). Takes a COPY of a
+# real store (`sqlite3 <store> ".backup <copy>"`, never the live file) and asserts the six
+# checks §7.4 names, importing `pipeline/identity_binding.py`'s own classifier rather than
+# re-deriving it. Never `check`-gated: it needs a store copy the owner supplies, and a
+# fixture cannot stand in for "did the owner's own store move in six minutes". Read-only —
+# never opens `Store().write()`, never touches the copy it is given.
+identity-replay:
+	@$(PYTHON) scripts/identity-replay.py $(ARGS)
+
+# THE EVIDENCE READERS, PROVED IN MEMORY (identity-follows-sku.md §5.1, lane 4 — added on
+# a review finding, HIGH, 2026-09-24). `cli/requeue.py:identified` and
+# `cli/resolve.py:store_payload` both carry a bound card's DISPUTED read name, never its
+# bound SKU's own catalog row (D253's own subject), and both refuse loudly — never a
+# silent catalog echo — on a bound card whose evidence was never recorded. THREE SEPARATE
+# PROCESSES, `price-postings-selftest`'s own two-process shape extended to three: each
+# `--mutate-*` run mutates `cli/resolve.py:card_reading`'s own body through a `.bak` copy,
+# restored in its own `finally` before that process exits either way, and must turn at
+# least one assertion red or the run itself fails (a mutation that survives means the case
+# it names is not actually being tested).
+#
+# IN `check`, NEVER IN THE GIT HOOK — a hook context that could be interrupted mid-mutation
+# is not where writing (transiently) to a real tracked file belongs.
+identity-readers-selftest:
+	@$(PYTHON) scripts/identity-readers-selftest.py && \
+		$(PYTHON) scripts/identity-readers-selftest.py --mutate-identity-fields && \
+		$(PYTHON) scripts/identity-readers-selftest.py --mutate-no-fallback && \
+		$(PYTHON) scripts/identity-readers-selftest.py --mutate-no-refusal
+
+# THE CLI WRITERS, AGAINST A REAL THROWAWAY STORE AND THE REAL CLI DISPATCH
+# (identity-follows-sku.md §4.2, lane 3b). `pkmnscan emit` upserts the matched export row
+# into `skus` and THEN binds through `Inventory.bind_sku` — proved by binding on a store
+# whose `skus` table starts empty, so a successful bind is proof the upsert ran first. A
+# re-identification of an already-bound card (`cli/cmd_identify.py:_read_disputes_for`)
+# writes only `read_*`; the bound identity does not move. `pkmnscan join --export` and
+# `pkmnscan reconcile --live` each fill the table from EVERY row of the file they read, not
+# only the rows a card matched.
+#
+# IN `check`, NEVER IN THE GIT HOOK: it writes a temp store under `mktemp -d` (D18). Answers
+# from the tree alone (its one real-fixture read is `fixtures/sv09_export_untouched.csv`,
+# committed), so it is in `ci-check` too.
+identity-cli-selftest:
+	@$(PYTHON) scripts/identity-cli-selftest.py
+
+.PHONY: submission-selftest readings-selftest skus-selftest identity-store-selftest identity-binding-selftest identity-replay identity-readers-selftest identity-cli-selftest
 
 # A GIT WRITE MUST LEAVE A TRACE THE SESSION CAN READ. On 2026-09-12 a coordinator session
 # reported work as landed that had not landed, twice, through `git commit -q -F - >/dev/null
@@ -1722,3 +1862,12 @@ demo-preview:
 # Worth one command; not worth failing `make check` over.
 demo-freshness:
 	@$(PYTHON) scripts/demo-freshness.py
+
+# Whether `make demo` writes the same bundle twice. `demo-freshness` above proves the WIRE
+# SHAPE still matches; this proves the recorded CONTENT is reproducible — the one thing the
+# committed wire hash cannot see (review round, identity-follows-sku.md lane 6: 97 `bound_at`
+# values differed between two runs before `bind_sku` took an `at` parameter, and
+# `demo-freshness` was green throughout). Two full `make demo` runs into scratch homes; not
+# in `make check` for the same reason `demo-freshness` is not (D18).
+demo-determinism:
+	@$(PYTHON) scripts/demo-determinism.py

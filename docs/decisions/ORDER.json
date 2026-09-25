@@ -263,6 +263,7 @@
     "D254-pricehistory-resolves-by-sku.md",
     "D255-sku-name-contradictions.md",
     "D256-token-literals-are-pinned.md",
-    "D257-worktree-node-modules.md"
+    "D257-worktree-node-modules.md",
+    "D258-identity-follows-the-sku.md"
   ]
 }

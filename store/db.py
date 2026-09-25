@@ -114,10 +114,10 @@ PHOTOS_RELOCATED = "photos_relocated"
 # `set_name` and `rarity` to `cards` and sweeps the 99 `UNL` rows from 2026-08-29 to
 # `Unleashed` — the DDL and the sweep, which cost nothing to run on every open. Filling the
 # two new columns for cards the store already holds is a SEPARATE, re-runnable step
-# (`./pkmnscan cards variants --write`), never bound to a schema version: it resolves a SKU
-# against whatever export happens to be on disk, which can change from one run to the next,
-# and a migration that ran once at open time could never re-answer a card whose export
-# arrived later.
+# (`./pkmnscan cards identity --write` since identity-follows-sku.md, which retired
+# `cards variants`), never bound to a schema version: its answer depends on what the `skus`
+# table holds, which grows from one run to the next, and a migration that ran once at open
+# time could never re-answer a card whose export arrived later.
 #
 # NINE, FOR D219 (`docs/specs/revenue-plan.md` §4). `_add_price_history`
 # adds `price_history` and `price_history_sources` — the same purely-additive shape
@@ -135,7 +135,19 @@ PHOTOS_RELOCATED = "photos_relocated"
 # table must never perform. An upgraded store's ledger is correctly empty until the first
 # `emit` or `reprice apply --write` after the upgrade — nothing before this table existed is
 # recoverable, which is the argument for landing it now rather than later.
-SCHEMA_VERSION = 10
+#
+# ELEVEN, FOR LANE 0 OF `docs/specs/identity-follows-sku.md` (owner's ruling, 2026-09-24:
+# "yes I'd been saying we build this"). `_add_skus` adds two things at once, deliberately one
+# step: `skus` — one row per TCGplayer Id this repo has ever read out of a cached export, the
+# six fact cells verbatim plus the split `Condition` cell, never cleared and never fully
+# replaced (`store/skus.py`'s own argument, `price_history`'s shape and not `readings`'s) —
+# and `cards.identity_source`, an inert `TEXT` column `_add_set_columns`'s own precedent: it
+# defaults to NULL and this step does not fill it, because filling it is `Inventory.bind_sku`
+# (a later lane), never a migration bound to `SCHEMA_VERSION`. An upgraded store's `skus`
+# table is correctly empty until the first `pkmnscan skus adopt --write`, which — unlike
+# `price_history` — can answer for every export this machine has ever cached, because none of
+# them ages out the way the live price-history endpoint's own window does.
+SCHEMA_VERSION = 11
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -169,6 +181,10 @@ TABLES: Dict[str, Tuple[str, ...]] = {
         # exactly what `pipeline/join.py:join_key`/`display_number` compose — see
         # `store/master.py:_card_columns`.
         "number_key", "number_display",
+        # LANE 0 OF `docs/specs/identity-follows-sku.md`: `sku` (`identity`) vs `read`
+        # (`evidence`) — inert until a later lane's `Inventory.bind_sku` writes it. See
+        # `_add_skus`'s comment above `SCHEMA_VERSION`.
+        "identity_source",
     ),
     "boxes": ("box", "bid", "name", "state"),
     "listings": ("condition", "pushed", "staged", "live"),
@@ -197,11 +213,19 @@ TABLES: Dict[str, Tuple[str, ...]] = {
     ),
     # One row per range last swept — see `store/pricearchive.py:Source`.
     "price_history_sources": ("range", "at", "requested", "answered", "refused"),
+    # LANE 0 OF `docs/specs/identity-follows-sku.md` §3.2: one row per TCGplayer Id this
+    # repo has ever read out of a cached export, NEVER CLEARED and never fully replaced —
+    # see `store/skus.py`'s module docstring.
+    "skus": (
+        "product_line", "set_name", "product_name", "number", "rarity", "condition",
+        "grade", "printing", "first_seen", "last_seen", "source",
+    ),
 }
 
 _INTEGER = {
     "box", "bid", "idx", "pushed", "staged", "live", "cleared_by_human", "pid", "at", "skus",
     "product_id", "width_days", "quantity", "transactions", "requested", "answered", "refused",
+    "first_seen", "last_seen",
 }
 
 _INDEXES = (
@@ -385,6 +409,16 @@ def _ensure_schema(
     # so `_add_search_index`'s backfill loop and its `rebuild` are both no-ops — only the DDL
     # (the table and its three triggers) actually does anything.
     _add_search_index(conn)
+    # THE FRESH PATH BUILDS THE SKU TABLE'S INDEX AND VIEWS TOO, FOR THE SAME REASON THE TWO
+    # STEPS ABOVE DO (lane 0, identity-follows-sku.md §3.2). `_upgrade`'s `if stored < 11`
+    # never runs here — this branch stamps `SCHEMA_VERSION` directly, and the `skus` table
+    # itself already came out of the `TABLES` loop above — so without this call the composite
+    # index and the two product-layer views would not exist on any newly created store.
+    # Cheap: the table has no rows yet.
+    for statement in _SKU_INDEXES:
+        conn.execute(statement)
+    for statement in _SKU_VIEWS:
+        conn.execute(statement)
     conn.execute(
         "INSERT OR IGNORE INTO meta (key, value) VALUES ('schema', ?)", (str(SCHEMA_VERSION),)
     )
@@ -454,6 +488,8 @@ def _upgrade(
                 _add_price_history(conn)     # D219
             if stored < 10:
                 _add_price_postings(conn)    # D243
+            if stored < 11:
+                _add_skus(conn)              # LANE 0, identity-follows-sku.md
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1139,7 +1175,7 @@ def _add_set_columns(conn: sqlite3.Connection) -> None:
     ADDITIVE LIKE `_add_search_index`'s TWO COLUMNS: the `ALTER`s are guarded by
     `PRAGMA table_info` so a re-run after a crash is a no-op, and nothing existing is READ to
     decide what to write — both columns default to NULL and stay NULL until
-    `./pkmnscan cards variants --write` or the next identification fills them.
+    `./pkmnscan cards identity --write` or the next `bind_sku` fills them.
     `_add_search_index`'s own case for why the CID is here rather than derived per read
     applies unchanged: `_copies_out` and `do_search` are both O(cards) already, and a facet
     computed by joining an export on every request would be the same defect this schema
@@ -1150,9 +1186,10 @@ def _add_set_columns(conn: sqlite3.Connection) -> None:
     `inventory/.exports/<game>/` happens to hold, and an export is exactly the kind of thing
     that ages in (D166) or is fetched for the first time between two opens of this store; a
     migration bound to `SCHEMA_VERSION` runs once, ever, and could never re-answer a card
-    whose export arrived a week later. `./pkmnscan cards variants` is the re-runnable
-    counterpart — the same shape `photos`/`prices adopt` already use for a fact this store
-    can only partially answer the day it is asked.
+    whose export arrived a week later. `./pkmnscan cards identity --write` is the
+    re-runnable counterpart now (it retired `cards variants`, identity-follows-sku.md §4.2)
+    — the same shape `photos`/`prices adopt` already use for a fact this store can only
+    partially answer the day it is asked.
 
     THE 99 `UNL` ROWS ARE SWEPT HERE, though, because that IS a one-time, unconditional
     rewrite with no data outside this file to consult: `_SET_HINT_SWEEP` is a closed table
@@ -1210,6 +1247,86 @@ def _add_price_postings(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS price_postings_sku ON price_postings(sku)"
     )
+
+
+
+# LANE 0's composite index, alongside `_INDEXES`'s single-column entries rather than inside
+# that tuple: `_INDEXES` only ever names one column, and the product layer's own lookup
+# (`product_line`, `set_name`, `product_name`, `number` together) needs all four, `_CID_INDEXES`'
+# own reason for living apart from `_INDEXES`.
+_SKU_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS skus_product ON "
+    "skus(product_line, set_name, product_name, number)",
+)
+
+# THE TWO VIEWS SPEC SECTION 3.2 NAMES — "no second copy to drift". Both are read-only and
+# derive everything from `skus` alone, so a later lane can query either with no migration of
+# its own: `sku_products` groups every SKU down to one row per PHYSICAL CARD (product line,
+# set, product name, number), collapsing condition, grade and printing; `sku_printings` keeps
+# `printing` as a fifth grouping column, so a foil row and a normal row of the same card stay
+# apart. `rarity_variants` is `COUNT(DISTINCT rarity)` over the group — 1 for a product whose
+# SKUs agree, more than 1 for the audit (§4.3, a later lane) to report; `rarity` itself is
+# `MIN(rarity)`, a deterministic representative rather than a guess at which SKU is "the"
+# answer when they do not.
+_SKU_VIEWS = (
+    "CREATE VIEW IF NOT EXISTS sku_products AS "
+    "SELECT product_line, set_name, product_name, number, "
+    "MIN(rarity) AS rarity, COUNT(DISTINCT rarity) AS rarity_variants, "
+    "COUNT(*) AS sku_count, MIN(first_seen) AS first_seen, MAX(last_seen) AS last_seen "
+    "FROM skus GROUP BY product_line, set_name, product_name, number",
+    "CREATE VIEW IF NOT EXISTS sku_printings AS "
+    "SELECT product_line, set_name, product_name, number, printing, "
+    "MIN(rarity) AS rarity, COUNT(DISTINCT rarity) AS rarity_variants, "
+    "COUNT(*) AS sku_count, MIN(first_seen) AS first_seen, MAX(last_seen) AS last_seen "
+    "FROM skus GROUP BY product_line, set_name, product_name, number, printing",
+)
+
+
+def _add_skus(conn: sqlite3.Connection) -> None:
+    """Schema 11: the `skus` table, its two product-layer views, and `cards.identity_source`
+    (lane 0 of `docs/specs/identity-follows-sku.md` §3.2 — owner's ruling, 2026-09-24: "yes
+    I'd been saying we build this").
+
+    THE TABLE HALF IS ADDITIVE LIKE `_add_readings`/`_add_price_history`: nothing older has a
+    `skus` table, so there is nothing to backfill and nothing to read wrong. An upgraded
+    store's table is correctly empty until the first `pkmnscan skus adopt --write`, which
+    reads every export already cached under `inventory/.exports/` and `inventory/.live/` —
+    unlike `price_history`'s 357-day source window, nothing here ages out, so that first press
+    can answer for the store's WHOLE history of fetched exports, not merely what is left of it.
+
+    THE COLUMN HALF IS ADDITIVE LIKE `_add_set_columns`'S TWO COLUMNS: `identity_source`
+    defaults to NULL and this step does not fill it — filling it is a later lane's
+    `Inventory.bind_sku`, never a migration bound to `SCHEMA_VERSION`, `_add_set_columns`'s
+    own reason for leaving `set_name`/`rarity` NULL on every existing card.
+
+    THE VIEWS ARE CREATED HERE TOO, evaluated fresh on every query (`COUNT(DISTINCT rarity)`
+    etc. over a table this step just created, empty), so there is nothing to backfill for them
+    either — they read whatever `skus` holds at query time, always.
+
+    THE TABLE HALF ALSO ALTERS RATHER THAN ONLY CREATING, and that is not belt-and-braces —
+    it is load-bearing against T7's own `check_set_and_rarity` (D213), which builds its
+    schema-7 fixture by looping `db.TABLES.items()` and stripping `set_name`/`rarity` from
+    EVERY table's column list, `cards`'s own two D213 columns being the only ones that loop
+    ever meant. `skus` happens to carry columns of the same two names for an unrelated
+    reason (the CSV's own `Set Name`/`Rarity` cells), so that fixture's `skus` table — built
+    before this function ever runs — is missing exactly those two columns. A bare `CREATE
+    TABLE IF NOT EXISTS` would silently keep that shape forever. `PRAGMA table_info` plus an
+    `ALTER ... ADD COLUMN` per missing name is `_add_card_ids`/`_add_set_columns`'s own
+    idiom, applied here so this table is correct whatever partial shape created it first.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
+    if "identity_source" not in columns:
+        conn.execute("ALTER TABLE cards ADD COLUMN identity_source TEXT")
+    conn.execute(_ddl("skus", TABLES["skus"]))
+    sku_columns = {row[1] for row in conn.execute("PRAGMA table_info(skus)").fetchall()}
+    for column in TABLES["skus"]:
+        if column not in sku_columns:
+            typed = "INTEGER" if column in _INTEGER else "TEXT"
+            conn.execute(f"ALTER TABLE skus ADD COLUMN {column} {typed}")
+    for statement in _SKU_INDEXES:
+        conn.execute(statement)
+    for statement in _SKU_VIEWS:
+        conn.execute(statement)
 
 
 def _add_box_ids(conn: sqlite3.Connection) -> dict:
@@ -1385,6 +1502,43 @@ def _open(db_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA synchronous = FULL")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def open_read_only(db_path: Path) -> sqlite3.Connection:
+    """The one read-only door onto a store file. It never migrates, and it sees every commit.
+
+    NOT `connect`. `connect` always runs `_ensure_schema`, so a preview that opened the store
+    through it would PERFORM the migration it claims to preview. Every reader that must not
+    migrate opens here instead: `cli/cmd_cards.py`'s previews, `scripts/identity-replay.py`,
+    `scripts/d240-tolerance-fit.py` and `scripts/cid-selftest.py`.
+
+    `mode=ro` ALWAYS. SQLite refuses every write through this connection, and the database
+    file is never changed.
+
+    `immutable=1` ONLY WHEN THE WAL IS EMPTY OR ABSENT. `_open` above puts the store in WAL
+    mode. A commit lands in `store.sqlite-wal` first. It reaches the main file only at a
+    checkpoint, and a checkpoint runs when the last connection closes. `immutable=1` tells
+    SQLite the file cannot change, so SQLite never reads the WAL, and every commit not yet
+    checkpointed is invisible. While any other connection is open (a live capture server,
+    or an open `Store.read()` snapshot), an always-immutable door read a store older than
+    its last commit. Measured: `cards identity --write` found 0 SKUs in a `skus` table that
+    a committed fill had just written, and bound nothing. T7 failed on CI for this reason.
+
+    Plain `mode=ro` reads the WAL through the `-shm` index a live writer already keeps, so
+    it creates no file there. It cannot open a WAL store that has no side files at all
+    ("unable to open database file", measured on SQLite 3.54). In that state every commit
+    is already in the main file, so `immutable=1` is exact, and it writes nothing. A
+    `.backup` copy is that state too: the backup API copies committed WAL pages into the
+    copy's own main file.
+
+    `harness/tests/t7_store_and_seams.py:check_open_read_only` proves both halves.
+    """
+    if not db_path.is_file():
+        raise FileNotFoundError(f"no store at {db_path}")
+    wal = Path(f"{db_path}-wal")
+    if wal.is_file() and wal.stat().st_size > 0:
+        return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    return sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
 
 
 def connect(directory: Path, *, locked: bool = False) -> sqlite3.Connection:

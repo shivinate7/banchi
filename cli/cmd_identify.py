@@ -45,6 +45,7 @@ import geometry
 from cli import runs
 from identify import batch, cost, images, prompt, sidecar
 from pipeline import games
+from pipeline import join
 from pipeline import selection as selection_mod
 from store import files as store_files
 from store import master
@@ -739,6 +740,35 @@ def _give_back_unspent(claim, run_dir, store, say) -> bool:
         f"submitted, so nothing was spent and nothing is being held"
     )
     return freed is not None
+
+
+def _read_disputes_for(writable, key: str, read_name) -> Optional[bool]:
+    """`read_disputes` for one `record_identification` call
+    (docs/specs/identity-follows-sku.md §4.1, §4.2: "On a SKU-bound card the identity stays,
+    and the caller recomputes read_disputes") — `record_identification` cannot compute this
+    itself, because `store/` imports neither `pipeline/join` nor `pipeline/games` (D63).
+
+    `None` — LEAVE THE STORED FLAG ALONE — for a card with no binding yet: there is no SKU
+    row to compare the fresh read against, and `record_identification`'s own docstring is
+    explicit that a caller with no fresh answer must not overwrite a real flag with a stale
+    `False`. A BOUND card is checked against its own SKU row's `raw` payload
+    (`store/skus.py:SkuRow.raw` — "the WHOLE CSV row, verbatim", the one
+    `tcgcsv.Row`-shaped thing this table keeps), never against an export file — the same
+    rule `bind_sku` itself follows (§3.2: "READS THE SKU'S ROW FROM `skus`... NEVER FROM AN
+    EXPORT FILE").
+
+    Pulled out of the write loop so it is a function with an answer, not a fact only provable
+    by running the whole batch-collect machinery — `scripts/identity-cli-selftest.py` calls
+    it directly, on a plain `Inventory`/`Skus` pair, the way
+    `scripts/identity-store-selftest.py` proves `bind_sku` itself.
+    """
+    card = writable.inventory.cards.get(key)
+    if card is None or card.identity_source != master.IDENTITY_SKU or not card.sku:
+        return None
+    row = writable.skus.entries.get(str(card.sku))
+    if row is None:
+        return None
+    return join.name_disputes(read_name, [row.raw])
 
 
 def run(args, say) -> int:
@@ -1493,6 +1523,9 @@ def run(args, say) -> int:
                     # whitelist in a second place; `_detected` applies it at the point of
                     # use and this line stores the raw answer unchanged.
                     detected_finish=(item.identification or {}).get("finish"),
+                    read_disputes=_read_disputes_for(
+                        writable, item.key, item.parsed.name
+                    ),
                 )
 
         # C8's ledger, in the same locked session that recorded the cards it indexes.
