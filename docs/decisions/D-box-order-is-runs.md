@@ -55,3 +55,14 @@ BUILT, 2026-09-25, on `ux/boxmap`. The store half is `Box.order`, `BoxOrder`,
 `moveSections` and `undoSectionMove`. T7's `check_section_moves` covers the placement, the
 reorder, the merge and the split. It also covers the undo and its refusal, the sealed box, the
 stale aim, the paid reading, and the mid-box delete. Four mutations each turned it red.
+
+### Planned, not built
+
+- **Single cards and ranges.** D264 put them in v1 only if they are easy on top. The store half
+  is easy: `place_sections` places any block of slots, and a range is a block. The screen half
+  is not: the Shelf draws no card, so a range needs a card list inside a lifted section. That is
+  the next slice. Until then a card or a range moves by the walk's tick and "Move to box".
+- **Two receipt lines** from `docs/specs/box-map.md` section 5.4: the cards owed to open orders,
+  and the next capture that joins a moved last section.
+- **The public demo** answers no section move. Its stub server has no handler for the two
+  routes, so a press on the demo is refused.
