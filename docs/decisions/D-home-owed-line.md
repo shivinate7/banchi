@@ -42,21 +42,26 @@ per-reason filter (`OrdersHubStore.setHub`) before the press navigated. The orde
 that filter. The buyer list now filters only on each buyer's worst open order (UX-199). So the
 press now names a facet in the URL (D285), and it sets no shared state.
 
-The mapping, in `orderBuyers.ts`'s `unfindableFacet`:
+Amended a second time at the PR 2 integration review, 2026-09-25. The first mapping read the
+line REASON: `short` and `no_copies_on_hand` went to `show=short`. But `statusOf` files a
+no-copies line under "Needs a look" unless a copy was recorded for it. On the owner's store,
+Home said "135 copies missing across 71 orders" and opened `show=short`. That list held 6 buyers
+and 10 of the copies. The other 125 were under "Needs a look", and only 57 open orders missed a
+copy at all.
 
-- `dominantMissingReason` finds the reason that carries the most outstanding copies among the
-  open orders (D202). It reads the same `resolution.orders` rows that the sentence sums. A tie
-  keeps `ORDER_REASONS`'s own order.
-- `short` and `no_copies_on_hand` map to `show=short`. Every other reason maps to `show=look`.
-- The facet filters buyers, not lines. A buyer who owes a missing copy can read "Needs a look"
-  because of another line. So the mapped facet is kept only where at least one buyer who owes
-  a missing copy has it. If none does, the worst state that such a buyer has is used. The list
-  is never empty while Home's figure is above 0.
-- Where no open order owes a missing copy, the press opens plain `#/orders`.
+The build now, in `orderBuyers.ts`'s `missingCopies`:
 
-`app/tests/home.spec.ts` presses the line against two ledgers: a buyer who is only short
-(`show=short`), and a no-copies line whose buyer reads "Needs a look" (`show=look`). Each
-checks that the buyer list is not empty. Dropping the fallback turns the second case red.
+- Each buyer group is filed under `worstStatus`, the same classification the "Show" facet draws.
+  Its missing copies (`outstanding` on its open orders, D202) go to that facet.
+- The sentence counts every missing copy, and only the open orders that miss one.
+- The press opens the facet that holds the most missing copies. A tie keeps `STATUS_RANK`'s own
+  order. Where nothing is missing, the press opens plain `#/orders`.
+
+`app/tests/home.spec.ts` presses the line against a ledger shaped like the owner's store. One
+buyer misses 5 copies under "Needs a look", one misses 1 copy under "Short", and one open order
+misses nothing. The case checks "6 copies missing across 3 orders", `show=look`, and a list that
+holds that one buyer. The old code read "across 4 orders" there and went red. The two earlier
+cases (`show=short`, and `show=look` for a no-copies line) still check a list that is not empty.
 
 ### Five stages, not six (Q6, 2026-09-24)
 

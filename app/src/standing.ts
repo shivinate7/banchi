@@ -1,5 +1,5 @@
 import type { IconName } from './kit'
-import { dominantMissingReason, unfindableFacet } from './orderBuyers'
+import { missingCopies } from './orderBuyers'
 import type { OrdersPayload, PricingWorklist, RunSummary, ServerStatus } from './types'
 
 /* THE STANDING LINE — what the store is waiting on, ranked, as one sentence.
@@ -145,11 +145,11 @@ export function standing(input: StandingInput): Standing | null {
      read (D114 — no status vocabulary in `app/`), so a resolution row is counted only where
      its own order reads `open: true` on the wire, never derived from `status` text and never
      assumed pre-filtered. See `## D202`. */
-  const openKeys = open === null ? null : new Set(open.map((o) => o.key))
-  const unfindable =
-    orders === null || openKeys === null
-      ? null
-      : orders.resolution.orders.reduce((sum, o) => sum + (openKeys.has(o.key) ? (o.outstanding ?? 0) : 0), 0)
+  /* THE SAME CLASSIFICATION THE ORDERS LIST DRAWS (`orderBuyers.ts:missingCopies`): every
+     missing copy on an open order, only the open orders that miss one, and the "Show" facet that
+     holds most of them. `groupBuyers` keeps only rows that read `open: true` (D202). */
+  const missing = orders === null ? null : missingCopies(orders.orders, orders.resolution.orders, Date.now())
+  const unfindable = missing === null ? null : missing.copies
   const owed = pricing === null ? null : runsOwingPrice(pricing.roster)
   /* WHAT IS PRICED AND WAITS ON THE SEND: every unsent copy of an open run that owes no price. */
   const readyCopies =
@@ -165,18 +165,9 @@ export function standing(input: StandingInput): Standing | null {
          condition on this screen that is genuinely bad news, and until now it was tail text
          inside a stage note. */
   if (unfindable !== null && unfindable > 0) {
-    /* The press opens Orders on the buyers who owe these copies (UX-077): the "Show" facet
-       `unfindableFacet` picks, `short` for a short or no-copies reason and `look` for the rest,
-       kept only where a buyer owing a missing copy has it, so the list is never empty. */
-    const facet =
-      orders === null || openKeys === null
-        ? null
-        : unfindableFacet(
-            orders.orders,
-            orders.resolution.orders,
-            dominantMissingReason(orders.resolution.orders, openKeys),
-            Date.now(),
-          )
+    /* The press opens Orders on the facet that holds the most of these copies (UX-077). */
+    const facet = missing?.facet ?? null
+    const missingOrders = missing?.orders ?? 0
     return {
       key: 'unfindable',
       tone: 'danger',
@@ -186,8 +177,8 @@ export function standing(input: StandingInput): Standing | null {
         t(' — '),
         n(unfindable),
         t(unfindable === 1 ? ' copy missing across ' : ' copies missing across '),
-        n(open === null ? 0 : open.length),
-        t(open !== null && open.length === 1 ? ' order.' : ' orders.'),
+        n(missingOrders),
+        t(missingOrders === 1 ? ' order.' : ' orders.'),
       ],
       href: facet === null ? '#/orders' : `#/orders?show=${facet}`,
       kbd: ',O',

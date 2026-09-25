@@ -198,6 +198,57 @@ for (const [label, ledger, facet] of [
   })
 }
 
+/* F2, THE OWNER'S STORE IN MINIATURE (PR 2 integration review). Home said "135 copies missing
+ * across 71 orders" and opened `show=short`, which held 6 buyers and 10 of those copies. The
+ * other 125 sat under "Needs a look", and only 57 open orders missed a copy at all. This ledger
+ * has the same shape: Ada's two orders miss 5 copies with none recorded (Orders files that as
+ * "Needs a look"), Bob's order misses 1 with one copy already pulled (Orders files that as
+ * "Short"), and Cy's open order misses nothing. Home counts only the 3 orders that miss a copy,
+ * and the press opens the facet that holds most of them: "Needs a look", with Ada in it. */
+function lookHeavyLedger(): OrdersPayload {
+  const ada1 = orderRow({ key: 'TCGplayer:ADA-1', number: 'ADA-1', buyer: 'Ada Lovelace', wanted: 3, recorded: 0 })
+  const ada2 = orderRow({ key: 'TCGplayer:ADA-2', number: 'ADA-2', buyer: 'Ada Lovelace', wanted: 2, recorded: 0 })
+  const bobProgress: OrderRow['progress'] = [
+    { sku: '9191005', wanted: 2, recorded: 1, outstanding: 1, over: 0, copies: ['1:1'], by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null, at: null },
+  ]
+  const bob = orderRow({ key: 'TCGplayer:BOB-1', number: 'BOB-1', buyer: 'Bob Babbage', wanted: 2, recorded: 1, progress: bobProgress })
+  const cy = orderRow({ key: 'TCGplayer:CY-1', number: 'CY-1', buyer: 'Cy Hopper', wanted: 1, recorded: 0 })
+  const resolved: ResolvedOrder[] = [
+    { key: 'TCGplayer:ADA-1', number: 'ADA-1', complete: false, outstanding: 3, lines: [resolvedLine('9191003', 3)] },
+    { key: 'TCGplayer:ADA-2', number: 'ADA-2', complete: false, outstanding: 2, lines: [resolvedLine('9191004', 2)] },
+    { key: 'TCGplayer:BOB-1', number: 'BOB-1', complete: false, outstanding: 1, lines: [resolvedLine('9191005', 1)] },
+    { key: 'TCGplayer:CY-1', number: 'CY-1', complete: true, outstanding: 0, lines: [resolvedLine('9191006', 0)] },
+  ]
+  return {
+    summary: '4 orders',
+    orders: [ada1, ada2, bob, cy],
+    resolution: {
+      orders: resolved,
+      counts: { resolved: 1, short: 0, no_copies_on_hand: 3, sku_unknown: 0, sku_unseen: 0, not_a_single: 0 },
+    },
+  }
+}
+
+test('"Cannot be filled" counts only the orders that miss a copy, and opens the facet holding most of them', async ({ page }) => {
+  await page.route(/\/orders$/, (route) => json(route, lookHeavyLedger()))
+  await page.route(/\/orders\/walk-plan$/, (route) => json(route, EMPTY_PLAN))
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+
+  const standingRow = page.locator('a.home-standing-row')
+  await expect(standingRow).toContainText('Cannot be filled')
+  const said = (await standingRow.innerText()).replace(/\s+/g, ' ')
+  expect(said).toContain('6 copies missing across 3 orders')
+  await expect(standingRow).toHaveAttribute('href', '#/orders?show=look')
+  await standingRow.click()
+
+  /* THE LIST THE PRESS OPENS HOLDS THE BUYERS HOME COUNTED UNDER THAT FACET: Ada, and nobody
+     else. Bob's one short copy is the other facet's, which is why the press did not go there. */
+  const rows = page.locator('main.orders .orders-index-row')
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first()).toContainText('Ada Lovelace')
+})
+
 /* D218: NO ROUTE TYPES A MIDDLE DOT OR BULLET. `stubStore`'s two boxes carry real
  * `on_hand`/`sold` figures (box 2: 3 on hand, 1 sold), which is what actually puts
  * `.home-box-meta` on screen with something to join — an empty-boxes fixture would let this

@@ -7967,8 +7967,9 @@ COMPONENTS = [
                                         "whichever group holds it. It also holds a buyer's "
                                         "status (`statusOf`, `worstStatus`, moved out of "
                                         "Orders.tsx) so Home can reach it, and "
-                                        "`unfindableFacet`, the `show=` facet Home's "
-                                        "\"Cannot be filled\" press opens (UX-077).",
+                                        "`missingCopies`: Home's \"Cannot be filled\" "
+                                        "figures and the `show=` facet its press opens, "
+                                        "filed by that same status (UX-077).",
                                 "governed_by": ["D13", "D63", "D69", "D97", "D193", "D202",
                                                 "D285", "D-home-owed-line"]},
             "src/orderView.ts": {"does": "HOW THE BUYER LIST IS SORTED AND FILTERED "

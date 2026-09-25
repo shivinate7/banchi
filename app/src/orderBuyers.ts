@@ -32,7 +32,6 @@
  * receipt above it so the two cannot disagree about what "today" means mid-render.
  */
 
-import { ORDER_REASONS } from './orderReasons'
 import type { OrderLineReason, OrderRow, ResolvedLine, ResolvedOrder } from './types'
 
 /** How long a buyer with nothing open still counts as RECENT rather than sinking under the
@@ -227,56 +226,52 @@ export function worstStatus(group: BuyerGroup, answers: ReadonlyMap<string, Reso
   return worst
 }
 
-/** WHICH "Show" FACET HOME'S "Cannot be filled" PRESS OPENS ORDERS ON (UX-077, amended at the
- *  integration): `#/orders?show=<facet>`. The mapping, off the reason carrying the most missing
- *  copies (`dominant`): `short` and `no_copies_on_hand` -> `short`; every other reason ->
- *  `look` ("Needs a look"). The facet filters BUYERS on their worst open order, so a buyer who
- *  owes a missing copy can still read `look` for another order. The preferred facet is kept
- *  only when at least one buyer who owes a missing copy (an OPEN order, D202) has it.
- *  Otherwise the worst state such a buyer does have is used, so the list is never empty while
- *  Home's figure is above 0. `null` when no open order owes a missing copy. */
-export function unfindableFacet(
-  orders: readonly OrderRow[],
-  resolution: readonly ResolvedOrder[],
-  dominant: OrderLineReason | null,
-  now: number,
-): Status | null {
-  const answers = new Map(resolution.map((one) => [one.key, one] as const))
-  const { recent, earlier } = groupBuyers(orders, now)
-  const found = new Set<Status>()
-  for (const group of [...recent, ...earlier]) {
-    const owes = group.open.some((order) => (answers.get(order.key)?.outstanding ?? 0) > 0)
-    if (owes) found.add(worstStatus(group, answers))
-  }
-  if (found.size === 0) return null
-  const preferred: Status = dominant === 'short' || dominant === 'no_copies_on_hand' ? 'short' : 'look'
-  if (found.has(preferred)) return preferred
-  return [...found].sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b])[0] ?? null
+/** WHAT HOME'S "Cannot be filled" LINE SAYS, AND WHERE ITS PRESS LANDS (UX-077, amended twice at
+ *  the PR 2 integration). One pass over the same classification the Orders list draws: each
+ *  buyer group is filed under `worstStatus`, exactly as the "Show" facet files it, and the
+ *  copies it cannot fill (`outstanding` on its OPEN orders, D202) are added to that facet.
+ *
+ *  - `copies` and `orders`: every missing copy, and only the open orders that miss one.
+ *  - `byFacet`: the same two figures per "Show" facet.
+ *  - `facet`: the facet holding the most missing copies (a tie keeps `STATUS_RANK`'s order), so
+ *    the press opens the list where most of the problem is. `null` when nothing is missing.
+ *
+ *  The first build mapped a line REASON to a facet (`no_copies_on_hand` to `short`), but
+ *  `statusOf` files a no-copies line under "Needs a look" unless a copy was recorded for it. On
+ *  the owner's store that sent 125 of 135 missing copies to the other facet. */
+export type MissingCopies = {
+  readonly copies: number
+  readonly orders: number
+  readonly byFacet: ReadonlyMap<Status, { readonly copies: number; readonly orders: number }>
+  readonly facet: Status | null
 }
 
-/** THE REASON CARRYING THE MOST MISSING COPIES over the open orders (UX-077), summed off the
- *  same `outstanding` Home's figure sums. A tie keeps `ORDER_REASONS`'s own order (`short`
- *  first). `null` when nothing open is missing. */
-export function dominantMissingReason(
-  resolution: readonly ResolvedOrder[],
-  openKeys: ReadonlySet<string>,
-): OrderLineReason | null {
-  const totals = new Map<OrderLineReason, number>()
-  for (const o of resolution) {
-    if (!openKeys.has(o.key)) continue
-    for (const line of o.lines) {
-      if (line.reason === 'resolved') continue
-      totals.set(line.reason, (totals.get(line.reason) ?? 0) + line.outstanding)
+export function missingCopies(orders: readonly OrderRow[], resolution: readonly ResolvedOrder[], now: number): MissingCopies {
+  const answers = new Map(resolution.map((one) => [one.key, one] as const))
+  const { recent, earlier } = groupBuyers(orders, now)
+  const byFacet = new Map<Status, { copies: number; orders: number }>()
+  let copies = 0
+  let missingOrders = 0
+  for (const group of [...recent, ...earlier]) {
+    let groupCopies = 0
+    let groupOrders = 0
+    for (const order of group.open) {
+      const out = answers.get(order.key)?.outstanding ?? 0
+      if (out > 0) {
+        groupCopies += out
+        groupOrders += 1
+      }
     }
+    if (groupCopies === 0) continue
+    const status = worstStatus(group, answers)
+    const at = byFacet.get(status) ?? { copies: 0, orders: 0 }
+    byFacet.set(status, { copies: at.copies + groupCopies, orders: at.orders + groupOrders })
+    copies += groupCopies
+    missingOrders += groupOrders
   }
-  let best: OrderLineReason | null = null
-  let bestN = 0
-  for (const reason of ORDER_REASONS) {
-    const n = totals.get(reason) ?? 0
-    if (n > bestN) {
-      best = reason
-      bestN = n
-    }
+  let facet: Status | null = null
+  for (const [status, at] of [...byFacet].sort((x, y) => STATUS_RANK[x[0]] - STATUS_RANK[y[0]])) {
+    if (facet === null || at.copies > (byFacet.get(facet)?.copies ?? 0)) facet = status
   }
-  return best
+  return { copies, orders: missingOrders, byFacet, facet }
 }
