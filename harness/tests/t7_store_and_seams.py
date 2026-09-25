@@ -36946,7 +36946,7 @@ def _m_home(worklists: Dict[str, dict]) -> Dict[str, dict]:
             "      pricing: c.pricing, pricingFailed: false, runs: [], runsFailed: false, unconfirmed: 0,"
             "      book, bookFailed: failed});"
             "    return say === null ? null : {lead: say.lead, text: say.say.map((x) => x.text).join(''),"
-            "      behind: say.behind.map((b) => `${b.figure ?? ''} ${b.label}`.trim())};"
+            "      behind: say.behind.slice()};"
             "  };"
             "  const ready = s.sendCounts(c.pricing, c.book).ready;"
             "  out[name] = {line: read(c.book, false), failed: read(null, true),"
