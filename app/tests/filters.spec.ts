@@ -368,7 +368,10 @@ test.describe('FilterBar', () => {
 
   test('at 390, the "Filters" badge counts what differs from rest: a Hide sold on by default is not counted', async ({ page }) => {
     await open(page, 390)
-    const badge = page.locator(`${BAR} .bn-filterbar-trigger-count`)
+    /* `.bn-filterbar-trigger-count` WAS HERE — the trigger is an IconButton now
+       (D-icon-buttons), and its badge is `.bn-icon-count`, generic across every IconButton
+       that carries one. */
+    const badge = page.locator(`${BAR} .bn-filterbar-trigger .bn-icon-count`)
     /* Game = Pokémon is one. Hide sold is on, and on is its default. */
     await expect(badge).toHaveText('1')
     await page.locator(`${BAR} .bn-filterbar-trigger`).click()
