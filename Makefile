@@ -1945,6 +1945,11 @@ demo-seed:
 	@PKMNSCAN_HOME=$(DEMO_HOME) ./pkmnscan join $(DEMO_HOME)/runs/demo-box3 	  --export fixtures/riftbound_export_untouched.csv > /dev/null
 	@echo "  joined 2 runs against the real fixture exports"
 
+# A SECOND, small, real box, opt-in only — never on `demo-seed` alone (D18: the flag reaches
+# a generator, never a gate). Set as a TARGET-SPECIFIC variable, which GNU Make propagates
+# into every prerequisite this target pulls in, direct and indirect — so `demo-static`'s own
+# chain through `demo` to `demo-seed` carries it, and a bare `make demo-seed` never does.
+demo-record: export PKMNSCAN_DEMO_EXTRA_REAL := 1
 demo-record:
 	@PKMNSCAN_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-record.py
 
@@ -1952,6 +1957,7 @@ demo-record:
 # shows the recording moving with the contract it was recorded against.
 demo: demo-seed demo-record
 
+demo-static: export PKMNSCAN_DEMO_EXTRA_REAL := 1
 demo-static: demo
 	$(NPM_GUARD)
 	@cd app && VITE_DEMO=1 DEMO_BASE=$(DEMO_BASE) npx vite build --outDir ../dist-demo --emptyOutDir

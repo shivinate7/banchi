@@ -994,6 +994,119 @@ def write_archive() -> int:
     return len(buckets)
 
 
+# ---------------------------------------------------------- extra real box (opt-in only)
+
+
+def add_extra_real_boxes() -> dict:
+    """A SECOND, small, real box — additive, opt-in, and never the default build.
+
+    OFF UNLESS `PKMNSCAN_DEMO_EXTRA_REAL=1`. `make demo-seed` on its own never calls this
+    branch at all, so the default store stays byte-identical to the build before this
+    function existed — `make demo-determinism-selftest` proves the digest matcher without
+    ever setting the variable, and nothing above this function changes.
+
+    RUNS IN ITS OWN `store.write()`, AFTER THE DETERMINISTIC BASE STORE IS ALREADY
+    COMMITTED. So it cannot perturb `SEED`/`NOW`, `placed`, the corpus, the review queue, or
+    either run directory the base build writes — this only ever ADDS a box, its cards, and a
+    listing row per SKU. `docs/specs/demo.md` §4's REAL/INVENTED split still holds: reads
+    `demo-assets/extra/cards.json` (`scripts/demo-extra-real.py`'s own output), which is
+    itself real names, numbers, SKUs, rarities, market prices, typed prices and sale facts
+    curated from a READ-ONLY COPY of the owner's store. WHICH BOX AND INDEX each card sits
+    at is invented, exactly like the base build's boxes — nothing here claims otherwise.
+
+    NO ORDER IS WRITTEN, on the owner's own ruling: buyers and orders stay invented, and nothing
+    here adds either.
+    """
+    if not os.environ.get("PKMNSCAN_DEMO_EXTRA_REAL"):
+        return {}
+
+    manifest_path = REPO_ROOT / "demo-assets" / "extra" / "cards.json"
+    if not manifest_path.is_file():
+        print("PKMNSCAN_DEMO_EXTRA_REAL is set but %s is missing — run "
+              "scripts/demo-extra-real.py first. Skipping." % manifest_path.relative_to(REPO_ROOT))
+        return {}
+    entries = json.loads(manifest_path.read_text())
+    photos_dir = manifest_path.parent / "photos"
+
+    counts = {"boxes": 0, "cards": 0, "photos": 0, "listings": 0, "sold": 0, "identified": 0}
+    store = Store()
+    with store.write() as snapshot:
+        inventory = snapshot.inventory
+        box_number = max((int(b) for b in inventory.boxes), default=0) + 1
+        box_name = "Owner's Real Cards"
+        if box_name in {b.name for b in inventory.boxes.values()}:
+            return {}  # already added by an earlier run — never a second box
+        inventory.boxes[str(box_number)] = Box(
+            box=box_number,
+            name=box_name,
+            sections=[1],
+            section_names={"1": "From the owner's own store"},
+            state="open",
+            capacity=None,
+            created_at=stamp(1.0),
+        )
+        counts["boxes"] += 1
+
+        for offset, entry in enumerate(entries):
+            index = offset + 1
+            digest = store_photos.sha256_of(photos_dir / entry["photo"])
+            dest = store_photos.path(digest)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(photos_dir / entry["photo"], dest)
+            counts["photos"] += 1
+
+            sale = entry.get("sale")
+            state = "sold" if sale else "identified"
+            captured_at = stamp(1.0)
+            card = Card(
+                box=box_number,
+                index=index,
+                photo=relative_photo(digest),
+                cid=digest,
+                game=entry["game"],
+                capture_id="demo-extra-%04d" % index,
+                captured_at=captured_at,
+                state=state,
+                # A REAL DATE WHERE THERE IS ONE — the sale's own `placed_at`, never
+                # `now()`. Everything else here is the same fixed `stamp(1.0)` the base
+                # build's own review-queue entries use.
+                state_at=sale["placed_at"] if sale else captured_at,
+                condition=entry.get("condition") or "Near Mint",
+            )
+            inventory.cards[card.key] = card
+            counts["cards"] += 1
+            counts[state] = counts.get(state, 0) + 1
+
+            if entry.get("sku"):
+                bind_or_hold(
+                    inventory, snapshot.skus, card,
+                    sku=entry["sku"], game=entry["game"], run="demo-extra",
+                    read_name=entry["name"], read_number=entry["number"],
+                    read_printed_total=entry.get("printed_total"),
+                    confidence="high", bound_at=captured_at,
+                )
+                if state == "identified":
+                    inventory.listings[entry["sku"]] = Listing(
+                        sku=entry["sku"], condition=card.condition,
+                        pushed=0, staged=0, live=0, at=captured_at, live_as_of=captured_at,
+                    )
+                    counts["listings"] += 1
+    # A real typed price reaches the pricing corpus for real, so a viewer of `#/pricing`
+    # sees the actual gap between what the owner typed and today's market — not a synthetic
+    # one. Merged into the corpus `write_corpus` already wrote, above main()'s own call to
+    # this function — never a second, competing writer of the same file at once.
+    typed = {e["sku"]: e["typed_price"] for e in entries if e.get("typed_price")}
+    if typed:
+        from pipeline import corpus as corpus_mod
+        current = corpus_mod.Corpus.read()
+        for sku, value in typed.items():
+            current.answers[sku] = corpus_mod.Answer(value=value, at=stamp(1.0))
+        current.write()
+        counts["typed_prices"] = len(typed)
+
+    return counts
+
+
 # ------------------------------------------------------------------------------- entry
 
 
@@ -1023,10 +1136,19 @@ def main() -> int:
         if write_run(placed, box, home, whole_box) is not None:
             counts["runs"] += 1
 
+    extra = add_extra_real_boxes()
+    if extra:
+        for key, value in extra.items():
+            counts["extra_" + key] = value
+
     print("demo store seeded at %s" % home)
     for key in ("boxes", "cards", "photos", "listings", "answers", "archived", "review",
                 "runs", "orders", "sold", "retired", "moved", "captured"):
         print("  %-9s %d" % (key, counts.get(key, 0)))
+    if extra:
+        print("  extra real box (PKMNSCAN_DEMO_EXTRA_REAL):")
+        for key, value in extra.items():
+            print("    %-9s %d" % (key, value))
     return 0
 
 

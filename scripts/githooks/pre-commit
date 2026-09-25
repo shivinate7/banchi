@@ -216,11 +216,19 @@ while IFS= read -r path; do
     # for: the reason the blanket rule exists is that a live code is a bearer instrument and
     # a tracked one cannot be recalled.
     demo-assets/photos/*) continue ;;
+    # A SECOND, SMALL, REAL BOX (2026-09-25), never widened past this one sibling directory.
+    # `scripts/demo-extra-real.py` runs the SAME QR clearance as `demo-photos.py` above —
+    # `codes/qr.py` at full resolution, refused on any decode — so this exception carries
+    # exactly the argument the comment above already makes, over a second output path
+    # because the extra box's manifest and photographs must never collide with or resize
+    # the already-committed 132-card set.
+    demo-assets/extra/photos/*) continue ;;
     *.png|*.jpg|*.jpeg|*.webp|*.heic|*.PNG|*.JPG|*.JPEG)
       fail "image staged outside captures/ ($path).
   Code-card photos are bearer instruments and must never reach a tracked path.
-  The one exception is demo-assets/photos/, written only by scripts/demo-photos.py,
-  which refuses any photograph a QR decodes out of."
+  The exceptions are demo-assets/photos/ and demo-assets/extra/photos/, written only by
+  scripts/demo-photos.py and scripts/demo-extra-real.py, which refuse any photograph a QR
+  decodes out of."
       ;;
   esac
 done <<< "$staged"

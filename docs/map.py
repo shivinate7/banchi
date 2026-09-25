@@ -5041,41 +5041,38 @@ COMPONENTS = [
                         "(D18: that target is a press, run by hand).",
                 "governed_by": ["D16", "D18"],
             },
-            "extract_demo_data.py": {
-                "does": "queries the snapshot of the owner's real store, extracting card "
-                        "facts (names, sets, numbers, rarities, SKUs, market prices, state) "
-                        "without personal data. Identifies edge cases: unsent cards with no "
-                        "market price, high-value cards ($5+), multi-condition variants, and "
-                        "cards with sales history. Output is a JSON file for analysis, not "
-                        "committed — inspection only, to understand the data we are working with.",
-                # D18: read-only analysis script, no write output committed. Used to plan demo
-                # data extraction strategy.
-                "governed_by": ["D18"],
-            },
-            "extract_real_card_facts.py": {
-                "does": "queries the snapshot of the owner's real store, extracting real card "
-                        "facts (names, sets, numbers, rarities, SKUs, market prices, sold/on-hand "
-                        "counts) without personal data (no buyer names, addresses, emails, or "
-                        "order numbers). Categorizes 916 unique SKUs by case: high-value cards "
-                        "($5+), unsent with no price, multi-condition variants, and sales history. "
-                        "Writes a single JSON file (real_card_facts.json) that tracks how many "
-                        "cards from the owner's data are used in the demo.",
-                # D18: writes real_card_facts.json which is tracked, not committed to the build.
-                # D43 isolates reads to a snapshot copy. Used to populate demo with owner's real
-                # card data while maintaining determinism.
+            "extract_real_facts.py": {
+                "does": "reads a READ-ONLY COPY of the owner's store (never the owner's own "
+                        "checkout) and writes demo-assets/real-facts.json: a typed price per "
+                        "SKU (from prices.json, only for SKUs a vendored fixture also prices, "
+                        "so a mismatch is checkable against the demo's own real arithmetic), "
+                        "a short list of real sale lines per SKU (unit_price and the order's "
+                        "placed_at date only — never a buyer, an order number or an address), "
+                        "and a pinned-SKU list naming the specific real cards "
+                        "demo-extra-real.py must include so the extra, opt-in box's cases "
+                        "($5+, a 25%+ typed-price mismatch, a foil/normal pair, an unsent "
+                        "no-market card) are real rather than invented. Run once, by hand, "
+                        "against a snapshot; its output is committed and demo-seed.py never "
+                        "re-reads the owner's store.",
+                # D18: a generator that writes a tracked file; not on any hook or gate.
+                # D43 isolates the read to a copy, never the owner's own checkout or port 8000.
                 "governed_by": ["D18", "D43"],
             },
-            "extract_comprehensive_card_facts.py": {
-                "does": "queries the snapshot of the owner's real store to extract 150-300 cards "
-                        "for the demo, categorized by test case: high-value ($5+), unsent with no "
-                        "price, price mismatch (25%+ from market), multi-condition variants, and "
-                        "cards with actual sales history. Writes demo_cards_comprehensive.json "
-                        "containing real card facts (names, numbers, rarities, SKUs, market prices, "
-                        "sold counts) without personal data.",
-                # D18: writes demo_cards_comprehensive.json which is tracked, not committed to the build.
-                # D43 isolates reads to a snapshot copy. Used to enrich demo store with owner's
-                # real card data and sales patterns.
-                "governed_by": ["D18", "D43"],
+            "demo-extra-real.py": {
+                "does": "curates a SECOND, small, real card set — its own manifest and "
+                        "photographs under demo-assets/extra/, never touching the default "
+                        "132-card demo-assets/cards.json or its photos. QR-clears every "
+                        "candidate exactly as demo-photos.py does (loaded by path and reused, "
+                        "not copied). Reads demo-assets/real-facts.json for pinned SKUs, real "
+                        "typed prices and real sale facts. Read by demo-seed.py's "
+                        "`add_extra_real_boxes()` ONLY when PKMNSCAN_DEMO_EXTRA_REAL=1 — the "
+                        "default `make demo-seed` never reads this output, so the base build "
+                        "stays byte-identical.",
+                # D18: a generator that writes tracked files; not on any hook or gate.
+                # D43 isolates the read to a copy, never the owner's own checkout or port 8000.
+                # D172: never picks a SKU the base manifest already curated, because
+                # `cards.cid` is unique on the photograph's own digest.
+                "governed_by": ["D18", "D43", "D172"],
             },
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
