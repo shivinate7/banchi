@@ -456,14 +456,8 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
   pane    559   BoxBrowse — the photograph stops short of the full width
   pane    560   BoxBrowse — the photo/copies band splits in two
   pane    760   BoxBrowse — the fact grid goes to two columns
-  value   469   ValueBands — the bar stops being sticky and the cause row loses its third column
-  value   619   ValueBands — the row becomes a card: the address takes its own line
-  value   760   ValueBands — the drawer grid goes to one column and the row gives up its gaps
-  page    1099  Pricing — the ship bar's key legend takes a line of its own
-  pricing 599   Pricing — the row becomes a card
-  pricing 880   Pricing — the deck takes two columns
-  pricing 939   Pricing — the row becomes a compact two-line row
-  pricing 1040  Pricing — the DIRECT column joins the table
+  bn-page 559   Pricing — the row becomes two lines, the price on the right with Market under it
+  bn-page 899   Pricing — Lowest and the trend leave the row (the product view carries both)
   (unnamed) 520, 640   RunPanel — the run detail's own steps, on `.runs-detail`
   bn-page 640   kit — a `Page`'s toolbar folds into equal cells, and its actions take a line;
                 Gallery — the specimen grids go to one column

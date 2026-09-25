@@ -4067,8 +4067,7 @@ COMPONENTS = [
                         "2026-09-20, is the same shape for a different record: "
                         "`scripts/stop-gate.sh:69` cited in docs/specs/mechanization-"
                         "backlog.md, from before the harness left turn end.",
-                "governed_by": ["D16", "D136", "D141", "D149", "D229",
-                                "D248"],
+                "governed_by": ["D16", "D136", "D141", "D149", "D229", "D248", "D277"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
@@ -7261,7 +7260,7 @@ COMPONENTS = [
                                               "until a preview has answered (D33's gate pointed "
                                               "at the ledger), and the same bytes are sent twice "
                                               "rather than re-picked.",
-                                      "governed_by": ["D7", "D13", "D33", "D87", "D104"],
+                                      "governed_by": ["D7", "D13", "D33", "D87", "D104", "D118"],
                                       # `app/tests/live-reconcile.spec.ts` is the check the hard
                                       # rule says does not otherwise exist — it runs under
                                       # `make design-check`, not at turn end, so it is named
@@ -7447,13 +7446,12 @@ COMPONENTS = [
                                          "confirmed with Take them back, and the check after the "
                                          "lag. No pipeline word reaches the screen (D196).",
                                  "governed_by": ["D86", "D99", "D105", "D106", "D118", "D196",
-                                                 "D269",
-                                                 "D273"]},
+                                                 "D269", "D273", "D277"]},
             "src/SendCard.css": {"does": "the send card's own rows: the press and its two quiet "
                                          "doors on one line that wraps as a unit, the download "
                                          "door, and the card lists under a notice. On a phone "
                                          "the press takes the whole first line (UX-007).",
-                                 "governed_by": ["D117", "D118", "D273"]},
+                                 "governed_by": ["D117", "D118", "D273", "D277"]},
             "src/liveCheck.ts": {"does": "WHEN THE LIVE CHECK AFTER A SEND RUNS (the owner's Q3 "
                                          "ruling). A visit to Pricing or Home reads the send "
                                          "status and runs a due check at once; otherwise one "
@@ -7479,60 +7477,6 @@ COMPONENTS = [
                                          "nothing in reachability. Both forms take a drop as well "
                                          "as a click.",
                                  "governed_by": ["D5", "D33", "D94"]},
-            "src/Markdown.tsx": {"does": "THE STALE-LISTING MARKDOWN (D100), the second sheet off "
-                                         "the Runs header and a structural clone of "
-                                         "LiveReconcile.tsx — same bn-sheet/bn-scrim shell, same "
-                                         "runsOverlay focus trap, same open/onClose contract. "
-                                         "Three steps and each press is ABSENT until the read "
-                                         "before it has answered, which is D33's gate applied "
-                                         "twice: to the press that writes a worklist and to the "
-                                         "one that writes the file the operator uploads. The "
-                                         "footer carries whichever of the three is next. The "
-                                         "export is HELD so the write sends the same bytes the "
-                                         "preview described, LiveReconcile's rule and it matters "
-                                         "more here — a survey about one file and a worklist "
-                                         "written from another would make the numbers on screen "
-                                         "about something else. Both consoles are RunsLog wells "
-                                         "and neither is summarised (D33). MOUNTED INSIDE "
-                                         "#/pricing SINCE D105 AND STILL NOT ON A ROUTE. D100 "
-                                         "put it beside the store-wide reconcile because both "
-                                         "read one export — kinship of IMPLEMENTATION; a "
-                                         "markdown decides a PRICE, so it lives where prices are "
-                                         "decided, and its own step-2 press now LANDS rather "
-                                         "than navigating, because App.tsx keys the view on the "
-                                         "hash minus its query. It takes `revision` and hands "
-                                         "back `onCorpusWritten` for that move's one real cost: "
-                                         "step 3 writes inventory/prices.json from a subprocess "
-                                         "and now shares a tab with the screen holding the "
-                                         "digest, which is exactly the hazard D103 built the "
-                                         "guard for. Says two things in its own words that no "
-                                         "spec can say for it — that nothing is deleted at "
-                                         "TCGplayer to lower a price, and that the age it ranks "
-                                         "on is OWNERSHIP age.",
-                                 "governed_by": ["D7", "D9", "D13", "D33", "D49", "D64", "D86",
-                                                 "D87", "D94", "D95", "D100", "D103", "D104",
-                                                 "D105", "D118", "D273"],
-                                 # `app/tests/markdown.spec.ts` is the check the hard rule says
-                                 # does not otherwise exist — it runs under `make design-check`,
-                                 # not at turn end, so it is named here in prose rather than in
-                                 # `tested_by`.
-                                 },
-            "src/Markdown.css": {"does": "the sheet's own chrome, and the prefix names the "
-                                         "COMPONENT rather than a screen (D105). It was "
-                                         "`.runs-md-*` inside Runs.css until 2026-09-06, which "
-                                         "left this component importing another screen's "
-                                         "stylesheet and forty class names asserting a host it "
-                                         "no longer has. The kit has the sheet and NOT its "
-                                         "chrome: `.bn-sheet` is the fixed panel and the phone's "
-                                         "bottom-rise, and a scrolling body between a fixed head "
-                                         "and a fixed foot is not a kit primitive — this is the "
-                                         "runs composer's chrome re-stated for a sheet, the "
-                                         "second time and so the last before it is worth "
-                                         "promoting. One rule was dropped rather than moved: "
-                                         "`.runs-md-shortfall`, whose comment said it awaited a "
-                                         "narrowing axis while app/src/types.ts says the field "
-                                         "it draws cannot exist. `--bn-*` only.",
-                                 "governed_by": ["D50", "D94", "D100", "D103", "D105", "D117"]},
             "src/runsOverlay.ts": {"does": "dialog focus for the three runs overlays — the composer, "
                                            "the store-wide reconcile and the markdown sheet: focus lands "
                                            "inside on open, Tab and Shift-Tab stay inside, focus "
@@ -7593,9 +7537,9 @@ COMPONENTS = [
                                                 "D49", "D51", "D54", "D56", "D58", "D59", "D62",
                                                 "D78", "D79", "D85", "D86", "D89", "D98", "D99",
                                                 "D100", "D101", "D103", "D105", "D107", "D109",
-                                                "D115", "D117", "D118", "D125", "D156", "D159",
-                                                "D168", "D172", "D208", "D210", "D218",
-                                                "D273"]},
+                                                "D115", "D117", "D118", "D125", "D137", "D156",
+                                                "D159", "D168", "D172", "D181", "D208", "D210",
+                                                "D218", "D273", "D277", "D278"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, the third sheet off #/pricing's "
                                             "header (D168). The operator's "
                                             "own ask - \"after several emits a lot of pricing "
@@ -7660,8 +7604,8 @@ COMPONENTS = [
                                         "control and nothing has to win a stacking order.",
                                 "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50",
                                                 "D54", "D56", "D62", "D78", "D79", "D85", "D86",
-                                                "D103", "D105", "D117", "D125", "D197", "D208",
-                                                "D218"]},
+                                                "D103", "D105", "D117", "D123", "D125", "D197",
+                                                "D208", "D218", "D277"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -7683,7 +7627,8 @@ COMPONENTS = [
                                              "FOR NOTHING — only the press does. The footer is "
                                              "the only place the two differ on screen — Close "
                                              "against Keep open.",
-                                     "governed_by": ["D5", "D8", "D9", "D22", "D41", "D49", "D50", "D62", "D79"],
+                                     "governed_by": ["D5", "D8", "D9", "D22", "D41", "D49", "D50",
+                                                     "D62", "D79", "D277", "D278"],
                                      "note": "IT PRICES NOTHING AND WRITES NOTHING. The two "
                                              "ranges OVERLAP and are drawn side by side with a "
                                              "sentence saying so — measured on Vilemaw the day it "
@@ -7692,21 +7637,6 @@ COMPONENTS = [
                                              "contradiction. DIRECTION IS A SIGN AND A WORD, "
                                              "NEVER A COLOR: the palette has no red and no green "
                                              "and accent already means `unsure`."},
-            "src/PriceHistory.css": {"does": "that panel at owner density. It shares the "
-                                            "photograph's bottom-left corner and the two are "
-                                            "mutually exclusive, for the reason Pricing.css "
-                                            "chose that corner: bottom-right covers the four "
-                                            "reference columns and the price field. The 26px "
-                                            "average against the 11px bound is the "
-                                            "anchor-versus-sanity-check rule expressed as type "
-                                            "sizes, and is the property to preserve if this is "
-                                            "ever re-laid-out. Its anchor is stated in "
-                                            "Pricing.css and read here rather than re-derived: "
-                                            "--pricing-gutter clears the row's T and H, and "
-                                            "--pricing-ship-h is the ship bar's MEASURED height "
-                                            "(D85) — read by three declarations and set by "
-                                            "nothing from D54 until then.",
-                                     "governed_by": ["D5", "D41", "D45", "D49", "D50", "D54", "D62", "D85"]},
             # THE PER-PRODUCT VIEW (D227). Off-nav, deep-linked by SKU. Never
             # links from #/revenue -- that file was being edited by another branch when this
             # route was built, and the decision entry argues the deferral in full.
@@ -8332,8 +8262,8 @@ COMPONENTS = [
                                              "eleven and three mechanical counts do not move.",
                                      # D103 is the entry; D86 is the one answer file the write
                                      # path is keyed by; D62 is the press the trends scoping keeps.
-                                     "governed_by": ["D28", "D62", "D86", "D100", "D103", "D101", "D99", "D115", "D59", "D87",
-                                                     "D159"]},
+                                     "governed_by": ["D28", "D59", "D62", "D86", "D87", "D99",
+                                                     "D100", "D101", "D103", "D115", "D159", "D277"]},
             "src/runHandoff.ts": {"does": "the one module that reads or writes the run scope "
                                           "carried from #/inventory to #/runs — key "
                                           "`banchi.run-scope`, D27's carve-out. NOT CLEARED BY "

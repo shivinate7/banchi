@@ -135,7 +135,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
           <div className="livecheck-fetch">
             <Button
               variant="primary"
-              icon="download"
+              icon="refresh"
               busy={fetching}
               disabled={busy || fetching}
               onClick={() => {
@@ -156,8 +156,12 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
                 })()
               }}
             >
-              {fetching ? 'Asking TCGplayer…' : 'Fetch my live listings'}
+              {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (D118): the spinner, and a status line. */}
+              Fetch my live listings
             </Button>
+            <span className="bn-sr" role="status">
+              {fetching ? 'Asking TCGplayer…' : ''}
+            </span>
           </div>
 
           <div className="livecheck-pick">

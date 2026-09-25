@@ -24,7 +24,7 @@
  * NO PIPELINE WORD REACHES THE SCREEN (D196): not emit, not staged, not reconcile. */
 
 import { useEffect, useState } from 'react'
-import { Button, Icon, Money, Notice, Refusal, Retry } from './kit'
+import { Button, Icon, IconButton, Money, Notice, Refusal, Retry } from './kit'
 import { clockTime } from './dates'
 import { describeFailure, dismissSendWarning, sendCopies, sendFileUrl, takeBackSend } from './server'
 import type { Failure } from './server'
@@ -337,9 +337,7 @@ function TakenBackWarning({
         </>
       }
       action={
-        <Button size="sm" busy={dismissing} disabled={dismissing} onClick={() => dismiss(send.stamp)}>
-          Dismiss
-        </Button>
+        <IconButton icon="x" label="Dismiss" busy={dismissing} disabled={dismissing} onClick={() => dismiss(send.stamp)} />
       }
     >
       {send.warning === 'staged'
@@ -492,6 +490,9 @@ export function SendCard({
   const [failure, setFailure] = useState<Failure | null>(null)
   const [sent, setSent] = useState<SendSummary | null>(null)
   const [downloadOpen, setDownloadOpen] = useState(false)
+  /* ON A PHONE THE BAR IS ONE LINE (D277, Q4): the press, and a More press that opens the two
+     quiet doors beneath it. Above a phone the doors are always drawn and More is not. */
+  const [moreOpen, setMoreOpen] = useState(false)
   const [split, setSplit] = useState(false)
   const [takingBack, setTakingBack] = useState(false)
   const [dismissing, setDismissing] = useState(false)
@@ -604,7 +605,14 @@ export function SendCard({
      phone width and became one short line under the finger, so the sticky bar shrank and the
      press moved. `busy` draws the spinner on it; what the press is doing is said to a screen
      reader beside it, in a status that takes no room. */
-  const doing = phase === 'waiting' ? 'Saving your prices…' : phase === 'sending' || running ? 'Checking TCGplayer, then sending…' : ''
+  const doing =
+    phase === 'waiting'
+      ? 'Saving your prices…'
+      : phase === 'sending' || running
+        ? 'Checking TCGplayer, then sending…'
+        : phase === 'downloading'
+          ? 'Writing the file…'
+          : ''
   const label =
     liveMoves.length > 0
           ? /* THE LIVE COPIES THE PRESS MOVES ARE NAMED ON IT (the owner's ruling, round 7):
@@ -654,7 +662,7 @@ export function SendCard({
 
   return (
     <div className="send-card">
-      <div className="send-act">
+      <div className="send-act" data-more={moreOpen ? 'open' : undefined}>
         <Button
           variant="primary"
           size="lg"
@@ -669,9 +677,17 @@ export function SendCard({
         <span className="bn-sr" role="status">
           {doing}
         </span>
+        <IconButton
+          icon="more"
+          label="More send options"
+          className="send-more-press"
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen((open) => !open)}
+        />
         <Button
           variant="quiet"
           icon="download"
+          className="send-door"
           aria-expanded={downloadOpen}
           disabled={busy}
           onClick={() => setDownloadOpen((open) => !open)}
@@ -681,7 +697,7 @@ export function SendCard({
           <span className="send-long">Download the file instead</span>
           <span className="send-short">Download file</span>
         </Button>
-        <Button variant="quiet" icon="refresh" busy={live.checking} disabled={live.checking} onClick={() => void live.checkNow()}>
+        <Button variant="quiet" icon="refresh" className="send-door" busy={live.checking} disabled={live.checking} onClick={() => void live.checkNow()}>
           <span className="send-long">Check what is live</span>
           <span className="send-short">Check live</span>
         </Button>
@@ -694,7 +710,9 @@ export function SendCard({
             <span>Split in two files at the cut-off</span>
           </label>
           <Button icon="download" busy={phase === 'downloading'} disabled={busy} onClick={() => press('download')}>
-            {phase === 'downloading' ? 'Writing…' : split ? 'Write the two files' : 'Write the file'}
+            {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (D118, b-runs round 9): `busy` draws the
+                spinner, and the status line above says what it is doing. */}
+            {split ? 'Write the two files' : 'Write the file'}
           </Button>
           {sent === null || sent.kind !== 'download' ? null : (
             <span className="send-files">

@@ -6,8 +6,6 @@
   "app/src/CardLocations.tsx": { "pushed": "inventory", "staged": "inventory" },
   "app/src/Codes.tsx": { "index": "library" },
   "app/src/Inventory.tsx": { "emit": "inventory" },
-  "app/src/Markdown.tsx": { "staged": "b-pricing" },
-  "app/src/Pricing.tsx": { "emit": "b-pricing", "pushed": "b-pricing" },
   "app/src/ReviewQueue.tsx": { "parked": "review", "index": "review" },
   "app/src/RunPanel.tsx": { "parked": "b-runs" }
 }

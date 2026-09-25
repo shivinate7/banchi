@@ -464,9 +464,9 @@ below).
 #/runs         Runs           pipeline: free preflight, two-step money gate, join/emit/
                               reconcile, run log, CSVs as downloads
 #/review       Review         one card at a time, photo first
-#/pricing      Pricing        hand-pricing worklist, one row per SKU, cut-off strip, holds
-                              (D49). Two sources (D103): joined runs, and the live book at
-                              `?band=top|bottom` (D159): what is worth pulling, read-only
+#/pricing      Pricing        every unsent copy, one row per SKU, the rows that need the owner
+                              on top, one Send bar, holds (D49, D277). A Live tab prices the
+                              live book (D103), and the value list is an Inventory sort now
 #/orders       Orders         grouped by buyer (D193), one walk per person over open orders
 #/shipping     Shipping       shipping export routed into three lanes
 #/revenue      Sales          gross-revenue retrospective (D214):
@@ -525,9 +525,9 @@ hand-typed hash list.
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
-157<!-- derived:app_src_file_count --> files under `app/src`: none read the
+154<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
-301<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
+278<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before

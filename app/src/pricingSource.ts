@@ -303,6 +303,13 @@ export function markdownInHash(): string | null {
   return /^\d{8}-\d{6}$/.test(stamp) ? stamp : null
 }
 
+/** Whether the hash asks for the Live tab (D277, Q6): `?live`, or a markdown stamp. The tab
+ *  with no stamp yet opens the newest read, or says there is none. */
+export function liveInHash(): boolean {
+  const asked = query()
+  return asked.has('live') || markdownInHash() !== null
+}
+
 function query(): URLSearchParams {
   return new URLSearchParams(window.location.hash.split('?')[1] ?? '')
 }

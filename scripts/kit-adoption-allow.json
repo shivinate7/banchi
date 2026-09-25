@@ -28,11 +28,6 @@
     "app/src/CardLocations.tsx": {
       "R2-icon-only-button": "icons"
     },
-    "app/src/ClearPrices.tsx": {
-      "R2-dialog": "b-pricing",
-      "R2-class": "b-pricing",
-      "R2-icon-only-button": "icons"
-    },
     "app/src/Codes.tsx": {
       "R1": "library",
       "R2-dialog": "library",
@@ -75,13 +70,6 @@
       "R2-class": "b-runs",
       "R2-icon-only-button": "icons"
     },
-    "app/src/Markdown.tsx": {
-      "R2-dialog": "b-pricing",
-      "R2-select": "b-pricing",
-      "R2-class": "b-pricing",
-      "R2-date": "b-pricing",
-      "R2-icon-only-button": "icons"
-    },
     "app/src/Orders.tsx": {
       "R1": "orders",
       "R2-select": "orders",
@@ -95,23 +83,6 @@
     },
     "app/src/OrdersWalkPane.tsx": {
       "R2-class": "orders",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/PriceHistory.tsx": {
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/PriceTrend.tsx": {
-      "R2-class": "b-pricing"
-    },
-    "app/src/Pricing.tsx": {
-      "R1": "b-pricing",
-      "R2-dialog": "b-pricing",
-      "R2-class": "b-pricing",
-      "R2-date": "b-pricing",
-      "R2-money": "b-pricing",
-      "R2-icon-only-button": "icons"
-    },
-    "app/src/ProductHistory.tsx": {
       "R2-icon-only-button": "icons"
     },
     "app/src/Revenue.tsx": {
@@ -154,9 +125,6 @@
     },
     "app/src/RunsStage.tsx": {
       "R2-date": "b-runs"
-    },
-    "app/src/SendCard.tsx": {
-      "R2-icon-only-button": "icons"
     },
     "app/src/Shipping.tsx": {
       "R1": "shipping"

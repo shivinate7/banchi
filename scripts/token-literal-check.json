@@ -5,7 +5,6 @@
     "app/src/BoxOps.css": 9,
     "app/src/CaptureScreen.css": 91,
     "app/src/CardLocations.css": 16,
-    "app/src/ClearPrices.css": 5,
     "app/src/Codes.css": 36,
     "app/src/Fulfillment.css": 37,
     "app/src/Gallery.css": 14,
@@ -14,14 +13,10 @@
     "app/src/Inventory.css": 1,
     "app/src/InventoryOverlay.css": 4,
     "app/src/LiveReconcile.css": 5,
-    "app/src/Markdown.css": 5,
     "app/src/Orders.css": 59,
     "app/src/PlaceNeighbors.css": 2,
     "app/src/PositionBar.css": 4,
     "app/src/PositionLabel.css": 6,
-    "app/src/PriceHistory.css": 10,
-    "app/src/PriceTrend.css": 1,
-    "app/src/Pricing.css": 56,
     "app/src/ProductHistory.css": 2,
     "app/src/PullConfirm.css": 5,
     "app/src/ReviewQueue.css": 71,
@@ -30,7 +25,6 @@
     "app/src/Runs.css": 16,
     "app/src/Shipping.css": 15,
     "app/src/SubmissionClaims.css": 1,
-    "app/src/ValueBands.css": 8,
     "app/src/kit.css": 26
   }
 }
