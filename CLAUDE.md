@@ -318,6 +318,15 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    #   --listed-only      above-threshold rows only
                                    #   --split-threshold  import-listed.csv / import-subthreshold.csv
                                    #   --split-games      one file per game
+                                   #   --live-guard FILE  trim each row so TCGplayer never
+                                   #                      holds more copies than are here
+                                   #   --reprice-live     with --live-guard: a PRICE-ONLY row
+                                   #                      (Add to Quantity 0) for each live
+                                   #                      card that adds no copy and whose
+                                   #                      TYPED price moved. A listing file
+                                   #                      may mix both (the owner's ruling,
+                                   #                      2026-09-24). The send press passes
+                                   #                      both flags.
 ./pkmnscan cards    name             # a card's stable name and photograph location (D172).
                                    #   Free, read-only. Never calls `db.connect`, which would
                                    #   perform the migration it previews.

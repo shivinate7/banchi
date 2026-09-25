@@ -55,6 +55,8 @@ function sendSummary(over: Record<string, unknown> = {}): Record<string, unknown
     state: 'waiting',
     at: '2026-09-24T12:00:00+00:00',
     copies: 3,
+    prices: 0,
+    price_check: null,
     rows: 2,
     published_at: '2026-09-24T12:00:05+00:00',
     check_after: '2026-09-24T12:15:05+00:00',
@@ -1202,6 +1204,129 @@ test('what the double-send guard held back is named, card by card', async ({ pag
   await expect(held).toContainText('2 copies held back: TCGplayer already had them.')
   await expect(held).toContainText('Dunsparce')
   await expect(held).toContainText('2 of 3 already live')
+})
+
+/* ROUND 5, THE MIXED SEND (the owner's ruling, 2026-09-24: "Allow mixed"). One press lists new
+   copies and reprices cards already live. A price change is a row this press adds no copy of,
+   already live, whose TYPED price is not the live one. A rule price never counts, and a typed
+   price TCGplayer already shows is no change. The press says both, apart. */
+test('a mixed press says what it carries: new copies and price changes', async ({ page }) => {
+  const mixed = sendSummary({ copies: 3, prices: 1, rows: 2 })
+  const wire = await open(page, {
+    skus: [
+      sku({ sku: '8608859', name: 'Articuno' }),
+      sku({
+        sku: '8608459',
+        name: 'Dunsparce',
+        at_cap: true,
+        add_to_quantity: 0,
+        live_before: 2,
+        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: '9.99' },
+        listing: { pushed: 2, staged: 0, live: 2 },
+      }),
+      sku({
+        sku: '8608659',
+        name: 'Wattrel',
+        at_cap: true,
+        add_to_quantity: 0,
+        live_before: 1,
+        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        snap: { market: '4.10', direct_low: null, low: '3.90', low_with_shipping: '4.90', now: '4.00' },
+        listing: { pushed: 1, staged: 0, live: 1 },
+      }),
+      sku({
+        sku: '8608959',
+        name: 'Kled',
+        at_cap: true,
+        add_to_quantity: 0,
+        live_before: 1,
+        nothing_to_add: 'every copy in this run is already listed or has left the box',
+        snap: { market: '6.00', direct_low: null, low: '5.50', low_with_shipping: '6.50', now: '7.00' },
+        listing: { pushed: 1, staged: 0, live: 1 },
+      }),
+    ],
+    decisions: {
+      rule: 'match',
+      basis: 'market',
+      sub_threshold: null,
+      /* Dunsparce typed over its live price: a change. Wattrel typed AT its live price: none.
+         Kled carries no typed price, so the rule's figure never reaches its live listing. */
+      overrides: { '8608459': '12.50', '8608659': '4.00' },
+    },
+    send: () => ({ status: 200, body: { send: mixed, console: '' } }),
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [mixed] } : SENDS_NONE),
+  })
+  const press = page.getByRole('button', { name: 'Send 3 copies and 1 price change' })
+  await expect(press).toBeVisible()
+  await press.click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  await expect(page.locator('.send-standing')).toContainText('3 copies and 1 price change went live at')
+})
+
+/* ROUND 5: TWO PRESSES IN ONE SECOND. A stamp is the second, then a random tail, so the card
+   compared stamps and stood on its own older press whenever the newer one drew the smaller
+   tail. The server lists receipts newest PRESS first, and the card stands on that. */
+test('two presses in one second: the card stands on the newest press, not the larger stamp', async ({ page }) => {
+  const mine = sendSummary({ stamp: '20260924-120000-ffffff', copies: 3 })
+  const later = sendSummary({ stamp: '20260924-120000-000000', copies: 5 })
+  const wire = await open(page, {
+    send: () => ({ status: 200, body: { send: mine, console: '' } }),
+    sends: (seen) => (sendPosts(seen).length > 0 ? { ...SENDS_NONE, sends: [later, mine] } : SENDS_NONE),
+  })
+  await sendPress(page).click()
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+  await expect(page.locator('.send-standing')).toContainText('5 copies went live at')
+})
+
+/* ROUND 5: AT 390 WIDE, TWO TAKEN-BACK WARNINGS STOOD HALF THE SCREEN HIGH IN THE STICKY BAR.
+   Each folds to one line: the warning's own imperative, a press that opens the rest, and
+   Dismiss. It never folds away: only Dismiss takes it off the card (round 4). */
+test('at 390 two taken-back warnings fold to one line each, and stay until Dismiss', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const staged = sendSummary({
+    stamp: '20260924-120000-aaaaaa',
+    state: 'taken_back',
+    taken_back_at: '2026-09-24T12:20:00+00:00',
+    unknown: { stage: 'publish', upload_id: 'u-1', staged: true, file: 'import.csv', at: '2026-09-24T12:00:05+00:00' },
+    warning: 'staged',
+  })
+  const file = sendSummary({
+    stamp: '20260924-110000-bbbbbb',
+    kind: 'download',
+    state: 'taken_back',
+    taken_back_at: '2026-09-24T12:21:00+00:00',
+    warning: 'old_file',
+  })
+  const wire = await open(page, {
+    sends: (seen) =>
+      seen.some((r) => r.path.endsWith('/dismiss'))
+        ? { ...SENDS_NONE, sends: [{ ...staged, warning: null }, file] }
+        : { ...SENDS_NONE, sends: [staged, file] },
+  })
+  const warned = page.locator('.send-taken-back')
+  await expect(warned).toHaveCount(2)
+  for (const index of [0, 1]) {
+    const box = await warned.nth(index).boundingBox()
+    /* ONE LINE: the 40px press it opens by, and the notice's own padding. */
+    expect(box?.height ?? 999).toBeLessThanOrEqual(72)
+    await expect(warned.nth(index).locator('.bn-notice-body')).toBeHidden()
+  }
+  await expect(warned.nth(0).locator('.send-fold')).toHaveText('Do not publish the old upload.')
+  await expect(warned.nth(1).locator('.send-fold')).toHaveText('Do not upload the old file.')
+
+  const fold = warned.nth(0).locator('.send-fold')
+  await fold.click()
+  await expect(fold).toHaveAttribute('aria-expanded', 'true')
+  await expect(warned.nth(0).locator('.bn-notice-body')).toBeVisible()
+  await expect(warned.nth(0).locator('.bn-notice-body')).toContainText('Do not publish it there.')
+  await fold.click()
+  await expect(warned.nth(0).locator('.bn-notice-body')).toBeHidden()
+  await expect(warned).toHaveCount(2)
+
+  await warned.nth(0).getByRole('button', { name: 'Dismiss' }).click()
+  await expect.poll(() => wire.filter((r) => r.path.endsWith('/dismiss')).length).toBe(1)
+  await expect(page.locator('.send-taken-back')).toHaveCount(1)
 })
 
 test('a live check that cannot run refuses the send, says why, and offers Try again', async ({ page }) => {
