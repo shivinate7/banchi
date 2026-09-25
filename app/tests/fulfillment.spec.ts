@@ -1004,9 +1004,11 @@ type Run = { text: string; where: string; size: number; color: string; ground: s
  *
  * `checkVisibility()` alone still says yes to the kit's own `.bn-sr` (`kit.css`): visible per
  * `display`/`visibility`, clipped to a 1x1 box on purpose (the accessible name an icon-only
- * `Button` gives a screen reader — the "?" sheet's own Close button, since it moved onto the
- * kit's `Modal`, is the first place this file draws one). `checkVisibility()` has no option
- * for `clip`, so the box itself is read: on-screen text is never 1px in both directions.
+ * `Button` gives a screen reader, its `iconOnly` prop). The "?" sheet's own Close button is
+ * NOT this case since round 2 (D-icon-buttons): the Fulfiller reads words there, per spec
+ * rule 1, so its Close is a plain worded `Button` and draws no `.bn-sr` at all.
+ * `checkVisibility()` has no option for `clip`, so the box itself is read: on-screen text is
+ * never 1px in both directions.
  *
  * The ground is resolved by walking up to the first opaque background, which is what the eye
  * does: `.pull-confirm-label` is white on nothing, sitting on a button filled with --accent.

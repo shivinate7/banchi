@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon, type IconName } from './Icon'
+import { IconButton } from './index'
 
 /* One toast stack for the whole product. Any screen may call toast(); the shell renders
    <Toaster/> once. Receipts carry an undo; status toasts expire; refusals stay until dismissed. */
@@ -88,9 +89,7 @@ export function Toaster() {
               {t.action.kbd ? <kbd className="bn-kbd">{t.action.kbd}</kbd> : null}
             </button>
           ) : null}
-          <button type="button" className="bn-toast-close" aria-label="Dismiss" onClick={() => dismissToast(t.id)}>
-            <Icon name="x" size={14} />
-          </button>
+          <IconButton icon="x" label="Dismiss" size="sm" className="bn-toast-close" onClick={() => dismissToast(t.id)} />
           {t.ttlMs > 0 ? <span className="bn-toast-drain" style={{ animationDuration: `${t.ttlMs}ms` }} /> : null}
         </div>
       ))}

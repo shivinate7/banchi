@@ -225,20 +225,28 @@
 .bn-fchip[data-active='true'] > .bn-pick .bn-pick-label { color: var(--bn-accent-hover); }
 .bn-fchip[data-active='true'] > .bn-pick .bn-pick-chev { visibility: hidden; }
 .bn-fchip-more { font-weight: 500; color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
-.bn-fchip-clear {
-  position: absolute;
-  top: 0;
-  right: 0;
-  display: grid;
-  place-items: center;
-  width: var(--bn-control-h);
-  height: 100%;
-  border-radius: 0 var(--bn-r) var(--bn-r) 0;
-  background: transparent;
-  color: var(--bn-accent-hover);
-  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
-}
-.bn-fchip-clear:hover { background: var(--bn-accent-tint-2); color: var(--bn-accent-hover); }
+/* It is an IconButton now (D-icon-buttons): its own box, colour and hover paint are
+   `.bn-icon-btn` in kit.css. This rule only places it — centred over the trigger's own
+   chevron slot, so revealing it changes no width (D118), the reason it was absolute here
+   before IconButton existed. */
+.bn-fchip-clear { position: absolute; top: 0; bottom: 0; right: var(--bn-2); margin: auto 0; }
+/* `.bn-fchip-clear` and `.bn-sort-dir` match `.bn-pick`/`Select`'s own height beside them
+   (`--bn-control-h`, kit.css) — FLT-24, one control height in a field row. That token moves
+   with the coarse-pointer breakpoint (tokens.css) the same way the field beside it does. Each
+   call site (`app/src/kit/data.tsx`) passes it through `IconButton`'s own `style` prop, which
+   merges into the SAME inline `style` the component already sets its face size with — never a
+   CSS override. A CSS `!important` here once beat that inline style on paint, but real pointer
+   dispatch still hit-tested the PRE-override box: Playwright's actionability retries reported
+   `.bn-fchip-clear`'s clicks landing on `.bn-pick` beneath it. One inline `style` closed that
+   gap, but a second bug sat under it: `top: 50%; transform: translateY(-50%)` centred the
+   button on a compositor layer that headless Chromium's real click dispatch does not always
+   hit-test the same way `elementFromPoint` reads it — measured, a raw `page.mouse.click()` at
+   the button's own reported centre missed it every time, landing on `.bn-pick` instead, and
+   the same margin-based centring below fixed it outright. `top: 0; bottom: 0; margin: auto 0`
+   centres the same way with no `transform`, so there is no separate compositor layer to
+   mis-hit. `.bn-fchip-clear` is drawn OVER the pick trigger's own chevron slot (D118, the
+   comment above); only its height changes there, never its width, so it never overlaps the
+   label. */
 
 .bn-filterchips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-2); min-width: 0; }
 .bn-filterchips-clear {
@@ -255,25 +263,10 @@
 /* Off until two facets are on: it keeps its place in the bar and is not drawn. */
 .bn-filterchips-clear[data-off='true'] { visibility: hidden; }
 
-/* SortControl: the key, then which way, both in words, one height. */
+/* SortControl: the key stays in words (a `Select`); the direction is an IconButton
+   (D-icon-buttons) and carries no styling of its own here — `.bn-icon-btn` in kit.css is
+   the whole of it. */
 .bn-sort { display: inline-flex; align-items: center; gap: var(--bn-1); }
-.bn-sort-dir {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--bn-1);
-  height: var(--bn-control-h);
-  padding: 0 var(--bn-3);
-  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
-  border-radius: var(--bn-r);
-  background: var(--bn-surface);
-  font: inherit;
-  font-size: var(--bn-fs-md);
-  font-weight: 600;
-  color: var(--bn-ink-2);
-  white-space: nowrap;
-  transition: border-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
-}
-.bn-sort-dir:hover { border-color: var(--bn-ink-3); color: var(--bn-ink); }
 
 /* The panel: Capture's open-field body, floating. Above a sheet (61), below a toast (80). */
 .bn-pick-panel {
