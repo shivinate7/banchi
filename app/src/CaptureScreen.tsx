@@ -40,7 +40,7 @@ import { captureBoxLabel } from './runScope'
 // The one thing this screen takes from the library drawing: how long a pause has to be
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
-import { Button, Icon, Kbd, Notice, Page, Pill, Stat } from './kit'
+import { Button, Icon, IconButton, Kbd, Notice, Page, Pill, Stat } from './kit'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
 import type { IconName, PillTone } from './kit'
@@ -3470,17 +3470,14 @@ export function CaptureScreen() {
                     value={noteDraft}
                     onChange={(event) => setNoteDraft(event.target.value)}
                   />
-                  <Button
+                  <IconButton
                     type="submit"
                     size="sm"
-                    variant="ghost"
                     icon="check"
-                    iconOnly
+                    label="Save note"
                     className="capture-note-save"
                     disabled={noteBusy}
-                  >
-                    Save note
-                  </Button>
+                  />
                 </div>
               </form>
               {last.game.catalogued ? null : (
@@ -3867,8 +3864,12 @@ export function CaptureScreen() {
                         own complaint — undoing a mid-sitting shot loses every capture after
                         it too. `removeCardInPlace` is the route that already exists for it
                         (D10 ruling 1), and this is its second door, beside the row's own. */}
-                    <button
-                      type="button"
+                    <IconButton
+                      icon="trash"
+                      label="Remove just this card"
+                      name={`Remove just this card, ${positionText(target)}`}
+                      tone="danger"
+                      size="sm"
                       className="capture-undo-drop"
                       disabled={busy}
                       onClick={(event) => {
@@ -3876,10 +3877,7 @@ export function CaptureScreen() {
                         setUndoNote(null)
                         setRemoveConfirm(target)
                       }}
-                      aria-label={`Remove just this card, ${positionText(target)}`}
-                    >
-                      <Icon name="x" size={13} />
-                    </button>
+                    />
                   </div>
                 </li>
               ))}
@@ -4545,7 +4543,7 @@ export function CaptureScreen() {
               variant="quiet"
               size="sm"
               block
-              icon="refresh"
+              icon="eraser"
               onClick={clearSetup}
               disabled={!setupChosen}
             >
