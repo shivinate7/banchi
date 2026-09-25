@@ -2139,6 +2139,20 @@ def _require_query(query: str) -> str:
             f"`q` is {len(text)} characters; the limit is {_QUERY_LENGTH_CAP}. Search for "
             "a name, a collector number, a SKU or a set hint, not a whole sentence.",
         )
+    if "\x00" in text:
+        # F6, round-3 Opus review, 2026-09-25. `GET /search?q=%00` (and `a%00b`) 500'd:
+        # SQLite's C string binding stops at the first NUL, so a Python string carrying
+        # one truncates on its way into the driver while `sqlite3` itself still expects
+        # the ORIGINAL length, and the mismatch surfaces as `OperationalError:
+        # unterminated string` from deep inside `_fts_query`'s own MATCH — uncaught,
+        # because a NUL byte is not a shape `_require_query` had ever named. No query may
+        # give a 500; this refuses the one byte that can, rather than trying to quote or
+        # strip it out of every SQL string this route ever builds.
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "query_invalid",
+            "`q` may not contain a NUL byte.",
+        )
     return text
 
 

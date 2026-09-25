@@ -8335,6 +8335,42 @@ def check_box_routes_and_search(checks: Checks) -> None:
                 "not a request for every card in the store",
             )
 
+        # F6, round-3 Opus review, 2026-09-25: NO QUERY MAY 500. A NUL byte truncates the
+        # C string sqlite3's driver binds while Python's own `len()` still sees the whole
+        # thing, and the mismatch surfaced as an uncaught `OperationalError` from deep
+        # inside `_fts_query`'s own MATCH — `q=%00` and `q=a%00b` both 500'd. Asserted
+        # in-process first (the refusal itself), then over a real socket (F6's own report
+        # named the WIRE route, `GET /search?q=%00`) so a future regression cannot hide
+        # behind an in-process call that never reaches the real query-string decode.
+        for nul_query in ("\x00", "a\x00b"):
+            refusal(
+                checks,
+                lambda q=nul_query: capture_server.do_search(q),
+                "query_invalid",
+                f"a search for {nul_query!r} refuses as query_invalid rather than 500ing",
+            )
+
+        # AND OVER THE REAL SOCKET, the shape F6's own report named — a query STRING with
+        # a percent-encoded NUL, decoded by `parse_qs` the same way a browser's own request
+        # would arrive.
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for wire_query in ("/search?q=%00", "/search?q=a%00b"):
+                status, body, _ = request(port, "GET", wire_query)
+                checks.equal(
+                    status, 400, f"GET {wire_query} answers 400, never 500",
+                )
+                checks.equal(
+                    error_code(body), "query_invalid",
+                    f"and GET {wire_query} names the refusal",
+                )
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
         found = capture_server.do_search("eiscue")["groups"]
         if checks.equal(
             [group["sku"] for group in found],
