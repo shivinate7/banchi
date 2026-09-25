@@ -181,7 +181,7 @@ function TakenBackWarning({
      away: only Dismiss takes it off the card, as round 4 ruled. */
   const [open, setOpen] = useState(false)
   if (send.warning === null) return null
-  const line = send.warning === 'staged' ? 'Do not publish the old upload.' : 'Do not upload the old file.'
+  const line = send.warning === 'staged' ? 'Do not publish the upload.' : 'Do not upload the old file.'
   return (
     <Notice
       tone="warn"

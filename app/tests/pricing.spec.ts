@@ -1312,8 +1312,11 @@ test('r5: at 390 two taken-back warnings fold to one line each, and stay until D
     expect(box?.height ?? 999).toBeLessThanOrEqual(72)
     await expect(warned.nth(index).locator('.bn-notice-body')).toBeHidden()
   }
-  await expect(warned.nth(0).locator('.send-fold')).toHaveText('Do not publish the old upload.')
+  await expect(warned.nth(0).locator('.send-fold')).toHaveText('Do not publish the upload.')
   await expect(warned.nth(1).locator('.send-fold')).toHaveText('Do not upload the old file.')
+  /* THE LINE IS READ WHOLE, never cut to an ellipsis: it is the warning while folded. */
+  const cut = await page.locator('.send-fold-line').evaluateAll((lines) => lines.filter((line) => line.scrollWidth > line.clientWidth).length)
+  expect(cut).toBe(0)
 
   const fold = warned.nth(0).locator('.send-fold')
   await fold.click()
