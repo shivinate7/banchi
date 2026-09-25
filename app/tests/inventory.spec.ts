@@ -2955,7 +2955,8 @@ test('the box panel draws its census as bn-stat figures, not the old dotted line
   /* THE PILL AND THE NOTE STAY OUTSIDE THE STAT ROW. `open`/`sealed` is the lid, not a count of
      what is in the box, and this fixture box is open so there is no `sealed at N` note to draw
      — `#/inventory`'s sealed-box case (this same file, "the seal names...") covers that text. */
-  await expect(page.locator('.boxops-identity .boxops-state')).toHaveText('open')
+  /* An open box draws no state pill: open is the ordinary state (UX-269). */
+  await expect(page.locator('.boxops-identity .boxops-state')).toHaveCount(0)
 
   /* AND THE FOUR FIGURES SIT ON ONE ROW AT 1440 — the rail is 300px and this is the width the
      brief named as the floor for it. */

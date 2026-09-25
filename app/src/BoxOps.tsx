@@ -333,18 +333,17 @@ export function BoxIdentity({
       <div className="boxops-identity-top">
         {/* THE NAME ALONE (D-a-box-is-shown-by-its-name): the number is the store's key, never
             drawn. An unnamed box has a stored default name since the locating lane. THE STATE
-            PILL RIDES THE NAME'S LINE (UX-269): on the figures' line it sat inline for one box
-            and wrapped onto its own line for another, by how many figures the box had. */}
+            PILL ONLY FOR THE EXCEPTION, ON THE NAME'S LINE (UX-269, UX-221's rule): on the
+            figures' line an "open" pill sat inline for one box and wrapped alone for another,
+            and nearly every box is open, so the word told the hand nothing. Sealed is drawn. */}
         <div className="boxops-identity-text">
           <h2 className="boxops-identity-name">{record.name ?? UNNAMED_BOX}</h2>
         </div>
-        <Pill
-          tone={sealed ? 'default' : 'ok'}
-          icon={sealed ? 'lock' : 'unlock'}
-          className={sealed ? 'boxops-state boxops-state-sealed' : 'boxops-state'}
-        >
-          {sealed ? 'sealed' : 'open'}
-        </Pill>
+        {sealed ? (
+          <Pill tone="default" icon="lock" className="boxops-state boxops-state-sealed">
+            sealed
+          </Pill>
+        ) : null}
         {actions}
       </div>
 
