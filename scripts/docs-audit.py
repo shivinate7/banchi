@@ -2837,6 +2837,21 @@ def decision_heading_lines_across(paths: Iterable[Path], letter: str) -> List[Tu
     return out
 
 
+def decision_id_code_haystack() -> List[Path]:
+    """Every non-markdown file `decision ids in code` reads for a D/C citation.
+
+    ITS OWN FUNCTION, SO `scripts/claim-ids.py`'s SELF-TEST CAN CALL IT DIRECTLY, rather than
+    retyping the suffix list this scan reads. The claimer's own walk once skipped every
+    dotted directory (`.claude/skills/`), so a slug cited in
+    `.claude/skills/text-density/SKILL.md` survived a claim commit unrewritten and this very
+    row refused PR #462's merge over it (commits 34c54259/eaef7ce7) — `check_decision_ids`
+    calling this function, and the claimer's self-test importing it too, is what keeps the
+    two walks from drifting apart again the way `.js` already once did (see the paragraph
+    below).
+    """
+    return python_files() + _walk(ROOT, (".ts", ".tsx", ".css", ".js"))
+
+
 def check_decision_ids(report: Report, docs: List[Path]) -> None:
     singles = {i for i, _, _ in decision_heading_lines_across(decision_files(), "D")}
     codes = decision_headings(ROOT / "docs" / "CODES-DECISIONS.md", "C")
@@ -2927,7 +2942,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     # ONE HAYSTACK, BUILT BEFORE THE SCAN, so the row can declare how many files it read.
     # It was two `scan()` calls with the count nowhere, which is the shape that let this
     # file print `ok` over a walk that had found nothing.
-    code_haystack = python_files() + _walk(ROOT, (".ts", ".tsx", ".css", ".js"))
+    code_haystack = decision_id_code_haystack()
     scan(code_haystack, in_code)
 
     report.add("decision ids", MECHANICAL, in_docs,
