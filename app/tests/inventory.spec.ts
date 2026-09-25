@@ -4277,6 +4277,31 @@ test('UX-190 — a sale says which card took its number, and the rows hold still
   expect(await rects()).toEqual(before)
 })
 
+test('UX-244 — one copy moves to another box from its own row, and the receipt names the box', async ({ page }) => {
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+  const sent: { path: string; body: unknown }[] = []
+  await page.route(/\/inventory\/\d+\/\d+\/move$/, async (route) => {
+    const url = new URL(route.request().url())
+    sent.push({ path: url.pathname, body: route.request().postDataJSON() })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ moved: '2/1', to: '7/41', box: 2, index: 1, new_box: 7, new_index: 41 }),
+    })
+  })
+  const row = page.locator('.card-locations-row.is-current')
+  await row.getByRole('button', { name: 'Move to another box' }).click()
+  const dialog = page.getByRole('dialog', { name: /^Move/ })
+  await expect(dialog).toBeVisible()
+  await dialog.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  await dialog.getByRole('button', { name: 'Move', exact: true }).click()
+  await expect(page.locator('.bn-toast')).toContainText('Moved to ME01 spares')
+  expect(sent).toHaveLength(1)
+  expect(sent[0]?.path).toBe('/inventory/2/1/move')
+  expect(sent[0]?.body).toMatchObject({ to_box: 7 })
+})
+
 test('the neighbours are ranked, not joined — the names are the only thing drawn at ink', async ({
   page,
 }) => {

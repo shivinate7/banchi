@@ -361,12 +361,13 @@
   justify-content: flex-end;
   gap: var(--bn-2);
   min-height: var(--bn-control-h-sm);
-  /* AND ITS WIDTH, WHICH IS THE HALF THAT MOVED THE MOST. The pair this cell holds — `Mark sold`
-     beside an icon-only `Retire` — measures 137px at this density; a sold copy draws nothing here
-     at all, so the cell collapsed to 0 and the state pills beside it slid 137px right on the
-     press. The reservation is that measurement, taken on the real screen at 1440 with fonts
-     settled, and it is a `min-width` so a longer label in another language still fits. */
-  min-width: 137px;
+  /* AND ITS WIDTH, WHICH IS THE HALF THAT MOVED THE MOST. The three presses this cell holds —
+     `Mark sold` beside an icon-only `Retire` and `Move` (UX-244) — measure 169px at this
+     density; a sold copy draws nothing here at all, so the cell collapsed to 0 and the state
+     pills beside it slid right on the press. The reservation is that measurement, taken on the
+     real screen at 1440 with fonts settled, and it is a `min-width` so a longer label in another
+     language still fits. It was 137px for the pair before Move. */
+  min-width: 169px;
 }
 
 /* --------------------------------------------------- the receipt, inside the slot (D119)

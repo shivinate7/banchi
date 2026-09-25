@@ -6607,8 +6607,8 @@ COMPONENTS = [
                 # was removed on purpose rather than lost.
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
-                                "D58", "D68", "D71", "D90", "D93", "D118", "D119", "D125", "D132",
-                                "D172", "D181", "D192", "D196", "D213", "D218",
+                                "D58", "D68", "D71", "D83", "D90", "D93", "D118", "D119", "D125",
+                                "D132", "D172", "D181", "D192", "D196", "D213", "D218",
                                 "D-a-card-is-counted-in-its-section", "D-page-scaffold"],
             },
             "src/Inventory.css": {

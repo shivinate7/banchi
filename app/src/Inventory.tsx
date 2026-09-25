@@ -18,6 +18,7 @@ import {
   getOrders,
   isDeparted,
   markSold,
+  moveCard,
   photoUrl,
   retireCard,
   undoRetire,
@@ -32,7 +33,8 @@ import { sayPlace } from './position'
 import { RETIRE_REASONS, reasonWord } from './cardState'
 import { useSearch } from './useSearch'
 import { isEditableTarget } from './keys'
-import { Button, Icon, Loading, Notice, Page, Pill } from './kit'
+import { Button, Icon, Loading, Notice, Page, Pill, Select } from './kit'
+import { UNNAMED_BOX } from './kit/data'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
 import { RANK_IS_CURRENT, type FrozenRank } from './frozenRank'
@@ -285,6 +287,8 @@ export function Inventory() {
   /* The copy waiting on a retire panel, or null. A retirement without a reason is refused, so
    * the four reason buttons ARE the confirm. */
   const [retiring, setRetiring] = useState<SearchCopy | null>(null)
+  /* The copy waiting on the move panel, or null (UX-244). */
+  const [moving, setMoving] = useState<SearchCopy | null>(null)
 
   /* One write in flight at a time, by copy key. */
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -495,6 +499,32 @@ export function Inventory() {
     [busyKey, remember, holdRank],
   )
 
+  /* D83's third door, for one copy (UX-244). No undo here: undo is its own later session. */
+  const doMove = useCallback(
+    async (copy: SearchCopy, toBox: number) => {
+      if (busyKey !== null) return
+      setBusyKey(copy.key)
+      try {
+        await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox)
+        setMoving(null)
+        holdRank(copy.key)
+        const where = boxRecords.find((record) => record.box === toBox)?.name ?? UNNAMED_BOX
+        toast({
+          kind: 'ok',
+          icon: 'package',
+          title: `Moved to ${where}`,
+          body: receiptBody(sayPlace(copy.place.label ?? copy.key), renumberNote(copy.place)),
+        })
+        setReloads((n) => n + 1)
+      } catch (err) {
+        report(describeFailure(err))
+      } finally {
+        setBusyKey(null)
+      }
+    },
+    [busyKey, holdRank, boxRecords],
+  )
+
   const doUndo = useCallback(
     async (receipt: Receipt) => {
       if (busyKey !== null) return
@@ -614,6 +644,7 @@ export function Inventory() {
       onSell={sell}
       onUndo={undo}
       onRetire={openRetire}
+      onMove={setMoving}
     />
   )
 
@@ -670,6 +701,15 @@ export function Inventory() {
           busy={busyKey !== null}
           onRetire={(reason) => void doRetire(retiring, reason)}
           onCancel={() => setRetiring(null)}
+        />
+      )}
+      {moving === null ? null : (
+        <MovePanel
+          copy={moving}
+          boxes={boxRecords}
+          busy={busyKey !== null}
+          onMove={(toBox) => void doMove(moving, toBox)}
+          onCancel={() => setMoving(null)}
         />
       )}
     </Page>
@@ -871,6 +911,7 @@ function Action({
   onSell,
   onUndo,
   onRetire,
+  onMove,
 }: {
   copy: SearchCopy
   primary: boolean
@@ -883,6 +924,7 @@ function Action({
   onSell: (copy: SearchCopy) => void
   onUndo: (receipt: Receipt) => void
   onRetire: (copy: SearchCopy) => void
+  onMove: (copy: SearchCopy) => void
 }) {
   const busy = busyKey === copy.key
   if (copy.state === 'sold' || soldKeys.has(copy.key)) {
@@ -969,7 +1011,72 @@ function Action({
       >
         Retire
       </Button>
+      {/* MOVE ONE COPY FROM THE CARD IN VIEW (UX-244): it was only in Manage, over ticked cards,
+          and with nothing ticked it moved the whole box. A pooled copy has no box to leave. */}
+      {copy.place.located === false ? null : (
+        <Button
+          variant="ghost"
+          size={primary ? 'md' : 'sm'}
+          icon="package"
+          iconOnly={!primary}
+          title={primary ? undefined : 'Move to another box'}
+          aria-label={primary ? undefined : 'Move to another box'}
+          disabled={busyKey !== null}
+          onClick={() => onMove(copy)}
+        >
+          Move
+        </Button>
+      )}
     </span>
+  )
+}
+
+/* THE MOVE PANEL (UX-244, D83): one copy, one destination, one press. The other boxes by name,
+ * most recent first as everywhere (the owner's box-order ruling). */
+function MovePanel({
+  copy,
+  boxes,
+  busy,
+  onMove,
+  onCancel,
+}: {
+  copy: SearchCopy
+  boxes: readonly BoxRecord[]
+  busy: boolean
+  onMove: (toBox: number) => void
+  onCancel: () => void
+}) {
+  const [to, setTo] = useState<string | null>(null)
+  const others = boxes.filter((record) => record.box !== copy.place.box && record.state !== 'closed')
+  return (
+    <Overlay kind="dialog" label={`Move: ${sayPlace(copy.place.label ?? copy.key)}`} onClose={onCancel} className="inventory-confirm">
+      <div className="inv-dialog-head">
+        <span className="bn-eyebrow">Move</span>
+        <h2 className="inv-dialog-title">Which box does this copy go to?</h2>
+      </div>
+      <div className="inv-dialog-body">
+        <p className="bn-muted">It goes to the front of that box. No other card changes box.</p>
+        {others.length === 0 ? (
+          <Notice tone="info" title="There is no other open box." />
+        ) : (
+          <Select
+            label="Box"
+            value={to}
+            placeholder="Choose a box"
+            options={others.map((record) => ({ value: String(record.box), label: record.name ?? UNNAMED_BOX }))}
+            onChange={setTo}
+          />
+        )}
+      </div>
+      <div className="inv-dialog-foot">
+        <Button variant="ghost" onClick={onCancel} data-autofocus="">
+          Cancel
+        </Button>
+        <Button variant="primary" icon="package" busy={busy} disabled={to === null} onClick={() => to !== null && onMove(Number(to))}>
+          Move
+        </Button>
+      </div>
+    </Overlay>
   )
 }
 
