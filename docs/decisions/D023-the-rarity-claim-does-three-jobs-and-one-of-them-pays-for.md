@@ -40,4 +40,4 @@ This is presentation only. It cannot add a row that answers to nothing. It canno
 
 **Rung 0 stays exempt, unamended.** D146's own rule holds: *"a human who looked at the photograph beside the candidate rows outranks a claim about the stack it came from."* This holds by construction, not by a new check. A `HUMAN_ANSWERED` card resolves to one row before any candidate list is built. Ranking a list of one is always a no-op.
 
-**The cutoff this widening exposed belongs to D213's own document.** `docs/specs/card-variants.md` section 3c already reasoned about `4/383` and its nine-row limit. The owner's ruling on that limit, and the search's own before and after, are recorded there. That document governs the search.
+**The cutoff this widening exposed is recorded in `docs/specs/card-variants.md`.** Section 3c already reasoned about `4/383` and its nine-row limit. The owner's ruling on that limit, and the search's own before and after, are recorded there.
