@@ -1,30 +1,29 @@
-/* Six `1fr` stage tiles and a two-panel grid, none of which reads better for being wider. */
-.home { display: flex; flex-direction: column; gap: var(--bn-7); --bn-page-max: var(--bn-page-w-rows); }
-
-/* The hero sits in the same band as every other screen's header: eyebrow at the top of the
-   page, not centred against the art. */
-.home-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--bn-8);
-  padding: 0 0 var(--bn-4);
-}
-.home-hero-text { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
-.home-hero-text .bn-eyebrow { white-space: nowrap; }
-.home-title {
+/* Six `1fr` stage tiles and a two-panel grid, none of which reads better for being wider.
+   `Page` supplies the width, the top gap and the left edge (D-page-scaffold) — this sheet
+   only carries the hero's own look on top of it. */
+.home .bn-page-body { display: flex; flex-direction: column; gap: var(--bn-7); }
+/* THE HERO IS `Page`'S OWN HEADER NOW (kit-adoption R1): the greeting is `Page`'s one h1, the
+   date is its lede, and the deck is its actions slot — the same three-part shape every other
+   screen's header has, carrying this screen's own look through the rules below. */
+.home .bn-page-head { gap: var(--bn-8); }
+/* The date sits ABOVE the greeting, as it always has — `Page` draws the lede after the h1,
+   so this moves it back with `order` alone; the DOM order (h1 then lede) is unchanged. */
+.home .bn-lede { order: -1; font-size: inherit; color: inherit; max-width: none; }
+.home .bn-lede .bn-eyebrow { white-space: nowrap; }
+.home .bn-title {
   font-family: var(--bn-font-display);
   font-size: clamp(36px, 5vw, 56px);
   font-weight: 800;
   letter-spacing: -0.035em;
   line-height: 1;
 }
+.home-hero-body { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
 /* ── THE STANDING LINE ─────────────────────────────────────────────────────────────────
    One sentence naming what the store is waiting on, ranked by `standing.ts`. The emphasis
    floor is a TINT and never a fill: an accent fill spends the element's only colour channel,
    so a danger condition comes out the same cheerful blue as a clear one. */
 .home-standing { margin-top: var(--bn-4); max-width: 620px; display: flex; flex-direction: column; gap: var(--bn-3); }
-.home-standing-skel { margin-top: var(--bn-4); max-width: 620px; height: 58px; border-radius: var(--bn-r-lg); }
+.home-standing-skel { margin-top: var(--bn-4); max-width: 620px; }
 .home-standing[data-tone='danger'] { --tone: var(--bn-danger); --tone-tint: var(--bn-danger-tint); }
 .home-standing[data-tone='warn']   { --tone: var(--bn-warn);   --tone-tint: var(--bn-warn-tint); }
 .home-standing[data-tone='live']   { --tone: var(--bn-live);   --tone-tint: var(--bn-live-tint); }
@@ -212,7 +211,6 @@ a.home-deck { pointer-events: auto; }
    would strip. The end of an enter animation is the element's resting style. */
 @keyframes home-deck-in { from { opacity: 0; transform: translateY(14px); } }
 @media (max-width: 767px) {
-  .home-hero { grid-template-columns: 1fr; gap: 0; padding-top: 0; }
   /* Hidden WITHOUT `display: none`: Chromium's full-page capture matches this media query for
      a frame, and a display toggle restarts the deck's enter animations — so every screenshot
      of this screen at 1440 showed an empty hero. A zero-height, invisible block toggles nothing. */
@@ -287,7 +285,6 @@ a.home-deck { pointer-events: auto; }
   .home-more { min-height: var(--bn-control-h-sm); padding: 0 var(--bn-2); margin: -11px calc(-1 * var(--bn-2)); }
 }
 .home-boxes, .home-runs { display: flex; flex-direction: column; padding: var(--bn-2); }
-.home-skel-row { height: 44px; margin: 4px var(--bn-2); }
 .home-empty { padding: var(--bn-5); color: var(--bn-ink-3); font-size: var(--bn-fs-md); text-align: center; }
 
 .home-box, .home-run {

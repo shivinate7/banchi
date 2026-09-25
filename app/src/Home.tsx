@@ -18,7 +18,8 @@ import type {
   ServerStatus,
 } from './types'
 import { useCardCrop } from './cardCrop'
-import { Button, cropStyle, Icon, Kbd, type IconName } from './kit'
+import { Button, cropStyle, Icon, Kbd, Loading, Page, type IconName } from './kit'
+import { dayMonth, weekdayDate } from './dates'
 import { runsOwingPrice, standing, type Standing } from './standing'
 import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
@@ -220,7 +221,7 @@ function StandingLine({
    *  rather than always firing, since every other row's `href` needs nothing extra. */
   readonly onBeforeNav?: (key: string) => void
 }) {
-  if (say === null) return <div className="home-standing-skel bn-skeleton" />
+  if (say === null) return <Loading rows={1} shape="rows" className="home-standing-skel" />
   /* A row that cannot be pressed is PROSE, not a control: it drops the surface, the ring and
      the shadow, so the shape says whether there is work before the colour or the words do. */
   const body = (
@@ -339,7 +340,7 @@ function HistoryFoot({
     total = realTotal * DEMO_HISTORY_SCALE
     everSold = total - onHand - retired * DEMO_HISTORY_SCALE
   }
-  const since = plot?.from ? new Date(plot.from).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }) : null
+  const since = plot?.from ? dayMonth(plot.from) : null
   const newest = plot?.blocks[plot.blocks.length - 1]?.sitting ?? null
   return (
     <div className="home-foot">
@@ -374,7 +375,7 @@ function HistoryFoot({
       {plot === null ? null : <Ribbon plot={plot} live={live} />}
       {newest === null ? null : (
         <p className="home-foot-last">
-          <b>{new Date(newest.from).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}</b>
+          <b>{dayMonth(newest.from)}</b>
           {' — '}
           <b>{newest.cards.toLocaleString()}</b> {newest.cards === 1 ? 'card' : 'cards'}
           {newest.box === null ? null : <> into Box {newest.box}</>}
@@ -686,33 +687,9 @@ export function Home() {
     },
   ]
 
-  return (
-    <main className="home bn-page">
-      <section className="home-hero">
-        <div className="home-hero-text">
-          <span className="bn-eyebrow">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
-          <h1 className="home-title">{greeting()}.</h1>
-          <StandingLine
-            standing={say}
-            onBeforeNav={(key) => {
-              if (key === 'unfindable' && dominantShortReason !== null) setHub({ filter: dominantShortReason })
-            }}
-          />
-          <div className="home-actions">
-            <Button
-              variant="primary"
-              size="lg"
-              icon="camera"
-              kbd=",C"
-              onClick={() => (window.location.hash = '#/capture')}
-            >
-              {status.state === 'ready' && status.value.cards === 0 ? 'Photograph the first box' : 'Start capturing'}
-            </Button>
-          </div>
-          <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={shelf.state === 'ready' ? shelf.value : null} live={say?.running ?? false} />
-        </div>
-        <div className="home-hero-art">
-          {front === undefined || deckBox === null ? (
+  const deckArt = (
+    <div className="home-hero-art">
+      {front === undefined || deckBox === null ? (
             /* Nothing photographed yet: the frames alone, and no name. A deck that invents a
                card is the defect this replaced. */
             <div className="home-deck" aria-hidden="true" data-empty="true">
@@ -790,7 +767,35 @@ export function Home() {
             </a>
           )}
         </div>
-      </section>
+  )
+
+  return (
+    <Page
+      className="home"
+      title={<>{greeting()}.</>}
+      lede={<span className="bn-eyebrow">{weekdayDate(new Date())}</span>}
+      actions={deckArt}
+    >
+      <div className="home-hero-body">
+        <StandingLine
+          standing={say}
+          onBeforeNav={(key) => {
+            if (key === 'unfindable' && dominantShortReason !== null) setHub({ filter: dominantShortReason })
+          }}
+        />
+        <div className="home-actions">
+          <Button
+            variant="primary"
+            size="lg"
+            icon="camera"
+            kbd=",C"
+            onClick={() => (window.location.hash = '#/capture')}
+          >
+            {status.state === 'ready' && status.value.cards === 0 ? 'Photograph the first box' : 'Start capturing'}
+          </Button>
+        </div>
+        <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={shelf.state === 'ready' ? shelf.value : null} live={say?.running ?? false} />
+      </div>
 
       <section className="home-spine bn-stagger" aria-label="The workflow">
         {stages.map((stage, i) => (
@@ -825,7 +830,7 @@ export function Home() {
           </div>
           <div className="home-boxes">
             {boxes.state === 'loading' ? (
-              Array.from({ length: 4 }, (_, i) => <div key={i} className="bn-skeleton home-skel-row" />)
+              <Loading rows={4} shape="rows" className="home-skel-rows" />
             ) : boxes.state === 'failed' ? (
               <p className="home-empty">The server did not answer.</p>
             ) : boxes.value.length === 0 ? (
@@ -873,7 +878,7 @@ export function Home() {
           </div>
           <div className="home-runs">
             {runs.state === 'loading' ? (
-              Array.from({ length: 4 }, (_, i) => <div key={i} className="bn-skeleton home-skel-row" />)
+              <Loading rows={4} shape="rows" className="home-skel-rows" />
             ) : runs.state === 'failed' ? (
               <p className="home-empty">The server did not answer.</p>
             ) : runs.value.length === 0 ? (
@@ -909,6 +914,6 @@ export function Home() {
           </div>
         </div>
       </section>
-    </main>
+    </Page>
   )
 }

@@ -5968,7 +5968,7 @@ COMPONENTS = [
                              # D117 is the thumb floor this sheet answers to at phone width;
                              # D121 is the hero the lede became.
                              "governed_by": ["D5", "D32", "D50", "D94", "D110", "D117", "D118",
-                                             "D121", "D218"]},
+                                             "D121", "D218", "D-page-scaffold"]},
             # ---- the wire, and the two seams ----
             "src/server.ts": {"does": "the only module that talks to the capture server, so the "
                                       "stop-the-run failure rule is one decision. Surfaces the "
