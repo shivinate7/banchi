@@ -52,7 +52,7 @@ import {
 import { IDENTIFIED, stateLabel, stateTone } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
-import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Notice, PageHeader, Pill, countFacets, filterRows } from './kit'
+import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, Loading, Notice, Pill, countFacets, filterRows } from './kit'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
 import { storedBoxRecency, touchBox } from './deviceMemory'
@@ -422,9 +422,6 @@ function isTyping(target: EventTarget | null): boolean {
 
 /** What the screen above hands down, and what it gets back. */
 type BoxBrowseProps = {
-  /** The page title. */
-  head?: ReactNode
-
   /** Rendered beside the photograph, for the selected card: its location, its copies and its
    *  writes. Given as a node because the caller already knows which card is selected. */
   detail?: ReactNode
@@ -683,7 +680,6 @@ function VariantChooser({
 }
 
 export function BoxBrowse({
-  head,
   detail,
   boxPanel,
   actionBar,
@@ -2296,34 +2292,6 @@ export function BoxBrowse({
 
   return (
     <section className="browse">
-      <PageHeader
-        title={head ?? 'Inventory'}
-        icon="box"
-        lede={
-          rows === null
-            ? failure === null
-              ? noBoxesYet
-                ? null
-                : 'Reading the inventory…'
-              : 'The inventory could not be read.'
-            : 'Walk any box card by card. Sell, retire or move a copy from here.'
-        }
-        actions={
-          rows === null ? null : (
-            <Pill mono className="browse-census">
-              <span className="bn-facts">
-                <span>
-                  {storeCards.toLocaleString()} {storeCards === 1 ? 'card' : 'cards'}
-                </span>{' '}
-                <span>
-                  {boxRecords.length} {boxRecords.length === 1 ? 'box' : 'boxes'}
-                </span>
-              </span>
-            </Pill>
-          )
-        }
-      />
-
       {failure === null ? null : (
         <Notice tone="danger" title={failure.message} code={failure.code}>
           <Button size="sm" icon="refresh" onClick={() => setReloads((n) => n + 1)}>
@@ -2334,28 +2302,9 @@ export function BoxBrowse({
 
       {rows === null && failure === null && !noBoxesYet ? (
         <div className="browse-body browse-body-loading">
-          <div className="browse-map">
-            <div className="bn-skeleton browse-skel-search" />
-            <div className="bn-panel browse-skel-panel">
-              {Array.from({ length: 5 }, (_, i) => (
-                <div key={i} className="bn-skeleton browse-skel-row" />
-              ))}
-            </div>
-          </div>
-          <div className="browse-side">
-            <div className="bn-panel browse-card">
-              <div className="browse-hero-head">
-                <div className="bn-skeleton" style={{ width: 260, height: 26 }} />
-              </div>
-              <div className="browse-band">
-                <div className="bn-skeleton browse-skel-photo" />
-                <div className="bn-stack">
-                  <div className="bn-skeleton" style={{ height: 120 }} />
-                  <div className="bn-skeleton" style={{ height: 80 }} />
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* THE KIT'S LOADING SHAPE (D-page-scaffold): the rail's rows, then the card. */}
+          <Loading rows={6} label="Reading the inventory" />
+          <Loading shape="cards" rows={1} label="Reading the card" />
         </div>
       ) : null}
 

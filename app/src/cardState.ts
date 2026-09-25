@@ -14,6 +14,7 @@
  */
 
 import type { RetireReason } from './types'
+import { absoluteDate, clockTime, toDate } from './dates'
 
 const MINUTE = 60_000
 const HOUR = 3_600_000
@@ -35,17 +36,11 @@ export function readingAgo(at: string | null | undefined): string | null {
   return `${days} day${days === 1 ? '' : 's'} ago`
 }
 
-/** The moment itself, as a person's clock says it — the hover behind the coarse phrase. */
+/** The moment itself, as a person's clock says it — the hover behind the coarse phrase. The
+ *  kit's one date and one clock format (`dates.ts`). */
 export function readingExact(at: string | null | undefined): string | undefined {
-  if (typeof at !== 'string') return undefined
-  const when = new Date(at)
-  if (Number.isNaN(when.getTime())) return undefined
-  return when.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+  if (typeof at !== 'string' || toDate(at) === null) return undefined
+  return `${absoluteDate(at)}, ${clockTime(at)}`
 }
 
 /** A copy the pipeline considers gone. */

@@ -6457,7 +6457,8 @@ COMPONENTS = [
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
                             "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
                             "D192", "D213", "D218", "D252", "D-a-box-is-shown-by-its-name",
-                            "D-a-press-reorders-and-nothing-else-moves", "D-view-state-in-url"]},
+                            "D-a-press-reorders-and-nothing-else-moves", "D-page-scaffold",
+                            "D-view-state-in-url"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -6608,7 +6609,7 @@ COMPONENTS = [
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
                                 "D58", "D68", "D71", "D90", "D93", "D118", "D119", "D125", "D132",
                                 "D172", "D181", "D192", "D196", "D213", "D218",
-                                "D-a-card-is-counted-in-its-section"],
+                                "D-a-card-is-counted-in-its-section", "D-page-scaffold"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "

@@ -6,7 +6,6 @@
   gap: var(--bn-5);
   min-width: 0;
 }
-.browse > .bn-head { margin-bottom: var(--bn-1); }
 
 /* ---- the body: rail beside pane ---- */
 .browse-body {
@@ -773,12 +772,6 @@
   gap: 2px 6px;
 }
 .browse-fact-live .bn-tnum { font-weight: 600; }
-
-/* ---- loading ---- */
-.browse-skel-search { height: 40px; }
-.browse-skel-panel { padding: var(--bn-2); display: flex; flex-direction: column; gap: var(--bn-2); }
-.browse-skel-row { height: 40px; }
-.browse-skel-photo { aspect-ratio: 63 / 88; width: 100%; border-radius: var(--bn-r-lg); background: var(--bn-stage-bg); }
 
 /* ---- the phone ---- */
 .browse-mobilebar {

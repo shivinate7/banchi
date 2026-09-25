@@ -7290,13 +7290,15 @@ test('D218: this lane\'s own facts draw the separator, never type it', async ({ 
      `CardHero.tsx`) DRAWS, never the whole `.bn-view`: this route's own `.position-bar-text`
      (`PositionBar.tsx`, D41's accessible-name territory, a different file this sweep does not
      touch) still types one today, so a blanket assertion cannot pass until every lane on this
-     route has landed. `.browse-census` is the page header's store-wide pill (BoxBrowse.tsx);
+     route has landed. `.bn-filtercount` is the rail's store-wide count line (BoxBrowse.tsx);
      `.boxops-sheet` is the Manage sheet in full, including the Name-sections editor's example
      text and its own per-section Field labels (BoxOps.tsx) — both self-contained to this
      lane's components. */
   await open(page)
 
-  const census = page.locator('.browse-census')
+  /* The header's census pill is gone (the rail's count line says the boxes); that line is
+     this lane's store-wide figure now. */
+  const census = page.locator('.browse-filterbar .bn-filtercount')
   await expect(census).toBeVisible()
   expect(await census.innerText()).not.toMatch(/[·•]/)
 

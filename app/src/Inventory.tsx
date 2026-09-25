@@ -32,7 +32,7 @@ import { sayPlace } from './position'
 import { RETIRE_REASONS, reasonWord } from './cardState'
 import { useSearch } from './useSearch'
 import { isEditableTarget } from './keys'
-import { Button, Icon, Notice, Pill } from './kit'
+import { Button, Icon, Loading, Notice, Page, Pill } from './kit'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
 import { RANK_IS_CURRENT, type FrozenRank } from './frozenRank'
@@ -640,9 +640,14 @@ export function Inventory() {
     )
 
   return (
-    <main className="inventory bn-page">
+    /* THE KIT'S PAGE (D-page-scaffold): the one h1 off the route, the one width and top gap. */
+    <Page
+      icon="box"
+      /* SILENT WITH NO BOX: the empty state says "No boxes yet" once, not the lede too. */
+      lede={boxRecords.length === 0 ? undefined : 'Sell, retire or move any card.'}
+      className="inventory"
+    >
       <BoxBrowse
-        head="Inventory"
         detail={detail}
         onSelect={setSelected}
         onBoxes={setBoxRecords}
@@ -667,7 +672,7 @@ export function Inventory() {
           onCancel={() => setRetiring(null)}
         />
       )}
-    </main>
+    </Page>
   )
 }
 
@@ -804,10 +809,7 @@ function CopiesPanel({
           old `results`) or the very first read. A re-read of the SAME card keeps its `group`
           (found by key in the stale `results`) and the list stays put while the fetch runs. */}
       {group === null && (loading || !settled) ? (
-        <div className="inventory-looking">
-          <span className="bn-skeleton" style={{ width: 140, height: 14 }} />
-          <span className="bn-skeleton" style={{ width: '100%', height: 64 }} />
-        </div>
+        <Loading rows={1} className="inventory-looking" label="Reading this card's copies" />
       ) : null}
 
       {group === null && settled && !loading ? (
