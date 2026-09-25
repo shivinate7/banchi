@@ -938,9 +938,9 @@ def front_of_box(dividers, lowest=None) -> Tuple:
 
 
 # THE SMALLEST GAP A PLACEMENT MAY LEAVE BETWEEN TWO KEYS. Below it the box is re-spaced
-# (`Inventory._respace`), which writes every card in it once. A 64-bit float halves one gap
-# about forty times before this, so a re-space is rare, and it is named here rather than
-# discovered as two cards that compare equal.
+# (`Inventory._respace`), which writes every card in it once. One gap between two whole-number
+# keys halves 20 times before this (measured by the R3 review), so a re-space is rare, and it
+# is named here rather than discovered as two cards that compare equal.
 KEY_EPSILON = 1e-6
 
 

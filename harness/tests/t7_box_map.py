@@ -297,6 +297,7 @@ def check_section_moves(checks: Checks) -> None:
                 receipt="r", pid=os.getpid(), started_at=master.now(),
                 keys=["1/6"], state=claims.STATE_LIVE,
             )
+        capture_server.do_create_box({"box": 3, "name": "Spare"})
         refusal(
             checks, lambda: capture_server.do_move_sections(1, {"first": 2, "to_box": 3}),
             "card_being_read", "a section holding a card with a live paid reading refuses",
@@ -631,8 +632,46 @@ def check_front_of_box(checks: Checks) -> None:
         )
 
 
+def check_card_move_refusals(checks: Checks) -> None:
+    """R3 review, items 6 to 9: what a card move refuses, and the empty box it takes."""
+    checks.note("")
+    checks.note("BOX MAP R3 — card move refusals, and a move into an empty box")
+    with isolated_home():
+        _shelf()
+        refusal(
+            checks,
+            lambda: capture_server.do_move_range(1, {"indices": [2], "to_box": 1, "before_card": 3}),
+            "before_invalid", "item 6: a card put back in front of its own next card is a no-op, refused",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_move_range(1, {"indices": [3], "to_box": 1, "section_end": 1}),
+            "before_invalid", "item 6: the last card of a section put at that section's end is refused",
+        )
+        capture_server.do_move_range(1, {"indices": [5], "to_box": 2, "section_end": 2})
+        refusal(
+            checks,
+            lambda: capture_server.do_move_range(1, {"indices": [6], "to_box": 1, "before_card": 5}),
+            "before_invalid", "item 7: a tombstone is not a card to put anything in front of",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_move_range(1, {"indices": [2], "to_box": 9, "section_end": 1}),
+            "box_not_found", "item 8: a box that does not exist is refused, never made",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_move_sections(1, {"first": 2, "to_box": 9}),
+            "box_not_found", "item 8: and a section move to it is refused too",
+        )
+        checks.ok(Store().read().inventory.box(9) is None, "and no box 9 was made")
+        capture_server.do_create_box({"box": 3, "name": "Empty"})
+        capture_server.do_move_range(1, {"indices": [2], "to_box": 3})
+        checks.equal(_walk(3), ["o2"], "item 9: a card moves into an empty box")
+
+
 CHECKS = (
     check_box_map_safety, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
-    check_undo_keeps_paid_answers, check_front_of_box,
+    check_undo_keeps_paid_answers, check_front_of_box, check_card_move_refusals,
 )

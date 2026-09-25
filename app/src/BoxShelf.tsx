@@ -657,6 +657,11 @@ function BoxColumn({
             )}
           </li>
         ))}
+        {gaps && cardMode && sections.length === 0 ? (
+          <li className="shelf-slot">
+            <Gap gaps={gaps} id="end" where={`into ${boxName(record)}`} />
+          </li>
+        ) : null}
         {gaps && !cardMode && offered(null) ? (
           <li className="shelf-slot">
             <Gap gaps={gaps} id="end" where={`at the end of ${boxName(record)} nearest you`} />

@@ -5466,7 +5466,15 @@ def _destination(inventory: master.Inventory, payload: dict, box: int) -> Tuple[
         return to_box, to_box
     to_box = _require_to_box(payload)
     dst = inventory.box(to_box)
-    if dst is not None and dst.closed and int(to_box) != int(box):
+    # A BOX THE REGISTRY DOES NOT HOLD IS REFUSED, NEVER MADE (the R3 review): a move must not
+    # create a box silently, and a receipt must never name a box the store does not have
+    # (D259). `new_box` is the one way a move makes a box.
+    if dst is None:
+        raise BadRequest(
+            HTTPStatus.NOT_FOUND, "box_not_found",
+            "That box does not exist any more. Look at the map again.",
+        )
+    if dst.closed and int(to_box) != int(box):
         raise BadRequest(
             HTTPStatus.CONFLICT, "box_closed",
             f"{inventory.box_title(to_box)} is sealed, so it takes no more cards. Open it first.",
@@ -5608,10 +5616,11 @@ def do_move_range(box: int, payload: dict) -> dict:
         section_end = None if payload.get("section_end") is None else int(payload["section_end"])
     except (TypeError, ValueError):
         indices = None
-    if indices is None or (before_card is None) == (section_end is None):
+    if indices is None or (before_card is not None and section_end is not None):
         raise BadRequest(
             HTTPStatus.BAD_REQUEST, "range_invalid",
-            "Send the cards to move, and one gap: a card to go in front of, or a section's end.",
+            "Send the cards to move, and at most one gap: a card to go in front of, or a "
+            "section's end. No gap is the end of the box nearest you.",
         )
     if payload.get("to_box") is None:
         raise BadRequest(HTTPStatus.BAD_REQUEST, "to_box_required", "Send a box to move them into.")
@@ -5644,13 +5653,17 @@ def do_move_range(box: int, payload: dict) -> dict:
         dst_title = inventory.box_title(to_box)
         dst_sections = sections if same else inventory.layout_of(to_box)
         dst_names = inventory.section_names_for(to_box)
+        if before_card is None and section_end is None:
+            # NO GAP IS THE NEAR END: the end of the last section, or an empty box.
+            if dst_sections:
+                section_end = len(dst_sections)
         if before_card is not None:
-            if not inventory._on_hand(to_box, before_card) and inventory.cards.get(
-                master.position_key(to_box, before_card)
-            ) is None:
+            # A CARD ON HAND ONLY: a sold card or a tombstone is not where a hand can put
+            # anything in front of (the R3 review).
+            if not inventory._on_hand(to_box, before_card):
                 raise BadRequest(
                     HTTPStatus.BAD_REQUEST, "before_invalid",
-                    f"{dst_title} has no such card to put them in front of.",
+                    f"{dst_title} has no card on hand there to put them in front of.",
                 )
             gap = ("card", before_card)
             there = _card_name(inventory, to_box, before_card)
@@ -5659,6 +5672,9 @@ def do_move_range(box: int, payload: dict) -> dict:
                 if there
                 else f"In {dst_title}, find the card the map shows. Put them just on the far side of it, in the same order."
             )
+        elif section_end is None:
+            gap = ("end", None)
+            put = f"Put them into {dst_title} in the same order, card 1 farthest from you."
         else:
             if not 1 <= section_end <= len(dst_sections):
                 raise BadRequest(
@@ -5678,6 +5694,11 @@ def do_move_range(box: int, payload: dict) -> dict:
                     f"In {dst_title}, find {_divider_words(dst_names, section_end)}. "
                     f"Put them just on your side of it, in the same order."
                 )
+        if same and _range_stays(sections, owner, indices, gap, inventory, box):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST, "before_invalid",
+                "The cards are already there. Choose another gap.",
+            )
         first, last_name, count = _landmarks(inventory, box, indices)
         heading = (
             f"Move {_plural(count, 'card')} in {src_title}."
@@ -5706,6 +5727,26 @@ def do_move_range(box: int, payload: dict) -> dict:
             inventory, kind="cards", box=box, to_box=to_box, created=None,
             moved=count, undo=undo, receipt=receipt, landed=[],
         )
+
+
+def _range_stays(sections, owner: int, indices, gap, inventory, box) -> bool:
+    """Whether a same-box card move would leave every card where it stands (a no-op).
+
+    The moved cards stand together in their section when no on-hand card sits between them.
+    Then the gap in front of the first on-hand card after them, or the end of their own section
+    when none follows, is where they already are.
+    """
+    slots = [at for at in sections[owner - 1]["slots"] if inventory._on_hand(box, at) or at in indices]
+    where = [slots.index(at) for at in indices]
+    if where != list(range(where[0], where[0] + len(where))):
+        return False
+    after = slots[where[-1] + 1:]
+    kind, at = gap
+    if kind == "card":
+        return bool(after) and at == after[0]
+    if kind == "section_end":
+        return at == owner and not after
+    return False
 
 
 def do_undo_section_move(payload: dict) -> dict:

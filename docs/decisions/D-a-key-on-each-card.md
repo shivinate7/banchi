@@ -22,8 +22,9 @@ integer, for three reasons.
   its own index as its key, so such a box stays the identity. The fast path in every reader
   (`BoxOrder.identity`) skips the mapping for it.
 - **An insert writes only the cards that move.** A card placed between two others takes a key
-  between theirs: `lo + (hi - lo) * n / (count + 1)`. A 64-bit float halves one gap about
-  forty times before two keys come closer than `KEY_EPSILON` (one millionth). Then the box is
+  between theirs: `lo + (hi - lo) * n / (count + 1)`. One gap between two whole-number keys
+  halves 20 times before two keys come closer than `KEY_EPSILON` (one millionth), as measured
+  by the R3 review. Then the box is
   re-spaced once (`Inventory._respace`): every card gets a whole-number key again, in the order
   it stands. That is the one write that touches cards a placement did not move. It is logged
   as `box_respaced`.
