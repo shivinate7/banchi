@@ -628,7 +628,7 @@ export function Home() {
         reviewTotal !== null && reviewTotal > 0
           ? parked !== null && parked > 0
             ? `${review} waiting, ${parked} parked`
-            : ''
+            : 'waiting'
           : captured !== null && captured > 0
             ? `${plural(captured, 'card')} to identify`
             : reviewTotal === 0
@@ -683,7 +683,7 @@ export function Home() {
       label: 'Shipping',
       figure: batch ? String(batch.shipments) : '—',
       quiet: !batch,
-      note: batch ? `${batch.name}: ${batch.shipments} ${batch.shipments === 1 ? 'shipment' : 'shipments'} in lanes` : '',
+      note: batch ? `${batch.name}: ${batch.shipments} ${batch.shipments === 1 ? 'shipment' : 'shipments'} in lanes` : 'no export yet',
     },
   ]
 

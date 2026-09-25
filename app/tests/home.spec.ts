@@ -216,3 +216,30 @@ test('a visit to Home matches a finished reading, and asks nothing over a match 
   await expect.poll(() => reads).toBeGreaterThan(1)
 })
 
+/* UX-139's anti-pattern reaches the Review tile too: a bare figure with no note reads as an
+ * unlabelled number, the same defect the box row's trailing count had. The common case —
+ * cards waiting in Review, none parked — must say so, in the standing line's own word. */
+test('the Review tile says "waiting", never a bare figure, when the queue is not empty and nothing is parked', async ({
+  page,
+}) => {
+  await page.route(/\/status$/, (route) =>
+    json(route, {
+      captures_root: 'captures',
+      store: 'inventory/store.sqlite',
+      store_exists: true,
+      cards: 4,
+      states: {},
+      queues: { review: 9, parked: 0 },
+      next_index: {},
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+
+  const reviewTile = page.locator('a.home-stage[href="#/review"]')
+  await expect(reviewTile).toBeVisible()
+  await expect(reviewTile).toContainText('waiting')
+  const note = page.locator('a.home-stage[href="#/review"] .home-stage-note')
+  await expect(note).not.toHaveText('')
+})
+
