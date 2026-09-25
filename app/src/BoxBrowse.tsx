@@ -2176,7 +2176,7 @@ export function BoxBrowse({
                 title="Nothing here matches the filter"
                 body={`No card in ${shelfLabel(shelf, shelfName)} matches the game, set or rarity chosen.`}
                 actions={
-                  <Button size="sm" icon="x" onClick={() => setFacetValue({})}>
+                  <Button size="sm" icon="x" words="only-primary" onClick={() => setFacetValue({})}>
                     Clear the filter
                   </Button>
                 }
@@ -2495,7 +2495,7 @@ export function BoxBrowse({
                       title={`Nothing matches “${query.trim()}”`}
                       body="Searches name, number, SKU, set, note."
                       actions={
-                        <Button icon="x" onClick={() => setQuery('')}>
+                        <Button icon="x" words="only-primary" onClick={() => setQuery('')}>
                           Clear the search
                         </Button>
                       }

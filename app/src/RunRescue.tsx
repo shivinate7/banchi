@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 
 import { describeFailure, rescueRun, type Failure } from './server'
 import type { RescueResult } from './types'
-import { Button, Notice, Stat } from './kit'
+import { Button, IconButton, Notice, Stat } from './kit'
 import { toast } from './kit/toast'
 import { useOverlayFocus } from './runsOverlay'
 import './RunRescue.css'
@@ -121,9 +121,7 @@ export function RunRescue({
               Rebind this run
             </h2>
           </div>
-          <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
-            Close
-          </Button>
+          <IconButton icon="x" label="Close" onClick={onClose} />
         </header>
 
         <div className="rescue-sheet-body">

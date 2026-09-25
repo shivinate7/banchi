@@ -315,8 +315,8 @@ test('a custom range shows week buckets for a short span, and states the range i
   await open(page, '?period=all')
 
   await page.getByRole('button', { name: 'Custom' }).click()
-  await page.getByLabel('From').fill('2026-09-01')
-  await page.getByLabel('To').fill('2026-09-15')
+  await page.getByLabel('From', { exact: true }).fill('2026-09-01')
+  await page.getByLabel('To', { exact: true }).fill('2026-09-15')
 
   await expect(page.getByText(/from Sep 1, 2026 to Sep 15, 2026/)).toBeVisible()
   await expect(page.getByRole('heading', { name: 'By week' })).toBeVisible()
@@ -375,7 +375,7 @@ test('no horizontal scroll at 390, with Custom selected — the fifth period opt
   await stub(page, generalOrders())
   await open(page, '?period=all')
   await page.getByRole('button', { name: 'Custom' }).click()
-  await expect(page.getByLabel('From')).toBeVisible()
+  await expect(page.getByLabel('From', { exact: true })).toBeVisible()
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
 })

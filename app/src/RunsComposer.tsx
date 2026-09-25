@@ -21,7 +21,7 @@ import type {
   RunStartedRun,
   RunSummary,
 } from './types'
-import { Button, Chip, EmptyState, Icon, Kbd, Notice, Segmented } from './kit'
+import { Button, Chip, EmptyState, Icon, IconButton, Kbd, Notice, Segmented } from './kit'
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
@@ -805,9 +805,7 @@ export function RunsComposer({
               )
             })}
           </ol>
-          <Button variant="ghost" icon="x" iconOnly onClick={close}>
-            Close
-          </Button>
+          <IconButton icon="x" label="Close" onClick={close} />
         </header>
 
         <div className="runs-composer-body">
@@ -1131,15 +1129,11 @@ export function RunsComposer({
                     /* The walk lives up here, above the frame, so it is on screen at every
                        viewport height — the arrow keys are only discoverable from it. */
                     <span className="run-preview-walk" role="group" aria-label="Walk the selection">
-                      <Button size="sm" iconOnly icon="chevronLeft" onClick={() => setPreviewOffset((was) => was - 1)}>
-                        The card before this one
-                      </Button>
+                      <IconButton size="sm" icon="chevronLeft" label="The card before this one" onClick={() => setPreviewOffset((was) => was - 1)} />
                       <span className="run-preview-count">
                         card {preview.offset + 1} of {count(preview.total)}
                       </span>
-                      <Button size="sm" iconOnly icon="chevronRight" onClick={() => setPreviewOffset((was) => was + 1)}>
-                        The card after this one
-                      </Button>
+                      <IconButton size="sm" icon="chevronRight" label="The card after this one" onClick={() => setPreviewOffset((was) => was + 1)} />
                     </span>
                   )}
                 </div>

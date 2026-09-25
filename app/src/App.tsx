@@ -5,7 +5,7 @@ import { rememberRail, storedRail, storedTheme } from './deviceMemory'
 import { getStatus, onServerBoot, onServerReachable } from './server'
 import { useSearch } from './useSearch'
 import { usePoll } from './usePoll'
-import { Button, Icon, Kbd, KeyHint, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
+import { Button, Icon, IconButton, Kbd, KeyHint, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
   applyTheme, openSheet, overlayOpen, readTheme, type IconName, type Theme } from './kit'
 import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from './kit/lockupGeometry'
 import { Toaster, toast } from './kit/toast'
@@ -1223,9 +1223,7 @@ function PhoneBar({ onPalette }: { onPalette: () => void }) {
       >
         Banchi
       </span>
-      <Button variant="ghost" icon="search" iconOnly onClick={onPalette} aria-haspopup="dialog">
-        Go to
-      </Button>
+      <IconButton icon="search" label="Go to" onClick={onPalette} aria-haspopup="dialog" />
     </header>
   )
 }

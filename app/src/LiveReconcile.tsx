@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 
 import { describeFailure, fetchLiveExport, reconcileLive, type Failure } from './server'
 import { readUpload } from './csvUpload'
-import { Button, Icon, Notice } from './kit'
+import { Button, Icon, IconButton, Notice } from './kit'
 import { toast } from './kit/toast'
 import { DropZone } from './RunsDrop'
 import { whenLabel } from './RunsStage'
@@ -113,9 +113,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
               Check what is live
             </h2>
           </div>
-          <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
-            Close
-          </Button>
+          <IconButton icon="x" label="Close" onClick={onClose} />
         </header>
 
         <div className="livecheck-body">

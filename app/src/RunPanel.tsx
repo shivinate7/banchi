@@ -14,7 +14,7 @@ import {
 import type { ExportAsked, ExportFetched, ExportScope, RunDetail, RunSummary } from './types'
 import { usePoll } from './usePoll'
 import { readUpload } from './csvUpload'
-import { Button, EmptyState, Icon, Notice, Pill, Segmented, Stat } from './kit'
+import { Button, EmptyState, Icon, IconButton, Notice, Pill, Segmented, Stat } from './kit'
 import { toast } from './kit/toast'
 import { RunFiles } from './RunFiles'
 import { RunRescue } from './RunRescue'
@@ -691,9 +691,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
         <Notice tone="danger" code={trouble.failure.code}>
           {trouble.failure.message}
         </Notice>
-        <Button size="sm" variant="ghost" icon="x" iconOnly onClick={() => setTrouble(null)}>
-          Dismiss
-        </Button>
+        <IconButton size="sm" icon="x" label="Dismiss" onClick={() => setTrouble(null)} />
       </div>
     ) : null
 
@@ -704,9 +702,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
           <Pill tone={stepOut.ok ? 'ok' : 'danger'} icon={stepOut.ok ? 'check' : 'alert'}>
             {TITLES[cmd]} {stepOut.ok ? 'finished' : 'refused'}
           </Pill>
-          <Button size="sm" variant="ghost" onClick={() => setStepOut(null)}>
-            Dismiss
-          </Button>
+          <IconButton size="sm" icon="x" label="Dismiss" onClick={() => setStepOut(null)} />
         </div>
         <LogWell text={stepOut.console} label={`What ${TITLES[cmd]} printed`} />
       </div>
@@ -1055,15 +1051,12 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                     busy={busy === 'exports'}
                     onFiles={(files) => void joinWithExports(files)}
                   />
-                  <Button
-                    variant="ghost"
+                  <IconButton
                     icon="settings"
-                    iconRight={optionsOpen ? 'chevronUp' : 'chevronDown'}
+                    label="Options"
                     aria-expanded={optionsOpen}
                     onClick={() => setOptionsOpen((v) => !v)}
-                  >
-                    Options
-                  </Button>
+                  />
                 </div>
 
                 {optionsOpen ? (

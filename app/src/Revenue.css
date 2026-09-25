@@ -188,16 +188,6 @@ th.num .revenue-sort { flex-direction: row-reverse; }
 
 /* ---- drill-down disclosure -------------------------------------------------------- */
 .revenue-disclosure-col { width: 32px; padding-right: 0 !important; }
-.revenue-disclosure {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--bn-control-h-sm);
-  height: var(--bn-control-h-sm);
-  border-radius: var(--bn-r-sm);
-  color: var(--bn-ink-3);
-}
-.revenue-disclosure:hover { background: var(--bn-hover); color: var(--bn-ink); }
 
 .revenue-detail-row td { padding: 0 var(--bn-3) var(--bn-3); border-bottom: 1px solid var(--bn-line); }
 .revenue-detail-table { background: var(--bn-surface-2); border-radius: var(--bn-r); }
