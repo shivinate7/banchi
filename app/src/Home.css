@@ -66,7 +66,6 @@ a.home-standing-row:hover .home-standing-rule { scale: 1.5 1; }
 a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate: 2px 0; }
 .home-standing-behind { margin: 0; padding-left: var(--bn-5); font-size: var(--bn-fs-md); color: var(--bn-ink-3);
   display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--bn-2) var(--bn-4); }
-.home-standing-behind b { color: var(--bn-ink-2); font-weight: 700; font-variant-numeric: tabular-nums; }
 .home-standing-behind-lab { color: var(--bn-ink-3); }
 .home-standing-problem { margin: 0; padding-left: var(--bn-5); font-size: var(--bn-fs-sm); color: var(--bn-warn);
   display: flex; align-items: center; gap: var(--bn-2); }
@@ -84,6 +83,12 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
    frames it on both sides exactly as it framed the character. */
 .home-foot-sum i::before { content: '·'; }
 .home-foot-quiet { color: var(--bn-ink-3); }
+/* THE ONLY LINK OFF HOME INTO SALES (UX-032): styled as plain text at rest, so it reads as
+   part of the sentence and not as a stray button, and picks up the accent only on hover —
+   the same "an alpha over what is already there" rule as every other link on this page. */
+.home-foot-sold { color: inherit; text-decoration: none; }
+.home-foot-sold:hover { color: var(--bn-accent); text-decoration: none; }
+.home-foot-sold:hover b { color: var(--bn-accent); }
 .home-foot-last { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); line-height: 1.5; }
 .home-foot-last b { color: var(--bn-ink-2); font-weight: 700; font-variant-numeric: tabular-nums; }
 .home-foot-last em { font-style: normal; color: var(--bn-ink-3); }
@@ -200,10 +205,6 @@ a.home-deck { pointer-events: auto; }
   animation-delay: 420ms;
 }
 .home-deck-address .bn-icon { color: var(--bn-stage-live); }
-.home-deck-sep { opacity: 0.4; }
-/* D218: `.home-deck-address` is already `inline-flex; gap: 6px`, so the gap alone spaces this
-   marker from its neighbours on both sides — the content is the only thing that moved to CSS. */
-.home-deck-sep::before { content: '·'; }
 .home-deck-card-no { color: var(--bn-stage-accent); }
 /* D218: the server's own parts, kept apart by CSS. */
 .home-deck-card-no > span:not(:first-child)::before { content: '·'; margin: 0 4px; opacity: 0.6; }
@@ -220,10 +221,10 @@ a.home-deck { pointer-events: auto; }
   .home-actions .bn-btn { width: 100%; }
 }
 
-/* the spine */
+/* the spine — FIVE stages, not six (Runs folded into Review, 2026-09-24). */
 .home-spine {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--bn-3);
 }
 .home-stage {
@@ -300,6 +301,8 @@ a.home-deck { pointer-events: auto; }
   transition: background-color var(--bn-t-fast) var(--bn-ease);
 }
 .home-box:hover, .home-run:hover { background: var(--bn-hover); text-decoration: none; }
+/* AN ICON, NOT THE BOX'S NUMBER (the owner's ruling, 2026-09-23): the number is an internal
+   index, never a fact this screen shows. */
 .home-box-num {
   width: 32px;
   height: 32px;
@@ -308,9 +311,6 @@ a.home-deck { pointer-events: auto; }
   place-items: center;
   background: var(--bn-ink);
   color: var(--bn-bg);
-  font-family: var(--bn-font-display);
-  font-weight: 800;
-  font-size: var(--bn-fs-base);
   flex: none;
 }
 .home-box-text, .home-run-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
@@ -322,7 +322,6 @@ a.home-deck { pointer-events: auto; }
 .home-box-meta > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .home-box-bar { width: 96px; height: 6px; border-radius: 3px; background: var(--bn-surface-2); overflow: hidden; flex: none; }
 .home-box-bar > span { display: block; height: 100%; background: var(--bn-accent); border-radius: 3px; transition: width var(--bn-t-slow) var(--bn-ease); }
-.home-box-count { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); width: 40px; text-align: right; flex: none; }
 .home-run-when { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; }
 @media (max-width: 559px) { .home-box-bar { display: none; } }
 @media (max-width: 767px) {

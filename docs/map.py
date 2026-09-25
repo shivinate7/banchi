@@ -5954,7 +5954,7 @@ COMPONENTS = [
                                      "loads on its own, so no figure waits on another.",
                              "governed_by": ["D5", "D6", "D10", "D13", "D32", "D33", "D52", "D56",
                                              "D63", "D69", "D86", "D89", "D94", "D95", "D125",
-                                             "D145", "D156", "D172", "D192", "D202", "D218"]},
+                                             "D142", "D145", "D156", "D172", "D192", "D202", "D218"]},
             "src/Home.css": {"does": "the home screen's look: the hero and its deck, the stage "
                                      "spine, the box and run cards. The one screen in the app "
                                      "that draws a display figure above 36px — "

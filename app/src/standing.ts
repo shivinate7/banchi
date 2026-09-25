@@ -36,9 +36,6 @@ export type StandingTone = 'danger' | 'warn' | 'live' | 'ok' | 'none'
 /** A run of the sentence. `em` is a figure, and draws in ink with tabular numerals. */
 export type Say = { readonly text: string; readonly em?: boolean }
 
-/** One item of the quieter line under the sentence: what is queued behind the head. */
-export type Behind = { readonly figure: string | null; readonly label: string }
-
 export type Standing = {
   /** Stable across renders for the same condition, so React does not re-mount on a re-poll. */
   readonly key: string
@@ -51,7 +48,10 @@ export type Standing = {
   /** Null when this row cannot be pressed, which is what makes it prose and not a control. */
   readonly href: string | null
   readonly kbd: string | null
-  readonly behind: readonly Behind[]
+  /** The quieter sentence under the head. Never a figure the spine already draws (the owner's
+   *  ruling, 2026-09-24: a "Behind that" line that only repeats the spine is cut). What is left
+   *  is a plain sentence with nothing to count — "Nothing is waiting on you." and the like. */
+  readonly behind: readonly string[]
   /** The server's own `problem` string, shown verbatim and never paraphrased. */
   readonly problem: string | null
   /** True while a run is running, which is the only thing that may paint the ribbon live. */
@@ -126,7 +126,7 @@ export function standing(input: StandingInput): Standing | null {
       say: [t(' — the queue starts at the camera.')],
       href: null,
       kbd: null,
-      behind: [{ figure: null, label: 'Boxes are made as you fill them.' }],
+      behind: ['Boxes are made as you fill them.'],
       problem,
       running: false,
     }
@@ -135,7 +135,6 @@ export function standing(input: StandingInput): Standing | null {
   /* Everything below needs the queue depths and the ledger. Read them once, and keep the
      three non-values apart. */
   const review = status.queues.review
-  const parked = status.queues.parked
   const open = orders === null ? null : orders.orders.filter((o) => o.open)
   const toPull = open === null ? null : open.reduce((sum, o) => sum + Math.max(0, o.wanted - o.recorded), 0)
   /* `resolution.orders` is a SUBSET of `orders` keyed on the ledger's own `open_keys`
@@ -161,18 +160,10 @@ export function standing(input: StandingInput): Standing | null {
   const unconfirmed = input.unconfirmed ?? null
   const live = runs === null ? null : runs.filter((r) => r.live)
 
-  const behind: Behind[] = []
-  const add = (figure: number | null, label: string, when: boolean) => {
-    if (when) behind.push({ figure: figure === null ? null : figure.toLocaleString(), label })
-  }
-
   /* 1 — copies a buyer has already paid for that this store cannot find anywhere. The only
          condition on this screen that is genuinely bad news, and until now it was tail text
          inside a stage note. */
   if (unfindable !== null && unfindable > 0) {
-    add(toPull, 'copies to pull', toPull !== null && toPull > 0)
-    add(review, 'to review', review !== null && review > 0)
-    add(owed, 'runs to price', owed !== null && owed > 0)
     return {
       key: 'unfindable',
       tone: 'danger',
@@ -181,13 +172,13 @@ export function standing(input: StandingInput): Standing | null {
       say: [
         t(' — '),
         n(unfindable),
-        t(unfindable === 1 ? ' copy for ' : ' copies for '),
+        t(unfindable === 1 ? ' copy missing across ' : ' copies missing across '),
         n(open === null ? 0 : open.length),
-        t(open !== null && open.length === 1 ? ' open order cannot be found.' : ' open orders cannot be found.'),
+        t(open !== null && open.length === 1 ? ' order.' : ' orders.'),
       ],
       href: '#/orders',
       kbd: ',O',
-      behind,
+      behind: [],
       problem,
       running: live !== null && live.length > 0,
     }
@@ -202,8 +193,6 @@ export function standing(input: StandingInput): Standing | null {
 
   /* 2 — copies an open order wants that are still in a box. */
   if (toPull !== null && toPull > 0) {
-    add(review, 'to review', review !== null && review > 0)
-    add(owed, 'runs to price', owed !== null && owed > 0)
     return {
       key: 'pull',
       tone: 'warn',
@@ -218,7 +207,7 @@ export function standing(input: StandingInput): Standing | null {
       ],
       href: '#/orders',
       kbd: ',O',
-      behind,
+      behind: [],
       problem,
       running: live !== null && live.length > 0,
     }
@@ -230,17 +219,15 @@ export function standing(input: StandingInput): Standing | null {
     return unknown('review-unknown', 'the review queue could not be counted.', problem)
   }
   if (review > 0) {
-    add(owed, 'runs to price', owed !== null && owed > 0)
-    add(parked, 'parked', parked !== null && parked > 0)
     return {
       key: 'review',
       tone: 'warn',
       icon: 'inbox',
       lead: 'Waiting on you',
-      say: [t(' — answer the '), n(review), t(review === 1 ? ' card waiting in Review.' : ' cards waiting in Review.')],
+      say: [t(' — '), n(review), t(review === 1 ? ' card is waiting in Review.' : ' cards are waiting in Review.')],
       href: '#/review',
       kbd: ',Q',
-      behind,
+      behind: [],
       problem,
       running: live !== null && live.length > 0,
     }
@@ -263,7 +250,7 @@ export function standing(input: StandingInput): Standing | null {
       say: [t(' — price '), n(owed), t(owed === 1 ? ' run before it can be sent.' : ' runs before they can be sent.')],
       href: '#/pricing',
       kbd: ',P',
-      behind,
+      behind: [],
       problem,
       running: live !== null && live.length > 0,
     }
@@ -280,7 +267,7 @@ export function standing(input: StandingInput): Standing | null {
       say: [t(' — send '), n(readyCopies), t(readyCopies === 1 ? ' copy to TCGplayer.' : ' copies to TCGplayer.')],
       href: '#/pricing',
       kbd: ',P',
-      behind,
+      behind: [],
       problem,
       running: live !== null && live.length > 0,
     }
@@ -300,7 +287,7 @@ export function standing(input: StandingInput): Standing | null {
       ],
       href: '#/pricing',
       kbd: ',P',
-      behind,
+      behind: [],
       problem,
       running: live !== null && live.length > 0,
     }
@@ -319,7 +306,7 @@ export function standing(input: StandingInput): Standing | null {
       say: [t(` — ${where} ${live.length === 1 ? 'is' : 'are'} identifying.`)],
       href: '#/runs',
       kbd: ',R',
-      behind: [{ figure: null, label: 'Nothing is waiting on you.' }],
+      behind: ['Nothing is waiting on you.'],
       problem,
       running: true,
     }
@@ -372,7 +359,7 @@ export function standing(input: StandingInput): Standing | null {
     say: [t(' — nothing is owed anywhere.')],
     href: null,
     kbd: null,
-    behind: [{ figure: null, label: 'Every card photographed has been identified, priced and sent.' }],
+    behind: ['Every card photographed has been identified, priced and sent.'],
     problem,
     running: false,
   }
