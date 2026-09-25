@@ -79,5 +79,7 @@ New guards come with the section object:
 
 ### What is built
 
-SPECIFIED, NOT BUILT. `docs/specs/box-map.md` lists the slices in build order. The first slice
-is a safety fix to today's "Move to box", and it needs no new screen.
+BUILT on `ux/boxmap`, 2026-09-25, for PR 3. Slice 0 is in D262 (a moved card keeps its
+price). The section move, the reorder, the merge, the split and the exact undo are in
+D-box-order-is-runs, with the order key they need. The Shelf view in `#/inventory` is the
+screen. The aim, the paid-reading refusal and the sealed box are each refused at the write.

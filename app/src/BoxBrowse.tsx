@@ -76,11 +76,13 @@ import './BoxBrowse.css'
  * from './BoxBrowse'` keeps working) — `#/orders`' walk pane builds one too. */
 export type { Row } from './CardHero'
 
-/* Box-walk order — box, then index — the order the cards physically sit in. */
+/* Box-walk order — box, then the card's order in it (D265), the order the cards physically
+ * sit in. The order is the index until a section is placed into the box. */
 function rowsOf(cards: Record<string, InventoryCard>): Row[] {
+  const at = (card: InventoryCard) => card.place?.order ?? card.index
   return Object.entries(cards)
     .map(([key, card]) => ({ key, card }))
-    .sort((a, b) => a.card.box - b.card.box || a.card.index - b.card.index)
+    .sort((a, b) => a.card.box - b.card.box || at(a.card) - at(b.card))
 }
 
 const NO_ROWS: Row[] = []

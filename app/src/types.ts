@@ -1394,6 +1394,11 @@ export type Place = {
 
   box: number
 
+  /** Where the card stands in its box, 1 at the far back (D265). The sort key a walk orders
+   *  by. It equals `index` until a section is placed into the box. Never drawn. Optional
+   *  because an older server omits it: then `index` is the order. */
+  order?: number
+
   /** The card's sequential position in the box — D10's allocator number, 1-based. THE STORE
    *  KEY: the `/inventory/<box>/<index>` path every write aims by, the `<index>.jpg` the
    *  photograph is named after, and half of `key`. It stopped being the numerator of the
@@ -1678,6 +1683,45 @@ export type SectionDetail = {
   /** The operator's own word for the section — `Rares` — or null where none was given.
    *  Joined at read time by ordinal (D132), the way `box_name` is (D56). */
   name: string | null
+  /** The box map's landmarks and aim (D264): the first and last card on hand in the section,
+   *  by name for the eye (null where no card is named) and by cid for a move's aim. Null for
+   *  an empty section. Absent from an older server. */
+  first_name?: string | null
+  last_name?: string | null
+  first_cid?: string | null
+  last_cid?: string | null
+}
+
+/** What `POST /boxes/<box>/sections/move` answers (D264): the move's id for Undo, the
+ *  physical instruction, and both boxes as `GET /boxes` draws them. */
+export type SectionMoveResult = {
+  move: string
+  box: number
+  to_box: number
+  /** The box a split made, or null. */
+  created: number | null
+  moved: number
+  /** Each moved section's new ordinal in the destination. */
+  landed: number[]
+  receipt: {
+    heading: string
+    steps: string[]
+    renumbered: string[]
+  }
+  boxes: BoxRecord[]
+}
+
+/** Where a section move lands: in front of a section of `toBox`, or at its near end (null). */
+export type SectionMoveTarget = {
+  toBox: number | 'new'
+  before: number | null
+}
+
+/** What `POST /boxes/sections/undo` answers. */
+export type SectionUndoResult = {
+  move: string
+  undone: boolean
+  boxes: BoxRecord[]
 }
 
 /** What a box's `state` may be SET to, which is one thing and not the same thing as what may

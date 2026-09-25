@@ -365,14 +365,18 @@ function stillHere(group: SearchGroup, gone: ReadonlySet<string>): SearchGroup |
   }
 }
 
+/* The card's order in its box (D265), which is its index until a section is placed there. */
 function inWalkOrder(cards: Sellable[]): Sellable[] {
-  return [...cards].sort((a, b) => a.box - b.box || a.index - b.index)
+  const at = (card: Sellable) => card.where?.order ?? card.index
+  return [...cards].sort((a, b) => a.box - b.box || at(a) - at(b))
 }
 
 /** A search group's copies in the order he walks the boxes: the first is the one he pulls. */
 function copiesInWalkOrder(copies: SearchCopy[]): SearchCopy[] {
   return [...copies].sort(
-    (a, b) => a.place.box - b.place.box || a.place.index - b.place.index,
+    (a, b) =>
+      a.place.box - b.place.box ||
+      (a.place.order ?? a.place.index) - (b.place.order ?? b.place.index),
   )
 }
 

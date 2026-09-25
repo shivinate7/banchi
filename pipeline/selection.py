@@ -610,10 +610,14 @@ def narrow(
         # counts to, which differs by the cards that have departed in front of this one. The
         # dividers editor speaks slots and `join.divider_index` maps it back; a selection over
         # PHOTOGRAPHS has no slot to speak, because a departed card still has a photograph.
+        # THE DIVIDERS ARE IN THE BOX'S ORDER (D265), so each index is read in that order.
+        order = inventory.box_order(box)
         out = [
             c
             for c in out
-            if c.index is not None and c.index >= start and (end is None or c.index < end)
+            if c.index is not None
+            and order.of(c.index) >= start
+            and (end is None or order.of(c.index) < end)
         ]
 
     if selection.game is not None:

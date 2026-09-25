@@ -36,6 +36,9 @@ import type {
   RemoveResult,
   MoveResult,
   MoveCardsResult,
+  SectionMoveResult,
+  SectionMoveTarget,
+  SectionUndoResult,
   BoxDeleteResult,
   GraveyardPayload,
   BoxListingPlan,
@@ -1938,6 +1941,40 @@ export async function moveCards(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ indices, to_box: toBox }),
   })) as MoveCardsResult
+}
+
+/**
+ * Move touching sections of one box as objects (D264): dividers, names and cards together.
+ * `first`..`last` are the source sections; the target is a gap in front of a section of a box
+ * (the same box reorders it), its near end, or a new box. `aim` is what the screen saw, so a
+ * box changed on another device refuses `section_changed` and nothing moves.
+ */
+export async function moveSections(
+  box: number,
+  first: number,
+  last: number,
+  target: SectionMoveTarget,
+  aim: { count: number; first: string | null; last: string | null } | null,
+): Promise<SectionMoveResult> {
+  const where =
+    target.toBox === 'new'
+      ? { new_box: true }
+      : { to_box: target.toBox, before: target.before }
+  return (await request(`/boxes/${box}/sections/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ first, last, ...where, aim }),
+  })) as SectionMoveResult
+}
+
+/** Put a section move back exactly, while neither box has changed since (D264). A box that
+ *  changed refuses `box_changed_since`; then the way back is a new move. */
+export async function undoSectionMove(move: string): Promise<SectionUndoResult> {
+  return (await request('/boxes/sections/undo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ move }),
+  })) as SectionUndoResult
 }
 
 /**

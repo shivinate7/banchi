@@ -55,6 +55,8 @@ The shape of the key is not decided. The builder brings options to the owner wit
 
 ### What is built
 
-RECORDED as a proposal, NOT BUILT. The owner's word on the design comes before the build. It comes before the box map's placement slice. It needs two harness cases.
-A key migration changes no label. A placement between two sections renumbers only the cards it
-should.
+BUILT on `ux/boxmap`, 2026-09-25, as D-box-order-is-runs: runs of stored indices on the box
+record. The orchestrator's brief asked for the build before the owner's word on the form. So
+the form is a proposal until the owner rules on it in PR 3. T7's `check_section_moves` holds
+its two harness cases. An order that is the index is stored as nothing. A placement between two
+sections renumbers only the sections it should.

@@ -957,9 +957,8 @@ COMPONENTS = [
                                         "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35",
                                         "D36", "D41", "D49", "D54", "D55", "D56", "D58", "D59",
                                         "D63", "D64", "D65", "D67", "D68", "D71", "D76", "D87",
-                                        "D137", "D146", "D162", "D213", "D218", "D253",
-                                        "D259",
-                                        "D260"], "tested_by": ["T3"]},
+                                        "D137", "D146", "D162", "D213", "D218", "D253", "D259",
+                                        "D260", "D265"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -1119,7 +1118,7 @@ COMPONENTS = [
                             # and removing it is what created one. D93/D97 because a stop says
                             # how many to take and lists every copy, never `wanted` of them.
                             "governed_by": ["D10", "D21", "D24", "D26", "D36", "D58", "D63", "D93",
-                                            "D97", "D172", "D183", "D212"],
+                                            "D97", "D172", "D183", "D212", "D265"],
                             "tested_by": ["T11"],
                             "note": "IT TOUCHES NO WIRE AND NO BROWSER. `POST /orders/walk-plan` "
                                     "(`server/capture_server.py:do_order_walk_plan`) and "
@@ -1480,9 +1479,9 @@ COMPONENTS = [
                                      "`photos/` a capture is filed under from D172 onward — "
                                      "gated on the second existing, so a store with nothing "
                                      "captured since scans exactly as it always did.",
-                             "governed_by": ["D10", "D21", "D22", "D33", "D36", "D39", "D43",
-                                             "D48", "D56", "D58", "D65", "D76", "D145", "D165",
-                                             "D172", "D174", "D180"],
+                             "governed_by": ["D10", "D21", "D22", "D33", "D36", "D39", "D43", "D48",
+                                             "D56", "D58", "D65", "D76", "D145", "D165", "D172",
+                                             "D174", "D180", "D265"],
                              "tested_by": ["T7"]},
             "sendguard.py": {"does": "THE DOUBLE-SEND GUARD. After a send, live at TCGplayer "
                                      "plus Add to Quantity may never pass the copies on hand, "
@@ -1810,7 +1809,7 @@ COMPONENTS = [
                                           "D56", "D58", "D59", "D63", "D67", "D83", "D87", "D88",
                                           "D89", "D100", "D115", "D132", "D145", "D146", "D167",
                                           "D172", "D173", "D183", "D192", "D213", "D253", "D259",
-                                          "D264"], "tested_by": ["T7"]},
+                                          "D264", "D265"], "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -5292,7 +5291,8 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D132", "D134", "D137", "D138", "D145",
                                 "D159", "D165", "D166", "D168", "D172", "D174", "D183", "D189",
                                 "D191", "D192", "D193", "D203", "D212", "D213", "D219", "D225",
-                                "D227", "D251", "D252", "D259", "D262", "D268", "D273"],
+                                "D227", "D251", "D252", "D259", "D262", "D264", "D265", "D268",
+                                "D273"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -6293,9 +6293,7 @@ COMPONENTS = [
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
-                                              "D225", "D227", "D236", "D252",
-                                              "D268",
-                                              "D273"]},
+                                              "D225", "D227", "D236", "D252", "D264", "D268", "D273"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -6388,7 +6386,8 @@ COMPONENTS = [
                                              "D104", "D113", "D114", "D115", "D116", "D118", "D132",
                                              "D134", "D142", "D145", "D147", "D156", "D159", "D165",
                                              "D166", "D168", "D172", "D174", "D180", "D183", "D193",
-                                             "D212", "D213", "D225", "D227", "D236", "D252", "D273"]},
+                                             "D212", "D213", "D225", "D227", "D236", "D252", "D264",
+                                             "D265", "D273"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -6756,7 +6755,7 @@ COMPONENTS = [
                             "D24", "D26", "D27", "D30", "D31", "D33", "D35", "D38", "D39", "D41",
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
                             "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D172", "D181",
-                            "D192", "D213", "D218", "D252", "D259"]},
+                            "D192", "D213", "D218", "D252", "D259", "D265"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -7048,7 +7047,7 @@ COMPONENTS = [
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
                 "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D32", "D69",
-                                "D83", "D93", "D125", "D172", "D192", "D193", "D212", "D218"],
+                                "D83", "D93", "D125", "D172", "D192", "D193", "D212", "D218", "D265"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
