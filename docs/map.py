@@ -5065,6 +5065,18 @@ COMPONENTS = [
                 # card data while maintaining determinism.
                 "governed_by": ["D18", "D43"],
             },
+            "extract_comprehensive_card_facts.py": {
+                "does": "queries the snapshot of the owner's real store to extract 150-300 cards "
+                        "for the demo, categorized by test case: high-value ($5+), unsent with no "
+                        "price, price mismatch (25%+ from market), multi-condition variants, and "
+                        "cards with actual sales history. Writes demo_cards_comprehensive.json "
+                        "containing real card facts (names, numbers, rarities, SKUs, market prices, "
+                        "sold counts) without personal data.",
+                # D18: writes demo_cards_comprehensive.json which is tracked, not committed to the build.
+                # D43 isolates reads to a snapshot copy. Used to enrich demo store with owner's
+                # real card data and sales patterns.
+                "governed_by": ["D18", "D43"],
+            },
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
