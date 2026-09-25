@@ -10,7 +10,7 @@
 .orders-card-market { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .orders-card-market .bn-money { color: var(--bn-ink-2); }
 
-/* ---- the layout: buyers, the walk, the card (UX-169, UX-194, D-orders-and-shipping-are-two-rows)
+/* ---- the layout: buyers, the walk, the card (UX-169, UX-194, D274)
    THE WALK GETS THE HEIGHT. There is one scroll, the page's (UX-201): no column scrolls on its
    own. The card pane is sticky beside the walk on a wide column, so Mark sold stays in reach
    while the walk scrolls under it.

@@ -56,6 +56,7 @@ from store.master import Card  # noqa: E402
 from store.orders import OrderLine, OrderRecord  # noqa: E402
 from store.pricearchive import Bucket, PriceArchive, Source, _key  # noqa: E402
 from store.session import Store  # noqa: E402
+from store.skus import SkuRow  # noqa: E402
 
 PASS = 0
 FAIL = 0
@@ -925,66 +926,96 @@ def main() -> int:
            "market that always answers",
            refusals8)
 
-        # ---------------------------------------- merged_export_rows_by_sku, on real bytes
-        print("\n-- pipeline/pricearchive.py: merged_export_rows_by_sku, real files on disk --")
-        export_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-exports-"))
+        # ---------------------------------------- merged_export_rows_by_sku, off the store's
+        # own `skus` table (identity-follows-sku.md §3.2/§5.3, lane 4 — this reader moved off
+        # a disk walk and onto the table lane 0 built)
+        print("\n-- pipeline/pricearchive.py: merged_export_rows_by_sku, off the skus table --")
+        skus_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-skus-"))
         previous_home = os.environ.get(files.HOME_ENV)
-        os.environ[files.HOME_ENV] = str(export_home)
+        os.environ[files.HOME_ENV] = str(skus_home)
         try:
-            exports_dir = export_home / "inventory" / ".exports" / "riftbound"
-            exports_dir.mkdir(parents=True)
-            csv_text = (
-                "TCGplayer Id,Product Line,Set Name,Product Name,Number,Rarity,Condition,"
-                "TCG Market Price,TCG Direct Low,TCG Low Price With Shipping,TCG Low Price,"
-                "Total Quantity,Add to Quantity,TCG Marketplace Price,Photo URL\n"
-                '"7654321","Riftbound League of Legends Trading Card Game","Origins",'
-                '"Twisted Fate, Gambler","200/298","Rare","Near Mint","5.00","","","",'
-                '"1","0","",""\n'
-            )
-            (exports_dir / "export-tcgplayer-20260101-000000-aaaaaaaa.csv").write_text(
-                csv_text, "utf-8"
-            )
+            csv_row: Dict[str, str] = {
+                tcgcsv_module.SKU_COLUMN: "7654321",
+                tcgcsv_module.PRODUCT_LINE_COLUMN: "Riftbound League of Legends Trading Card Game",
+                tcgcsv_module.SET_COLUMN: "Origins",
+                tcgcsv_module.NAME_COLUMN: "Twisted Fate, Gambler",
+                tcgcsv_module.NUMBER_COLUMN: "200/298",
+                tcgcsv_module.RARITY_COLUMN: "Rare",
+                tcgcsv_module.CONDITION_COLUMN: "Near Mint",
+            }
+            with Store().write() as snapshot:
+                snapshot.skus.entries["7654321"] = SkuRow(
+                    product_line=csv_row[tcgcsv_module.PRODUCT_LINE_COLUMN],
+                    set_name=csv_row[tcgcsv_module.SET_COLUMN],
+                    product_name=csv_row[tcgcsv_module.NAME_COLUMN],
+                    number=csv_row[tcgcsv_module.NUMBER_COLUMN],
+                    rarity=csv_row[tcgcsv_module.RARITY_COLUMN],
+                    condition=csv_row[tcgcsv_module.CONDITION_COLUMN],
+                    grade="Near Mint", printing=None,
+                    first_seen=1, last_seen=1,
+                    source="export-tcgplayer-20260101-000000-aaaaaaaa.csv",
+                    raw=dict(csv_row),
+                )
             merged = archive_walk.merged_export_rows_by_sku()
             ok(
                 merged.get("7654321", {}).get(tcgcsv_module.NAME_COLUMN)
                 == "Twisted Fate, Gambler",
-                "a real cached export file, merged by SKU, answers the SKU's own "
-                "Product Name — read off disk, no network",
+                "a SKU the `skus` table holds, merged by SKU, answers the SKU's own "
+                "Product Name — off the store, no disk walk and no network",
                 merged.get("7654321"),
             )
             ok(
                 "0000000" not in merged,
-                "a SKU never written to any cached export is simply absent, never "
+                "a SKU the `skus` table has never seen is simply absent, never "
                 "guessed at",
+            )
+            # MUTATION GUARD: the answer is the TABLE's row, never a re-derivation from a
+            # `Card`'s own stored fields — proven by a card on this same SKU carrying a
+            # DIFFERENT name than the table's row, and the table's name winning anyway.
+            with Store().write() as snapshot:
+                snapshot.inventory.cards["1:1"] = Card(
+                    box=1, index=1, sku="7654321", name="A Card's Own Different Name",
+                    number="000/000", set_name="Origins", game="riftbound",
+                    condition="Near Mint",
+                )
+            merged_again = archive_walk.merged_export_rows_by_sku()
+            ok(
+                merged_again.get("7654321", {}).get(tcgcsv_module.NAME_COLUMN)
+                == "Twisted Fate, Gambler",
+                "MUTATION GUARD: a card bound to this SKU carries a different name, and "
+                "merged_export_rows_by_sku still answers the skus TABLE's name — proves "
+                "this reader never falls through to a card's own fields",
+                merged_again.get("7654321"),
             )
         finally:
             if previous_home is None:
                 os.environ.pop(files.HOME_ENV, None)
             else:
                 os.environ[files.HOME_ENV] = previous_home
-            shutil.rmtree(export_home, ignore_errors=True)
+            shutil.rmtree(skus_home, ignore_errors=True)
 
-        # MUTATION GUARD: no `.exports` directory at all on disk answers an empty map,
-        # never an exception — the function's own stated fail-open shape.
-        no_exports_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-noexports-"))
+        # MUTATION GUARD: an empty `skus` table (a fresh store, nothing ever adopted or
+        # fetched) answers an empty map, never an exception — the function's own stated
+        # fail-open shape, unchanged by the move off disk.
+        no_skus_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-noskus-"))
         previous_home = os.environ.get(files.HOME_ENV)
-        os.environ[files.HOME_ENV] = str(no_exports_home)
+        os.environ[files.HOME_ENV] = str(no_skus_home)
         try:
             ok(archive_walk.merged_export_rows_by_sku() == {},
-               "MUTATION GUARD: no inventory/.exports/ directory at all answers an empty "
+               "MUTATION GUARD: a store whose `skus` table is empty answers an empty "
                "map rather than raising")
         finally:
             if previous_home is None:
                 os.environ.pop(files.HOME_ENV, None)
             else:
                 os.environ[files.HOME_ENV] = previous_home
-            shutil.rmtree(no_exports_home, ignore_errors=True)
+            shutil.rmtree(no_skus_home, ignore_errors=True)
 
-        # --------- pipeline/productview.py: row_for_sku prefers the SKU's own export row
-        # (D254) — the live-fallback path's own tier (b), a real
-        # store and a real cached export together, the same shape `GET /pipeline/products/
-        # <sku>/history` reaches when the archive has never swept a SKU.
-        print("\n-- pipeline/productview.py: row_for_sku prefers the export row --")
+        # --------- pipeline/productview.py: row_for_sku prefers the SKU's own skus-table row
+        # (D254, identity-follows-sku.md §3.2/§5.3 lane 4) — the live-fallback path's own
+        # tier (b), a real store and a real `skus` row together, the same shape `GET
+        # /pipeline/products/<sku>/history` reaches when the archive has never swept a SKU.
+        print("\n-- pipeline/productview.py: row_for_sku prefers the skus-table row --")
         rowsku_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-rowsku-"))
         previous_home = os.environ.get(files.HOME_ENV)
         os.environ[files.HOME_ENV] = str(rowsku_home)
@@ -999,25 +1030,32 @@ def main() -> int:
                 productview.row_for_sku(Store().read(), "7654321").get(
                     tcgcsv_module.NAME_COLUMN
                 ) == "Totally Wrong Stored Name",
-                "BASELINE: with no cached export at all, row_for_sku falls back to the "
+                "BASELINE: with the skus table empty, row_for_sku falls back to the "
                 "card's own stored name — tier (c), proving the fixture's name really is "
                 "what tier (b) below has to override",
             )
-            exports_dir = rowsku_home / "inventory" / ".exports" / "riftbound"
-            exports_dir.mkdir(parents=True)
-            (exports_dir / "export-tcgplayer-20260101-000000-bbbbbbbb.csv").write_text(
-                "TCGplayer Id,Product Line,Set Name,Product Name,Number,Rarity,Condition,"
-                "TCG Market Price,TCG Direct Low,TCG Low Price With Shipping,TCG Low Price,"
-                "Total Quantity,Add to Quantity,TCG Marketplace Price,Photo URL\n"
-                '"7654321","Riftbound League of Legends Trading Card Game","Origins",'
-                '"Twisted Fate, Gambler","200/298","Rare","Near Mint","5.00","","","",'
-                '"1","0","",""\n',
-                "utf-8",
-            )
+            with Store().write() as snapshot:
+                snapshot.skus.entries["7654321"] = SkuRow(
+                    product_line="Riftbound League of Legends Trading Card Game",
+                    set_name="Origins", product_name="Twisted Fate, Gambler",
+                    number="200/298", rarity="Rare", condition="Near Mint",
+                    grade="Near Mint", printing=None, first_seen=1, last_seen=1,
+                    source="export-tcgplayer-20260101-000000-bbbbbbbb.csv",
+                    raw={
+                        tcgcsv_module.SKU_COLUMN: "7654321",
+                        tcgcsv_module.PRODUCT_LINE_COLUMN:
+                            "Riftbound League of Legends Trading Card Game",
+                        tcgcsv_module.SET_COLUMN: "Origins",
+                        tcgcsv_module.NAME_COLUMN: "Twisted Fate, Gambler",
+                        tcgcsv_module.NUMBER_COLUMN: "200/298",
+                        tcgcsv_module.RARITY_COLUMN: "Rare",
+                        tcgcsv_module.CONDITION_COLUMN: "Near Mint",
+                    },
+                )
             resolved = productview.row_for_sku(Store().read(), "7654321")
             ok(
                 resolved.get(tcgcsv_module.NAME_COLUMN) == "Twisted Fate, Gambler",
-                "with a cached export now present, row_for_sku prefers ITS name over the "
+                "with a `skus` row now present, row_for_sku prefers ITS name over the "
                 "card's own misread one — tier (b), the live-fallback path's own reach",
                 resolved,
             )
@@ -1029,8 +1067,9 @@ def main() -> int:
             ok(
                 raised is not None,
                 "MUTATION GUARD: a SKU no card has ever carried still raises "
-                "ProductNotFound, even with a cached export directory present — the export "
-                "preference never manufactures a subject `rows_from_store` never named",
+                "ProductNotFound, even with a `skus` table row present for a different "
+                "SKU — the table preference never manufactures a subject "
+                "`rows_from_store` never named",
             )
         finally:
             if previous_home is None:

@@ -92,7 +92,7 @@ turn one arm red and no others.
 - Treat a pin whose file is gone as a rise. Red on the deleted document.
 - Accept the old repo-wide pin shape. Red on the reader's own refusal.
 
-### Superseded 2026-09-24 — `D-ratchets-become-offender-lists`
+### Superseded 2026-09-24 — `D280`
 
 **This entry's mechanism is deleted.** The per-file pin, `scripts/ste-ratchet-pin.py` and
 `scripts/ste-ratchet.json` are gone. A per-file ratio passed a new bad sentence when an old one
@@ -104,4 +104,4 @@ cut into pieces, the same way this entry cut the ratio. Two branches that fix di
 delete different lines.
 
 **What is reversed: a new file.** This entry accepted a new file at its own ratio, to spare a
-re-pin. With no pin, a new file now starts clean. D-ratchets-become-offender-lists argues why.
+re-pin. With no pin, a new file now starts clean. D280 argues why.

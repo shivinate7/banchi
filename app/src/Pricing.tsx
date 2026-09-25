@@ -860,11 +860,15 @@ export function Pricing() {
   const [push, setPush] = useState<'idle' | 'sending' | 'writing'>('idle')
   const [applied, setApplied] = useState<MarkdownAnswer | null>(null)
   const [wroteUpload, setWroteUpload] = useState(false)
+  /* WHETHER THE FILE'S LINK WAS ON SCREEN WHEN THE PRESS BEGAN (round 9, R9-1). A link already
+     drawn stays through the press; one the press itself writes waits until it ends. Either way
+     nothing appears or vanishes beside the press while it runs (D118). */
+  const [linkHeld, setLinkHeld] = useState(false)
   const [loading, setLoading] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
   /** The pricing corpus — one document for the store, and the authority (D86). */
   const [book, setBook] = useState<PricingCorpus | null>(null)
-  /* THE SEND OPTIONS LEFT THE SEND PRESS (the owner's Send-menu ruling, `D-one-press-sends-and-makes-live`):
+  /* THE SEND OPTIONS LEFT THE SEND PRESS (the owner's Send-menu ruling, `D273`):
      nothing sits beside Send. The split lives under "Download the file instead" inside `SendCard`,
      and where the per-send cap lives now is not ruled. */
   /* A NUMBER ON EACH CARD'S ROW, THIS PRESS ONLY (D7, amended 2026-09-11 on the operator's
@@ -1359,7 +1363,7 @@ export function Pricing() {
     const sending = push === 'sending'
     void (async () => {
       try {
-        /* ONE PRESS (`D-one-press-sends-and-makes-live`, Q7): the file is written, then the
+        /* ONE PRESS (`D273`, Q7): the file is written, then the
            server reads what is live, sends the file and makes it live. "Download the file
            instead" stops after the write. There is no press that puts the old prices back. */
         const result = await applyMarkdown(stamp, {
@@ -3770,7 +3774,7 @@ export function Pricing() {
         )
       ) : null}
 
-      {/* THE SEND BAR (`D-one-press-sends-and-makes-live`): sticky, in flow, one press. One
+      {/* THE SEND BAR (`D273`): sticky, in flow, one press. One
           bar for one run or many: the server writes ONE file over every run in the send (D86),
           behind the double-send guard, sends it and makes it live. Its options left the press
           (the Send-menu ruling), so the bar is the card and nothing beside it. */}
@@ -3802,7 +3806,7 @@ export function Pricing() {
       {source.kind !== 'markdown' || stamp === null ? null : (
         <aside className="pricing-ship" ref={measureShip} role="region" aria-label="Send these prices">
           <div className="pricing-ship-act">
-            {/* ONE PRESS SENDS AND MAKES LIVE (`D-one-press-sends-and-makes-live`, Q7). The
+            {/* ONE PRESS SENDS AND MAKES LIVE (`D273`, Q7). The
                 download is the second door, and nothing else sits beside the press. */}
             <Button
               variant="primary"
@@ -3811,22 +3815,35 @@ export function Pricing() {
               className="pricing-emit"
               busy={push === 'sending'}
               disabled={push !== 'idle' || pushable.length === 0}
-              onClick={() => setPush('sending')}
+              onClick={() => {
+                setLinkHeld(wroteUpload)
+                setPush('sending')
+              }}
             >
-              {push === 'sending'
-                ? 'Checking TCGplayer, then sending…'
-                : `Send ${pushable.length} ${pushable.length === 1 ? 'price' : 'prices'} to TCGplayer`}
+              {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (round 9, D118): `busy` draws the
+                  spinner, and what it is doing is said to a screen reader beside it. */}
+              {`Send ${pushable.length} ${pushable.length === 1 ? 'price' : 'prices'} to TCGplayer`}
             </Button>
+            <span className="bn-sr" role="status">
+              {push === 'sending' ? 'Checking TCGplayer, then sending…' : ''}
+            </span>
             <Button
               variant="quiet"
               icon="download"
               busy={push === 'writing'}
               disabled={push !== 'idle' || pushable.length === 0}
-              onClick={() => setPush('writing')}
+              onClick={() => {
+                setLinkHeld(wroteUpload)
+                setPush('writing')
+              }}
             >
               {push === 'writing' ? 'Writing…' : 'Download the file instead'}
             </Button>
-            {!wroteUpload ? null : (
+            {/* THE FILE'S LINK NEITHER APPEARS NOR VANISHES WHILE A PRESS RUNS (round 9, D118
+                and R9-1). The send writes the file first, and a link appearing beside the press
+                pushed it sideways under the finger; a link already drawn that vanished pushed it
+                back. A link on screen when the press began stays until it ends. */}
+            {!wroteUpload || (push !== 'idle' && !linkHeld) ? null : (
               <a className="bn-btn" href={markdownFileUrl(stamp, 'import.csv')} download="import.csv">
                 <Icon name="download" size={16} />
                 import.csv

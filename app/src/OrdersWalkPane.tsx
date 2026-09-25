@@ -6,7 +6,7 @@
  * `pullCopy`/`undoPull`). Nothing here edits `pipeline/walkplan.py`; which drawers, which
  * cards, and the density order are exactly what the solver already decided.
  *
- * A ROW IS A PICK COUNT (D212, D-pull-list-is-a-pick-count, UX-198): one card in one section,
+ * A ROW IS A PICK COUNT (D212, D279, UX-198): one card in one section,
  * "Pick 1 of 2", never a list of chosen copies. The hook below still keeps one internal row per
  * copy of the solver's reach, because the press and its undo act on one physical copy; the list
  * folds them by take. `here` is the solver's own flag and this file does not recompute it.
@@ -522,7 +522,7 @@ export function takeBuyers(take: WalkPlanTake): string {
   return names.join(', ')
 }
 
-/** THE WALK IS A PICK COUNT, NOT A LIST OF CHOSEN COPIES (D212, D-pull-list-is-a-pick-count,
+/** THE WALK IS A PICK COUNT, NOT A LIST OF CHOSEN COPIES (D212, D279,
  *  UX-198). A row is one card in one section: where it is, what it is, how many to pick here of
  *  how many the walk's orders want, and, when the walk holds more than one buyer, for whom. The
  *  copies themselves, every one of them, are in the card pane beside it. No tick on a row: the

@@ -200,7 +200,7 @@ function copyDeparted(copy: SearchCopy): boolean {
   return isDeparted(copy.place)
 }
 
-/* A SHELF BY ITS NAME (D-a-box-is-shown-by-its-name): the owner ruled the box number an index the
+/* A SHELF BY ITS NAME (D259): the owner ruled the box number an index the
  * store keeps, never a label. Every box carries a stored name since the backfill, so `Box <n>`
  * is only the fallback for a registry the screen has not read yet, and it is the same string
  * the backfill stores for that box. */
@@ -335,7 +335,7 @@ function sectionsOf(rows: Row[], sinkDeparted = false, keep: string | null = nul
 function rowSlot(row: Row): string {
   if (row.card.card !== undefined) return `#${row.card.card}`
   /* A DEPARTED ROW KEEPS THE NUMBER OF THE PLACE IT LEFT (the owner's ruling, 2026-09-23,
-     D-a-box-is-shown-by-its-name): the server's departed label carries it, and the row's own
+     D259): the server's departed label carries it, and the row's own
      mark (`.is-departed`, struck through by the stylesheet) says it left, never a word or the
      store key. A label from before the ruling names no card, so the store key is the fallback. */
   if (hasDeparted(row.card)) {

@@ -46,7 +46,7 @@ from cli import resolve as run_resolve  # noqa: E402
 from pipeline import tcgcsv  # noqa: E402
 from pipeline import variant  # noqa: E402
 from store import files  # noqa: E402
-from store.master import Card  # noqa: E402
+from store.master import IDENTITY_SKU, Card  # noqa: E402
 from store.session import Store  # noqa: E402
 
 PASS = 0
@@ -121,16 +121,33 @@ def main() -> int:
                 set_name="Spiritforged", game="riftbound", condition="Near Mint",
                 state="identified", photo="/photos/ccc-5.jpg",
             )
+            # A fourth refused sku, on a BOUND card whose evidence was never recorded
+            # (`identity_source = sku`, `read_name` still the Python default `None` — a
+            # card bound before `record_identification` ever wrote `read_*`, or by
+            # `cards identity --write`'s own T3/T4u migration). Has a photograph, matches
+            # its own refusal in every field, and STILL cannot be queued —
+            # `cli/resolve.py:card_reading` answers `READING_UNAVAILABLE` for it, and this
+            # is the review round's own HIGH finding: this position must be NAMED in
+            # `QueueBuild.unavailable`, never silently absent (CLAUDE.md's hard rule,
+            # "never drop a card without saying so").
+            snapshot.inventory.cards["1/6"] = Card(
+                box=1, index=6, sku="DDD", name="Warden's Hymn", number="",
+                set_name="Vendetta", game="riftbound", condition="Near Mint",
+                state="identified", photo="/photos/ddd-6.jpg",
+                identity_source=IDENTITY_SKU,
+            )
 
         rows = {
             "AAA": _row("AAA", "Shadbow Temple", "", "Vendetta"),
             "BBB": _row("BBB", "Kihoud Temple", "", "Vendetta"),
             "CCC": _row("CCC", "Seal of Power", "", "Spiritforged"),
+            "DDD": _row("DDD", "Warden's Hymn", "", "Vendetta"),
         }
         refusals = {
             "AAA": _not_resolvable("Shadbow Temple", "", "Vendetta"),
             "BBB": _not_resolvable("Kihoud Temple", "", "Vendetta"),
             "CCC": "https://mcp.tcgplayer.com/... could not be reached: timed out",
+            "DDD": _not_resolvable("Warden's Hymn", "", "Vendetta"),
         }
 
         print("-- is_identification_refusal --")
@@ -143,32 +160,76 @@ def main() -> int:
         inventory = Store().read().inventory
         matches = archive_review.cards_for_refusals(inventory, rows, refusals)
         positions = sorted((m.card.box, m.card.index) for m in matches)
-        ok(positions == [(1, 1), (1, 4)],
-           "1/1 and 1/4 match their own refused identification — 1/2 (different stored "
-           "number, same sku), 1/3 (sold) and 1/5 (network refusal, sku CCC) are all "
-           "excluded here. 1/4 has no photo, checked next: that filter lives in "
-           "queue_entries, not in the card match itself",
+        ok(positions == [(1, 1), (1, 4), (1, 6)],
+           "1/1, 1/4 and 1/6 match their own refused identification — 1/2 (different "
+           "stored number, same sku), 1/3 (sold) and 1/5 (network refusal, sku CCC) are "
+           "all excluded here. 1/4 has no photo and 1/6 is bound with no recorded "
+           "reading, both checked next: those filters live in queue_entries, not in the "
+           "card match itself",
            positions)
         ok(all(m.reason == variant.NO_CATALOG_ROW for m in matches),
            "the reason is the existing ladder vocabulary, not a new string")
 
-        print("\n-- queue_entries: no photo, no entry --")
+        print("\n-- queue_entries: no photo — never queued, but NAMED, never dropped --")
         # Widen refusals to include BBB alone, whose only matching card has no photo.
+        # Lane 7 review: this was the OTHER silent drop CLAUDE.md's hard rule forbids —
+        # the 2026-09-24 round named the no-reading gap and left this one exactly as it
+        # was, and a card missing its photograph still needs a human told about it.
         bbb_matches = archive_review.cards_for_refusals(
             inventory, rows, {"BBB": refusals["BBB"]}
         )
         views = run_resolve.box_views(inventory, boxes={1})
-        bbb_entries = archive_review.queue_entries(bbb_matches, views)
-        ok(bbb_entries == [], "a card with no photograph is never queued", bbb_entries)
+        bbb_build = archive_review.queue_entries(bbb_matches, views)
+        ok(bbb_build.entries == [], "a card with no photograph is never queued",
+           bbb_build.entries)
+        ok(len(bbb_build.unavailable) == 1,
+           "and it IS reported as `unavailable` — named exactly once, not folded into a "
+           "bare count",
+           bbb_build.unavailable)
+        if bbb_build.unavailable:
+            skipped = bbb_build.unavailable[0]
+            ok(skipped.position == "1/4", "keyed by the card's own position",
+               skipped.position)
+            ok("BBB" in skipped.reason and "no photograph" in skipped.reason,
+               "and the reason names the SKU and says why, in plain words — never a "
+               "bare code a reader has to look up", skipped.reason)
+
+        print("\n-- queue_entries: bound, no recorded reading — NAMED, never dropped --")
+        # identity-follows-sku.md §5.1 / review round, HIGH finding, 2026-09-24: a card
+        # whose own refusal matched, but whose evidence was never recorded, must be named
+        # in QueueBuild.unavailable rather than silently absent from the sweep's report.
+        ddd_matches = archive_review.cards_for_refusals(
+            inventory, rows, {"DDD": refusals["DDD"]}
+        )
+        ddd_build = archive_review.queue_entries(ddd_matches, views)
+        ok(ddd_build.entries == [],
+           "a bound card with no recorded reading builds no queue entry",
+           ddd_build.entries)
+        ok(len(ddd_build.unavailable) == 1, "and it is named exactly once",
+           ddd_build.unavailable)
+        if ddd_build.unavailable:
+            skipped = ddd_build.unavailable[0]
+            ok(skipped.position == "1/6", "keyed by the card's own position",
+               skipped.position)
+            ok("DDD" in skipped.reason and "no recorded reading" in skipped.reason,
+               "and the reason names the SKU and says why, in plain words — never a "
+               "bare code a reader has to look up", skipped.reason)
 
         print("\n-- queue_entries + apply: reaches the queue, with its photo --")
-        entries = archive_review.queue_entries(matches, views)
+        build = archive_review.queue_entries(matches, views)
+        entries = build.entries
         ok(len(entries) == 1, "exactly one entry is built", entries)
         entry = entries[0]
         ok(entry.position == "1/1", "keyed by the card's own position", entry.position)
         ok(entry.photo == "/photos/aaa-1.jpg", "carries the card's photograph", entry.photo)
         ok(entry.reason == variant.NO_CATALOG_ROW, "carries the ladder's own reason")
         ok(entry.candidates == [], "zero candidates — this is what NO_CATALOG_ROW means")
+        unavailable_positions = sorted(s.position for s in build.unavailable)
+        ok(unavailable_positions == ["1/4", "1/6"],
+           "and 1/4 (no photo) and 1/6 (bound, no reading) are BOTH named in "
+           "`unavailable` in this SAME build, beside the one real entry — never a "
+           "separate, easy-to-forget pass",
+           build.unavailable)
 
         with Store().write() as snapshot:
             added = archive_review.apply(snapshot.review, entries)

@@ -2199,7 +2199,7 @@ test('the sort press re-orders the list at once, Ready to ship first, and the li
   await expect.poll(() => buyerOrder(page)).toEqual(['Alice', 'Carol', 'Bob'])
 })
 
-/* THE VIEW LIVES IN THE URL (FLT-11, D-view-state-in-url): a reload keeps it, and nothing about it
+/* THE VIEW LIVES IN THE URL (FLT-11, D285): a reload keeps it, and nothing about it
  * is written to the device. */
 test('the filters, the search and the sort survive a reload through the URL', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
@@ -3319,7 +3319,7 @@ for (const [width, height] of [
     await expect(bar.locator('.bn-filterbar-trigger')).toBeVisible()
     await expect(bar.getByRole('button', { name: /^Show/ })).toBeHidden()
     /* Add orders and Cards to pull are two small squares ON THIS LINE (the owner's plan,
-       D-orders-and-shipping-are-two-rows), and the page header holds no press. */
+       D274), and the page header holds no press. */
     for (const name of ['Add orders', 'Cards to pull']) {
       const press = bar.getByRole('button', { name })
       await expect(press).toBeVisible()

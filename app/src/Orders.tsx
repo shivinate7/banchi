@@ -92,7 +92,7 @@ import type {
 import './Orders.css'
 
 /* THE ORDERS HUB: two screens, two sidebar rows, one shared state (D69,
- * D-orders-and-shipping-are-two-rows).
+ * D274).
  *
  *   ORDERS   the buyers, the walk through the boxes for the buyers walked, and the card to pick,
  *            with every copy of it and Mark sold. One press per copy, aimed by `capture_id`.
@@ -2148,7 +2148,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   )
 
   /* ORDERS AND SHIPPING ARE TWO SIDEBAR ROWS, AND NO TAB STRIP JOINS THEM (UX-233,
-     D-orders-and-shipping-are-two-rows). Each route draws its own kit `Page`. The two still share
+     D274). Each route draws its own kit `Page`. The two still share
      this hub's state, so a row on one that names an order still finds it on the other. */
   if (stage === 'ship') {
     return (
@@ -2220,7 +2220,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         onFetch={onFetch}
         onReread={() => void reread()}
         /* THE STORE'S OWN CONTROLS (UX-165, UX-193), two small squares on the filter bar's line
-           (the owner's plan, D-orders-and-shipping-are-two-rows). Fetch, paste and the two
+           (the owner's plan, D274). Fetch, paste and the two
            stand-downs act on the whole store, so they open from the page, never from one
            buyer's sheet. The second is the hand-off the sidebar makes: the Fulfiller's page, in
            its own tab. */
@@ -2529,7 +2529,7 @@ function PullStage({
 
   /* ------------------------------------------------------------- the buyer list's own view */
 
-  /* THE LIST'S VIEW LIVES IN THE URL (FLT-11, D-view-state-in-url): a link, a bookmark and Back
+  /* THE LIST'S VIEW LIVES IN THE URL (FLT-11, D285): a link, a bookmark and Back
    *  restore it, and nothing about it is kept on the device. `q` is the search, `show` and
    *  `status` the two facets (read below, once their options are known), `sort`/`dir` the sort,
    *  `unknown` the hide toggle. A sort press re-sorts at once (FLT-01, amending D209). */
