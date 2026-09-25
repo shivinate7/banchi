@@ -27,7 +27,7 @@
  */
 
 import type { OrderRow, ResolvedOrder } from './types'
-import { foldName, type BuyerGroup } from './orderBuyers'
+import type { BuyerGroup } from './orderBuyers'
 
 export type OrderSort = 'newest' | 'oldest'
 
@@ -100,29 +100,10 @@ export function sortGroups(groups: readonly BuyerGroup[], sort: OrderSort): Buye
   return [...groups].sort(compareGroups(sort))
 }
 
-/** Does this group survive the status control? `null` (All) always passes — the anti-hiding
- *  default — and otherwise a group passes when ANY of its orders (open or not) carries the
- *  chosen status verbatim, folded only by trimming, never by case: the vocabulary IS the
- *  feed's own strings, so the comparison is exact. */
-export function passesStatus(group: BuyerGroup, status: string | null): boolean {
-  if (status === null) return true
-  return group.orders.some((order) => (order.status ?? '').trim() === status)
-}
-
-/** Does this group survive a typed search — by buyer NAME or by ORDER NUMBER, the two things
- *  the row already draws. Blank (untrimmed to nothing) always passes, the same anti-hiding
- *  default every other predicate here uses. Folded with `orderBuyers.ts:foldName` — the exact
- *  rule `buyerKeyOf` already applies to build the group key — so this is a substring match over
- *  the same normalized text a shared spelling already collapses to, never a second folding
- *  rule that could disagree with the first about what counts as the same name. A number is
- *  folded too, cheaply: TCGplayer's own numbers are plain digits, but folding both sides the
- *  same way means one rule to read rather than a name rule and a number rule that happen to
- *  agree today. */
-export function passesQuery(group: BuyerGroup, query: string): boolean {
-  const needle = foldName(query)
-  if (needle === '') return true
-  if (group.name !== null && foldName(group.name).includes(needle)) return true
-  return group.orders.some((order) => foldName(order.number).includes(needle))
+/** True when a sorted list leads with Ready to ship buyers AND holds others after them: the one
+ *  case the list must say so, because the date order alone would not explain it (UX-170). */
+export function sortedReadyFirst(groups: readonly BuyerGroup[]): boolean {
+  return groups.some(groupIsReadyToShip) && groups.some((group) => !groupIsReadyToShip(group))
 }
 
 /** Does this group carry a line the resolver could not identify — the "Never seen" chip's own
@@ -141,55 +122,6 @@ export function passesHideUnknown(
 ): boolean {
   if (!hideUnknown) return true
   return !groupHasUnseenLine(group, answers)
-}
-
-/* --------------------------------------------------------------------------- the freeze (D181) */
-
-/** A snapshot of the order the list was last TAKEN in: group key -> position. Empty means
- *  "current" — nothing frozen, render whatever a live sort produces — which is both the
- *  opening state and what a re-sort press restores, the same shape `RANK_IS_CURRENT` gives
- *  `frozenRank.ts`'s own freeze. */
-export type OrderTake = ReadonlyMap<string, number>
-
-export const TAKE_IS_CURRENT: OrderTake = new Map()
-
-/** Take the order now: every group in `sorted` gets the position it holds this instant. */
-export function takeOrder(sorted: readonly BuyerGroup[]): OrderTake {
-  const map = new Map<string, number>()
-  sorted.forEach((group, index) => map.set(group.key, index))
-  return map
-}
-
-/** The order actually rendered: a group the take already knows about keeps the RELATIVE order
- *  it held then; a group the take has never seen — new evidence, same as `frozenRank.ts`'s
- *  untouched arrival — is appended after every known one, in ITS OWN live order, so a new
- *  buyer is always reachable and never inserted where it would shift an existing row. */
-export function applyTake(liveSorted: readonly BuyerGroup[], take: OrderTake): BuyerGroup[] {
-  if (take.size === 0) return [...liveSorted]
-  const known = liveSorted.filter((group) => take.has(group.key))
-  known.sort((a, b) => (take.get(a.key) ?? 0) - (take.get(b.key) ?? 0))
-  const fresh = liveSorted.filter((group) => !take.has(group.key))
-  return [...known, ...fresh]
-}
-
-/** How many groups sit somewhere other than where a fresh take would put them right now — the
- *  figure `stalenessSentence`-shaped copy draws beside "re-sort". Zero while the take is
- *  current or while the rendered order and a fresh live order agree position for position. */
-export function staleCount(liveSorted: readonly BuyerGroup[], take: OrderTake): number {
-  if (take.size === 0) return 0
-  const rendered = applyTake(liveSorted, take)
-  let diff = 0
-  for (let index = 0; index < liveSorted.length; index++) {
-    if (liveSorted[index]?.key !== rendered[index]?.key) diff++
-  }
-  return diff
-}
-
-/** The sentence beside the re-sort chip, or `null` while the order is current — the same
- *  "said as a fact, not a warning" register `stalenessSentence` uses for copies. */
-export function orderStalenessSentence(groups: number): string | null {
-  if (groups <= 0) return null
-  return `Order is ${groups} ${groups === 1 ? 'buyer' : 'buyers'} stale`
 }
 
 /* --------------------------------------------------------------------- the unnamed label */
@@ -237,4 +169,9 @@ export function unnamedBuyerLabel(group: BuyerGroup): string {
   if (date === null) return tail
   if (tail === '') return date
   return `${date}_${tail}`
+}
+
+/** What a buyer is called on screen: the feed's own name, or the unnamed label. */
+export function buyerLabel(group: BuyerGroup): string {
+  return group.name ?? unnamedBuyerLabel(group)
 }

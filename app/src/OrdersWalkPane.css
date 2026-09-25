@@ -28,6 +28,3 @@
   display: block;
 }
 
-.orders-walk-card .browse-hero-chips:empty {
-  display: none;
-}

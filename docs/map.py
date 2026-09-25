@@ -7737,14 +7737,17 @@ COMPONENTS = [
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
                                                "D118", "D123", "D132", "D159", "D181", "D192",
                                                "D193", "D194", "D195", "D196", "D203", "D209",
-                                               "D212", "D218", "D220", "D221"]},
+                                               "D212", "D218", "D220", "D221",
+                                               "D-orders-and-shipping-are-two-rows",
+                                               "D-view-state-in-url"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
                                        "rather than offered twice.",
                                "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69",
-                                               "D113", "D114", "D117", "D118", "D193", "D195",
-                                               "D203", "D221"]},
+                                               "D113", "D114", "D117", "D118", "D123", "D193",
+                                               "D195", "D203", "D221",
+                                               "D-orders-and-shipping-are-two-rows"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -7809,7 +7812,8 @@ COMPONENTS = [
                                            "brief named first (never re-sort the walk).",
                                    "governed_by": ["D58", "D62", "D79", "D93", "D96", "D97", "D116",
                                                    "D118", "D132", "D164", "D181", "D193", "D209",
-                                                   "D212", "D218", "D220", "D252"]},
+                                                   "D212", "D218", "D220", "D252",
+                                                   "D-pull-list-is-a-pick-count"]},
             "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
                                            "drain-bar (borrowed from `Inventory.css` by class "
                                            "name); every other shape this file draws is "

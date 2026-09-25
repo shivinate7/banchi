@@ -464,6 +464,8 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
   pricing 880   Pricing — the deck takes two columns
   pricing 939   Pricing — the row becomes a compact two-line row
   pricing 1040  Pricing — the DIRECT column joins the table
+  orders  560   Orders — the buyer list moves beside the card and the walk
+  orders  1000  Orders — the card pane moves beside the walk, sticky, and its photograph grows
   (unnamed) 520, 640   RunPanel — the run detail's own steps, on `.runs-detail`
   bn-page 640   kit — a `Page`'s toolbar folds into equal cells, and its actions take a line;
                 Gallery — the specimen grids go to one column
