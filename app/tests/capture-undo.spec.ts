@@ -618,7 +618,10 @@ test('the odometer counts the sitting and says which drawers it went to', async 
 
   const captured = page.locator('.capture-odo .bn-stat').first().locator('.bn-stat-value')
   await expect(captured).toHaveText('3')
-  await expect(page.locator('.capture-odo-split')).toHaveText('Box 3 3')
+  /* THE LEAD-IN IS `bn-sr` (UX-096): visually hidden, absolutely positioned so it costs the
+     paragraph no height, but still part of its textContent — hence the prefix here. It
+     replaced an `aria-label` on a plain `<p>`, which axe's `aria-prohibited-attr` flags. */
+  await expect(page.locator('.capture-odo-split')).toHaveText('Where this sitting went: Box 3 3')
 
   await switchBox(page, 4)
 
@@ -631,12 +634,14 @@ test('the odometer counts the sitting and says which drawers it went to', async 
   await expect(captured).toHaveText('5')
   /* THE DOT IS CSS NOW, NOT TYPED TEXT (D218) — `.capture-odo-drawer + .capture-odo-drawer::before`
      draws it, so the two drawers' own text runs together with no separator character. */
-  await expect(page.locator('.capture-odo-split')).toHaveText('Box 3 3Box 4 2')
+  await expect(page.locator('.capture-odo-split')).toHaveText(
+    'Where this sitting went: Box 3 3Box 4 2',
+  )
 
-  /* THE SPAN STAYS IN ONE DRAWER'S INDEX SPACE, because two drawers do not share one. `1–2`
-     is box 4's; a sitting-wide span would read `1–3` and mean nothing. */
-  const span = page.locator('.capture-odo .bn-stat').nth(2).locator('.bn-stat-value')
-  await expect(span).toHaveText('1–2')
+  /* THE "INDEX SPAN" STAT IS GONE (UX-052, density): it duplicated the drawer split line a
+     few pixels below it, in "index" language the owner called wasted space (D153), and this
+     odometer now has exactly two stats — captured, and the next card. */
+  await expect(page.locator('.capture-odo .bn-stat')).toHaveCount(2)
 })
 
 test('the strip does not change height when the drawer label appears (D118)', async ({

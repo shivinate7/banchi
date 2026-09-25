@@ -611,7 +611,7 @@ async function openWithBox(page: Page): Promise<string[]> {
   /* THE ROW NAMES THE BOX AND NO LONGER NUMBERS IT (D142), so this asserts
      the NAME the fixture gives box 3. It read `toContainText('3')` against a row that opened
      `Box 3`; the owner's instruction was that the number comes off this screen, and the name
-     is the stronger assertion anyway — `3` also matches a `next index 3`. */
+     is the stronger assertion anyway — `3` also matches a `next 3`. */
   await expect(page.locator('.capture-row').filter({ hasText: /Box/ })).toContainText('S key')
   return bodies
 }
@@ -1053,10 +1053,10 @@ test('the box list leads with the fullest box, and the number is last', async ({
      a typed number and the number is doing no job on any of them — which is the owner's
      instruction, *"i shouldn't even need to see box. numbers here"*, asserted at rest. */
   expect(await boxOptionText(page)).toEqual([
-    'Commons next index 41',
-    'Bulk next index 11',
-    'Epics next index 8',
-    'Slabs next index 4',
+    'Commons next 41',
+    'Bulk next 11',
+    'Epics next 8',
+    'Slabs next 4',
   ])
 })
 
@@ -1085,7 +1085,7 @@ test('the box picked last time leads, even when it is the emptiest', async ({ pa
 
   await page.keyboard.press('b')
   await expect(page.locator('.capture-opt').first()).toBeVisible()
-  expect((await boxOptionText(page))[0]).toBe('Slabs next index 4')
+  expect((await boxOptionText(page))[0]).toBe('Slabs next 4')
 })
 
 test('the setup survives a reload, and the in-flight capture id is not on the device', async ({
@@ -1314,14 +1314,14 @@ test('a typed number puts the number back on the rows that answer it', async ({ 
 
   await page.keyboard.type('2')
   await expect(page.locator('.capture-opt')).toHaveCount(1)
-  expect(await boxOptionText(page)).toEqual(['Slabs Box 2 next index 4'])
+  expect(await boxOptionText(page)).toEqual(['Slabs Box 2 next 4'])
 
   /* AND A NAME SEARCH BRINGS NO NUMBER BACK, because none of those rows matched on one. The
      second row is the create-box offer, which every non-exact entry draws last. */
   await page.keyboard.press('Backspace')
   await page.keyboard.type('om')
   await expect(page.locator('.capture-opt')).toHaveCount(2)
-  expect(await boxOptionText(page)).toEqual(['Commons next index 41', 'om New'])
+  expect(await boxOptionText(page)).toEqual(['Commons next 41', 'om New'])
 })
 
 test('an unnamed box draws its number once, typed or not', async ({ page }) => {
@@ -1341,11 +1341,11 @@ test('an unnamed box draws its number once, typed or not', async ({ page }) => {
   await open(page, undefined, GAMES, UNNAMED)
   await page.keyboard.press('b')
   await expect(page.locator('.capture-opt')).toHaveCount(2)
-  expect(await boxOptionText(page)).toEqual(['Box 6 next index 11', 'Box 7 next index 4'])
+  expect(await boxOptionText(page)).toEqual(['Box 6 next 11', 'Box 7 next 4'])
 
   await page.keyboard.type('6')
   await expect(page.locator('.capture-opt')).toHaveCount(1)
-  expect(await boxOptionText(page)).toEqual(['Box 6 next index 11'])
+  expect(await boxOptionText(page)).toEqual(['Box 6 next 11'])
 })
 
 test('clearing the setup empties every claim, forgets the key, and can be undone', async ({
@@ -1440,9 +1440,12 @@ test('a game whose export needs a set hint says so, in all three states of the f
   /* THREE PLACES, BECAUSE THE OPERATOR MEETS THIS FIELD IN THREE STATES: the head while it
      is open, the meta beside the cursor, and the row once it is shut. The row is the one
      that matters at the rig — it is where the screen sits for every card of a sitting
-     nobody pressed H on, and `None` on its own reads as a choice that was made. */
+     nobody pressed H on, and `None` on its own reads as a choice that was made.
+     THE HEAD'S OWN META READS `Needed` NOW, NOT `Needed for this game` (TXT-33, density):
+     the closed row a few pixels away already says `Needed`, and the open head's meta had no
+     other job than repeating it in more words. */
   await expect(page.locator('.capture-open').filter({ hasText: /Set hint/ })).toContainText(
-    'Needed for this game',
+    'Needed',
   )
   await expect(hintMeta(page)).toHaveText(/needed/i)
   await expect(hintNote(page)).toContainText('needs one')
