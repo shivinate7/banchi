@@ -7612,8 +7612,12 @@ COMPONENTS = [
                                            "own comment says what it is: worth promoting to a "
                                            "kit Dialog itself, the same move InventoryOverlay.tsx "
                                            "already took (round 4) — that promotion did not "
-                                           "reach this file, whose three overlays stay on their "
-                                           "own hook.",
+                                           "reach this file, whose overlays stay on their own "
+                                           "hook. Since the PR 2 integration the hook joins the "
+                                           "kit's one overlay stack (`useOverlayLayer`), so a "
+                                           "sheet opened from inside a kit Sheet paints above it "
+                                           "and takes Tab and Escape; `hold` still reaches "
+                                           "Escape through a layout effect (D128).",
                                    "governed_by": ["D5", "D33", "D87", "D94", "D100", "D128"]},
             # ---- the pricing screen (D49, 2026-08-30) ----
             #
