@@ -365,6 +365,61 @@ def case_do_search_never_returns_a_row_the_shared_matcher_rejects() -> None:
     )
 
 
+def case_do_search_midword_agrees_with_match_query() -> None:
+    """R4, round-4 Opus review, 2026-09-25. `_fts_substring_candidates_for_term`'s first
+    version compared a Python-folded QUERY against a RAW, unfolded `name` column — so an
+    accented, apostrophed or hyphenated name never surfaced as a candidate no matter what
+    `match.match_query` itself would say. A fuzz found 167 misses; these six are the ones
+    the review named. Folding the COLUMN side too (in Python, since SQLite has no
+    `unicodedata`) closes the gap — see the function's own docstring for the fix and why
+    it needs BOTH the spaced fold and the compact fallback, matching `match.py:
+    _text_match`'s own two paths.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    cases = [
+        ("Flabébé", "abebe"),
+        ("Farfetch'd", "etchd"),
+        ("Ho-Oh ex", "ooh"),
+        ("Porygon-Z", "gonz"),
+        ("Charizard ex", "zardex"),
+        ("Akali, Deadly Duelist", "adlyduel"),
+    ]
+    with Store().write() as snapshot:
+        inv = snapshot.inventory
+        for i, (name, _) in enumerate(cases):
+            card = master.Card(box=1, index=i + 1, name=name, sku=str(720000 + i))
+            inv.cards[f"1/{i + 1}"] = card
+
+    for i, (name, query) in enumerate(cases):
+        sku = str(720000 + i)
+        found = [g["sku"] for g in cs.do_search(query)["groups"]]
+        check(sku in found, f"do_search({query!r}) finds {name!r}")
+
+
+def case_do_search_short_midword_terms_never_full_scan() -> None:
+    """R3, round-4 Opus review, 2026-09-25 — the owner's own MID-WORD ruling qualified:
+    "only if a measurement... says search stays fast". `q=a` measured a 582ms full-table
+    scan at 3,000 cards: a 1-2 character fragment matches almost every row, buying nothing
+    but cost. `_fts_substring_candidates_for_term` now refuses anything under 3 characters
+    — asserted directly here, and by `case_do_search_hostile_multiterm_query_stays_fast`
+    against real wall-clock time.
+    """
+    fresh_home()
+    from server import capture_server as cs
+
+    conn_check = cs._fts_substring_candidates_for_term
+    for term in ("a", "ab"):
+        check(
+            conn_check(None, term) == [],  # type: ignore[arg-type]
+            f"a {len(term)}-character term never reaches the substring scan at all "
+            "(no connection needed to prove it — the length gate returns before the "
+            "first query)",
+        )
+
+
 def case_do_search_finds_a_hyphenated_name() -> None:
     """`heimerdinger-inventor` found nothing against `Heimerdinger, Inventor`, because the
     literal hyphenated token is not one the FTS5 index holds — the comma splits the field
@@ -549,6 +604,70 @@ def case_do_search_refuses_a_query_past_the_length_cap() -> None:
     )
 
 
+def case_do_search_measures_the_length_cap_after_nfkc() -> None:
+    """R2, round-4 Opus review, 2026-09-25. A single codepoint can expand under NFKC —
+    `"\\ufdfa"` (a compatibility ligature) becomes about 18 characters — so 200 copies of
+    it were 200 characters when `_require_query` used to check length, and about 3,600
+    once normalized. Checking length BEFORE normalizing let the cap be typed around
+    entirely. `_require_query` now normalizes first.
+    """
+    fresh_home()
+    from server import capture_server as cs
+
+    q = "ﷺ" * 200
+    check(len(q) == 200, "the raw query is exactly at the OLD, bypassed cap")
+    caught = None
+    try:
+        cs.do_search(q)
+    except cs.BadRequest as exc:  # noqa: BLE001 — the refusal IS the assertion
+        caught = exc
+    check(
+        caught is not None,
+        "a query that expands past the cap under NFKC refuses, even though its raw "
+        "length is at the cap",
+    )
+    if caught is not None:
+        equal(caught.code, "query_too_long", "and the refusal names itself")
+
+
+def case_do_search_hostile_multiterm_query_stays_fast() -> None:
+    """R1, BLOCKING, round-4 Opus review, 2026-09-25. `("a " * 100).strip()` measured
+    5.8s at 3,000 cards, and `("001 " * 50).strip()` 1.5s — each of the (undeduplicated)
+    terms ran its own O(store) scan, unioned rather than intersected. Both are at or under
+    `_QUERY_LENGTH_CAP` (199 characters each), so the length cap alone never bounded this.
+    Asserted against a bound generous enough to survive a slower CI runner but nowhere
+    near the unbounded cost, on a store this case builds itself — 3,200 cards, never the
+    owner's own.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        inv = snapshot.inventory
+        for i in range(3200):
+            box = 1 + i // 400
+            idx = 1 + i % 400
+            card = master.Card(
+                box=box, index=idx, name=f"Bench Card {i}",
+                number=str(i % 300).zfill(3), sku=str(910000 + i),
+            )
+            inv.cards[f"{box}/{idx}"] = card
+
+    for label, query in (
+        ("100 repeated 'a' terms", ("a " * 100).strip()),
+        ("50 repeated '001' terms", ("001 " * 50).strip()),
+    ):
+        start = time.monotonic()
+        cs.do_search(query)
+        took = time.monotonic() - start
+        check(
+            took < 2.0,
+            f"do_search over {label} took {took:.3f}s on a 3,200-card store, under the "
+            "2.0s bound (unbounded: 5.8s and 1.5s measured by the review)",
+        )
+
+
 def case_do_search_still_refuses_an_unrelated_number() -> None:
     """The widened FTS5 candidate query must not turn into a false positive end to end —
     the same rule 4 guarantee as group 2, proved through the real index this time."""
@@ -576,9 +695,13 @@ CASES = [
     case_do_search_finds_a_whole_number_second_half,
     case_do_search_finds_a_number_with_more_leading_zeros_than_typed,
     case_do_search_never_returns_a_row_the_shared_matcher_rejects,
+    case_do_search_midword_agrees_with_match_query,
+    case_do_search_short_midword_terms_never_full_scan,
     case_do_search_finds_a_hyphenated_name,
     case_do_search_multiword_never_500s_next_to_a_widened_word,
     case_do_search_refuses_a_query_past_the_length_cap,
+    case_do_search_measures_the_length_cap_after_nfkc,
+    case_do_search_hostile_multiterm_query_stays_fast,
     case_do_search_still_refuses_an_unrelated_number,
     case_do_search_runs_the_shared_case_table,
 ]

@@ -2114,16 +2114,20 @@ def _require_query(query: str) -> str:
     cleared the box" is not a request for all of it — `store/queues.py` makes the same call
     for the same reason when it declines to treat an empty queue as a full one.
 
-    A LONG `q` IS ALSO REFUSED (F1, the Opus review, 2026-09-25). `match.py:_cover` is now
-    memoized so one call is O(tokens), but `do_search` still runs a real SQL query PER TERM
-    for `_fts_slash_candidates`/`_fts_fold_candidates`, and a term with no real card behind
-    it can be typed by the thousand — `_QUERY_LENGTH_CAP` bounds the cost of ANY single
-    request, memoization or not, the same way a body-size limit bounds a POST regardless of
-    how cheap the handler behind it became. 200 characters is generous against every real
-    field this route ever compares against (`store/master.py:Card`'s longest text field, a
-    note, and the longest order label this repo has ever composed both fit inside a tenth
-    of it) and small against `harness/tests/t7_store_and_seams.py`'s own 100+ character
-    stress case for `_cover`'s own timing.
+    A LONG `q` IS ALSO REFUSED (F1, the Opus review, 2026-09-25; NOT a full defense on its
+    own — `do_search`'s own candidate gathering now dedupes and bounds the TERM COUNT too,
+    R1, round-4 Opus review, 2026-09-25). `_QUERY_LENGTH_CAP` still bounds the wire cost of
+    any single request, the same way a body-size limit bounds a POST regardless of how
+    cheap the handler behind it became. 200 characters is generous against every real field
+    this route ever compares against (`store/master.py:Card`'s longest text field, a note,
+    and the longest order label this repo has ever composed both fit inside a tenth of it).
+
+    NFKC BEFORE THE LENGTH CHECK, NEVER AFTER (R2, round-4 Opus review, 2026-09-25). A
+    single codepoint can expand under NFKC — `"ﷺ"` (a compatibility ligature) becomes
+    about 18 characters — so `"ﷺ" * 200` is 200 characters here and about 3,600 once
+    normalized. `do_search` used to normalize AFTER this function ran, which let the cap be
+    typed around entirely. Normalizing HERE means the cap bounds what every downstream
+    reader (`_fts_query`, `match.match_query`) actually sees, not what arrived on the wire.
     """
     text = (query or "").strip()
     if not text:
@@ -2132,6 +2136,7 @@ def _require_query(query: str) -> str:
             "query_required",
             "Send `q` — a name, a collector number, a SKU or a set hint to look for.",
         )
+    text = unicodedata.normalize("NFKC", text)
     if len(text) > _QUERY_LENGTH_CAP:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
@@ -10142,9 +10147,21 @@ def _fts_pair_alternatives(left: str, right: str) -> Optional[str]:
 
 _LEADING_SLASH_DIGITS = re.compile(r"^/([0-9]+)$")
 
+# R1, BLOCKING (round-4 Opus review, 2026-09-25). Only the first `_SUPPLEMENTAL_TERM_CAP`
+# DISTINCT terms of a query feed the four candidate widenings below. Each one is a real
+# SQL scan that cannot use an index (a `LIKE` with a leading `%`, or an `LTRIM` on every
+# row), so its cost is O(store) PER TERM — a query of a hundred distinct words would run a
+# hundred such scans before any of the AND/intersection logic below gets a chance to
+# narrow anything. 8 is generous against every real query this route has ever named in its
+# own tests (a name is at most a few words) and small enough to keep the worst case
+# bounded regardless of what a caller types. The base FTS query (`_fts_query`, above) is
+# UNBOUNDED in term count on purpose — it is index-backed and cheap per term, so capping it
+# would refuse a legitimate long query for no gain.
+_SUPPLEMENTAL_TERM_CAP = 8
 
-def _fts_slash_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
-    """Card `(key, sku)` rows for a query naming the SECOND half of a collector number
+
+def _fts_slash_candidates_for_term(conn: sqlite3.Connection, term: str) -> List[Tuple[str, str]]:
+    """Card `(key, sku)` rows for ONE term naming the SECOND half of a collector number
     alone (S2, UX-173 amended): `/132` for a card stored as `054/132`. FTS5 has no "ends
     with" — `tokenchars '/-'` keeps the composed number ONE token, so a prefix search from
     either end finds the FIRST half and never the second. A plain SQL suffix scan, matching
@@ -10163,26 +10180,29 @@ def _fts_slash_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str
     `match.match_query` itself correctly accepts it once given the chance — the row was
     never missing from the CANDIDATE step's own promise, `_number_match`'s rule, only from
     what this function was willing to look at.
+
+    ONE TERM, NOT THE WHOLE QUERY (R1, round-4 Opus review, 2026-09-25) — see
+    `_fts_supplemental_candidates` for why: dedup and cross-term intersection both need a
+    single term's own answer, never a whole-text scan repeated per term internally.
     """
     out: Dict[str, str] = {}
-    for term in text.split():
-        found = _LEADING_SLASH_DIGITS.match(term)
-        if not found:
-            continue
-        digits = found.group(1)
-        for suffix in {digits, digits.zfill(3)}:
-            pattern = f"%/{suffix}"
-            for key, sku in conn.execute(
-                "SELECT key, sku FROM cards WHERE number_key LIKE ? OR number LIKE ?",
-                (pattern, pattern),
-            ):
-                out.setdefault(str(key), sku)
+    found = _LEADING_SLASH_DIGITS.match(term)
+    if not found:
+        return []
+    digits = found.group(1)
+    for suffix in {digits, digits.zfill(3)}:
+        pattern = f"%/{suffix}"
+        for key, sku in conn.execute(
+            "SELECT key, sku FROM cards WHERE number_key LIKE ? OR number LIKE ?",
+            (pattern, pattern),
+        ):
+            out.setdefault(str(key), sku)
     return list(out.items())
 
 
-def _fts_zero_pad_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
-    """Card `(key, sku)` rows for an ALL-DIGIT query term, ignoring how many leading zeros
-    the STORED number carries against how many the QUERY carries (F8, round-3 Opus review,
+def _fts_zero_pad_candidates_for_term(conn: sqlite3.Connection, term: str) -> List[Tuple[str, str]]:
+    """Card `(key, sku)` rows for ONE ALL-DIGIT term, ignoring how many leading zeros the
+    STORED number carries against how many the QUERY carries (F8, round-3 Opus review,
     2026-09-25: "card numbers with or without leading zeros").
 
     `_zero_padded_variant`'s FTS widening only covers a term of 1 OR 2 DIGITS — it pads to
@@ -10193,114 +10213,182 @@ def _fts_zero_pad_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[
     3-digit term to a stored token with MORE leading zeros than that, because prefix
     matching only ever adds characters after what was typed, never before it.
 
-    A PLAIN SQL SCAN, comparing both sides with their OWN leading zeros stripped
-    (`LTRIM(col, '0')`) — the same rule `match.py:_drop_leading_zeros` already applies
-    once a candidate reaches the rank step; this only gets the candidate there. Symmetric
-    by construction: `LTRIM` strips zeros off BOTH the stored column and the query term,
-    so a query typed WITH its own extra leading zeros (`0934` finding a card stored as
-    `934`) is covered by the same comparison, not a second one. `LTRIM` trims only from
-    the FRONT of the string, so `054/132`'s own `/132` half is untouched — this widening
-    is about the FIRST number alone, exactly where a leading zero can ever sit.
+    AN EQUALITY CHECK, NEVER A PREFIX ONE (R1, round-4 Opus review, 2026-09-25, correcting
+    this function's own first version). The intended comparison is "the stored number,
+    zeros stripped, is what the query names, zeros stripped" — always an EXACT match once
+    both sides are stripped, never a prefix; a prefix was never needed for `934` finding
+    `0934` (`LTRIM` of both sides is already `934` = `934`) and it was the whole reason
+    `LTRIM(col, '0') LIKE '1%'` (query `001`) matched nearly every numbered card in the
+    store — any number starting with `1` at all, once its own zeros are stripped. `LTRIM`
+    trims only from the FRONT of the string, so `054/132`'s own `/132` half is untouched —
+    this widening is about the FIRST number alone, exactly where a leading zero can ever
+    sit. Symmetric by construction: `LTRIM` strips zeros off BOTH sides, so a query typed
+    WITH its own extra leading zeros (`0934` finding a card stored as `934`) is covered by
+    the same comparison, not a second one.
 
     A SUPERSET, like every candidate source here: `match.match_query` (or `_match_rank`,
     for a single-term query) still decides."""
     out: Dict[str, str] = {}
-    for term in text.split():
-        if len(term) < 3 or not match._DIGITS_ONLY.match(term):
-            continue
-        bare = term.lstrip("0") or "0"
-        pattern = bare + "%"
-        for column in ("number_key", "number", "number_display"):
-            for key, sku in conn.execute(
-                f"SELECT key, sku FROM cards WHERE LTRIM({column}, '0') LIKE ?",  # noqa: S608
-                (pattern,),
-            ):
-                out.setdefault(str(key), sku)
+    if len(term) < 3 or not match._DIGITS_ONLY.match(term):
+        return []
+    bare = term.lstrip("0") or "0"
+    for column in ("number_key", "number", "number_display"):
+        for key, sku in conn.execute(
+            f"SELECT key, sku FROM cards WHERE LTRIM({column}, '0') = ?",  # noqa: S608
+            (bare,),
+        ):
+            out.setdefault(str(key), sku)
     return list(out.items())
 
 
-def _fts_fold_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
-    """Card `(key, sku)` rows a hyphen or an apostrophe hides from FTS5's own prefix search
-    (S2, UX-173 amended): `tokenchars '/-'` keeps a hyphenated word ONE token exactly as
-    written (`Ho-Oh` indexes as `ho-oh`, not `hooh`), and an apostrophe is an ordinary
-    separator that SPLITS a word instead (`Farfetch'd` indexes as two tokens, `farfetch`
-    and `d`) — so neither direction ever lets a query typed with the punctuation folded out
-    (`hooh`, `farfetchd`) reach a candidate a real FTS5 prefix search would need.
+def _fts_fold_candidates_for_term(conn: sqlite3.Connection, term: str) -> List[Tuple[str, str]]:
+    """Card `(key, sku)` rows for ONE term a hyphen or an apostrophe hides from FTS5's own
+    prefix search (S2, UX-173 amended): `tokenchars '/-'` keeps a hyphenated word ONE token
+    exactly as written (`Ho-Oh` indexes as `ho-oh`, not `hooh`), and an apostrophe is an
+    ordinary separator that SPLITS a word instead (`Farfetch'd` indexes as two tokens,
+    `farfetch` and `d`) — so neither direction ever lets a query typed with the punctuation
+    folded out (`hooh`, `farfetchd`) reach a candidate a real FTS5 prefix search would need.
 
     A PLAIN SQL PREFIX SCAN, ANCHORED AT THE START (`folded_term + '%'`) over the real
     `cards.name` column with a hyphen or apostrophe stripped and lower-cased — the exact
-    fold `match.py:compact_text` performs on the query side, so the two meet. Deliberately
-    NARROWER than a general substring scan even after MID-WORD (the owner's ruling,
-    2026-09-25) added one (`_fts_substring_candidates`, right below): a punctuation-only
-    fold is one comparison against the SAME name column two functions now scan, and
-    keeping this one prefix-anchored costs nothing to correctness — `_fts_substring_
-    candidates` already covers every row this one does, and more.
+    fold `match.py:compact_text` performs on the query side, so the two meet EXCEPT ON
+    ACCENTS (R5, round-4 Opus review, 2026-09-25, correcting this docstring's own earlier
+    claim). This SQL-side fold cannot strip an accent — there is no `unicodedata` inside
+    SQLite — so a name carrying one (`Flabébé`) never reaches this function; only
+    `_fts_substring_candidates_for_term`'s Python-side fold does that. Kept anyway,
+    prefix-anchored, as a cheap FIRST pass ahead of the substring scan: most of what this
+    function finds (a plain hyphen or apostrophe, no accent) never needs the more
+    expensive Python-side row walk at all.
     """
     out: Dict[str, str] = {}
-    for term in text.split():
-        if not match._has_letter(term):
-            continue
-        folded = match.compact_text(term)
-        if not folded:
-            continue
-        pattern = folded.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        for key, sku in conn.execute(
-            "SELECT key, sku FROM cards WHERE "
-            "LOWER(REPLACE(REPLACE(REPLACE(name, '-', ''), CHAR(39), ''), CHAR(8217), '')) "
-            "LIKE ? ESCAPE '\\'",
-            (pattern,),
-        ):
-            out.setdefault(str(key), sku)
+    if not match._has_letter(term):
+        return []
+    folded = match.compact_text(term)
+    if not folded:
+        return []
+    pattern = folded.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    for key, sku in conn.execute(
+        "SELECT key, sku FROM cards WHERE "
+        "LOWER(REPLACE(REPLACE(REPLACE(name, '-', ''), CHAR(39), ''), CHAR(8217), '')) "
+        "LIKE ? ESCAPE '\\'",
+        (pattern,),
+    ):
+        out.setdefault(str(key), sku)
     return list(out.items())
 
 
-def _fts_substring_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
-    """Card `(key, sku)` rows for a MID-WORD fragment — `izard` finding a card named
-    `Charizard` (MID-WORD, the owner's ruling, 2026-09-25: "Add mid-word search"). D271's
-    one matcher wins over store-scaling item 8's own prefix-only trade-off, which this
-    function's earlier absence enforced and `_fts_fold_candidates`'s docstring used to
-    cite. FTS5's own prefix index can never answer this shape (a token has to start with
-    what was typed), so a plain SQL substring scan — `LIKE '%term%'`, the ONE candidate
-    source here that is not anchored at the start — is the only way in.
+def _fts_substring_candidates_for_term(conn: sqlite3.Connection, term: str) -> List[Tuple[str, str]]:
+    """Card `(key, sku)` rows for ONE MID-WORD fragment — `izard` finding a card named
+    `Charizard` (MID-WORD, the owner's ruling, 2026-09-25, verbatim: "Add mid-word
+    search"). D271's one matcher wins over store-scaling item 8's own prefix-only
+    trade-off. FTS5's own prefix index can never answer this shape (a token has to start
+    with what was typed), so a scan that is not anchored at the start is the only way in.
 
-    MEASURED BEFORE SHIPPING, on a synthetic 2,600-card store built in this session's own
-    worktree, never the owner's: the worst case measured (a two-word name, one substring
-    scan per term) rose from p95 44.7ms to p95 95.1ms; a mid-word query that used to
-    answer empty in ~3ms now finds its card in ~64ms. Both stay well inside
-    `useSearch.ts:SEARCH_DEBOUNCE_MS`'s own 200ms budget, with margin.
-    `docs/decisions/D271-one-forgiving-search-matcher.md` carries the full table. A
-    substring scan cannot use an index (no B-tree ordering helps a pattern with a leading
-    `%`), so this is the one candidate source whose cost grows with the STORE rather than
-    with the term — reasonable at the measured scale, and the reason it is measured again
-    rather than assumed safe forever.
+    THREE OR MORE CHARACTERS ONLY (R3, round-4 Opus review, 2026-09-25 — the owner's own
+    ruling qualified: mid-word ships "only if a measurement... says search stays fast", and
+    `q=a` measured a 582ms full-table scan at 3,000 cards: a 1-2 character fragment matches
+    almost every row, so it buys nothing but cost. A real mid-word search — `izard`,
+    `abebe` — is never shorter than this in practice.
 
-    THE SAME THREE COLUMNS `_card_match_fields` HANDS TO `match.match_query`'s "text"
-    list — name, set_hint, note — because a mid-word hit anywhere else (a number, a SKU)
-    already has its own precise rule and needs no substring fallback. A SUPERSET, like
-    every candidate source here: `match.match_query` still decides, so a term that is
-    ALSO covered by a more precise rule (rule 4's numbers, rule 6's SKU prefix) is never
-    weakened by this addition — it only ever adds rows for `match_query` to then confirm
-    or reject.
+    FOLDED IN PYTHON, NEVER IN SQL (R4, round-4 Opus review, 2026-09-25, replacing this
+    function's own first version, which compared a Python-folded QUERY against a RAW,
+    unfolded `name` column — so `abebe` never found `Flabébé`, `etchd` never found
+    `Farfetch'd`, `ooh` never found `Ho-Oh ex`: the accent, the apostrophe and the hyphen
+    were still on the STORED side of every comparison). `match.fold_text` is the one fold
+    both `match_query` and this function now use, so what the CANDIDATE step accepts is
+    exactly what the DECISIVE step (`match.match_query`, below) would also accept — no
+    third, slightly different fold to keep in step. SQLite has no `unicodedata`, so the
+    fold happens after the row lands in Python: this SELECTs only the four columns
+    `match_query`'s own "text" list reads (`_card_match_fields`: name, set_hint, note —
+    `note` via `json_extract`, not a real column), never a full `Card`, keeping the O(cards)
+    part of this cost to what store-scaling item 8 was always about (building 50,000
+    objects), not to the column count.
     """
+    if len(term) < 3 or not match._has_letter(term):
+        return []
+    folded_term = match.fold_text(term)
+    compact_term = match.compact_text(term)
+    if not folded_term:
+        return []
     out: Dict[str, str] = {}
-    for term in text.split():
-        if not match._has_letter(term):
-            continue
-        folded = match.fold_text(term)
-        if not folded:
-            continue
-        pattern = "%" + folded.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        for key, sku in conn.execute(
-            # `note` is not a real column on `cards` — only `name`/`set_hint` are
-            # (`store/master.py:_card_columns`); the FTS index's own trigger reaches it
-            # through `json_extract(payload, '$.note')`, and this matches that.
-            "SELECT key, sku FROM cards WHERE "
-            "LOWER(name) LIKE ? ESCAPE '\\' OR LOWER(set_hint) LIKE ? ESCAPE '\\' "
-            "OR LOWER(json_extract(payload, '$.note')) LIKE ? ESCAPE '\\'",
-            (pattern, pattern, pattern),
-        ):
-            out.setdefault(str(key), sku)
+    for key, sku, name, set_hint, note in conn.execute(
+        "SELECT key, sku, name, set_hint, json_extract(payload, '$.note') FROM cards"
+    ):
+        for field in (name, set_hint, note):
+            if not field:
+                continue
+            # BOTH FORMS, MATCHING `match.py:_text_match`'S OWN TWO PATHS — never only
+            # the spaced fold (R4, round-4 Opus review, 2026-09-25). `fold_text` turns
+            # punctuation into a SPACE, not nothing: `"Ho-Oh ex"` folds to `"ho oh ex"`,
+            # three words, and `"ooh"` is not a substring of that (there is a space
+            # between the two `o`s). `match_query` itself falls back to the COMPACT form
+            # (spaces removed too) for exactly this shape — `"hoohex"` does contain
+            # `"ooh"` — and case 20 in the shared table (`"hooh"` must NOT find
+            # `"Hoothoot"`) is what keeps this fallback from crossing an unrelated word;
+            # it is `match.py`'s own rule, not a new one invented here.
+            if folded_term in match.fold_text(field) or (
+                compact_term and compact_term in match.compact_text(field)
+            ):
+                out.setdefault(str(key), sku)
+                break
     return list(out.items())
+
+
+_SUPPLEMENTAL_SOURCES = (
+    _fts_slash_candidates_for_term,
+    _fts_zero_pad_candidates_for_term,
+    _fts_fold_candidates_for_term,
+    _fts_substring_candidates_for_term,
+)
+
+
+def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
+    """Every extra candidate the base FTS5 query (`_fts_query`, above) cannot reach on its
+    own, from all four widenings, DEDUPED AND INTERSECTED ACROSS TERMS (R1, BLOCKING,
+    round-4 Opus review, 2026-09-25).
+
+    THE DEFECT, MEASURED: `("a " * 100).strip()` — 100 REPEATED terms — took 5.8s at 3,000
+    cards, because each of the (undeduplicated) 100 terms ran its own O(store) scan and the
+    results were UNIONED, never intersected against each other or against the query's own
+    AND semantics. `("001 " * 50).strip()` took 1.5s for the same reason, compounded by the
+    zero-pad widening's own prefix bug (fixed separately, in `_fts_zero_pad_candidates_
+    for_term`'s own docstring).
+
+    THREE THINGS FIX IT, TOGETHER:
+      DEDUPE     `dict.fromkeys(text.split())` — a term seen twice is scanned once.
+                 100 copies of `a` become the one distinct term `a`.
+      CAP        `_SUPPLEMENTAL_TERM_CAP` bounds how many DISTINCT terms even reach these
+                 scans, so a query of many distinct words cannot multiply the cost either.
+      INTERSECT  a query of two or more terms requires the STORE'S candidate for EACH term
+                 to agree before either term's widening contributes a row — narrowing what
+                 a hostile multi-term query can make this step return, the same AND
+                 `match.match_query`'s own `_cover` requires of a real match.
+
+    INTERSECTING NEVER DROPS A REAL MATCH. This function is additive to the base FTS `hits`
+    dict in `do_search`, which already applies its own correct AND across every term via
+    ONE combined `MATCH` expression — unaffected by anything here. A row this function's
+    own intersection excludes (because term B produced no supplemental candidate for it,
+    say a SKU term that only the base FTS query's own SKU-prefix rule reaches) is a row the
+    base query already found on its own, or a row `match.match_query` was never going to
+    accept in the first place — this function only ever WIDENS what already-passing rows
+    the decisive step gets to see, never the final answer.
+    """
+    terms = list(dict.fromkeys(text.split()))[:_SUPPLEMENTAL_TERM_CAP]
+    if not terms:
+        return []
+    per_term: List[Dict[str, str]] = []
+    for term in terms:
+        one: Dict[str, str] = {}
+        for source in _SUPPLEMENTAL_SOURCES:
+            for key, sku in source(conn, term):
+                one[key] = sku
+        per_term.append(one)
+    common = set(per_term[0])
+    for other in per_term[1:]:
+        common &= set(other)
+        if not common:
+            return []
+    return [(key, per_term[0][key]) for key in common]
 
 
 def _card_match_fields(card: master.Card) -> "match.MatchFields":
@@ -10453,16 +10541,15 @@ def do_search(query: str) -> dict:
     leaving the client to read `on_hand` twice — `app/src/CardLocations.tsx:headroom` is its
     reader and the arithmetic there is unchanged.
     """
+    # NFKC HAPPENS INSIDE `_require_query` NOW, NOT HERE (R2, round-4 Opus review,
+    # 2026-09-25; was S2, UX-173 amended). A full-width digit (`５４/１３２`) is a DIFFERENT
+    # codepoint than its ASCII form, and `store/db.py:_FTS_TOKENIZE`'s `unicode61`
+    # tokenizer does not NFKC-fold a query the way `match.fold_text`/`match.canonical_
+    # number` do — so the FTS5 candidate query built from the RAW text never matched the
+    # ASCII token the index holds. Normalizing BEFORE the length check (rather than after,
+    # here) closes the R2 bypass: a single codepoint can expand under NFKC, so checking
+    # length first let the 200-character cap be typed around with one repeated character.
     text = _require_query(query)
-    # NFKC FIRST, ONCE, FOR EVERY READER BELOW (S2, UX-173 amended, the Opus review,
-    # 2026-09-25): a full-width digit (`５４/１３２`) is a DIFFERENT codepoint than its ASCII
-    # form, and `store/db.py:_FTS_TOKENIZE`'s `unicode61` tokenizer does not NFKC-fold a
-    # query the way `match.fold_text`/`match.canonical_number` do — so the FTS5 candidate
-    # query built from the RAW text never matched the ASCII token the index holds.
-    # Normalizing here, before `_fts_query` splits it into terms and before `match_query`
-    # or `_match_rank` ever sees it, means every reader downstream agrees without each
-    # having to fold it again.
-    text = unicodedata.normalize("NFKC", text)
 
     inventory = Store().read().inventory
     places = _Places(inventory)
@@ -10481,22 +10568,18 @@ def do_search(query: str) -> dict:
                 (match_expr,),
             ):
                 hits.setdefault(str(key), sku)
-            # FOUR MORE CANDIDATE SOURCES, UNIONED (S2, UX-173 amended; F8, round-3 Opus
-            # review, 2026-09-25; MID-WORD, the owner's ruling, 2026-09-25): FTS5's own
+            # SUPPLEMENTAL CANDIDATES, UNIONED WITH THE BASE QUERY ABOVE (S2, UX-173
+            # amended; F8, F2, MID-WORD, R1, all the same day, 2026-09-25): FTS5's own
             # prefix index cannot answer a query naming the SECOND half of a number alone
             # (`/132`), one that only reaches a real token once a hyphen or an apostrophe
             # is folded out (`hooh`, `farfetchd`), a 3+ digit query missing MORE leading
             # zeros than it typed (`934` for a card stored as `0934`), or a MID-WORD
-            # fragment (`izard` for `Charizard`) — see each function's own docstring. All
-            # four are supersets exactly the way the FTS step already was;
+            # fragment (`izard` for `Charizard`). `_fts_supplemental_candidates` dedupes,
+            # bounds and — for a multi-term query — intersects across terms before ever
+            # reaching here; see its own docstring for the defect that made that
+            # necessary. A superset, like the base query already was;
             # `match.match_query`/`_match_rank` below still decide.
-            for key, sku in _fts_slash_candidates(conn, text):
-                hits.setdefault(key, sku)
-            for key, sku in _fts_fold_candidates(conn, text):
-                hits.setdefault(key, sku)
-            for key, sku in _fts_zero_pad_candidates(conn, text):
-                hits.setdefault(key, sku)
-            for key, sku in _fts_substring_candidates(conn, text):
+            for key, sku in _fts_supplemental_candidates(conn, text):
                 hits.setdefault(key, sku)
         finally:
             conn.close()
