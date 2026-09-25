@@ -1114,3 +1114,36 @@ test('an unmapped code falls back to the honest, hedged sentence', async ({ page
   )
   await expect(page.locator('.capture-halt-code')).toHaveText('a_code_this_roster_does_not_know')
 })
+
+/* F5, THE PR 2 INTEGRATION REVIEW: A DEGRADED PLACE CARRIES `box_total: 0`, AND THAT IS "NO
+ * COUNT", NEVER "AN EMPTY BOX". The server answers a pooled card's place, and a place whose
+ * position will not read, with `box_total: 0` beside `located: false` or a null label. The
+ * capture used to write that 0 onto the box row, so the next card read "1" in a box holding 9.
+ * The row keeps its last known count now. */
+test('a capture whose place is unlabeled never writes a zero count onto the box', async ({ page }) => {
+  const SOLD_BOX = { ...BOX, cards: 10, sold: 1, on_hand: 9, next_index: 11 }
+  await open(page, { boxes: [SOLD_BOX, BOX4], nextIndex: { '3': 11 } })
+  expect(await nextCardEverywhere(page)).toBe(10)
+
+  await page.route(/\/capture$/, (route) =>
+    route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        box: 3,
+        index: 11,
+        key: '3/11',
+        label: 'Box 3, Section 1, Card 11',
+        section: 1,
+        card: 11,
+        new_box: false,
+        created: true,
+        photo: '/tmp/3-11.jpg',
+        capture_id: null,
+        place: { box_total: 0, label: null, located: true },
+      }),
+    }),
+  )
+  await shootInto(page, 3, 11, 1)
+  expect(await nextCardEverywhere(page), 'the box row keeps its count, never "next card 1"').toBe(10)
+})

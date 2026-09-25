@@ -2397,7 +2397,9 @@ export function CaptureScreen() {
         // D58, R1d: the box's on-hand count after THIS capture, off the same response —
         // never a client increment, which would drift the moment the server refused a
         // replay or another device wrote into the same box.
-        patchOnHand(card.box, card.place.box_total)
+        // A POOLED OR UNLABELED PLACE CARRIES `box_total: 0` (the server's own degraded
+        // block): that is "no count", not "an empty box", so it never overwrites the row.
+        if (card.place.located !== false && card.place.label !== null) patchOnHand(card.box, card.place.box_total)
         setRevision((prev) => prev + 1)
         setFlash((prev) => prev + 1)
         setUndoNote(null)

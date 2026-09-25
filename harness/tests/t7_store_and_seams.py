@@ -2501,8 +2501,23 @@ def check_undo(checks: Checks) -> None:
             "three captures into box 3, and the newest has both a photo and a sidecar",
         )
 
+        def on_hand_in(box: int) -> int:
+            """Box `box`'s on-hand cards, counted off the store itself (F5, the PR 2
+            integration review): every record in the box that has not left it."""
+            return sum(
+                1
+                for card in Store().read().inventory.cards.values()
+                if card.box == box and card.state not in master.TERMINAL_STATES
+            )
+
         body = capture_server.do_delete_card(3, 3)
         checks.equal(body["deleted"], "3/3", "undo answers with the position it removed")
+        checks.equal(
+            body["on_hand"],
+            on_hand_in(3),
+            "and its on_hand is the box's own count after the undo (D58, R1d): the capture "
+            "screen writes this number straight onto the box row",
+        )
         checks.ok(
             Store().read().inventory.get("3/3") is None,
             "the RECORD is deleted, not tombstoned — there is no state between captured "
@@ -2542,6 +2557,11 @@ def check_undo(checks: Checks) -> None:
         second = capture_server.do_delete_card(3, 2)
         checks.equal(
             second["deleted"], "3/2", "a second undo walks back one more card, with no extra state"
+        )
+        checks.equal(
+            (body["on_hand"] - second["on_hand"], second["on_hand"]),
+            (1, on_hand_in(3)),
+            "and on_hand steps down by exactly the one card that left",
         )
         checks.equal(
             Store().read().inventory.next_index(3), 2, "and releases that index too"
@@ -2635,6 +2655,11 @@ def check_undo(checks: Checks) -> None:
         # Remedy three, the mid-box remove: deletes the identified card undo may not touch.
         # 3/3 is the top of its box, so the shift is empty — the remove route's floor case.
         gone = capture_server.do_remove_card(3, 3, {"capture_id": "undo-remedy-reshoot"})
+        checks.equal(
+            gone["on_hand"],
+            on_hand_in(3),
+            "remove answers the box's own on_hand count after the card left (D58, R1d)",
+        )
         checks.ok(
             gone["deleted"] == "3/3"
             and gone["shifted"] == 0
