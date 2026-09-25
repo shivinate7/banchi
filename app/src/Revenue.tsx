@@ -2,7 +2,7 @@ import { Fragment, useEffect, useId, useMemo, useState, type CSSProperties } fro
 
 import { describeFailure, getHoldingsValue, getOrders, getSoldPrices, type Failure, type SoldPricesLookup } from './server'
 import type { HoldingsRange, HoldingsTotal, HoldingsValuePayload, OrderLineWire, OrderRow } from './types'
-import { Button, EmptyState, Icon, IconButton, Notice, PageHeader, Pill, Segmented } from './kit'
+import { Button, EmptyState, Icon, IconButton, Money, Notice, PageHeader, Pill, Segmented } from './kit'
 import { money, moneyGrouped } from './money'
 import { saleDate } from './dates'
 import { sparkSegments } from './PriceHistory'
@@ -959,7 +959,9 @@ export function Revenue() {
       <section className="revenue-verdict">
         <p className="revenue-verdict-said">
           {'You grossed '}
-          <strong>{moneyGrouped(total)}</strong>
+          <strong>
+            <Money value={total} />
+          </strong>
           {` ${periodPhrase}, across ${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}.`}
         </p>
         <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>

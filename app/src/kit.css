@@ -808,6 +808,9 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   font-variant-numeric: tabular-nums;
   color: var(--bn-ink);
 }
+/* A money Stat (`money` prop) keeps D221's mono face: `.bn-stat-value` above sets the display
+   face at the same specificity as `.bn-money`, and sits later in this sheet, so it would win. */
+.bn-stat-value.bn-money { font-family: var(--bn-font-mono); }
 .bn-stat-label { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
 /* TWO SMALLER SIZES (S9): the tile shipped one ratio, 22:12, and two call sites hand-rolled

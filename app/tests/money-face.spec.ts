@@ -85,3 +85,16 @@ test('every visible dollar figure on every route is drawn in the mono face', asy
 
   expect(problems, problems.join('\n')).toEqual([])
 })
+
+/* THE KIT'S OWN `Stat`, WHICH NO SWEEP READS (the PR 2 screen pass, D221). `#/gallery` is out of
+ * the sweep (`routeExclusions.ts`), and no owner screen passes `Stat` a dollar figure today, so
+ * the one place a money `Stat` is drawn is the kit sheet. `.bn-stat-value` sets the display face,
+ * so a figure passed through `Stat` broke D221 by construction. `Stat`'s `money` prop takes the
+ * mono face; this reads the gallery's own "$184 to list" specimen through the same scan. */
+test('a dollar figure drawn through the kit Stat is in the mono face', async ({ page }) => {
+  await page.goto('/#/gallery')
+  const stat = page.locator('.bn-stat', { hasText: 'to list' }).first()
+  await stat.scrollIntoViewIfNeeded()
+  const face = await stat.locator('.bn-stat-value').evaluate((el) => getComputedStyle(el).fontFamily)
+  expect(face, `"$184 to list" drawn as "${face}"`).toContain('JetBrains Mono')
+})

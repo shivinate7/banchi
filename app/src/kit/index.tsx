@@ -747,10 +747,14 @@ export function Stat({
   value,
   label,
   size,
+  money,
   className,
 }: {
   readonly value: ReactNode
   readonly label: ReactNode
+  /** The value is a dollar figure: it takes `.bn-money`'s mono face (D221). `.bn-stat-value`
+   *  draws the display face, so without this a money `Stat` broke D221 by construction. */
+  readonly money?: boolean
   /** `'sm'` reads at Orders' own 14:11 (`.orders-index-figure`); `'xs'` reads at Inventory's
    *  own 11:11, un-bolded (`.browse-boxcell-count` beside `.browse-boxcell-meta`) (S9). The
    *  base size (omitted) is unchanged at 22:12. */
@@ -759,7 +763,7 @@ export function Stat({
 }) {
   return (
     <div className={['bn-stat', size ? `bn-stat-${size}` : '', className].filter(Boolean).join(' ')}>
-      <span className="bn-stat-value">{value}</span>
+      <span className={money ? 'bn-stat-value bn-money' : 'bn-stat-value'}>{value}</span>
       <span className="bn-stat-label">{label}</span>
     </div>
   )

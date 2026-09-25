@@ -1284,7 +1284,7 @@ export function Gallery() {
                 </div>
                 <div className="kit-row">
                   <Stat value="16" label="answered" />
-                  <Stat value="$184" label="to list" />
+                  <Stat value="$184" label="to list" money />
                   <Stat value="2" label="closed" />
                 </div>
               </Spec>

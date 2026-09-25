@@ -878,7 +878,7 @@
 .review-row-parked-label > span + span::before { content: '·'; margin: 0 4px; color: var(--bn-ink-4); }
 .review-row-main { display: flex; justify-content: space-between; align-items: baseline; gap: var(--bn-2); }
 .review-row-name { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.review-row-price { font-family: var(--bn-font-display); font-size: var(--bn-fs-md); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bn-ink); white-space: nowrap; }
+.review-row-price { font-size: var(--bn-fs-md); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bn-ink); white-space: nowrap; }
 .review-row-sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .review-row-position { white-space: nowrap; }
 /* The current card's place shows once, on the photo caption. The selected row keeps the

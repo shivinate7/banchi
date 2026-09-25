@@ -35,7 +35,7 @@ import {
   undoRetire,
   undoStandDown,
 } from './server'
-import { Button, EmptyState, Icon, IconButton, Kbd, Notice, Page, Pill, ReloadButton, Sheet } from './kit'
+import { Button, EmptyState, Icon, IconButton, Kbd, Money, Notice, Page, Pill, ReloadButton, Sheet } from './kit'
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
@@ -1950,7 +1950,12 @@ function Card({
             <>
               <span className="review-next-label">Next</span>
               <span className="review-next-name">{text(next.entry.read.name) ?? 'not identified'}</span>
-              <span className="review-next-price bn-tnum">{priceText(next.entry.market)}</span>
+              {/* A dollar figure is the kit's `Money` (D221, mono); "no market price" is words. */}
+              {priceOf(next.entry.market) === null ? (
+                <span className="review-next-price">{priceText(next.entry.market)}</span>
+              ) : (
+                <Money className="review-next-price" value={priceOf(next.entry.market)} />
+              )}
             </>
           )}
         </p>
@@ -2740,7 +2745,11 @@ function Waiting({
                 <span className="review-row-name" title={text(row.entry.read.name) ?? undefined}>
                   {text(row.entry.read.name) ?? 'not identified'}
                 </span>
-                <span className="review-row-price">{priceText(row.entry.market)}</span>
+                {priceOf(row.entry.market) === null ? (
+                  <span className="review-row-price">{priceText(row.entry.market)}</span>
+                ) : (
+                  <Money className="review-row-price" value={priceOf(row.entry.market)} />
+                )}
               </span>
               <span className="review-row-sub">
                 <span className="review-row-position">
