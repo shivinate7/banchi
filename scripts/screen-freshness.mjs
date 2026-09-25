@@ -226,6 +226,10 @@ const RECORDED = {
     // price-history archive, one range at a time. A plain read, same shape as
     // `getSoldPrices` above and never merged with it.
     'getHoldingsValue',
+    // `#/revenue`'s thumbnail lookup (D-sales-rows-by-sku): the first on-hand,
+    // photographed copy of each named SKU. A plain read, called on arrival like
+    // `getHoldingsValue` above rather than gated behind a press.
+    'getSkuPhotos',
   ],
   writes: [
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',

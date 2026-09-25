@@ -41,11 +41,6 @@
     "app/src/ProductHistory.tsx": {
       "R2-icon-only-button": "icons"
     },
-    "app/src/Revenue.tsx": {
-      "R1": "sales",
-      "R2-class": "sales",
-      "R2-date": "sales"
-    },
     "app/src/ReviewQueue.tsx": {
       "R2-dialog": "review",
       "R2-search": "review",
@@ -92,11 +87,6 @@
       "page": "b-pricing",
       "width": "b-pricing",
       "top": "b-pricing"
-    },
-    "/revenue": {
-      "page": "sales",
-      "width": "sales",
-      "top": "sales"
     },
     "/fulfillment": {
       "page": "fulfillment"

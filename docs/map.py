@@ -3547,7 +3547,7 @@ COMPONENTS = [
                                 "D86", "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
                                 "D134", "D159", "D165", "D167", "D168", "D174", "D189", "D192",
                                 "D193", "D203", "D210", "D225", "D227", "D236", "D252", "D264",
-                                "D273"],
+                                "D273", "D-sales-rows-by-sku"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -5294,7 +5294,7 @@ COMPONENTS = [
                                 "D159", "D165", "D166", "D168", "D172", "D174", "D183", "D189",
                                 "D191", "D192", "D193", "D196", "D203", "D212", "D213", "D219",
                                 "D225", "D227", "D251", "D252", "D259", "D262", "D264", "D265",
-                                "D268", "D273", "D-sealed-boxes-removed"],
+                                "D268", "D273", "D-sealed-boxes-removed", "D-sales-rows-by-sku"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -6314,7 +6314,8 @@ COMPONENTS = [
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
                                               "D225", "D227", "D236", "D252", "D264", "D268",
-                                              "D273", "D-sealed-boxes-removed"]},
+                                              "D273", "D-sealed-boxes-removed",
+                                              "D-sales-rows-by-sku"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -8159,20 +8160,26 @@ COMPONENTS = [
                                  "governed_by": ["D40", "D50", "D61", "D69", "D117", "D218",
                                                  "D-ship-lanes-collapse"]},
             "src/Revenue.tsx": {"does": "`#/revenue` (Sales): the gross-revenue "
-                                        "retrospective. AN ELEVENTH NAV ROW ON PURPOSE — tried "
-                                        "off-nav on 2026-09-19, reversed the same day on the "
-                                        "owner's own word, having been shown the phone-drawer "
-                                        "cost `brand.spec.ts` measures (see "
-                                        "D214). A pure reshaping of "
-                                        "`GET /orders`, "
-                                        "already fetched by `#/orders` — no new server route, "
-                                        "no change to order parsing or the ledger. Three "
-                                        "tiers behind one period control (3 months, 6 months, "
-                                        "this year, all time): a verdict sentence with the "
-                                        "prior period's own figure beneath it, a month strip "
-                                        "with a sparkline (`PriceHistory.tsx:sparkSegments`, "
-                                        "unmodified), and a product table by name, searchable "
-                                        "(`SearchField`). Canceled orders are dropped "
+                                        "retrospective, built on `<Page>` and Direction B "
+                                        "(D-sales-rows-by-sku, RULINGS.md 'Sales'): a summary "
+                                        "band (gross, month bars, 'On the shelf' loading on "
+                                        "arrival), a podium of the top 3 PRINTINGS as photo "
+                                        "tiles plus a foil/rarity mix tile, bar rows for "
+                                        "places 4-10, then the full sortable, drillable "
+                                        "table. A pure reshaping of `GET /orders`, already "
+                                        "fetched by `#/orders` — no change to order parsing "
+                                        "or the ledger, except a new plain read: "
+                                        "`GET /skus/photos` (D89's own gap — a sold card's "
+                                        "photograph is usually reclaimed, so a row's "
+                                        "thumbnail is ANOTHER copy of the same SKU). "
+                                        "`products` GROUPS BY SKU, NOT NAME "
+                                        "(D-sales-rows-by-sku): a foil and a normal printing "
+                                        "sharing a display name draw as two separate rows. "
+                                        "`salesOf`'s own "
+                                        "`parsePrice` treats `unit_price: \"\"` the same as "
+                                        "`null` — TCGplayer's own way of saying no price — so "
+                                        "an unpriced sale draws 'no price' rather than a false "
+                                        "$0.00 (finding 1). Canceled orders are dropped "
                                         "silently by `isCanceled`, which folds and compares "
                                         "the wire's own `status` string against ONE word — "
                                         "narrower than `store/orders.py:TERMINAL_STATUSES`, "
@@ -8188,20 +8195,22 @@ COMPONENTS = [
                                         "the in-progress bucket is marked, and period, sort, "
                                         "search and the active bucket all round-trip through "
                                         "the URL.",
-                                "governed_by": ["D50", "D62", "D69", "D86", "D103", "D105", "D118",
-                                                "D159", "D189", "D193", "D194", "D201", "D214",
-                                                "D217", "D219", "D225", "D236"]},
-            "src/Revenue.css": {"does": "the verdict, the month strip and the product table's "
-                                        "own layout, `--bn-*` only. The sparkline's polyline "
-                                        "reuses `--bn-accent` rather than naming a color; the "
-                                        "search field wrapper is sized like every other "
-                                        "screen's own `-search` class (Graveyard, Codes). "
-                                        "Since `D217`: sortable headers, a "
-                                        "cross-filterable month row, a drill-down's nested "
-                                        "table, and a 390px-only wrap on this screen's own "
-                                        "`Segmented` instance, scoped here rather than to the "
-                                        "shared kit rule.",
-                                "governed_by": ["D50", "D94", "D217"]},
+                                "governed_by": ["D50", "D62", "D69", "D86", "D89", "D103", "D105",
+                                                "D118", "D159", "D189", "D193", "D194", "D201",
+                                                "D214", "D217", "D219", "D225", "D236",
+                                                "D-sales-rows-by-sku"]},
+            "src/Revenue.css": {"does": "the summary band, podium, mix tile, board rows and "
+                                        "product table's own layout, `--bn-*` only "
+                                        "(D-sales-rows-by-sku's Direction B). The month bars "
+                                        "and the shelf spark reuse `--bn-accent` rather than "
+                                        "naming a color; the search field wrapper is sized "
+                                        "like every other screen's own `-search` class "
+                                        "(Graveyard, Codes). Since `D217`: sortable headers, "
+                                        "a cross-filterable month column, a drill-down's "
+                                        "nested table, and a 390px-only wrap on this screen's "
+                                        "own `Segmented` instance, scoped here rather than to "
+                                        "the shared kit rule.",
+                                "governed_by": ["D50", "D94", "D217", "D236", "D-sales-rows-by-sku"]},
             "src/RunFiles.tsx": {"does": "a run's files, as downloads — extracted from RunPanel on "
                                        "2026-08-30 (D54) so two screens can draw them. The `only` "
                                        "prop is the split: the import CSVs go to #/pricing with the "
@@ -8396,7 +8405,11 @@ COMPONENTS = [
                                      "ago`, `yesterday`, then the absolute form past a week) and "
                                      "`absoluteDate` (`Sep 4, 2026`, no leading zero). "
                                      "`saleDate`, the older padded form, stays until its two "
-                                     "callers move. "
+                                     "callers move. `monthOf`/`weekOf` (D-sales-rows-by-sku) "
+                                     "are the bucket-label formats `#/revenue`'s month strip "
+                                     "needs and the other two do not cover ('Sep 2026', "
+                                     "'Aug 28–Sep 3') — the ONE place either is built, so "
+                                     "`kit-adoption.mjs`'s R2-date rule stays satisfied. "
                                      "Extracted 2026-09-20, a UX review follow-up: Revenue.tsx "
                                      "had padded its own 'Last sold' column against a jittering "
                                      "un-padded `toLocaleDateString()`, and ProductHistory.tsx "
@@ -8405,7 +8418,8 @@ COMPONENTS = [
                                      "drift money.ts's own header names as the reason a second "
                                      "copy is never the fix. Both month and day are asked for "
                                      "`2-digit`, so `Sep 09, 2026` and `Sep 13, 2026` take the "
-                                     "same width."},
+                                     "same width.",
+                             "governed_by": ["D-sales-rows-by-sku"]},
             "src/pricingSource.ts": {"does": "WHERE `#/pricing`'s ROWS CAME FROM, AND WHAT MAY "
                                              "BE ASKED ABOUT THEM (D103). One type, two "
                                              "builders, the hash parsing, and the adapter that "
@@ -9147,7 +9161,7 @@ COMPONENTS = [
                         "exercised by every spec that imports it.",
                 "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
                                 "D124", "D125", "D134", "D174", "D192", "D276", "D259",
-                                "D273"]},
+                                "D273", "D-sales-rows-by-sku"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -9438,7 +9452,7 @@ COMPONENTS = [
                         "in its own header once a fifth period option existed. Not a harness "
                         "test; `make design-check` runs it.",
                 "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201", "D214",
-                                "D217", "D225"],
+                                "D217", "D225", "D-sales-rows-by-sku"],
             },
             "tests/demo-coverage.spec.ts": {
                 "does": "the BUILT public demo (`dist-demo/`), served on this checkout's own "
@@ -9699,8 +9713,8 @@ COMPONENTS = [
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
                 "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D93", "D115",
-                                "D118", "D125", "D136", "D193", "D212", "D218", "D259",
-                                "D-icon-buttons"],
+                                "D118", "D125", "D136", "D193", "D212", "D218",
+                                "D259", "D-icon-buttons"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

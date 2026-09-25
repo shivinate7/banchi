@@ -43,6 +43,8 @@
     POST   /boxes/<box>/listings/release   give up what this box's copies could account for,
                                            on the operator's word (D34)
     GET    /search?q=<text>                find a card by name, number, SKU, set hint or note
+    GET    /skus/photos?sku=<s>&sku=<s>    the first on-hand, photographed copy of each named
+                                           SKU — `#/revenue`'s thumbnail lookup (D89's own gap)
     GET    /games                          the per-game registry, as `pipeline/games.py` authors it
     GET    /codes                          the code ledger: counts, tiers, every code (C8)
     GET    /codes/lots                     every lot built so far, newest first
@@ -10782,6 +10784,54 @@ def _copy_row(places: _Places, card: master.Card) -> dict:
     }
 
 
+#: Round 2 review finding: the client's own `PHOTO_LOOKUP_CAP` (`Revenue.tsx`) bounded the
+#: request it SENDS, but nothing bounded what this route would ANSWER for — a hand-typed
+#: query string could ask for any number of SKUs in one call. No shared constant reaches
+#: across the TS/Python boundary here (`ORDER_NAMES_LIMIT`'s own precedent has the same
+#: gap, one bound per side), so this is `Revenue.tsx:PHOTO_LOOKUP_CAP`'s value, kept in
+#: step by hand.
+SKUS_PHOTOS_LIMIT = 40
+
+
+def do_skus_photos(skus: Sequence[str]) -> dict:
+    """The first on-hand copy WITH a photograph, for each named SKU — `#/revenue`'s
+    thumbnail lookup (D-sales-rows-by-sku). A sold card's own photograph is usually gone
+    (D89 reclaims it on purpose), so a sales row asks for ANOTHER copy of the same SKU
+    still on the shelf. `Inventory.copies_on_hand`'s own box-walk order decides which copy
+    that is; the first one carrying a real photograph wins, using the same `photo_for`
+    predicate `_copy_row` already applies rather than a second copy of it. A SKU with no
+    photographed copy on hand is simply ABSENT from the answer, never a guess and never a
+    stand-in image — the client's own fallback tile covers that case. Free and read-only,
+    like `do_search` above: no lock, one bounded pass per requested SKU.
+
+    REFUSES OVER `SKUS_PHOTOS_LIMIT` (round 2 review): the client's own cap bounds what it
+    SENDS, never what this route would do with a longer list a different caller sent.
+    """
+    if len(skus) > SKUS_PHOTOS_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_skus",
+            f"{len(skus)} SKUs in one call, and this route answers at most "
+            f"{SKUS_PHOTOS_LIMIT}. Ask in smaller batches.",
+        )
+    inventory = Store().read().inventory
+    out: Dict[str, dict] = {}
+    for sku in skus:
+        if not sku or sku in out:
+            continue
+        for card in inventory.copies_on_hand(sku):
+            path = photo_for(inventory, card)
+            if path is None:
+                continue
+            out[sku] = {
+                "box": card.box,
+                "index": card.index,
+                "cid": card.cid if photos.is_photo_cid(card.cid) else None,
+            }
+            break
+    return {"photos": out}
+
+
 def do_search(query: str) -> dict:
     """Find a card by name, number, SKU or set hint. Grouped by SKU, D7's map made visible.
 
@@ -14710,6 +14760,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # the two are one refusal, and the code says which to send next.
                 query = parse_qs(parsed.query, keep_blank_values=True).get("q") or [""]
                 return self._json(HTTPStatus.OK, do_search(query[0]))
+            if path == "/skus/photos":
+                # `#/revenue`'s thumbnail lookup — see `do_skus_photos`'s own header.
+                asked = parse_qs(parsed.query, keep_blank_values=True).get("sku") or []
+                return self._json(HTTPStatus.OK, do_skus_photos(asked))
             # D34's preflight. Matched BEFORE `_BOXES_ITEM_RE`'s explainer below, which
             # would otherwise answer a real route with "there is no GET /boxes/<n>" — that
             # regex is anchored one segment shorter, so it cannot match this path, and the
