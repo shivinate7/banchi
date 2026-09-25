@@ -3144,3 +3144,69 @@ test('the last sale leaves the buyer on screen, says all sold, and points to Shi
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Ada Lovelace')
 })
+
+/* ------------------------------------------------------------ the stand-down's own guard (UX-165, review) */
+
+/** Today and tomorrow as the browser's `<input type="date">` reads them: the UTC day, as the
+ *  panel and the server compare it. */
+function utcDay(offsetDays: number): string {
+  return new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10)
+}
+
+test('a cutoff after today refuses the press, so an order placed today is never closed unnamed', async ({ page }) => {
+  /* THE HOLE THE REVIEW FOUND: the preview dropped orders placed today, while a date typed past
+     the field's max was still sent. The server takes any cutoff, so a same-day Ready to Ship
+     order would have closed with no name drawn. */
+  const today = `${utcDay(0)}T01:00:00+00:00`
+  const both = payloadOf(
+    [
+      order({ key: 'TCGplayer:A-1', number: 'A-1', buyer: 'Old Buyer', status: 'Completed - Paid', recorded: 0, placed_at: '2020-01-01T00:00:00+00:00' }),
+      order({ key: 'TCGplayer:A-2', number: 'A-2', buyer: 'Today Buyer', status: 'Ready to Ship', recorded: 0, placed_at: today }),
+    ],
+    [
+      { key: 'TCGplayer:A-1', number: 'A-1', complete: false, outstanding: 1, lines: [line()] },
+      { key: 'TCGplayer:A-2', number: 'A-2', complete: false, outstanding: 1, lines: [line()] },
+    ],
+  )
+  const wire = await open(page, { orders: both })
+  await openStore(page)
+  const panel = page.locator('.orders-reconcile')
+  await panel.getByLabel('Placed before').fill(utcDay(1))
+
+  /* The preview counts from the cutoff alone, so the order placed today is named. */
+  await expect(panel.locator('.orders-reconcile-live')).toContainText('Today Buyer')
+  const press = panel.getByRole('button', { name: /^Stand down/ })
+  await expect(press).toBeDisabled()
+  await expect(panel).toContainText('Pick a day on or before today.')
+  await press.click({ force: true })
+  expect(wire.filter((one) => one.path === '/orders/reconcile-backlog')).toEqual([])
+})
+
+test('an empty cutoff refuses the press', async ({ page }) => {
+  const old = payloadOf(
+    [order({ key: 'TCGplayer:A-1', number: 'A-1', status: 'Completed - Paid', recorded: 0, placed_at: '2020-01-01T00:00:00+00:00' })],
+    [{ key: 'TCGplayer:A-1', number: 'A-1', complete: false, outstanding: 1, lines: [line()] }],
+  )
+  const wire = await open(page, { orders: old })
+  await openStore(page)
+  const panel = page.locator('.orders-reconcile')
+  await panel.getByLabel('Placed before').fill('')
+  const press = panel.getByRole('button', { name: /^Stand down/ })
+  await expect(press).toBeDisabled()
+  await press.click({ force: true })
+  expect(wire.filter((one) => one.path === '/orders/reconcile-backlog')).toEqual([])
+})
+
+test('a typed ?buyer= selects that buyer, and Back selects the one before (FLT-11)', async ({ page }) => {
+  await open(page, { orders: threeBuyerPayload() })
+  await page.evaluate(() => {
+    window.location.hash = '#/orders?buyer=name%3Abob'
+  })
+  await expect(page.locator('.orders-panel-name')).toHaveText('Bob')
+  await page.evaluate(() => {
+    window.location.hash = '#/orders?buyer=name%3Aalice'
+  })
+  await expect(page.locator('.orders-panel-name')).toHaveText('Alice')
+  await page.goBack()
+  await expect(page.locator('.orders-panel-name')).toHaveText('Bob')
+})

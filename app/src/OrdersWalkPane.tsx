@@ -21,6 +21,7 @@ import { PhotoPanel, type Row } from './CardHero'
 import { Overlay } from './InventoryOverlay'
 import { Button, Icon, Loading, Location, Notice, Pill } from './kit'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
+import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
 import { describeFailure, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
@@ -508,7 +509,7 @@ function takeLinesOf(rows: readonly WalkRow[]): WalkTakeLine[] {
 export function takeBuyers(take: WalkPlanTake): string {
   const names: string[] = []
   for (const ref of take.for) {
-    const name = ref.buyer?.trim() || 'No name'
+    const name = orderBuyerLabel(ref)
     if (!names.includes(name)) names.push(name)
   }
   return names.join(', ')

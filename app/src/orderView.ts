@@ -148,9 +148,20 @@ export function passesHideUnknown(
  *  so `orders[0]` is the only order. THE TAIL IS THE LAST 5 CHARACTERS of its id, or the whole id
  *  when it is shorter. */
 export function unnamedBuyerLabel(group: BuyerGroup): string {
-  const id = group.orders[0]?.number ?? group.number ?? ''
-  if (id === '') return 'Buyer with no name'
-  return `Buyer on order ${id.length > 5 ? `…${id.slice(-5)}` : id}`
+  return unnamedOrderLabel(group.orders[0]?.number ?? group.number ?? '')
+}
+
+/** The same label, for one order's number. */
+export function unnamedOrderLabel(number: string): string {
+  if (number === '') return 'Buyer with no name'
+  return `Buyer on order ${number.length > 5 ? `…${number.slice(-5)}` : number}`
+}
+
+/** What the buyer of ONE order is called: the feed's name, or the same unnamed label the list
+ *  draws for that buyer. One buyer has one name on every part of the screen. */
+export function orderBuyerLabel(order: { readonly buyer: string | null; readonly number: string }): string {
+  const name = order.buyer?.trim() ?? ''
+  return name === '' ? unnamedOrderLabel(order.number) : name
 }
 
 /** What a buyer is called on screen: the feed's own name, or the unnamed label. */

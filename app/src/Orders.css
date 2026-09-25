@@ -154,13 +154,9 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-index-row[aria-current='true']::before { opacity: 1; scale: 1 1; }
 .orders-index-row[aria-current='true'] .orders-index-number { color: var(--bn-accent); }
 .orders-index-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.orders-index-number {
-  font-size: var(--bn-fs-md);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* A NAME WRAPS, never an ellipsis: "Buyer on order …00012" cut to "Buyer on order …0…" named
+   nobody (review, UX-268). */
+.orders-index-number { font-size: var(--bn-fs-md); font-weight: 600; overflow-wrap: anywhere; }
 .orders-index-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .orders-index-count { flex: none; }
 .orders-index-figure { font-size: var(--bn-fs-xs); font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }

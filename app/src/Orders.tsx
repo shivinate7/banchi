@@ -36,6 +36,7 @@ import { sayPlace } from './position'
 import { buyerKeyOf, groupBuyers, groupForOrderKey, type BuyerGroup } from './orderBuyers'
 import {
   buyerLabel,
+  orderBuyerLabel,
   groupHasUnseenLine,
   groupIsReadyToShip,
   passesHideUnknown,
@@ -968,32 +969,11 @@ type CloseLineHandler = (order: OrderRow, line: ResolvedLine, reason: OrderClose
  *  `?buyer=`. Both are read, `?buyer=` first, and a link naming one order is resolved
  *  through `groupForOrderKey` to whichever group holds it (D193). */
 const ORDER_PARAM = 'order'
-/** THE OUTBOUND LINK — `#/orders?buyer=<group key>`, this screen's own selection, read and
- *  written together. */
+/** THE SELECTION — `#/orders?buyer=<group key>`, read live through the view state, so Back and a
+ *  typed URL both select (FLT-11). Written with `replaceState` (`patchViewQuery`), so stepping
+ *  through twenty buyers leaves one history entry. */
 const BUYER_PARAM = 'buyer'
 
-function hashQuery(): URLSearchParams | null {
-  const hash = window.location.hash
-  const at = hash.indexOf('?')
-  if (at === -1) return null
-  return new URLSearchParams(hash.slice(at + 1))
-}
-
-function orderParam(): string | null {
-  return hashQuery()?.get(ORDER_PARAM) ?? null
-}
-
-function buyerParam(): string | null {
-  return hashQuery()?.get(BUYER_PARAM) ?? null
-}
-
-/** `#/orders?buyer=<key>`, written with `replaceState` so stepping through twenty buyers leaves
- *  one history entry and fires no `hashchange` — the shell's router keys on the path alone. */
-function mirrorBuyerParam(key: string): void {
-  const path = window.location.hash.replace(/^#/, '').split('?')[0] ?? ''
-  if (path !== '/orders') return
-  patchViewQuery({ [BUYER_PARAM]: key, [ORDER_PARAM]: null })
-}
 
 /* ---- the copy map: where a card's copies are, ranked by density ---------------------------- */
 
@@ -2173,7 +2153,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         onRereadStore={() => void rereadStore()}
         failure={failure}
         busy={busy}
-        selected={hub.selected}
         emptyWell={wellOf(false)}
         /* The empty state draws its own primary Fetch, so it needs the narrowing beside it —
            the populated path gets both inside `wellOf(true)`, and only one of the two paths
@@ -2286,8 +2265,8 @@ function BacklogPrompt({
         {candidates.length} open {plural(candidates.length, 'order is', 'orders are')} already shipped
       </h3>
       <p>
-        TCGplayer says {joinPhrases(statuses.map((status) => `“${status}”`))}, but no copy was recorded here. Standing
-        down marks nothing sold.
+        TCGplayer says {joinPhrases(statuses.map((status) => `“${status}”`))}, and here they still owe copies. Standing down
+        marks nothing sold.
       </p>
       <div className="orders-standdown-row">
         <Button busy={busyHere} disabled={busy !== null} onClick={() => onStandDown(candidates, 'shipped_elsewhere')}>
@@ -2321,14 +2300,21 @@ function ReconcileBacklogPanel({
   readonly onPress: (cutoff: string) => void
 }) {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
-  /* Every order the rule could reach at today's cutoff: open, nothing recorded, a placed date. */
+  /* EVERY ORDER THE RULE COULD REACH AT ANY CUTOFF: open, nothing recorded, a placed date. There
+     is NO cut at today here. The review found that one: the preview dropped orders placed today,
+     while a date typed past the field's max was still sent, and the server takes any cutoff. So
+     the preview is computed from the cutoff alone, and a cutoff after today refuses the press. */
   const pool = useMemo(
-    () => orders.filter((row) => row.open && row.recorded === 0 && row.placed_at !== null && dayOf(row) < today),
-    [orders, today],
+    () => orders.filter((row) => row.open && row.recorded === 0 && row.placed_at !== null),
+    [orders],
   )
-  const safe = useMemo(() => pool.filter(isReadyToShip).map(dayOf).sort()[0] ?? today, [pool, today])
+  const safe = useMemo(() => {
+    const live = pool.filter(isReadyToShip).map(dayOf).sort()[0]
+    return live === undefined || live > today ? today : live
+  }, [pool, today])
   const [picked, setPicked] = useState<string | null>(null)
   const cutoff = picked ?? safe
+  const valid = /^\d{4}-\d{2}-\d{2}$/.test(cutoff) && cutoff <= today
   const fieldId = useId()
   const candidates = useMemo(
     () => pool.filter((row) => dayOf(row) < cutoff).sort((a, b) => dayOf(a).localeCompare(dayOf(b))),
@@ -2344,7 +2330,8 @@ function ReconcileBacklogPanel({
     return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
   }, [candidates])
 
-  if (pool.length === 0) return null
+  /* Drawn only while there is a backlog at today's cutoff: an order placed before today. */
+  if (!pool.some((row) => dayOf(row) < today)) return null
   const busyHere = busy === 'reconcile'
   const oldest = candidates[0]
   const newest = candidates[candidates.length - 1]
@@ -2365,11 +2352,14 @@ function ReconcileBacklogPanel({
           type="date"
           value={cutoff}
           max={today}
-          onChange={(event) => setPicked(event.target.value === '' ? null : event.target.value)}
+          onChange={(event) => setPicked(event.target.value)}
         />
       </div>
+      {!valid ? (
+        <p className="orders-reconcile-span">Pick a day on or before today.</p>
+      ) : null}
       {oldest === undefined || newest === undefined ? (
-        <p className="orders-reconcile-span">No order with nothing recorded was placed before {dayLabel(cutoff)}.</p>
+        valid ? <p className="orders-reconcile-span">No order with nothing recorded was placed before {dayLabel(cutoff)}.</p> : null
       ) : (
         <>
           <p className="orders-reconcile-span">
@@ -2387,7 +2377,7 @@ function ReconcileBacklogPanel({
               <ul>
                 {live.map((row) => (
                   <li key={row.key}>
-                    {row.buyer ?? 'No name'}, placed {dayLabel(dayOf(row))}
+                    {orderBuyerLabel(row)}, placed {dayLabel(dayOf(row))}
                   </li>
                 ))}
               </ul>
@@ -2399,8 +2389,10 @@ function ReconcileBacklogPanel({
         <Button
           variant={live.length > 0 ? 'danger' : 'default'}
           busy={busyHere}
-          disabled={busy !== null || candidates.length === 0}
-          onClick={() => onPress(cutoff)}
+          disabled={busy !== null || !valid || candidates.length === 0}
+          onClick={() => {
+            if (valid) onPress(cutoff)
+          }}
         >
           Stand down {candidates.length} {plural(candidates.length, 'order', 'orders')}
         </Button>
@@ -2433,7 +2425,6 @@ function PullStage({
   onRereadStore,
   failure,
   busy,
-  selected,
   emptyWell,
   receipt,
   onPull,
@@ -2458,7 +2449,6 @@ function PullStage({
   readonly onRereadStore: () => void
   readonly failure: Failure | null
   readonly busy: string | null
-  readonly selected: string | null
   readonly emptyWell: ReactNode
   /** The last fetch's receipt, or null before one has been pressed. */
   readonly receipt: ReactNode
@@ -2802,6 +2792,10 @@ function PullStage({
     })
   }, [tickableKeys])
 
+  const [buyerQ] = useViewParam(BUYER_PARAM)
+  const [orderQ] = useViewParam(ORDER_PARAM)
+  const selected = buyerQ !== '' ? buyerQ : orderQ !== '' ? (groupForOrderKey(groups, orderQ)?.key ?? null) : null
+
   /* THE SELECTION IS ALWAYS A ROW THE LIST DRAWS (UX-235): a filter that hides the selected
      buyer moves the selection to the first row shown, never to a buyer the list hides. */
   const selectedKey =
@@ -2850,49 +2844,20 @@ function PullStage({
 
   const walk = useOrderWalk({ walkedKeys, ordersByKey, rawCards, onPull: onWalkPull, onUndo: onWalkUndo })
 
-  /* THE HASH NAMES A BUYER, OR — FOR AN OLD LINK — AN ORDER RESOLVED TO ITS BUYER, ONCE THE
-     LEDGER HAS ACTUALLY ANSWERED; from then on the store leads and the hash follows. `?buyer=`
-     is read first because it is this screen's own current spelling; `?order=` is kept only so
-     a link written before this change still lands somewhere real.
-     A MOUNT-ONLY EFFECT CANNOT DO THIS: `payload` is still null on the first render, so
-     `groups` is empty and `groupForOrderKey` can never resolve anything — the read has to wait
-     for the read it is reading. `linkHandled` makes it run once in EFFECT, the first time
-     `groups` holds something (or `?buyer=`, which needs no group lookup at all and is applied
-     the moment the effect first runs). */
-  const linkHandled = useRef(false)
-  /* THE SKIP LINK'S LANDING SPOT (interaction review, "32 tab stops"). A Tab-only pass over
-   *  the wide layout has to cross the whole filter bar and buyer list before it reaches the
-   *  walk, which sits after all of it in DOM order. The shell's own jump grammar (`,` then a letter, `App.tsx`'s `SHORTCUTS`) moves
-   *  between SCREENS, not between regions of one screen, so it does not reach this; a
-   *  tabindex change on every rail control was rejected as the bandaid it would be, since it
-   *  would not shorten the rail, only make it feel arbitrary to reorder. A skip link — focus a
-   *  landmark that is already there — is the standard fix for exactly this complaint and needs
-   *  no new keybinding to document in the reference sheet, because it rides the browser's own
-   *  Tab order rather than adding one. */
+  /* THE SKIP LINK'S LANDING SPOT (interaction review, "32 tab stops"). A Tab-only pass has to
+   *  cross the filter bar and the buyer list before it reaches the walk. A skip link, one press
+   *  that focuses a landmark already there, is the standard fix and needs no new key. */
   const walkRef = useRef<HTMLElement>(null)
+  /* A LINK TO A BUYER WITH NOTHING OPEN OPENS THE DONE VIEW, so the list draws the row the link
+     names (UX-235). Once per link value: a filter picked after it is the owner's to keep. */
+  const doneLinkHandled = useRef<string | null>(null)
   useEffect(() => {
-    if (linkHandled.current) return
-    const buyerWanted = buyerParam()
-    const orderWanted = buyerWanted === null ? orderParam() : null
-    if (buyerWanted === null && orderWanted === null) {
-      linkHandled.current = true
-      return
-    }
-    if (allGroups.length === 0) return // wait for the read this link is about
-    linkHandled.current = true
-    const group =
-      buyerWanted !== null
-        ? (allGroups.find((one) => one.key === buyerWanted) ?? null)
-        : groupForOrderKey(groups, orderWanted ?? '')
-    if (group === null) return
-    setHub({ selected: group.key })
-    /* A LINK TO A BUYER WITH NOTHING OPEN LANDS ON THE DONE VIEW, so the list draws the row the
-       link names (UX-235: the selection is always a row the list shows). */
-    if (group.open.length === 0) patchViewQuery({ show: 'done' })
-  }, [groups, allGroups])
-  useEffect(() => {
-    if (selectedKey !== null) mirrorBuyerParam(selectedKey)
-  }, [selectedKey])
+    if (selected === null || doneLinkHandled.current === selected) return
+    const group = allGroups.find((one) => one.key === selected)
+    if (group === undefined) return // wait for the read this link is about
+    doneLinkHandled.current = selected
+    if (group.open.length === 0 && show !== 'done' && !finished.has(group.key)) patchViewQuery({ show: 'done' })
+  }, [selected, allGroups, show, finished])
 
   /* THE ARROWS STEP THE LIST OF BUYERS where there is a list beside the detail. Never with a
    *  modifier (Cmd-arrow is the shell's, D51) and never out of a field.
@@ -2913,7 +2878,7 @@ function PullStage({
       const next = shownGroups[Math.min(shownGroups.length - 1, Math.max(0, (at === -1 ? 0 : at) + step))]
       if (next === undefined) return
       event.preventDefault()
-      setHub({ selected: next.key })
+      patchViewQuery({ [BUYER_PARAM]: next.key, [ORDER_PARAM]: null })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -2936,7 +2901,7 @@ function PullStage({
   }, [walk])
 
   const select = (key: string) => {
-    setHub({ selected: key })
+    patchViewQuery({ [BUYER_PARAM]: key, [ORDER_PARAM]: null })
     setBuyersOpen(false)
   }
 
@@ -4227,7 +4192,7 @@ function PickLine({
           <button
             type="button"
             className="orders-pick-order"
-            onClick={() => setHub({ selected: order.key })}
+            onClick={() => patchViewQuery({ [ORDER_PARAM]: order.key, [BUYER_PARAM]: null })}
             title={`Show order ${order.number}`}
           >
             <Icon name="cart" size={11} />

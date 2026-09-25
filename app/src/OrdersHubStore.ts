@@ -27,9 +27,6 @@ export type HubState = {
    *  stops the well flashing open before the ledger has said whether it is empty. */
   readonly arriving: boolean | null
   readonly paste: string
-  /** The order the Pull stage has open — an `OrderRow.key`. `null` means the first one shown.
-   *  Mirrored into the hash as `#/orders?order=<key>` so a selection is linkable. */
-  readonly selected: string | null
   readonly batch: ShippingBatch | null
   readonly lanes: ReadonlySet<ShippingLane>
   /** The server-restart notice for the Ship stage. */
@@ -53,7 +50,6 @@ let state: HubState = {
   payload: null,
   arriving: null,
   paste: '',
-  selected: null,
   batch: null,
   lanes: new Set(SHIP_LANES),
   gone: null,
