@@ -3125,7 +3125,7 @@ test('the operations are rows on one edge, and the delete is the only bordered o
       return { dx: Math.abs(own.x - held.x), dw: Math.abs(own.width - held.width) }
     }),
   )
-  expect(measures.length).toBe(6)
+  expect(measures.length).toBe(5)
   for (const measure of measures) {
     expect(measure.dx).toBeLessThanOrEqual(1)
     expect(measure.dw).toBeLessThanOrEqual(1)
@@ -5234,7 +5234,7 @@ test("the box's census and its forecast are told apart, and the fill says which 
   await expect(page.locator('.boxops-census-cell', { hasText: 'Next capture' })).toHaveCount(1)
 
   /* A box has no seal (`D-sealed-boxes-removed`), so no census figure can be a frozen one. */
-  await expect(page.locator('.boxops-census-qual')).not.toHaveText(/sealed/)
+  expect((await page.locator('.boxops-census-qual').allInnerTexts()).join(' ')).not.toMatch(/sealed/)
 
   /* And no figure wraps away from its own label at either width. */
   for (const width of [1440, 1280]) {
@@ -5460,13 +5460,10 @@ test('the box fill is qualified once, on the identity line', async ({ page }) =>
   await expect(page.locator('.boxops-census-qual')).toHaveCount(0)
   await expect(censusValue(page, 'Fill')).toHaveText('7')
 
-  /* AND IT IS QUALIFIED ONCE, IN THE SHEET THAT DRAWS THE FILL — whose head says whether the lid
-     is on. That is what D20 asks for: a reader can tell an open box's fill-so-far from a sealed
-     box's frozen capacity without going to look, and the census does not annotate it twice. The
-     rail's box card draws a state pill only for a sealed box since UX-269, so the sheet's head
-     is where an open box says so. */
+  /* A box has no lid (`D-sealed-boxes-removed`), so the sheet's head names no lid state at all:
+     every fill is a fill so far. */
   const head = await page.locator('.boxops-sheet .inv-sheet-head').innerText()
-  expect(head.toLowerCase()).toMatch(/\bopen\b|\bsealed\b/)
+  expect(head.toLowerCase()).not.toMatch(/\bopen\b|\bsealed\b/)
 })
 
 test('the walk keeps a floor when the box editors open beneath it', async ({ page }) => {
@@ -7762,55 +7759,5 @@ test('D218: this lane\'s own facts draw the separator, never type it', async ({ 
   await page.getByRole('button', { name: /^Name sections/ }).click()
   const sheet = page.locator('.boxops-sheet')
   expect(await sheet.innerText()).not.toMatch(/[·•]/)
-})
-
-/* THE LOCK'S OWN HORIZONTAL FORM OF D118. `.browse-boxcell`'s grid is `minmax(0, 1fr) auto auto
- * auto`, and `.browse-boxcell-lock` used to be a grid item ONLY on a sealed row — an absent item
- * is an absent auto column, so the row's remaining `1fr` column resolved to a different width on
- * a sealed row than on an open one, and everything after the name (the bar, the count) sat up to
- * 12px further left on the sealed row. The fix gives the lock a fixed-size track on every record
- * row and hides only the glyph inside it when the box is not sealed.
- *
- * OBSERVED RED BEFORE IT WAS KEPT: reverting `BoxBrowse.tsx` to render the lock span only when
- * `sealed` (the defect's own shape) fails this case — the name and the bar both shift left on
- * the sealed row, past the one-pixel budget below. */
-test('a sealed row and an unsealed row agree on the name and bar left edge', async ({ page }) => {
-  const boxes = {
-    boxes: [
-      BOXES.boxes[0],
-      {
-        box: 6,
-        name: 'ETB codes',
-        sections: [1],
-        state: 'closed',
-        capacity: 10,
-        fill: 10,
-        next_index: 11,
-        cards: 10,
-        on_hand: 10,
-        sold: 0,
-        retired: 0,
-        moved: 0,
-        listed: 0,
-        sections_detail: [{ section: 1, start: 1, end: 10, count: 10 }],
-      },
-    ],
-  }
-  await open(page, boxes, STORE, () => PRICING, SALE, { settle: '.browse-boxcell' })
-  await settleFonts(page)
-
-  const openRow = page.locator('.browse-boxcell[aria-label^="ME01 commons"]')
-  const sealedRow = page.locator('.browse-boxcell[aria-label^="ETB codes"]')
-  await expect(sealedRow).toHaveAttribute('aria-label', /sealed$/)
-
-  const openName = (await openRow.locator('.browse-boxcell-name').boundingBox())?.x ?? -1
-  const sealedName = (await sealedRow.locator('.browse-boxcell-name').boundingBox())?.x ?? -2
-  const openBar = (await openRow.locator('.browse-boxcell-bar').boundingBox())?.x ?? -1
-  const sealedBar = (await sealedRow.locator('.browse-boxcell-bar').boundingBox())?.x ?? -2
-
-  expect(Math.abs(openName - sealedName), 'the name column shifts between a sealed and an open row')
-    .toBeLessThanOrEqual(1)
-  expect(Math.abs(openBar - sealedBar), 'the bar column shifts between a sealed and an open row')
-    .toBeLessThanOrEqual(1)
 })
 
