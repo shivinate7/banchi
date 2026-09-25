@@ -97,13 +97,13 @@
 /* ---- THE FILTER BAR IS ONE LINE at every width (the owner, 2026-09-24: "i question whether
    they deserve all that real estate"): the search, ONE Filters button with its count badge, and
    the count line beside them. Show, the TCGplayer status, the sort and the hide toggle live in
-   the Filters sheet. This forces the kit bar's own compact mode at every width. STOPGAP: the
-   kit should take this as a prop (the inventory lane's `compact="popover"`), and then this goes. */
+   the Filters sheet. The kit's own default is one line plus the popover (D270 amended by
+   kit-tighten), so this file only sizes ITS OWN row: the trigger's own `flex: none` and how the
+   search field and the count line share the rest. */
 .orders-filterbar { flex-direction: row; align-items: center; gap: var(--bn-3); }
 .orders-filterbar .bn-filterbar-controls { flex: 0 1 auto; flex-wrap: nowrap; min-width: 0; }
 .orders-filterbar .bn-filterbar-lead { flex: 0 1 28rem; min-width: 10rem; max-width: 28rem; }
-.orders-filterbar .bn-filterbar-row { display: none; }
-.orders-filterbar .bn-filterbar-compact { display: block; flex: none; }
+.orders-filterbar .bn-filterbar-compact { flex: none; }
 .orders-filterbar .bn-filtercount { flex: 1 1 auto; min-width: 0; margin: 0; }
 @container bn-page (max-width: 559px) {
   .orders-filterbar .bn-filterbar-lead { flex: 1 1 auto; max-width: none; }

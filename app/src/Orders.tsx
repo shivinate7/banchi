@@ -2223,11 +2223,13 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
           <span className="orders-store-controls">
             <IconButton icon="plus" label="Add orders" style={BAR_SQUARE} aria-haspopup="dialog" onClick={() => setStoreOpen(true)} />
             <IconButton
-              icon="hand"
+              icon="external"
               label="Cards to pull"
               name="Cards to pull, in a new tab"
               style={BAR_SQUARE}
-              onClick={() => window.open('#/fulfillment', '_blank', 'noopener')}
+              href="#/fulfillment"
+              target="_blank"
+              rel="noreferrer"
             />
           </span>
         }

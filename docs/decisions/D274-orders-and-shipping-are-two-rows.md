@@ -99,7 +99,9 @@ own "Add orders" sheet. The panel's `Manage` keeps only that buyer's own orders.
   "Add orders" and "Cards to pull" are kit `IconButton`s, each with a tooltip and an accessible
   name. They sit on the one-line filter bar, beside the search, in its `beside` slot. The header
   keeps the title, and in walk mode the walk line. "Cards to pull" opens the Fulfiller's page
-  in a new tab, as the sidebar's own row does.
+  in a new tab, as the sidebar's own row does. It uses the `IconButton` anchor form (`href`,
+  `target="_blank"`, `rel="noreferrer"`), never `window.open`. `Gallery.tsx` already linked
+  the same route this way (2026-09-25).
 
 - **A shared copy carries no visual descriptor.** The owner, 2026-09-25:
 
