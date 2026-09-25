@@ -17,15 +17,16 @@
  * is first. The card's full inventory detail stays on `#/inventory`.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { PhotoPanel, type Row } from './CardHero'
+import { CardDetailsSection, marketTable, PhotoPanel, type MarketRead, type Row } from './CardHero'
 import { Overlay } from './InventoryOverlay'
-import { Button, Icon, Loading, Location, Notice, Pill } from './kit'
+import { Button, Icon, Loading, Location, Money, Notice, Pill } from './kit'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { SectionTitle } from './SectionTitle'
-import { describeFailure, photoUrl, walkPlan } from './server'
+import { describeFailure, getInventoryCopies, getPricing, photoUrl, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   InventoryCard,
+  Listing,
   OrderRow,
   Place,
   PullRefresh,
@@ -643,6 +644,21 @@ export function WalkCardPane({
     setZoomed(false)
   }, [currentRow?.copy.key])
 
+  const mock = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('mock')
+  const [market, setMarket] = useState<MarketRead | undefined>(undefined)
+  const [listings, setListings] = useState<Record<string, Listing>>({})
+  const mockRun = currentCard?.run ?? null
+  const mockSku = currentRow?.take.sku ?? null
+  useEffect(() => {
+    if (mock !== 'B' && mock !== 'C') return
+    if (mockRun !== null) {
+      getPricing(mockRun)
+        .then((payload) => setMarket(marketTable(payload)))
+        .catch(() => setMarket({ kind: 'absent', why: 'could not be read' }))
+    }
+    if (mockSku !== null) getInventoryCopies([mockSku]).then((inv) => setListings(inv.listings ?? {})).catch(() => undefined)
+  }, [mock, mockRun, mockSku])
+
   if (currentGroup === null || currentRow === null) return null
   const take = currentRow.take
   /* NEVER A PHOTOGRAPH OF A POOLED CARD: a code card's photo is a live code (D24, opsec). */
@@ -686,6 +702,17 @@ export function WalkCardPane({
           {showBuyers ? <p className="orders-card-for">For {takeBuyers(take)}</p> : null}
         </div>
       </div>
+      {mock === 'B' && currentCard !== null ? (
+        <p className="orders-card-sub">
+          <Money
+            value={(() => {
+              const raw = market?.kind === 'table' ? market.rows[`${currentCard.box}/${currentCard.index}`] : null
+              return raw === null || raw === undefined ? null : Number(raw)
+            })()}
+          />{' '}
+          market, {listings[take.sku]?.live ?? 0} live
+        </p>
+      ) : null}
       <ul className="orders-card-copies" aria-label="Every copy of this card">
         {currentGroup.copies.map((copy) => {
           const here = copy.key === currentRow.copy.key
@@ -703,6 +730,7 @@ export function WalkCardPane({
           )
         })}
       </ul>
+      {mock === 'C' && row !== null ? <CardDetailsSection card={row.card} market={market} listings={listings} phone={false} /> : null}
       {!zoomed || row === null ? null : (
         <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
           <img
