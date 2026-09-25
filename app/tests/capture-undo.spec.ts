@@ -796,3 +796,95 @@ test('a blocked removal reaches the operator as a sentence naming what blocked i
   await expect(refusal).not.toContainText('capture_id')
   await expect(refusal).not.toContainText('/inventory/')
 })
+
+/* ------------------------------------------------------------------------------------------
+ * THE PAUSE/PLAY OVERLAY (owner, 2026-09-24, verbatim): "we shouldn't change any actions from
+ * how it operates now, this pause button should literally be like if i switched it off motion
+ * mode and play being switching it back onto motion mode." It calls the exact `switchTrigger`
+ * the Trigger field's own track calls, through a button on the pane and through Space — no new
+ * state, no new hold, no behaviour of its own. This is the file that captures for real
+ * (capture-claims.spec.ts's own rule is the opposite), so it is the one that can prove the
+ * manual key genuinely fires while paused and genuinely does not once resumed.
+ * ------------------------------------------------------------------------------------------ */
+
+/** Arms motion on the box `open()` already picked. D211 folds the Rig once a box is known;
+ *  unfolded here defensively, the way the odometer test above does it. */
+async function armMotion(page: Page): Promise<void> {
+  const rigSummary = page.locator('.capture-rig-summary')
+  if ((await rigSummary.getAttribute('aria-expanded')) === 'false') await rigSummary.click()
+  await page.getByRole('button', { name: /Trigger/ }).click()
+  await page.getByRole('button', { name: 'motion', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.capture-trigger')).toHaveText('motion')
+}
+
+function pauseplay(page: Page) {
+  return page.locator('.capture-pauseplay')
+}
+
+test('the pause button switches motion off, and the manual key fires while it is down', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await armMotion(page)
+  await expect(pauseplay(page)).toHaveClass(/is-running/)
+
+  await pauseplay(page).click()
+  await expect(pauseplay(page)).toHaveClass(/is-paused/)
+  await expect(pauseplay(page)).toHaveAccessibleName(/Resume motion/)
+  // `switchTrigger('manual')` is the same call the track's own `key` cell makes — the machine
+  // string is `manual:c`, not a name this button invented.
+  await expect(page.locator('.capture-trigger')).toHaveText('manual:c')
+
+  // C is disarmed in motion mode and live in manual (map.py's own rule); firing it for real
+  // is the proof that pausing switched the mode rather than only redrawing the button.
+  await page.keyboard.press('c')
+  await expect.poll(() => wire.captures).toBe(1)
+})
+
+test('the play button switches motion back on, and the manual key stops firing again', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await armMotion(page)
+  await pauseplay(page).click()
+  await expect(page.locator('.capture-trigger')).toHaveText('manual:c')
+
+  await pauseplay(page).click()
+  await expect(pauseplay(page)).toHaveClass(/is-running/)
+  await expect(pauseplay(page)).toHaveAccessibleName(/Pause motion/)
+  await expect(page.locator('.capture-trigger')).toHaveText('motion')
+
+  await page.keyboard.press('c')
+  // Asserted against something that DOES change on a real fire (the odometer's own count),
+  // rather than a fixed pause after a negative — the wait this repo refuses elsewhere.
+  await expect(page.locator('.capture-odo .bn-stat-value').first()).toHaveText('0')
+  expect(wire.captures).toBe(0)
+})
+
+test('Space is the same toggle, and does nothing while typing', async ({ page }) => {
+  await open(page)
+  await armMotion(page)
+  await page.keyboard.press(' ')
+  await expect(page.locator('.capture-trigger')).toHaveText('manual:c')
+  await page.keyboard.press(' ')
+  await expect(page.locator('.capture-trigger')).toHaveText('motion')
+
+  // Typing a space into the Box field's own entry must type a space, not toggle the trigger.
+  await page.keyboard.press('b')
+  const entry = page.locator('.capture-filter')
+  await entry.fill('New')
+  await entry.press(' ')
+  await expect(entry).toHaveValue('New ')
+  await expect(page.locator('.capture-trigger')).toHaveText('motion')
+  await page.keyboard.press('Escape')
+})
+
+test('pressing the pause button moves nothing else on the screen (D118)', async ({ page }) => {
+  await open(page)
+  await armMotion(page)
+  const before = await shutter(page).boundingBox()
+  await pauseplay(page).click()
+  const after = await shutter(page).boundingBox()
+  expect(after).toEqual(before)
+})

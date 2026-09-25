@@ -1894,6 +1894,24 @@ export function CaptureScreen() {
 
       if (isEditableTarget(event.target)) return
 
+      /* THE MOTION PAUSE KEY (owner, 2026-09-24, verbatim): "i'd love it if when i'm on
+       * motion mode i get a pause button and/or a super prominent / easy way (maybe
+       * spacebar) to just turn off the motion mode... if there was just a pause play of
+       * motion by one press that'd be a game change." Space is free — no `SHORTCUTS` row,
+       * no App.tsx binding, and `trigger.ts`'s own `manualTrigger` already anticipated it
+       * (`manual:Space`) without ever using it. THIS CALLS THE SAME `switchTrigger` THE
+       * TRACK'S OWN `1`/`2` OPTIONS CALL (owner correction: "literally be like if i
+       * switched it off motion mode ... no new behaviour"). No new state, no new hold,
+       * no re-baseline logic of its own — whatever `switchTrigger('motion')` already does
+       * on a resume is exactly what happens here too. `event.repeat` is guarded so a
+       * finger left on the bar cannot machine-gun the toggle. */
+      if (event.key === ' ') {
+        if (event.repeat) return
+        event.preventDefault()
+        switchTrigger(triggerMode === 'motion' ? 'manual' : 'motion')
+        return
+      }
+
       const key = event.key.toLowerCase()
       const field = FIELD_KEYS[key]
       if (field !== undefined) {
@@ -1920,7 +1938,7 @@ export function CaptureScreen() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [openField, gameEntry, toggleField, fieldPick])
+  }, [openField, gameEntry, toggleField, fieldPick, triggerMode, switchTrigger])
 
   /* What the video track actually negotiated — CameraPicker carried this readout and the
    * camera field inherits it whole, because it is the one number that makes the screen
@@ -3026,6 +3044,35 @@ export function CaptureScreen() {
                     <circle className="capture-ring-fill" cx="24" cy="24" r="20" />
                   </svg>
                 ) : null}
+
+                {/* THE PAUSE/PLAY OVERLAY (owner, 2026-09-24), a YouTube-style control on the
+                    pane itself rather than a row beside the shutter — the owner's own picture,
+                    left to this lane to place. Large and centred while paused (`triggerMode
+                    === 'manual'`): nothing is being judged, so the centre of the frame is
+                    free to hold it. Small and quiet, moved to a corner, while motion is
+                    running: it never sits over the middle of the frame, which is the region
+                    the presence read judges, and it never blocks a manual click on the card
+                    itself. It is `switchTrigger`, the exact call the Trigger field's own
+                    track makes — no new state, no new behaviour, just a second, faster door
+                    to the same act. */}
+                <button
+                  type="button"
+                  className={
+                    triggerMode === 'manual'
+                      ? 'capture-pauseplay is-paused'
+                      : 'capture-pauseplay is-running'
+                  }
+                  onClick={() => switchTrigger(triggerMode === 'motion' ? 'manual' : 'motion')}
+                  aria-label={
+                    triggerMode === 'manual'
+                      ? 'Resume motion (Space)'
+                      : 'Pause motion (Space)'
+                  }
+                  title={triggerMode === 'manual' ? 'Resume motion — Space' : 'Pause motion — Space'}
+                >
+                  <Icon name={triggerMode === 'manual' ? 'play' : 'pause'} size={triggerMode === 'manual' ? 30 : 16} />
+                  {triggerMode === 'manual' ? <span className="capture-pauseplay-label">Paused</span> : null}
+                </button>
 
                 {camera.ready ? null : (
                   <div className="capture-frame-note">

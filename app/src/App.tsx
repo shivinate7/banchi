@@ -85,6 +85,7 @@ const CAPTURE_OPTION_KEYS = '1234567890adeijklmnqwxyz'.toUpperCase().split('')
 const CAPTURE_KEYS: ScreenKeys = {
   rows: [
     { keys: ['C'], does: 'Take the photograph', when: 'while the trigger is on Manual' },
+    { keys: ['Space'], does: 'Pause motion, or resume it', when: 'not while typing' },
     { keys: ['S'], does: 'Put a divider in, at the card you are about to shoot' },
     { keys: ['U'], does: 'Undo the newest capture' },
     { keys: ['B'], does: 'Open or close the Box field' },

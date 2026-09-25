@@ -1603,3 +1603,7 @@ test('no typed middle dot or bullet reaches the capture screen', async ({ page }
   expect(text).not.toContain('·')
   expect(text).not.toContain('•')
 })
+
+/* The pause/play overlay's own cases moved to capture-undo.spec.ts: this file's own rule is
+   that the shutter is never pressed and no capture is ever taken, and proving the manual key
+   fires while paused means pressing it. See capture-undo.spec.ts's "pause/play" block. */

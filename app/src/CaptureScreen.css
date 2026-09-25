@@ -647,6 +647,65 @@
 }
 @keyframes capture-ring { to { stroke-dashoffset: 0; } }
 
+/* THE PAUSE/PLAY OVERLAY (owner, 2026-09-24): a YouTube-style control on the pane, not a row
+   beside the shutter. `is-paused` sits large and centred, because nothing is being judged
+   while `triggerMode` is manual and the centre of the frame is free. `is-running` is small,
+   quiet and moved into a corner — it never sits over the middle third of the frame, the
+   region the presence read judges, and it never blocks a manual click on the card itself.
+   One `transition` covers both axes so the move between states reads as one gesture. */
+.capture-pauseplay {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bn-1);
+  border: 0;
+  border-radius: var(--bn-r-full);
+  background: color-mix(in srgb, var(--vf-bg) 55%, transparent);
+  color: var(--vf-ink);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--vf-ink) 30%, transparent), var(--bn-shadow-2);
+  cursor: pointer;
+  transition:
+    top var(--bn-t-slow) var(--bn-ease),
+    left var(--bn-t-slow) var(--bn-ease),
+    width var(--bn-t-slow) var(--bn-ease),
+    height var(--bn-t-slow) var(--bn-ease),
+    padding var(--bn-t-slow) var(--bn-ease),
+    opacity var(--bn-t-slow) var(--bn-ease),
+    background-color var(--bn-t-fast) var(--bn-ease);
+}
+.capture-pauseplay:hover { background: color-mix(in srgb, var(--vf-bg) 70%, transparent); }
+.capture-pauseplay.is-paused {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 72px;
+  height: 72px;
+  flex-direction: column;
+  opacity: 0.96;
+}
+.capture-pauseplay-label {
+  font-size: var(--bn-fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+}
+.capture-pauseplay.is-running {
+  /* Bottom-right, inset past the corner bracket at 10px so the two never touch. 40px is the
+     thumb floor (D117) even though this is quiet, not primary — it is still a press. */
+  top: auto;
+  left: auto;
+  bottom: 26px;
+  right: 26px;
+  transform: none;
+  width: 40px;
+  height: 40px;
+  opacity: 0.45;
+}
+.capture-pauseplay.is-running:hover,
+.capture-pauseplay.is-running:focus-visible { opacity: 0.9; }
+@media (prefers-reduced-motion: reduce) { .capture-pauseplay { transition: none; } }
+
 /* contain, not cover: a crop that hides the edge of the frame hides the finger holding the
    card down, which is one of the two things this panel exists to catch. */
 .capture-media { width: 100%; height: 100%; object-fit: contain; display: block; }
