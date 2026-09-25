@@ -1560,14 +1560,10 @@ export function Fulfillment() {
                             )
                           }
                         >
-                          <span className="ff-box-num" aria-hidden="true">
-                            {group.box}
-                          </span>
+                          {/* THE BOX BY ITS NAME ALONE (D-a-box-is-shown-by-its-name): no number tile and no
+                              "Box N", which is the store's key and not a label on the drawer. */}
                           <span className="ff-box-text">
-                            <span className="fulfillment-say ff-box-name">
-                              Box {group.box}
-                              {group.name === null ? null : <span className="ff-box-namepart">{group.name}</span>}
-                            </span>
+                            <span className="fulfillment-say ff-box-name">{group.name ?? 'Unnamed box'}</span>
                             <span className="fulfillment-say ff-box-count">
                               {count(group.cards.length, 'card', 'cards')}
                             </span>
