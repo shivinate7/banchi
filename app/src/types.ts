@@ -1866,6 +1866,15 @@ export type BoxRecord = {
   listed: number
   sections_detail: SectionDetail[]
 
+  /** The box's layout token (`docs/specs/subbox-capture.md` 1.1, 1.5): a short hash of its
+   *  divider keys, in order. Every aim at a section of THIS box — a capture, an S, and a
+   *  Move-to-box naming it as the destination — sends this token beside the divider key. A
+   *  re-space changes every divider's key, and this token is what tells an old key from a
+   *  new section that happens to reuse it: two equal tokens mean two equal divider lists, so
+   *  a key that passes the check names the section the screen actually drew. Absent from an
+   *  older server. */
+  layout_token?: string
+
   /** How many of this box's cards pass D213's game/set/rarity filter — present ONLY while a
    *  filter is active, and absent (never zero-by-default) while it is not, matching
    *  `server/capture_server.py:_box_row`'s own contract. `BoxBrowse.tsx` reads this to grey

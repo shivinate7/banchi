@@ -2298,6 +2298,7 @@ const TWO_BOXES = {
       retired: 0,
       listed: 0,
       moved: 0,
+      layout_token: 'tok-7-a',
       sections_detail: [{ section: 1, start: 1, end: 40, count: 40, div: '1' }],
     },
   ],
@@ -4781,7 +4782,7 @@ test('UN-14 — Move to box gets a real Undo, wired into the receipt like every 
   await receiptUndo.click()
   await expect(page.locator('.bn-toast-ok')).toContainText('Move undone')
   expect(sent.map((call) => call.body)).toEqual([
-    { to_box: 7, section: '1' },
+    { to_box: 7, section: '1', layout_token: 'tok-7-a' },
     { undo: true },
   ])
   expect(sent.map((call) => call.path)).toEqual(['/inventory/2/1/move', '/inventory/2/1/move'])

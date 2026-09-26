@@ -442,11 +442,15 @@ export function BoxOps({
   /* The section a completed move landed in, for the receipt below — read while `moveTo` and
    * `sectionDiv` still name it, before the next `startEdit` clears either. */
   const movedSection = moveTargetSections.find((detail) => detail.div === sectionDiv)
+  /* The box's own layout token (`docs/specs/subbox-capture.md` 1.1, 1.5): required beside
+   * `section` on every Move-to-box. Absent from an older server, same as `div`. */
+  const moveTargetToken = moveTarget?.layout_token ?? null
   /* (a) THE ENABLEMENT NEVER TRUSTS A BARE non-null `sectionDiv`: `boxes` can refresh under an
    * open sheet (another device's S or U, or this lane's own F1 retry), and a stale div that
    * no longer names a real section must read as unpicked, not as a live choice nothing draws
-   * checked for. */
-  const sectionStillThere = sectionDiv !== null && moveTargetSections.some((detail) => detail.div === sectionDiv)
+   * checked for — and never without the token the write now requires. */
+  const sectionStillThere =
+    sectionDiv !== null && moveTargetToken !== null && moveTargetSections.some((detail) => detail.div === sectionDiv)
   const [proposed, setProposed] = useState<number[] | null>(null)
   const moveId = useId()
   const readAt = oldestReading(listings)
@@ -492,7 +496,10 @@ export function BoxOps({
     setRefused(null)
     setSectionTrouble(null)
     const result = await write(() =>
-      moveCards(record.box, selection.length > 0 ? [...selection] : null, toBox, sectionDiv as string),
+      moveCards(record.box, selection.length > 0 ? [...selection] : null, toBox, {
+        div: sectionDiv as string,
+        layoutToken: moveTargetToken as string,
+      }),
     )
     if (result !== null) {
       setMoved(result)
@@ -514,7 +521,12 @@ export function BoxOps({
    * div still numerically exists in the last-read list, which is what let Move go on
    * reading enabled with nothing checked. */
   useEffect(() => {
-    if (trouble === null || (trouble.code !== 'section_gone' && trouble.code !== 'section_required')) return
+    if (
+      trouble === null ||
+      (trouble.code !== 'section_gone' && trouble.code !== 'section_required' && trouble.code !== 'layout_token_required')
+    ) {
+      return
+    }
     const label =
       movedSection === undefined
         ? 'That section'
@@ -527,8 +539,7 @@ export function BoxOps({
     setSectionTrouble(trouble)
     setSectionDiv(null)
     onChangedRef.current()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `movedSection` is read once,
-    // from the render this failure landed on, not tracked as a re-trigger of its own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- movedSection is read once, from the render this failure landed on
   }, [trouble])
   /* (a) — THE SECOND, INDEPENDENT NET: a pick can also go stale with no refusal at all, from
    * an ambient `boxes` refresh while the sheet sat open (another device's S or U). This
@@ -824,7 +835,7 @@ export function BoxOps({
                 is picked, the owner picks its section too — a box with one section still
                 shows that single choice, so the owner confirms it rather than a screen
                 deciding quietly. */}
-            {moveTarget === null ? null : moveTargetSections.length === 0 ? (
+            {moveTarget === null ? null : moveTargetSections.length === 0 || moveTargetToken === null ? (
               <Notice tone="warn" title="Its sections could not be drawn. Read the box again and choose a section." />
             ) : (
               <SectionPicker sections={moveTargetSections} value={sectionDiv} onChange={setSectionDiv} />

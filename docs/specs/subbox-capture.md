@@ -379,11 +379,16 @@ is untouched. It already names an exact gap and was never in scope.
   so the owner presses it. No code path treats "the only choice" as a default.
 - **No default, enforced on the screen.** Both dialogs' Move press stays disabled until a
   box AND a section are picked. `server.ts:moveCard` and `moveCards` both take an optional
-  `section` (a divider key), sent whenever one is picked.
-- **A stale section re-opens the pick.** `section_gone` (409) and `section_required` (400)
-  are handled the same way. The dialog stays open. The server's own sentence shows in place.
-  The section pick clears. The box stays chosen. Neither closes the dialog into a toast the
-  owner has to reopen the whole flow to answer.
+  `MoveSection` (a divider key AND the destination box's own `layout_token`, always sent
+  together — 1.5's own airtight-key argument). The disabled check reads whether the picked
+  div is still a real row in the box's CURRENT `sections_detail`. It never trusts a bare
+  non-null flag. A box that changes under an open dialog cannot leave Move enabled with
+  nothing checked.
+- **A stale section re-opens the pick.** `section_gone` (409), `section_required` (400) and
+  `layout_token_required` (400) are handled the same way. The dialog stays open. The
+  server's own sentence shows in place, behind "What the server said" (D196). The section
+  pick clears. The box stays chosen. Neither closes the dialog into a toast the owner has to
+  reopen the whole flow to answer.
 - **The receipt and the undo.** A single-card move's toast reads the destination's own
   `place.label` off the response (`MoveResult.card`). That field already composes
   "Section N" — the one renderer every screen uses, never composed twice. `moveCards`'s

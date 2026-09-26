@@ -11,7 +11,7 @@ import type {
   SearchGroup,
   SectionDetail,
 } from './types'
-import type { Failure } from './server'
+import type { Failure, MoveSection } from './server'
 import {
   ServerError,
   describeFailure,
@@ -539,7 +539,7 @@ function InventoryWalk({
    * generic failure: the dialog stays open, on the same box, with one plain sentence and a
    * fresh section list rather than a toast the owner has to reopen the whole flow to answer. */
   const doMove = useCallback(
-    async (copy: SearchCopy, toBox: number, section: string, sectionLabel: string) => {
+    async (copy: SearchCopy, toBox: number, section: MoveSection, sectionLabel: string) => {
       if (busyKey !== null) return
       setBusyKey(copy.key)
       setMoveRefused(null)
@@ -563,9 +563,11 @@ function InventoryWalk({
         setReloads((n) => n + 1)
       } catch (err) {
         const code = refusalCode(err)
-        if (code === 'section_gone' || code === 'section_required') {
+        if (code === 'section_gone' || code === 'section_required' || code === 'layout_token_required') {
           /* F2 — THE SENTENCE NAMES WHAT THE OWNER SAW, NEVER A DIVIDER KEY (D196). The
-           * server's own words go behind "What the server said" instead. */
+           * server's own words go behind "What the server said" instead. `layout_token_required`
+           * should never fire from this screen (the token always rides beside `section`), but
+           * it gets the same re-read rather than a bare toast if a race ever produces it. */
           setMoveRefused(
             code === 'section_gone'
               ? `${sectionLabel} is gone. Read the box again and choose a section.`
@@ -1152,7 +1154,7 @@ function MovePanel({
   /** F2 — the server's own words, behind "What the server said" rather than in the sentence
    *  above (D196: no divider key on screen). */
   refusedDetail: Failure | null
-  onMove: (toBox: number, section: string, sectionLabel: string) => void
+  onMove: (toBox: number, section: MoveSection, sectionLabel: string) => void
   onCancel: () => void
 }) {
   const [to, setTo] = useState<string | null>(null)
@@ -1168,12 +1170,15 @@ function MovePanel({
     (detail): detail is SectionDetail & { div: string } => typeof detail.div === 'string',
   )
   const pickedSection = section === null ? null : (targetSections.find((detail) => detail.div === section) ?? null)
+  /* The box's own layout token (`docs/specs/subbox-capture.md` 1.1, 1.5): required beside
+   * `section` on every Move-to-box. Absent from an older server, same as `div`. */
+  const layoutToken = target?.layout_token ?? null
   /* (a) THE ENABLEMENT NEVER TRUSTS A BARE non-null `section`: a box's own sections can
    * change under an open dialog (another device's S or U, or this box's own stale-section
    * retry), and a picker that keeps its LAST div after the list moved on draws no row
    * checked while the state is still non-null. Move must read as disabled exactly when
-   * nothing is visibly checked. */
-  const sectionStillThere = pickedSection !== null
+   * nothing is visibly checked, and never without the token the write now requires. */
+  const sectionStillThere = pickedSection !== null && layoutToken !== null
   /* A stale-section refusal, or the section it named no longer existing, clears the pick —
    * the box stays chosen, the section does not, so the press cannot retry the same dead key
    * and cannot go on reading as enabled with nothing checked. */
@@ -1202,7 +1207,7 @@ function MovePanel({
             }}
           />
         )}
-        {target === null ? null : targetSections.length === 0 ? (
+        {target === null ? null : targetSections.length === 0 || layoutToken === null ? (
           <Notice tone="warn" title="Its sections could not be drawn. Read the box again and choose a section." />
         ) : (
           <SectionPicker sections={targetSections} value={section} onChange={setSection} />
@@ -1219,11 +1224,11 @@ function MovePanel({
           variant="primary"
           icon="package"
           busy={busy}
-          disabled={to === null || pickedSection === null}
+          disabled={to === null || !sectionStillThere}
           onClick={() => {
-            if (to === null || pickedSection === null) return
+            if (to === null || pickedSection === null || layoutToken === null) return
             const label = `Section ${pickedSection.section}${pickedSection.name ? ` (${pickedSection.name})` : ''}`
-            onMove(Number(to), pickedSection.div, label)
+            onMove(Number(to), { div: pickedSection.div, layoutToken }, label)
           }}
         >
           Move
