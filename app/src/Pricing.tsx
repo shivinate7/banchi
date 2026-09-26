@@ -25,6 +25,7 @@ import {
   getPricingCorpus,
   getPricingWorklist,
   putPricingCorpus,
+  restoreLastClear,
   restorePricingAnswers,
   getRun,
   getRuns,
@@ -1096,6 +1097,7 @@ export function Pricing() {
       /* A SERVER THAT PREDATES THIS ANSWERS NOTHING, and `null` is what the sheet reads as "do
          not offer the control" rather than as "nothing is clearable". */
       setClearable(held.clearable ?? null)
+      setLastClear(held.last_clear ?? null)
       setSunkHolds(
         heldOnArrival(
           answer?.skus ?? ((table?.skus ?? []) as unknown as MergedSku[]),
@@ -1127,6 +1129,7 @@ export function Pricing() {
       setSheet(null)
       setBook(null)
       setClearable(null)
+      setLastClear(null)
       setSunkHolds(new Set())
       setFailure(describeFailure(err))
     } finally {
@@ -2395,6 +2398,11 @@ export function Pricing() {
    *  route answers no block, and a sheet drawn over a guess about which answers are holds is the
    *  one thing this feature may not do. */
   const [clearable, setClearable] = useState<PricingClearable | null>(null)
+  /** UN-11 (`docs/specs/undo.md` §11.3): the newest clear that can still be undone, read off
+   *  the server rather than kept only in a toast's own closure — the fix for "Clear typed"
+   *  losing its undo when the toast goes. Null once a send has carried a cleared SKU
+   *  (`clear_built_on`), the same "built on" limit every other undo answers to now. */
+  const [lastClear, setLastClear] = useState<{ count: number; at: number } | null>(null)
   const clearableTotal = Object.keys(clearable?.days ?? {}).length
 
   /** THE SCOPE, AND IT IS THE WORKLIST RATHER THAN THE VISIBLE ROWS. `rows` is `table` after the
@@ -2443,7 +2451,45 @@ export function Pricing() {
   const refreshCorpus = useCallback(async () => {
     const held = await getPricingCorpus()
     setClearable(held.clearable ?? null)
+    setLastClear(held.last_clear ?? null)
     revision.current = held.revision
+  }, [])
+
+  /** UN-11: put back the newest clear, off the server's own memory of it rather than a
+   *  toast's closure — reachable after the toast has faded, or after a reload. Unlike the
+   *  toast's own Undo, this answer carries no SKU-keyed values to walk into the fields, only
+   *  which SKUs came back — so this reads the corpus fresh and takes each restored SKU's
+   *  answer off IT, the same "the response decides which rows come back" rule
+   *  `withRestored` already follows, sourced from a read instead of the clear's own map. */
+  const doRestoreLastClear = useCallback(async () => {
+    try {
+      const back = await restoreLastClear(revision.current)
+      setLastClear(null)
+      const held = await getPricingCorpus()
+      revision.current = held.revision
+      savedBook.current = held.corpus
+      setBook(held.corpus)
+      setClearable(held.clearable ?? null)
+      for (const sku of back.restored) {
+        const input = inputs.current.get(sku)
+        const was = held.corpus.skus?.[sku]
+        if (input === undefined || was === undefined) continue
+        input.value = typeof was.value === 'string' ? was.value : String(was.value ?? '')
+        flash(input)
+        touched.current.delete(sku)
+      }
+      toast({
+        kind: 'ok',
+        title: `${back.restored.length} price${back.restored.length === 1 ? '' : 's'} restored`,
+        body:
+          back.skipped.length === 0
+            ? 'Each one carries the date it was first typed on.'
+            : `${back.skipped.length} had been answered again since, and those answers were kept.`,
+      })
+    } catch (err) {
+      const trouble = describeFailure(err)
+      toast({ kind: 'refusal', title: 'Not restored', body: `${trouble.message} (${trouble.code})` })
+    }
   }, [])
 
   /** A clear landed: drop those answers, clear the fields, re-read, and offer the way back.
@@ -3248,6 +3294,13 @@ export function Pricing() {
             {undo.length === 0 ? null : (
               <Button size="sm" variant="ghost" icon="undo" kbd="U" onClick={undoLast}>
                 Undo
+              </Button>
+            )}
+            {lastClear === null ? null : (
+              /* UN-11: outlives the toast, and a reload. Gone once a send has carried a
+                 cleared SKU (`clear_built_on`) — the next read finds no `last_clear`. */
+              <Button size="sm" variant="ghost" icon="undo" onClick={() => void doRestoreLastClear()}>
+                Restore {lastClear.count} cleared
               </Button>
             )}
             <Button

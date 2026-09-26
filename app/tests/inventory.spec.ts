@@ -663,7 +663,11 @@ type Priced = () => unknown
  *  `restores_to` IS THE FIELD THE SCREEN BRANCHES ON, and a stub answering null draws no Undo
  *  anywhere — which is a real server case (`sold_origin_unknown`) and also the shape of a broken
  *  fixture. Both cases below say which one they are. */
-type SaleStub = (box: number, index: number, undo: boolean) => { status: number; body: unknown }
+/** `stillHere` (UN-7, `docs/specs/undo.md` §11.1): true for `saleStillHere`'s own request,
+ *  `{still_here: true}` — distinct from `undo`, which reads `{undo: true}`. A stub that
+ *  ignores its fourth argument still type-checks; only a case that needs to answer
+ *  "This card is still here" differently from an ordinary reversal declares it. */
+type SaleStub = (box: number, index: number, undo: boolean, stillHere?: boolean) => { status: number; body: unknown }
 
 /** The ordinary sale and the ordinary reversal. `identified` is what `_state_before_sale` reads
  *  back off the history line for a card that was identified before it sold, which is every card
@@ -767,10 +771,10 @@ async function open(
      that mistake once. */
   await page.route(/\/inventory\/\d+\/\d+\/sold$/, async (route) => {
     const request = route.request()
-    const body = request.postDataJSON() as { undo?: boolean } | null
+    const body = request.postDataJSON() as { undo?: boolean; still_here?: boolean } | null
     record(request.method(), request.url(), body)
     const path = new URL(request.url()).pathname.split('/')
-    const answer = sale(Number(path[2]), Number(path[3]), body?.undo === true)
+    const answer = sale(Number(path[2]), Number(path[3]), body?.undo === true, body?.still_here === true)
     await route.fulfill({
       status: answer.status,
       contentType: 'application/json',
@@ -4380,6 +4384,56 @@ test('S1 — bringing a card back names the box, never its number', async ({ pag
   expect(sent?.body).toEqual({ undo: true })
 })
 
+test('UN-7 — a sale built on is refused, and "This card is still here" is a different write', async ({
+  page,
+}) => {
+  /* `docs/specs/undo.md` §11.1: an ordinary reversal is refused ON PURPOSE once the photo is
+   * gone or the order it was pulled for has shipped or closed — `sale_built_on`. The fix
+   * after that is `saleStillHere`, `{still_here: true}`, never a retry of the same request. */
+  const wire = await open(page, BOXES, STORE, () => PRICING, (box, index, _undo, stillHere) => {
+    if (stillHere) {
+      return {
+        status: 200,
+        body: {
+          position: `${box}/${index}`,
+          box,
+          index,
+          undone: true,
+          restores_to: null,
+          order_released: null,
+          still_here: true,
+        },
+      }
+    }
+    return {
+      status: 409,
+      body: { error: { code: 'sale_built_on', message: 'This sale can no longer be undone. The card is still here instead.' } },
+    }
+  })
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  await page.getByRole('button', { name: 'Card actions' }).click()
+
+  /* THE FIRST PRESS LEARNS IT, the same shape `sold_origin_unknown` already takes: there is
+     no route to ask in advance, so the ordinary control is what refuses. */
+  await page.getByRole('menuitem', { name: 'Bring this card back' }).click()
+
+  /* THE MENU ITEM CHANGES, NEVER A RETRY BUTTON: this is a different write with a different
+     name, not the same request offered again. */
+  const stillHere = page.getByRole('menuitem', { name: 'This card is still here' })
+  await expect(stillHere).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Bring this card back' })).toHaveCount(0)
+  await stillHere.click()
+
+  const toast = page.locator('.bn-toast', { hasText: 'Card brought back' })
+  await expect(toast).toContainText('ME01 commons #4 is back in its box')
+
+  const calls = wire.filter((entry) => entry.path === '/inventory/2/4/sold')
+  expect(calls).toHaveLength(2)
+  expect(calls[0]?.body).toEqual({ undo: true })
+  expect(calls[1]?.body).toEqual({ still_here: true })
+})
+
 test('S2 — a sold card says so once, not on the hero, the row and the phone bar all at once', async ({
   page,
 }) => {
@@ -4466,6 +4520,52 @@ test('UX-244 — one copy moves to another box from its own row, and the receipt
   expect(sent).toHaveLength(1)
   expect(sent[0]?.path).toBe('/inventory/2/1/move')
   expect(sent[0]?.body).toMatchObject({ to_box: 7 })
+})
+
+test('UN-14 — a move gets an undo, the same fast path a sale gets, and it never renumbers', async ({
+  page,
+}) => {
+  /* `docs/specs/undo.md` §11.1: "Move, then undo. The card is back at its index, and nothing
+   * else moves." No clock either (UN-5) — this reuses `remember`'s own rank mechanism, so
+   * `U` and the toast's Undo reach the move exactly as they reach a sale or a retirement. */
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+  const sent: { path: string; body: unknown }[] = []
+  await page.route(/\/inventory\/\d+\/\d+\/move$/, async (route) => {
+    const url = new URL(route.request().url())
+    const body = route.request().postDataJSON() as { undo?: boolean } | null
+    sent.push({ path: url.pathname, body })
+    if (body?.undo === true) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ moved: '2/1', to: '2/1', box: 2, index: 1, undone: true }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ moved: '2/1', to: '7/41', box: 2, index: 1, new_box: 7, new_index: 41 }),
+    })
+  })
+  const row = page.locator('.card-locations-row.is-current')
+  await row.getByRole('button', { name: 'Move to another box' }).click()
+  const dialog = page.getByRole('dialog', { name: /^Move/ })
+  await expect(dialog).toBeVisible()
+  await dialog.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  await dialog.getByRole('button', { name: 'Move', exact: true }).click()
+
+  const toast = page.locator('.bn-toast', { hasText: 'Moved to ME01 spares' })
+  const undo = toast.getByRole('button', { name: 'Undo' })
+  await expect(undo).toBeVisible()
+  await undo.click()
+
+  await expect(page.locator('.bn-toast', { hasText: 'Move undone' })).toBeVisible()
+  expect(sent).toHaveLength(2)
+  expect(sent[0]?.body).toMatchObject({ to_box: 7 })
+  expect(sent[1]?.path).toBe('/inventory/2/1/move')
+  expect(sent[1]?.body).toEqual({ undo: true })
 })
 
 test('the header holds one worded primary and the filter bar one line, at 390 and 720', async ({

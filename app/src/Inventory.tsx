@@ -19,6 +19,7 @@ import {
   isDeparted,
   markSold,
   moveCard,
+  undoMove,
   photoUrl,
   retireCard,
   undoRetire,
@@ -85,6 +86,7 @@ const ALREADY_SOLD = 'already_sold'
 const NOT_SOLD = 'not_sold'
 const ALREADY_RETIRED = 'already_retired'
 const NOT_RETIRED = 'not_retired'
+const NOT_MOVED = 'not_moved'
 
 const NO_LAYOUTS: ReadonlyMap<number, readonly SectionDetail[]> = new Map()
 
@@ -250,7 +252,7 @@ function loneGroup(row: Row, copy: SearchCopy): SearchGroup {
  *  `[0]` reach the same answer a clock used to gate. A toast still fades (`kit/toast.tsx`'s own
  *  `ttlMs`); the row's and the page's Undo do not fade with it. */
 type Receipt = {
-  kind: 'sale' | 'retirement'
+  kind: 'sale' | 'retirement' | 'move'
   key: string
   box: number
   index: number
@@ -391,7 +393,7 @@ export function Inventory() {
     if (previous !== undefined) dismissToast(previous)
     const id = toast({
       kind: receipt.canUndo ? 'receipt' : 'status',
-      icon: receipt.kind === 'sale' ? 'check' : 'archive',
+      icon: receipt.kind === 'sale' ? 'check' : receipt.kind === 'move' ? 'package' : 'archive',
       title: receipt.said,
       body: receiptBody(receipt.place, receipt.note),
       ttlMs: UNDO_WINDOW_MS,
@@ -498,21 +500,29 @@ export function Inventory() {
     [busyKey, remember, holdRank],
   )
 
-  /* D83's third door, for one copy (UX-244). No undo here: undo is its own later session. */
+  /* D83's third door, for one copy (UX-244). UN-14 (`docs/specs/undo.md` §11.1, D28/D57
+   * amended 2026-09-25): the move gets the same fast path a sale does — `remember` folds it
+   * into the SAME receipt list, so `U` and the toast's own Undo reach whichever write, sale,
+   * retirement or move, was pressed last. `undoMove` is aimed at the TOMBSTONE (the source
+   * `box`/`index` this call sent), never the new one — the card comes back to its own index,
+   * and nothing else in either box moves. */
   const doMove = useCallback(
     async (copy: SearchCopy, toBox: number) => {
       if (busyKey !== null) return
       setBusyKey(copy.key)
+      const seat = { key: copy.key, box: copy.place.box, index: copy.place.index }
       try {
         await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox)
         setMoving(null)
         holdRank(copy.key)
         const where = boxRecords.find((record) => record.box === toBox)?.name ?? UNNAMED_BOX
-        toast({
-          kind: 'ok',
-          icon: 'package',
-          title: `Moved to ${where}`,
-          body: receiptBody(sayPlace(copy.place.label ?? copy.key), renumberNote(copy.place)),
+        remember({
+          ...seat,
+          place: sayPlace(copy.place.label ?? copy.key),
+          kind: 'move',
+          said: `Moved to ${where}`,
+          canUndo: true,
+          note: renumberNote(copy.place),
         })
         setReloads((n) => n + 1)
       } catch (err) {
@@ -521,7 +531,7 @@ export function Inventory() {
         setBusyKey(null)
       }
     },
-    [busyKey, holdRank, boxRecords],
+    [busyKey, holdRank, boxRecords, remember],
   )
 
   const doUndo = useCallback(
@@ -530,11 +540,13 @@ export function Inventory() {
       setBusyKey(receipt.key)
       try {
         if (receipt.kind === 'sale') await undoSale(receipt.box, receipt.index)
-        else await undoRetire(receipt.box, receipt.index)
+        else if (receipt.kind === 'retirement') await undoRetire(receipt.box, receipt.index)
+        else await undoMove(receipt.box, receipt.index)
       } catch (err) {
-        /* `not_sold` / `not_retired` is success — the copy is not in the state the press asked
-         * to leave. Anything else keeps the receipt standing. */
-        const settled = receipt.kind === 'sale' ? NOT_SOLD : NOT_RETIRED
+        /* `not_sold` / `not_retired` / `not_moved` is success — the copy is not in the state
+         * the press asked to leave. Anything else (including `move_built_on`, UN-14: either
+         * box has changed again since) keeps the receipt standing. */
+        const settled = receipt.kind === 'sale' ? NOT_SOLD : receipt.kind === 'retirement' ? NOT_RETIRED : NOT_MOVED
         if (refusalCode(err) !== settled) {
           report(describeFailure(err))
           setBusyKey(null)
@@ -548,12 +560,18 @@ export function Inventory() {
         toasts.current.delete(receipt.key)
       }
       if (receipt.kind === 'sale') setSold((held) => held.filter((key) => key !== receipt.key))
-      else setRetired((held) => held.filter((key) => key !== receipt.key))
+      else if (receipt.kind === 'retirement') setRetired((held) => held.filter((key) => key !== receipt.key))
       /* THE COPY IS BACK, SO THE ORDER IS NO LONGER STALE BY IT. Releasing rather than leaving
          it held is what keeps the staleness figure a count of what actually left: an undone sale
          that went on being counted would offer a re-rank for a store that never moved. */
       releaseRank(receipt.key)
-      toast({ kind: 'ok', icon: 'undo', title: receipt.kind === 'sale' ? 'Sale undone' : 'Retirement undone', body: receipt.place, ttlMs: 4000 })
+      toast({
+        kind: 'ok',
+        icon: 'undo',
+        title: receipt.kind === 'sale' ? 'Sale undone' : receipt.kind === 'retirement' ? 'Retirement undone' : 'Move undone',
+        body: receipt.place,
+        ttlMs: 4000,
+      })
       setReloads((n) => n + 1)
       setBusyKey(null)
     },

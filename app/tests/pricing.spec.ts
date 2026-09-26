@@ -4559,6 +4559,77 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
   )
 })
 
+test('UN-11 — a clear outlives its toast: the server remembers it, and a reload still offers the way back', async ({ page }) => {
+  /* `docs/specs/undo.md` §11.1: "Clear typed" used to lose its undo the moment the toast
+   * faded, because `do_pricing_clear` handed `cleared` back to the browser and kept nothing
+   * itself. `GET /pricing`'s `last_clear` is the server's own memory of it, and
+   * `restoreLastClear` is the press that reads it — reachable with the toast long gone. */
+  const TYPED = { value: '4.50', at: '2026-09-07T06:50:31.891+00:00' }
+  const wire = await open(page, {
+    skus: CLEAR_ROWS,
+    clearable: CLEARABLE,
+    decisions: { rule: 'match', basis: 'market', overrides: { '8608859': '4.50' } },
+  })
+  const field = page.getByLabel('Price for Articuno')
+  await expect(field).toHaveValue('4.50')
+
+  const live: Record<string, unknown> = { '8608859': { ...TYPED } }
+  let lastClear: { count: number; at: number } | null = null
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'PUT') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: { ...live } },
+        path: '/tmp/prices.json',
+        revision: 'rev-live',
+        clearable: { days: Object.fromEntries(Object.keys(live).map((k) => [k, 5])), holds: 0, unknown: 0 },
+        last_clear: lastClear,
+      }),
+    })
+  })
+  await page.route(/\/pricing\/clear$/, async (route) => {
+    const cleared = { '8608859': { ...TYPED } }
+    delete live['8608859']
+    lastClear = { count: 1, at: 1_757_231_431 }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true, cleared, count: 1, holds: 0, unknown: 0, undated: 0, answers: 1,
+        revision: 'rev-cleared',
+      }),
+    })
+  })
+  await page.route(/\/pricing\/restore$/, async (route) => {
+    const body = route.request().postDataJSON() as { last_clear?: boolean; revision?: string }
+    wire.push({ method: 'POST', path: '/pricing/restore', body })
+    live['8608859'] = { ...TYPED }
+    lastClear = null
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, restored: ['8608859'], skipped: [], revision: 'rev-restored' }),
+    })
+  })
+
+  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+  await page.locator('.clearprices-foot .bn-btn-danger-solid').click()
+  await expect(field).toHaveValue('')
+
+  /* THE TOAST'S OWN UNDO IS GONE — this case never presses it, standing in for the toast
+     having faded or the page having been reloaded, which is the exact gap UN-11 closes. */
+  const restore = page.getByRole('button', { name: 'Restore 1 cleared' })
+  await expect(restore).toBeVisible()
+  await restore.click()
+
+  await expect(field).toHaveValue('4.50')
+  await expect(page.getByRole('button', { name: 'Restore 1 cleared' })).toHaveCount(0)
+  const back = wire.filter((r) => r.path === '/pricing/restore').at(-1)
+  expect(back?.body).toEqual({ last_clear: true, revision: 'rev-live' })
+})
+
 test('the clear is refused while the screen has an unsaved answer', async ({ page }) => {
   /* `#/pricing` autosaves the whole document, so a clear landing under an unsaved keystroke
      would be undone by the next save — D86's two-writer defect reached from inside one tab.
