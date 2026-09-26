@@ -516,6 +516,11 @@ one number across a round trip and sending it back, and at the feeder's measured
 cadence that race is real: one capture in between and the divider lands behind the card it
 was meant to be in front of.
 
+**Amended 2026-09-26 (D-sections-are-sub-boxes).** A capture can name a section, and S can
+name the section it goes after. Each names the section by its divider key, never by an
+index. So the sentence above still holds, and the store chooses the place inside the lock.
+`docs/specs/subbox-capture.md` has the wire contract.
+
 **Superseded 2026-09-25: a box has no seal and no capacity (D-sealed-boxes-removed).**
 
 **It refuses rather than guessing**: a second press with nothing captured between

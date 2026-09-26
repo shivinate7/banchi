@@ -284,7 +284,7 @@ ruling.
 | Clear typed | The next send carries any cleared SKU. A SKU typed since is kept (built). | Type the prices again. |
 | Hold | Never. A hold withholds, and nothing reads past it. | Release is the hold's own control. |
 | Cut-off change | The next send prices by it. | Set the cut-off again. |
-| Divider | A card is captured behind it. | Manage box edits the sections (`Inventory.set_sections`). |
+| Divider | A card is captured into its section. A divider S put after a middle section is taken out by its key (D-sections-are-sub-boxes). | Manage box edits the sections (`Inventory.set_sections`). |
 
 ### 11.2 What the code does today, per audit failure
 

@@ -56,9 +56,11 @@
     PUT    /boxes/<box>                    rename it, declare its dividers, seal or unseal it
     POST   /boxes/<box>/sections           put ONE divider in front of the next card, at the
                                            moment the real one goes in (D10, the capture
-                                           screen's `S`). Takes no index: the store reads it
+                                           screen's `S`). Takes no index: the store reads it.
+                                           `after` puts it right after that section
     DELETE /boxes/<box>/sections           take out the EMPTY last divider, the capture
-                                           screen's `U` after `S` (UN-15). Moves no other
+                                           screen's `U` after `S` (UN-15). Moves no other.
+                                           `?div=` names the empty divider to take out
     POST   /pipeline/preflight             what a run would cost. FREE, creates no run
     POST   /pipeline/waiting               the photographed, unclaimed cards a spend over a
                                            selection would buy. FREE, decodes nothing

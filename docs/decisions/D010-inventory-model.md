@@ -48,8 +48,12 @@ section 2. `S` then refuses with `section_empty`, and `SectionAhead` is deleted.
 verbatim: "if i am in section 1, and i am capturing away, then section 1 is continuing to
 expand, if i am selecting section 2, then i am capturing that fills in section 2, kinda like a
 subbox". The real store held no such layout. Only boxes 4 and 6 end with an empty section,
-one S each. Picking a middle section to capture into is planned in the same pull request, by a
-separate lane, and it is not built yet.
+one S each.
+
+**Amended 2026-09-26: a capture goes on the end of its SECTION, not of the box**
+(D-sections-are-sub-boxes). The owner picks the section on Capture. The store files the card
+at that section's tail, and S can go right after a picked section. No section named is the
+capture above, unchanged.
 
 `harness/tests/t7_box_map.py:check_divider_anchor` guards it (D265, the divider anchor).
 
