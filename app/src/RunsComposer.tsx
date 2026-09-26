@@ -1307,7 +1307,9 @@ export function RunsComposer({
                    message to learn. */
                 <Notice
                   tone="warn"
-                  title="Some of these cards are already being paid for"
+                  /* The count is on the line (D174): two cards is a double-click, four hundred is a
+                     different mistake. */
+                  title={`${plural(quote.claimed.cards, 'card')} already being paid for`}
                   /* Which runs or receipts hold them are machine names (D196), so they sit
                      behind "What the server said" (D269). */
                   detail={quote.claimed.runs.length > 0 ? quote.claimed.runs.join(', ') : quote.claimed.receipts.join(', ')}

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { describeFailure, getBoxes, type Failure } from './server'
-import type { BoxRecord, RunSelection } from './types'
-import { Button, IconButton, Pill, ReloadButton } from './kit'
+import type { BoxRecord, RunSelection, RunSummary } from './types'
+import { Button, Pill, ReloadButton } from './kit'
 import { LiveReconcile } from './LiveReconcile'
 import { RunPanel } from './RunPanel'
 import {
@@ -77,6 +77,26 @@ export function boxInHash(): number | null {
   return box >= 1 ? box : null
 }
 
+/** WHAT A CARD HAS COST TO IDENTIFY, ON THIS STORE'S OWN PAST RUNS: every recorded spend
+ *  divided by every card those runs read. The "~$X" on Review's Identify strip (D291) is this
+ *  times the waiting count. It is not a quote, and nothing is gated on it: the composer's free
+ *  preflight is still the one figure the spend press is confirmed against. A store with no run
+ *  that recorded a spend has no rate, and the strip then says no figure at all rather than a
+ *  guess. Both figures are the server's (`usage.cost_usd`, `counts.cards_in`); this only
+ *  divides them, and multiplies no token count by any rate. */
+export function perCardRate(runs: readonly RunSummary[]): number | null {
+  let usd = 0
+  let cards = 0
+  for (const run of runs) {
+    const spent = run.usage.cost_usd
+    const read = run.counts.cards_in
+    if (typeof spent !== 'number' || spent <= 0 || typeof read !== 'number' || read <= 0) continue
+    usd += spent
+    cards += read
+  }
+  return cards === 0 ? null : usd / cards
+}
+
 /** THE RUNS CONTENT, folded into Review's own sheet (D291,
  *  the owner's ruling, RULINGS.md Q6). Unchanged from the screen this used to be on its own
  *  route — same state, same hooks, same hash reads — only the outer frame moved: `#/runs`'s
@@ -86,7 +106,17 @@ export function boxInHash(): number | null {
  *  (`?run=`, `?state=captured`, `?box=`) working unread by this file — it is the SAME hash
  *  query reads, `runInHash`/`stateInHash`/`boxInHash` above, that already worked from either
  *  path. */
-export function RunsContent() {
+export function RunsContent({
+  compose = false,
+  onLeave,
+}: {
+  /** Open straight onto the composer: Review's Identify strip pressed through to the money
+   *  gate (D291), rather than the past-runs link. */
+  readonly compose?: boolean
+  /** Called when a composer opened by `compose` closes with no run started, so the press
+   *  leaves nothing behind it: the operator is back on Review, not in the run list. */
+  readonly onLeave?: () => void
+} = {}) {
   const [boxes, setBoxes] = useState<readonly BoxRecord[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [reloads, setReloads] = useState(0)
@@ -99,7 +129,8 @@ export function RunsContent() {
   /** The cards handed over from `#/inventory`'s mass-select, as position keys. */
   const [carried, setCarried] = useState<CarriedScope | null>(null)
 
-  const [composerOpen, setComposerOpen] = useState(() => stateInHash())
+  const [composerOpen, setComposerOpen] = useState(() => compose || stateInHash())
+  const started = useRef(false)
   const [syncOpen, setSyncOpen] = useState(false)
   const [openRun, setOpenRun] = useState<string | null>(() => runInHash())
 
@@ -219,11 +250,15 @@ export function RunsContent() {
   )
 
   const onStarted = useCallback((run: string) => {
+    started.current = true
     setOpenRun(run)
     setReloads((n) => n + 1)
   }, [])
 
-  const closeComposer = useCallback(() => setComposerOpen(false), [])
+  const closeComposer = useCallback(() => {
+    setComposerOpen(false)
+    if (compose && !started.current) onLeave?.()
+  }, [compose, onLeave])
   const closeSync = useCallback(() => setSyncOpen(false), [])
 
   return (
@@ -239,7 +274,12 @@ export function RunsContent() {
           </Pill>
         )}
         <ReloadButton onReload={() => setReloads((n) => n + 1)} busy={boxes === null && failure === null} label="Reload boxes and runs" hotkey={false} />
-        <IconButton icon="refresh" label="Check what is live" onClick={() => setSyncOpen(true)} />
+        {/* WORDS, NOT AN ICON (ICON-MAP's Runs row): its verb is not in the icon vocabulary, and a
+            second refresh glyph beside the reload would read as the same control. Ghost, because
+            Identify cards is this row's one primary. */}
+        <Button variant="ghost" icon="refresh" onClick={() => setSyncOpen(true)}>
+          Check what is live
+        </Button>
         {/* ONE VERB, WHATEVER THE SELECTION IS OVER. It read `Identify a box` / `Identify N
             boxes`, which named the unit of work in the label of the button that opens the
             dialog where the unit is chosen — so the operator had to have decided before

@@ -1030,7 +1030,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 <div className="run-actions">
                   <Button
                     variant="primary"
-                    icon="download"
+                    icon="refresh"
                     busy={busy === 'fetch'}
                     disabled={busy !== null}
                     onClick={() => void doFetchExport()}

@@ -836,7 +836,7 @@ export function Home() {
             ) : runs.state === 'failed' ? (
               <p className="home-empty">The server did not answer.</p>
             ) : runs.value.length === 0 ? (
-              <p className="home-empty">No runs yet. Identify a box from the Runs screen.</p>
+              <p className="home-empty">No runs yet. Identify cards from Review.</p>
             ) : (
               runs.value.slice(0, 6).map((run) => {
                 // `runBoxLabel` AND NOT A SECOND SPELLING OF IT (D145). This line

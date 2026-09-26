@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import type { Place } from '../src/types'
+import { runRow } from './routeFixtures'
 
 /* THE REVIEW QUEUE, ASSERTED — AND UNTIL THIS FILE EXISTED, NOTHING ASSERTED IT AT ALL.
  *
@@ -1359,3 +1360,111 @@ for (const theme of ['light', 'dark'] as const) {
     expect(named, `.review-caption-nb (named) in ${theme}`).toBeGreaterThanOrEqual(ORDER_LINE_FLOOR)
   })
 }
+
+/* ------------------------------------------------------------ the Identify strip (D291) */
+
+/** `GET /status` with `n` cards photographed and not identified. Registered after the shell's
+ *  own stub, so it wins (Playwright tries the newest route first). */
+async function waiting(page: Page, n: number): Promise<void> {
+  await page.route(/\/status$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        captures_root: 'captures',
+        store: 'inventory/store.sqlite',
+        store_exists: true,
+        cards: 40,
+        states: { captured: n },
+        queues: { review: 0, parked: 0 },
+        next_index: {},
+      }),
+    }),
+  )
+}
+
+/** Every read the Runs sheet and its composer make, stubbed, with the money routes recorded. */
+async function runsReads(page: Page, runs: unknown[]): Promise<string[]> {
+  const asked: string[] = []
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  await page.route(/\/pipeline\/runs$/, (route) => {
+    asked.push('/pipeline/runs')
+    return route.fulfill(json({ runs }))
+  })
+  await page.route(/\/boxes$/, (route) => route.fulfill(json({ boxes: [] })))
+  await page.route(/\/inventory$/, (route) => route.fulfill(json({ version: 2, cards: {} })))
+  await page.route(/\/games$/, (route) => route.fulfill(json({ games: [] })))
+  await page.route(/\/pipeline\/submissions$/, (route) =>
+    route.fulfill(json({ claims: [], counts: { claims: 0, keys: 0, stale: 0 } })),
+  )
+  await page.route(/\/pipeline\/preflight$/, (route) => {
+    asked.push('/pipeline/preflight')
+    return route.fulfill(
+      json({
+        ok: true,
+        exit_code: 0,
+        selection: { state: 'captured' },
+        sentence: 'captured',
+        scope: null,
+        capture_dirs: ['/tmp/captures/cards'],
+        console: 'estimated cost $0.04\n',
+        claimed: null,
+        total: { photographs: 12, cache_hits: 0, to_send: 12, estimate_usd: 0.04, cards: 12 },
+      }),
+    )
+  })
+  await page.route(/\/pipeline\/identify$/, (route) => {
+    asked.push('/pipeline/identify')
+    return route.fulfill({ status: 500, body: 'this case never spends' })
+  })
+  return asked
+}
+
+test('the Identify strip is absent while no card waits, and the run list is not read for it', async ({ page }) => {
+  const asked = await runsReads(page, [])
+  await open(page)
+  await expect(page.locator('.review-identify-strip')).toHaveCount(0)
+  expect(asked).toEqual([])
+})
+
+test('the Identify strip names the waiting count and this store’s own past cost per card', async ({ page }) => {
+  await waiting(page, 12)
+  /* $0.30 over 100 cards is $0.003 a card, so 12 cards is about $0.036. The second run spent
+     nothing and the third read no cards: neither may move the rate. */
+  await runsReads(page, [
+    runRow({ counts: { cards_in: 100 }, usage: { cost_usd: 0.3 } }),
+    runRow({ run: 'b', counts: { cards_in: 50 }, usage: { cost_usd: 0 } }),
+    runRow({ run: 'c', counts: {}, usage: { cost_usd: 9 } }),
+  ])
+  await open(page)
+  const strip = page.locator('.review-identify-strip')
+  await expect(strip.getByRole('button')).toHaveText('Identify 12 cards, ~$0.04')
+  /* D221: the dollar figure is the mono face's own span, never typed into the label. */
+  await expect(strip.locator('.bn-money')).toHaveText('$0.04')
+})
+
+test('a store with no recorded spend draws the strip with no figure rather than a guess', async ({ page }) => {
+  await waiting(page, 1)
+  await runsReads(page, [runRow({ usage: {} })])
+  await open(page)
+  await expect(page.locator('.review-identify-strip').getByRole('button')).toHaveText('Identify 1 card')
+})
+
+test('the strip opens the money gate on top, spends nothing, and leaving it goes back to Review', async ({ page }) => {
+  await waiting(page, 12)
+  const asked = await runsReads(page, [runRow({ counts: { cards_in: 100 }, usage: { cost_usd: 0.3 } })])
+  await open(page)
+  await page.locator('.review-identify-open').click()
+
+  /* The composer is the TOP layer, though it mounts in the same commit as the Runs sheet
+     around it: its own Close takes the press, rather than the sheet under it taking it. */
+  const composer = page.locator('.runs-composer')
+  await expect(composer).toBeVisible()
+  await expect(page.locator('.run-quote')).toBeVisible()
+  expect(asked.filter((path) => path === '/pipeline/preflight')).toHaveLength(1)
+  await composer.getByRole('button', { name: 'Close' }).click()
+
+  await expect(composer).toHaveCount(0)
+  await expect(page.locator('.review-runs-sheet')).toHaveCount(0)
+  expect(asked).not.toContain('/pipeline/identify')
+})

@@ -94,23 +94,33 @@
 /* D291: the strip, drawn only when cards wait. One line, a warm tint so
    it reads as a call to act rather than a fact — the same tint family the group-offer chip
    in the header uses. */
+/* THE IDENTIFY STRIP (D291): a sentence and one worded press, on one line at desk width and
+   stacked on a phone. A well, not a warning: cards waiting to be read is the normal state of a
+   store between runs. */
 .review-identify-strip {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bn-2) var(--bn-3);
+  margin: 0 0 var(--bn-3);
+  padding: var(--bn-2) var(--bn-2) var(--bn-2) var(--bn-4);
+  border: 1px solid var(--bn-line);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface-2);
+}
+.review-identify-strip-said {
+  display: inline-flex;
   align-items: center;
   gap: var(--bn-2);
-  width: fit-content;
-  max-width: 100%;
-  margin: 0 0 var(--bn-3);
-  padding: var(--bn-2) var(--bn-3);
-  border-radius: var(--bn-r);
-  background: var(--bn-warn-tint);
-  color: var(--bn-warn);
-  font-size: var(--bn-fs-sm);
-  font-weight: 600;
-  transition: background-color var(--bn-t-fast) var(--bn-ease);
+  color: var(--bn-ink-2);
+  font-size: var(--bn-fs-md);
 }
-.review-identify-strip:hover { background: color-mix(in srgb, var(--bn-warn-tint) 70%, var(--bn-warn) 30%); }
-.review-identify-strip-arrow { opacity: 0.7; }
+.review-identify-strip-said .bn-icon { color: var(--bn-ink-3); }
+@media (max-width: 559px) {
+  .review-identify-strip { padding: var(--bn-3); }
+  .review-identify-open { width: 100%; }
+}
 
 /* D291: `.bn-sheet`'s own default width (kit.css, 420px) is sized for a
    form or a detail — RunPanel's own master/detail split and the composer's 940px dialog were

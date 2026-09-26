@@ -6044,7 +6044,7 @@ COMPONENTS = [
                                             "`open` state is true rather than taking one, and on "
                                             "the same `useOverlayLayer` stack every other layer "
                                             "here joins — which the file it replaced never did.",
-                                    "governed_by": ["D94", "D95", "D118", "D128", "D288"]},
+                                    "governed_by": ["D94", "D95", "D118", "D128", "D288", "D291"]},
             "src/kit/dialog.css": {"does": "`Dialog`'s own inner rhythm — the sheet's width, the "
                                            "head padding, the lightbox's 44px circular Close and "
                                            "its backdrop blur. The panels themselves are the "
@@ -9662,7 +9662,8 @@ COMPONENTS = [
                 # an all-or-nothing worklist — two entries out of a hundred and one used to
                 # suppress it for the other ninety-nine.
                 "governed_by": ["D4", "D13", "D16", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
-                                "D41", "D46", "D77", "D118", "D136", "D146", "D194", "D218"],
+                                "D41", "D46", "D77", "D118", "D136", "D146", "D194", "D218", "D221",
+                                "D291"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "

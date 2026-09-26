@@ -22,6 +22,7 @@ import {
   answerReviewGroup,
   describeFailure,
   getQueues,
+  getRuns,
   getStatus,
   isDeparted,
   neighborWords,
@@ -39,7 +40,8 @@ import { Button, EmptyState, Icon, IconButton, Kbd, Money, Notice, Page, Pill, R
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
-import { RunsContent, boxInHash, runInHash, stateInHash } from './Runs'
+import { RunsContent, boxInHash, perCardRate, runInHash, stateInHash } from './Runs'
+import { roundsToNothing } from './money'
 import './ReviewQueue.css'
 import { isRetiredReason, reasonLabel } from './reasons'
 import { collectorNumber as sharedCollectorNumber } from './cardNumber'
@@ -733,11 +735,22 @@ export function ReviewQueue() {
     return stateInHash() || runInHash() !== null || boxInHash() !== null || new URLSearchParams(query).get('runs') === '1'
   })
 
-  /* THE STRIP: "Identify N cards", drawn only when the pipeline has cards waiting
-   * (`status.states.captured`, the same figure Home's own standing sentence reads). A
-   * light-weight read, not the composer's own preflight — opening the sheet runs that, with
-   * the real estimate, the way it always has. */
+  /** True when the sheet was opened by the Identify strip, so it opens on the composer. */
+  const [runsCompose, setRunsCompose] = useState(false)
+  const openRuns = useCallback((compose: boolean) => {
+    setRunsCompose(compose)
+    setRunsOpen(true)
+  }, [])
+  const closeRuns = useCallback(() => setRunsOpen(false), [])
+
+  /* THE STRIP: "Identify N cards, ~$X", drawn only when the pipeline has cards waiting
+   * (`status.states.captured`, the same figure Home's own standing sentence reads). Two light
+   * reads, not the composer's own preflight, which decodes every waiting photograph and takes
+   * about a minute over five hundred cards. `~$X` is this store's own past cost per card
+   * (`Runs.tsx:perCardRate`) times N. The press opens the composer, whose free preflight is the
+   * real figure the spend is confirmed against, as it always was. */
   const [status, setStatus] = useState<ServerStatus | null>(null)
+  const [rate, setRate] = useState<number | null>(null)
   useEffect(() => {
     let live = true
     void getStatus()
@@ -750,6 +763,22 @@ export function ReviewQueue() {
     }
   }, [reloads])
   const captured = status?.states.captured ?? 0
+  /* The run list is read only when there is a strip to price: a store with nothing waiting
+     pays for no second read. */
+  const waiting = captured > 0
+  useEffect(() => {
+    if (!waiting) return
+    let live = true
+    void getRuns()
+      .then((runs) => {
+        if (live) setRate(perCardRate(runs))
+      })
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [waiting, reloads])
+  const about = rate === null ? null : rate * captured
 
   useEffect(() => {
     let live = true
@@ -1446,8 +1475,8 @@ export function ReviewQueue() {
               OFF: this screen wires RELOAD_KEY into the same switch every other key rides,
               because a second listener would fire the read twice. */}
           <ReloadButton onReload={reload} busy={disabled} label="Reload the queue" hotkey={false} className="review-reload" />
-          {/* D291: every Runs capability, one press away. */}
-          <IconButton icon="play" label="Past runs" onClick={() => setRunsOpen(true)} className="review-runs-open" />
+          {/* D291: past runs, and every other Runs capability, behind one link. */}
+          <IconButton icon="history" label="Past runs" onClick={() => openRuns(false)} className="review-runs-open" />
           {everyone.length === 0 ? null : (
             <IconButton
               icon="list"
@@ -1465,15 +1494,24 @@ export function ReviewQueue() {
         </>
       }
     >
-      {/* THE STRIP (D291): drawn only when the pipeline has cards
-          waiting. Opens the same sheet, on the composer's own default "needed" start — the
-          real cost estimate is the composer's preflight, not a second one guessed here. */}
+      {/* THE STRIP (D291): drawn only when the pipeline has cards waiting. One sentence and
+          one worded press, because it spends money. It opens the composer on its default
+          "needed" start, every card photographed and not identified, which is this N. */}
       {captured === 0 ? null : (
-        <button type="button" className="review-identify-strip" onClick={() => setRunsOpen(true)}>
-          <Icon name="play" size={16} />
-          {`Identify ${captured} ${captured === 1 ? 'card' : 'cards'}`}
-          <Icon name="arrowRight" size={14} className="review-identify-strip-arrow" />
-        </button>
+        <div className="review-identify-strip">
+          <span className="review-identify-strip-said">
+            <Icon name="camera" size={16} />
+            Photographed, not yet identified.
+          </span>
+          <Button icon="zap" onClick={() => openRuns(true)} className="review-identify-open">
+            Identify {captured} {captured === 1 ? 'card' : 'cards'}
+            {about === null ? null : roundsToNothing(about) ? ', under a cent' : (
+              <>
+                , ~<Money value={about} />
+              </>
+            )}
+          </Button>
+        </div>
       )}
 
       {!lens ? null : (
@@ -1511,7 +1549,7 @@ export function ReviewQueue() {
 
       {rows !== null && worklist.length === 0 ? (
         everyone.length === 0 ? (
-          <Done tally={tally} startedAt={startedAt.current} receipts={receipts} onUndo={undo} disabled={disabled} onOpenRuns={() => setRunsOpen(true)} />
+          <Done tally={tally} startedAt={startedAt.current} receipts={receipts} onUndo={undo} disabled={disabled} onOpenRuns={() => openRuns(false)} />
         ) : (
           <section className="review-lone bn-panel">
             <EmptyState
@@ -1580,8 +1618,8 @@ export function ReviewQueue() {
       {/* D291: every Runs capability, reachable from here. Mounted only
           while open (`Sheet`'s own `useLeave`), so its GET /boxes and GET /pipeline/runs
           reads happen only when the operator is looking at it. */}
-      <Sheet open={runsOpen} onClose={() => setRunsOpen(false)} title="Runs" icon="play" className="review-runs-sheet">
-        <RunsContent />
+      <Sheet open={runsOpen} onClose={closeRuns} title="Runs" icon="history" className="review-runs-sheet">
+        <RunsContent compose={runsCompose} onLeave={closeRuns} />
       </Sheet>
     </Page>
   )
