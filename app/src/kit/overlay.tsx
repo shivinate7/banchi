@@ -474,7 +474,7 @@ type FrameProps = OverlayProps & {
 
 function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose, title, icon, footer, children, className }: FrameProps) {
   const { mounted, leaving } = useLeave(open)
-  /* THE FULFILLER GETS WORDS, ALWAYS (D-icon-buttons, spec rule 1; DESIGN.md's 20px floor).
+  /* THE FULFILLER GETS WORDS, ALWAYS (D288, spec rule 1; DESIGN.md's 20px floor).
      A Sheet or Modal is portalled to <body>, so it cannot read its persona from where it
      sits in the DOM — `usePageRoute()` is a React context read, which a portal does not
      break, since context follows the component tree rather than the DOM tree. */

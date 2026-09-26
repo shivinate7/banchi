@@ -253,7 +253,7 @@ export const MISSING_FACET = 'missing'
  *  miss one, summed over `groupMissing`. The press opens `#/orders?show=missing`, which lists
  *  exactly the buyers counted here.
  *
- *  History (D-home-owed-line): the first build mapped a line reason to a facet, and the second
+ *  History (D287): the first build mapped a line reason to a facet, and the second
  *  opened the `worstStatus` facet holding the most copies. On the owner's store that still split
  *  135 copies across two facets (125 and 10), so no single status list matched the sentence. */
 export function missingCopies(

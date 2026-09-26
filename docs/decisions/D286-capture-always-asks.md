@@ -1,4 +1,4 @@
-## D-capture-always-asks — Capture always asks on a fresh device, and Home's tile is the thing that lied
+## D286 — Capture always asks on a fresh device, and Home's tile is the thing that lied
 
 **The owner's ruling, 2026-09-24, amends D142.** The owner asked for more explanation first.
 Then the owner ruled:

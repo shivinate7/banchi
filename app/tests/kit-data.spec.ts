@@ -591,7 +591,7 @@ test('every kit-data control a thumb presses is 40px tall at 390', async ({ page
         .filter((el) => getComputedStyle(el).visibility !== 'hidden')
         .map((el) => {
           const r = el.getBoundingClientRect()
-          /* THE HIT AREA, NOT THE VISUAL BOX (D-icon-buttons, round 2, option (a)). An
+          /* THE HIT AREA, NOT THE VISUAL BOX (D288, round 2, option (a)). An
              IconButton paints at FACE size and floors its hit area with a ::before inset
              instead (max(40px, 100%), kit.css) — the box alone now under-reports a control
              the pseudo already covers. Only counted when the pseudo actually draws. */
@@ -650,7 +650,7 @@ async function contrastOf(page: Page, selector: string): Promise<number> {
 for (const theme of ['light', 'dark'] as const) {
   test(`every field edge reads 3:1 against the page in ${theme}`, async ({ page }) => {
     await open(page, 1440, theme)
-    /* `.bn-sort-dir` WAS HERE, a bordered field: D-icon-buttons (round 2) converted the
+    /* `.bn-sort-dir` WAS HERE, a bordered field: D288 (round 2) converted the
        direction toggle to an IconButton, which carries no border on purpose — a ghost-style
        icon-only control, not a field. This floor is a field-edge floor, and that control is
        no longer a field. */

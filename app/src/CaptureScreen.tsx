@@ -911,7 +911,7 @@ export function CaptureScreen() {
      render and never again. That was already the rule for the per-key readers this replaced,
      and it matters more now that one read serves six values.
 
-     A FRESH DEVICE ALWAYS ASKS (D-capture-always-asks, amends D142): `storedCaptureSetup`
+     A FRESH DEVICE ALWAYS ASKS (D286, amends D142): `storedCaptureSetup`
      reads `restored.box` as `null` when this device has never written `banchi.capture.setup`,
      and nothing below seeds it from anywhere else — not Home's own figure, not
      `banchi.box-recency`'s top entry, not the store's highest-numbered box. The Box row opens

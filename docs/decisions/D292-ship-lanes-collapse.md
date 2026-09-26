@@ -1,4 +1,4 @@
-## D-ship-lanes-collapse — The lane order stays, a phone opens every lane folded, and the rule is said once
+## D292 — The lane order stays, a phone opens every lane folded, and the rule is said once
 
 **The owner's ruling, 2026-09-23: keep the lane order. Collapse every lane on a phone. State the rule once, in the lane header. No reason codes.**
 

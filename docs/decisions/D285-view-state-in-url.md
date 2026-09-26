@@ -74,4 +74,4 @@ both untouched.
 The owner's option c at the PR 2 integration gives `#/orders` a "Show" value, `missing` ("Missing
 a copy"), and Home's "Cannot be filled" press links to `#/orders?show=missing`. The value lives in
 the URL like every other facet value here. So the link opens the same list that a person gets
-from the option. D-home-owed-line records the rule behind it.
+from the option. D287 records the rule behind it.

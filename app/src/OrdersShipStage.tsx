@@ -152,7 +152,7 @@ function keptOf(seconds: number): string {
 }
 
 /** Whether the viewport is a phone, for the one thing that changes shape there: a freshly
- *  loaded batch's lanes start folded (UX-016/D-ship-lanes-collapse) rather than all three open,
+ *  loaded batch's lanes start folded (UX-016/D292) rather than all three open,
  *  because the Needs-a-look lane — the one that needs a person — could sit 32,000 px down a
  *  37,000 px page. The same convention `ReviewQueue.tsx`, `Pricing.tsx`, `Orders.tsx` and
  *  `BoxBrowse.tsx` already use. */
@@ -186,7 +186,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
     try {
       const answer = await readShippingExport(await readUpload(chosen))
       /* EVERY READ STARTS WITH EVERY LANE SHOWING ITS OWN CONTENT — except on a phone, where D61
-         (amended: D-ship-lanes-collapse) folds all three shut so the operator sees three counts,
+         (amended: D292) folds all three shut so the operator sees three counts,
          not a 37,000 px scroll, before choosing which to open. A collapsed lane is about the
          file on screen; carrying it across a new file would hide orders the operator has never
          seen, so a fresh read still resets to the width's own default rather than to whatever
@@ -595,7 +595,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
 
               {/* THE ID IS ALWAYS HERE, so `aria-controls` above always resolves — only its
                   content is conditional. A FOLDED LANE DRAWS NO SENTENCE (fixed alongside
-                  D-ship-lanes-collapse): the chip's own count already says how many, and on a
+                  D292): the chip's own count already says how many, and on a
                   phone, where every lane opens folded, three lanes repeating "N orders folded
                   away" was the exact repeated-sentence shape TXT-01 exists to catch — restating
                   a figure the chip already shows, three times over. */}

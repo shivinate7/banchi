@@ -93,4 +93,5 @@ DEBT32 The archive sweep stays a press, and the owner intends to schedule it eve
 DEBT33 An answered queue entry can never resurface, even when it is wrong
 DEBT34 The catalogue cache never expires, on a membership claim this store cannot re-check on its own
 DEBT35 emit exits differently on one run and several runs
+DEBT36 A layout read taken while the page still moves is wrong
 ```

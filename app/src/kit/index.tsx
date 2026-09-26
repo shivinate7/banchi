@@ -81,7 +81,7 @@ export function Button({
 }
 
 /* ---- IconButton ---------------------------------------------------------------
-   THE ONE ICON-ONLY BUTTON (owner's ruling, 2026-09-24, ICONOGRAPHY; D-icon-buttons;
+   THE ONE ICON-ONLY BUTTON (owner's ruling, 2026-09-24, ICONOGRAPHY; D288;
    `docs/specs/iconography.md`): a common, repeated action from the vocabulary — Mark sold,
    Undo, Retire, Edit, Delete, Copy, Download, Open, Close, Filter, Sort, Hold, Release,
    Reveal, Hide, Clear, and the rest the spec names — becomes an icon with a `label` that is
@@ -162,7 +162,7 @@ export type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'chi
   readonly ref?: Ref<HTMLButtonElement | HTMLAnchorElement>
   readonly icon: IconName
   /** Renders an `<a>` instead of a `<button>` — same face, `::before` 40px hit area, tooltip
-   *  and accessible name (D-icon-buttons' round-2 sibling). An icon-only control that opens
+   *  and accessible name (D288' round-2 sibling). An icon-only control that opens
    *  another route or tab is a LINK, never a `window.open` in an `onClick`: only an `<a href>`
    *  gives the browser's own middle-click, right-click "open in new tab" and "copy link". */
   readonly href?: string

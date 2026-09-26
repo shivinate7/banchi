@@ -1,4 +1,4 @@
-## D-inventory-walk-first — The walk list is the rail's main part, and 720 is a desk
+## D289 — The walk list is the rail's main part, and 720 is a desk
 
 **The review's findings and the owner's rulings, 2026-09-23.** This entry amends the rail half
 of D40 (the screen is three columns: the box, the card, and where its copies are). D40 put the

@@ -50,7 +50,7 @@ function inOrder(records: readonly BoxRecord[]): BoxRecord[] {
 }
 
 /** `?run=<name>` opens that run — Home links here that way, and so does the Review strip
- *  since the fold (`docs/decisions/D-runs-folds-into-review.md`). Read off the whole hash's
+ *  since the fold (D291). Read off the whole hash's
  *  query, so it works the same whether the path in front of it is `#/runs` or `#/review`. */
 export function runInHash(): string | null {
   const query = window.location.hash.split('?')[1] ?? ''
@@ -77,7 +77,7 @@ export function boxInHash(): number | null {
   return box >= 1 ? box : null
 }
 
-/** THE RUNS CONTENT, folded into Review's own sheet (`docs/decisions/D-runs-folds-into-review.md`,
+/** THE RUNS CONTENT, folded into Review's own sheet (D291,
  *  the owner's ruling, RULINGS.md Q6). Unchanged from the screen this used to be on its own
  *  route — same state, same hooks, same hash reads — only the outer frame moved: `#/runs`'s
  *  own `<main className="runs bn-page">` and `<PageHeader>` are gone, because this now
@@ -287,7 +287,7 @@ export function RunsContent() {
   )
 }
 
-/** `#/runs` ITSELF IS A REDIRECT NOW (item 2, `D-runs-folds-into-review.md`). Every deep link
+/** `#/runs` ITSELF IS A REDIRECT NOW (item 2, `D291.md`). Every deep link
  *  a person or another screen already holds — `#/runs`, `#/runs?run=<name>`,
  *  `#/runs?state=captured`, `#/runs?box=<n>` — keeps landing on the same content, because the
  *  whole query string carries over unread by this component: `RunsContent`'s own hash reads
