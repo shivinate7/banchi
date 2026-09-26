@@ -4425,8 +4425,10 @@ test('UN-7 — a sale built on is refused, and "This card is still here" is a di
   await expect(page.getByRole('menuitem', { name: 'Bring this card back' })).toHaveCount(0)
   await stillHere.click()
 
+  /* THE OWNER'S RULING, 2026-09-25: "Card back, order re-points." Plain, not neutral. */
   const toast = page.locator('.bn-toast', { hasText: 'Card brought back' })
-  await expect(toast).toContainText('ME01 commons #4 is back in its box')
+  await expect(toast).toContainText('ME01 commons #4 is back in stock')
+  await expect(toast).toContainText('marked filled by hand')
 
   const calls = wire.filter((entry) => entry.path === '/inventory/2/4/sold')
   expect(calls).toHaveLength(2)

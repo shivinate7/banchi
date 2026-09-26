@@ -3837,62 +3837,7 @@ function OrderLineRow({
      already held — so filtering it out here is filtering out precisely the rows duplicated
      above. A copy already spoken for by another line, or one the ledger already holds, is NOT
      takeable and has nowhere else on screen to be seen, so it stays. */
-  const liveCopies = hidePicks === true ? map.copies.filter((copy) => !copy.takeable) : map.copies
-
-  /* THE SOLD COPY KEEPS ITS PLACE (UN-6, `docs/specs/undo.md` §11.3, D118). A pull's own reread
-   * drops that copy out of `liveCopies` — it really has left the box — so without this the row
-   * beneath it slides up into the spot a finger just tapped. `pressed`, below, is a snapshot of
-   * the row's own position at the moment it was pressed, held until either a newer store read
-   * brings the key back (the undo landed) or this row unmounts. Nothing here is optimistic
-   * about the WRITE — `onPull`/`onWalkPull` are unchanged — only about where the row draws. */
-  const [pressed, setPressed] = useState<ReadonlyMap<string, { pick: PickRow; at: number; place: string }>>(new Map())
-  useEffect(() => {
-    setPressed((held) => {
-      if (held.size === 0) return held
-      let changed = false
-      const next = new Map(held)
-      for (const key of held.keys()) {
-        if (liveCopies.some((copy) => copy.key === key)) {
-          next.delete(key)
-          changed = true
-        }
-      }
-      return changed ? next : held
-    })
-  }, [liveCopies])
-
-  const wrappedPull: PullHandler = useCallback(
-    (pressedOrder, pressedLine, pick, target) => {
-      const key = copyKeyOf(pick)
-      const at = liveCopies.findIndex((copy) => copy.key === key)
-      setPressed((held) => {
-        const next = new Map(held)
-        next.set(key, { pick, at: at === -1 ? liveCopies.length : at, place: sayPlace(pick.place.label ?? `box ${pick.box}, index ${pick.index}`) })
-        return next
-      })
-      onPull(pressedOrder, pressedLine, pick, target)
-    },
-    [liveCopies, onPull],
-  )
-
-  const copies = useMemo(() => {
-    if (pressed.size === 0) return liveCopies
-    const merged = [...liveCopies]
-    for (const held of pressed.values()) {
-      const key = copyKeyOf(held.pick)
-      if (merged.some((copy) => copy.key === key)) continue
-      merged.splice(Math.min(held.at, merged.length), 0, {
-        key,
-        pick: held.pick,
-        offered: false,
-        claimedBy: null,
-        spokenFor: null,
-        takeable: false,
-        free: false,
-      })
-    }
-    return merged
-  }, [liveCopies, pressed])
+  const copies = hidePicks === true ? map.copies.filter((copy) => !copy.takeable) : map.copies
 
   /* The first six in the map's order, PLUS every copy this order was offered wherever it fell —
      the resolver's own choice is never the thing behind the fold. */
@@ -3984,9 +3929,7 @@ function OrderLineRow({
               pick={copy.pick}
               offered={copy.offered}
               busy={busy}
-              onPull={wrappedPull}
-              sold={pressed.has(copy.key)}
-              place={pressed.get(copy.key)?.place}
+              onPull={onPull}
               /* The heading already names the card; the row repeats it only where the store's
                  name for THIS copy differs from it. */
               name={
@@ -4220,8 +4163,6 @@ function PickLine({
   lit,
   lead,
   offered,
-  sold,
-  place,
 }: {
   readonly order: OrderRow
   readonly line: ResolvedLine
@@ -4241,21 +4182,13 @@ function PickLine({
   /** This copy is one the resolver offered THIS line — the machine's own choice, marked so the
    *  operator can take it or ignore it. Absent in the walk, where every row is an offered copy. */
   readonly offered?: boolean
-  /** UN-6 (`docs/specs/undo.md` §11.3): THIS row was just pulled, by this device, this render.
-   *  The row keeps its place and its own `Mark sold` becomes `Undo` — the same D57 answer
-   *  `#/inventory` already gives, moved to this screen. Never true for a copy the ledger
-   *  already held before this visit; that fact is the `figure.pulled` note below the list. */
-  readonly sold?: boolean
-  /** The place `sold` puts back, for the Undo control's name and its toast. */
-  readonly place?: string
 }) {
   const target = aimOf(line, pick)
   const pressing = target !== null && busy === `${line.order_key}/${line.sku}/${target.capture_id}`
   const full = `${pick.card_name ?? line.line.name ?? line.sku}${pick.condition === null ? '' : ` (${pick.condition})`}`
-  const undoing = target !== null && busy === `undo/${target.capture_id}`
   return (
     <li
-      className={`orders-pick${pick.held_by !== null ? ' orders-pick-is-held' : ''}${sold === true ? ' orders-pick-sold' : ''}`}
+      className={`orders-pick${pick.held_by !== null ? ' orders-pick-is-held' : ''}`}
       data-offered={offered === true ? 'true' : undefined}
       data-box={pick.box}
       data-index={pick.index}
@@ -4298,24 +4231,10 @@ function PickLine({
           </button>
         ) : null}
       </span>
-      {/* SOLD KEEPS ITS PLACE (UN-6, `docs/specs/undo.md` §11.3, D57): the row that was just
-          pressed draws Undo where `Mark sold` stood, rather than leaving the slot to whichever
-          copy the store's reread slid up into it. No clock (UN-5): it stands until a newer
-          write replaces it or the undo lands and the fresh read brings the key back. */}
-      {sold === true ? (
-        <IconButton
-          icon="undo"
-          label="Undo"
-          name={`Undo the sale at ${place ?? sayPlace(pick.place.label ?? `box ${pick.box}`)}`}
-          className="orders-pull"
-          busy={undoing}
-          disabled={busy !== null && !undoing}
-          onClick={() => void undoFromToast(target ?? { box: pick.box, index: pick.index, capture_id: pick.capture_id ?? '' }, place ?? sayPlace(pick.place.label ?? `box ${pick.box}`), name ?? pick.card_name ?? line.line.name ?? line.sku)}
-        />
-      ) : /* SPOKEN FOR, DRAWN AS A FACT RATHER THAN A DISABLED BUTTON. `held_by` says this exact
+      {/* SPOKEN FOR, DRAWN AS A FACT RATHER THAN A DISABLED BUTTON. `held_by` says this exact
           card is already recorded against a line; offering it again would walk the picker to one
-          drawer for two envelopes. */
-      pick.held_by !== null ? (
+          drawer for two envelopes. */}
+      {pick.held_by !== null ? (
         <span className="orders-pick-held">
           <Icon name="lock" size={13} />
           Held for order <span className="bn-mono">{pick.held_by.order}</span>

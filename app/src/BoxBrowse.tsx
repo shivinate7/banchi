@@ -2924,9 +2924,10 @@ function CardOps({
    * photo is gone or the order it was pulled for has shipped or closed. This is a DIFFERENT
    * write — never a retry of the same one.
    *
-   * THE SCREEN TEXT STAYS NEUTRAL ON PURPOSE (coordinator note, 2026-09-25): the owner is
-   * re-ruling what this does to the order ledger. Do not claim a specific order effect here
-   * until that lands — the sentence says only that the card is back. */
+   * THE OWNER'S RULING, 2026-09-25: "Card back, order re-points." The card goes back on the
+   * shelf, and the order line it was pulled for is marked filled by hand instead
+   * (`sold_separately`, lane S's own doc, §11.8) — a shipped order's own count stands, so the
+   * screen may say this plainly rather than staying silent about the order. */
   const stillHere = async () => {
     if (busy) return
     setBusy(true)
@@ -2940,7 +2941,7 @@ function CardOps({
         kind: 'ok',
         icon: 'undo',
         title: 'Card brought back',
-        body: `${label} is back in its box.`,
+        body: `${label} is back in stock. The order it was pulled for is now marked filled by hand.`,
         ttlMs: 12000,
       })
       setMenu(false)

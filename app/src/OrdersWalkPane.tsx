@@ -168,6 +168,17 @@ function sectionsOf(plan: WalkPlan | null, rows: readonly WalkRow[]): WalkSectio
  *  taking the "newest" rank away from it (below), or the walk itself resetting. */
 type Receipt = { readonly at: number; readonly target: PullTarget; readonly place: string; readonly orderKey: string }
 
+/** HOW LONG THE PANEL STAYS DISABLED AFTER A SALE ADVANCES IT (UN-6, `docs/specs/undo.md`
+ *  §11.3). The blind audit's own words: "Orders on phone: after tapping $, the next card
+ *  (Tricksy Tentacles) slid in with its $ button exactly where I had just tapped." `advanceAfter`
+ *  moves `current` to a DIFFERENT card the instant a take is satisfied, and that card's own
+ *  `RowAction` sits in the identical slot the finger just left — a double-tap sells the card
+ *  the operator never meant to touch. `busyCopy` already disables every OTHER row while one is
+ *  in flight; the gap was that it cleared the moment the new card was already on screen, so the
+ *  new card's own row was never `busy` and never disabled. Held a beat longer closes it, at the
+ *  cost of nothing an operator pressing one card at a time would notice. */
+const ADVANCE_GUARD_MS = 400
+
 /* ------------------------------------------------------------------------ the walk, as a hook */
 
 /** THE WALK, OVER THE UNION `#/orders`' rail hands it — the selected order plus every ticked
@@ -431,6 +442,15 @@ export function useOrderWalk({
            needs it; the advance itself only reads `rows`. */
         void stopKey
         advanceAfter(row.rowKey, satisfied, justSold)
+        /* UN-6: `busyCopy` still names THIS copy, so `RowAction` reads every row of whichever
+           card `advanceAfter` just switched to as disabled (`disabled={busyCopy !== null &&
+           !busy}` — the new card's own copies are never `busy`, so this is what disables
+           them). Cleared a beat later rather than at once, so the card that lands under the
+           finger cannot be sold by the same motion that just sold the one before it. A refusal
+           clears it at once below instead — the panel never changed, so there is nothing to
+           guard against there. */
+        if (live.current) window.setTimeout(() => { if (live.current) setBusyCopy(null) }, ADVANCE_GUARD_MS)
+        return
       }
       setBusyCopy(null)
     })()

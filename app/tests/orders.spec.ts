@@ -1049,6 +1049,98 @@ test('the pull sends the capture_id of the row that was pressed, and its own pos
   })
 })
 
+test('UN-6 — a sale that advances to a new card guards its own $ against the tap that just landed, at 390 (D118)', async ({
+  page,
+}) => {
+  /* THE BLIND AUDIT'S OWN WORDS: "Orders on phone: after tapping $, the next card (Tricksy
+   * Tentacles) slid in with its $ button exactly where I had just tapped." Two takes, each
+   * wanted 1 with one copy, so the FIRST sale satisfies its own take and `advanceAfter`
+   * (`OrdersWalkPane.tsx`) moves the whole card pane to the second one at once — the real,
+   * reachable defect (`WalkCardPane`/`RowAction`, `#/orders`' own walk). `OrderLineRow`'s
+   * `PickLine` (the Manage sheet's list) always renders with `hidePicks` on, so a takeable
+   * copy's own Mark sold never draws there — the plan named that file too, but tracing the
+   * render tree found no screen path to it, so no change landed there this round. */
+  await page.setViewportSize({ width: 390, height: 844 })
+  const SKU_B = '9191487'
+  const lineB = line({
+    sku: SKU_B,
+    wanted: 1,
+    owed: 1,
+    fulfilled: 0,
+    outstanding: 1,
+    on_hand: 1,
+    line: { sku: SKU_B, quantity: 1, name: 'Tricksy Tentacles', number: '008', printing: 'Normal', condition: 'Near Mint', rarity: 'Rare', unit_price: '1.24', kind: 'single' },
+    picks: [
+      pick({
+        card_name: 'Tricksy Tentacles',
+        card_number: '008',
+        box: 3,
+        index: 22,
+        capture_id: 'cap-b',
+        place: place({ box: 3, index: 22, slot: 18, card: 18, label: 'Box 3, Section 2, Card 18' }),
+      }),
+    ],
+  })
+  await open(page, {
+    orders: payloadOf(
+      [
+        order({
+          wanted: 2,
+          lines: [line().line, lineB.line],
+          progress: [
+            ...order().progress,
+            { sku: SKU_B, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
+          ],
+        }),
+      ],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [line(), lineB] }],
+    ),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({ wanted: 1, copies: [walkPlanCopy({ capture_id: 'cap-a' })] }),
+          walkPlanTake({
+            sku: SKU_B,
+            name: 'Tricksy Tentacles',
+            wanted: 1,
+            copies: [
+              walkPlanCopy({
+                box: 3,
+                index: 22,
+                slot: 18,
+                card: 18,
+                label: 'Box 3, Section 2, Card 18',
+                capture_id: 'cap-b',
+              }),
+            ],
+          }),
+        ],
+      }),
+    ]),
+  })
+
+  /* AT 390, THE LIST AND THE CARD PANE ARE TWO STOPS, not one screen: `.orders-walk-press`
+     opens the row a phone shows one at a time. Desktop draws both, which is why the older
+     case here never had to do this. */
+  await page.getByRole('button', { name: /Volcanion/ }).click()
+
+  const action = page.getByRole('button', { name: /^Mark sold/ })
+  const before = await action.boundingBox()
+  await action.click()
+
+  /* THE NEW CARD LANDS AT ONCE — this is the deliberate advance, not the defect — and its own
+     button sits at the exact coordinate the tap just left. That coincidence is what makes a
+     double-tap dangerous, so it is asserted rather than assumed. */
+  await expect(page.locator('.orders-card-name')).toHaveText('Tricksy Tentacles')
+  const stillHere = page.getByRole('button', { name: /^Mark sold/ })
+  expect(await stillHere.boundingBox()).toEqual(before)
+
+  /* UN-6's fix (`ADVANCE_GUARD_MS`, `OrdersWalkPane.tsx`): the button there is disabled for a
+     beat, so the motion that just sold Volcanion cannot also sell Tricksy Tentacles. */
+  await expect(stillHere).toBeDisabled()
+  await expect(stillHere).toBeEnabled()
+})
+
 /* -------------------------------------------------------------------------------------- 5 */
 
 test('the receipt names where the card just was, never the departed label the sale answers with', async ({
