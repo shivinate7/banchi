@@ -39,7 +39,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from harness.tests import Checks, Result
-from pipeline import decisions, join, pricing, tcgcsv
+from pipeline import corpus, decisions, join, pricing, tcgcsv
 
 NAME = "T5"
 DESCRIPTION = "Pricing rules, rounding, floor clamp, and the no-market-data refusal"
@@ -429,6 +429,35 @@ def run() -> Result:
         [ARTICUNO],
         "an unlisted SKU never reaches the import file",
     )
+
+    # --- a held SKU with no market price, as `#/pricing` stores it ---------------------------
+    #
+    # THE SCREEN'S OWN SHAPE, THROUGH THE CORPUS. A hold is one answer on the `price` channel on
+    # every row, and it carries the answer it replaced in `before` (the owner's ruling, "Bring
+    # back $5.16"). `join.prices_for` must skip the held SKU before it reads `no_market_data`,
+    # and still list the control. A release writes `before` back, and the SKU lists again.
+    def _through_corpus(answers):
+        book = corpus.Corpus.parse({"version": 1, "skus": answers})
+        choice = book._decisions(None, [ARTICUNO, ACCELGOR], [ARTICUNO, ACCELGOR])
+        return join.prices_for(
+            report,
+            sub_threshold=pricing.flat_floor(),
+            sku_dispositions=choice.dispositions(),
+            no_market_data=choice.no_market_data,
+            withheld=set(choice.withheld()),
+        )
+
+    # NO `leave_unanswered`: an unanswered no-price SKU refuses here, so a held one passing
+    # proves the hold is what answered it, not the send's leave-out rule.
+    hold = {"withheld": "bullish", "note": "rotation", "before": {"value": "22.00", "channel": "price"}}
+    on_hold = _through_corpus({ARTICUNO: {"value": hold}, ACCELGOR: {"value": "4.00"}})
+    c.ok(
+        ARTICUNO not in on_hold,
+        "a held SKU with no market price is withheld, and its `before` field is not read as a price",
+    )
+    c.equal(on_hold.get(ACCELGOR), Decimal("4.00"), "the control, a typed price with no market price, still lists")
+    released = _through_corpus({ARTICUNO: {"value": "22.00"}, ACCELGOR: {"value": "4.00"}})
+    c.equal(released.get(ARTICUNO), Decimal("22.00"), "a release writes `before` back, and the SKU lists at it")
 
     # --- withholding: an answer that is not a price (D49) ------------------------------------
     #

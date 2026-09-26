@@ -655,3 +655,8 @@ On expiry: "Yes, until it's built on (Recommended)".
   the field, with a short "No market price" mark, and never "Needs a price". Home counts
   that copy as ready. The screen follows what the send already lists. The send, the files
   it writes and the stored prices do not change. DEBT42 records the gap and its close.
+- Release after a hold (owner, 2026-09-26, the owner's chosen option, verbatim): "Bring back
+  $5.16 (Recommended)". A release puts back the answer the hold replaced, value and
+  channel. So the card goes out on the next send, as the toast says. The hold keeps that
+  answer in its own `before` field, and a send never reads it. A hold with no earlier answer
+  releases to none, as before. Its home is `docs/specs/undo.md` §11.1, the Hold row.

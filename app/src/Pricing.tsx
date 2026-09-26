@@ -973,11 +973,13 @@ export function Pricing() {
    *  holds by the time the button is pressed. `before` is read off the SAME `book` for every
    *  op in the batch — the state before any of them landed, never a later op's own write. */
   const writeMany = useCallback(
-    (ops: readonly { sku: string; bucket: PricingSku['bucket']; value: unknown }[]): number => {
-      const writes = ops.map(({ sku, bucket }) => ({
+    (ops: readonly { sku: string; bucket: PricingSku['bucket']; value: unknown; channel?: 'price' | 'unknown' }[]): number => {
+      /* `channel` NAMES THE CHANNEL OUTRIGHT, for a release that puts back the answer a hold
+       * replaced on the channel it was stored on. Otherwise the bucket decides. */
+      const writes = ops.map(({ sku, bucket, channel }) => ({
         sku,
         before: book?.skus?.[sku],
-        channel: (targetOf(bucket) === 'no_market_data' ? 'unknown' : 'price') as 'price' | 'unknown',
+        channel: channel ?? ((targetOf(bucket) === 'no_market_data' ? 'unknown' : 'price') as 'price' | 'unknown'),
       }))
       setBook((current) => {
         if (current === null) return current
@@ -1540,8 +1542,18 @@ export function Pricing() {
 
   const toggleHold = useCallback(
     (sku: PricingSku) => {
-      if (isWithheld(answers[sku.sku])) {
-        const id = write(sku.sku, sku.bucket, undefined)
+      /* THE ROW'S OWN ANSWER, read the way the row is drawn (`answerFor`), so a hold stored as
+       * 'unlisted' on the `unknown` channel releases too, and not only one on `price`. */
+      const held = answerFor(sku)
+      if (isWithheld(held)) {
+        /* A RELEASE PUTS BACK THE ANSWER THE HOLD REPLACED (the owner's ruling, "Bring back
+         * $5.16"), on its own channel, so the toast's "next send" is true. A hold with no
+         * earlier answer releases to none. */
+        const prior = typeof held === 'object' ? held.before : undefined
+        const id =
+          prior === undefined || prior.value === null
+            ? write(sku.sku, sku.bucket, undefined)
+            : writeMany([{ sku: sku.sku, bucket: sku.bucket, value: prior.value, channel: prior.channel === 'unknown' ? 'unknown' : 'price' }])
         setHoldFor(null)
         toast({
           kind: 'receipt',
@@ -1554,7 +1566,7 @@ export function Pricing() {
       }
       openHold(sku)
     },
-    [answers, write, openHold],
+    [answerFor, write, writeMany, openHold],
   )
 
   const closeHold = useCallback(() => {
@@ -1568,6 +1580,13 @@ export function Pricing() {
       const record: WithheldRecord = { withheld: reason }
       if (watch.trim() !== '') record.watch_above = watch.trim()
       if (text.trim() !== '') record.note = text.trim()
+      /* THE ANSWER THIS HOLD REPLACES, kept inside it so a release can put it back (the
+       * owner's ruling, "Bring back $5.16"). Only a real answer: none, or an earlier hold, is
+       * not kept. */
+      const prior = book?.skus?.[sku.sku]
+      if (prior !== undefined && prior !== null && prior.value !== null && !isWithheld(prior.value)) {
+        record.before = { value: prior.value as string | number, channel: prior.channel ?? 'price' }
+      }
       /* ONE ANSWER, ON THE `price` CHANNEL, FOR EVERY ROW (the final Pricing review, HIGH).
        * `book.skus[sku]` holds ONE answer per SKU, so the old second write ('unlisted' on the
        * `unknown` channel) replaced this record and lost the reason, watch and note. A hold
@@ -1586,7 +1605,7 @@ export function Pricing() {
       })
       inputs.current.get(sku.sku)?.focus()
     },
-    [write],
+    [write, book],
   )
 
   /** Read the shape of every row still waiting — one press, chunked, sequential. EACH ROW ASKS

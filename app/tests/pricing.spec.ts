@@ -2077,6 +2077,57 @@ test('DEBT42 — a typed price on a row whose market went blank is shown, becaus
   await expect(row).not.toContainText('Needs a price')
 })
 
+/* THE OWNER'S RULING ON RELEASE, "Bring back $5.16 (Recommended)". A hold keeps the answer it
+ * replaced, value and channel, inside its own record (`before`). A release writes that answer
+ * back, so the card goes out on the next send at the price it had, as the toast says. A hold
+ * with no earlier answer releases to none, as before. */
+const sentFor = (wire: Wire[], key: string) =>
+  (wire.filter((row) => row.method === 'PUT').pop()?.body as { corpus?: { skus?: Record<string, { value: unknown; channel?: string }> } } | undefined)
+    ?.corpus?.skus?.[key]
+
+test('a release puts back the price the hold replaced, on its own channel', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [sku({ sku: '5', name: 'Void Assault', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
+    decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {}, no_market_data: { '5': '5.16' } },
+  })
+  await page.locator('.pricing-hold').first().click()
+  await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByRole('button', { name: 'Hold it' }).click()
+  await expect.poll(() => sentFor(wire, '5')?.value).toMatchObject({ before: { value: '5.16', channel: 'unknown' } })
+
+  await page.locator('.pricing-hold').first().click()
+  await expect(page.locator('.bn-toast', { hasText: 'Released Void Assault' })).toBeVisible()
+  await expect.poll(() => sentFor(wire, '5')).toMatchObject({ value: '5.16', channel: 'unknown' })
+  await expect(field(page)).toHaveValue('5.16')
+})
+
+test('a hold with no earlier answer releases to no answer', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [sku({ sku: '5', name: 'Void Assault', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
+    decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: { '5': { withheld: 'bullish' } } },
+  })
+  await expect(page.locator('.pricing-row')).toHaveAttribute('data-answer', 'held')
+  await page.locator('.pricing-hold').first().click()
+  await expect(page.locator('.bn-toast', { hasText: 'Released Void Assault' })).toBeVisible()
+  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
+  expect(sentFor(wire, '5')).toBeUndefined()
+})
+
+test('a hold stored as unlisted on the no-market channel is really released', async ({ page }) => {
+  /* The two-write hold main once stored: 'unlisted' on the `unknown` channel. The row draws it
+   * as held, so its Release button has to release it, and not open the hold panel. */
+  const wire = await open(page, {
+    skus: [sku({ sku: '5', name: 'Void Assault', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
+    decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {}, no_market_data: { '5': 'unlisted' } },
+  })
+  await expect(page.locator('.pricing-row')).toHaveAttribute('data-answer', 'held')
+  await page.locator('.pricing-hold').first().click()
+  await expect(page.locator('.pricing-holdpanel')).toHaveCount(0)
+  await expect(page.locator('.bn-toast', { hasText: 'Released Void Assault' })).toBeVisible()
+  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
+  expect(sentFor(wire, '5')).toBeUndefined()
+})
+
 test('a held row says so, in both registers, and has no price field', async ({ page }) => {
   await open(page, {
     decisions: {
@@ -3400,6 +3451,10 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
      to be re-typed. */
   await toast.getByRole('button', { name: 'Undo' }).click()
   await expect(field).toHaveValue('4.50')
+  /* ONE VOCABULARY (`docs/specs/undo.md` §11.11): the way back says "undone", as the Restore
+     notice does, never "restored". */
+  await expect(page.locator('.bn-toast', { hasText: '1 price undone' })).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: 'restored' })).toHaveCount(0)
   const back = wire.filter((r) => r.path === '/pricing/restore').at(-1)
   /* THE ANSWER ITSELF TRAVELS, VALUE AND DATE. A restore that sent only the SKU would make the
      undo a re-type, and one that let the server stamp a fresh date would read as a store-wide

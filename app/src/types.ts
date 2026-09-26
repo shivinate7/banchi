@@ -2354,6 +2354,10 @@ export type WithheldRecord = {
   withheld: string
   watch_above?: string
   note?: string
+  /** THE ANSWER THE HOLD REPLACED, value and channel, so a release puts it back (the owner's
+   *  ruling, "Bring back $5.16"). Absent when there was none, and a release then leaves no
+   *  answer. `decisions.parse` reads only the three keys above, so a send never sees it. */
+  before?: { value: string | number | null; channel?: string }
 }
 
 /** One run's pricing decision, as `GET .../pricing` projects the corpus for one run (D86).
