@@ -2487,8 +2487,10 @@ export function Pricing() {
             : `${back.skipped.length} had been answered again since, and those answers were kept.`,
       })
     } catch (err) {
+      /* NO RAW CODE ON SCREEN (D196, D269 — the Opus review round's finding #7): a toast has
+         no disclosure to put a machine string behind. */
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', title: 'Not restored', body: `${trouble.message} (${trouble.code})` })
+      toast({ kind: 'refusal', title: 'Not restored', body: trouble.message })
     }
   }, [])
 

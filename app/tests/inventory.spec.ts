@@ -7316,7 +7316,14 @@ test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute l
      length: a real sleep buys nothing a jump does not. Installed before the first navigation. */
   await page.clock.install()
   const { store, depart } = stackedStore()
-  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
+  /* A SALE STUB THAT DEPARTS WHICHEVER CARD WAS PRESSED, not one fixed key — the Opus review
+     round's own finding (#12): the prior draft only ever sold 7/38, so it could not prove a
+     second, NEWER sale takes the row's Undo away from the first. */
+  const saleStub: SaleStub = (box, index, undo) => {
+    if (!undo) depart(`${box}/${index}`)
+    return SALE(box, index, undo)
+  }
+  await open(page, STACKED_BOXES, store, () => PRICING, saleStub, {
     route: '/#/inventory?box=2',
     hideSold: true,
   })
@@ -7347,6 +7354,15 @@ test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute l
   expect(await copyOrder(page)).toEqual(['Was at Box 7, Section 1, Card 38', ...before.slice(1)])
   /* And the control is still offering the re-rank, because nothing has taken a new order. */
   await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
+
+  /* NOW A NEWER SALE (finding #12, `docs/specs/undo.md` §11.1): only the newest sale is
+     undoable, never every sale of the session. Card 39 is sold second. */
+  await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 39' })).toHaveCount(1)
+  /* Card 38's own Undo is gone — it is no longer the newest, and its row draws nothing extra
+     (the struck number already says sold, S2's own reasoning). */
+  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 38' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Undo the sale at/ })).toHaveCount(1)
 })
 
 test('a retirement holds its row too, and it is the freeze alone that does it', async ({ page }) => {

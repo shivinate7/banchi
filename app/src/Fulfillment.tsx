@@ -171,9 +171,6 @@ type Sale = {
   note: string | null
 }
 
-/** A sale this session recorded and did not take back — the "Pulled today" list. */
-type Done = { key: string; name: string; place: string; order: string | null }
-
 type BoxGroup = { box: number; name: string | null; cards: Sellable[] }
 
 /** One SKU an open order still owes, and every on-hand copy in the store — the owner's own
@@ -529,8 +526,10 @@ export function Fulfillment() {
   /** A request in flight. Guards instead of disabling — his controls never grey out. */
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [trouble, setTrouble] = useState<string | null>(null)
+  /* THE ONE LIST (finding #1): `sales[0]` is the sheet's own receipt, `sales.slice(1)` is
+     "Pulled today" below — no second, parallel `done` array that the sheet's Undo never
+     reached. */
   const [sales, setSales] = useState<Sale[]>([])
-  const [done, setDone] = useState<Done[]>([])
   /** Copies sold here, so search results fetched before the sale drop them too. */
   const [soldHere, setSoldHere] = useState<string[]>([])
   const [photoMissing, setPhotoMissing] = useState<string | null>(null)
@@ -828,10 +827,6 @@ export function Fulfillment() {
             ? null
             : 'You cannot take this one back here. Ask for help if it is wrong.',
         })
-        setDone((held) => [
-          { key: card.key, name: card.name, place: card.place, order: card.order?.number ?? null },
-          ...held.filter((row) => row.key !== card.key),
-        ])
         reread()
       } catch (err) {
         const code = refusalCode(err)
@@ -881,7 +876,6 @@ export function Fulfillment() {
         )
         setSoldHere((held) => held.filter((key) => key !== card.key))
         setSales((held) => held.filter((standing) => standing.card.key !== card.key))
-        setDone((held) => held.filter((row) => row.key !== card.key))
         reread()
       } catch (err) {
         const dead = refusalCode(err) === NO_ORIGIN
@@ -975,57 +969,66 @@ export function Fulfillment() {
   }
 
   /* ---- the receipt sheet ------------------------------------------------------------- */
+  /* ONE RECEIPT AT A TIME (the Opus review round's finding #1): the prior draft drew every
+   * standing sale here, forever — the comment claimed `Done`'s own list "carried the rest",
+   * but nothing moved a sale there once a newer one arrived, so the sheet grew one panel per
+   * sale and covered the next card. Only the NEWEST stands here now. Older sales are the
+   * `Done` list's own rows below (`ff-done`), each with its own Undo where `canUndo` allows
+   * one — the door the comment always meant. Dismissible, since NO CLOCK (UN-5) otherwise
+   * leaves it on screen until a newer sale bumps it. */
+  const newest = sales[0] ?? null
+  /** "Pulled today" — every sale that is no longer the sheet's own receipt. */
+  const done = sales.slice(1)
   const sheet =
-    sales.length === 0 ? null : (
+    newest === null ? null : (
       <div className="ff-sheet" role="status" aria-live="polite">
-        {/* THE NEWEST RECEIPT IS DRAWN IN FULL; the ones under it fold to a line each. NO CLOCK
-            (UN-5, `docs/specs/undo.md` §11.1): what kept the sheet from stacking past the
-            screen was never the window, it is `remember`'s own dedupe by `card.key` plus
-            `Done`'s own list carrying the rest once a sale is no longer the newest reversible
-            write, so the sheet does not grow without bound just because a clock is gone. */}
-        {sales.map((sale, at) => (
-          <div
-            className={`fulfillment-panel ff-receipt${at === 0 ? '' : ' ff-receipt-compact'}`}
-            key={sale.card.key}
-          >
-            <span className="ff-receipt-icon" data-tone={sale.canUndo ? 'ok' : 'note'}>
-              {sale.canUndo ? <CheckMark /> : <Icon name="info" size={24} />}
-            </span>
-            <div className="ff-receipt-text">
-              <p className="fulfillment-say ff-receipt-said">{sale.said}</p>
-              <p className="fulfillment-say ff-receipt-what">
-                <span className="ff-receipt-name">{sale.card.name}</span>
-                {/* D218: found beyond the reader's own list — `sale.card.place` is the
-                    server's raw label off a variable, so the reader's plain-string scan never
-                    saw the dot in it. Same string, same register; the seam is CSS now. */}
-                <span className="ff-receipt-place">
-                  {placeWordsOf(sale.card.place).map((part, at) => (
-                    <span key={at}>{part}</span>
-                  ))}
-                </span>
-                {sale.card.order === null ? null : (
-                  <span className="ff-receipt-order">Order {sale.card.order.number}</span>
-                )}
-              </p>
-              {sale.note === null ? null : (
-                <p className="fulfillment-say ff-receipt-note">{sale.note}</p>
+        <div className="fulfillment-panel ff-receipt" key={newest.card.key}>
+          <span className="ff-receipt-icon" data-tone={newest.canUndo ? 'ok' : 'note'}>
+            {newest.canUndo ? <CheckMark /> : <Icon name="info" size={24} />}
+          </span>
+          <div className="ff-receipt-text">
+            <p className="fulfillment-say ff-receipt-said">{newest.said}</p>
+            <p className="fulfillment-say ff-receipt-what">
+              <span className="ff-receipt-name">{newest.card.name}</span>
+              {/* D218: found beyond the reader's own list — `sale.card.place` is the
+                  server's raw label off a variable, so the reader's plain-string scan never
+                  saw the dot in it. Same string, same register; the seam is CSS now. */}
+              <span className="ff-receipt-place">
+                {placeWordsOf(newest.card.place).map((part, at) => (
+                  <span key={at}>{part}</span>
+                ))}
+              </span>
+              {newest.card.order === null ? null : (
+                <span className="ff-receipt-order">Order {newest.card.order.number}</span>
               )}
-            </div>
-            {!sale.canUndo ? null : (
-              <button
-                className="ff-undo"
-                type="button"
-                aria-label={`Undo ${sayPlace(sale.card.place)}`}
-                onClick={() => void doUndo(sale.card)}
-              >
-                <Icon name="undo" size={22} />
-                Undo
-              </button>
+            </p>
+            {newest.note === null ? null : (
+              <p className="fulfillment-say ff-receipt-note">{newest.note}</p>
             )}
-            {/* NO CLOCK (UN-5): the drain and the countdown are gone, because the row does not
-                fade with the toast and there is no window left for either to count down. */}
           </div>
-        ))}
+          {!newest.canUndo ? null : (
+            <button
+              className="ff-undo"
+              type="button"
+              aria-label={`Undo ${sayPlace(newest.card.place)}`}
+              onClick={() => void doUndo(newest.card)}
+            >
+              <Icon name="undo" size={22} />
+              Undo
+            </button>
+          )}
+          {/* NO CLOCK (UN-5): nothing fades this on a timer, so a way to dismiss it stands in
+              for the window that used to close it. Dismissing never undoes the sale — the
+              row moves to `Done` below, same as it would once a newer sale bumped it. */}
+          <button
+            className="ff-receipt-dismiss"
+            type="button"
+            aria-label="Dismiss this receipt"
+            onClick={() => setSales((held) => held.filter((standing) => standing.card.key !== newest.card.key))}
+          >
+            <Icon name="x" size={18} />
+          </button>
+        </div>
       </div>
     )
 
@@ -1431,21 +1434,35 @@ export function Fulfillment() {
                   </span>
                   Pulled today
                 </h2>
+                {/* FINDING #1's OTHER HALF: the sheet only ever draws `sales[0]`. Every OLDER
+                    sale still stands here, with its own Undo when `canUndo` allows one — the
+                    door the sheet's own old comment claimed already existed. */}
                 <ul className="ff-done-list">
-                  {done.map((row) => (
-                    <li className="ff-done-row" key={row.key}>
-                      <span className="fulfillment-say ff-done-name">{row.name}</span>
-                      {/* D218: found beyond the reader's own list — `row.place` is the
+                  {done.map((sale) => (
+                    <li className="ff-done-row" key={sale.card.key}>
+                      <span className="fulfillment-say ff-done-name">{sale.card.name}</span>
+                      {/* D218: found beyond the reader's own list — `sale.card.place` is the
                           server's raw label off a variable, so the reader's plain-string scan
                           never saw the dot in it. Same string, same register; the seam is CSS
                           now. */}
                       <span className="fulfillment-say ff-done-place">
-                        {placeWordsOf(row.place).map((part, at) => (
+                        {placeWordsOf(sale.card.place).map((part, at) => (
                           <span key={at}>{part}</span>
                         ))}
                       </span>
-                      {row.order === null ? null : (
-                        <span className="fulfillment-say ff-done-order">Order {row.order}</span>
+                      {sale.card.order === null ? null : (
+                        <span className="fulfillment-say ff-done-order">Order {sale.card.order.number}</span>
+                      )}
+                      {!sale.canUndo ? null : (
+                        <button
+                          className="ff-done-undo"
+                          type="button"
+                          aria-label={`Undo ${sayPlace(sale.card.place)}`}
+                          onClick={() => void doUndo(sale.card)}
+                        >
+                          <Icon name="undo" size={18} />
+                          Undo
+                        </button>
                       )}
                     </li>
                   ))}

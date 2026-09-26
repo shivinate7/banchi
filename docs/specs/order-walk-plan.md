@@ -805,8 +805,9 @@ the button and the word**; on this screen
 it also records the copy against an owing order (D212: no order claims a copy, the write
 refuses a full line). The copies in the section you are standing in come first; the order is
 held for the walk (§8's ruling: ranking frozen, position refreshed); a sale refreshes
-positions the way inventory already does. `J`/`K` step through the walk list. When a card's
-owed copies are all sold, the next card lights.
+positions the way inventory already does. `J`/`K` step through the walk list.
+
+**UN-6, the Opus review round, 2026-09-25: the pane no longer advances itself.** It used to light the next card the instant a take was satisfied, with no press beyond the sale. That was the defect. The new card's own `Mark sold` landed where the finger had just tapped. A fast second tap sold a card nobody looked at. The sold copy's own row turns into `Undo` in place instead (D57). Nothing else on the pane moves (D118). The operator steps on `J`/`K`, same as ever.
 
 ### Words
 

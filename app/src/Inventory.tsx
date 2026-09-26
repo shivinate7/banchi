@@ -269,8 +269,11 @@ type Receipt = {
 
 const MOVE_BUILT_ON = 'move_built_on'
 
+/* NO RAW CODE ON SCREEN (D196, D269 — the Opus review round's finding #7): a toast has no
+ * disclosure to put a machine string behind, so it does not carry one. The server's own
+ * sentence, already in `failure.message`, is what a person reads; `code` stays off-screen. */
 function report(failure: Failure): void {
-  toast({ kind: 'refusal', title: failure.message, body: failure.code })
+  toast({ kind: 'refusal', title: failure.message })
 }
 
 export function Inventory() {
@@ -639,15 +642,19 @@ export function Inventory() {
     })
   }, [])
 
-  /** The sales a row may still take back, by copy key. Only sales, only reversible ones. */
+  /** The one sale a row may still take back — the NEWEST reversible receipt, and only if it is
+   *  a sale (`docs/specs/undo.md` §11.1, the Opus review round, finding #12): "only the newest
+   *  sale is undoable by U or the toast." An older sold row keeps its own row (the freeze,
+   *  D132) but its Undo leaves the instant a later write takes the newest rank, the same way
+   *  Orders' `newestUndoKey` gates `RowAction`. Filtering every `canUndo` receipt here (the
+   *  first build) kept EVERY sale of the session undoable at once, which is what the review
+   *  caught: §11.1 asks for one. */
   const undoableSales = useMemo(
     () =>
-      new Map(
-        receipts
-          .filter((receipt) => receipt.kind === 'sale' && receipt.canUndo)
-          .map((receipt) => [receipt.key, receipt] as const),
-      ),
-    [receipts],
+      newestUndoable !== null && newestUndoable.kind === 'sale'
+        ? new Map([[newestUndoable.key, newestUndoable] as const])
+        : new Map<string, Receipt>(),
+    [newestUndoable],
   )
 
   /* The press is the sale (D57). A retire panel standing over another copy is closed first. */

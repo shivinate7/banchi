@@ -2486,6 +2486,12 @@ test(`undo is offered on every mark-sold and stays for at least ${UNDO_FLOOR_MS 
  */
 
 test('a second sale does not take the first sale undo away', async ({ page }) => {
+  /* THE OPUS REVIEW ROUND, FINDING #1: standing BOTH receipts in the SHEET at once is the
+   * defect it caught — the sheet grew one panel per sale and covered the next card, forever,
+   * since there is no clock to end it. What this case still asks for is unchanged: neither
+   * sale's Undo may vanish. The rebuilt door for the older one is `ff-done`, "Pulled today" —
+   * every sale but the newest stands there, each with its own Undo, which is where this case
+   * now looks for the first sale's. */
   const wire: Wire[] = []
   await openList(page, wire)
 
@@ -2496,16 +2502,16 @@ test('a second sale does not take the first sale undo away', async ({ page }) =>
   await openCard(page, 'Iono')
   await sellOpenCard(page)
 
-  // Both receipts stand, each with its own Undo. One slot held one of these and dropped the
-  // other with no trace, on a screen whose only other route to recovery is the owner.
-  const first = receiptFor(page, 'Box 3, Section 1, Card 7')
+  // The sheet draws only the newest. The older one's own Undo did not vanish — it moved to
+  // "Pulled today", the door the sheet's own comment always named.
+  const doneRow = view(page).locator('.ff-done-row', { hasText: 'Charizard ex' })
   const second = receiptFor(page, 'Box 1, Section 1, Card 3')
-  await expect(first.getByRole('button', { name: 'Undo' })).toBeVisible()
+  await expect(doneRow.getByRole('button', { name: 'Undo' })).toBeVisible()
   await expect(second.getByRole('button', { name: 'Undo' })).toBeVisible()
 
   // The older one still works, and reaches the server for the card it names rather than for
   // the most recent sale.
-  await first.getByRole('button', { name: 'Undo' }).click()
+  await doneRow.getByRole('button', { name: 'Undo' }).click()
   await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
   expect(wire.at(-1)!.undo, 'the last call was a reversal').toBe(true)
   expect(wire.at(-1)!.url, 'the reversal named the older card').toContain('/inventory/3/7/sold')

@@ -917,7 +917,7 @@ async function undoFromToast(target: PullTarget, place: string, name: string): P
     toast({ kind: 'ok', icon: 'undo', title: `Put ${name} back`, body: `${place} holds it again.` })
   } catch (err) {
     const trouble = describeFailure(err)
-    toast({ kind: 'refusal', title: 'The card was not put back', body: `${trouble.message} (${trouble.code})` })
+    toast({ kind: 'refusal', title: 'The card was not put back', body: trouble.message })
   } finally {
     /* Clear `lastPull` only if this is still the pull it names — a later pull may already
        have replaced it, and undoing THIS one must not erase THAT one's own way back. */
@@ -1828,7 +1828,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       return { ok: true, refreshed: done.refreshed ?? [] }
     } catch (err) {
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', title: 'The card was not put back', body: `${trouble.message} (${trouble.code})` })
+      toast({ kind: 'refusal', title: 'The card was not put back', body: trouble.message })
       return { ok: false }
     } finally {
       setHub((current) => ({ busy: null, lastPull: current.lastPull?.target.capture_id === target.capture_id ? null : current.lastPull }))

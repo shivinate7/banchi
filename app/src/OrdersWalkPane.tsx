@@ -168,17 +168,6 @@ function sectionsOf(plan: WalkPlan | null, rows: readonly WalkRow[]): WalkSectio
  *  taking the "newest" rank away from it (below), or the walk itself resetting. */
 type Receipt = { readonly at: number; readonly target: PullTarget; readonly place: string; readonly orderKey: string }
 
-/** HOW LONG THE PANEL STAYS DISABLED AFTER A SALE ADVANCES IT (UN-6, `docs/specs/undo.md`
- *  §11.3). The blind audit's own words: "Orders on phone: after tapping $, the next card
- *  (Tricksy Tentacles) slid in with its $ button exactly where I had just tapped." `advanceAfter`
- *  moves `current` to a DIFFERENT card the instant a take is satisfied, and that card's own
- *  `RowAction` sits in the identical slot the finger just left — a double-tap sells the card
- *  the operator never meant to touch. `busyCopy` already disables every OTHER row while one is
- *  in flight; the gap was that it cleared the moment the new card was already on screen, so the
- *  new card's own row was never `busy` and never disabled. Held a beat longer closes it, at the
- *  cost of nothing an operator pressing one card at a time would notice. */
-const ADVANCE_GUARD_MS = 400
-
 /* ------------------------------------------------------------------------ the walk, as a hook */
 
 /** THE WALK, OVER THE UNION `#/orders`' rail hands it — the selected order plus every ticked
@@ -339,12 +328,6 @@ export function useOrderWalk({
     return rawCards.get(`${place.box}/${place.index}`) ?? null
   }, [currentRow, facts, rawCards])
 
-  const totalRecorded = (sku: string): number => {
-    let sum = 0
-    for (const n of (recorded.get(sku) ?? new Map()).values()) sum += n
-    return sum
-  }
-
   /** Every copy in the plan sitting in `box`, minus the one being pressed and minus a copy
    *  already recorded here — `OrdersWalk.tsx`'s own `staleAfter`, restated over the flat
    *  `rows` this file keeps instead of a `RowState` map per take. */
@@ -375,24 +358,6 @@ export function useOrderWalk({
     })
   }
 
-  /** Step to the next row after a sale — `#387 of 675 so far` moving on. While the take is not
-   *  yet fully recorded, the next UNSOLD copy of the SAME take leads, so the operator keeps
-   *  marking that card; once it is, the first row of the next take lights (§13: "when a card's
-   *  owed copies are all sold, the next card lights"). */
-  const advanceAfter = (soldRowKey: string, satisfied: boolean, justSold: ReadonlySet<string>) => {
-    const at = rows.findIndex((row) => row.rowKey === soldRowKey)
-    if (at === -1) return
-    if (!satisfied) {
-      const next = rows.find((row, i) => i > at && row.takeKey === rows[at]!.takeKey && !justSold.has(row.copy.key))
-      if (next !== undefined) {
-        setCurrent(next.rowKey)
-        return
-      }
-    }
-    const next = rows.find((row, i) => i > at && row.takeKey !== rows[at]!.takeKey)
-    if (next !== undefined) setCurrent(next.rowKey)
-  }
-
   const select = (rowKey: string) => setCurrent(rowKey)
 
   const step = (direction: 1 | -1) => {
@@ -406,7 +371,7 @@ export function useOrderWalk({
     if (busyCopy !== null) return
     const row = rows.find((candidate) => candidate.copy.key === copy.key)
     if (row === undefined) return
-    const { take, stopKey } = row
+    const { take } = row
     const order = pickOrderFor(take, ordersByKey, recorded.get(take.sku) ?? new Map())
     if (order === null) return
     const target: PullTarget | null = copy.capture_id === null ? null : { box: copy.place.box, index: copy.place.index, capture_id: copy.capture_id }
@@ -435,23 +400,16 @@ export function useOrderWalk({
           next.set(take.sku, bySku)
           return next
         })
-        const justSold = new Set([...soldKeys, copy.key])
         setReceipts((prev) => new Map(prev).set(copy.key, { at: Date.now(), target, place: outcome.place, orderKey: order.key }))
-        const satisfied = totalRecorded(take.sku) + 1 >= take.wanted
-        /* `stopKey` names which stop this row belongs to, kept for a future refinement that
-           needs it; the advance itself only reads `rows`. */
-        void stopKey
-        advanceAfter(row.rowKey, satisfied, justSold)
-        /* UN-6: `busyCopy` still names THIS copy, so `RowAction` reads every row of whichever
-           card `advanceAfter` just switched to as disabled (`disabled={busyCopy !== null &&
-           !busy}` — the new card's own copies are never `busy`, so this is what disables
-           them). Cleared a beat later rather than at once, so the card that lands under the
-           finger cannot be sold by the same motion that just sold the one before it. A refusal
-           clears it at once below instead — the panel never changed, so there is nothing to
-           guard against there. */
-        if (live.current) window.setTimeout(() => { if (live.current) setBusyCopy(null) }, ADVANCE_GUARD_MS)
-        return
       }
+      /* UN-6, REBUILT (`docs/specs/undo.md` §11.3, D57, D118): the walk no longer advances
+         itself. The sold copy's own `RowAction` reads `receipts` fresh every render and turns
+         into `Undo` in the exact row it was pressed from — nothing else on the pane is
+         re-mounted, so no OTHER row's button can ever land under a repeated tap. The operator
+         moves to the next card on their own press (J/K, or a row in the walk list), the same
+         door every other screen's Undo leaves open. The earlier fix disabled the new card's
+         button for `ADVANCE_GUARD_MS` after an automatic jump; the jump itself was the defect,
+         so there is nothing left here to guard against. */
       setBusyCopy(null)
     })()
   }
