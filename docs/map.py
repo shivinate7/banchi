@@ -7964,10 +7964,10 @@ COMPONENTS = [
                                "governed_by": ["D7", "D10", "D24", "D27", "D28", "D36", "D39",
                                                "D51", "D57", "D58", "D61", "D63", "D66", "D69",
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
-                                               "D118", "D123", "D132", "D159", "D181", "D192",
-                                               "D193", "D194", "D195", "D196", "D203", "D209",
-                                               "D212", "D218", "D220", "D221",
-                                               "D274", "D285"]},
+                                               "D118", "D123", "D132", "D159", "D171", "D181",
+                                               "D192", "D193", "D194", "D195", "D196", "D203",
+                                               "D209", "D212", "D218", "D220", "D221", "D274",
+                                               "D285"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8039,8 +8039,8 @@ COMPONENTS = [
                                            "`preserveOrder` stays, the trap this rebuild's own "
                                            "brief named first (never re-sort the walk).",
                                    "governed_by": ["D24", "D58", "D62", "D79", "D93", "D96", "D97",
-                                                   "D116", "D118", "D132", "D164", "D181", "D193",
-                                                   "D209", "D212", "D218", "D220", "D252",
+                                                   "D116", "D118", "D132", "D164", "D171", "D181",
+                                                   "D193", "D209", "D212", "D218", "D220", "D252",
                                                    "D279"]},
             "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
                                            "drain-bar (borrowed from `Inventory.css` by class "
@@ -9229,9 +9229,9 @@ COMPONENTS = [
                                      "governed_by": ["D20", "D24", "D27", "D28", "D36", "D49",
                                                      "D50", "D58", "D63", "D69", "D73", "D90",
                                                      "D91", "D93", "D96", "D103", "D113", "D114",
-                                                     "D118", "D123", "D132", "D181", "D193", "D194",
-                                                     "D196", "D203", "D209", "D212", "D218", "D220",
-                                                     "D221", "D274", "D285"]},
+                                                     "D118", "D123", "D132", "D171", "D181", "D193",
+                                                     "D194", "D196", "D203", "D209", "D212", "D218",
+                                                     "D220", "D221", "D274", "D285"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "

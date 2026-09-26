@@ -21,6 +21,7 @@ import { marketTable, PhotoPanel, type MarketRead, type Row } from './CardHero'
 import { forSale } from './cardState'
 import { Dialog as Overlay } from './kit/overlay'
 import { Icon, IconButton, Loading, Location, Money, Notice, Pill, ProductLink } from './kit'
+import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
@@ -87,7 +88,12 @@ function pickOrderFor(
     if (order === undefined) continue
     const remaining = ref.owed - (recordedForSku.get(ref.key) ?? 0)
     if (remaining <= 0) continue
-    const placedAt = order.placed_at ?? ''
+    /* `￿` SORTS AFTER EVERY REAL TIMESTAMP, never before — `?? ''` was the review
+       round's finding 4's second half: an empty string sorts BEFORE any real date, so an
+       order with no `placed_at` read as the oldest possible order and won every tie it was
+       in, which is backwards from "placed longest ago" (an unknown age is not a claim of
+       great age). An order with no `placed_at` now loses every tie to one with a real date. */
+    const placedAt = order.placed_at ?? '￿'
     if (
       best === null ||
       remaining < best.remaining ||
@@ -198,7 +204,7 @@ function sectionsOf(plan: WalkPlan | null, rows: readonly WalkRow[]): WalkSectio
  *  copy's `Undo` would reverse, and `at` orders receipts against each other, never against a
  *  deadline. What ends a copy's OWN reversal is not this record aging out; it is a newer pull
  *  taking the "newest" rank away from it (below), or the walk itself resetting. */
-type Receipt = { readonly at: number; readonly target: PullTarget; readonly place: string; readonly orderKey: string }
+type Receipt = { readonly at: number; readonly target: PullTarget; readonly place: string; readonly orderKey: string; readonly sku: string }
 
 /* ------------------------------------------------------------------------ the walk, as a hook */
 
@@ -360,12 +366,6 @@ export function useOrderWalk({
     return rawCards.get(`${place.box}/${place.index}`) ?? null
   }, [currentRow, facts, rawCards])
 
-  const totalRecorded = (sku: string): number => {
-    let sum = 0
-    for (const n of (recorded.get(sku) ?? new Map()).values()) sum += n
-    return sum
-  }
-
   /** Every copy in the plan sitting in `box`, minus the one being pressed and minus a copy
    *  already recorded here — `OrdersWalk.tsx`'s own `staleAfter`, restated over the flat
    *  `rows` this file keeps instead of a `RowState` map per take. */
@@ -429,7 +429,18 @@ export function useOrderWalk({
     if (row === undefined) return
     const { take, stopKey } = row
     const order = pickOrderFor(take, ordersByKey, recorded.get(take.sku) ?? new Map())
-    if (order === null) return
+    if (order === null) {
+      /* D171: a refusal that reaches nobody did not happen. This pass's own tally may be
+         stale (an undo made elsewhere, not yet synced here) or the plan may simply be behind
+         a snapshot the store has already moved past — either way the operator pressed
+         something and nothing may silently happen in response. */
+      toast({
+        kind: 'refusal',
+        title: 'Nobody here still owes a copy',
+        body: `${take.name ?? take.sku}: no order in this walk needs another one. Reload the walk to check.`,
+      })
+      return
+    }
     const target: PullTarget | null = copy.capture_id === null ? null : { box: copy.place.box, index: copy.place.index, capture_id: copy.capture_id }
     if (target === null) return
     setBusyCopy(copy.key)
@@ -457,8 +468,16 @@ export function useOrderWalk({
           return next
         })
         const justSold = new Set([...soldKeys, copy.key])
-        setReceipts((prev) => new Map(prev).set(copy.key, { at: Date.now(), target, place: outcome.place, orderKey: order.key }))
-        const satisfied = totalRecorded(take.sku) + 1 >= take.wanted
+        setReceipts((prev) => new Map(prev).set(copy.key, { at: Date.now(), target, place: outcome.place, orderKey: order.key, sku: take.sku }))
+        /* PER-STOP, NEVER PER-SKU (the review round's finding 4): `take` is THIS STOP's own
+           take instance — a SKU split across two stops (D212's own case, e.g. Mirror Image at
+           two sections) gets one `WalkPlanTake` per stop, each with its own `wanted` share.
+           `totalRecorded(take.sku)` summed every order's tally for the sku STORE-WIDE, so the
+           second stop read as satisfied after only 2 of its own 3 picks — the first stop's
+           already-recorded copy was still being counted here. The right count is how many of
+           THIS TAKE's own "here" copies (this stop's physical reach) are now sold. */
+        const hereCount = take.copies.filter((c) => c.here && justSold.has(c.key)).length
+        const satisfied = hereCount >= take.wanted
         /* `stopKey` names which stop this row belongs to, kept for a future refinement that
            needs it; the advance itself only reads `rows`. */
         void stopKey
@@ -466,6 +485,29 @@ export function useOrderWalk({
       }
       setBusyCopy(null)
     })()
+  }
+
+  /** Lower this pass's own tally by one copy against `orderKey`/`sku` — the state half of an
+   *  undo, shared by the row's own inline Undo (`undoCopy`, below) and an undo that happened
+   *  OUTSIDE this hook (`noteExternalUndo`): a toast's own Undo or the `U` key, which write
+   *  through `Orders.tsx:undoFromToast` and never touch this hook at all. Before this shared
+   *  helper existed, only `undoCopy` lowered the tally, so a toast/`U` undo mid-walk left this
+   *  pass believing a copy was still recorded that the ledger no longer held — `pickOrderFor`
+   *  then returned `null` for an order that still owed one, and the next press did nothing
+   *  and said nothing (the review round's finding 2, D171). */
+  const lowerTally = (sku: string, orderKey: string) => {
+    setRecorded((prev) => {
+      const bySku = prev.get(sku)
+      if (bySku === undefined) return prev
+      const count = bySku.get(orderKey)
+      if (count === undefined) return prev
+      const nextBySku = new Map(bySku)
+      if (count <= 1) nextBySku.delete(orderKey)
+      else nextBySku.set(orderKey, count - 1)
+      const next = new Map(prev)
+      next.set(sku, nextBySku)
+      return next
+    })
   }
 
   const undoCopy = (copyKey: string) => {
@@ -488,21 +530,29 @@ export function useOrderWalk({
           next.delete(copyKey)
           return next
         })
-        setRecorded((prev) => {
-          const bySku = prev.get(row.take.sku)
-          if (bySku === undefined) return prev
-          const count = bySku.get(receipt.orderKey)
-          if (count === undefined) return prev
-          const nextBySku = new Map(bySku)
-          if (count <= 1) nextBySku.delete(receipt.orderKey)
-          else nextBySku.set(receipt.orderKey, count - 1)
-          const next = new Map(prev)
-          next.set(row.take.sku, nextBySku)
-          return next
-        })
+        lowerTally(receipt.sku, receipt.orderKey)
       }
       setBusyCopy(null)
     })()
+  }
+
+  /** THE OTHER UNDO PATH — a toast's own Undo (`docs/specs/undo.md` §3) or the `U` key,
+   *  neither of which goes through `undoCopy` above. Both write through
+   *  `Orders.tsx:undoFromToast`, which calls the server directly and has no reason to know
+   *  this hook exists. `Orders.tsx` calls this instead, once that write succeeds, keyed off
+   *  the SAME `PullTarget` the toast already carries — never off `rows`, which may already be
+   *  behind a re-plan. A copy this pass never recorded (an undo of a pull made outside the
+   *  walk entirely) is a no-op: `receipts` holds nothing for it. */
+  const noteExternalUndo = (target: PullTarget) => {
+    const copyKey = `${target.box}/${target.index}`
+    const receipt = receipts.get(copyKey)
+    if (receipt === undefined) return
+    setReceipts((prev) => {
+      const next = new Map(prev)
+      next.delete(copyKey)
+      return next
+    })
+    lowerTally(receipt.sku, receipt.orderKey)
   }
 
   return {
@@ -519,6 +569,7 @@ export function useOrderWalk({
     step,
     onSell,
     undoCopy,
+    noteExternalUndo,
     busyCopy,
     receipts,
     soldKeys,

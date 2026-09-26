@@ -12847,6 +12847,15 @@ def _order_progress(
                 # that rides on the line itself, and `_engine_order` prefers it.
                 "declared_kind": row.kind,
                 "at": row.at,
+                # THE STAND-DOWN, ON THE WIRE — `types.ts`'s `OrderLineProgress` always
+                # declared these two, and this builder never sent them, so a stood-down
+                # line's row on `#/orders` looked identical to an untouched one and every
+                # client-side `closed_at !== null` check read `undefined`, never a stand-down
+                # (the review round's finding 1). `row.closed_at`/`row.closed_reason` are the
+                # ledger's own `LineProgress` fields (`store/orders.py`), read here rather
+                # than re-derived.
+                "closed_at": row.closed_at,
+                "closed_reason": row.closed_reason,
             }
         )
     return rows

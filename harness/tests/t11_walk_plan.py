@@ -145,6 +145,7 @@ def run() -> Result:
     _wire_owed(c)
     _walk_pick_all_accepted(c)
     _walk_pick_short_completes_smallest(c)
+    _progress_wire_carries_closed_fields(c)
 
     return c.result()
 
@@ -233,6 +234,49 @@ def _walk_pick_all_accepted(c: Checks) -> None:
 
     c.equal(ledger.outstanding("tcg:1", sku), 0, "the order owing 1 is fully recorded")
     c.equal(ledger.outstanding("tcg:2", sku), 0, "the order owing 3 is fully recorded")
+
+
+def _progress_wire_carries_closed_fields(c: Checks) -> None:
+    """THE REVIEW ROUND'S FINDING 1, AT ITS OWN CAUSE. `_order_progress`
+    (`server/capture_server.py`) used to omit `closed_at`/`closed_reason` from every row it
+    built, though `types.ts`'s `OrderLineProgress` always declared both as present. The client
+    filter this pass added (`app/src/Orders.tsx`'s `owedBySku`, `row.closed_at !== null`) then
+    read `undefined !== null`, which is `true` — so EVERY line looked stood down on the real
+    wire, `owedBySku` came back empty for every walked card, and no "short" pill ever drew.
+    This proves the wire itself, not a client-side mirror: a stood-down line's row carries a
+    real `closed_at` stamp and its own `closed_reason`, and an untouched line's row carries the
+    key with a `None` value — present, never missing, which is what makes `!== null` an honest
+    check again."""
+    sku = "A"
+    ledger = order_store.Ledger()
+    ledger.ingest(
+        [
+            order_store.OrderRecord(
+                source="tcg", number="1", placed_at="2026-09-25T00:00:00Z",
+                lines=[order_store.OrderLine(sku=sku, quantity=2)],
+            ),
+        ]
+    )
+    key = "tcg:1"
+    record = ledger.orders[key]
+
+    before = capture_server._order_progress(ledger, record)
+    c.equal(len(before), 1, "one line on the order, one progress row")
+    row = before[0]
+    c.ok(
+        "closed_at" in row and "closed_reason" in row,
+        "the wire row carries both keys before any stand-down, never omitting them",
+    )
+    c.equal(row["closed_at"], None, "and an untouched line's stamp is None, not missing")
+
+    ledger.close_line(key, sku, reason=order_store.CLOSE_REASONS[0])
+    after = capture_server._order_progress(ledger, record)
+    stood = after[0]
+    c.ok(stood["closed_at"] is not None, "a stood-down line's wire row carries a real stamp")
+    c.equal(
+        stood["closed_reason"], order_store.CLOSE_REASONS[0],
+        "and the reason rides beside it, the same word the ledger stored",
+    )
 
 
 def _walk_pick_short_completes_smallest(c: Checks) -> None:
