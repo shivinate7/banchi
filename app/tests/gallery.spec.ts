@@ -1163,20 +1163,7 @@ test('a section inside a layer is an h3, and on the page an h2', async ({ page }
    lane that owns the fix — a shrinking list, never a pinned count. A violation not listed fails.
    A listed entry that matches nothing in any of the four runs fails too, so the list only
    shrinks: take the entry out in the commit that fixes it. */
-const AXE_KNOWN: readonly { readonly rule: string; readonly selector: string; readonly owner: string; readonly why: string }[] = [
-  {
-    rule: 'color-contrast',
-    selector: '.position-path',
-    owner: 'locating lane',
-    why: 'PositionLabel draws a label with no figure muted: 2.89:1 light, 3.2:1 dark. The same on main.',
-  },
-  {
-    rule: 'color-contrast',
-    selector: '.position-key',
-    owner: 'locating lane',
-    why: 'the same muted PositionLabel, its store key',
-  },
-]
+const AXE_KNOWN: readonly { readonly rule: string; readonly selector: string; readonly owner: string; readonly why: string }[] = []
 
 test('axe finds nothing on the kit at 390 and 1440 in both themes, but what is listed with its owner', async ({ page }) => {
   test.setTimeout(90_000)

@@ -79,3 +79,72 @@ It does not call `Element.scrollIntoView`. That method walks every scrollable an
 **`Section 1` and `#17`/`card N of M` were NOT pinned by any decision, so they are built.** `position.ts:sectionDepthOf`'s `head` now carries the section's NAME alone when the owner gave one. It carries nothing when he did not. The bare number is what `PositionLabel`'s header already draws beside it. Its `tail` drops the slot number too. `PlaceNeighbors` and the header both already carry it. It states the section's SIZE alone (`"39 cards"`, not `"card 17 of 39"`). `PositionBar.css`'s dangling-dot rule (`.position-bar-cap-tail:first-child`) covers the box with no section name. There the head renders nothing, not an empty span. `inventory.spec.ts:2680`, `2684`, `2714`, `2718`, `2741`, `2824` and the named-section case at `6490` are rewritten to the new text. One fixture there gets a section name, so the flex-shrink proof at `2824` still has a head to measure. `locating.spec.ts:242` likewise.
 
 **Second round: both rulers are taller, spent from the height freed.** `--pb-track` (the box strip) rises from 14px to 18px. `--pb-rule` (the card-level ruler) rises from 26px to 32px, under `[data-depth]`. That is +12px total on `PositionBar`'s own height. D119's fold assertions are the ground truth here, not a manual pixel count. `inventory.spec.ts`'s `toBeInViewport({ ratio: 1 })` on `.card-locations-row.is-current` stayed green at the new height. So did `the card panel holds one height for the whole walk`. The panel's own band had this much slack to spend. The dedup above argued the size increase would not read as clutter. It did not mechanically produce the twelve pixels. The two are one round because the owner asked for both together.
+### Amendment, 2026-09-25: Direction B, built into the real components
+
+**The owner reviewed two rendered mockups of the whole locator block.** These covered the
+header, BACK/THIS/FRONT, the action icons and both rulers. The owner picked one, verbatim:
+`"B, large ruler (Recommended)"`. Direction B keeps both rulers at their larger, graduated
+size. It also rebuilds the row's own place line as one sentence. Three corrections came with
+the pick.
+
+**No typed middle dot.** The mockup wrote `"WB1 R2 · Section 1 · Card 5 of 39"` as one string.
+D218 forbids a typed separator. The build draws each fact as its own
+`.card-locations-identity-fact` span. `CardLocations.css` then draws the dot in CSS, on the
+sibling selector, never in a string `user-strings.mjs` can find.
+
+**`$` stays the sell glyph.** The mockup's check-circle was a stand-in only. The real build
+calls the kit's own `IconButton icon="sold"`. That icon is already a round seal drawn around a
+`$` (`kit/Icon.tsx`). Nothing here invented a new glyph.
+
+**"Card 5 of 39" and "39 cards" said the section size twice. Now it is said once.**
+`position.ts:sectionDepthOf`'s tail fed the ruler's own caption. It is now `[]` in both the live
+and the departed case. The new `RowIdentity` component (`CardLocations.tsx`) states
+`Card N of M` on the row itself. It reads `M` from `sectionCountOf(copy.place)`. The ruler's
+own caption now states only the section's rank and name, never its size.
+
+**A one-line replacement for `PositionLabel`, scoped to the owner's row alone.** `RowIdentity`
+renders three facts: the box (the only one allowed to shrink), the section (name if the owner
+gave one, the bare number if not) and the card (`Card N of M`). The card figure strikes
+through, and the group's `aria-label` reads `Was at ...`, when the copy departed. The exact
+`aria-label` `PositionLabel` produced still holds. Every existing accessible-name assertion
+passed without being changed.
+
+**Two real D118 regressions turned up, and both are fixed at the cause.** First: the ruler's
+caption rendered only when `head` or `tail` held content. The departed case still carried a
+tail fact (`was card N`) after the live case's tail went empty for that same section. So the
+caption appeared and disappeared across a sale, changing the row's own height. The fix retires
+the caption outright, for every state, rather than patching one state at a time.
+
+**Second: the Undo button kept the old, smaller size while its siblings grew.** Every other
+action icon on the row rose to `size="xl"`. Undo stayed `size="sm"` inside the sale receipt.
+That shrank the action cell the moment a sale fired. Undo now reads `size="xl"`
+unconditionally, matching its siblings rather than branching on `primary`.
+
+**One test caught both bugs: `"every copy row draws the same bar height, located or not"`.**
+Each fix was reverted to a `.bak` copy in turn. The test went red at 200px against
+212px for the icon bug, and 221px against 212px for the caption bug. Restoring each fix turned
+the test green again. This is the mutation-proof.
+
+**A third defect, in contrast rather than layout, turned up along the way.**
+`.card-locations-identity`'s ink went through `--bn-ink-3`, and that failed the dark theme's
+axe sweep. `--bn-ink-2` failed light instead. `--bn-ink` passes both. The same sweep
+(`gallery.spec.ts`) then flagged two stale `AXE_KNOWN` entries, `.position-path` and
+`.position-key`, once the contrast fix removed the violation they were excusing.
+
+**The ruler sizes settle at `--pb-track: 22px`, `--pb-rule: 40px`, `--pb-cap-sect: 18px`.**
+That is up from this file's 2026-09-23 amendment, `18px`/`32px`/`18px`. A first attempt at
+`26px`/`48px` broke D119's fold check by roughly 12 to 14 pixels. `.card-locations-row.is-current` no longer held `toBeInViewport({ ratio: 1 })` on `#/inventory`'s seeded screen.
+Dialing back to `22px`/`40px` passed the same test again.
+
+**The net cost against D119's budget is zero.** The row stays inside the fold at the settled
+size, so nothing here trades away silently. The settled sizes are still clearly larger than the
+pre-2026-09-23 baseline, `12px`/`26px` — what "B, large ruler" asked for.
+
+**The row form's action icons rose to `size="xl"`, the kit's own 40px ceiling.** That is past
+the first round's `md` (28px). The owner's plain "the icons are small" still read true after
+that round. No new pixel value was invented. `xl` is a size the kit already defines.
+
+**Proof.** `app/tests/section-ruler.spec.ts`, `inventory.spec.ts`, `locating.spec.ts`,
+`scaffold.spec.ts` and `gallery.spec.ts` all pass after this amendment. Screenshots at 1440 and
+390, in light and dark, sit in `scratchpad/report/after-b/` for this round's own review. They
+were not committed.

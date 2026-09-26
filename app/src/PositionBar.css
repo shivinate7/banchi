@@ -32,7 +32,7 @@
 /* THE STRIP UNDER THE RULER IS THE BOX'S SECTIONS, NUMBERED (the owner's ruling, 2026-09-23,
    amending D155: the ruler shows the sections before and after). 14px holds a section number in
    `--bn-fs-2xs`; a chip too narrow for its digits clips them and still marks its run. */
-.position-bar-owner[data-depth] { --pb-track: 18px; --pb-rule: 32px; --pb-cap-sect: 18px; }
+.position-bar-owner[data-depth] { --pb-track: 22px; --pb-rule: 40px; --pb-cap-sect: 18px; }
 
 /* ---- the box track ---- */
 .position-bar-track {
@@ -301,7 +301,8 @@
    takes: \`back\` at the left edge, the caption, \`front\` at the right edge. The Fulfiller's strip
    draws the same two words on a row of its own (\`.position-bar-ends\`). */
 .position-bar-ends-row,
-.position-bar-ends {
+.position-bar-ends,
+.position-bar-zoom-ends {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -309,6 +310,10 @@
   margin: 0;
   min-width: 0;
 }
+/* THE CARD RULER'S OWN BACK/FRONT (the owner's ruling, 2026-09-25: "Keep it on each ruler" —
+   D260 stands, unchanged by this round's dedup). A thin margin only, never `--pb-gap`'s full
+   column gap: this row reads as part of the ruler right above it, not as a fourth band. */
+.position-bar-zoom-ends { margin-top: var(--bn-0-5); }
 .position-bar-end-back,
 .position-bar-end-front {
   flex: none;

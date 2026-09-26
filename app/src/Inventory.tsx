@@ -1011,7 +1011,7 @@ function Action({
             keeps no words in either sector — the row and the phone bar both read it from the
             sentence/clock beside it. */}
         <IconButton
-          size={primary ? 'xl' : 'sm'}
+          size="xl"
           icon="undo"
           label="Undo"
           name={`Undo the sale at ${standing.place}`}
@@ -1042,16 +1042,16 @@ function Action({
           Mark sold
         </Button>
       ) : (
-        /* THE ROW FORM'S OWN FLOOR RAISED FROM `sm` TO `md` (the owner's ruling, 2026-09-25:
-           "the icons are small"). `md` reads `--bn-control-h`, already 42px under 767px or a
-           coarse pointer (tokens.css) — this only raises the desktop size to match, since `sm`
-           was already the phone floor's own number and the owner's complaint was not phone-only. */
-        <IconButton size="md" icon="sold" label="Mark sold" busy={busy} disabled={busyKey !== null && !busy} onClick={() => onSell(copy)} />
+        /* THE ROW FORM'S OWN FLOOR RAISED TO `xl`, THE KIT'S LARGEST (the owner's Direction-B
+           build, 2026-09-25: "big icons"; the first round's `md` read as only slightly bigger).
+           `xl` is 40px, the kit's own defined ceiling — no new pixel value invented, and "40 or
+           more on a phone, comfortable on desktop" is met at the floor rather than past it. */
+        <IconButton size="xl" icon="sold" label="Mark sold" busy={busy} disabled={busyKey !== null && !busy} onClick={() => onSell(copy)} />
       )}
       {/* ICON IN BOTH SECTORS (ICONOGRAPHY): Retire is reversible (Undo), so it never spends
           words. `archive` — a lidded box — reads as "put away" rather than "delete". */}
       <IconButton
-        size={primary ? 'xl' : 'md'}
+        size="xl"
         icon="archive"
         label="Retire"
         disabled={busyKey !== null}
@@ -1062,7 +1062,7 @@ function Action({
           ICON IN BOTH SECTORS, the same vocabulary as Retire beside it. */}
       {copy.place.located === false ? null : (
         <IconButton
-          size={primary ? 'xl' : 'md'}
+          size="xl"
           icon="moveTo"
           label="Move to another box"
           disabled={busyKey !== null}

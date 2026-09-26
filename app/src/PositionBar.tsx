@@ -249,35 +249,27 @@ export function PositionBar({
               aria-hidden="true"
             />
           </div>
-          <p className="position-bar-text position-bar-text-section">
-            {depth === null ? (
-              sectionSentence
-            ) : (
-              <>
-                {/* OMITTED, NOT DRAWN EMPTY, WHEN THE OWNER NAMED NO SECTION (the owner's
-                    report, 2026-09-25): the bare `Section N` this used to hold is dropped —
-                    `PositionLabel`'s header states the number already — and an empty head
-                    span left a dangling `·` in front of the tail with nothing before it.
-                    `PositionBar.css`'s `.position-bar-cap-tail:first-child` rule cancels that
-                    dot exactly when this span is absent. */}
-                {depth.head.length === 0 ? null : (
-                  <span className="position-bar-cap-head">
-                    {depth.head.map((fact, i) => (
-                      <span key={i} className="position-bar-cap-fact">
-                        {fact}
-                      </span>
-                    ))}
-                  </span>
-                )}
-                <span className="position-bar-cap-tail">
-                  {depth.tail.map((fact, i) => (
-                    <span key={i} className="position-bar-cap-fact">
-                      {fact}
-                    </span>
-                  ))}
-                </span>
-              </>
-            )}
+          {/* RETIRED, NEVER DRAWN (the owner's Direction-B build, 2026-09-25): every fact this
+              caption ever stated — the section's name, the card's count — is now said once, on
+              `CardLocations.tsx`'s `RowIdentity` header. It stays computed, for `sentence`'s own
+              use as part of this bar's accessible name a few lines below, but no longer rendered
+              visually — which is also what fixed a real bug this round found: the ONE box this
+              file's own `sectionDepthOf` cannot size (`depth === null`) always had a sentence to
+              show (`sectionBlankSentence`), while an ordinary unnamed section had nothing, so
+              those two states drew this bar at two different heights — caught by
+              `app/tests/inventory.spec.ts`'s "every copy row draws the same bar height, located
+              or not". Never rendering it at all is what makes every state the same height again,
+              unconditionally, the way D118 always meant this block to be. */}
+          {/* THE CARD RULER KEEPS ITS OWN BACK/FRONT (the owner's ruling, 2026-09-25: "Keep it
+              on each ruler" — D260 stands). The section ruler already has its own words in
+              `.position-bar-ends-row`; this is the card ruler's pair, so each of the two
+              instruments orients on its own rather than sharing one row between them. NEVER
+              GATED ON `depth`: D118 draws this whole block whether or not the depth resolved,
+              a box the server cannot size included — gating this row alone on `depth` is what
+              a real fixture in this round caught as a second per-row height disagreement. */}
+          <p className="position-bar-zoom-ends" aria-hidden="true">
+            <span className="position-bar-end-back">Back</span>
+            <span className="position-bar-end-front">Front</span>
           </p>
         </div>
       )}

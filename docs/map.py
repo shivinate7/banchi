@@ -7254,7 +7254,7 @@ COMPONENTS = [
                                             "too, so document order is the only thing that makes the "
                                             "spec's `querySelector` return the box strip.",
                                     "governed_by": ["D5", "D20", "D41", "D50", "D118", "D155",
-                                                    "D218"]},
+                                                    "D218", "D260"]},
             "src/cardState.ts": {"does": "the card-state vocabulary and the age of a reading, with no "
                                          "component in it — `readingAgo`, `readingExact`, `stateTone`, "
                                          "`stateLabel`, and the `SOLD` / `RETIRED` words those two are "
@@ -7346,7 +7346,7 @@ COMPONENTS = [
                                                       "D26", "D28", "D30", "D31", "D38", "D41",
                                                       "D45", "D58", "D67", "D68", "D71", "D92",
                                                       "D115", "D118", "D119", "D132", "D172",
-                                                      "D181", "D196", "D218", "D259"]},
+                                                      "D181", "D196", "D218", "D259", "D260"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
@@ -7363,7 +7363,7 @@ COMPONENTS = [
                                               "panel.",
                                       "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45",
                                                       "D58", "D71", "D115", "D118", "D119", "D132",
-                                                      "D218"]},
+                                                      "D218", "D259"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's

@@ -186,28 +186,11 @@
   padding-bottom: 18px;
   mask-image: linear-gradient(to bottom, var(--bn-mask) calc(100% - 18px), transparent);
   -webkit-mask-image: linear-gradient(to bottom, var(--bn-mask) calc(100% - 18px), transparent);
-  /* ONE SLOT COLUMN FOR THE LIST, DECLARED WHERE THE LIST IS — which is the only place the
-     decision can be made honestly. A row's slot holds `CARD 17`, or, for a copy that has left
-     the box, a void where the figure would be (D58, D71); the two reserve different widths, and
-     while each row sized its own the departed rows' paths started 2.109px left of every live
-     one's. That is not a rounding error to absorb, it is the column `lead='slot'` exists to
-     draw, ragged for exactly the cards a person had just sold — and it is the assertion
-     `app/tests/inventory.spec.ts` has been carrying red since the merge.
-
-     WHAT THE LIST DECLARES IS THE KEY'S ADVANCE AND THE DIGIT COUNT, and only the first is a
-     constant. `--pos-slot-key` is `CARD` at this list's key size plus the 4px slot gap, MEASURED on
-     the real screen at 1440 with fonts settled: 33.594 + 4. It is `px` and not `rem` because
-     everything it measures is `px` — `--pos-slot: 22px`, and `.position-key`'s clamp sitting on its
-     11px floor — and the `5.25rem` it replaces would overflow at THREE digits for a reader on a
-     12px root font, which nothing had noticed. A four-letter word's advance in a second font is the
-     one term no CSS unit gives you; the figure's is `ch` in `PositionLabel.css`, where the browser
-     measures it, off the count `CardLocations.tsx` reads from the rows it is drawing.
-
-     THE 84px THIS REPLACES was measured too, and that was the problem: it was one number covering
-     both terms, so it was right about the fonts and could never be right about the digit count. A
-     box past 999 cards overflowed it silently — the figure is flex-shrunk and its glyphs paint
-     outside their own box, so every element-box measurement said nothing had changed. */
-  --pos-slot-key: 37.594px;
+  /* THE SLOT COLUMN THIS COMMENT ONCE DESCRIBED IS RETIRED (the owner's ruling, 2026-09-25,
+     Direction B): `RowIdentity` (`CardLocations.tsx`) runs box, section and card as one line
+     with no path column beside it, so there is no second column width for `--pos-slot-key` to
+     answer for any more. `CardLocations.tsx`'s own `slotDigits` computation is retired in the
+     same commit. */
 }
 
 /* One copy: where it is (label + neighbours), the lens, the state, the action. The lens takes
@@ -409,20 +392,59 @@
 
 
 
-/* The position label. `--pos-slot` is the one number this site chooses. */
 .card-locations-owner .card-locations-label {
   display: block;
-  color: var(--bn-ink);
-  --pos-slot: 22px;
-  --pos-gap: var(--bn-3);
-  font-size: var(--pos-slot);
-  line-height: 1.2;
   min-width: 0;
 }
-.card-locations-owner .card-locations-label .position-parts { flex: 1 1 auto; min-width: 0; }
+/* THE ONE-LINE IDENTITY (the owner's ruling, 2026-09-25, Direction B): box, section and card,
+   each said once, dot-separated by CSS (D218) and never typed. Small and muted on purpose — in
+   this direction the RULERS are the hero and the identity is a caption above them, the way a
+   photo caption sits under the photo rather than competing with it. Replaces `PositionLabel`'s
+   stacked block for this row only; every other caller of that component is unchanged. */
+.card-locations-owner .card-locations-identity {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  font-size: var(--bn-fs-sm);
+  font-weight: 700;
+  /* `--bn-ink`, NOT `--bn-ink-2` OR `--bn-ink-3` (found by `gallery.spec.ts`'s axe sweep,
+     2026-09-25, both tried and both still under AA in the light theme's `.is-current` row on
+     `--bn-surface-2`, at this weight and size). `--bn-ink` is the one token this file's own
+     token comment guarantees against every surface. */
+  color: var(--bn-ink);
+  white-space: nowrap;
+}
+.card-locations-owner .card-locations-identity-fact { min-width: 0; }
+/* D218: the seam between facts is CSS, never typed. */
+.card-locations-owner .card-locations-identity-fact + .card-locations-identity-fact::before {
+  content: '·';
+  margin: 0 var(--bn-1-5);
+  color: var(--bn-ink-4);
+}
+/* THE BOX NAME MAY ELLIPSIZE; SECTION AND CARD NEVER DO (D41's own priority, carried over): a
+   box name is free text and can run long, and it is named again in the walk's own rail — the
+   section and the card are the two facts this line alone states. */
+.card-locations-owner .card-locations-identity-box {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-locations-owner .card-locations-identity-fact:not(.card-locations-identity-box) { flex: none; }
+.card-locations-owner .card-locations-identity-card { color: var(--bn-ink); font-weight: 800; }
+.card-locations-owner .card-locations-identity-num { font-variant-numeric: tabular-nums; }
+.card-locations-owner .card-locations-identity-note { font-weight: 600; }
+/* THE STRUCK FIGURE (D58, D71, D259): a departed copy keeps the card it left, struck through,
+   never worded. */
+.card-locations-owner .card-locations-identity[data-departed='true'] .card-locations-identity-num {
+  text-decoration: line-through;
+  text-decoration-color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
+}
+.card-locations-owner .card-locations-identity { flex: 1 1 auto; }
 /* Inside the walk-to the label does NOT grow: the arrow belongs beside the address it opens,
    not stranded at the far edge of a full-width row. */
-.card-locations-owner .card-locations-goto .position-parts { flex: 0 1 auto; }
+.card-locations-owner .card-locations-goto .card-locations-identity { flex: 0 1 auto; }
 .card-locations-owner .nb {
   --nb-key: 11px;
   --nb-name: 12px;
@@ -469,8 +491,8 @@
   color: var(--bn-accent);
   transform: translate(1px, -1px);
 }
-.card-locations-owner .card-locations-goto:hover .position-num,
-.card-locations-owner .card-locations-goto:focus-visible .position-num { color: var(--bn-accent); }
+.card-locations-owner .card-locations-goto:hover .card-locations-identity-num,
+.card-locations-owner .card-locations-goto:focus-visible .card-locations-identity-num { color: var(--bn-accent); }
 
 /* A thumb presses the walk-to, AND the claim pill — it is a link to the order screen, not a
    badge, so it takes the same floor as the `Mark sold` button beside it (`Button size="sm"`

@@ -399,12 +399,15 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
        function today is fed through `PositionBar`, which does not thread that word in either.
        One neutral phrase, shorter than what it replaces, says exactly what is known and no
        more (D194 — the count only ever goes down). */
-    /* PAST TENSE, ONE FACT (LOC-23, and the owner's ruling that a departed card speaks of the
-       place it left). The number is the one the server's departed label carries. */
-    const was = placePartsOf(place.label)?.card ?? null
-    /* No `of N` here: a card that stood behind the section's last card would read `was card 12 of
-       11`, which is true of the place and reads as an error. */
-    const tail: readonly string[] = [was === null ? 'was in this section' : `was card ${was}`]
+    /* THE TAIL IS EMPTY HERE TOO NOW (the owner's Direction-B build, 2026-09-25). It used to say
+       `was card 4` — a fact `CardLocations.tsx`'s `RowIdentity` now carries on the header, struck
+       through, with `Was at ...` as its own accessible name. Left populated, this caption
+       appeared on a sale that it had been ABSENT for the instant before (no section name, live)
+       — the exact D118 violation this file's own `PositionBar.tsx` exists to forbid: a press
+       resizing the row it lands in, caught by `inventory.spec.ts`'s "the press that sells a copy
+       moves nothing outside the panel it lands in". The caption's presence now depends only on
+       `head` (a section name), which a sale does not change. */
+    const tail: readonly string[] = []
     return {
       slot: null,
       of,
@@ -419,14 +422,13 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
     }
   }
 
-  /* "CARDS", NEVER "SLOTS", HERE (LOC-22; the owner's final ruling keeps "slots" for the box's
-     capacity in Inventory's header and strip only). THE SLOT NUMBER ITSELF IS DROPPED (the
-     owner's report, 2026-09-25): `slot` is drawn twice more on this same panel already —
-     `PlaceNeighbors`' "this" row and `PositionLabel`'s big numeral — and the mark's own cell,
-     filled on the ruler right under this caption, draws it a third time as a picture. What
-     this caption alone still says is the section's SIZE, which nothing else on the row
-     states. */
-  const tail: readonly string[] = [`${of} card${of === 1 ? '' : 's'}`]
+  /* THE TAIL IS EMPTY HERE NOW (the owner's Direction-B build, 2026-09-25: "'Card 5 of 39' and
+     '39 cards' repeat the 39. Say it once."). `CardLocations.tsx`'s `RowIdentity` states
+     `Card 5 of 39` once, on the header, which is BOTH the slot this caption's own comment once
+     justified dropping AND the section's size the tail was left to say alone — so once the
+     header carries the size too, the tail has nothing left that is not said elsewhere. The
+     ruler still marks the exact card; it does so as a picture; the words move to the header. */
+  const tail: readonly string[] = []
   return {
     slot,
     of,
