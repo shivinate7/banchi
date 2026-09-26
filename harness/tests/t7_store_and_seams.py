@@ -823,7 +823,7 @@ def identifications_for(cards) -> dict:
     }
 
 
-def seam_run(checks: Checks, cards, *, live=None, market=None, join=True):
+def seam_run(checks: Checks, cards, *, live=None, market=None, join=True, sections=None):
     """A joined run over `cards`, in whatever isolated home is current. Returns the run.
 
     Captures a photo per card through the real route first, so the store holds the same
@@ -832,10 +832,15 @@ def seam_run(checks: Checks, cards, *, live=None, market=None, join=True):
 
     `join=False` stops before the join and returns the run with an empty report, for the
     cases that need to put something in the run directory FIRST and watch the join refuse.
+
+    `sections` maps a box to its dividers, declared after the captures and before the join:
+    a divider typed ahead of the fill would take the captures (D10).
     """
     for box, index, *_ in cards:
         while Store().read().inventory.next_index(box) <= index:
             capture_server.do_capture(capture_payload(box))
+    for box, layout in (sections or {}).items():
+        capture_server.do_put_box(box, {"sections": layout})
     run_dir = runs.create("t7-seam")
     run_dir.write_identifications(identifications_for(cards))
     export = write_export(run_dir.path("export.csv"), live=live, market=market)
@@ -10513,28 +10518,60 @@ def check_place_neighbors(checks: Checks) -> None:
             "card 2's front side holds two unread cards before Charizard",
         )
 
-        # --- an unallocated tail is not a gap --------------------------------------------
-        # A declared divider far past the fill: section 1 of box 5 runs to index 50 while
-        # the box holds five cards. `section_gaps` counts terminal RECORDS, not unoccupied
-        # indices — that an empty tail adds nothing is the CONSTRUCTION, not a bounds
-        # check, and this is the box that would catch the bounds check creeping back in.
+        # --- a divider typed ahead of the fill takes the captures ---------------------------
+        # The owner's ruling, 2026-09-26 (D10): a section is where captures go once it exists.
+        # So a divider declared far past the fill, `[1, 51]` on an empty box, is an empty last
+        # section, and every capture goes INTO it. Section 1 stays empty. `section_gaps`
+        # still counts terminal RECORDS only, so the sold card is the one gap.
         capture_server.do_create_box({"box": 5, "sections": [1, 51]})
         for _ in range(5):
             capture_server.do_capture(capture_payload(5))
         capture_server.do_mark_sold(5, 2, {})
         place = capture_server.do_inventory()["cards"]["5/3"]["place"]
-        # 50 UNTIL D58 AND 49 SINCE, WHICH IS ONE DEPARTED CARD AND NOT A LOST PLAN. The
-        # divider is declared at index 51 and the box has sold one card, so it now stands
-        # in front of the FIFTIETH card rather than the fifty-first slot; section 1 runs to
-        # the forty-ninth. `Position._divider` is what keeps the other 45 slots — the ones
-        # the box has not grown into — counting for one card each, so a layout typed in
-        # before the box was filled still says what was typed.
+        checks.equal(
+            (place["section"], place["slot"]),
+            (2, 2),
+            "a divider typed ahead of the fill takes the captures: card 3 stands in section 2, "
+            "as its second card once card 2 has sold (D58)",
+        )
+        checks.equal(
+            [
+                d["count"]
+                for b in capture_server.do_boxes()["boxes"] if b["box"] == 5
+                for d in b["sections_detail"]
+            ],
+            [0, 4],
+            "and section 1 holds nothing: no capture went in front of the typed divider",
+        )
+        checks.equal(
+            place["section_gaps"],
+            1,
+            "and an index with no record adds NOTHING to the gap count: only the sold record "
+            "at 2 is a gap",
+        )
+
+        # --- an unallocated tail is not a gap --------------------------------------------
+        # The same divider far past the fill, TYPED AFTER THE CAPTURES: section 1 of box 9
+        # runs to index 50 while the box holds five cards. `section_gaps` counts terminal
+        # RECORDS, not unoccupied indices — that an empty tail adds nothing is the
+        # CONSTRUCTION, not a bounds check, and this is the box that would catch the bounds
+        # check creeping back in.
+        capture_server.do_create_box({"box": 9})
+        for _ in range(5):
+            capture_server.do_capture(capture_payload(9))
+        capture_server.do_put_box(9, {"sections": [1, 51]})
+        capture_server.do_mark_sold(9, 2, {})
+        place = capture_server.do_inventory()["cards"]["9/3"]["place"]
+        # 49, ONE DEPARTED CARD AND NOT A LOST PLAN. The divider is declared at index 51 and
+        # the box has sold one card, so it stands in front of the FIFTIETH card rather than
+        # the fifty-first slot. `Position._divider` keeps the other 45 slots counting for
+        # one card each.
         checks.equal(
             place["section_end"],
             49,
-            "a declared divider past the fill still carries its unfilled slots — the "
-            "block says the section ends at 49, one short of the declared 50, because "
-            "one card has left the box in front of it (D58)",
+            "a divider typed past the fill still carries its unfilled slots — the block says "
+            "the section ends at 49, one short of the declared 50, because one card has left "
+            "the box in front of it (D58)",
         )
         checks.equal(
             place["section_gaps"],
@@ -10966,9 +11003,13 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
         # names a card says the box's NAME, the section and the card within the section,
         # through the one helper (`join.said_place`), and never the box number or the store
         # index. A refusal reaches a screen as a toast. The error code does not change.
-        capture_server.do_create_box({"box": 7, "name": "Rares", "sections": [1, 3]})
+        capture_server.do_create_box({"box": 7, "name": "Rares"})
         for _ in range(4):
             capture_server.do_capture(capture_payload(7))
+        # DIVIDERS AFTER THE CAPTURES (D10, the owner's ruling of 2026-09-26): a divider
+        # typed ahead of the fill takes the next captures, so a layout is declared
+        # over cards that are already in the box.
+        capture_server.do_put_box(7, {"sections": [1, 3]})
         capture_server.do_mark_sold(7, 4, {})
         try:
             capture_server.do_mark_sold(7, 4, {})
@@ -11055,9 +11096,13 @@ def check_consolidated_numbering(checks: Checks) -> None:
 
     with isolated_home():
         # Two sections, six cards each: [1, 7] over twelve.
-        capture_server.do_create_box({"box": 3, "sections": [1, 7]})
+        capture_server.do_create_box({"box": 3})
         for _ in range(12):
             capture_server.do_capture(capture_payload(3))
+        # DIVIDERS AFTER THE CAPTURES (D10, the owner's ruling of 2026-09-26): a divider
+        # typed ahead of the fill takes the next captures, so a layout is declared
+        # over cards that are already in the box.
+        capture_server.do_put_box(3, {"sections": [1, 7]})
         # THE LABEL SAYS THE BOX'S NAME (D259), and a box created with
         # no name carries its stored default. Read back, so this check is about numbering.
         box_title = Store().read().inventory.box(3).name
@@ -23923,9 +23968,10 @@ def check_pricing_labels(checks: Checks) -> None:
     with isolated_home():
         # Two sections over four cards — dividers at 1 and 3 — so a divider has cards on both
         # sides of it and a departure in front of one can be told from a departure behind it.
-        capture_server.do_create_box({"box": 3, "sections": [1, 3]})
+        capture_server.do_create_box({"box": 3})
         run_dir, _ = seam_run(
-            checks, [(3, at, "Articuno", "161", None) for at in (1, 2, 3, 4)]
+            checks, [(3, at, "Articuno", "161", None) for at in (1, 2, 3, 4)],
+            sections={3: [1, 3]},
         )
         name = run_dir.directory.name
         joined_bytes = run_dir.path(runs.PRICING).read_bytes()
@@ -25794,9 +25840,13 @@ def check_section_names(checks: Checks) -> None:
     checks.note("D132 — A SECTION CAN BE NAMED, AND THE NAME FOLLOWS ITS DIVIDER")
 
     with isolated_home():
-        capture_server.do_create_box({"box": 3, "sections": [1, 7]})
+        capture_server.do_create_box({"box": 3})
         for _ in range(12):
             capture_server.do_capture(capture_payload(3))
+        # DIVIDERS AFTER THE CAPTURES (D10, the owner's ruling of 2026-09-26): a divider
+        # typed ahead of the fill takes the next captures, so a layout is declared
+        # over cards that are already in the box.
+        capture_server.do_put_box(3, {"sections": [1, 7]})
 
         row = capture_server.do_put_box(3, {"section_names": {"2": "Rares"}})
         checks.equal(
@@ -27527,19 +27577,19 @@ def check_open_section(checks: Checks) -> None:
         )
 
         # A DECLARED DIVIDER PAST THE FILL is legal (`_section_spans` renders it with a
-        # count of zero) and is the one layout this route cannot append to, because the
-        # divider it would add belongs BEHIND one that already exists.
+        # count of zero). It is an empty last section, so under the owner's ruling of
+        # 2026-09-25 ("Into the empty section (Recommended)", D10) S refuses it as
+        # `section_empty`, and the next capture goes INTO it, behind the divider.
         with Store().write() as snapshot:
             snapshot.inventory.record_capture(
                 master.Card(box=5, index=1, cid=fake_cid("section-ahead-5-1"))
             )
         capture_server.do_put_box(5, {"sections": [1, 51]})
         checks.raises(
-            master.SectionAhead,
+            master.SectionEmpty,
             lambda: capture_server.do_open_section(5, {}),
-            "a divider already declared past the next card refuses, naming it — appending "
-            "would make the layout unsorted, and `check_sections` would say so in a "
-            "sentence about a list rather than about this box",
+            "a divider already declared past the next card is an empty section, so S "
+            "refuses it the way it refuses a second press",
         )
 
         refusal(
@@ -27574,8 +27624,8 @@ def check_open_section(checks: Checks) -> None:
         #
         # THE PATH AND THE CODES, which are the whole of what a client sees. `do_*` calls
         # above prove the behaviour; only a socket proves that `POST /boxes/6/sections`
-        # reaches it and that the store's three exceptions arrive as three distinct strings
-        # rather than as one 500. `app/src/server.ts:openSection` branches on all three.
+        # reaches it and that the store's refusals arrive as distinct strings
+        # rather than as one 500. `app/src/server.ts:openSection` branches on them.
         # Card 8 of box 6, so the section opened at 8 above holds something and the wire
         # press below is a real one rather than the replay refusal.
         capture_server.do_capture(capture_payload(6))
@@ -27594,7 +27644,7 @@ def check_open_section(checks: Checks) -> None:
             )
             for box, code, label in (
                 (6, "section_empty", "a replayed press is a 409 `section_empty`"),
-                (5, "section_ahead", "a divider ahead of the next card is 409 `section_ahead`"),
+                (5, "section_empty", "a divider ahead of the next card is 409 `section_empty`"),
             ):
                 status, body, _ = request(port, "POST", f"/boxes/{box}/sections", payload={})
                 checks.equal(

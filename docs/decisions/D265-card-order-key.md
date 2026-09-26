@@ -63,3 +63,24 @@ BUILT on `ux/boxmap`, 2026-09-25. The owner answered the open question above on 
 "A key on each card". D-a-key-on-each-card records the form (a fraction that starts at the
 index), the dividers, the migration and the moves. T7's `t7_box_map.py` holds the harness
 cases: the migration changes no label, and a placement writes only the cards it moves.
+
+### The divider anchor, 2026-09-26
+
+The divider proof ran random writes against a physical model of each box. It found three
+defects where a card could stand on the wrong side of a divider. All three are fixed, and each
+compares keys with keys:
+
+- **F1.** `next_key` and `_birth_key` did not read the dividers. The next card now goes into
+  an empty last section (the owner's ruling, D10: "Into the empty section (Recommended)").
+- **F2.** The capture screen's divider undo (UN-15) sent stored order keys to `PUT
+  /boxes/<box>`, which reads card counts. So every divider whose key was not its count moved.
+  It calls `DELETE /boxes/<box>/sections` now. `Inventory.close_section` removes the empty
+  last divider by its own key, and moves no other.
+- **F3.** `Inventory.unmove_card` compared a divider's key with the transplant's stored index.
+  It compares it with the transplant's order key now.
+
+`harness/tests/t7_box_map.py:check_divider_anchor` lands the proof as a permanent check: the
+three repros as named cases, then 6 seeds of 150 random writes. A store error on a well-aimed
+write fails it too. Eight mutations each turn it red. Four undo the fixes. The others slide
+order keys on a remove, use `bisect_left` in `layout_of`, drop `take_div` in `_try_place`, and
+drop the front re-anchor in `drop_sections`. `app/tests/capture-undo.spec.ts` holds F2's client half.

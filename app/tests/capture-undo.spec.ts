@@ -107,12 +107,17 @@ const BOX4 = {
 
 /** Every DELETE the screen sent, in order. The ORDER is the assertion — newest first — so
  *  this is a list and never a set. `sections` is every `PUT /boxes/<box>` the screen sent
- *  with a `sections` field — UN-15's own undo, `updateBox({ sections })`. */
+ *  with a `sections` field. `closes` is every `DELETE /boxes/<box>/sections?div=<key>`, as
+ *  `<box>:<div>`, UN-15's own
+ *  undo (`closeSection`), by box. */
 type Wire = {
   deletes: string[]
   removes: string[]
   captures: number
   sections: { box: string; sections: number[] }[]
+  closes: string[]
+  /** The stub's own divider lists by box, so a case can play a dividers-editor save. */
+  layouts: Record<string, number[]>
 }
 
 async function open(
@@ -132,7 +137,14 @@ async function open(
     onHandStart?: Record<string, number>
   } = {},
 ): Promise<Wire> {
-  const wire: Wire = { deletes: [], removes: [], captures: 0, sections: [] }
+  const wire: Wire = {
+    deletes: [],
+    removes: [],
+    captures: 0,
+    sections: [],
+    closes: [],
+    layouts: {},
+  }
 
   /* A canvas camera, installed before the app script runs. `useCamera` reads
      `navigator.mediaDevices` at call time, so replacing the two methods is enough — and the
@@ -302,15 +314,16 @@ async function open(
   })
 
   /* UN-15: dividers, tracked the way the store keeps them — one divider list per box. The
-     section route APPENDS (`openSection`'s own contract, `server.ts`); the box route
-     REPLACES wholesale (`updateBox({ sections })`), which is UN-15's undo. */
-  const sectionsByBox: Record<string, number[]> = {}
+     section route APPENDS (`openSection`'s own contract, `server.ts`) and its DELETE takes the
+     last divider back out (`closeSection`, UN-15's undo); the box route REPLACES wholesale
+     (`updateBox({ sections })`). A box's starting dividers are its fixture's own. */
+  const sectionsByBox = wire.layouts
   const boxRecord = (box: string): Record<string, unknown> => {
     const base =
       (options.boxes ?? [BOX, BOX4]).find(
         (entry) => (entry as { box: number }).box === Number(box),
       ) ?? BOX
-    const sections = sectionsByBox[box] ?? []
+    const sections = sectionsByBox[box] ?? (base as { sections?: number[] }).sections ?? []
     return {
       ...base,
       box: Number(box),
@@ -324,12 +337,37 @@ async function open(
       })),
     }
   }
-  await page.route(/\/boxes\/\d+\/sections$/, (route) => {
-    if (route.request().method() !== 'POST') return route.fallback()
-    const path = new URL(route.request().url()).pathname
-    const box = /\/boxes\/(\d+)\/sections$/.exec(path)![1]!
+  await page.route(/\/boxes\/\d+\/sections(\?.*)?$/, (route) => {
+    const method = route.request().method()
+    if (method !== 'POST' && method !== 'DELETE') return route.fallback()
+    const url = new URL(route.request().url())
+    const box = /\/boxes\/(\d+)\/sections$/.exec(url.pathname)![1]!
+    const held = (boxRecord(box).sections as number[]) ?? []
+    if (method === 'DELETE') {
+      // The store's rule: only the divider named by `div`, and only while it is the last.
+      const div = url.searchParams.get('div')
+      wire.closes.push(`${box}:${div}`)
+      if (div === null || Number(div) !== held[held.length - 1]) {
+        return route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'divider_built_on',
+              message: 'The divider you added is no longer the last one in S key, so it stays.',
+            },
+          }),
+        })
+      }
+      sectionsByBox[box] = held.slice(0, -1)
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(boxRecord(box)),
+      })
+    }
     const at = allocated[box] ?? 1
-    sectionsByBox[box] = [...(sectionsByBox[box] ?? []), at]
+    sectionsByBox[box] = [...held, at]
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -499,10 +537,10 @@ test('the stack is the whole sitting, newest first, and reaches the 13th row', a
   await expect(page.locator('.capture-undo-depth')).toHaveText('23 recent')
 })
 
-/* UN-15: A DIVIDER'S OWN UNDO. `S`/"New section" writes through `set_sections`
- * (`openSection`), which is not an append the store can reverse on its own — so `U` puts the
- * layout back through the same route Manage box's own editor calls (`updateBox({ sections })`),
- * "while no card is behind it" (undo.md 11.1). */
+/* UN-15: A DIVIDER'S OWN UNDO. `S`/"New section" appends a divider (`openSection`), and `U`
+ * takes that one divider back out through `closeSection`, "while no card is behind it"
+ * (undo.md 11.1). Never through `updateBox({ sections })`: that route reads card counts, and
+ * a box's `sections` are order keys. */
 test('U undoes a divider while no card is behind it', async ({ page }) => {
   const wire = await open(page)
   await shoot(page, 2)
@@ -514,11 +552,62 @@ test('U undoes a divider while no card is behind it', async ({ page }) => {
 
   await page.keyboard.press('u')
 
-  // The layout is back to what it was — no divider — through the box route, not a delete.
-  expect(wire.sections).toEqual([{ box: '3', sections: [] }])
+  // The divider comes back out through its own route, named by the key S got back, and no
+  // layout is re-sent. The stub's S put it at 3, where the next card goes.
+  await expect.poll(() => wire.closes).toEqual(['3:3'])
+  expect(wire.sections).toEqual([])
   expect(wire.deletes).toEqual([])
   // Neither capture was touched.
   await expect(rows(page)).toHaveCount(2)
+})
+
+/* THE DIVIDER PROOF'S F2, ON A BOX WITH A SOLD CARD. 3 captures, S, 3 captures, sell card 1:
+ * the stored dividers are the keys `[1, 4]`, and the second section starts at card 3 by
+ * count. The old undo re-sent those keys through `PUT /boxes/<box>`, which reads counts, so
+ * the store moved the second divider to `[1, 5]`. The undo must send no layout at all. */
+test('U after S on a box with a sold card takes out only that divider (F2)', async ({ page }) => {
+  const DIVIDED = {
+    ...BOX,
+    sections: [1, 4],
+    cards: 6,
+    sold: 1,
+    on_hand: 5,
+    fill: 6,
+    next_index: 7,
+  }
+  const wire = await open(page, { boxes: [DIVIDED, BOX4], nextIndex: { '3': 7 } })
+
+  await page.getByRole('button', { name: 'New section' }).click()
+  await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
+    'New section',
+  )
+  await page.keyboard.press('u')
+
+  await expect.poll(() => wire.closes).toEqual(['3:7'])
+  expect(wire.sections, 'no layout is re-sent, so no other divider can move').toEqual([])
+})
+
+/* THE STALE U (the Opus review's first finding). S, then a dividers-editor save on another
+ * device adds a divider behind it, then U. The undo names S's own divider, the store refuses
+ * it, and the screen says so in one sentence and drops the pending divider, so the next U
+ * reaches the captures. */
+test('a stale U after an editor save is refused, said, and not retried', async ({ page }) => {
+  const wire = await open(page)
+  await shoot(page, 2)
+  await page.getByRole('button', { name: 'New section' }).click()
+  await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
+    'New section',
+  )
+  wire.layouts['3'] = [...(wire.layouts['3'] ?? []), 9]
+
+  await page.keyboard.press('u')
+  await expect.poll(() => wire.closes).toEqual(['3:3'])
+  await expect(page.getByText('The divider you added is no longer the last one')).toBeVisible()
+  expect(wire.layouts['3'], 'the editor\'s divider stays').toEqual([3, 9])
+
+  await page.keyboard.press('u')
+  await expect.poll(() => wire.deletes).toEqual(['/inventory/3/2'])
+  expect(wire.closes, 'the refused divider undo is not sent again').toEqual(['3:3'])
 })
 
 /* THE OTHER HALF: ONCE A CARD IS CAPTURED BEHIND IT, THE DIVIDER IS "BUILT ON" and `U` reaches

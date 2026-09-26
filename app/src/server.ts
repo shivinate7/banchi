@@ -1758,12 +1758,11 @@ export async function updateBox(
  * box already has and append to it, so two devices editing one box last-writer-wins the way
  * that function's own note describes. This one appends, in the store, from the physical act.
  *
- * REFUSALS WORTH BRANCHING ON, all three of them facts about the box rather than about the
- * request. `section_empty`: the last section was opened and nothing has been captured into
- * it yet, so the divider asked for is already there — the two-presses-in-a-row case, and the
- * one an operator will actually hit. `section_ahead`: a divider is already declared past the
- * next card, so this one cannot go in front of it; the remedy is the dividers editor.
- * Show the server's sentence — each names the divider that is in the way, and this module
+ * THE REFUSAL WORTH BRANCHING ON is a fact about the box rather than about the request.
+ * `section_empty`: the last section was opened and nothing has been captured into it yet,
+ * so the divider asked for is already there — the two-presses-in-a-row case. A divider
+ * typed past the last card is the same case now, because the next card goes behind it.
+ * Show the server's sentence — it names the divider that is in the way, and this module
  * has nothing to add to it.
  *
  * Answers with the whole `BoxRecord`, so `sections_detail` comes back with it. Read the
@@ -1779,6 +1778,16 @@ export async function openSection(box: number): Promise<BoxRecord> {
      * way and refuses an absent one as `body_required`, which `markSold` documents as the
      * convention rather than an oversight. Two characters. */
     body: JSON.stringify({}),
+  })) as BoxRecord
+}
+
+/** `DELETE /boxes/<box>/sections?div=<key>`: take out the divider `openSection` added, the
+ * capture screen's `U` after `S` (UN-15). `div` is that answer's last `sections` entry. The
+ * store removes that one divider and moves no other. It refuses (409 `divider_built_on`) when
+ * the divider is no longer the last one, or a card stands behind it. */
+export async function closeSection(box: number, div: number): Promise<BoxRecord> {
+  return (await request(`/boxes/${box}/sections?div=${encodeURIComponent(String(div))}`, {
+    method: 'DELETE',
   })) as BoxRecord
 }
 
