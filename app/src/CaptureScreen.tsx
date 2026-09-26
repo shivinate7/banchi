@@ -4055,6 +4055,11 @@ export function CaptureScreen() {
                       tone="danger"
                       size="sm"
                       className="capture-undo-drop"
+                      /* THE FACE FOLLOWS `--undo-drop-size` (CaptureScreen.css), 40px on a
+                         phone or a coarse pointer (D117), and the kit's own 24px `sm` face
+                         everywhere else. IconButton merges `style` over its inline face size,
+                         so no `!important` is needed to beat it. */
+                      style={{ width: 'var(--undo-drop-size, 24px)', height: 'var(--undo-drop-size, 24px)' }}
                       disabled={busy}
                       onClick={(event) => {
                         event.stopPropagation()

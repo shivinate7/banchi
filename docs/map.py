@@ -6707,8 +6707,8 @@ COMPONENTS = [
             # on `#/` mean the same stretch of work by the same measurement.
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D36", "D41", "D52", "D56", "D58", "D65", "D67", "D81", "D92",
-                            "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145", "D153",
-                            "D164", "D170", "D172", "D196", "D218", "D286",
+                            "D117", "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145",
+                            "D153", "D164", "D170", "D172", "D196", "D218", "D286",
                             "D-sealed-boxes-removed"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and

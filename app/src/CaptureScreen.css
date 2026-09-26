@@ -1088,8 +1088,6 @@
   position: absolute;
   top: -6px;
   right: -5px;
-  width: 22px;
-  height: 22px;
   padding: 0;
   border: none;
   border-radius: var(--bn-r-full);
@@ -1105,18 +1103,16 @@
 .capture-undo-drop:hover:not(:disabled),
 .capture-undo-drop:focus-visible { background: var(--bn-danger); color: var(--bn-on-accent); }
 .capture-undo-drop:disabled { opacity: 0.5; cursor: not-allowed; }
-/* THE 40PX FLOOR ON A COARSE POINTER (D117), MEASURED RATHER THAN ASSUMED: this rule already
-   read `var(--bn-control-h-sm)` (40px here), and never won — `IconButton` sizes its own face
-   with an inline `style` (`kit/index.tsx`'s `FACE_PX` table), and no external rule beats an
-   inline one without `!important`. Measured at 24x24 on a real phone-width run before this
-   line existed. Flush at the corner (`top: 0; right: 0`) instead of hanging over it, so the
-   real 40px box stays inside its own cell rather than reaching into the next one — the
-   corner overhang worked at 24px beside a 12px gap; it does not at 40px, whatever the gap.
-   `top`/`right` need no `!important`: only the SIZE is inline. */
+/* THE 40PX FLOOR ON A COARSE POINTER (D117), MEASURED RATHER THAN ASSUMED: `IconButton` sizes
+   its own face with an inline `style` (`kit/index.tsx`'s `FACE_PX` table), so a class rule
+   never won, and the press measured 24x24 on a real phone-width run. The size is the
+   `--undo-drop-size` property now, which the press's own `style` reads, so the media rule
+   below sets it with no `!important`. Flush at the corner (`top: 0; right: 0`) instead of
+   hanging over it, so the real 40px box stays inside its own cell rather than reaching into
+   the next one: the corner overhang worked at 24px beside a 12px gap, and not at 40px. */
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
   .capture-undo-drop {
-    width: var(--bn-control-h-sm) !important;
-    height: var(--bn-control-h-sm) !important;
+    --undo-drop-size: var(--bn-control-h-sm);
     top: 0;
     right: 0;
   }
