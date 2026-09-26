@@ -459,6 +459,31 @@ def run() -> Result:
     released = _through_corpus({ARTICUNO: {"value": "22.00"}, ACCELGOR: {"value": "4.00"}})
     c.equal(released.get(ARTICUNO), Decimal("22.00"), "a release writes `before` back, and the SKU lists at it")
 
+    # --- a release keeps the first date (the owner's ruling, "Keep the first date") ----------
+    #
+    # `corpus.stamp_answers` dates every NEW price answer, because D100's markdown ratchet reads
+    # `at`. A price returning from a hold is not new: the hold kept it in `before`, date and all,
+    # and a release sends that same answer back with that same date. Only an exact return keeps
+    # the date. A new price, or the same price with no matching date, is dated today.
+    first, now = "2026-09-01T10:00:00+00:00", "2026-09-26T12:00:00+00:00"
+    held_book = corpus.Corpus.parse({"version": 1, "skus": {
+        ARTICUNO: {"value": {"withheld": "bullish", "before": {"value": "22.00", "channel": "price", "at": first}}},
+    }})
+
+    def _stamped(value, at=None):
+        after = corpus.Corpus.parse({"version": 1, "skus": {ARTICUNO: {"value": value, **({"at": at} if at else {})}}})
+        corpus.stamp_answers(held_book, after, now)
+        return after.answers[ARTICUNO].at
+
+    c.equal(_stamped("22.00", first), first, "a release that sends back the hold's own answer and date keeps the first date")
+    c.equal(_stamped("22.0", first), first, "the value folds as the ratchet folds it: 22.0 is 22.00")
+    c.equal(_stamped("23.00", first), now, "a new price after a hold dates today, whatever date it carries")
+    c.equal(_stamped("22.00"), now, "the same price with no date is a new typing, and dates today")
+    c.equal(_stamped("22.00", "2026-09-20T00:00:00+00:00"), now, "a date that is not the hold's own is not kept")
+    fresh = corpus.Corpus.parse({"version": 1, "skus": {ARTICUNO: {"value": "22.00", "at": first}}})
+    corpus.stamp_answers(corpus.Corpus(), fresh, now)
+    c.equal(fresh.answers[ARTICUNO].at, now, "a price with no hold before it dates today, as it always has")
+
     # --- withholding: an answer that is not a price (D49) ------------------------------------
     #
     # THE MIRROR OF THE `no_market_data` CASE ABOVE, ONE CHANNEL OVER. That field has accepted

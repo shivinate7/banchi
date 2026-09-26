@@ -184,6 +184,8 @@ async function open(
     /** What `GET .../history` answers. `'refuse'` answers a named refusal, so the panel's
      *  failure arm is exercised against the same shape a real server sends. */
     history?: unknown | 'refuse'
+    /** The stored `at` of an answer in `decisions`, by SKU — the first date a release keeps. */
+    answerAt?: Record<string, string>
     /** What `GET .../trends` answers for the SKUs a chunk asks about — D79. A function, not a
      *  payload, because the client CHUNKS the walk and the interesting cases are about which
      *  SKUs each request carries. */
@@ -479,12 +481,12 @@ async function open(
     for (const [sku, value] of Object.entries(
       (answers?.overrides ?? {}) as Record<string, unknown>,
     )) {
-      skus[sku] = { value }
+      skus[sku] = { value, ...(options.answerAt?.[sku] ? { at: options.answerAt[sku] } : {}) }
     }
     for (const [sku, value] of Object.entries(
       (answers?.no_market_data ?? {}) as Record<string, unknown>,
     )) {
-      skus[sku] = { value, channel: 'unknown' }
+      skus[sku] = { value, channel: 'unknown', ...(options.answerAt?.[sku] ? { at: options.answerAt[sku] } : {}) }
     }
     await route.fulfill({
       status: 200,
@@ -2035,6 +2037,7 @@ test('UN-12 (the delta review round) — a hold on a no-market-price SKU is ONE 
   const wire = await open(page, {
     skus: [sku({ sku: '5', name: 'Unpriced', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
     decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {}, no_market_data: { '5': '5.16' } },
+    answerAt: { '5': '2026-09-01T10:00:00.000+00:00' },
   })
   const sent = () =>
     (wire.filter((row) => row.method === 'PUT').pop()?.body as { corpus?: { skus?: Record<string, { value: unknown; channel?: string }> } } | undefined)
@@ -2057,7 +2060,8 @@ test('UN-12 (the delta review round) — a hold on a no-market-price SKU is ONE 
   const toolbarUndo = page.getByRole('button', { name: 'Undo', exact: true })
   await page.keyboard.press('u')
   await expect(toolbarUndo).toBeDisabled()
-  await expect.poll(() => sent()).toMatchObject({ value: '5.16', channel: 'unknown' })
+  /* WITH ITS FIRST DATE (the owner's ruling, "Keep the first date"). */
+  await expect.poll(() => sent()).toMatchObject({ value: '5.16', channel: 'unknown', at: '2026-09-01T10:00:00.000+00:00' })
 })
 
 test('DEBT42 — a typed price on a row whose market went blank is shown, because the send lists at it', async ({
@@ -2081,6 +2085,7 @@ test('DEBT42 — a typed price on a row whose market went blank is shown, becaus
  * replaced, value and channel, inside its own record (`before`). A release writes that answer
  * back, so the card goes out on the next send at the price it had, as the toast says. A hold
  * with no earlier answer releases to none, as before. */
+const FIRST_DATE = '2026-09-01T10:00:00.000+00:00'
 const sentFor = (wire: Wire[], key: string) =>
   (wire.filter((row) => row.method === 'PUT').pop()?.body as { corpus?: { skus?: Record<string, { value: unknown; channel?: string }> } } | undefined)
     ?.corpus?.skus?.[key]
@@ -2089,15 +2094,18 @@ test('a release puts back the price the hold replaced, on its own channel', asyn
   const wire = await open(page, {
     skus: [sku({ sku: '5', name: 'Void Assault', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
     decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {}, no_market_data: { '5': '5.16' } },
+    answerAt: { '5': FIRST_DATE },
   })
   await page.locator('.pricing-hold').first().click()
   await page.getByRole('button', { name: /Keeping this one/ }).click()
   await page.getByRole('button', { name: 'Hold it' }).click()
-  await expect.poll(() => sentFor(wire, '5')?.value).toMatchObject({ before: { value: '5.16', channel: 'unknown' } })
+  await expect.poll(() => sentFor(wire, '5')?.value).toMatchObject({ before: { value: '5.16', channel: 'unknown', at: FIRST_DATE } })
 
+  /* THE FIRST DATE COMES BACK TOO (the owner's ruling, "Keep the first date"). The server keeps
+   * it only when the release sends it (`corpus.stamp_answers`). */
   await page.locator('.pricing-hold').first().click()
   await expect(page.locator('.bn-toast', { hasText: 'Released Void Assault' })).toBeVisible()
-  await expect.poll(() => sentFor(wire, '5')).toMatchObject({ value: '5.16', channel: 'unknown' })
+  await expect.poll(() => sentFor(wire, '5')).toMatchObject({ value: '5.16', channel: 'unknown', at: FIRST_DATE })
   await expect(field(page)).toHaveValue('5.16')
 })
 

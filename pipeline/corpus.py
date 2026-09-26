@@ -560,9 +560,32 @@ def stamp_answers(before: "Corpus", after: "Corpus", at: str) -> List[str]:
         ):
             answer.at = previous.at
             continue
+        # A PRICE RETURNING FROM A HOLD KEEPS ITS FIRST DATE (the owner's ruling, "Keep the first
+        # date (Recommended)"). A hold carries the answer it replaced in `before`, date and all.
+        # A release, or U on the hold, sends that same answer back with that same `at`. It is
+        # the assertion that an answer given earlier was never withdrawn, as a restore is
+        # (`do_pricing_restore`), so it is not re-dated. Every part must match: the value, the
+        # channel, and the date. Anything else is a new answer, and dates today.
+        returning = _hold_before(previous)
+        if (
+            returning is not None
+            and returning.get("at")
+            and answer.at == returning.get("at")
+            and str(returning.get("channel") or "price") == answer.channel
+            and _token(returning.get("value")) == _token(answer.value)
+        ):
+            continue
         answer.at = at
         stamped.append(sku)
     return stamped
+
+
+def _hold_before(previous: Optional["Answer"]) -> Optional[dict]:
+    """The answer a stored hold replaced (`#/pricing` keeps it in `before`), or None."""
+    if previous is None or not previous.is_hold or not isinstance(previous.value, dict):
+        return None
+    before = previous.value.get("before")
+    return before if isinstance(before, dict) else None
 
 
 # ------------------------------------------------------------------- clearing typed prices

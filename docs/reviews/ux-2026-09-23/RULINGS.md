@@ -660,3 +660,10 @@ On expiry: "Yes, until it's built on (Recommended)".
   channel. So the card goes out on the next send, as the toast says. The hold keeps that
   answer in its own `before` field, and a send never reads it. A hold with no earlier answer
   releases to none, as before. Its home is `docs/specs/undo.md` §11.1, the Hold row.
+- The date of a price that returns from a hold (owner, 2026-09-26, the owner's chosen
+  option, verbatim): "Keep the first date (Recommended)". A release, and U on a hold, bring
+  the price back with its first date, as the clear's Restore does. The hold keeps that date
+  in `before`. `corpus.stamp_answers` keeps it only on an exact return: the same value, the
+  same channel and the same date. Every other answer is dated as before, because the
+  markdown ratchet (D100) reads these dates. Its home is `docs/specs/undo.md` §11.1, the Hold
+  row.

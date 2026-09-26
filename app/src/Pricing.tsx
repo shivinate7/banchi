@@ -973,7 +973,7 @@ export function Pricing() {
    *  holds by the time the button is pressed. `before` is read off the SAME `book` for every
    *  op in the batch — the state before any of them landed, never a later op's own write. */
   const writeMany = useCallback(
-    (ops: readonly { sku: string; bucket: PricingSku['bucket']; value: unknown; channel?: 'price' | 'unknown' }[]): number => {
+    (ops: readonly { sku: string; bucket: PricingSku['bucket']; value: unknown; channel?: 'price' | 'unknown'; at?: string }[]): number => {
       /* `channel` NAMES THE CHANNEL OUTRIGHT, for a release that puts back the answer a hold
        * replaced on the channel it was stored on. Otherwise the bucket decides. */
       const writes = ops.map(({ sku, bucket, channel }) => ({
@@ -984,7 +984,15 @@ export function Pricing() {
       setBook((current) => {
         if (current === null) return current
         let next = current
-        for (let i = 0; i < ops.length; i += 1) next = setAnswer(next, ops[i]!.sku, ops[i]!.value, writes[i]!.channel)
+        for (let i = 0; i < ops.length; i += 1) {
+          const op = ops[i]!
+          next = setAnswer(next, op.sku, op.value, writes[i]!.channel)
+          /* A RELEASE NAMES THE DATE IT BRINGS BACK, or none. Never the hold's own slot's date. */
+          if ('at' in op && next.skus?.[op.sku] !== undefined) {
+            const { at: _dropped, ...rest } = next.skus[op.sku]!
+            next = { ...next, skus: { ...next.skus, [op.sku]: op.at === undefined ? rest : { ...rest, at: op.at } } }
+          }
+        }
         return next
       })
       const id = nextUndoId.current++
@@ -1553,7 +1561,7 @@ export function Pricing() {
         const empty = prior === undefined || prior.value === null
         const id = empty
             ? write(sku.sku, sku.bucket, undefined)
-            : writeMany([{ sku: sku.sku, bucket: sku.bucket, value: prior.value, channel: prior.channel === 'unknown' ? 'unknown' : 'price' }])
+            : writeMany([{ sku: sku.sku, bucket: sku.bucket, value: prior.value, channel: prior.channel === 'unknown' ? 'unknown' : 'price', at: prior.at }])
         setHoldFor(null)
         toast({
           kind: 'receipt',
@@ -1588,6 +1596,8 @@ export function Pricing() {
       const prior = book?.skus?.[sku.sku]
       if (prior !== undefined && prior !== null && prior.value !== null && !isWithheld(prior.value)) {
         record.before = { value: prior.value as string | number, channel: prior.channel ?? 'price' }
+        /* AND ITS FIRST DATE, so a release keeps it (the owner's ruling, "Keep the first date"). */
+        if (prior.at !== undefined) record.before.at = prior.at
       }
       /* ONE ANSWER, ON THE `price` CHANNEL, FOR EVERY ROW (the final Pricing review, HIGH).
        * `book.skus[sku]` holds ONE answer per SKU, so the old second write ('unlisted' on the
