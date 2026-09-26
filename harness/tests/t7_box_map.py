@@ -764,10 +764,42 @@ def check_delete_keeps_dividers(checks: Checks) -> None:
 
 
 def check_merge_speed(checks: Checks) -> None:
-    """R4 review, item 4: a 500-card merge into a 500-card box holds the lock under 1 s.
+    """R4 review, item 4: a 500-card merge into a 500-card box does linear work, not
+    quadratic.
+
+    CRIES WOLF ON WALL TIME ALONE, so wall time is no longer what this asserts (owner's
+    ruling: "Trust a guard only once it goes red on the defect it guards. A guard that goes
+    red when nothing is wrong is spent"; `docs/reviews/ux-2026-09-23/RULINGS.md`: "Timing
+    guards must count work, not wall time alone"). The old `took < 1.0` failed three times
+    in one day at 1.01-1.31 s under machine load 13-27, with `do_move_sections`/`_cross`/
+    `_move_one` unchanged, and passed on every rerun — the machine's mood, not the merge.
+
+    THE ASSERTION IS A ROW-READ COUNT, independent of load: `sqlite3.Connection.
+    set_progress_handler` fires once per 100 SQLite VM instructions on the write's own
+    connection, so counting the calls counts work SQLite actually did — proportional to
+    rows scanned, not to how many statements were issued. A statement COUNT alone was
+    tried and rejected here: `_positions_in`/`box_order` are one indexed `select()` call
+    regardless of how many rows it returns, so a per-card destination scan that grows with
+    the box shows up as almost the same statement count (+17%, measured) while it triples
+    the wall time — the statement count cannot see the defect this guard exists for. The
+    progress-handler tick count can: reverting `_cross`'s `slot=` reuse so `move_card`
+    recomputes `next_index`/`next_key` per card (the pre-R3 defect) measured 77,355 ticks
+    against a fixed 4,575 — 17x, and growing with the box, not the fixed rate below.
+
+    Measured on the real (fixed) path, twice, to confirm linearity: 4,575 ticks for 500
+    moved cards, 2,289 for 250 — ~9.15 per card either way, the R3 fix's own promise
+    (`_cross`'s "next_index and next_key are read ONCE per press"). The ceiling is
+    `30 * moved cards` (15,000 here): over 3x the measured linear rate, so load noise
+    cannot trip it, and well under the mutation's 77,355, so a real regression does.
+
+    Wall time stays as a LOOSE BACKSTOP ONLY, 10 s (ten times the retired 1 s bound), for a
+    hang or a lock wait a tick count alone would not catch — never the assertion a reader
+    should trust; the tick count is that.
 
     Red before R3's fix: 3.8 s, growing with the square of the box."""
     import time
+
+    from store import db as db_module
 
     checks.note("")
     checks.note("BOX MAP R4 — merge speed")
@@ -781,10 +813,40 @@ def check_merge_speed(checks: Checks) -> None:
                         box=box, index=i, cid=fake_cid(f"speed-{box}-{i}"), order=float(i),
                         state=master.CAPTURED,
                     )
-        start = time.perf_counter()
-        capture_server.do_move_sections(1, {"first": 1, "to_box": 2})
-        took = time.perf_counter() - start
-        checks.ok(took < 1.0, "a 500-into-500 merge takes under a second", f"{took:.2f} s")
+
+        ticks = {"n": 0}
+        real_connect = db_module.connect
+
+        def counting_connect(*args, **kwargs):
+            conn = real_connect(*args, **kwargs)
+
+            def _tick():
+                ticks["n"] += 1
+                return 0  # 0: never abort the query, only count
+
+            conn.set_progress_handler(_tick, 100)
+            return conn
+
+        db_module.connect = counting_connect
+        try:
+            start = time.perf_counter()
+            body = capture_server.do_move_sections(1, {"first": 1, "to_box": 2})
+            took = time.perf_counter() - start
+        finally:
+            db_module.connect = real_connect
+
+        moved = int(body["moved"])
+        ceiling = 30 * moved
+        checks.ok(
+            ticks["n"] < ceiling,
+            "a 500-into-500 merge does linear row-read work (VM-tick count), not quadratic",
+            f"{ticks['n']} ticks for {moved} moved cards, ceiling {ceiling}",
+        )
+        checks.ok(
+            took < 10.0,
+            "loose wall-clock backstop only (not what this check trusts)",
+            f"{took:.2f} s",
+        )
 
 
 def check_r5_links_and_empty_sections(checks: Checks) -> None:
