@@ -281,7 +281,6 @@ const RECORDED = {
                                                // pair, same shape: `ListingCorrection` folds
                                                // the response into `written` the identical
                                                // way `correctAnswer`/`undoCorrectAnswer` do
-
     'saleStillHere', 'undoMove', 'restoreLastClear', // undo.md UN-7, UN-14 and UN-11
     'moveSections', 'undoSectionMove',        // D264, the box map's section move and its undo
     'moveRange',                              // D264, one card or a range, the next slice

@@ -2876,7 +2876,10 @@ class Inventory:
             )
 
         # AT THE BACK OF THE DESTINATION (D265): a later `place` gives it its real key.
-        transplant = replace(card, box=to_box, index=new_index, photo=None, moved_from=key, order=new_order)
+        # `moved_from` tells a transplant from a capture (UN-14 review round).
+        transplant = replace(
+            card, box=to_box, index=new_index, photo=None, order=new_order, moved_from=key
+        )
         self.cards[new_key] = transplant
 
         card.state = MOVED
@@ -2901,15 +2904,15 @@ class Inventory:
         # photograph is filed under the card's name now, so a move is this field update and
         # nothing else.
         #
-        # THE TOMBSTONE'S NAME ALSO CARRIES ITS OWN KEY, `moved:<name>@<key>` (UN-14 review
-        # round, and the box map's D264 independently). A card moved twice leaves two
-        # tombstones, and a bare `moved:<name>` on both put one value on two rows under the
-        # UNIQUE index: moving a card back, or on to a third box, raised IntegrityError. The
-        # key is unique to the slot, so every tombstone in a chain is distinct. The card's
-        # own name is untouched (D172). Tombstones written before this carry the bare form,
-        # and `unmove_card` reads both. NO QUERY DECIDES THE FORM: a lookup per card
-        # re-checked every row the session had touched, which made a 500-card merge
-        # quadratic (the R3 review).
+        # A CARD MOVED A SECOND TIME NEEDS A SECOND TOMBSTONE NAME (the box map, D264). The
+        # first move left `moved:<name>` on its old slot. A second `moved:<name>` would fire
+        # `cards_cid`'s UNIQUE index at the commit, so a card could move only once in its
+        # life. So every tombstone written from now on is `moved:<name>@<its own key>`, which no
+        # other row can hold. A tombstone already on disk keeps its plain form and reads as
+        # before. NO QUERY DECIDES THE FORM: a lookup per card re-checked every row the
+        # session had touched, which made a 500-card merge quadratic (the R3 review).
+        # The move's undo (UN-14) reads both forms, so a card moved before this can
+        # still be put back.
         card.cid = f"{MOVED_CID_PREFIX}{card.cid}@{key}" if card.cid else None
 
         self._log(MOVED, key, moved_to=new_key, run=card.run, cid=transplant.cid)
@@ -2959,9 +2962,12 @@ class Inventory:
         ):
             raise CardDeparted(f"a divider was put in after {new_key}")
 
+        # THE ORDER KEY COMES BACK FROM THE TOMBSTONE TOO (D265). The transplant holds the
+        # new box's back position, and the old box sorts by `order`, so without this the card
+        # would come home at its own index but stand at the wrong place in the walk.
         restored = replace(
             transplant, box=card.box, index=card.index, moved_to=None,
-            moved_from=card.moved_from,
+            moved_from=card.moved_from, order=card.order,
         )
         del self.cards[new_key]
         self.cards[key] = restored

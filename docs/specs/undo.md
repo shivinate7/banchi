@@ -442,6 +442,13 @@ proves each one. Three choices the table left open are recorded here.
   form, and the move undo reads both. A divider put in behind the transplant builds on the
   move. A batch move is undone one card at a time, and only its last card is the newest, so
   only that card can be undone. The others are moved back.
+- **A chain of moves undoes one link.** Move a card from A to B, then from B to C. Undo the
+  second move, and the card is back at B. The first move is then built on, because box B
+  changed. Its fix is an ordinary move back to A. Section 11.1's table stands as it is.
+- **The move undo restores the order key too (D265).** The card comes home at its own index
+  and at its own place in the walk.
+- **A section reorder inside a box does not build on a move.** A reorder writes no card
+  history, so the move undo still returns the card to its own order key.
 - **"Still here" and the ledger: the owner's ruling, 2026-09-25, verbatim:**
 
   ```
@@ -451,7 +458,35 @@ proves each one. Three choices the table left open are recorded here.
   The behavior above stands. The card goes back. On a shipped order, the line keeps its
   count and becomes a `sold_separately` hand-fill. The SKU's `sold_here` falls by one.
 
-### 11.9 Lane R, as built (2026-09-25)
+### 11.9 Lane C, as built (2026-09-25)
+
+Built on branch `ux/undo-capture`, `app/tests/capture-undo.spec.ts`.
+
+- **UN-1.** `CaptureScreen.tsx:undoStack` no longer slices to `UNDO_DEPTH` (D164's cap, gone
+  on the owner's Q1). The whole sitting is the strip, newest first. `.capture-undo-list`
+  scrolls inside its own footer, a fixed `max-height` at desktop. The tablet breakpoint
+  keeps its own horizontal scroll instead. Neither grows the page.
+- **UN-15.** A divider gets its own undo. `doSection` remembers the box's dividers as they
+  stood before the one it just added (`pendingDivider`). `U` puts them back through
+  `updateBox({ sections })`, Manage box's own route. It fires only while `pendingDivider` is
+  still the newer of the two reversible writes here, by `at` against the sitting's own
+  newest shot. A capture into the SAME box clears it. The divider is built on.
+- **UN-3 (Q2, "keep the confirm here only").** The mechanism is unchanged. `do_remove_card`
+  still consumes the photograph and slides the later cards down, with no undo. Only the
+  words changed. The dialog now says "This permanently deletes the record and its
+  photograph" in place of the old "There is no undo."
+- **UN-2's screen half.** `getCaptureSitting()` runs once. It waits for the game registry,
+  which is the one thing that can resolve a hydrated card's `game` key into a `GameEntry`.
+  A second read never fires. It would duplicate every row `shots` already holds. `undoNote`
+  reads `capture_built_on` the same way it reads every other refusal, the server's own
+  sentence and code, verbatim. It also offers a "Manage box" button, named for the refused
+  card's own box, per 11.1's table row for Capture.
+- **The pre-existing flake.** `pressing the pause button moves nothing else on the screen
+  (D118)` fails at roughly 1 in 2 to 1 in 8 runs, `--workers=1` included, on the tree before
+  this lane's own commits too. Checked by running the prior commit's `CaptureScreen.tsx`
+  against the same spec. Not this lane's defect. Not investigated further here.
+
+### 11.10 Lane R, as built (2026-09-25)
 
 The screen halves are built on branch `ux/undo-screens`, over lane S's `ux/undo-store`.
 
@@ -477,6 +512,9 @@ The screen halves are built on branch `ux/undo-screens`, over lane S's `ux/undo-
   It is measured NOT to reserve space: doing so on every load cost `#/review`'s no-scrolling
   floor 54px it had no slack for (`answering a card costs no scrolling`). Inventory and
   Orders keep their own row-level `Undo` (D57) and do not pass one.
+  **AMENDED, §11.12: Review no longer passes `undo` to `Page` at all.** The finding #10
+  conflict this created is resolved there. The reserved in-body row wins over the
+  unreserved header door.
 - **UN-12.** `Pricing.tsx`'s `Undo` type is now `{ entries: readonly UndoEntry[] }`. `write`
   is `writeMany`'s one-op case. `setHold` pushes both fields it touches as one entry. One `U`
   now undoes a hold completely.
@@ -500,7 +538,7 @@ The screen halves are built on branch `ux/undo-screens`, over lane S's `ux/undo-
   restored SKU's answer off THAT read — the same "the response decides which rows come back"
   rule `withRestored` already follows for the toast's own path.
 
-### 11.10 One vocabulary (the Opus review round, finding #15)
+### 11.11 One vocabulary (the Opus review round, finding #15)
 
 The review found the same outcome named differently on different screens. "Sale undone".
 "Move undone". "Card moved back". "Card brought back". "Put X back". "N prices restored".
@@ -530,31 +568,29 @@ The rule for a new screen: name the result of an Undo press `"<subject> undone"`
 write that is not provably a reversal for what it plainly did instead. Never borrow
 "undone" for it.
 
-### 11.11 Finding #10, surfaced rather than fixed (the Opus review round)
+### 11.12 Finding #10, decided by the orchestrator (the Opus review round)
 
 The review asked that Review's receipt row reserve its own space. Then nothing else moves
-when it mounts (D118). §11.9's own UN-9/UN-10 entry already records the opposite ruling,
+when it mounts (D118). Section 11.10's own UN-9/UN-10 entry recorded the opposite ruling,
 from the same round. `PageUndo` does NOT reserve space on Review. Reserving it cost the
 no-scrolling floor 54px it had no slack for.
 
-Measured again for this finding: Review renders the SAME receipt twice. `.review-tray`'s own
-row, in the body, already reserves its height and moves nothing (proven by the finding #14
-test). `PageUndo`, in the page header, is the redundant second copy. It is the one that is
-not reserved. Its mount pushes `.review-filters` and everything below it down 56px on the
-first answer of a session.
+Measured for this finding: Review rendered the SAME receipt twice. `.review-tray`'s own row,
+in the body, already reserved its height. It moved nothing (proven by the finding #14 test).
+`PageUndo`, in the page header, was the redundant second copy. It was the one that was not
+reserved. Its mount pushed `.review-filters` and everything below it down 56px on the first
+answer of a session.
 
-Two real fixes exist, and neither one is free:
+**Decided: drop the header's `PageUndo` on Review.** `ReviewQueue.tsx` no longer passes
+`undo` to `Page` at all. The in-body Tray is the only Undo door Review ever draws. Nothing
+is lost on a screen wide enough to see the Tray. `kit/undo.ts`'s own comment says `PageUndo`
+exists so a phone reaches Undo "without hunting the in-page receipt, which sits below the
+fold on a phone". Review's own Tray sits inside `.review-body`, on screen with the card at
+every width this product ships. That reach was never actually lost here. This removes the
+duplicate. It keeps both floors, D118 and the no-scrolling floor, intact at once. `PageUndo`
+itself is untouched. Pricing's own use of it is unaffected.
 
-1. **Drop the header's `PageUndo` on Review.** The in-body Tray already offers the same
-   Undo. Nothing is lost on a screen wide enough to see it. `kit/undo.ts`'s own comment says
-   `PageUndo` exists so a phone reaches Undo "without hunting the in-page receipt, which
-   sits below the fold on a phone". Dropping it may cost that phone-only reach. Not measured
-   here.
-2. **Make `.bn-page-undo` an overlay instead of a flow element**
-   (`position: absolute` or `fixed`). It can then appear and disappear without moving
-   anything below it, on every screen that uses it (Pricing included). This spends no
-   permanent space, and it reaches the phone case option 1 gives up. It is a
-   `kit/Page.tsx`-level change. This round did not scope or test it.
-
-Not built this round. Filed for the owner's word: which of the two, or whether the D118
-exception UN-9/UN-10 already recorded stands as written.
+The second option this section once offered stays open. A screen may genuinely need both
+a header door and zero reserved space. An overlay `.bn-page-undo` never moves layout. It
+spends no permanent space on any screen that uses `PageUndo`. Review does not need it. Its
+Tray already does the job.

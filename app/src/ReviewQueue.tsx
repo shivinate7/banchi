@@ -47,7 +47,6 @@ import {
   Money,
   Notice,
   Page,
-  PageUndo,
   Pill,
   ReloadButton,
   Sheet,
@@ -1184,11 +1183,6 @@ export function ReviewQueue() {
     [putBack, count],
   )
 
-  /** UN-9/UN-10 (`docs/specs/undo.md` §11.3): the newest receipt that IS undoable, off the
-   *  page's own door — reachable without hunting the in-page receipt, which sits below the
-   *  fold on a phone. */
-  const newestUndoable = useMemo(() => receipts.find((receipt) => receipt.undoable) ?? null, [receipts])
-
   /* The group write: one route call, nothing dropped until the server answers. */
   const answerGroup = useCallback(() => {
     if (busyRef.current || loadingRef.current) return
@@ -1484,10 +1478,9 @@ export function ReviewQueue() {
 
   /* NO CLOCK (UN-5, `docs/specs/undo.md` §11.1 — the Opus review round, finding #14): the
    * tray used to drain the newest receipt off screen after twenty seconds, with a draining
-   * bar drawn for the wait — the one remaining clock on this screen, and a confusing one
-   * once `PageUndo` above the rows already stands with no clock of its own. The newest
-   * receipt now stays exactly the way `Inventory.tsx` and `Orders.tsx` already keep theirs:
-   * until a NEWER one replaces it, by rank, never by a timer. */
+   * bar drawn for the wait — the one remaining clock on this screen. The newest receipt now
+   * stays exactly the way `Inventory.tsx` and `Orders.tsx` already keep theirs: until a
+   * NEWER one replaces it, by rank, never by a timer. */
   const trayReceipt = receipts[0] ?? null
 
   /* The reason lens, in a FIXED order: by label, so a chip the operator reaches for by
@@ -1523,10 +1516,10 @@ export function ReviewQueue() {
       className={['review', queueOpen ? 'is-queue-open' : '', lens ? 'review-pagehead has-lens' : 'review-pagehead'].filter(Boolean).join(' ')}
       icon="inbox"
       title="Review"
-      /* THE PAGE'S OWN DOOR (UN-9, UN-10): the in-page receipt sits below the fold at 390 and
-         its arrow is `size="sm"` — this door is always in view and 40px or more (D117),
-         through `--bn-control-h-lg`'s own phone floor. */
-      undo={newestUndoable === null ? null : <PageUndo busy={disabled} onPress={() => undo(newestUndoable)} />}
+      /* NO HEADER DOOR (finding #10, the Opus review round, `docs/specs/undo.md` §11.12): the
+         in-body Tray below already reserves its own row and moves nothing when it mounts
+         (D118). A second, unreserved `PageUndo` here drew the same receipt twice and was the
+         one pushing every row below it down 56px on the first answer of a session. Dropped. */
       lede={
         <span className="review-progress" aria-live="polite">
           <span className="review-progress-text bn-tnum">

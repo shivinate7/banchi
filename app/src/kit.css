@@ -1593,7 +1593,9 @@ img.bn-crop[data-cropped='true'] {
    `BoxBrowse.css` did the same for `.bn-menu-item`. Both patches are deleted; every screen gets
    these rather than the two that happened to notice. */
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
-  .bn-seg-item { height: var(--bn-control-h-sm); }
+  /* The width too (the PR 3 integration): a short label, "Map" or "List", drew a 35px-wide
+     segment whose neighbour caught a thumb 19px off its centre. */
+  .bn-seg-item { height: var(--bn-control-h-sm); min-width: var(--bn-control-h-sm); }
   .bn-tab { height: var(--bn-control-h); }
   .bn-menu-item { min-height: var(--bn-control-h-sm); padding: var(--bn-2) var(--bn-3); }
   .bn-list-row { min-height: 48px; }

@@ -1812,7 +1812,8 @@ COMPONENTS = [
                                           "D89", "D100", "D115", "D118", "D132", "D145", "D146",
                                           "D164", "D167", "D172", "D173", "D183", "D192", "D213",
                                           "D253", "D258", "D259", "D264", "D265",
-                                          "D-sealed-boxes-removed"], "tested_by": ["T7"]},
+                                          "D-sealed-boxes-removed"],
+                                          "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
                           "governed_by": ["D4", "D9", "D22", "D26", "D28", "D37", "D88"], "tested_by": ["T7"]},
@@ -5355,8 +5356,8 @@ COMPONENTS = [
                                 "D145", "D159", "D164", "D165", "D166", "D168", "D172", "D174",
                                 "D183", "D189", "D191", "D192", "D193", "D196", "D203", "D212",
                                 "D213", "D219", "D225", "D227", "D251", "D252", "D259", "D262",
-                                "D264", "D265", "D268", "D271", "D273",
-                                "D-sealed-boxes-removed", "D-sales-rows-by-sku"],
+                                "D264", "D265", "D268", "D271", "D273", "D-sales-rows-by-sku",
+                                "D-sealed-boxes-removed"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -6718,8 +6719,8 @@ COMPONENTS = [
             # on `#/` mean the same stretch of work by the same measurement.
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D36", "D41", "D52", "D56", "D58", "D65", "D67", "D81", "D92",
-                            "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145", "D153",
-                            "D164", "D170", "D172", "D196", "D218", "D286",
+                            "D117", "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145",
+                            "D153", "D164", "D170", "D172", "D196", "D218", "D286",
                             "D-sealed-boxes-removed"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
@@ -7914,7 +7915,8 @@ COMPONENTS = [
                                         "`MM-DD-YY_XXXXX` off the group's own `latest` date and "
                                         "the most recent order's id tail — never a typed dot "
                                         "(D218), never the full id.",
-                                 "governed_by": ["D103", "D114", "D118", "D181", "D209", "D218", "D220"]},
+                                 "governed_by": ["D24", "D103", "D114", "D118", "D181", "D193",
+                                                 "D209", "D218", "D220", "D221", "D-orders-sorts"]},
             "src/csvUpload.ts": {"does": "the one FileReader every CSV upload in this app goes "
                                          "through, lifted out of RunPanel.tsx on 2026-08-30 so "
                                          "#/runs and #/shipping cannot carry two encodings to "
@@ -7980,7 +7982,7 @@ COMPONENTS = [
                                                "D118", "D123", "D132", "D159", "D171", "D181",
                                                "D192", "D193", "D194", "D195", "D196", "D203",
                                                "D209", "D212", "D218", "D220", "D221", "D274",
-                                               "D285"]},
+                                               "D285", "D-orders-sorts"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8580,8 +8582,8 @@ COMPONENTS = [
                         "undoing exactly one, a row undoing that card AND everything after "
                         "it, and a walk refused partway reporting how far it got in the "
                         "server's own words. Run by `make design-check`.",
-                "governed_by": ["D10", "D41", "D58", "D67", "D101", "D118", "D153", "D164", "D196",
-                                "D211", "D218"],
+                "governed_by": ["D10", "D41", "D58", "D67", "D101", "D117", "D118", "D153", "D164",
+                                "D196", "D211", "D218"],
                 "note": "THE ONLY SPEC THAT CAPTURES, and it is the opposite of "
                         "capture-claims.spec.ts's rule rather than an exception to it: "
                         "`POST /capture` and `DELETE /inventory/...` are both intercepted, so "
@@ -9245,9 +9247,9 @@ COMPONENTS = [
                                                      "D50", "D57", "D58", "D63", "D69", "D73",
                                                      "D90", "D91", "D93", "D96", "D103", "D113",
                                                      "D114", "D118", "D123", "D132", "D171", "D181",
-                                                     "D193",
-                                                     "D194", "D196", "D203", "D209", "D212", "D218",
-                                                     "D220", "D221", "D274", "D285"]},
+                                                     "D193", "D194", "D196", "D203", "D209",
+                                                     "D212", "D218", "D220", "D221", "D274",
+                                                     "D285", "D-orders-sorts"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "

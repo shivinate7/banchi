@@ -634,9 +634,8 @@ test('finding #14 (the Opus review round) — the tray has no clock: a faked min
   page,
 }) => {
   /* THE OLD BUILD DRAINED THE TRAY OFF SCREEN AFTER TWENTY SECONDS, with a bar counting down
-   * the wait — the one remaining clock on this screen, confusing beside `PageUndo`'s own
-   * clockless door above the rows. `docs/specs/undo.md` §11.1 (UN-5): rank replaces the
-   * clock everywhere else on this product; this proves it here too. */
+   * the wait — the one remaining clock on this screen. `docs/specs/undo.md` §11.1 (UN-5):
+   * rank replaces the clock everywhere else on this product; this proves it here too. */
   await page.clock.install()
   const sent = await open(page)
 
@@ -655,6 +654,30 @@ test('finding #14 (the Opus review round) — the tray has no clock: a faked min
   await expect
     .poll(() => sent.filter((s) => s.method === 'POST' && (s.body as { undo?: boolean } | null)?.undo === true).length)
     .toBe(1)
+})
+
+test('finding #10 (the Opus review round) — the receipt reserves its own row, and nothing else moves (D118)', async ({
+  page,
+}) => {
+  /* Review used to draw the same receipt twice: `.review-tray`'s own reserved row in the
+   * body, and a second, UNRESERVED `PageUndo` in the page header (`docs/specs/undo.md`
+   * §11.10's own UN-9/UN-10 entry). The header copy's mount is what pushed everything below
+   * it down 56px on the first answer of a session — orchestrator's call (§11.12): drop the
+   * header copy, keep only the reserved one. */
+  await open(page)
+  await expect(page.locator('.review-receipt')).toHaveCount(0)
+
+  const before = await settled(page)
+  await page.locator('.review-candidate').first().click()
+  await expect(page.locator('.review-receipt')).toHaveCount(1)
+  await expect(page.locator('.review-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
+  const after = await settled(page)
+
+  const moved = whatMoved(before, after)
+  expect(
+    moved,
+    `${moved.length} element(s) outside the card panel moved when the receipt arrived:\n${moved.slice(0, 12).join('\n')}`,
+  ).toHaveLength(0)
 })
 
 /* ------------------------------------------------------------------------- the phone */

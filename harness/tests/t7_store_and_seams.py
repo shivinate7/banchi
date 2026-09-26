@@ -6625,6 +6625,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         before = Store().read().inventory
         mover = before.cards["6/1"]
         neighbor = asdict(before.cards["6/2"])
+        stayer = asdict(before.cards["7/1"])
         capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
         undone = answers(
             checks,
@@ -6640,8 +6641,15 @@ def check_undo_until_built_on(checks: Checks) -> None:
             "and puts the card back at its own index",
         )
         checks.ok(
-            "7/2" not in after.cards and asdict(after.cards["6/2"]) == neighbor,
+            "7/2" not in after.cards
+            and asdict(after.cards["6/2"]) == neighbor
+            and asdict(after.cards["7/1"]) == stayer,
             "and the transplant is gone, and nothing else in either box moved (D118)",
+        )
+        checks.equal(
+            (getattr(home, "order", None), getattr(home, "order_key", None) is not None),
+            (mover.order, True),
+            "and the card's order key comes back too (D265), so it stands where it stood",
         )
         checks.equal(
             (getattr(home, "cid", None), getattr(home, "moved_from", "unset")),
@@ -6682,6 +6690,21 @@ def check_undo_until_built_on(checks: Checks) -> None:
             "move_built_on",
             "UN-14: a divider put in behind the transplant builds on the move",
         )
+
+    # ---------------- UN-14: a tombstone written before the key suffix still undoes
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["6/1"].cid = f"{master.MOVED_CID_PREFIX}{mover.cid}"
+        undone = answers(
+            checks,
+            lambda: capture_server.do_move_card(6, 1, {"undo": True}),
+            "UN-14: a tombstone in the older `moved:<name>` form still undoes",
+        )
+        checks.equal(field(undone, "to"), "6/1", "and the card is back home")
 
     # ------------------ D83's chain: a move back, and a move on, write distinct tombstones
     with isolated_home():

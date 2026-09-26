@@ -580,9 +580,8 @@ def case_the_moved_tombstone_names_no_photograph() -> None:
               "the transplant keeps the card's name, because the name is the CARD's and the "
               "card is what moved")
         equal(tombstone.cid, f"{photos.MOVED_PREFIX}{digest}@1/1",
-              "and the tombstone wears `moved:<name>@<its own key>`, so one name is never on "
-              "two rows under a UNIQUE index, even for a card moved twice — cleared to NULL "
-              "it would be re-issued by the heal")
+              "and the tombstone wears `moved:<name>@<its key>`, so one name is never on two rows "
+              "under a UNIQUE index — cleared to NULL it would be re-issued by the heal")
     check(not photos.is_photo_cid(f"{photos.MOVED_PREFIX}{digest}"),
           "a `moved:` name names no photograph, so nothing composes a path from it")
     equal(master.MOVED_CID_PREFIX, photos.MOVED_PREFIX,

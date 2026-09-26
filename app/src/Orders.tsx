@@ -36,14 +36,22 @@ import { PositionLabel } from './PositionLabel'
 import { sayPlace } from './position'
 import { buyerKeyOf, groupBuyers, groupForOrderKey, groupMissing, lineReason, MISSING_FACET, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
+  applyTake,
   buyerLabel,
-  orderBuyerLabel,
+  drawerCountsFromPlan,
+  groupCardsOwed,
   groupHasUnseenLine,
   groupIsReadyToShip,
+  groupOrderValue,
+  orderBuyerLabel,
   passesHideUnknown,
   sortedReadyFirst,
   sortGroups,
   statusVocabulary,
+  takeOrder,
+  type GroupTake,
+  type OrderSortInputs,
+  type OrderSortKey,
 } from './orderView'
 import {
   closeLines,
@@ -64,6 +72,7 @@ import {
   reopenOrders,
   undoFill,
   undoPull,
+  walkPlan,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -88,6 +97,7 @@ import type {
   ResolvedLine,
   ResolvedOrder,
   ShippingLane,
+  WalkPlan,
 } from './types'
 import './Orders.css'
 
@@ -843,10 +853,16 @@ const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconNam
   done: { label: 'Done', tone: 'default', icon: 'check' },
 }
 
-/** The one sort: when the buyer's newest order was placed (FLT-01: a press re-sorts at once). */
-type OrderSortKey = 'placed'
+/** The five sorts (`D-orders-sorts`, the owner's pick, 2026-09-25): when the buyer's newest
+ *  order was placed (FLT-01: a press re-sorts at once), the buyer's own order total, how many
+ *  copies are still owed, the buyer's name, and the fewest drawers to open for them. Ready to
+ *  Ship still leads every one of these (`orderView.ts`'s own banner on why). */
 const SORT_OPTIONS: readonly SortOption<OrderSortKey>[] = [
   { key: 'placed', label: 'Placed', desc: 'Newest first', asc: 'Oldest first', first: 'desc' },
+  { key: 'value', label: 'Dollar value', desc: 'High to low', asc: 'Low to high', first: 'desc' },
+  { key: 'cards', label: 'Card count', desc: 'Most first', asc: 'Fewest first', first: 'desc' },
+  { key: 'buyer', label: 'Buyer name', desc: 'Z to A', asc: 'A to Z', first: 'asc' },
+  { key: 'drawers', label: 'Fewest drawers to open', desc: 'Most first', asc: 'Fewest first', first: 'asc' },
 ]
 const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'desc' }
 
@@ -2729,12 +2745,88 @@ function PullStage({
     value === 'done' ||
     (value === MISSING_FACET ? groupMissing(group, answers).copies > 0 : statusByGroup.get(group.key) === value)
 
-  const base = allGroups.filter(show === 'done' ? inDoneBase : inOpenBase)
-  const shownGroups = sortGroups(
-    base.filter((group) => passesFeed(group) && passesSearch(group) && passesHide(group) && passesShow(group, show)),
-    sort.dir === 'asc' ? 'oldest' : 'newest',
-    readyOf,
+  /* THE DRAWERS SORT REUSES THE WALK PLANNER'S OWN SOLVE (`D-orders-sorts`), never a second
+   *  box-counting pass: one `POST /orders/walk-plan` over every walkable order on the screen,
+   *  fetched only while this sort is picked (`sort.key === 'drawers'`) — the same lazy shape
+   *  `useOrderWalk` already uses for the walk itself, over the wider set here. */
+  const orderToGroup = useMemo(() => {
+    const out = new Map<string, string>()
+    for (const group of allGroups) for (const order of group.orders) out.set(order.key, group.key)
+    return out
+  }, [allGroups])
+  const walkableKeysAll = useMemo(
+    () => allGroups.flatMap((group) => group.orders.filter(ownsAWalkableBody).map((order) => order.key)),
+    [allGroups],
   )
+  const walkableKeysSig = useMemo(() => [...walkableKeysAll].sort().join(' '), [walkableKeysAll])
+  const [drawerPlan, setDrawerPlan] = useState<WalkPlan | null>(null)
+  const drawerAsked = useRef<string | null>(null)
+  useEffect(() => {
+    if (sort.key !== 'drawers' || walkableKeysAll.length === 0) {
+      setDrawerPlan(null)
+      drawerAsked.current = null
+      return
+    }
+    if (drawerAsked.current === walkableKeysSig) return
+    const asked = walkableKeysSig
+    drawerAsked.current = asked
+    walkPlan(walkableKeysAll)
+      .then((got) => {
+        if (drawerAsked.current === asked) setDrawerPlan(got)
+      })
+      .catch(() => {
+        /* A refusal here is this ONE SORT gone stale, not the screen gone dark: every
+           `drawersOf` call falls back to `null` (below), which the comparator already treats
+           as "not yet known" — an honest degrade over the placed-date tiebreak alone. */
+      })
+  }, [sort.key, walkableKeysAll, walkableKeysSig])
+  const drawerCounts = useMemo(
+    () => (drawerPlan === null ? new Map<string, number>() : drawerCountsFromPlan(drawerPlan, orderToGroup)),
+    [drawerPlan, orderToGroup],
+  )
+  const sortInputs: OrderSortInputs = useMemo(
+    () => ({
+      valueOf: groupOrderValue,
+      cardsOf: groupCardsOwed,
+      drawersOf: (group) => (drawerPlan === null ? null : (drawerCounts.get(group.key) ?? 0)),
+    }),
+    [drawerPlan, drawerCounts],
+  )
+
+  const base = allGroups.filter(show === 'done' ? inDoneBase : inOpenBase)
+  const freshShownGroups = sortGroups(
+    base.filter((group) => passesFeed(group) && passesSearch(group) && passesHide(group) && passesShow(group, show)),
+    sort,
+    readyOf,
+    sortInputs,
+  )
+
+  /* THE POSITION FREEZE (D181, D118): "Dollar value", "Card count" and "Fewest drawers" all
+   *  read fields a Mark Sold or an Undo changes mid-view, so sorting `payload`'s live numbers
+   *  on every render would re-rank the list under the operator's hand the moment a write
+   *  lands. `take` is `freshShownGroups`' own order the last time an EXPLICIT input changed
+   *  it (the sort control, a facet, a search keystroke) — retaken here, during render, the
+   *  same "adjust state during render" idiom `finished` above already uses, never in an
+   *  effect (the same race that idiom exists to avoid). A write's own re-render changes
+   *  `payload` and re-derives `freshShownGroups`' live figures, but not `basisSig`, so the
+   *  freeze holds; `applyTake` still draws a genuinely new arrival, appended after every
+   *  known row in `freshShownGroups`' own order. */
+  /* `drawerPlan !== null` RETAKES ONCE THE ASKED-FOR PLAN LANDS — without it, picking "Fewest
+     drawers" would freeze the guess `drawersOf`'s null fallback makes on the render before the
+     fetch resolves, and the real answer would never draw. This is the fetch this EXPLICIT
+     press asked for finishing, not a background write, so it retakes; a later pull does not
+     change `drawerPlan`'s own identity (only a widened walkable set refetches it), so the
+     freeze still holds against one. Always `false` outside `sort.key === 'drawers'`
+     (`drawerPlan` is nulled the moment another key is picked), so this term is inert for
+     every other sort. */
+  const basisSig = [sort.key, sort.dir, show ?? '', statuses.join(','), query, hideUnknown, drawerPlan !== null].join('\u0000')
+  const [takeSig, setTakeSig] = useState<string | null>(null)
+  const [take, setTake] = useState<GroupTake>(new Map())
+  if (takeSig !== basisSig) {
+    setTakeSig(basisSig)
+    setTake(takeOrder(freshShownGroups))
+  }
+  const shownGroups = applyTake(freshShownGroups, take)
 
   /* EACH OPTION'S COUNT IS THE ROWS IT WOULD SHOW, under the other facets (FilterChips' rule). */
   const facets: readonly FilterFacet[] = [
