@@ -542,21 +542,6 @@ export function Inventory() {
     [busyKey, holdRank, boxRecords, remember],
   )
 
-  /* THE "MOVE BACK" REMEDY for `move_built_on` (UN-14): the ordinary reversal aims at the
-   * tombstone and refuses once either box has changed again since — same reason `undoSale`
-   * refuses `sale_built_on`. There is no separate route for the fix-after here, unlike a
-   * sale's `saleStillHere`: `server.ts:moveCard`'s own doc comment names the remedy as an
-   * ORDINARY `moveCard` again, aimed at the transplant's CURRENT position, back to the box
-   * the receipt started from. It lands at a fresh index there, never the tombstoned one. */
-  const moveBack = useCallback(
-    async (receipt: Receipt) => {
-      if (receipt.current === undefined) return false
-      await moveCard(receipt.current.box, receipt.current.index, receipt.current.captureId, receipt.box)
-      return true
-    },
-    [],
-  )
-
   const doUndo = useCallback(
     async (receipt: Receipt) => {
       if (busyKey !== null) return
@@ -568,11 +553,18 @@ export function Inventory() {
         else await undoMove(receipt.box, receipt.index)
       } catch (err) {
         /* `not_sold` / `not_retired` / `not_moved` is success — the copy is not in the state
-         * the press asked to leave. `move_built_on` gets its own remedy above. Anything else
-         * keeps the receipt standing. */
-        if (receipt.kind === 'move' && refusalCode(err) === MOVE_BUILT_ON) {
+         * the press asked to leave. Anything else keeps the receipt standing, EXCEPT
+         * `move_built_on` (UN-14): the ordinary reversal aims at the tombstone and refuses
+         * once either box has changed again since — same reason `undoSale` refuses
+         * `sale_built_on`. There is no separate route for the fix-after here, unlike a sale's
+         * `saleStillHere`: `server.ts:moveCard`'s own doc comment names the remedy as an
+         * ORDINARY `moveCard` again, aimed at the transplant's CURRENT position, back to the
+         * box the receipt started from. It lands at a fresh index there, never the
+         * tombstoned one. */
+        if (receipt.kind === 'move' && refusalCode(err) === MOVE_BUILT_ON && receipt.current !== undefined) {
           try {
-            movedBack = await moveBack(receipt)
+            await moveCard(receipt.current.box, receipt.current.index, receipt.current.captureId, receipt.box)
+            movedBack = true
           } catch (remedyErr) {
             report(describeFailure(remedyErr))
             setBusyKey(null)
@@ -616,7 +608,7 @@ export function Inventory() {
       setReloads((n) => n + 1)
       setBusyKey(null)
     },
-    [busyKey, releaseRank, moveBack],
+    [busyKey, releaseRank],
   )
   doUndoRef.current = doUndo
 
