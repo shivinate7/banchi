@@ -2925,9 +2925,14 @@ function CardOps({
    * write — never a retry of the same one.
    *
    * THE OWNER'S RULING, 2026-09-25: "Card back, order re-points." The card goes back on the
-   * shelf, and the order line it was pulled for is marked filled by hand instead
-   * (`sold_separately`, lane S's own doc, §11.8) — a shipped order's own count stands, so the
-   * screen may say this plainly rather than staying silent about the order. */
+   * shelf, and a SHIPPED order's line is marked filled by hand instead (`sold_separately`,
+   * lane S's own doc, §11.8) — a shipped order's own count stands, so the screen may say
+   * this plainly rather than staying silent about the order.
+   *
+   * THE OPUS REVIEW ROUND, FINDING #4: the sentence used to claim an order changed every
+   * time, even when this card never had one, or when the order it had was OPEN (released,
+   * not filled). `order_effect` names which of the three actually happened, so the toast is
+   * built from the server's own answer rather than assumed. */
   const stillHere = async () => {
     if (busy) return
     setBusy(true)
@@ -2936,12 +2941,18 @@ function CardOps({
       // sigil-ok: a store key, the same shape `resurrect`'s own label above draws and the
       // same reason (D92) — this card is not in a slot to count, same as that one.
       const label = `${row.card.place?.box_name ?? UNNAMED_BOX} #${row.card.index}`
-      await saleStillHere(row.card.box, row.card.index)
+      const result = await saleStillHere(row.card.box, row.card.index)
+      const orderNote =
+        result.order_effect === 'filled_by_hand'
+          ? ' The order it was pulled for is now marked filled by hand.'
+          : result.order_effect === 'released'
+            ? ' The order it was pulled for no longer counts it shipped.'
+            : ''
       toast({
         kind: 'ok',
         icon: 'undo',
         title: 'Card brought back',
-        body: `${label} is back in stock. The order it was pulled for is now marked filled by hand.`,
+        body: `${label} is back in stock.${orderNote}`,
         ttlMs: 12000,
       })
       setMenu(false)

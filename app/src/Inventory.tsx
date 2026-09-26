@@ -550,6 +550,11 @@ export function Inventory() {
       if (busyKey !== null) return
       setBusyKey(receipt.key)
       let movedBack = false
+      /* WHERE THE REMEDY ACTUALLY PUT IT (finding #5, the Opus review round): the remedy
+       * lands at a FRESH index in the origin box, never the tombstoned one, so `receipt.place`
+       * — the copy's place from BEFORE the original move — names the wrong shelf once this
+       * runs. `result.card.label` is the server's own answer to the move-back itself. */
+      let movedBackTo: string | null = null
       try {
         if (receipt.kind === 'sale') await undoSale(receipt.box, receipt.index)
         else if (receipt.kind === 'retirement') await undoRetire(receipt.box, receipt.index)
@@ -566,8 +571,9 @@ export function Inventory() {
          * tombstoned one. */
         if (receipt.kind === 'move' && refusalCode(err) === MOVE_BUILT_ON && receipt.current !== undefined) {
           try {
-            await moveCard(receipt.current.box, receipt.current.index, receipt.current.captureId, receipt.box)
+            const result = await moveCard(receipt.current.box, receipt.current.index, receipt.current.captureId, receipt.box)
             movedBack = true
+            movedBackTo = result.card.label === undefined ? null : sayPlace(result.card.label)
           } catch (remedyErr) {
             report(describeFailure(remedyErr))
             setBusyKey(null)
@@ -605,7 +611,7 @@ export function Inventory() {
               : movedBack
                 ? 'Card moved back'
                 : 'Move undone',
-        body: receipt.place,
+        body: movedBack ? (movedBackTo ?? receipt.place) : receipt.place,
         ttlMs: 4000,
       })
       setReloads((n) => n + 1)

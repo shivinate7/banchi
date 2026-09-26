@@ -4401,6 +4401,9 @@ test('UN-7 — a sale built on is refused, and "This card is still here" is a di
           undone: true,
           restores_to: null,
           order_released: null,
+          /* FINDING #4 (the Opus review round): the card this fixture reverses WAS pulled for
+             a shipped order, so the server's own answer names that fact. */
+          order_effect: 'filled_by_hand',
           still_here: true,
         },
       }
@@ -4434,6 +4437,64 @@ test('UN-7 — a sale built on is refused, and "This card is still here" is a di
   expect(calls).toHaveLength(2)
   expect(calls[0]?.body).toEqual({ undo: true })
   expect(calls[1]?.body).toEqual({ still_here: true })
+})
+
+test('UN-7 finding #4 — "still here" reads the server\'s own order_effect, never one guessed sentence for all three facts', async ({
+  page,
+}) => {
+  /* THE OPUS REVIEW ROUND: "the toast always says '...marked filled by hand.' That is false
+   * when the card had no order, and false when the order is still open (the line is
+   * released, not filled by hand)." Two presses here, over two different cards, each
+   * answering a different `order_effect` — proving the sentence follows the server's own
+   * field rather than being the same string every time. */
+  const cards2: Cards = {
+    '2/4': card({ index: 4, state: 'sold', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 5 }),
+    '2/5': card({ index: 5, state: 'sold', name: 'Sneasler', sku: '8607460', section: 1, sectionStart: 1, sectionEnd: 5 }),
+  }
+  const store2: Store = { cards: cards2, search: (query) => searchAnswer(query, cards2) }
+  const effects: Record<string, string> = { '2/4': 'none', '2/5': 'released' }
+  await open(page, BOXES, store2, () => PRICING, (box, index, _undo, stillHere) => {
+    const key = `${box}/${index}`
+    if (stillHere) {
+      return {
+        status: 200,
+        body: {
+          position: key,
+          box,
+          index,
+          undone: true,
+          restores_to: null,
+          order_released: effects[key] === 'released' ? { key: 'TCGplayer:100200300', sku: '8607460' } : null,
+          order_effect: effects[key],
+          still_here: true,
+        },
+      }
+    }
+    return {
+      status: 409,
+      body: { error: { code: 'sale_built_on', message: 'This sale can no longer be undone. The card is still here instead.' } },
+    }
+  })
+  await expandAll(page)
+
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  await page.getByRole('button', { name: 'Card actions' }).click()
+  await page.getByRole('menuitem', { name: 'Bring this card back' }).click()
+  await page.getByRole('menuitem', { name: 'This card is still here' }).click()
+  const noneToast = page.locator('.bn-toast', { hasText: 'Card brought back' })
+  /* order_effect: 'none' — no order sentence at all, and neither of the other two claims. */
+  await expect(noneToast).toContainText('is back in stock')
+  await expect(noneToast).not.toContainText('order')
+
+  await page.locator('.browse-row', { hasText: 'Sneasler' }).click()
+  await page.getByRole('button', { name: 'Card actions' }).click()
+  await page.getByRole('menuitem', { name: 'Bring this card back' }).click()
+  await page.getByRole('menuitem', { name: 'This card is still here' }).click()
+  const releasedToast = page.locator('.bn-toast', { hasText: 'Card brought back' }).last()
+  /* order_effect: 'released' — the OPPOSITE claim from 'filled by hand': the order no longer
+     counts the copy shipped, because it was open and this reversal released its line. */
+  await expect(releasedToast).toContainText('no longer counts it shipped')
+  await expect(releasedToast).not.toContainText('filled by hand')
 })
 
 test('S2 — a sold card says so once, not on the hero, the row and the phone bar all at once', async ({
@@ -4623,7 +4684,10 @@ test('UN-14 — a move built on is refused, and "Move back" is an ordinary move 
           index: 41,
           new_box: 2,
           new_index: 9,
-          card: { capture_id: 'cap-14' },
+          /* FINDING #5 (the Opus review round): the remedy lands at a FRESH index, never the
+             tombstoned one — `2/9` here, not `2/1` where the receipt's own `place` still
+             points. The toast must read this label, not the stale one. */
+          card: { capture_id: 'cap-14', label: 'ME01 commons, Section 4, Card 9' },
         }),
       })
       return
@@ -4657,7 +4721,11 @@ test('UN-14 — a move built on is refused, and "Move back" is an ordinary move 
 
   /* THE REMEDY, NEVER A SECOND ROUTE: the same POST, aimed at where the card reads now
      (box 7, index 41), back to box 2 — the receipt's own origin. */
-  await expect(page.locator('.bn-toast', { hasText: 'Card moved back' })).toBeVisible()
+  const backToast = page.locator('.bn-toast', { hasText: 'Card moved back' })
+  await expect(backToast).toBeVisible()
+  /* FINDING #5: the toast names where the remedy actually put it — the fresh index the
+     server's own answer carries — never the receipt's stale pre-move place. */
+  await expect(backToast).toContainText('ME01 commons, Section 4, Card 9')
   expect(sent).toHaveLength(3)
   expect(sent[1]?.path).toBe('/inventory/2/1/move')
   expect(sent[1]?.body).toEqual({ undo: true })

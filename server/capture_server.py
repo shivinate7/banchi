@@ -9770,6 +9770,12 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
         body = _sell(snapshot, box, index, undo, still_here)
 
         released = None
+        # THE OPUS REVIEW ROUND, FINDING #4: `order_released` alone answers `null` for TWO
+        # different facts — no order ever held this copy, and a shipped order that just got
+        # hand-filled instead. A screen cannot build the right sentence from one field that
+        # means either. `order_effect` names which of the three happened, so the client never
+        # has to guess.
+        order_effect = "none"
         if undo and holder is not None:
             held_key, held_sku = holder
             snapshot.ledger.forget_pull(held_key, held_sku, [str(card.capture_id)])
@@ -9782,9 +9788,12 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
                 snapshot.ledger.record_fill(
                     held_key, held_sku, 1, order_store.FILL_SOLD_SEPARATELY
                 )
+                order_effect = "filled_by_hand"
             else:
                 released = {"key": held_key, "sku": held_sku}
+                order_effect = "released"
         body["order_released"] = released
+        body["order_effect"] = order_effect
         body["still_here"] = bool(still_here)
         return body
 
