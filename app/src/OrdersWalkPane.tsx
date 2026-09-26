@@ -425,9 +425,16 @@ export function useOrderWalk({
 
   const onSell = (copy: SearchCopy) => {
     if (busyCopy !== null) return
-    const row = rows.find((candidate) => candidate.copy.key === copy.key)
-    if (row === undefined) return
-    const { take, stopKey } = row
+    /* THE CARD PANE OFFERS MARK SOLD ON EVERY COPY OF THE TAKE, D212's own copies list — not
+       only the ones physically AT this stop (`here: true`). `rows` flattens only the `here`
+       copies, one per physical reach, so looking THIS press up in `rows` by the pressed
+       copy's own key silently dropped a press on any other copy (the review round's finding
+       5, D171 again): no request, no toast, nothing. `currentRow` is the take the pane is
+       standing on regardless of which of its copies was pressed, and every copy the pane
+       draws a button for belongs to that one take (`currentGroup.copies` is `take.copies`
+       whole) — so it is the right anchor for every press this function makes. */
+    if (currentRow === null) return
+    const { take } = currentRow
     const order = pickOrderFor(take, ordersByKey, recorded.get(take.sku) ?? new Map())
     if (order === null) {
       /* D171: a refusal that reaches nobody did not happen. This pass's own tally may be
@@ -478,10 +485,7 @@ export function useOrderWalk({
            THIS TAKE's own "here" copies (this stop's physical reach) are now sold. */
         const hereCount = take.copies.filter((c) => c.here && justSold.has(c.key)).length
         const satisfied = hereCount >= take.wanted
-        /* `stopKey` names which stop this row belongs to, kept for a future refinement that
-           needs it; the advance itself only reads `rows`. */
-        void stopKey
-        advanceAfter(row.rowKey, satisfied, justSold)
+        advanceAfter(currentRow.rowKey, satisfied, justSold)
       }
       setBusyCopy(null)
     })()
@@ -678,8 +682,13 @@ export function WalkList({
                           {done ? <Icon name="check" size={14} /> : null}
                           {done ? 'Picked' : 'Pick'} {line.take.wanted}
                           {figure.short > 0 ? null : ` of ${figure.of}`}
+                          {figure.short > 0 ? (
+                            <>
+                              {' '}
+                              <Pill tone="warn">{figure.short} short</Pill>
+                            </>
+                          ) : null}
                         </span>
-                        {figure.short > 0 ? <Pill tone="warn">{figure.short} short</Pill> : null}
                         {showBuyers ? <span className="orders-walk-for">{takeBuyers(line.take)}</span> : null}
                       </button>
                     </li>
@@ -794,11 +803,18 @@ export function WalkCardPane({
           <span className={take.name === null ? 'orders-card-thin-name is-unnamed' : 'orders-card-thin-name'}>
             {take.name ?? 'Not identified yet'}
           </span>
-          <span className="orders-card-thin-place">
-            {hereWords === null ? `Pick ${take.wanted}` : `${hereWords}, pick ${take.wanted}`}
-            {figure.short > 0 ? '' : ` of ${figure.of}`}
+          <span className="orders-card-thin-meta">
+            <span className="orders-card-thin-place">
+              {hereWords === null ? `Pick ${take.wanted}` : `${hereWords}, pick ${take.wanted}`}
+              {figure.short > 0 ? '' : ` of ${figure.of}`}
+            </span>
+            {figure.short > 0 ? (
+              <>
+                {' '}
+                <Pill tone="warn">{figure.short} short</Pill>
+              </>
+            ) : null}
           </span>
-          {figure.short > 0 ? <Pill tone="warn">{figure.short} short</Pill> : null}
         </span>
         {here === null ? null : (
           <span className="orders-card-thin-action">
@@ -836,7 +852,12 @@ export function WalkCardPane({
           <p className="orders-card-pick">
             Pick <strong>{take.wanted}</strong>
             {figure.short > 0 ? null : <> of {figure.of}</>}
-            {figure.short > 0 ? <Pill tone="warn">{figure.short} short</Pill> : null}
+            {figure.short > 0 ? (
+              <>
+                {' '}
+                <Pill tone="warn">{figure.short} short</Pill>
+              </>
+            ) : null}
           </p>
           {showBuyers ? <p className="orders-card-for">For {takeBuyers(take)}</p> : null}
           <p className="orders-card-market">

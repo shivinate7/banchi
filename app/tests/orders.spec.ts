@@ -2816,6 +2816,30 @@ test('a short card says "Pick 1" and "2 short", never a wrong "of 3"', async ({ 
   await expect(pane.locator('.orders-card-pick')).toContainText('Pick 1')
   await expect(pane.locator('.orders-card-pick')).not.toContainText('of 3')
   await expect(pane.locator('.orders-card-pick')).toContainText('2 short')
+  /* THE SECOND ROUND'S FINDING 7 — REAL SPACING, NEVER A CONCATENATED "Pick 12 short". A
+   *  Pill sitting right after "Pick 1" with no text node between them reads as one run of
+   *  characters to the accessibility tree exactly as it does on screen; `toHaveText` (whole
+   *  string, not `toContainText`'s substring) is what would catch the missing space. */
+  await expect(pane.locator('.orders-card-pick')).toHaveText('Pick 1 2 short')
+
+  /* AND AT 390, BESIDE "Pick N", NEVER UNDER THE CARD NUMBER (the same finding): the thin
+   *  header's place line and its short pill sit in one row, `.orders-card-thin-meta`, so the
+   *  card name above them never shifts and the pill is never a line of its own underneath.
+   *  Walk mode's collapsed layout (`.orders-hub.is-walking`, which is what shows the thin
+   *  header at all) is a NAVIGATION, read off the column at the moment of the press
+   *  (`walkTo`) — resizing the viewport alone does not retroactively set `?walk=1`, so this
+   *  presses through the buyer chip exactly as the mobile entry case does. */
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.locator('.orders-buyerchip').click()
+  await page.locator('.orders-buyers-sheet .orders-index-row').first().click()
+  const meta = pane.locator('.orders-card-thin-meta')
+  await expect(meta).toHaveText('Box 3, Section 2, Card 17, pick 1 2 short')
+  const nameBox = await pane.locator('.orders-card-thin-name').boundingBox()
+  const metaBox = await meta.boundingBox()
+  expect(metaBox!.y, 'the meta row sits below the name, never beside or above it').toBeGreaterThan(nameBox!.y)
+  const placeBox = await pane.locator('.orders-card-thin-place').boundingBox()
+  const pillBox = await pane.locator('.orders-card-thin-meta .bn-pill').boundingBox()
+  expect(pillBox!.y, 'the pill sits on the SAME row as the place text, not a row under it').toBeLessThan(placeBox!.y + placeBox!.height)
 })
 
 /* THE REVIEW ROUND'S FINDING 1, REPRODUCED AND GUARDED AT THE CLIENT. `types.ts` always
@@ -3031,6 +3055,60 @@ test('a toast/U undo lowers the walk tally, so a later press against the same or
   await expect(markSold).toHaveCount(0)
   await expect.poll(() => pulls().length).toBe(4)
   await expect(page.locator('.bn-toast', { hasText: 'Nobody here still owes a copy' })).toHaveCount(0)
+})
+
+/* THE SECOND ROUND'S FINDING 5, D171 AGAIN, OLDER THAN THIS BRANCH. The card pane offers Mark
+ * sold on EVERY copy of the take (D212), not only the ones physically at this stop — but
+ * `onSell` used to look the pressed copy up in `rows`, which flattens only `here: true` copies,
+ * one per physical reach. A press on any OTHER copy (real, on hand, somewhere else in the
+ * store) silently returned: no request, no toast. `currentRow.take` is now the anchor
+ * regardless of which of its copies was pressed. */
+test('a press on a copy that is not at any stop still records against the owing order', async ({ page }) => {
+  const wire = await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({
+            wanted: 1,
+            copies: [
+              walkPlanCopy(), // the stop's own copy — box 3, index 21, here: true (default)
+              walkPlanCopy({ box: 9, index: 99, capture_id: 'cap-elsewhere', key: '9/99', here: false }),
+            ],
+          }),
+        ],
+      }),
+    ]),
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
+  })
+
+  const copies = page.locator('.orders-card-copy')
+  await expect(copies).toHaveCount(2)
+  await copies.nth(1).getByRole('button', { name: 'Mark sold' }).click()
+
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
+  const sent = wire.find((one) => one.path.endsWith('/orders/pull'))
+  expect(sent?.body).toMatchObject({
+    source: 'TCGplayer',
+    number: ORDER_NUMBER,
+    sku: SKU,
+    targets: [{ box: 9, index: 99, capture_id: 'cap-elsewhere' }],
+  })
+})
+
+/* THE SECOND ROUND'S FINDING 6 — the refusal sentence itself, on screen. `for: []` gives
+ * `pickOrderFor` no ref to pick at all, so it returns `null` on the very first press: the case
+ * this sentence exists for. */
+test('pressing Mark sold with no order left to fill draws the refusal sentence, never nothing', async ({ page }) => {
+  const wire = await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ for: [] })] })]),
+  })
+
+  await page.locator('.orders-card-copy').getByRole('button', { name: 'Mark sold' }).click()
+
+  await expect(page.locator('.bn-toast', { hasText: 'Nobody here still owes a copy' })).toBeVisible()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(0)
 })
 
 /* --------------------------------------------------------------------------------- Mark sold */
