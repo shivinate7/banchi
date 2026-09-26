@@ -7269,7 +7269,7 @@ COMPONENTS = [
                                               "until a preview has answered (D33's gate pointed "
                                               "at the ledger), and the same bytes are sent twice "
                                               "rather than re-picked.",
-                                      "governed_by": ["D7", "D13", "D33", "D87", "D104"],
+                                      "governed_by": ["D7", "D13", "D33", "D87", "D104", "D275"],
                                       # `app/tests/live-reconcile.spec.ts` is the check the hard
                                       # rule says does not otherwise exist — it runs under
                                       # `make design-check`, not at turn end, so it is named
@@ -7290,12 +7290,12 @@ COMPONENTS = [
                                           "the way back to the run it wrote (D118: a press, "
                                           "never a route change), and the source run is never "
                                           "edited.",
-                                  "governed_by": ["D20", "D33", "D36", "D118", "D145",
-                                                  "D165", "D210"]},
+                                  "governed_by": ["D20", "D33", "D36", "D118", "D145", "D165",
+                                                  "D210", "D275"]},
             "src/RunRescue.css": {"does": "the rescue sheet's own layout, `LiveReconcile.css`'s "
                                           "shape — width, padding, the thumb floor on a coarse "
                                           "pointer (D117).",
-                                  "governed_by": ["D117", "D165", "D210"]},
+                                  "governed_by": ["D117", "D165", "D210", "D275"]},
             "src/SubmissionClaims.tsx": {"does": "the panel on #/runs saying what a live send "
                                                  "is holding, and the ONE way out of a stuck "
                                                  "claim (D174). It draws "
@@ -7344,7 +7344,7 @@ COMPONENTS = [
                                              "and the stdout block is `white-space: pre` with "
                                              "its own overflow because the report draws "
                                              "fixed-width columns a wrap would break.",
-                                     "governed_by": ["D50", "D87", "D117"]},
+                                     "governed_by": ["D50", "D87", "D117", "D275"]},
             "src/Runs.tsx": {"does": "#/runs: the page chrome, the box picker, the composer, the "
                                      "store-wide reconcile and the stale-listing markdown, with "
                                      "RunPanel beneath them. Owns the SCOPE and nothing else — a strip of "
@@ -9494,7 +9494,7 @@ COMPONENTS = [
                 "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D36", "D39",
                                 "D43", "D48", "D49", "D54", "D56", "D57", "D64", "D65", "D76",
                                 "D78", "D117", "D118", "D136", "D145", "D165", "D166", "D174",
-                                "D180", "D196", "D207", "D210", "D218", "D291"],
+                                "D180", "D196", "D207", "D210", "D218", "D275", "D291"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "

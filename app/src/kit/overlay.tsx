@@ -462,14 +462,14 @@ type OverlayProps = {
   readonly footer?: ReactNode
   readonly children?: ReactNode
   readonly className?: string
+  /** False while the layer must not close: its Close is disabled, and Escape and the scrim do
+   *  nothing. A confirm is not dismissible while it writes. */
+  readonly dismissible?: boolean
 }
 
 type FrameProps = OverlayProps & {
   readonly kind: 'sheet' | 'modal'
   readonly role?: 'dialog' | 'alertdialog'
-  /** False while the layer must not close: its Close is disabled, and Escape and the scrim do
-   *  nothing. A confirm is not dismissible while it writes. */
-  readonly dismissible?: boolean
 }
 
 function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose, title, icon, footer, children, className }: FrameProps) {

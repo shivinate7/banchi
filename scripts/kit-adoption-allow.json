@@ -13,10 +13,6 @@
       "R1": "fulfillment",
       "R2-class": "fulfillment"
     },
-    "app/src/LiveReconcile.tsx": {
-      "R2-dialog": "review",
-      "R2-class": "review"
-    },
     "app/src/Markdown.tsx": {
       "R2-dialog": "b-pricing",
       "R2-select": "b-pricing",
@@ -52,14 +48,6 @@
       "R2-class": "review",
       "R2-date": "review",
       "R2-money": "review"
-    },
-    "app/src/RunPanel.tsx": {
-      "R2-select": "review",
-      "R2-class": "review"
-    },
-    "app/src/RunRescue.tsx": {
-      "R2-dialog": "review",
-      "R2-class": "review"
     },
     "app/src/RunsComposer.tsx": {
       "R2-dialog": "review",

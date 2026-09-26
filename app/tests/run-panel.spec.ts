@@ -2119,7 +2119,9 @@ test('the routing lever reaches join', async ({ page }) => {
   await openRun(page)
   await openJoinOptions(page)
 
-  await page.getByLabel('Send to review at or below').selectOption('medium')
+  /* The kit's own pick list (D275), never a native <select>. */
+  await page.locator('.bn-pick', { hasText: 'Send to review at or below' }).click()
+  await page.getByRole('listbox', { name: 'Send to review at or below' }).getByRole('option', { name: /Medium/ }).click()
   await page.getByRole('button', { name: 'Join again' }).click()
 
   /* `--review-below-confidence` was reachable only from a terminal. `--rule` and `--basis`
