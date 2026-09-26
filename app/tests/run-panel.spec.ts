@@ -2118,6 +2118,10 @@ test('the routing lever reaches join', async ({ page }) => {
   /* The kit's own pick list (D275), never a native <select>. */
   await page.locator('.bn-pick', { hasText: 'Send to review at or below' }).click()
   await page.getByRole('listbox', { name: 'Send to review at or below' }).getByRole('option', { name: /Medium/ }).click()
+  /* The pick has landed before Join is pressed: the list is closed and the trigger shows it.
+     Pressing Join while the kit's panel was still closing raced the pick once in a full run. */
+  await expect(page.getByRole('listbox', { name: 'Send to review at or below' })).toHaveCount(0)
+  await expect(page.locator('.bn-pick', { hasText: 'Send to review at or below' }).locator('.bn-pick-value')).toHaveText(/Medium/)
   await page.getByRole('button', { name: 'Join again' }).click()
 
   /* `--review-below-confidence` was reachable only from a terminal. `--rule` and `--basis`
