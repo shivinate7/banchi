@@ -172,6 +172,15 @@
   container-type: inline-size;
   container-name: bn-page;
 }
+/* `<Page width={false}>`: the Fulfiller's screen sizes its own column (D5) and never the kit's
+   width or top gap. The enter animation goes too — it moves via `transform`, and this element's
+   sheet and zoomed photo are FIXED children of it, so a transformed ancestor would pin them to
+   the page instead of the screen. */
+.bn-page[data-bn-page][data-bn-page-width='auto'] {
+  max-width: none;
+  padding-top: 0;
+  animation: none;
+}
 .bn-page-head { margin-bottom: var(--bn-4); }
 .bn-page-head .bn-head-actions { margin-top: 0; }
 [data-bn-page-title]:focus { outline: none; }
