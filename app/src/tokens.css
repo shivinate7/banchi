@@ -316,16 +316,17 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* VARIANT A — surface separation only. accent/status untouched.
-     --bn-surface lifts from 3.70 ΔL* off bg to 8.26 ΔL* (its old headroom was mostly unused —
-     light's surface is capped at white, dark's had 90+ L* points spare). --bn-surface-2 sinks
-     below bg instead of sitting 0.96 ΔL* above it, so a well now reads as sunken rather than
-     nearly invisible. --bn-surface-3 and --bn-btn-bg-hover move up in step. */
+  /* VARIANT B — brighter, more saturated accent + status. Surfaces untouched.
+     accent/ok/warn/danger/live all sat at S69-100% already (not desaturated), but at very
+     high lightness (55-78 L*) they read as pastel against the near-black ground. Each moves
+     down 11-19 L* points toward a punchier, more saturated-reading tone while staying at or
+     above AA 4.5:1 against --bn-surface (the harder of the two grounds) and --bn-accent-hover
+     keeps clearing >=7:1 under --bn-on-accent (DESIGN.md's PullConfirm floor). */
   --bn-bg: #0c0e12;
-  --bn-surface: #1b1e23;
-  --bn-surface-2: #030405;
-  --bn-surface-3: #23272f;
-  --bn-surface-glass: rgba(27, 30, 35, 0.72);
+  --bn-surface: #14171c;
+  --bn-surface-2: #090b0e;
+  --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72);
   --bn-hover: rgba(255, 255, 255, 0.04);
 
   --bn-ink: #eef0f4;
@@ -335,24 +336,24 @@
 
   --bn-line: rgba(255, 255, 255, 0.08);
   --bn-line-strong: rgba(255, 255, 255, 0.16);
-  --bn-line-focus: rgba(129, 146, 255, 0.6);
+  --bn-line-focus: rgba(97, 118, 255, 0.6);
 
-  --bn-accent: #7f90ff;
-  --bn-accent-hover: #93a2ff;
-  --bn-accent-press: #6b7dfa;
-  --bn-accent-tint: rgba(127, 144, 255, 0.14);
-  --bn-accent-tint-2: rgba(127, 144, 255, 0.24);
+  --bn-accent: #6176ff;
+  --bn-accent-hover: #8a99ff;
+  --bn-accent-press: #2945ff;
+  --bn-accent-tint: rgba(97, 118, 255, 0.14);
+  --bn-accent-tint-2: rgba(97, 118, 255, 0.24);
   --bn-on-accent: #0c0e12;
 
-  --bn-live: #ff6a58;
-  --bn-live-tint: rgba(255, 106, 88, 0.16);
+  --bn-live: #ff351f;
+  --bn-live-tint: rgba(255, 53, 31, 0.16);
 
-  --bn-ok: #3ddc84;
-  --bn-ok-tint: rgba(61, 220, 132, 0.14);
-  --bn-warn: #f5a524;
-  --bn-warn-tint: rgba(245, 165, 36, 0.14);
-  --bn-danger: #ff5c5c;
-  --bn-danger-tint: rgba(255, 92, 92, 0.14);
+  --bn-ok: #11d067;
+  --bn-ok-tint: rgba(17, 208, 103, 0.14);
+  --bn-warn: #db8906;
+  --bn-warn-tint: rgba(219, 137, 6, 0.14);
+  --bn-danger: #ff1f1f;
+  --bn-danger-tint: rgba(255, 31, 31, 0.14);
   --bn-money: #eef0f4;
 
   --bn-pill-ink-accent: var(--bn-accent-hover);
@@ -366,14 +367,12 @@
     0 0 0 1px rgba(255, 255, 255, 0.07);
   --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75),
     0 0 0 1px rgba(255, 255, 255, 0.08);
-  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(97, 118, 255, 0.55);
 
   --bn-btn-bg: var(--bn-surface-3);
-  --bn-btn-bg-hover: #2f3541;
+  --bn-btn-bg-hover: #262b34;
   --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
 }
-
-/* A thumb needs 40px. Every kit control reads these, so the floor is raised once — and it
    follows the POINTER, not the width: an iPad in portrait is 820px wide and all thumb. */
 /* The gap above a page's title follows the page's own side inset: 16px on a phone. */
 @media (max-width: 767px) {
