@@ -2278,7 +2278,7 @@ const ELSEWHERE: Cards = { ...CARDS, ...SPARES }
 const FAR = 'Box 7, Section 1, Card 40'
 /* D218: `Walk to ${FAR}` is an aria-label — a sentence built AROUND the server's label — so it
    reads through `sayPlace` (`CardLocations.tsx`'s `OwnerRows`) the same way the sale toast
-   does. `.position-parts`'s OWN aria-label stays raw (D41's one exception, verbatim), which is
+   does. `.card-locations-identity`'s OWN aria-label stays raw (D41's one exception, verbatim), which is
    why FAR itself is untouched and only the button's name below uses the spoken form. */
 const FAR_SPOKEN = 'Box 7, Section 1, Card 40'
 
@@ -2325,7 +2325,7 @@ test('a copy in another box is reached by pressing its position, and the walk go
      one of them is drawn for whatever the walk points at, so moving the mark is the only thing
      the press has to do. */
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 spares/)
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')).toHaveAttribute('aria-label', FAR)
   await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/7\/40(\?|$)/)
 
   /* THE LANDING'S SECTION IS OPEN AND THE MARK IS WHERE IT CAN BE SEEN, in a box that arrived
@@ -2399,7 +2399,7 @@ test('a walk-to scrolls the walk and never the page — the top bars stay put', 
      landed nowhere would pass the first; the old code passed the second. */
   expect(await at()).toBe(0)
   expect(await navTop()).toBe(0)
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')).toHaveAttribute('aria-label', FAR)
   await expect(page.locator('.browse-row[aria-current="true"]')).toBeInViewport()
 })
 
@@ -2447,7 +2447,7 @@ test('a filtered walk gives up the filter rather than swallowing the jump', asyn
      this is the claim that matters and the wrong-card landing is what fails it: unguarded, the
      mark falls to the first row the filter still holds and this reads `Box 2 · Section 1 ·
      Card 1` under box 2's photograph. */
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('aria-label', FAR)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')).toHaveAttribute('aria-label', FAR)
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 spares/)
 
   // And the query goes, because it was a way of finding the card and the card has been found.
@@ -2676,12 +2676,16 @@ test('a copy row draws how far into the box AND how far into the section', async
      the full argument): `#1 of 5`, not `#1 of 5 so far`. */
   await expect(first.nth(0)).toHaveText('Section 1 of 2')
   /* SETTLED SECTION, SO THE DENOMINATOR IS SLOTS. Section 1 runs 1..3 and the box holds 5, so
-     its far bound is a divider with cards behind it: three slots today and three next week. */
-  await expect(first.nth(1)).toHaveText('Section 1card 1 of 3')
+     its far bound is a divider with cards behind it: three slots today and three next week —
+     said now on the row's own header (`Card 1 of 3`), never restated here (the owner's
+     Direction-B build, 2026-09-25), so the card ruler's own caption is omitted. */
+  await expect(bars.nth(0).locator('.position-bar-text-section')).toHaveCount(0)
+  await expect(rows.nth(0).locator('.card-locations-identity')).toContainText('Card 1 of 3')
 
   const second = bars.nth(1).locator('.position-bar-text')
   await expect(second.nth(0)).toHaveText('Section 1 of 2')
-  await expect(second.nth(1)).toHaveText('Section 1card 3 of 3')
+  await expect(bars.nth(1).locator('.position-bar-text-section')).toHaveCount(0)
+  await expect(rows.nth(1).locator('.card-locations-identity')).toContainText('Card 3 of 3')
 
   /* The section track carries no dividers of its own — a section is not divided by anything,
      and that absence is one of the three cues telling the two scales apart at a glance. */
@@ -2711,11 +2715,11 @@ test('the last section of an open box counts what is in it, and the box line dro
    * growing section reads `card 2 of 2`, a settled one `card 2 of 2 slots`. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Section 2 of 2')
-  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 2card 2 of 2')
-
-  /* One accessible name carrying both, because `role="img"` hides every descendant — a screen
-     reader is told the second scale here or not at all. */
-  await expect(bar).toHaveAttribute('aria-label', 'Card 2 of 2, Section 2 · card 2 of 2')
+  /* THE CARD RULER'S OWN CAPTION IS OMITTED HERE (the owner's Direction-B build, 2026-09-25):
+     the header now says `Card 2 of 2` once, and this section carries no name, so there is
+     nothing left for this caption to say. */
+  await expect(bar.locator('.position-bar-text-section')).toHaveCount(0)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-identity')).toContainText('Card 2 of 2')
 })
 
 test('the card with no group gets both depths too', async ({ page }) => {
@@ -2738,17 +2742,17 @@ test('the card with no group gets both depths too', async ({ page }) => {
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar).toHaveCount(1)
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Section 1 of 2')
-  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1card 2 of 3')
+  await expect(bar.locator('.position-bar-text-section')).toHaveCount(0)
 
   /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D71). This test reaches
    * the lone-copy branch and asserted only the two bars, so the label beside them went on being
    * the raw server string in the utility face — D41's treatment shipped to five sites and this
    * was not one of them. Nothing failed, because nothing here read it. */
-  const lone = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
+  const lone = page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')
   await expect(lone).toHaveCount(1)
   await expect(lone).toHaveAttribute('aria-label', 'Box 2, Section 1, Card 2')
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveText('2')
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-plain')).toHaveCount(0)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity-num')).toHaveText('2')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .is-unparsed')).toHaveCount(0)
 })
 
 test('a sold card with no group is ranked too, and its lens keeps the box but loses the mark', async ({ page }) => {
@@ -2763,17 +2767,22 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
    * every fixture that reaches the lone panel had a live card in it, and every fixture with a
    * departed card had a name and a SKU and so drew a group instead. The two conditions had never
    * been in one record. This case is that record. */
-  const shared: Cards = {
+  /* SECTION 1 CARRIES A NAME HERE, WHICH IT DID NOT BEFORE (the owner's report, 2026-09-25):
+     the bare section number this test used to pin is dropped from the ruler's own caption, so
+     a case with no name would leave the head empty and unable to prove the flex rule below.
+     The name is what stays, and it is the fact this fixture now needs to carry it. */
+  const departedNamed = card({
+    index: 4,
+    state: 'sold',
+    name: null,
+    sku: null,
+    section: 1,
+    sectionStart: 1,
+    sectionEnd: 3,
+  })
+  const shared = {
     ...CARDS,
-    '2/4': card({
-      index: 4,
-      state: 'sold',
-      name: null,
-      sku: null,
-      section: 1,
-      sectionStart: 1,
-      sectionEnd: 3,
-    }),
+    '2/4': { ...departedNamed, place: { ...departedNamed.place, section_name: 'Rares' } },
   }
   await open(page, BOXES, { cards: shared, search: (query) => searchAnswer(query, shared) })
   await expandAll(page)
@@ -2784,7 +2793,7 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
      copies list, the same one the case above walks, with the card sold. */
   await expect(page.locator('.inventory-lone')).toHaveCount(1)
 
-  const lone = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
+  const lone = page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')
   /* SINCE THE OWNER'S BOX-NAME RULING (D259) a departed card keeps the
      place it left (box, section, card within it), its figure struck through; no word and no
      store key. Its accessible name is in the past tense. */
@@ -2794,10 +2803,10 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
      end of this file, same string). The location card drew it as a separate element beside the
      `LOCATION` label; D119 did not lose it, it moved into the address — and since D132 the name
      LEADS and the index is the note beside it, on every row alike. */
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-path')).toHaveText('BOX ME01 commonsSECTION 1')
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveText('4')
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('data-departed', 'true')
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-plain')).toHaveCount(0)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')).toHaveText('ME01 commonsSection 1: RaresCard 4')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity-num')).toHaveText('4')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')).toHaveAttribute('data-departed', 'true')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .is-unparsed')).toHaveCount(0)
 
   /* AND THE LENS, DRAWN AS A COPY THAT HAS LEFT (D118, amending D68). This assertion read
      `toHaveCount(0)` until the owner reported the screen shaking under the sale, and what was
@@ -2815,30 +2824,13 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
   /* Both scales, both unmarked — the box track and the section track it zooms into. */
   await expect(lens.locator('.position-bar-marker[data-gone]')).toHaveCount(2)
 
-  /* THE TAIL IS SHORT AND NEVER CONTRADICTS THE RULER STILL DRAWN UNDER IT (the owner's box
-     WB1 R2 defect: the old two facts read `3 slots · this copy is not in one`, long enough to
-     force the section's own NAME to be the part that ellipsized). One neutral phrase — this
-     `sectionDepthOf` has no sold/retired distinction to read off a bare `Place` — shorter than
-     what it replaces (D194). */
-  const sectionText = lens.locator('.position-bar-text-section')
-  await expect(sectionText.locator('.position-bar-cap-head')).toHaveText('Section 1')
-  await expect(sectionText.locator('.position-bar-cap-tail')).toHaveText('was card 4')
-
-  /* AND THE TAIL IS THE PART THAT MAY CLIP, NEVER THE HEAD. `PositionBar.css` had this
-     backwards; swapped, the section's own name is pinned at its full width (`flex: none`) and
-     only the tail can shrink and ellipsize. */
-  const flexStyles = await sectionText.evaluate((el) => {
-    const head = el.querySelector('.position-bar-cap-head') as HTMLElement
-    const tail = el.querySelector('.position-bar-cap-tail') as HTMLElement
-    return {
-      headFlexShrink: getComputedStyle(head).flexShrink,
-      tailFlexShrink: getComputedStyle(tail).flexShrink,
-      tailTextOverflow: getComputedStyle(tail).textOverflow,
-    }
-  })
-  expect(flexStyles.headFlexShrink).toBe('0')
-  expect(flexStyles.tailFlexShrink).toBe('1')
-  expect(flexStyles.tailTextOverflow).toBe('ellipsis')
+  /* THE CARD RULER'S OWN CAPTION IS RETIRED OUTRIGHT (the owner's Direction-B build,
+     2026-09-25): the section's name and the departed state it used to say in words —
+     `3 slots · this copy is not in one`, then `Rares · was card 4` — are both said once now,
+     on the header above (`RowIdentity`'s own struck figure and `Was at ...` accessible name).
+     The old flex-shrink priority between this caption's head and tail (D194's own "the tail
+     may clip, never the head") has nothing left to protect: there is no caption left to clip. */
+  await expect(lens.locator('.position-bar-text-section')).toHaveCount(0)
 })
 
 test('a departed card draws no number, and the cards behind it count past it', async ({
@@ -2882,7 +2874,7 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * `Card 1` of section 2 and its photograph is still `/photo/2/6`. Nothing was renamed. */
   await page.locator('.browse-row').nth(5).click()
   await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/2\/6\?card=cap-6$/)
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute(
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')).toHaveAttribute(
     'aria-label',
     'Box 2, Section 2, Card 1',
   )
@@ -2893,7 +2885,7 @@ test('a departed card draws no number, and the cards behind it count past it', a
   await page.locator('.browse-row').nth(3).click()
 
   /* THE TREATMENT APPLIES, AND THIS CASE USED TO FLOOR THE OPPOSITE (D71). It read the raw
-   * string as text and asserted `.position-parts` count ZERO — a floor on the component
+   * string as text and asserted `.card-locations-identity` count ZERO — a floor on the component
    * REFUSING a departed label — and what that refusal actually drew was the pre-D41 plain
    * string: `Box 2 · departed` at 44px in the face the address is drawn in, wrapped onto two
    * lines, in the panel D41 exists to have unwrapped. A sold card was the only card left on
@@ -2902,10 +2894,10 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * WHAT THOSE ASSERTIONS WERE PROTECTING IS THE FIGURE, and it is asserted below unweakened:
    * the guard that refused the label was aimed at the word `departed` being promoted to 44px,
    * and refusing the whole treatment was never the only way to stop that. */
-  const panel = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
+  const panel = page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')
   await expect(panel).toHaveCount(1)
   await expect(panel).toHaveAttribute('aria-label', 'Was at Box 2, Section 1, Card 4')
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-plain')).toHaveCount(0)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .is-unparsed')).toHaveCount(0)
   /* The lens stays and its mark leaves (D118, amending D68) — see the case above for the whole
      argument. What this case is about is the LABEL, and the lens is asserted here only so a
      later change cannot take it away again without one of these two saying so. */
@@ -2915,15 +2907,15 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * card that has left; D68 adds that the store key must not take that number's place. Both are
    * the same statement about this panel — nothing is drawn at `--pos-slot`'s 44px — and the void
    * is what holds the column open in its stead. */
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveText('4')
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('data-departed', 'true')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity-num')).toHaveText('4')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')).toHaveAttribute('data-departed', 'true')
 
   /* AND THE STATE AND THE KEY ARE RANKED RATHER THAN LEFT AS A STRING WITH A NOTE UNDER IT.
    * `DEPARTED B2 #4` is the same key/value pair as the `BOX 2` above it and as the `SECTION 1` it
    * stands in for, which is what makes a departed row cost the same two path lines a live one
    * costs. */
-  const path = page.locator('.card-locations-row.is-current .card-locations-label .position-path')
-  await expect(path).toHaveText('BOX ME01 commonsSECTION 1')
+  const path = page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')
+  await expect(path).toHaveText('ME01 commonsSection 1Card 4')
 
   /* THE RE-RANK ITSELF IS ASSERTED ON `#/gallery` AND NOT HERE, AND THE MOVE IS D119's (see
    * `gallery.spec.ts`, `a label with no figure re-ranks its path`). `PositionLabel.css`'s rule
@@ -4591,22 +4583,23 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
   const band = page.locator('.card-locations-row.is-current .nb')
   await expect(band).toBeVisible()
 
-  /* THE KEYS ARE THE COMPOSER'S OWN TWO WORDS. `in front` / `behind` was built first and reads
-     better as a physical pair, and it takes the NEIGHBOUR as its subject where `placeParts`
-     takes THIS CARD — so the row and the `aria-label` would have disagreed about which side
-     the same name was on. */
-  /* Back, this card, front: the owner's orientation, card 1 at the far back (LOC-07). */
-  await expect(band.locator('.nb-key')).toHaveText(['back', 'this', 'front'])
+  /* BACK THEN FRONT, the owner's orientation, card 1 at the far back (LOC-07) — `data-side`
+     marks the order with no visible word for it any more (Direction B, 2026-09-25: the ladder's
+     `back`/`this`/`front` words collapsed into one line, an arrow between the two names). */
+  expect(await band.locator('.nb-side').evaluateAll((els) => els.map((el) => el.getAttribute('data-side')))).toEqual([
+    'back',
+    'front',
+  ])
 
-  /* THE SPLIT, which is what makes two proper nouns findable in a column: the champion is the
+  /* THE SPLIT, which is what makes two proper nouns findable side by side: the champion is the
      recognition token at ink and the epithet is the disambiguator, demoted and never dropped —
      61 of 99 champions carry more than one, so `Master Yi` alone names fourteen cards. */
-  await expect(band.locator('.nb-name b')).toHaveText(['Galio', 'Evelynn'])
+  await expect(band.locator('.nb-side b')).toHaveText(['Galio', 'Evelynn'])
   await expect(band.locator('.nb-rest')).toHaveText([', Indefaticable', ', Entrancing'])
 
-  /* THE JOINED SENTENCE SURVIVES ON `aria-label`, so a screen reader hears one sentence where
-     the eye is given two rows — and it is `placeParts`' own composition, not a second author's,
-     which is what the one-composer rule in server.ts is for. */
+  /* THE JOINED SENTENCE SURVIVES ON `aria-label`, so a screen reader hears one full sentence
+     where the eye is given two names and an arrow — and it is `placeParts`' own composition,
+     not a second author's, which is what the one-composer rule in server.ts is for. */
   await expect(band).toHaveAttribute(
     'aria-label',
     'It sits in front of Galio, Indefaticable and behind Evelynn, Entrancing.',
@@ -4619,7 +4612,7 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
     search: (query) => searchAnswer(query, NEIGHBORLY),
   })
 
-  /* THE TWO DEFECTS THIS REPLACED, ASSERTED AS THE PROPERTIES THEY ARE.
+  /* THE DEFECT THIS REPLACED, ASSERTED AS THE PROPERTY IT IS.
      `.card-locations-boxname` drew this at 10px UPPERCASE TRACKED MONO — the metadata register
      — which made the only running English in the product a row of rectangles. docs/DESIGN.md
      cuts on exactly this line: "Mono carries all metadata… the body face is reserved for
@@ -4627,7 +4620,7 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
      fast route to a name last seen on a piece of cardboard.
 
      Asserted on the COPIES ROW and not the band, because the row is where the borrow was. */
-  const name = page.locator('.card-locations-owner .nb-name').first()
+  const name = page.locator('.card-locations-owner .nb-side').first()
   await expect(name).toBeVisible()
   const drawn = await name.evaluate((node) => {
     const style = getComputedStyle(node)
@@ -4654,11 +4647,6 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
      which is the same fact from the DOM's side, and the one a `text-transform` regression
      would leave true while the screen went back to rectangles. */
   expect(drawn.text).toContain('Galio')
-
-  /* THE KEY KEEPS THE TRACKING, and that is not an inconsistency. An isolated two-word token
-     has no word boundary to protect; an eighty-eight-character sentence does. */
-  const key = page.locator('.card-locations-owner .nb-key').first()
-  await expect(key).toHaveCSS('text-transform', 'uppercase')
 })
 
 test('a card at the back of the box gets one row, not a pretend between', async ({ page }) => {
@@ -4672,13 +4660,16 @@ test('a card at the back of the box gets one row, not a pretend between', async 
      asserts the block at the site that draws it once per copy. */
   const front = page.locator('.card-locations-owner .nb').nth(1)
   await expect(front).toBeVisible()
-  await expect(front.locator('.nb-row')).toHaveCount(2)
-  await expect(front.locator('.nb-key')).toHaveText(['this', 'front'])
+  /* ONE SIDE, NOT A PRETEND BETWEEN: no `back`, and no arrow — an arrow only ever draws between
+     two real sides (`PlaceNeighbors.tsx`). */
+  await expect(front.locator('.nb-side')).toHaveCount(1)
+  await expect(front.locator('.nb-side')).toHaveAttribute('data-side', 'front')
+  await expect(front.locator('.nb-arrow')).toHaveCount(0)
 
   /* A NAME WITH NO COMMA RENDERS WHOLE. The seam splits on the first `, ` and refuses any other
      punctuation — the same refusal `PositionLabel` makes for a label it cannot parse — so every
      Pokemon name takes this branch and is drawn exactly as the server sent it. */
-  await expect(front.locator('.nb-name b')).toHaveText(['Conscription'])
+  await expect(front.locator('.nb-side b')).toHaveText(['Conscription'])
   await expect(front.locator('.nb-rest')).toHaveCount(0)
   /* Nothing toward the back: card 1 is at the far back, so this card sits behind its one
      neighbour and in front of nothing (UX-186). */
@@ -4701,9 +4692,9 @@ test('an unread neighbour is said in words, and counts as the neighbour (LOC-28)
      and one that dropped the unread side fails on the first. */
   const reached = page.locator('.card-locations-owner .nb').nth(2)
   await expect(reached).toBeVisible()
-  await expect(reached.locator('.nb-row[data-side="back"] .nb-unread')).toHaveText('2 unread cards')
-  await expect(reached.locator('.nb-name b')).toHaveText(['Conscription'])
-  await expect(reached.locator('.nb-row[data-side="back"]')).not.toContainText(/#\d/)
+  await expect(reached.locator('.nb-side[data-side="back"] .nb-unread')).toHaveText('2 unread cards')
+  await expect(reached.locator('.nb-side b')).toHaveText(['Conscription'])
+  await expect(reached.locator('.nb-side[data-side="back"]')).not.toContainText(/#\d/)
 
   /* AND IN `said`, WHICH IS THE HALF THE EYE CANNOT SEE HERE AND THE FULFILLER READS AT 20px. */
   await expect(reached).toHaveAttribute('aria-label', 'It sits in front of 2 unread cards and behind Conscription.')
@@ -4807,7 +4798,7 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
   /* Copy 5 counts from copy 3, which is about to be sold out from under it. */
   const behind = copyRow(page, 'Box 2, Section 1, Card 3')
   const ladder = page.locator('.card-locations-owner .nb').nth(2)
-  await expect(ladder.locator('.nb-name b')).toHaveText(['Bashful Bloom'])
+  await expect(ladder.locator('.nb-side b')).toHaveText(['Bashful Bloom'])
 
   const before = walkReads.length
 
@@ -4818,7 +4809,7 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
      block on the screen is recomputed by the server. The operator presses nothing else and
      reloads nothing: this is the question "does the ladder update, or do I refresh?" asserted
      rather than reasoned about. */
-  await expect(ladder.locator('.nb-name b')).toHaveText(['Mantine'])
+  await expect(ladder.locator('.nb-side b')).toHaveText(['Mantine'])
   await expect(() => expect(walkReads.length).toBeGreaterThan(before)).toPass({ timeout: 5000 })
 
   /* AND THE SOLD CARD IS NOT NAMED ANYWHERE IN THE LADDER — the whole complaint, at the site
@@ -5089,7 +5080,7 @@ test('the address is drawn without a separator, and the server string survives o
      — one per copy in the list — and they all carry the same treatment; what this case is about
      is the address of the card the walk is standing on, which since D119 is one of those rows
      rather than a card above them. */
-  const parts = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
+  const parts = page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')
   await expect(parts).toHaveAttribute('role', 'group')
   const label = await parts.getAttribute('aria-label')
   expect(label).toMatch(/^Box \d+, Section \d+, Card \d+$/)
@@ -5097,8 +5088,76 @@ test('the address is drawn without a separator, and the server string survives o
   /* THE SLOT IS THE LAST PART AND IT IS THE ONE DRAWN AT SIZE. Anchored to the END of the
      address rather than to index 2, so a formula with a different number of parts still puts the
      finest thing said on the biggest step. */
-  const num = page.locator('.card-locations-row.is-current .card-locations-label .position-num')
+  const num = page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity-num')
   await expect(num).toHaveText(/Card (\d+)$/.exec(String(label))?.[1] ?? '')
+})
+
+test('no wrapped line of the identity row begins with the separator, at 390 and 820', async ({ page }) => {
+  /* THE LANE REVIEW'S FINDING, 2026-09-25: the separator was `::before` on the fact AFTER the
+     seam, so at a width narrow enough for the identity line to wrap, the dot travelled WITH
+     the wrapped fact onto its own new line — every wrapped line but the first read as starting
+     with a bare dot. Fixed by moving the mark to `::after` on the fact BEFORE the seam, which
+     stays on the line it punctuates whichever line that is.
+
+     `innerText` WAS TRIED FIRST AND IS BLIND HERE: Chromium's `innerText` reads real text
+     nodes and never CSS generated content, so it cannot tell `::before` from `::after` at all
+     — both render as invisible to it, and a case built on it would pass on either. This reads
+     the pseudo-elements' own computed `content` instead, which is the actual mechanism the
+     lane review named: `::after` on every fact but the last, `::before` on none. */
+  for (const width of [390, 820]) {
+    await page.setViewportSize({ width, height: 900 })
+    await open(page, BOXES, STORE, () => PRICING, SALE, { settle: '.card-locations-owner' })
+    const identity = page.locator('.card-locations-row.is-current .card-locations-identity')
+    await expect(identity).toBeVisible()
+
+    const marks = await identity.evaluate((el) =>
+      [...el.querySelectorAll('.card-locations-identity-fact')].map((fact, at, all) => ({
+        before: getComputedStyle(fact, '::before').content,
+        after: getComputedStyle(fact, '::after').content,
+        isLast: at === all.length - 1,
+      })),
+    )
+    expect(marks.length, `at least two facts render at ${width}`).toBeGreaterThan(1)
+    for (const mark of marks) {
+      expect(mark.before, `no leading mark at ${width}`).toBe('none')
+      expect(mark.after, `a trailing mark on every fact but the last, at ${width}`).toBe(mark.isLast ? 'none' : '"·"')
+    }
+  }
+})
+
+test('the box fact never grows past its own text, and the dot never floats away from it', async ({ page }) => {
+  /* A WIDE VIEWPORT, DELIBERATELY: the free width a `flex-grow` bug needs to be visible at all —
+     at the suite's narrower default this fact's own row happens to have none to spend, so the
+     mutation this case exists to catch would pass unnoticed there. */
+  await page.setViewportSize({ width: 1920, height: 900 })
+  await open(page)
+
+  /* A REAL BUG, FOUND BY THE OWNER'S OWN SCREENSHOT (Direction B, round two, 2026-09-25): the
+     box fact was `flex: 1 1 auto`, which GROWS to fill the row's free width — a short box name
+     pushed `Section 1 · Card 5 of 39` all the way to the header's far right edge, reading as a
+     stray leading dot with nothing before it. D41's rule only ever asked the box fact to
+     SHRINK under real width pressure; it never asked it to grow past its own content.
+
+     THE NEXT FACT'S OWN LEFT EDGE IS THE WRONG THING TO MEASURE: it sits at the end of the box
+     fact's CSS BOX regardless of that box's width, so it is adjacent by construction whether or
+     not the box grew. What actually floats away is the box fact's own PAINTED TEXT — so this
+     compares the fact's rendered width against its content's natural (`scrollWidth`) size. */
+  const box = page.locator('.card-locations-row.is-current .card-locations-identity-box')
+  await expect(box).toBeVisible()
+  /* `scrollWidth` is no good here: with room to spare it reports the ELEMENT's own box, not the
+     glyphs inside it, which is exactly the case a `flex-grow` bug produces. A `Range` around the
+     text itself measures the glyphs regardless of how wide the box around them grew. */
+  const widths = await box.evaluate((el) => {
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    return { rendered: el.getBoundingClientRect().width, text: range.getBoundingClientRect().width }
+  })
+  /* THE TOLERANCE IS THE SEPARATOR'S OWN WIDTH, NOT SLACK FOR A GROWN BOX: this fact is not the
+     row's last, so it carries the trailing `::after` dot (D218's own seam), which the `Range`
+     above never selects — a real, legitimate ~16px of margin and glyph the box's rendered width
+     is SUPPOSED to include. 24px covers that with room to spare and stays far short of the
+     roughly 300px the flex-grow bug actually produced. */
+  expect(widths.rendered).toBeLessThan(widths.text + 24)
 })
 
 test('the address holds one line at both widths, including the longest label the store can emit', async ({
@@ -5147,26 +5206,32 @@ test('the address holds one line at both widths, including the longest label the
 
   for (const width of [1440, 1280]) {
     await page.setViewportSize({ width, height: 900 })
-    await page.locator('.card-locations-row.is-current .card-locations-label .position-parts').waitFor()
+    await page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity').waitFor()
 
     const unwrapped = await page.locator('.card-locations-row.is-current .card-locations-label').evaluate((el) => {
-      const shape = el.querySelector('.position-parts') as HTMLElement
+      const shape = el.querySelector('.card-locations-identity') as HTMLElement
       return shape.getBoundingClientRect().height <= 36
     })
     expect(unwrapped).toBe(true)
 
-    /* The shape fits its track with the worst label in it. Measured on the SHAPE rather than on
-       `.browse-position`, which is a full-width block and would always "fit". */
+    /* THE SHAPE FITS ITS TRACK WITH THE WORST LABEL IN IT — re-derived for the one-line identity
+       (the owner's Direction-B build, 2026-09-25): there is no separate path/slot pair any more,
+       so the worst case is forced into the three FACTS `RowIdentity` draws, and what must hold
+       is that the whole line never exceeds the track — the box fact alone may ellipsize
+       (`.card-locations-identity-box`'s own CSS), section and card never do. */
     const fits = await page.evaluate(() => {
-      const label = document.querySelector('.card-locations-row.is-current .card-locations-label') as HTMLElement
-      const path = label.querySelector('.position-path') as HTMLElement
-      const slot = label.querySelector('.position-slot') as HTMLElement
+      const identity = document.querySelector(
+        '.card-locations-row.is-current .card-locations-label .card-locations-identity',
+      ) as HTMLElement
       const track = document.querySelector('.card-locations-rows') as HTMLElement
-      path.innerHTML = '<span>BOX <b>100</b></span><span>SECTION <b>12</b></span>'
-      const numEl = slot.querySelector('.position-num') as HTMLElement
-      numEl.textContent = '543'
-      const used = path.getBoundingClientRect().width + slot.getBoundingClientRect().width + 24
-      return used <= track.getBoundingClientRect().width
+      const facts = identity.querySelectorAll('.card-locations-identity-fact')
+      const boxFact = facts[0] as HTMLElement | undefined
+      const sectionFact = facts[1] as HTMLElement | undefined
+      if (boxFact) boxFact.textContent = 'Box 100'
+      if (sectionFact) sectionFact.textContent = 'Section 12'
+      const num = identity.querySelector('.card-locations-identity-num') as HTMLElement
+      num.textContent = '543'
+      return identity.getBoundingClientRect().width <= track.getBoundingClientRect().width
     })
     expect(fits).toBe(true)
   }
@@ -5245,9 +5310,7 @@ test('a narrow copies column shortens the bar, never the position label', async 
     const caps = [...el.querySelectorAll('.position-bar-text')] as HTMLElement[]
     const boxTrack = el.querySelector('.position-bar-track') as HTMLElement
     const sect = el.querySelector('.position-bar-sectiontrack') as HTMLElement
-    const parts = el.querySelector('.position-parts') as HTMLElement
-    const pathEl = el.querySelector('.position-path') as HTMLElement
-    const slotEl = el.querySelector('.position-slot') as HTMLElement
+    const parts = el.querySelector('.card-locations-identity') as HTMLElement
     return {
       barH: Math.round(bar.getBoundingClientRect().height),
       /* `getClientRects().length` WAS READ HERE AND IT IS BLIND. The node it was read off is a
@@ -5257,13 +5320,10 @@ test('a narrow copies column shortens the bar, never the position label', async 
          time. The case only ever went red on its OTHER assertion, which hid this.
 
          The honest question is geometric, and it is the same shape as `capBesideTrack` two lines
-         down: the parts block is the two-line path (33.9px) beside the figure, so anything past
-         ~36px means a half of it wrapped. Height, not rect count. */
+         down: the identity is ONE LINE now (the owner's Direction-B build, 2026-09-25 — no more
+         a two-line path beside a figure), so anything past its own single line-height means it
+         wrapped. Height, not rect count. */
       partsH: parts === null ? 0 : Math.round(parts.getBoundingClientRect().height),
-      pathSlotAligned:
-        pathEl === null || slotEl === null
-          ? false
-          : Math.abs(pathEl.getBoundingClientRect().top - slotEl.getBoundingClientRect().top) < 40,
       capHeights: caps.map((c) => Math.round(c.getBoundingClientRect().height)),
       boxTrackH: Math.round(boxTrack.getBoundingClientRect().height),
       sectTrackH: sect === null ? null : Math.round(sect.getBoundingClientRect().height),
@@ -5273,18 +5333,22 @@ test('a narrow copies column shortens the bar, never the position label', async 
   /* THE LABEL DID NOT WRAP. This is the half the rejected fix broke, and it is asserted as a
      height rather than a rect count for the reason given inside the evaluate above. */
   expect(geom.partsH).toBeGreaterThan(0)
-  expect(geom.partsH).toBeLessThanOrEqual(36)
-  expect(geom.pathSlotAligned).toBe(true)
+  expect(geom.partsH).toBeLessThanOrEqual(20)
 
-  /* THE CAPTIONS ARE ONE LINE EACH, which is the half of the old "beside its track" rule that
-     was ever about this case. The rebuild stacks each caption over the track it describes — a
-     deliberate change of the component's own shape, and one this file may not overrule — so what
-     is asserted is what the height was ever protecting: neither caption wraps, and the bar stays
-     inside the space two captions and two tracks need. A wrapped caption, or a third scale
-     arriving unannounced, still fails it. */
+  /* THE ONE REMAINING CAPTION IS ONE LINE, which is the half of the old "beside its track" rule
+     that was ever about this case. The SECOND caption (the card ruler's own) is retired outright
+     this round (`PositionBar.tsx`, Direction B) — `RowIdentity`'s header says what it used to —
+     so what is asserted now is the one that is left: it does not wrap, and the bar stays inside
+     the space it and two tracks need. */
   for (const h of geom.capHeights) expect(h).toBeLessThan(20)
-  expect(geom.capHeights.length).toBe(2)
-  expect(geom.barH).toBeLessThan(96)
+  expect(geom.capHeights.length).toBe(1)
+  /* THE CEILING ROSE WITH THE RULERS THEMSELVES (the owner's Direction-B build, 2026-09-25:
+     "make both rulers clearly larger"). `--pb-track` and `--pb-rule` both grew, and the second
+     caption's removal (above) gave back less than the rulers took, so the real height moved from
+     96px to ~101px. What this ceiling still refuses is a bar that grows WITHOUT bound — a third
+     scale arriving unannounced, or a caption regressing back to two lines — not the owner's own
+     named size. */
+  expect(geom.barH).toBeLessThan(112)
 
   /* AND BOTH SCALES SURVIVE, WITH THE SECTION AS THE LARGER — REVERSED IN PLACE 2026-09-11 ON
      THE OWNER'S INSTRUCTION (D155). This assertion read
@@ -5817,22 +5881,19 @@ test('two departed copies of one card draw two different rows', async ({ page })
      read `.position-storekey` — the orphan sub-line under a raw string — and the raw string was
      the pre-D41 rendering, drawn here at 28px as the loudest thing in a list whose live rows are
      ranked. The pair is still what separates the two records, which is all D68 asked for. */
-  await expect(gone.nth(0).locator('.position-path')).toHaveText('BOX ME01 commonsSECTION 1')
-  await expect(gone.locator('.position-num')).toHaveText(['4', '5'])
+  await expect(gone.nth(0).locator('.card-locations-identity')).toHaveText('ME01 commonsSection 1Card 4')
+  await expect(gone.locator('.card-locations-identity-num')).toHaveText(['4', '5'])
 
-  /* AND THE COLUMN HOLDS ACROSS A ROW THAT HAS NO FIGURE, which is the assertion the reserve in
-     `PositionLabel.css` promises and cannot make about itself. `lead='slot'` exists so every
-     row's path starts at one x; the shipped reserve held the DIGITS only, so these two rows —
-     which have a key-less void where `CARD 1` sits — hung to the left of every live one by the
-     width of the key they do not draw. That reservation is `--pos-slot-key`, declared by the
-     list in `CardLocations.css` and spent as padding here, and it is 37.594px — `CARD` at
-     33.594 plus the 4px slot gap, MEASURED on the real screen rather than derived. This said
-     38.3px until 2026-09-05 and no two sites in the tree agreed on it. It is read
-     as a coordinate rather than as a width because a width can be right while the row it is on
-     is not: what matters is that a person's eye finds one edge down the list. */
-  const livePath = await page.locator('.card-locations-row .position-path').first().boundingBox()
-  const gonePath = await gone.nth(0).locator('.position-path').boundingBox()
-  expect(gonePath?.x).toBeCloseTo(livePath?.x ?? -1, 0)
+  /* AND EVERY ROW'S IDENTITY STARTS AT ONE X, live or departed (D71's own claim, re-derived for
+     `RowIdentity`, the owner's Direction-B build, 2026-09-25). The reservation this used to name
+     — `--pos-slot-key`, a padding sized to a `CARD` keyword no departed row draws — is retired
+     with the slot column it belonged to (`CardLocations.css`'s own note where that block stood):
+     `RowIdentity` never draws that keyword for ANY row, so there is no keyless void to align
+     against any more, and the left edge holds simply because every row's identity is the same
+     kind of flex line starting at the same cell edge. */
+  const liveIdentity = await page.locator('.card-locations-row .card-locations-identity').first().boundingBox()
+  const goneIdentity = await gone.nth(0).locator('.card-locations-identity').boundingBox()
+  expect(goneIdentity?.x).toBeCloseTo(liveIdentity?.x ?? -1, 0)
 
   /* AND NO BAR UNDER EITHER (D68). This list drew one — an empty track captioned `where this
    * sits in the box is not known yet`, which reads as the server having failed rather than as
@@ -5880,98 +5941,41 @@ const BIG_CARDS: Cards = {
   '2/1200': card({ index: 1200, at: 1200, state: 'sold', name: 'Thievul', sku: '8937370', section: 1, sectionStart: 1, sectionEnd: 1400, boxTotal: 1400 }),
 }
 
-/* THE SLOT COLUMN HOLDS A FOUR-DIGIT CARD NUMBER, which nothing in this file had ever drawn.
+/* THE SLOT COLUMN'S OWN TEST IS RETIRED (the owner's Direction-B build, 2026-09-25). It proved a
+ * FIXED-WIDTH COLUMN never let a four- or five-digit card figure overflow it — `--pos-slot-key`,
+ * `--pos-slot-digits`, `CardLocations.tsx`'s own `slotDigits`, all retired in the same round (see
+ * `CardLocations.css`'s note where that block stood). `RowIdentity` has no such column: the card
+ * fact is `flex: none` in one line with the box and section facts, so a wider figure simply takes
+ * more of the line rather than a column it could ever outgrow.
  *
- * MEASURE THE INK, NOT THE BOX — and this is the whole reason the case is written the way it is.
- * `.position-num` is `flex: 0 1 auto` inside the slot, so when its text outgrows the space it is
- * SHRUNK to fit and its glyphs paint outside it (`overflow` is visible). Measured on the real
- * screen against the shipped 84px column: the element's own `getBoundingClientRect()` is byte for
- * byte identical at three, four AND five digits, while the ink runs 6.4px past the slot at four
- * and 19.6px past at five. An assertion built on the element box — which is what this case was
- * first drafted as — is GREEN against the defect it is written for. So the two things read here
- * are `scrollWidth` against `clientWidth`, and a Range over the text node.
- *
- * THE GAP IS THE ASSERTION, NOT THE COLLISION. At four digits the ink does not yet reach the path:
- * it eats `--pos-gap`, 18.8px of clearance down to 5.6px. Overlap only starts at five digits. A
- * case asserting "the figure does not cross the path" would therefore pass at four and this whole
- * class would ship again one digit later.
- *
- * FIXTURE AND NOT A DOM POKE, unlike the hero label's case above. `--pos-slot-digits` is computed
- * in `CardLocations.tsx` from `place.card`, so a `textContent` written after render would leave the
- * reservation at three and this case would go red against a CORRECT implementation. The four digits
- * have to arrive the way the server sends them. */
-test('the slot column holds a four-digit card number, and the gap beside it survives', async ({
-  page,
-}) => {
+ * THE LINE MAY WRAP NOW (the owner's own correction, 2026-09-25, round two of Direction B): the
+ * action icons share this line's own grid row, so a long box name or a wide figure can push past
+ * one line at the panel's real width, and D41's fix for THAT is a second line, never an ellipsis
+ * on a fact that must render whole. What is still worth proving is the fact D41 actually
+ * protects: a four-digit figure renders WHOLE, never clipped mid-digit, wrapped or not. */
+test('a four-digit card number renders whole, never clipped mid-digit', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await open(page, BIG_BOX, { cards: BIG_CARDS, search: (query) => searchAnswer(query, BIG_CARDS) })
   await settleFonts(page)
   await expandAll(page)
   await page.locator('.browse-row').nth(0).click()
-  await expect(page.locator('.card-locations-rows .position-parts').first()).toBeVisible()
+  await expect(page.locator('.card-locations-rows .card-locations-identity').first()).toBeVisible()
 
-  const read = () =>
-    page.evaluate(() => {
-      const ink = (el: Element) => {
-        const range = document.createRange()
-        range.selectNodeContents(el)
-        return range.getBoundingClientRect()
+  const rows = await page.evaluate(() =>
+    [...document.querySelectorAll('.card-locations-rows .card-locations-identity')].map((el) => {
+      const num = el.querySelector('.card-locations-identity-num') as HTMLElement | null
+      return {
+        figure: num?.textContent ?? null,
+        clipped: num !== null && num.scrollWidth > num.clientWidth + 1,
       }
-      return [...document.querySelectorAll('.card-locations-rows .position-parts')].map((parts) => {
-        const slot = parts.querySelector('.position-slot') as HTMLElement
-        const path = parts.querySelector('.position-path') as HTMLElement
-        const num = parts.querySelector('.position-num')
-        return {
-          figure: num?.textContent ?? null,
-          overflow: slot.scrollWidth - slot.clientWidth,
-          /* NULL ON A ROW WITH NO INK, and that is the whole of this field's contract. A
-             departed row's figure is `.position-void`, whose em-dash comes from a `::before`,
-             so the element has NO CHILD NODES and `selectNodeContents` over it returns an
-             all-zero rect — measured: `width` 0 and `right` 0, which made `path.left - 0` read
-             1003.25 against a floor of 11 and passed by a factor of ninety-one. The row was in
-             the loop and testing nothing. What holds that row is `overflow` and `pathX` below,
-             which do not need ink. */
-          inkToPath:
-            num === null
-              ? null
-              : +(path.getBoundingClientRect().left - ink(num).right).toFixed(2),
-          pathX: +path.getBoundingClientRect().x.toFixed(2),
-          height: +parts.getBoundingClientRect().height.toFixed(2),
-        }
-      })
-    })
+    }),
+  )
 
-  const rows = await read()
-
-  /* The fixture reached the screen. Without this every assertion below is vacuously true of a
+  /* The fixture reached the screen. Without this the assertion below is vacuously true of a
      list that happens to hold no long number. */
   expect(rows.map((row) => row.figure)).toContain('1345')
-
-  /* NOTHING OVERFLOWS ITS SLOT. 6px on the shipped column, at this exact row. */
-  for (const row of rows) expect(row.overflow).toBeLessThanOrEqual(0)
-
-  /* AND THE GAP SURVIVES, ON EVERY ROW THAT HAS INK TO MEASURE. 5.6px on the shipped column
-     against 18.8px for a three-digit row; `--pos-gap` is 12px, and the floor is set below it
-     because the column reserves in `ch`, which over-reserves against real digits by design.
-
-     THE FIGURE-LESS ROW IS EXCLUDED RATHER THAN SILENTLY PASSING, which is the correction. It
-     used to be in this loop scoring 1003.25 — an all-zero Range rect subtracted from the path's
-     left edge — so it cleared a floor of 11 ninety-one times over while measuring nothing. It is
-     held by `overflow` and by `pathX` instead, neither of which needs a glyph. The count below
-     is what stops the exclusion quietly emptying the loop. */
-  const inked = rows.filter((row) => row.inkToPath !== null)
-  expect(inked.length).toBeGreaterThanOrEqual(2)
-  for (const row of inked) expect(row.inkToPath).toBeGreaterThanOrEqual(11)
-
-  /* THE COLUMN IS STILL ONE COLUMN, across a four-digit row and a row with no figure at all.
-     This is `two departed copies` one digit-count further out: that case proves the reserve
-     holds at three digits, and only this one proves it holds when the count MOVES. */
-  const xs = rows.map((row) => row.pathX)
-  for (const x of xs) expect(x).toBeCloseTo(xs[0] ?? -1, 0)
-
-  /* AND NOTHING WRAPPED. The widened column takes 12.9px out of the path's track; this carries
-     `a narrow copies column shortens the bar, never the position label` into the widened case. */
-  for (const row of rows) expect(row.height).toBeLessThanOrEqual(36)
+  /* NOTHING IS CLIPPED — the card fact never ellipsizes (D41), whichever line it wraps to. */
+  for (const row of rows) expect(row.clipped).toBe(false)
 })
 
 /* ------------------------------------------------------------ the hash's box, on a slow read
@@ -6380,13 +6384,13 @@ test('D132 — the address leads with the name and the index is its note, on the
 
   /* THE ROW THE WALK STANDS ON IS THE ADDRESS (D119): there is no location card above the list
      to lead with anything, so the name leads on `.is-current` exactly as it leads on its siblings. */
-  const label = page.locator('.card-locations-row.is-current .card-locations-label .position-parts')
-  await expect(label.locator('.position-path')).toHaveText('BOX ME01 commonsSECTION 1')
+  const label = page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')
+  await expect(label).toHaveText('ME01 commonsSection 1Card 1 of 3')
   /* The server's string is untouched: this is a rendering, not an edit (D41's invariant). */
   await expect(label).toHaveAttribute('aria-label', 'Box 2, Section 1, Card 1')
 
-  const rows = page.locator('.card-locations-row .position-path')
-  await expect(rows.nth(0)).toHaveText('BOX ME01 commonsSECTION 1')
+  const rows = page.locator('.card-locations-row .card-locations-identity')
+  await expect(rows.nth(0)).toHaveText('ME01 commonsSection 1Card 1 of 3')
 })
 
 test('D132 — an unnamed box keeps the index in the address and draws no note beside it', async ({ page }) => {
@@ -6397,9 +6401,10 @@ test('D132 — an unnamed box keeps the index in the address and draws no note b
   await open(page, { boxes: [{ ...BOXES.boxes[0], name: null }] }, store)
   await expandAll(page)
   await page.locator('.browse-row').nth(0).click()
-  /* An unnamed box reads its default name, which says Box itself, so no key rides in front. */
-  await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('Box 2SECTION 1')
-  await expect(page.locator('.card-locations-row.is-current .position-note')).toHaveCount(0)
+  /* An unnamed box reads its default name, which says Box itself, so no key rides in front —
+     the identity draws no key for ANY box now (the owner's Direction-B build, 2026-09-25), so
+     this case's own claim is what the name resolves to rather than a keyword's absence. */
+  await expect(page.locator('.card-locations-row.is-current .card-locations-identity')).toHaveText('Box 2Section 1Card 1 of 3')
 })
 
 
@@ -6487,8 +6492,11 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
      number read as out of range). */
   await expect(page.locator('.browse-secttitle').first()).toHaveText('Section 1: Rares, 3 cards')
   await page.locator('.browse-row').nth(0).click()
-  await expect(page.locator('.card-locations-row.is-current .position-bar-text').nth(1)).toHaveText('Section 1Rarescard 1 of 3')
-  await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('BOX ME01 commonsSECTION 1Rares')
+  /* THE CARD RULER'S OWN CAPTION IS RETIRED OUTRIGHT (the owner's Direction-B build, 2026-09-25):
+     the section's name, like every other fact it used to carry, is now said once on the header —
+     `RowIdentity` reads `place.section_name` the same way `PositionLabel` used to. */
+  await expect(page.locator('.card-locations-row.is-current .position-bar-text-section')).toHaveCount(0)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-identity')).toHaveText('ME01 commonsSection 1: RaresCard 1 of 3')
 
   /* AND THE NAME IS WRITTEN FROM THE MANAGE SHEET, keyed by the section's number. */
   await page.route(/\/boxes\/2$/, async (route) => {
@@ -6738,7 +6746,7 @@ test('D132 — a search lands on a box with a LIVE copy, never on the sold one t
 
   await page.getByRole('searchbox').fill('Eiscue')
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 spares/)
-  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 40')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-identity')).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 40')
   /* And the copy the walk stands on is the live one, not the departed one. */
   await expect(page.locator('.card-locations-row.is-current')).not.toHaveClass(/is-gone/)
 })
@@ -6769,7 +6777,7 @@ test('D132 — the copies list, the rail and the landing lead with the section h
   await page.locator('.browse-row').nth(0).click()
 
   /* The copies list: box 7's three, then box 2 section 2's two, then the lone one. */
-  const labels = page.locator('.card-locations-row .position-parts')
+  const labels = page.locator('.card-locations-row .card-locations-identity')
   await expect(labels).toHaveCount(6)
   await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   await expect(labels.nth(3)).toHaveAttribute('aria-label', 'Box 2, Section 2, Card 1')
@@ -6779,11 +6787,11 @@ test('D132 — the copies list, the rail and the landing lead with the section h
   await page.getByRole('searchbox').fill('Thievul')
   await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
   await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 spares/)
-  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-identity')).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
 
   /* And pressing box 2 under the same search lands in ITS fullest section, section 2. */
   await page.locator('.browse-boxcell[aria-label^="ME01 commons"]').click()
-  await expect(page.locator('.card-locations-row.is-current .position-parts')).toHaveAttribute('aria-label', 'Box 2, Section 2, Card 1')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-identity')).toHaveAttribute('aria-label', 'Box 2, Section 2, Card 1')
 })
 
 /* ------------------------------------------------------- the order stops moving under a sale
@@ -6811,7 +6819,7 @@ test('D132 — the copies list, the rail and the landing lead with the section h
 /** The copies list as an ordered list of row identities — the server's own position label per
  *  row, which is the one string that names WHICH copy is drawn there. */
 async function copyOrder(page: Page): Promise<string[]> {
-  const labels = page.locator('.card-locations-row .position-parts')
+  const labels = page.locator('.card-locations-row .card-locations-identity')
   const n = await labels.count()
   const out: string[] = []
   for (let i = 0; i < n; i += 1) out.push((await labels.nth(i).getAttribute('aria-label')) ?? '')
@@ -6854,7 +6862,7 @@ async function installCopiesWatch(page: Page): Promise<void> {
     ;(window as unknown as { __copiesWatch: typeof seen }).__copiesWatch = seen
     const tick = () => {
       seen.push({
-        rows: document.querySelectorAll('.card-locations-row .position-parts').length,
+        rows: document.querySelectorAll('.card-locations-row .card-locations-identity').length,
         column: document.querySelectorAll('.inventory-detail').length,
         skeleton: document.querySelectorAll('.inventory-detail .bn-skeleton').length,
       })
@@ -6969,7 +6977,7 @@ test('a sale leaves every other row where it was, and the sold row in its own pl
      afterwards came back EMPTY. Measured both ways: `railBefore` recording `Box 2, Box 7` in
      one order, `before[0]` undefined in the other. */
   await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
-  const labels = page.locator('.card-locations-row .position-parts')
+  const labels = page.locator('.card-locations-row .card-locations-identity')
   await expect(labels).toHaveCount(6)
   await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
@@ -6989,7 +6997,7 @@ test('a sale leaves every other row where it was, and the sold row in its own pl
      changed — the answer is right, a beat early, and the snapshot below reads stale labels.
      The DEPARTED LABEL is the wire's own and cannot appear until the re-read has landed. */
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 38"]'),
+    page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
 
   /* THE SOLD ROW IS STILL DRAWN AND STILL AT THE TOP. `Hide sold` is on, so without the freeze
@@ -7025,7 +7033,7 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
   await page.getByRole('searchbox').fill('Thievul')
   /* The rail first, for the reason the case above measures: it moves the walk when it lands. */
   await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
-  const labels = page.locator('.card-locations-row .position-parts')
+  const labels = page.locator('.card-locations-row .card-locations-identity')
   await expect(labels).toHaveCount(6)
   await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
@@ -7034,7 +7042,7 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
   await expect(page.locator('.card-locations-rerank')).toBeVisible()
   /* The re-read, waited for by the one string only it can produce — see the case above. */
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 38"]'),
+    page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
   /* AND THE ORDER HAS NOT MOVED, which is what makes the press below the subject of this case
      rather than a second reading of the one above. */
@@ -7089,14 +7097,14 @@ test('and the row is still there when its receipt has run out, which is the half
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
   await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
-  const labels = page.locator('.card-locations-row .position-parts')
+  const labels = page.locator('.card-locations-row .card-locations-identity')
   await expect(labels).toHaveCount(6)
   await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
 
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 38"]'),
+    page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
 
   /* PAST THE WINDOW. `UNDO_WINDOW_MS` is 20s and the receipt's own timer is armed for it, so
@@ -7156,7 +7164,7 @@ test('a retirement holds its row too, and it is the freeze alone that does it', 
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
   await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 spares/)
-  const labels = page.locator('.card-locations-row .position-parts')
+  const labels = page.locator('.card-locations-row .card-locations-identity')
   await expect(labels).toHaveCount(6)
   await expect(labels.nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   const before = await copyOrder(page)
@@ -7172,7 +7180,7 @@ test('a retirement holds its row too, and it is the freeze alone that does it', 
   await page.getByRole('dialog').getByRole('button', { name: 'Damaged' }).click()
 
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 39"]'),
+    page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 7, Section 1, Card 39"]'),
   ).toHaveCount(1)
   await expect(labels).toHaveCount(6)
   expect(await copyOrder(page)).toEqual([before[0], 'Was at Box 7, Section 1, Card 39', ...before.slice(2)])
@@ -7199,13 +7207,13 @@ test('a new search takes a new order, so the staleness never carries across answ
   })
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
-  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
+  await expect(page.locator('.card-locations-row .card-locations-identity').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.card-locations-rerank')).toBeVisible()
   /* The re-read, waited for by the one string only it can produce — the chip lands off the
      sale's own response and says nothing about whether the store has answered yet. */
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 38"]'),
+    page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
 
   /* A QUERY NOBODY HAS WORKED DOWN YET HAS NOTHING TO HOLD STILL.
@@ -7225,11 +7233,11 @@ test('a new search takes a new order, so the staleness never carries across answ
   await page.getByRole('searchbox').fill('8937370')
   /* Waited for the NEW order's own first row, not for a count: six rows is true before the
      answer lands and after it, so a count gates nothing. */
-  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute(
+  await expect(page.locator('.card-locations-row .card-locations-identity').nth(0)).toHaveAttribute(
     'aria-label',
     'Box 2, Section 2, Card 1',
   )
-  await expect(page.locator('.card-locations-row .position-parts')).toHaveCount(6)
+  await expect(page.locator('.card-locations-row .card-locations-identity')).toHaveCount(6)
   await expect(page.locator('.card-locations-rerank')).toHaveCount(0)
   /* And the order is the one a fresh answer computes: box 7 is down to two live copies, which
      ties box 2 section 2, so box 2's pair leads — the reshuffle that the freeze was holding off
@@ -7314,17 +7322,17 @@ test.skip(
   })
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
-  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
+  await expect(page.locator('.card-locations-row .card-locations-identity').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 38"]'),
+    page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
 
   await installCopiesWatch(page)
   /* The same SKU under a different string, so the answer is a new one and the drawer it leads
      with is not the drawer the walk is on. */
   await page.getByRole('searchbox').fill('8937370')
-  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute(
+  await expect(page.locator('.card-locations-row .card-locations-identity').nth(0)).toHaveAttribute(
     'aria-label',
     'Box 2, Section 2, Card 1',
   )
@@ -7333,7 +7341,7 @@ test.skip(
      started it — reading the verdict before the rows arrive is how a guard goes green over
      the exact window it was written for. */
   await expect(page.locator(`.browse-row`)).toHaveCount(3)
-  await expect(page.locator('.card-locations-row .position-parts')).toHaveCount(6)
+  await expect(page.locator('.card-locations-row .card-locations-identity')).toHaveCount(6)
   await expectCopiesHeld(page)
 })
 test.skip(
@@ -7537,7 +7545,7 @@ test('a box whose last live match departs keeps the walk, rather than handing it
 
   await copyRow(page, 'Box 2, Section 1, Card 1').getByRole('button', { name: 'Mark sold' }).click()
   await expect(
-    page.locator('.card-locations-row .position-parts[aria-label="Was at Box 2, Section 1, Card 1"]'),
+    page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 2, Section 1, Card 1"]'),
   ).toHaveCount(1)
 
   /* STILL STANDING IN BOX 2. Without the freeze the box holds no live match any more, drops out
@@ -7557,7 +7565,7 @@ test('undoing the sale takes the staleness back with it', async ({ page }) => {
   })
   await expandAll(page)
   await page.getByRole('searchbox').fill('Thievul')
-  await expect(page.locator('.card-locations-row .position-parts').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
+  await expect(page.locator('.card-locations-row .card-locations-identity').nth(0)).toHaveAttribute('aria-label', 'Box 7, Section 1, Card 38')
 
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')

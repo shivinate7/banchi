@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { Place, SectionDetail } from './types'
 import {
@@ -98,6 +98,52 @@ export function PositionBar({
   const boxAt = marker ?? lastBox.current
   const sectionAt = depth?.marker ?? lastSection.current
 
+  /* THE SECTION RULER NEVER PASSES ITS CONTAINER (the owner's report, 2026-09-25, box WB1 R2:
+   * "sections can pass the width of their container ... only 11 show"). `PositionBar.css`
+   * gives every chip a readable floor and lets the strip scroll past it rather than overflow
+   * the card; what is left for here is making sure the CURRENT section is the one already in
+   * view, and that a reader can tell there is more to either side.
+   *
+   * MEASURED, NOT ASSUMED: `data-fade-back`/`data-fade-front` are set from the track's own
+   * `scrollLeft`/`scrollWidth`, so a box that fits needs no fade and one that does not gets a
+   * fade only on the side that still has sections hidden past it. Re-measured on every resize
+   * (a rail collapsing widens this panel) and on every place the walk lands on, since a new
+   * card can change both which section is current and how many chips there are. */
+  const trackRef = useRef<HTMLDivElement>(null)
+  const [fade, setFade] = useState<{ back: boolean; front: boolean }>({ back: false, front: false })
+  useEffect(() => {
+    const el = trackRef.current
+    if (el === null) return
+    const measure = () => {
+      const back = el.scrollLeft > 1
+      const front = el.scrollLeft < el.scrollWidth - el.clientWidth - 1
+      setFade((prev) => (prev.back === back && prev.front === front ? prev : { back, front }))
+    }
+    /* THE CURRENT CHIP SCROLLS INTO VIEW, never the track's own start — a box the owner just
+       walked to at section 30 of 40 must not open scrolled to section 1. Set directly on THIS
+       element's `scrollLeft` rather than `Element.scrollIntoView`, which walks every scrollable
+       ANCESTOR looking for one to move — on this page that reached `.card-locations-rows`
+       (harmless, it already had the row in view) and the whole document (not harmless: it
+       moved `window.scrollY`, which broke `inventory.spec.ts`'s "a walk-to scrolls the walk and
+       never the page"). Centering only this track's own `scrollLeft` cannot touch anything
+       outside it. */
+    const here = el.querySelector<HTMLElement>('.position-bar-here')
+    if (here !== null) {
+      const target = here.offsetLeft + here.offsetWidth / 2 - el.clientWidth / 2
+      el.scrollLeft = Math.max(0, Math.min(target, el.scrollWidth - el.clientWidth))
+    }
+    measure()
+    el.addEventListener('scroll', measure, { passive: true })
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener('scroll', measure)
+      ro.disconnect()
+    }
+    // Re-run whenever the walk lands on a different card or a different section count.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [place.label, place.section, sections?.length])
+
   return (
     <div
       className={`position-bar position-bar-${persona}`}
@@ -126,7 +172,12 @@ export function PositionBar({
           {boxDetail === null ? null : <span className="position-bar-text-detail">{boxDetail}</span>}
         </p>
       )}
-      <div className="position-bar-track">
+      <div
+        className="position-bar-track"
+        ref={sectionDepth ? trackRef : undefined}
+        data-fade-back={sectionDepth && fade.back ? 'true' : undefined}
+        data-fade-front={sectionDepth && fade.front ? 'true' : undefined}
+      >
         {spans.length === 0 ? (
           <span className="position-bar-segment position-bar-segment-blank" />
         ) : (
@@ -198,27 +249,27 @@ export function PositionBar({
               aria-hidden="true"
             />
           </div>
-          <p className="position-bar-text position-bar-text-section">
-            {depth === null ? (
-              sectionSentence
-            ) : (
-              <>
-                <span className="position-bar-cap-head">
-                  {depth.head.map((fact, i) => (
-                    <span key={i} className="position-bar-cap-fact">
-                      {fact}
-                    </span>
-                  ))}
-                </span>
-                <span className="position-bar-cap-tail">
-                  {depth.tail.map((fact, i) => (
-                    <span key={i} className="position-bar-cap-fact">
-                      {fact}
-                    </span>
-                  ))}
-                </span>
-              </>
-            )}
+          {/* RETIRED, NEVER DRAWN (the owner's Direction-B build, 2026-09-25): every fact this
+              caption ever stated — the section's name, the card's count — is now said once, on
+              `CardLocations.tsx`'s `RowIdentity` header. It stays computed, for `sentence`'s own
+              use as part of this bar's accessible name a few lines below, but no longer rendered
+              visually — which is also what fixed a real bug this round found: the ONE box this
+              file's own `sectionDepthOf` cannot size (`depth === null`) always had a sentence to
+              show (`sectionBlankSentence`), while an ordinary unnamed section had nothing, so
+              those two states drew this bar at two different heights — caught by
+              `app/tests/inventory.spec.ts`'s "every copy row draws the same bar height, located
+              or not". Never rendering it at all is what makes every state the same height again,
+              unconditionally, the way D118 always meant this block to be. */}
+          {/* THE CARD RULER KEEPS ITS OWN BACK/FRONT (the owner's ruling, 2026-09-25: "Keep it
+              on each ruler" — D260 stands). The section ruler already has its own words in
+              `.position-bar-ends-row`; this is the card ruler's pair, so each of the two
+              instruments orients on its own rather than sharing one row between them. NEVER
+              GATED ON `depth`: D118 draws this whole block whether or not the depth resolved,
+              a box the server cannot size included — gating this row alone on `depth` is what
+              a real fixture in this round caught as a second per-row height disagreement. */}
+          <p className="position-bar-zoom-ends" aria-hidden="true">
+            <span className="position-bar-end-back">Back</span>
+            <span className="position-bar-end-front">Front</span>
           </p>
         </div>
       )}

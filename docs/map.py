@@ -6778,41 +6778,38 @@ COMPONENTS = [
                         "never joins the label's textContent.",
                 "governed_by": ["D24", "D31", "D41", "D58", "D68", "D71", "D92", "D218"]},
             "src/PlaceNeighbors.tsx": {
-                "does": "D30's neighbors, RANKED rather than joined (D41's move one line down, "
-                        "2026-08-30). `after` / `before` as a muted mono key column with the two "
-                        "names beside it, champion at ink and epithet muted, connectives deleted "
+                "does": "D30's neighbors, RANKED rather than joined, as ONE LINE (Direction B, the "
+                        "owner's pick, 2026-09-25, corrected the same day: \"THIS #5 repeats Card "
+                        "5. Remove it.\" \u2014 `CardLocations.tsx:RowIdentity` already states the "
+                        "card's own figure once). Collapses the 2026-09-11 to 2026-09-25 "
+                        "`back`/`this`/`front` three-row ladder into `Name \u2192 Name`, an arrow "
+                        "between the two, champion at ink and epithet muted, connectives deleted "
                         "\u2014 the owner could not pick two names out of `between Galio, "
                         "Indefaticable and Evelynn, Entrancing`, because every Riftbound name is "
                         "`Champion, Epithet` so the strongest punctuation in the string is the "
-                        "one that is not a boundary. THE KEYS ARE THE COMPOSER'S OWN TWO WORDS: "
-                        "`in front`/`behind` reads better physically and takes the NEIGHBOUR as "
-                        "its subject where `placeParts` takes THIS CARD, which would have put a "
-                        "screen reader's sentence at odds with the row. Draws nothing \u2014 never "
-                        "a guess \u2014 for a pooled card, an older server, a degraded decoration, "
-                        "or a box holding nothing else. THE FULFILLER NEVER IMPORTS IT: he keeps "
+                        "one that is not a boundary. `data-side=\"back\"/\"front\"` still marks "
+                        "which name is which (D260's own orientation), with no visible word for "
+                        "it any more \u2014 that protection now lives on the two RULERS "
+                        "(`PositionBar`'s own BACK/FRONT), which is what the owner's correction "
+                        "scoped \"keep it on each ruler\" to. Draws nothing \u2014 never a guess "
+                        "\u2014 for a pooled card, an older server, a degraded decoration, or a "
+                        "box holding nothing else. THE FULFILLER NEVER IMPORTS IT: he keeps "
                         "the joined sentence at 20px body, and the firewall is the component "
                         "graph rather than a selector. A CARD NOBODY HAS NAMED IS NOT A "
                         "LANDMARK (D116): the server walks past it to the nearest card it "
                         "can name, so the bare `#270` the owner read as a sold card leaking "
-                        "into the ladder is gone \u2014 it never was one \u2014 and `Skipped` "
-                        "draws what the walk cost on the rows where it cost anything.",
-                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58", "D92", "D116",
-                                "D260"]},
+                        "into the ladder is gone \u2014 it never was one \u2014 and the unread "
+                        "side is said in words instead (LOC-28).",
+                "governed_by": ["D22", "D24", "D30", "D31", "D41", "D58", "D92", "D116", "D260"]},
             "src/PlaceNeighbors.css": {
-                "does": "the shape, and two knobs per site \u2014 `--nb-key` and `--nb-name`, "
-                        "`--pos-slot`'s shape one component over. The band declares 11/13 and the "
-                        "copies row 10/12, because a treatment that is right once is not "
-                        "automatically right seven times down a column. Body face and lowercase "
-                        "on the names is docs/DESIGN.md's own line (the body face is for "
-                        "sentences a human reads) and undoes the borrow of "
-                        "`.card-locations-boxname`, whose 10px uppercase tracked mono made the "
-                        "only running English in the product a rectangle. A fixed key column so "
-                        "the two names cannot disagree about where they start. `.nb-name` is a "
-                        "COLUMN since D116, because the skip line sits under the name \u2014 and "
-                        "the truncation moved one element in with it, since `text-overflow` "
-                        "needs the nowrap on the box holding the text and a box holding two "
-                        "lines cannot be that box.",
-                "governed_by": ["D30", "D31", "D41", "D116"]},
+                "does": "the one-line shape (Direction B, 2026-09-25): a flex row that wraps "
+                        "rather than truncates, an arrow between the two names, no key column "
+                        "and no mono \u2014 undoing the borrow of `.card-locations-boxname`, "
+                        "whose 10px uppercase tracked mono once made the only running English "
+                        "in the product a rectangle. Body face and lowercase on the names is "
+                        "docs/DESIGN.md's own line (the body face is for sentences a human "
+                        "reads).",
+                "governed_by": ["D30", "D31", "D41", "D116", "D218", "D260"]},
             "src/BoxBrowse.tsx": {"does": "the box walk, D31's default way into #/inventory — was #/pull until the "
                     "three routes merged. The card's own capture photo beside its position label "
                     "and, since D30, "
@@ -7256,7 +7253,7 @@ COMPONENTS = [
                                             "too, so document order is the only thing that makes the "
                                             "spec's `querySelector` return the box strip.",
                                     "governed_by": ["D5", "D20", "D41", "D50", "D118", "D155",
-                                                    "D218"]},
+                                                    "D218", "D260"]},
             "src/cardState.ts": {"does": "the card-state vocabulary and the age of a reading, with no "
                                          "component in it — `readingAgo`, `readingExact`, `stateTone`, "
                                          "`stateLabel`, and the `SOLD` / `RETIRED` words those two are "
@@ -7348,7 +7345,7 @@ COMPONENTS = [
                                                       "D26", "D28", "D30", "D31", "D38", "D41",
                                                       "D45", "D58", "D67", "D68", "D71", "D92",
                                                       "D115", "D118", "D119", "D132", "D172",
-                                                      "D181", "D196", "D218", "D259"]},
+                                                      "D181", "D196", "D218", "D259", "D260"]},
             "src/CardLocations.css": {"does": "the group at two densities. The Fulfiller's copy is a "
                                               "card with a photo; the owner's is a row. The walk-to "
                                               "wrapper takes the button chrome back off and shows "
@@ -7365,7 +7362,7 @@ COMPONENTS = [
                                               "panel.",
                                       "governed_by": ["D5", "D7", "D30", "D31", "D40", "D41", "D45",
                                                       "D58", "D71", "D115", "D118", "D119", "D132",
-                                                      "D218"]},
+                                                      "D218", "D259"]},
             # ---- the runs screen (D39, 2026-08-29) ----
             #
             # The pipeline moved off #/inventory onto a route of its own at the owner's
@@ -8675,6 +8672,19 @@ COMPONENTS = [
                         "`make design-check`.",
                 "governed_by": ["D58", "D116", "D155", "D218", "D259",
                                 "D260"],
+            },
+            "tests/section-ruler.spec.ts": {
+                "does": "the section ruler never passes its card (the owner's report, "
+                        "2026-09-25, box WB1 R2): at 12 and 30 sections, at 1440 and 390, the "
+                        "box strip's `scrollWidth` never exceeds its own `clientWidth` by more "
+                        "than the OR the brief allows — a scroll track with the current section "
+                        "fully in view — and the page itself never gains a horizontal scroll "
+                        "either way; past the strip's shrink floor (60 sections) it proves the "
+                        "scroll-track path is what is carrying it, not a shrink that happened to "
+                        "fit; and the section ruler is drawn above the card ruler. Stubs its own "
+                        "minimal one-copy fixture rather than `inventory.spec.ts`'s fixed box, "
+                        "so a section count is a parameter. Run by `make design-check`.",
+                "governed_by": ["D118", "D155", "D260"],
             },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "

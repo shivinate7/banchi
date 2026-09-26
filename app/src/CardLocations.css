@@ -186,88 +186,61 @@
   padding-bottom: 18px;
   mask-image: linear-gradient(to bottom, var(--bn-mask) calc(100% - 18px), transparent);
   -webkit-mask-image: linear-gradient(to bottom, var(--bn-mask) calc(100% - 18px), transparent);
-  /* ONE SLOT COLUMN FOR THE LIST, DECLARED WHERE THE LIST IS — which is the only place the
-     decision can be made honestly. A row's slot holds `CARD 17`, or, for a copy that has left
-     the box, a void where the figure would be (D58, D71); the two reserve different widths, and
-     while each row sized its own the departed rows' paths started 2.109px left of every live
-     one's. That is not a rounding error to absorb, it is the column `lead='slot'` exists to
-     draw, ragged for exactly the cards a person had just sold — and it is the assertion
-     `app/tests/inventory.spec.ts` has been carrying red since the merge.
-
-     WHAT THE LIST DECLARES IS THE KEY'S ADVANCE AND THE DIGIT COUNT, and only the first is a
-     constant. `--pos-slot-key` is `CARD` at this list's key size plus the 4px slot gap, MEASURED on
-     the real screen at 1440 with fonts settled: 33.594 + 4. It is `px` and not `rem` because
-     everything it measures is `px` — `--pos-slot: 22px`, and `.position-key`'s clamp sitting on its
-     11px floor — and the `5.25rem` it replaces would overflow at THREE digits for a reader on a
-     12px root font, which nothing had noticed. A four-letter word's advance in a second font is the
-     one term no CSS unit gives you; the figure's is `ch` in `PositionLabel.css`, where the browser
-     measures it, off the count `CardLocations.tsx` reads from the rows it is drawing.
-
-     THE 84px THIS REPLACES was measured too, and that was the problem: it was one number covering
-     both terms, so it was right about the fonts and could never be right about the digit count. A
-     box past 999 cards overflowed it silently — the figure is flex-shrunk and its glyphs paint
-     outside their own box, so every element-box measurement said nothing had changed. */
-  --pos-slot-key: 37.594px;
+  /* THE SLOT COLUMN THIS COMMENT ONCE DESCRIBED IS RETIRED (the owner's ruling, 2026-09-25,
+     Direction B): `RowIdentity` (`CardLocations.tsx`) runs box, section and card as one line
+     with no path column beside it, so there is no second column width for `--pos-slot-key` to
+     answer for any more. `CardLocations.tsx`'s own `slotDigits` computation is retired in the
+     same commit. */
 }
 
-/* One copy: where it is (label + neighbours), the lens, the state, the action. The lens takes
-   a line of its own by default — it is the one cell whose meaning comes from its width — and
-   joins the row only where the container is wide enough to hold all four parts. */
+/* One copy: the address and the action share the header line, the neighbours line and the
+   state pills each take their own row beneath it, and the lens draws last.
+   DIRECTION B (the owner's pick, 2026-09-25, corrected the same day): the action icons sit
+   beside the address they act on, never a separate cell far below it — "a large empty gap
+   above them" was the report this replaces, and centring both cells on one row (rather than
+   the earlier `align-self: start` patch over the old, taller `place` cell) is what closes it
+   now that `place` holds one line and no longer the neighbours ladder too. */
 .card-locations-owner .card-locations-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
-    'place state action'
-    'bar bar bar';
+    'place action'
+    'neighbors state'
+    'bar bar';
   align-items: center;
-  gap: var(--bn-3) var(--bn-4);
+  gap: var(--bn-2) var(--bn-4);
   padding: var(--bn-3) var(--bn-4);
   border-bottom: 1px solid var(--bn-line);
   transition: background-color var(--bn-t-fast) var(--bn-ease);
   animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards;
 }
 .card-locations-owner .card-locations-row.is-nobar {
-  grid-template-areas: 'place state action';
+  grid-template-areas:
+    'place action'
+    'neighbors state';
 }
 /* Narrow — and this is most of the time, because the pane is one column of a three-column
-   screen. The address takes the whole line, the state and the action drop beneath it, and the
-   lens takes the last. Anything tighter and the box's own name is clipped to `UNL R…`, which
-   is the one part of the address a hand actually navigates by. */
+   screen: the neighbours line and the state pills no longer fit one row together, so each
+   takes the full width instead. Anything tighter and the box's own name is clipped to
+   `UNL R…`, which is the one part of the address a hand actually navigates by. */
 @container copies (max-width: 619px) {
   .card-locations-owner .card-locations-row {
-    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      'place place'
-      'state action'
+      'place action'
+      'neighbors neighbors'
+      'state state'
       'bar bar';
     row-gap: var(--bn-2);
   }
   .card-locations-owner .card-locations-row.is-nobar {
     grid-template-areas:
-      'place place'
-      'state action';
+      'place action'
+      'neighbors neighbors'
+      'state state';
   }
   /* NOT `justify-self: start`: that sizes the cell to its content and lets a long marker run
      out under the sale control beside it (measured: a 211px state cell in a 110px track). */
   .card-locations-owner .card-locations-state { justify-self: stretch; justify-content: flex-start; }
-
-  /* THE CURRENT ROW'S SECOND PILL LOSES ITS WORD, NOT ITS SPACE. `Viewing` sits beside the row's
-     own state pill only here, sharing the narrow row with `.card-locations-action`'s 137px
-     reservation (D118) — measured, the two pills together wrapped `Identified` onto its own
-     line under 335px. GROWING THE ROW TO FIT THEM WAS TRIED AND MEASURABLY WRONG: a state cell
-     of its own line fixed the wrap and broke `app/tests/inventory.spec.ts`'s
-     `toBeInViewport({ ratio: 1 })` on the current row, because the taller row no longer fit
-     the band. The word rides `.bn-sr`'s own technique — clipped to nothing, never
-     `display: none` — so a screen reader still reads `Viewing`, and the eye icon alone still
-     marks the row on screen; the pill's own height and the row's are exactly what they were. */
-  .card-locations-owner .card-locations-viewing-text {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
 }
 .card-locations-owner .card-locations-row:last-child { border-bottom: 0; }
 .card-locations-owner .card-locations-row:hover { background: var(--bn-hover); }
@@ -339,6 +312,10 @@
   gap: 4px;
   min-width: 0;
 }
+/* THE NEIGHBOURS LINE IS ITS OWN GRID ROW, NOT A CHILD OF `place` (Direction B, 2026-09-25):
+   moving it out from under the address is what lets `action` sit level with the address alone,
+   rather than centred against the taller place-plus-ladder block the old three-row design made. */
+.card-locations-owner .card-locations-row > .nb { grid-area: neighbors; min-width: 0; }
 .card-locations-owner .card-locations-row > .position-bar { grid-area: bar; }
 .card-locations-owner .card-locations-state {
   grid-area: state;
@@ -356,6 +333,12 @@
 .card-locations-owner .card-locations-action {
   grid-area: action;
   justify-self: end;
+  /* CENTRED AGAINST THE ADDRESS ALONE, NOW THAT THE ADDRESS IS ONE LINE (Direction B,
+     2026-09-25). The row's own `align-items: center` used to centre this cell against `place`
+     when `place` still carried the neighbours ladder too — tall and top-heavy, which left most
+     of the air above the icons ("a large empty gap above them", the owner's report). Splitting
+     the neighbours line into its own grid row (above) made `place` one line, so the row's
+     ordinary centring now lands the icons beside the address text itself, with no override. */
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
@@ -369,6 +352,17 @@
      language still fits. It was 137px for the pair before Move. */
   min-width: 169px;
 }
+/* BOXED, NOT BARE (the owner's correction, 2026-09-25: the mockup drew a bordered square per
+   icon, and a bare ghost glyph read as unfinished beside the ruler's own bordered chips). Kept
+   local to this header's own action cell rather than added to the kit's shared `.bn-icon-btn`
+   — every other icon-only control in the product stays the ghost look the kit specifies, and
+   this is the one place Direction B asked to look different. */
+.card-locations-owner .card-locations-action .bn-icon-btn {
+  border: 1px solid var(--bn-line-strong);
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-surface);
+}
+.card-locations-owner .card-locations-action .bn-icon-btn:hover { background: var(--bn-accent-tint); }
 
 /* --------------------------------------------------- the receipt, inside the slot (D119)
    THE SALE'S UNDO LANDS WHERE THE SALE WAS PRESSED, AND IT FITS THE SLOT RATHER THAN MOVING
@@ -402,24 +396,77 @@
 
 
 
-/* The position label. `--pos-slot` is the one number this site chooses. */
 .card-locations-owner .card-locations-label {
   display: block;
-  color: var(--bn-ink);
-  --pos-slot: 22px;
-  --pos-gap: var(--bn-3);
-  font-size: var(--pos-slot);
-  line-height: 1.2;
   min-width: 0;
 }
-.card-locations-owner .card-locations-label .position-parts { flex: 1 1 auto; min-width: 0; }
+/* THE ONE-LINE IDENTITY (the owner's ruling, 2026-09-25, Direction B): box, section and card,
+   each said once, dot-separated by CSS (D218) and never typed. Small and muted on purpose — in
+   this direction the RULERS are the hero and the identity is a caption above them, the way a
+   photo caption sits under the photo rather than competing with it. Replaces `PositionLabel`'s
+   stacked block for this row only; every other caller of that component is unchanged. */
+.card-locations-owner .card-locations-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+  font-size: var(--bn-fs-sm);
+  font-weight: 700;
+  /* `--bn-ink`, NOT `--bn-ink-2` OR `--bn-ink-3` (found by `gallery.spec.ts`'s axe sweep,
+     2026-09-25, both tried and both still under AA in the light theme's `.is-current` row on
+     `--bn-surface-2`, at this weight and size). `--bn-ink` is the one token this file's own
+     token comment guarantees against every surface. */
+  color: var(--bn-ink);
+  /* WRAPS RATHER THAN COLLAPSING THE BOX NAME TO NOTHING (found the same way the flex-grow bug
+     above was: the owner's own 390px screenshot). The action icons now share this line's own
+     grid row, and at a phone width the two together left no room for `section`/`card` to stay
+     non-shrinking AND for the box name to keep any width at all — `nowrap` on the whole line
+     forced every fact into one width budget instead of letting the line take a second row the
+     way Direction B's own 390 mockup shows (`WB1 R2 · Section 1 ·` / `Card 5 of 39`). Each fact
+     is still `white-space: nowrap` on its own — this line wraps BETWEEN facts, never inside
+     one. */
+}
+.card-locations-owner .card-locations-identity-fact { min-width: 0; }
+/* D218: the seam between facts is CSS, never typed. */
+/* `::after` on the fact BEFORE the seam, never `::before` on the one after it (the lane
+   review's finding, 2026-09-25): at a width narrow enough for this line to wrap, `::before` on
+   the next fact travels WITH that fact onto its own new line, so the wrapped line starts with a
+   bare dot and nothing before it — the identical shape of defect the flex-grow bug in this same
+   round was, on the seam instead of the box. `::after` on the fact ending the line keeps the dot
+   on the line it punctuates, whether that line wraps or not. */
+.card-locations-owner .card-locations-identity-fact:not(:last-child)::after {
+  content: '·';
+  margin: 0 var(--bn-1-5);
+  color: var(--bn-ink-4);
+}
+/* THE BOX NAME MAY ELLIPSIZE; SECTION AND CARD NEVER DO (D41's own priority, carried over): a
+   box name is free text and can run long, and it is named again in the walk's own rail — the
+   section and the card are the two facts this line alone states.
+   `flex: 0 1 auto`, NOT `flex-grow: 1` (a real bug, found by the owner's own screenshot,
+   2026-09-25: a short box name grew to fill the row's free width, shoving `· Section 1 ·
+   Card N of M` to the far right edge and reading as a stray leading dot). Shrink-only still
+   lets this fact ellipsize under real width pressure; it must never grow past its own text. */
+.card-locations-owner .card-locations-identity-box {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-locations-owner .card-locations-identity-fact:not(.card-locations-identity-box) { flex: none; }
+.card-locations-owner .card-locations-identity-card { color: var(--bn-ink); font-weight: 800; }
+.card-locations-owner .card-locations-identity-num { font-variant-numeric: tabular-nums; }
+.card-locations-owner .card-locations-identity-note { font-weight: 600; }
+/* THE STRUCK FIGURE (D58, D71, D259): a departed copy keeps the card it left, struck through,
+   never worded. */
+.card-locations-owner .card-locations-identity[data-departed='true'] .card-locations-identity-num {
+  text-decoration: line-through;
+  text-decoration-color: var(--bn-ink-4);
+  color: var(--bn-ink-3);
+}
+.card-locations-owner .card-locations-identity { flex: 1 1 auto; }
 /* Inside the walk-to the label does NOT grow: the arrow belongs beside the address it opens,
    not stranded at the far edge of a full-width row. */
-.card-locations-owner .card-locations-goto .position-parts { flex: 0 1 auto; }
-.card-locations-owner .nb {
-  --nb-key: 11px;
-  --nb-name: 12px;
-}
+.card-locations-owner .card-locations-goto .card-locations-identity { flex: 0 1 auto; }
 .card-locations-owner .card-locations-boxname {
   font-family: var(--bn-font-mono);
   font-size: var(--bn-fs-xs);
@@ -462,8 +509,8 @@
   color: var(--bn-accent);
   transform: translate(1px, -1px);
 }
-.card-locations-owner .card-locations-goto:hover .position-num,
-.card-locations-owner .card-locations-goto:focus-visible .position-num { color: var(--bn-accent); }
+.card-locations-owner .card-locations-goto:hover .card-locations-identity-num,
+.card-locations-owner .card-locations-goto:focus-visible .card-locations-identity-num { color: var(--bn-accent); }
 
 /* A thumb presses the walk-to, AND the claim pill — it is a link to the order screen, not a
    badge, so it takes the same floor as the `Mark sold` button beside it (`Button size="sm"`

@@ -226,7 +226,7 @@ for (const size of SIZES) {
       /* THE DEEP LINK OPENS THE CARD, NOT THE BOX'S FIRST (LOC-12). */
       const current = page.locator('.card-locations-row.is-current')
       await expect(current).toBeVisible()
-      const label = current.locator('.position-parts')
+      const label = current.locator('.card-locations-identity')
       await expect(label).toHaveAttribute('aria-label', 'RB Origins, Section 2, Card 2')
 
       /* THE BOX IS NAMED, NEVER NUMBERED (D259). */
@@ -239,12 +239,26 @@ for (const size of SIZES) {
       const bar = current.locator('.position-bar')
       await expect(bar.locator('.position-bar-edge-start')).toHaveText('1')
       await expect(bar.locator('.position-bar-edge-end')).toHaveText('3')
-      await expect(bar.locator('.position-bar-cap-tail')).toHaveText('card 2 of 3')
+      /* THE CARD RULER'S OWN CAPTION IS OMITTED HERE, NOT DRAWN EMPTY (the owner's Direction-B
+         build, 2026-09-25): `CardLocations.tsx`'s `RowIdentity` now states `Card 2 of 3` once,
+         on the header, and this section carries no name, so there is nothing left for this
+         line to say that is not said elsewhere — a dead line would be exactly the "no dead
+         gaps" the owner asked against. The pin above still marks the exact card. */
+      await expect(bar.locator('.position-bar-text-section')).toHaveCount(0)
 
-      /* CARD 1 IS AT THE BACK: `back` is at the ruler's start and `front` at its end. */
-      const back = await bar.locator('.position-bar-end-back').boundingBox()
-      const front = await bar.locator('.position-bar-end-front').boundingBox()
+      /* CARD 1 IS AT THE BACK, ON EACH RULER (the owner's ruling, 2026-09-25: "Keep it on each
+         ruler" — D260 stands). The section ruler's own pair lives in `.position-bar-ends-row`;
+         the card ruler's own lives in `.position-bar-zoom-ends`, added this round so both
+         instruments orient on their own rather than sharing one row between them. */
+      const sectionEnds = bar.locator('.position-bar-ends-row')
+      const back = await sectionEnds.locator('.position-bar-end-back').boundingBox()
+      const front = await sectionEnds.locator('.position-bar-end-front').boundingBox()
       expect(back && front && back.x < front.x, 'back is drawn before front').toBe(true)
+
+      const cardEnds = bar.locator('.position-bar-zoom-ends')
+      const cardBack = await cardEnds.locator('.position-bar-end-back').boundingBox()
+      const cardFront = await cardEnds.locator('.position-bar-end-front').boundingBox()
+      expect(cardBack && cardFront && cardBack.x < cardFront.x, 'the card ruler keeps its own back before front').toBe(true)
 
       /* THE MARK IS ON THE EXACT CARD (LOC-05): the pin's centre is inside card 2's own cell. */
       const cell = await bar.locator('.position-bar-cell').boundingBox()
@@ -260,24 +274,23 @@ for (const size of SIZES) {
       await expect(bar.locator('.position-bar-segment-num')).toHaveText(['1', '2', '3'])
       await expect(bar.locator('.position-bar-here .position-bar-segment-num')).toHaveText('2')
 
-      /* NEIGHBOURS FROM BACK TO FRONT, this card between them, and the sentence says which is
-         which (UX-186): index 5 is toward the back, index 8 toward the front. */
+      /* NEIGHBOURS FROM BACK TO FRONT, one line, and the sentence says which is which
+         (UX-186): index 5 is toward the back, index 8 toward the front. */
       await expect(current.locator('.nb')).toHaveAttribute(
         'aria-label',
         'It sits in front of Towering Combatant and behind Relentless Pursuit.',
       )
-      await expect(current.locator('.nb-row')).toHaveCount(3)
-      expect(await current.locator('.nb-row').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-side')))).toEqual([
+      await expect(current.locator('.nb-side')).toHaveCount(2)
+      expect(await current.locator('.nb-side').evaluateAll((els) => els.map((el) => el.getAttribute('data-side')))).toEqual([
         'back',
-        'this',
         'front',
       ])
 
       /* THE DEPARTED COPY names the place it left, marked and in the past tense, never worded. */
-      const gone = page.locator('.card-locations-row.is-gone .position-parts')
+      const gone = page.locator('.card-locations-row.is-gone .card-locations-identity')
       await expect(gone).toHaveAttribute('data-departed', 'true')
       await expect(gone).toHaveAttribute('aria-label', 'Was at RB Origins, Section 2, Card 2')
-      const strike = await gone.locator('.position-num').evaluate((el) => getComputedStyle(el).textDecorationLine)
+      const strike = await gone.locator('.card-locations-identity-num').evaluate((el) => getComputedStyle(el).textDecorationLine)
       expect(strike).toContain('line-through')
       expect((await gone.innerText()).toLowerCase()).not.toMatch(/departed|sold|\bb\d+ #\d+/)
       await expect(page.locator('.card-locations-row.is-gone .nb')).toHaveAttribute('aria-label', /^It was in front of /)
@@ -383,7 +396,7 @@ test('an unread neighbour is said in words on the ladder, never as a figure (LOC
   await settleFonts(page)
 
   const current = page.locator('.card-locations-row.is-current')
-  await expect(current.locator('.nb-row[data-side="front"] .nb-unread')).toHaveText('2 unread cards')
+  await expect(current.locator('.nb-side[data-side="front"] .nb-unread')).toHaveText('2 unread cards')
   await expect(current.locator('.nb')).toHaveAttribute(
     'aria-label',
     'It sits in front of Towering Combatant and behind 2 unread cards.',
@@ -395,7 +408,7 @@ test('a place link pressed while Inventory is open walks to that card', async ({
   await stubBox(page, 'RB Origins')
   await page.goto(`/#/inventory?box=${BOX}&card=cid-7`)
   await settleFonts(page)
-  const label = page.locator('.card-locations-row.is-current .position-parts')
+  const label = page.locator('.card-locations-row.is-current .card-locations-identity')
   await expect(label).toHaveAttribute('aria-label', 'RB Origins, Section 2, Card 2')
 
   /* A SECOND LINK, NO NEW MOUNT: the hash changes inside `#/inventory` (Review's pill, a copy

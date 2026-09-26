@@ -1,12 +1,11 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 
 import type { SearchCopy, SearchGroup, SectionDetail } from './types'
 import { isDeparted, photoUrl, placeSentence } from './server'
 import { PlaceNeighbors } from './PlaceNeighbors'
 import { PullConfirm } from './PullConfirm'
 import { PositionBar } from './PositionBar'
-import { placePartsOf, sayPlace, type Persona } from './position'
-import { PositionLabel } from './PositionLabel'
+import { placePartsOf, sayPlace, sectionCountOf, type Persona } from './position'
 import { collectorNumber } from './cardNumber'
 import { Chip, Icon, IconButton, Pill } from './kit'
 import { RANK_IS_CURRENT, ranksAsLive, ranksAsShown, stalenessSentence, type FrozenRank } from './frozenRank'
@@ -97,6 +96,68 @@ function headroom(group: SearchGroup): string {
   if (room > 0) return `Room for ${room} more live`
   if (room === 0) return `At the ceiling of ${group.listable}`
   return `${-room} over the ceiling of ${group.listable}`
+}
+
+/** ONE LINE, EVERY FACT ONCE (the owner's ruling, 2026-09-25, Direction B): the box's name, the
+ *  section and the card within it, said once and never restated by the ruler beneath it. This
+ *  replaces `PositionLabel`'s stacked CARD/BOX/SECTION block for the sectionDepth-ruler rows —
+ *  the redesign the owner picked names the header as part of the same locator block as the
+ *  rulers, so it changes with them. `PositionLabel` itself is untouched: every other caller
+ *  (Review's pill, the retire dialog, the Fulfiller) keeps its stacked or run form exactly as
+ *  it was.
+ *
+ *  THE FACTS ARE READ OFF THE LABEL, NEVER OFF `Place`'s OWN FIELDS, for the same reason
+ *  `PositionLabel` does it that way: a departed copy's `place.card` is null on the wire (D58),
+ *  but its LABEL still names the card it left (D259), so `placePartsOf` is what recovers a
+ *  figure to show, struck through, either way.
+ *
+ *  THE SECTION'S SIZE RIDES THE CARD FACT (`Card 5 of 39`), NEVER THE RULER'S OWN CAPTION —
+ *  `PositionBar`'s captions dropped that number in this same round precisely because this line
+ *  now states it once. A departed card carries no denominator: `was card 12 of 11` reads as an
+ *  error over a section that has since lost a card (D260's own note). */
+function RowIdentity({
+  label,
+  boxName,
+  sectionName,
+  departed,
+  sectionTotal,
+}: {
+  label: string
+  boxName: string | null
+  sectionName: string | null
+  departed: boolean
+  sectionTotal: number | null
+}): ReactNode {
+  const parts = placePartsOf(label)
+  if (parts === null) {
+    // UNPARSEABLE FALLS BACK TO THE WHOLE STRING (the same refusal `PositionLabel` makes) —
+    // no caller of this component reaches it today, since a pooled or placeless copy takes
+    // the `pooled` branch above this one, but a later server shape may still emit one.
+    return <span className="card-locations-identity is-unparsed">{label}</span>
+  }
+
+  const gone = departed || parts.card === null
+  const named = boxName !== null && boxName.trim() !== '' ? boxName.trim() : parts.box
+  const sectioned = sectionName !== null && sectionName.trim() !== '' ? sectionName.trim() : null
+  const aria = gone ? `Was at ${sayPlace(label)}` : sayPlace(label)
+
+  return (
+    <span className="card-locations-identity" role="group" aria-label={aria} data-departed={gone ? 'true' : undefined}>
+      <span className="card-locations-identity-fact card-locations-identity-box">{named}</span>
+      {parts.section === null ? null : (
+        <span className="card-locations-identity-fact">
+          Section {parts.section}
+          {sectioned === null ? null : <span className="card-locations-identity-note">: {sectioned}</span>}
+        </span>
+      )}
+      {parts.card === null ? null : (
+        <span className="card-locations-identity-fact card-locations-identity-card">
+          Card <b className="card-locations-identity-num">{parts.card}</b>
+          {departed || sectionTotal === null ? null : ` of ${sectionTotal}`}
+        </span>
+      )}
+    </span>
+  )
 }
 
 export type CardLocationsProps = {
@@ -330,24 +391,11 @@ function OwnerRows({
      loose bag and already draw this. */
   const listing = group.sku !== null
 
-  /* HOW MANY DIGITS THIS LIST'S SLOT COLUMN HAS TO HOLD, which is the one term of that column
-     that is DATA rather than typography (`CardLocations.css`'s `--pos-slot-key` is the other).
-     A row cannot compute it — it cannot see what its siblings drew — so the list does, over the
-     copies it is about to render, and every row reserves the same width from it.
-
-     `place.card` AND NOT THE LABEL. It is the same field `pipeline/join.py:Position.label`
-     composes its last part from, it is already on the wire, and it is null exactly for the rows
-     that draw no figure (D58, D71) — so reading it needs no second copy of `PositionLabel`'s
-     seam here, which is the duplication D67 and D92 both record.
-
-     Floored at three so no list renders narrower than every store, fixture and screenshot did
-     before this existed. */
-  const slotDigits = Math.max(
-    3,
-    ...drawn.map((copy) =>
-      copy.place.card === null ? 0 : String(copy.place.card).length,
-    ),
-  )
+  /* THE SLOT-COLUMN RESERVATION IS RETIRED (the owner's ruling, 2026-09-25, Direction B): the
+     card figure no longer sits in a column of its own beside a separate path — `RowIdentity`
+     runs box, section and card as one line, so there is no second column for a wider key to
+     widen and no name beside it that reservation was ever protecting. `--pos-slot-key` in
+     `CardLocations.css` is retired with it, for the same reason and in the same commit. */
   /* The machine strings — SKU, set code, number — in mono; the condition is a phrase and is
      drawn beside them in the UI face. */
   const meta =
@@ -474,10 +522,7 @@ function OwnerRows({
         ) : null}
       </header>
 
-      <ul
-        className="card-locations-rows bn-stagger"
-        style={{ ['--pos-slot-digits']: slotDigits } as CSSProperties}
-      >
+      <ul className="card-locations-rows bn-stagger">
         {drawn.map((copy, i) => {
           const sold = isSold(copy, soldKeys)
           const pooled = isPooled(copy)
@@ -538,7 +583,13 @@ function OwnerRows({
                         caller offers a walk-to, the same rendering sits inside a button. */}
                     <span className="card-locations-label">
                       {label === null ? null : goesTo === null ? (
-                        <PositionLabel label={label} lead="slot" boxName={copy.place.box_name} sectionName={copy.place.section_name ?? null} departed={departed} />
+                        <RowIdentity
+                          label={label}
+                          boxName={copy.place.box_name}
+                          sectionName={copy.place.section_name ?? null}
+                          departed={departed}
+                          sectionTotal={sectionCountOf(copy.place)?.of ?? null}
+                        />
                       ) : (
                         <button
                           className="card-locations-goto"
@@ -546,15 +597,22 @@ function OwnerRows({
                           aria-label={`Walk to ${sayPlace(label)}`}
                           onClick={goesTo}
                         >
-                          <PositionLabel label={label} lead="slot" boxName={copy.place.box_name} sectionName={copy.place.section_name ?? null} departed={departed} />
+                          <RowIdentity
+                            label={label}
+                            boxName={copy.place.box_name}
+                            sectionName={copy.place.section_name ?? null}
+                            departed={departed}
+                            sectionTotal={sectionCountOf(copy.place)?.of ?? null}
+                          />
                           <Icon name="arrowUpRight" size={14} className="card-locations-goto-icon" />
                         </button>
                       )}
                     </span>
-                    <PlaceNeighbors place={copy.place} departed={departed} />
                   </>
                 )}
               </span>
+
+              {pooled ? null : <PlaceNeighbors place={copy.place} departed={departed} />}
 
               {noBar ? null : (
                 <PositionBar

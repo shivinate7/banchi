@@ -7,6 +7,9 @@
   --pb-rule: 26px;             /* the section ruler */
   --pb-marker: 2px;
   --pb-gap: 3px;
+  /* BOTH RULERS ARE TALLER UNDER `[data-depth]` (the owner's ruling, 2026-09-25: "larger/more
+     intuitive"), spent from the height the dedup below freed rather than added on top of it —
+     `make design-check`'s fold assertions are what proved the budget, not a count taken here. */
   /* PINNED LINE BOXES, AND THE UNITS ARE LOAD-BEARING. The component's height is arithmetic
      rather than a function of font metrics, which is what lets every state land on the same
      number; a unitless value here silently kills both the `line-height` and any `calc` that
@@ -29,7 +32,7 @@
 /* THE STRIP UNDER THE RULER IS THE BOX'S SECTIONS, NUMBERED (the owner's ruling, 2026-09-23,
    amending D155: the ruler shows the sections before and after). 14px holds a section number in
    `--bn-fs-2xs`; a chip too narrow for its digits clips them and still marks its run. */
-.position-bar-owner[data-depth] { --pb-track: 14px; }
+.position-bar-owner[data-depth] { --pb-track: 22px; --pb-rule: 40px; --pb-cap-sect: 18px; }
 
 /* ---- the box track ---- */
 .position-bar-track {
@@ -41,7 +44,46 @@
   min-width: 0;
 }
 
-/* One section. Width comes from the inline flex-grow — the span's own length in cards. */
+/* THE SECTION RULER NEVER PASSES ITS CONTAINER (the owner's report, 2026-09-25, box WB1 R2:
+   "sections can pass the width of their container ... 12 sections but only 11 show"). Below
+   `position-bar-segment`'s readable floor, the strip stops shrinking and SCROLLS INSIDE ITS OWN
+   TRACK instead of overflowing the card — `PositionBar.tsx` scrolls the current section into
+   view on mount and on every change of place, and the edge fade below says there is more.
+   Scoped to the box strip only, never `.position-bar-sectiontrack` (the card-level ruler),
+   which has no per-section chips to crowd. `scrollbar-width`/`-ms-overflow-style` hide the
+   native bar; the scroller stays keyboard- and wheel-reachable, this only hides its chrome. */
+.position-bar-owner[data-depth] > .position-bar-track {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.position-bar-owner[data-depth] > .position-bar-track::-webkit-scrollbar { display: none; }
+/* THE FADE, EACH SIDE INDEPENDENTLY: `PositionBar.tsx` measures whether the strip can still
+   scroll toward the back or the front and sets these attributes — never a permanent mask, which
+   would clip the one section a box has right at the edge it did not need hiding. */
+.position-bar-owner[data-depth] > .position-bar-track[data-fade-back] {
+  mask-image: linear-gradient(to right, transparent, black 16px);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 16px);
+}
+.position-bar-owner[data-depth] > .position-bar-track[data-fade-front] {
+  mask-image: linear-gradient(to left, transparent, black 16px);
+  -webkit-mask-image: linear-gradient(to left, transparent, black 16px);
+}
+.position-bar-owner[data-depth] > .position-bar-track[data-fade-back][data-fade-front] {
+  mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+}
+
+/* One section. Width comes from the inline flex-grow — the span's own length in cards.
+   3px WAS THE FLOOR AND IS WHERE THE REPORT CAME FROM: a chip that thin loses even one digit of
+   a two-digit section number, which reads as the ruler running off the card rather than as a
+   narrow chip. 20px holds two tabular-nums digits at `--bn-fs-2xs` with room either side — past
+   it the TRACK scrolls (above) rather than the CHIP clipping. */
+.position-bar-owner[data-depth] .position-bar-segment {
+  min-width: 20px;
+}
 .position-bar-segment {
   flex-basis: 0;
   flex-shrink: 1;
@@ -143,17 +185,24 @@
    DOM ORDER IS NOT TOUCHED, because `inventory.spec.ts` reads the box track with
    `querySelector('.position-bar-track')` and the ruler carries that class too — document order
    is the only thing that makes that selector return the strip. An inversion done by reordering
-   the JSX would silently measure the wrong element. */
+   the JSX would silently measure the wrong element.
+
+   THE SECTION RULER COMES FIRST, THE CARD RULER BELOW IT (the owner's ruling, 2026-09-25,
+   amending D155 again: "the mental model is: which section in the box, then which card in that
+   section"). Only the three `order` integers moved — `.position-bar-track` (the box strip) and
+   `.position-bar-ends-row` (its caption) now sort ahead of `.position-bar-zoom` (the card-level
+   ruler). DOM order is still untouched for the same reason the comment above already gives. */
 .position-bar-zoom {
   display: flex;
   flex-direction: column;
   gap: var(--pb-gap);
   min-width: 0;
 }
-.position-bar.position-bar-owner[data-depth] > .position-bar-zoom { order: 0; }
-.position-bar.position-bar-owner[data-depth] > .position-bar-track { order: 1; }
+.position-bar.position-bar-owner[data-depth] > .position-bar-track { order: 0; }
+.position-bar.position-bar-owner[data-depth] > .position-bar-ends-row { order: 1; }
+.position-bar.position-bar-owner[data-depth] > .position-bar-zoom { order: 2; }
 .position-bar.position-bar-owner[data-depth] > .position-bar-text-box {
-  order: 2;
+  order: 1;
   align-self: flex-end;
 }
 .position-bar-owner[data-depth] .position-bar-zoom > .position-bar-text-section { order: -1; }
@@ -252,7 +301,8 @@
    takes: \`back\` at the left edge, the caption, \`front\` at the right edge. The Fulfiller's strip
    draws the same two words on a row of its own (\`.position-bar-ends\`). */
 .position-bar-ends-row,
-.position-bar-ends {
+.position-bar-ends,
+.position-bar-zoom-ends {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -260,6 +310,10 @@
   margin: 0;
   min-width: 0;
 }
+/* THE CARD RULER'S OWN BACK/FRONT (the owner's ruling, 2026-09-25: "Keep it on each ruler" —
+   D260 stands, unchanged by this round's dedup). A thin margin only, never `--pb-gap`'s full
+   column gap: this row reads as part of the ruler right above it, not as a fourth band. */
+.position-bar-zoom-ends { margin-top: var(--bn-0-5); }
 .position-bar-end-back,
 .position-bar-end-front {
   flex: none;
@@ -317,6 +371,14 @@
   content: '·';
   margin: 0 6px;
   color: var(--bn-ink-4);
+}
+/* NO DOT WITH NOTHING BEFORE IT. `.position-bar-cap-head` is omitted, not drawn empty, when the
+   owner named no section (`position.ts:sectionDepthOf`) — an owner-side dedup, 2026-09-25. The
+   rule above still fires on `.position-bar-cap-tail`'s OWN first-child selector regardless of
+   what precedes the tail in the DOM, so `:first-child` on the tail ITSELF (no head sibling
+   before it) is what says there is nothing to separate from. */
+.position-bar-cap-tail:first-child > .position-bar-cap-fact:first-child::before {
+  content: none;
 }
 
 /* ---- the Fulfiller's density: every floor in the constraints table ---- */
