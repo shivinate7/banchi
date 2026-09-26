@@ -1,14 +1,12 @@
 import { useCallback, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 
 import { describeFailure, fetchLiveExport, reconcileLive, type Failure } from './server'
 import { readUpload } from './csvUpload'
-import { Button, Icon, IconButton, Notice } from './kit'
+import { Button, Icon, Notice, Sheet } from './kit'
 import { toast } from './kit/toast'
 import { DropZone } from './RunsDrop'
 import { whenLabel } from './RunsStage'
 import { LogWell } from './RunsLog'
-import { useOverlayFocus } from './runsOverlay'
 import './LiveReconcile.css'
 
 /* THE FOURTH COMMAND, OVER THE WHOLE STORE (D87), as a sheet off the Runs header.
@@ -33,8 +31,6 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
      reading this screen can date honestly is one it just took. */
   const [readAt, setReadAt] = useState<string | null>(null)
   const held = useRef<Awaited<ReturnType<typeof readUpload>> | null>(null)
-  const sheet = useRef<HTMLElement | null>(null)
-  const scrim = useRef<HTMLDivElement | null>(null)
   /** The live export the SERVER holds, by name — the fetched counterpart to `held`'s bytes. */
   const fetchedName = useRef<string | null>(null)
   const [fetching, setFetching] = useState(false)
@@ -85,41 +81,35 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
     [send],
   )
 
-  /* Focus lands inside on open, stays inside under Tab, and returns to the opener on close;
-     Escape closes, unless a read or a write is in flight — `busy` is the hold, and it covers
-     both presses of the two-step gate. */
-  useOverlayFocus(sheet, open, onClose, busy, scrim)
-
-  /* Portalled to <body> for the same reason the composer is: `main.bn-page` keeps a filled
-     transform after its enter animation, and a fixed sheet inside it would hang off the column. */
-  return createPortal(
-    <>
-      {open ? <div ref={scrim} className="bn-scrim" onClick={onClose} /> : null}
-      <aside
-        ref={sheet}
-        className="bn-sheet livecheck"
-        hidden={!open}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="livecheck-head"
-        tabIndex={-1}
-      >
-        <header className="livecheck-top">
-          <div className="livecheck-heading">
-            <span className="bn-eyebrow">
-              <span>Store-wide</span>
-              <span>free</span>
-            </span>
-            <h2 className="livecheck-head" id="livecheck-head">
-              Check what is live
-            </h2>
-          </div>
-          <IconButton icon="x" label="Close" onClick={onClose} />
-        </header>
-
+  /* THE KIT'S OWN SHEET (D275): focus lands inside on open, stays inside under Tab, and
+     returns to the opener on close. Nothing closes it while a read or a write is in flight —
+     `busy` is the hold, and it covers both presses of the two-step gate. */
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      dismissible={!busy}
+      title="Check what is live"
+      icon="refresh"
+      className="livecheck"
+      footer={
+        report === null || wrote ? null : (
+          /* Absent until the preview has answered: the control that settles does not exist
+             before there is anything to read. */
+          <>
+            <Button variant="ghost" onClick={onClose} disabled={busy}>
+              Not now
+            </Button>
+            <Button variant="primary" icon="check" busy={busy} disabled={busy} onClick={() => void send(true)}>
+              Match the store
+            </Button>
+          </>
+        )
+      }
+    >
         <div className="livecheck-body">
           <p className="livecheck-says">
-            Compares what TCGplayer holds with every card in the store. It marks no card sold.
+            Compares what TCGplayer holds with every card in the store. It is free, and it marks no card sold.
           </p>
 
           <p className="livecheck-age">
@@ -134,7 +124,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
           <div className="livecheck-fetch">
             <Button
               variant="primary"
-              icon="download"
+              icon="refresh"
               busy={fetching}
               disabled={busy || fetching}
               onClick={() => {
@@ -155,8 +145,12 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
                 })()
               }}
             >
-              {fetching ? 'Asking TCGplayer…' : 'Fetch my live listings'}
+              {/* THE PRESS KEEPS ITS WORDS WHILE IT RUNS (D118): the spinner, and a status line. */}
+              Fetch my live listings
             </Button>
+            <span className="bn-sr" role="status">
+              {fetching ? 'Asking TCGplayer…' : ''}
+            </span>
           </div>
 
           <div className="livecheck-pick">
@@ -201,21 +195,6 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
             </>
           )}
         </div>
-
-        {report === null || wrote ? null : (
-          /* Absent until the preview has answered: the control that settles does not exist
-             before there is anything to read. */
-          <footer className="livecheck-foot">
-            <Button variant="ghost" onClick={onClose}>
-              Not now
-            </Button>
-            <Button variant="primary" icon="check" busy={busy} disabled={busy} onClick={() => void send(true)}>
-              Match the store
-            </Button>
-          </footer>
-        )}
-      </aside>
-    </>,
-    document.body,
+    </Sheet>
   )
 }

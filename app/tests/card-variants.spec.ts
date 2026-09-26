@@ -45,7 +45,6 @@ function place(box: number, section: number, card: number, boxTotal: number) {
     section_start: 1,
     section_end: null,
     box_total: boxTotal,
-    box_closed: false,
     fraction: card,
     neighbors: null,
     section_gaps: 0,

@@ -173,7 +173,6 @@ function card(over: {
       section_start: 1,
       section_end: null,
       box_total: over.boxTotal,
-      box_closed: false,
       fraction: over.card,
       neighbors: null,
       section_gaps: 0,
@@ -653,6 +652,24 @@ async function stubStore(page: Page): Promise<void> {
    *  answers, matching what `do_order_picks` actually returns for a key it holds nothing
    *  for. `orders.spec.ts`'s own `open()` overrides this per case with real fixtures. */
   await page.route(/\/orders\/picks$/, (route) => json(route, { orders: [] }))
+
+  /* `#/revenue`'s TWO ON-ARRIVAL READS (D-sales-rows-by-sku): the thumbnail lookup and
+   *  "On the shelf", both plain reads this screen now fires on mount rather than behind a
+   *  press. A spec testing either overrides these per case, same as `/orders/picks` above. */
+  await page.route(/\/skus\/photos\?/, (route) => json(route, { photos: {} }))
+  await page.route(/\/pipeline\/holdings-value(\?|$)/, (route) =>
+    json(route, {
+      range: 'month',
+      width_days: 30,
+      history_begins: null,
+      at: '2026-09-19T00:00:00+00:00',
+      on_hand_names: 0,
+      series: [],
+      totals: [],
+      unmarked: { names: 0 },
+      sealed_excluded: { names: 0, reason: 'sealed product has no card record' },
+    }),
+  )
 
   await stubCropPreview(page)
 

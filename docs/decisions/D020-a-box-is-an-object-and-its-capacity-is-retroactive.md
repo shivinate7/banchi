@@ -64,3 +64,10 @@ The owner, 2026-08-26: deleting boxes should require a confirm click, not typing
 **So the half that survives is the half that was doing the work: naming the target.** `Delete box 6…` opens the panel and `Delete box 6 permanently` fires it, so the number is printed twice and the second press is on a control that has to be found rather than one sitting under the pointer. What is given up is the momentum guarantee, deliberately and by the owner. **This is still not the *are you sure* `docs/DESIGN.md` bans**: that dialog's confirm says nothing about what it is confirming, and both of these say the box.
 
 **What would reopen it: a box deleted by mistake.** The fix to reach for first is then graduating the gate by what the box HOLDS rather than restoring typing everywhere — an empty box's delete destroys a name and a number, and box 2's destroys 543 photographs. That is one condition on `record.cards`, and it is named here rather than built because the owner asked for the simple thing and no such mistake has happened.
+
+### Amended 2026-09-25: the seal is removed
+
+The owner's ruling: "what was the point of sealed boxes? lets kill this". The seal and the
+retroactive capacity above are removed. D58 had already taken every denominator off capacity,
+so the seal protected no figure. D-sealed-boxes-removed records what went and how an existing
+sealed box becomes an ordinary one. The box object, its name and its `bid` stay as argued here.

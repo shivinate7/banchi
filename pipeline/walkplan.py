@@ -407,11 +407,11 @@ def _sections_of(inventory: master.Inventory, box: int) -> Dict[int, int]:
     except (master.BadPosition, master.BadSections):
         return {}
     occupied = tuple(index for index, claim in raw if _claim_located(claim))
+    # THROUGH `BoxView.at`, so a box with an order (D265) counts its sections in that order.
+    view = join.BoxView(sections=layout, occupied=occupied, order=inventory.box_order(box))
     out: Dict[int, int] = {}
     for index in occupied:
-        out[index] = join.Position(
-            box=box, index=index, sections=layout, occupied=occupied
-        ).section
+        out[index] = view.at(box, index).section
     return out
 
 

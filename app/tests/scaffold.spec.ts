@@ -104,6 +104,21 @@ function widthFailure(maxWidth: string | null, pageW: number): string | null {
   return null
 }
 
+/** Home's h1 is the hero greeting ("Good morning."), never the route's own title (D121: the
+ *  front page says what is owed). The owner's ruling, 2026-09-25, answering the follow-up
+ *  lane's question of whether the greeting stays: "yeah just keep the greeting". Only the TEXT
+ *  match is exempt — Home still draws exactly one visible h1, same as every other route, so a
+ *  route that grows a second h1 or loses its one h1 still goes red here. */
+const H1_TEXT_EXEMPT = new Set(['/'])
+
+/** The h1 assertion's verdict: exactly one visible h1, and — unless the route is in
+ *  `H1_TEXT_EXEMPT` — its text is `want`. */
+function h1Failure(path: string, h1s: readonly string[], want: string): string | null {
+  if (h1s.length !== 1) return `h1 ${JSON.stringify(h1s)}, want exactly one`
+  if (!H1_TEXT_EXEMPT.has(path) && h1s[0] !== want) return `h1 ${JSON.stringify(h1s)}, want ["${want}"]`
+  return null
+}
+
 /** The title assertion's verdict on every read over the window: null when each read is `want`. */
 function titleFailure(reads: readonly string[], want: string): string | null {
   const distinct = [...new Set(reads)]
@@ -249,7 +264,8 @@ for (const route of ROUTE_TABLE) {
       })
       const at = `${width}px`
       if (m.pages !== 1) fail('page', `${at}: ${m.pages} [data-bn-page]`)
-      if (m.h1s.length !== 1 || m.h1s[0] !== want) fail('h1', `${at}: h1 ${JSON.stringify(m.h1s)}, want ["${want}"]`)
+      const h1bad = h1Failure(route.path, m.h1s, want)
+      if (h1bad !== null) fail('h1', `${at}: ${h1bad}`)
       const wide = applies(route, 'width') ? widthFailure(m.maxWidth, m.pageW) : null
       if (wide !== null) fail('width', `${at}: ${wide}`)
       if (applies(route, 'top') && (m.gap === null || Math.abs(m.gap - m.pageTop) > 1)) fail('top', `${at}: h1 gap ${m.gap === null ? 'none' : m.gap.toFixed(1)}, want ${m.pageTop}`)
@@ -302,6 +318,19 @@ test('a page whose max-width is none fails the width check (fixture)', async ({ 
   const after = await read()
   expect(after.maxWidth, 'the fixture did not take').toBe('none')
   expect(widthFailure(after.maxWidth, after.pageW), 'max-width: none must fail the width check').toContain('"none"')
+})
+
+/* The h1 exemption is Home's alone (owner's ruling, 2026-09-25, "yeah just keep the greeting").
+   Every other route stays held to its own title: a mismatch anywhere else is still red, so the
+   exemption cannot quietly widen to cover a defect on a different screen. */
+test('h1Failure exempts only Home\'s text, and holds every route to exactly one h1', () => {
+  expect(h1Failure('/pricing', ['Pricing'], 'Pricing')).toBeNull()
+  expect(h1Failure('/pricing', ['Good morning'], 'Pricing'), 'a non-Home mismatch must fail').toContain('want')
+  expect(h1Failure('/pricing', [], 'Pricing'), 'no h1 at all must fail').toContain('want exactly one')
+  expect(h1Failure('/pricing', ['Pricing', 'Pricing'], 'Pricing'), 'two h1s must fail').toContain('want exactly one')
+  expect(h1Failure('/', ['Good morning.'], 'Home'), 'Home\'s greeting is exempt from the text match').toBeNull()
+  expect(h1Failure('/', [], 'Home'), 'Home still needs exactly one h1').not.toBeNull()
+  expect(h1Failure('/', ['Good morning.', 'Home'], 'Home'), 'Home still needs exactly one h1').not.toBeNull()
 })
 
 /* F2 of the review: the title was read once, under reduced motion, so an alternation never ran.

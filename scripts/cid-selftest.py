@@ -414,10 +414,10 @@ def case_the_four_column_rosters_agree() -> None:
     equal(sorted(spec ^ built), [],
           "and `_card_columns` builds exactly those keys")
     equal(sorted(built - set(master.Card.__annotations__)),
-          ["idx", "number_display", "number_key"],
-          "and every other one of them is a declared field on `Card` — `idx` is the one "
-          "named alias, for `index`, which is a Python builtin's name in every other "
-          "context, and `number_key`/`number_display` (store-scaling item 8) are the two "
+          ["idx", "number_display", "number_key", "ord"],
+          "and every other one of them is a declared field on `Card` — `idx` and `ord` are "
+          "the two named aliases, for `index` (a Python builtin's name in every other "
+          "context) and for `order` (a SQL keyword, D265), and `number_key`/`number_display` (store-scaling item 8) are the two "
           "DERIVED columns `_card_columns` composes from `number`/`printed_total` through "
           "`pipeline/join.py` rather than reading off a `Card` field of their own name — "
           "there is no `Card.number_key`, on purpose, because the composed form has no "
@@ -580,9 +580,8 @@ def case_the_moved_tombstone_names_no_photograph() -> None:
               "the transplant keeps the card's name, because the name is the CARD's and the "
               "card is what moved")
         equal(tombstone.cid, f"{photos.MOVED_PREFIX}{digest}@1/1",
-              "and the tombstone wears `moved:<name>@<its own key>`, so one name is never on "
-              "two rows under a UNIQUE index, even for a card moved twice — cleared to NULL "
-              "it would be re-issued by the heal")
+              "and the tombstone wears `moved:<name>@<its key>`, so one name is never on two rows "
+              "under a UNIQUE index — cleared to NULL it would be re-issued by the heal")
     check(not photos.is_photo_cid(f"{photos.MOVED_PREFIX}{digest}"),
           "a `moved:` name names no photograph, so nothing composes a path from it")
     equal(master.MOVED_CID_PREFIX, photos.MOVED_PREFIX,

@@ -12,7 +12,6 @@ import type {
   StandDownReason,
   StandDownResult,
   BoxRecord,
-  BoxState,
   BoxSummary,
   CardSummary,
   Finish,
@@ -38,6 +37,10 @@ import type {
   MoveUndoResult,
   CaptureSitting,
   MoveCardsResult,
+  SectionMoveResult,
+  SectionMoveTarget,
+  CardMoveTarget,
+  SectionUndoResult,
   BoxDeleteResult,
   GraveyardPayload,
   BoxListingPlan,
@@ -66,6 +69,7 @@ import type {
   PricingClearable,
   PricingClearResult,
   PricingWorklist,
+  RunSelection,
   RunSend,
   RunPreflight,
   RunStarted,
@@ -98,6 +102,7 @@ import type {
   ReconcileBacklogResult,
   ValueTable,
   ValueCopy,
+  SetsReport,
   SubmissionClaims,
   ClaimRelease,
   HoldingsRange,
@@ -1711,16 +1716,13 @@ export async function createBox(input: {
  * allowed — it is not this module's place to add the confirm D10 says to reach for *first if
  * that failure ever actually happens*, and it is worth knowing that it has not yet.
  *
- * `box_closed` IS A REFUSAL ABOUT THE BOX, NOT ABOUT THIS CALL BEING WRONG. It means the box
- * is closed and the edit asked for is one a closed box does not take. Branch on it if a screen
- * can offer to reopen; do not paraphrase it into "something went wrong".
+ * A box has no lid (`D-sealed-boxes-removed`), so no edit here is refused for a seal.
  */
 export async function updateBox(
   box: number,
   patch: {
     name?: string
     sections?: number[]
-    state?: BoxState
     /** Section names by ORDINAL, as the screen numbers them (D132). A blank clears one. */
     section_names?: Record<number, string>
   },
@@ -1732,7 +1734,6 @@ export async function updateBox(
   const payload: Record<string, string | number[] | Record<number, string>> = {}
   if (patch.name !== undefined) payload.name = patch.name
   if (patch.sections !== undefined) payload.sections = patch.sections
-  if (patch.state !== undefined) payload.state = patch.state
   if (patch.section_names !== undefined) payload.section_names = patch.section_names
 
   return (await request(`/boxes/${box}`, {
@@ -1762,8 +1763,8 @@ export async function updateBox(
  * it yet, so the divider asked for is already there — the two-presses-in-a-row case, and the
  * one an operator will actually hit. `section_ahead`: a divider is already declared past the
  * next card, so this one cannot go in front of it; the remedy is the dividers editor.
- * `box_closed`: a sealed box takes no more cards. Show the server's sentence — each names
- * the divider or the box that is in the way, and this module has nothing to add to it.
+ * Show the server's sentence — each names the divider that is in the way, and this module
+ * has nothing to add to it.
  *
  * Answers with the whole `BoxRecord`, so `sections_detail` comes back with it. Read the
  * section that was opened off the LAST entry of that array rather than off `sections.length`
@@ -1981,6 +1982,64 @@ export async function moveCards(
 }
 
 /**
+ * Move touching sections of one box as objects (D264): dividers, names and cards together.
+ * `first`..`last` are the source sections; the target is a gap in front of a section of a box
+ * (the same box reorders it), its near end, or a new box. `aim` is what the screen saw, so a
+ * box changed on another device refuses `section_changed` and nothing moves.
+ */
+export async function moveSections(
+  box: number,
+  first: number,
+  last: number,
+  target: SectionMoveTarget,
+  aim: { count: number; first: string | null; last: string | null } | null,
+): Promise<SectionMoveResult> {
+  const where =
+    target.toBox === 'new'
+      ? { new_box: true }
+      : { to_box: target.toBox, before: target.before }
+  return (await request(`/boxes/${box}/sections/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ first, last, ...where, aim }),
+  })) as SectionMoveResult
+}
+
+/**
+ * Move one card, or a range of cards from one section, to a gap in a box (D264): in front of
+ * a card, or at a section's end. No divider moves. The same one write, receipt and undo as a
+ * section move (`undoSectionMove`).
+ */
+export async function moveRange(
+  box: number,
+  indices: number[],
+  target: CardMoveTarget,
+  aim: { count: number; first: string | null; last: string | null } | null,
+): Promise<SectionMoveResult> {
+  return (await request(`/boxes/${box}/cards/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      indices,
+      to_box: target.toBox,
+      before_card: target.beforeCard,
+      section_end: target.sectionEnd,
+      aim,
+    }),
+  })) as SectionMoveResult
+}
+
+/** Put a section move back exactly, while neither box has changed since (D264). A box that
+ *  changed refuses `box_changed_since`; then the way back is a new move. */
+export async function undoSectionMove(move: string): Promise<SectionUndoResult> {
+  return (await request('/boxes/sections/undo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ move }),
+  })) as SectionUndoResult
+}
+
+/**
  * Delete a whole box — records, photos, sidecars, queue entries, cache, registry entry
  * (D10 ruling 3, amended D134).
  *
@@ -2133,6 +2192,17 @@ export async function preflightRun(send: RunSend): Promise<RunPreflight> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(onTheWire(send)),
   })) as RunPreflight
+}
+
+/** The cards a spend over this selection would buy: photographed, and held by no live claim.
+ *  FREE, decodes nothing, and writes nothing. Review's Identify strip counts, prices and spends this one list
+ *  (D291), so the press can never buy a card the strip did not name. */
+export async function waitingCards(selection: RunSelection): Promise<{ keys: string[]; claimed: number }> {
+  return (await request('/pipeline/waiting', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(onTheWire({ selection })),
+  })) as { keys: string[]; claimed: number }
 }
 
 /** ONE PRESS IN THE SHAPE THE ROUTE READS, and the selection is the payload rather than a field
@@ -3033,6 +3103,30 @@ export async function getHoldingsValue(range: HoldingsRange = 'month'): Promise<
     `/pipeline/holdings-value?range=${encodeURIComponent(range)}`,
     NO_CACHE,
   )) as HoldingsValuePayload
+}
+
+/** One SKU's answer from `getSkuPhotos` — the first on-hand copy of that SKU that still
+ *  carries a photograph, exactly `photoUrl`'s own `(box, index, cid)` triple. */
+export type SkuPhotoEntry = { box: number; index: number; cid: string | null }
+
+/** `sku -> SkuPhotoEntry`, for exactly the SKUs asked. A SKU with no photographed copy on
+ *  hand is simply ABSENT — never a guess (`GET /skus/photos?sku=<s>&sku=<s>`,
+ *  D-sales-rows-by-sku). `#/revenue`'s own reason: a sold card's own photograph is usually
+ *  reclaimed on purpose (D89), so a sales row's thumbnail is ANOTHER copy of the same SKU,
+ *  never the one that actually sold. A plain read, costs nothing, so this screen calls it
+ *  on arrival rather than gating it behind a press. */
+export async function getSkuPhotos(skus: string[]): Promise<Record<string, SkuPhotoEntry>> {
+  if (skus.length === 0) return {}
+  const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
+  const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as { photos: Record<string, SkuPhotoEntry> }
+  return body.photos
+}
+
+/** Every on-hand card, grouped by set, one row per distinct card with its quantity — the
+ *  owner's "by set order" view (`#/inventory?view=sets`). A read; costs nothing, holds
+ *  nothing, aggregates server-side. */
+export async function getInventorySets(): Promise<SetsReport> {
+  return (await request('/pipeline/sets', NO_CACHE)) as SetsReport
 }
 
 /** Every run, newest first. A read; costs nothing and holds nothing, so a run started from

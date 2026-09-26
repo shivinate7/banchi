@@ -409,8 +409,21 @@
   background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
 }
-/* Was `.ff-empty-art`, a local 72px reimplementation of the kit's own shape and colour logic
-   — promoted to `.bn-empty-art bn-empty-art-lg` (system review, 2026-09-20). */
+/* Was promoted to the kit's `.bn-empty-art bn-empty-art-lg` (system review, 2026-09-20), then
+   un-promoted back to a local class (D275's amendment, 2026-09-25): `bn-empty-art` is a
+   kit-reserved class name (`kit-adoption`'s R2-class), so this screen keeps its own copy of the
+   same shape and colour logic instead of writing a reserved class raw outside the kit. Same
+   declarations as `.bn-empty-art .bn-empty-art-lg` combined. */
+.ff-empty-art {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--bn-r-2xl);
+  display: grid;
+  place-items: center;
+  background: var(--bn-accent-tint);
+  color: var(--bn-accent);
+  margin-bottom: var(--bn-2);
+}
 .ff-empty-title {
   font-family: var(--bn-font-display);
   font-size: var(--ff-fs-lg);
@@ -689,8 +702,21 @@
   gap: var(--bn-2);
   color: var(--bn-ink-2);
 }
-/* Was `.ff-photo-missing`, a local reimplementation of a bordered icon-and-text well —
-   promoted to the kit's `.bn-empty-well` (system review, 2026-09-20), same declarations. */
+/* Was promoted to the kit's `.bn-empty-well` (system review, 2026-09-20), then un-promoted back
+   to a local class (D275's amendment, 2026-09-25): `bn-empty-well` is a kit-reserved
+   class name (`kit-adoption`'s R2-class). Same declarations. */
+.ff-empty-well {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--bn-3);
+  padding: var(--bn-8) var(--bn-5);
+  border-radius: var(--bn-r-2xl);
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 2px var(--bn-line-strong);
+  color: var(--bn-ink-2);
+}
 
 .ff-where {
   display: flex;

@@ -30,7 +30,7 @@ import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, placeWordsOf, sayPlace } from './position'
-import { Icon, Logo, Modal, useOverlayLayer } from './kit'
+import { Icon, Logo, Modal, Page, useOverlayLayer } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { isEditableTarget } from './keys'
 import { useSearch } from './useSearch'
@@ -366,14 +366,18 @@ function stillHere(group: SearchGroup, gone: ReadonlySet<string>): SearchGroup |
   }
 }
 
+/* The card's order in its box (D265), which is its index until a section is placed there. */
 function inWalkOrder(cards: Sellable[]): Sellable[] {
-  return [...cards].sort((a, b) => a.box - b.box || a.index - b.index)
+  const at = (card: Sellable) => card.where?.order ?? card.index
+  return [...cards].sort((a, b) => a.box - b.box || at(a) - at(b))
 }
 
 /** A search group's copies in the order he walks the boxes: the first is the one he pulls. */
 function copiesInWalkOrder(copies: SearchCopy[]): SearchCopy[] {
   return [...copies].sort(
-    (a, b) => a.place.box - b.place.box || a.place.index - b.place.index,
+    (a, b) =>
+      a.place.box - b.place.box ||
+      (a.place.order ?? a.place.index) - (b.place.order ?? b.place.index),
   )
 }
 
@@ -1084,7 +1088,7 @@ export function Fulfillment() {
       <>
         {header}
         <div className="ff-empty">
-          <span className="bn-empty-art bn-empty-art-lg">
+          <span className="ff-empty-art">
             <Icon name="alert" size={30} />
           </span>
           <p className="fulfillment-say ff-empty-title">The cards did not load. Try again.</p>
@@ -1133,7 +1137,7 @@ export function Fulfillment() {
         <article className="ff-card">
           <div className="ff-photo-wrap">
             {missing ? (
-              <div className="bn-empty-well">
+              <div className="ff-empty-well">
                 <Icon name="image" size={40} />
                 <p className="fulfillment-say">
                   The photo is missing. The card is still in the place shown here.
@@ -1532,7 +1536,7 @@ export function Fulfillment() {
 
             {cards.length === 0 ? (
               <div className="ff-empty">
-                <span className="bn-empty-art bn-empty-art-lg">
+                <span className="ff-empty-art">
                   <Icon name="box" size={30} />
                 </span>
                 <p className="fulfillment-say ff-empty-title">
@@ -1659,7 +1663,13 @@ export function Fulfillment() {
   )
 
   return (
-    <main
+    /* Page with no header and no width (D5, D275's amendment): R1 wants this screen
+       inside <Page> so the kit's own future page-scaffold changes reach it, but the Fulfiller
+       gets none of Page's own chrome — it draws its own header and its own h1 above, in
+       `body`, and it sizes its own column. */
+    <Page
+      header={false}
+      width={false}
       className={`fulfillment ff${sales.length === 0 ? '' : ' ff-has-sheet'}`}
       data-view={chosen === null ? 'home' : 'card'}
       data-zoom={bigPhoto === null ? 'false' : 'true'}
@@ -1672,6 +1682,6 @@ export function Fulfillment() {
       {sheet}
       {bigPhoto}
       {keysSheet}
-    </main>
+    </Page>
   )
 }

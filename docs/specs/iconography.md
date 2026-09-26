@@ -172,7 +172,7 @@ converts its own rows on `ux/kit-icons` merged in, per the wave-2 brief.
 | Re-read the inventory / Bring this card back / Remove this card… | BoxBrowse.tsx:CardOps | WORDS: menu items | – | – |
 | Close | BoxBrowse.tsx:CardOps | ICON | x | yes |
 | Cancel / Remove this card and slide the box down | BoxBrowse.tsx:CardOps | WORDS: irreversible | – | – |
-| Op tiles (Rename, Edit sections, Name sections, Re-open, Seal, Set claims, Move to box) | BoxOps.tsx:Op | WORDS: settings tiles carry a value; glyphs `tag → pencil`, `wand → pencil`, `package → moveTo` | pencil, moveTo | Add |
+| Op tiles (Rename, Edit sections, Name sections, Set claims, Move to box; Seal and Re-open removed by D-sealed-boxes-removed) | BoxOps.tsx:Op | WORDS: settings tiles carry a value; glyphs `tag → pencil`, `wand → pencil`, `package → moveTo` | pencil, moveTo | Add |
 | Close | BoxOps.tsx:BoxOps | ICON | x | yes |
 | Cancel / Save name / Move / Save names / Check this layout / Back / Save sections / Apply to {scope} | BoxOps.tsx | WORDS: form footers | – | – |
 | All settings | BoxOps.tsx:EditorFrame | WORDS: back with a destination | – | – |

@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import type { Place } from '../src/types'
+import { runRow } from './routeFixtures'
 
 /* THE REVIEW QUEUE, ASSERTED — AND UNTIL THIS FILE EXISTED, NOTHING ASSERTED IT AT ALL.
  *
@@ -1270,7 +1271,6 @@ const ORDER_LINE_PLACE: Place = {
   section_start: 1,
   section_end: null,
   box_total: 20,
-  box_closed: false,
   fraction: 0.7,
   neighbors: {
     prev: { slot: 13, index: 13, name: 'Charmander' },
@@ -1359,3 +1359,318 @@ for (const theme of ['light', 'dark'] as const) {
     expect(named, `.review-caption-nb (named) in ${theme}`).toBeGreaterThanOrEqual(ORDER_LINE_FLOOR)
   })
 }
+
+/* ------------------------------------------------------------ the Identify strip (D291) */
+
+/** `GET /status` with `n` cards in the `captured` state. Registered after the shell's own stub,
+ *  so it wins (Playwright tries the newest route first). It is only the strip's cheap gate:
+ *  the count the strip draws is `/pipeline/waiting`'s. */
+async function waiting(page: Page, n: number): Promise<void> {
+  await page.route(/\/status$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        captures_root: 'captures',
+        store: 'inventory/store.sqlite',
+        store_exists: true,
+        cards: 40,
+        states: { captured: n },
+        queues: { review: 0, parked: 0 },
+        next_index: {},
+      }),
+    }),
+  )
+}
+
+/** `n` position keys in box 9, the shape `/pipeline/waiting` answers. */
+function keysOf(n: number, box = 9): string[] {
+  return Array.from({ length: n }, (_, at) => `${box}/${at + 1}`)
+}
+
+type Asked = { path: string; body: Record<string, unknown> | null }
+
+/** Every read the strip, the Runs sheet and its composer make, stubbed and recorded. The
+ *  strip's list answers `keys`, and `later` replaces it once the case says so. The spend route
+ *  is a 500 here, and a case that spends registers `spendRoute` over it. */
+async function runsReads(page: Page, runs: unknown[], keys: string[] = []): Promise<{ asked: Asked[]; answer: (next: string[]) => void }> {
+  const asked: Asked[] = []
+  let current = keys
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  const record = (path: string, route: { request(): { postDataJSON(): unknown; method(): string } }) =>
+    asked.push({ path, body: route.request().method() === 'POST' ? (route.request().postDataJSON() as Record<string, unknown>) : null })
+  await page.route(/\/pipeline\/waiting$/, (route) => {
+    record('/pipeline/waiting', route)
+    return route.fulfill(json({ keys: current, claimed: 0 }))
+  })
+  await page.route(/\/pipeline\/runs$/, (route) => {
+    record('/pipeline/runs', route)
+    return route.fulfill(json({ runs }))
+  })
+  await page.route(/\/boxes$/, (route) => route.fulfill(json({ boxes: [] })))
+  await page.route(/\/inventory$/, (route) => route.fulfill(json({ version: 2, cards: {} })))
+  await page.route(/\/games$/, (route) => route.fulfill(json({ games: [] })))
+  await page.route(/\/pipeline\/submissions$/, (route) =>
+    route.fulfill(json({ claims: [], counts: { claims: 0, keys: 0, stale: 0 } })),
+  )
+  await page.route(/\/pipeline\/preflight$/, (route) => {
+    record('/pipeline/preflight', route)
+    return route.fulfill(
+      json({
+        ok: true,
+        exit_code: 0,
+        selection: { state: 'captured' },
+        sentence: 'captured',
+        scope: null,
+        capture_dirs: ['/tmp/captures/cards'],
+        console: 'estimated cost $0.04\n',
+        claimed: null,
+        total: { photographs: 12, cache_hits: 0, to_send: 12, estimate_usd: 0.04, cards: 12 },
+      }),
+    )
+  })
+  await page.route(/\/pipeline\/identify$/, (route) => {
+    record('/pipeline/identify', route)
+    return route.fulfill({ status: 500, body: 'this case never spends' })
+  })
+  /* The run a started spend opens in the sheet, and its export scope (D76), in run-panel's
+     own shape: registered first, so the more general run route below cannot shadow it. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/scope/, (route) =>
+    route.fulfill(
+      json({
+        run: '2026-09-25-box9-01',
+        games: [],
+        scopes: ['category', 'sets'],
+        asked: null,
+        reason: null,
+        message: null,
+      }),
+    ),
+  )
+  await page.route(/\/pipeline\/runs\/[^/]+$/, (route) =>
+    route.fulfill(json({ ...runRow({ live: true, pid: 999, phase: 'identifying', collected: false }), console: '', files: [], manifest: {} })),
+  )
+  return {
+    asked,
+    answer: (next) => {
+      current = next
+    },
+  }
+}
+
+type Spend = { body: Record<string, unknown> }
+
+/** The spend route, STUBBED: nothing here reaches a paid service. Registered after `runsReads`,
+ *  so it wins. `cards` is what the SERVER says it sent, which the receipt must quote. `hold`
+ *  keeps the answer back until the case releases it. `refuse` answers D174's 409 instead. */
+async function spendRoute(
+  page: Page,
+  opts: { cards?: number; hold?: Promise<void>; refuse?: boolean; after?: () => void } = {},
+): Promise<Spend[]> {
+  const spends: Spend[] = []
+  await page.route(/\/pipeline\/identify$/, async (route) => {
+    spends.push({ body: route.request().postDataJSON() as Record<string, unknown> })
+    if (opts.hold !== undefined) await opts.hold
+    opts.after?.()
+    if (opts.refuse === true) {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'cards_already_claimed',
+            message: 'Run 2026-09-25-box9-01 is already paying to read 3 of these cards. Nothing in this send was started.',
+          },
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        started: [
+          {
+            run: '2026-09-25-box9-01',
+            path: '/tmp/runs/2026-09-25-box9-01',
+            pid: 999,
+            selection: { keys: [] },
+            scope: null,
+            cards: opts.cards ?? 12,
+            argv: [],
+          },
+        ],
+        failed: [],
+      }),
+    })
+  })
+  return spends
+}
+
+const PAST = [runRow({ counts: { cards_in: 100 }, usage: { cost_usd: 0.3 } })]
+
+test('the Identify strip is absent while no card waits, and neither list is read for it', async ({ page }) => {
+  const { asked } = await runsReads(page, [])
+  await open(page)
+  await expect(page.locator('.review-identify-strip')).toHaveCount(0)
+  expect(asked).toEqual([])
+})
+
+test('the Identify strip names the waiting count and this store’s own past cost per card', async ({ page }) => {
+  await waiting(page, 12)
+  /* $0.30 over 100 cards is $0.003 a card, so 12 cards is about $0.036. The second run spent
+     nothing and the third read no cards: neither may move the rate. */
+  await runsReads(
+    page,
+    [
+      runRow({ counts: { cards_in: 100 }, usage: { cost_usd: 0.3 } }),
+      runRow({ run: 'b', counts: { cards_in: 50 }, usage: { cost_usd: 0 } }),
+      runRow({ run: 'c', counts: {}, usage: { cost_usd: 9 } }),
+    ],
+    keysOf(12),
+  )
+  await open(page)
+  const strip = page.locator('.review-identify-strip')
+  await expect(strip.locator('.review-identify-strip-said')).toHaveText('Identify 12 cards, ~$0.04 (estimate)')
+  /* D221: the dollar figure is the mono face's own span, never typed into the label. */
+  await expect(strip.locator('.bn-money')).toHaveText('$0.04')
+  /* And it says it is an estimate to a pointer, not only to a screen reader. */
+  await expect(strip.locator('.review-identify-estimate')).toHaveAttribute('title', /estimate/)
+})
+
+test('a store with no recorded spend draws the strip with no figure rather than a guess', async ({ page }) => {
+  await waiting(page, 1)
+  await runsReads(page, [runRow({ usage: {} })], keysOf(1))
+  await open(page)
+  await expect(page.locator('.review-identify-strip-said')).toHaveText('Identify 1 card')
+})
+
+/* THE STRIP COUNTS WHAT THE SPEND COUNTS. `/status` says 14 cards are in the captured state, but
+ * none of them has a photograph a spend could buy (the demo store's own shape), so the strip is
+ * absent rather than offering a press the server would refuse. PROVED RED: drawing N from
+ * `status.states.captured` draws "Identify 14 cards" here. */
+test('the strip counts the cards a spend would buy, not the captured state', async ({ page }) => {
+  await waiting(page, 14)
+  const { asked } = await runsReads(page, PAST, [])
+  await open(page)
+  await expect.poll(() => asked.filter((row) => row.path === '/pipeline/waiting').length).toBe(1)
+  await expect(page.locator('.review-identify-strip')).toHaveCount(0)
+})
+
+test('Check first opens the money gate on top, spends nothing, and leaving it goes back to Review', async ({ page }) => {
+  await waiting(page, 12)
+  const { asked } = await runsReads(page, PAST, keysOf(12))
+  await open(page)
+  await page.locator('.review-identify-open').click()
+
+  /* The composer is the TOP layer, though it mounts in the same commit as the Runs sheet
+     around it: its own Close takes the press, rather than the sheet under it taking it. */
+  const composer = page.locator('.runs-composer')
+  await expect(composer).toBeVisible()
+  await expect(page.locator('.run-quote')).toBeVisible()
+  expect(asked.filter((row) => row.path === '/pipeline/preflight')).toHaveLength(1)
+  await composer.getByRole('button', { name: 'Close' }).click()
+
+  await expect(composer).toHaveCount(0)
+  await expect(page.locator('.review-runs-sheet')).toHaveCount(0)
+  expect(asked.map((row) => row.path)).not.toContain('/pipeline/identify')
+})
+
+/* THE OWNER'S RULING, 2026-09-25: "Identify now" spends at once, with no pre-check and no
+ * confirm. IT SPENDS EXACTLY THE CARDS THE STRIP PRICED: the whole send body is those keys and
+ * the composer's default reading, and nothing else. A capture in another tab after the strip
+ * read its list (the waiting answer grows to 30 here, and `/status` with it) cannot grow the
+ * spend. The receipt quotes the SERVER'S count. PROVED RED: sending `{state: 'captured'}` in
+ * place of the keys fails the body assertion. */
+test('Identify now spends exactly the cards the strip priced, with no pre-check', async ({ page }) => {
+  await waiting(page, 12)
+  const { asked, answer } = await runsReads(page, PAST, keysOf(12))
+  const spends = await spendRoute(page, { cards: 11 })
+  await open(page)
+  await expect(page.locator('.review-identify-strip-said')).toContainText('Identify 12 cards')
+
+  answer(keysOf(30))
+  await waiting(page, 30)
+  await page.locator('.review-identify-now').click()
+
+  await expect.poll(() => spends.length).toBe(1)
+  expect(spends[0]?.body).toEqual({ confirm: true, keys: keysOf(12), crop: true, max_edge: 1200 })
+  expect(asked.map((row) => row.path)).not.toContain('/pipeline/preflight')
+  /* No confirm screen: the composer never opens. The receipt is a toast with the server's own
+     count, then the run itself, open in the Runs sheet, where its own progress reads itself. */
+  await expect(page.locator('.bn-toast', { hasText: 'Identify started' })).toContainText('11 cards sent to be read.')
+  await expect(page.locator('.runs-composer')).toHaveCount(0)
+  await expect(page.locator('.review-runs-sheet')).toBeVisible()
+})
+
+/* AFTER A SPEND THE STRIP STOPS OFFERING THOSE CARDS. The run claimed them, so the server's
+ * list no longer holds them, and the strip reads it again once the press answers. */
+test('after a spend the strip reads its list again and stops offering the claimed cards', async ({ page }) => {
+  await waiting(page, 12)
+  const reads = await runsReads(page, PAST, keysOf(12))
+  await spendRoute(page, { after: () => reads.answer([]) })
+  await open(page)
+  await page.locator('.review-identify-now').click()
+  await expect(page.locator('.review-runs-sheet')).toBeVisible()
+  await expect.poll(() => reads.asked.filter((row) => row.path === '/pipeline/waiting').length).toBe(2)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.review-identify-strip')).toHaveCount(0)
+})
+
+/* ONE RULE FOR BOTH PRESSES: when `#/inventory` handed over ticked cards (`banchi.run-scope`),
+ * the strip names, prices and spends THAT set, the same one "Check first" opens on. PROVED RED:
+ * `openingSelection` ignoring the handoff asks for `state: 'captured'` instead. */
+test('a ticked handoff is the set the strip names and Identify now spends', async ({ page }) => {
+  const ticked = ['9/2', '9/3', '9/7']
+  await page.addInitScript((keys) => {
+    window.sessionStorage.setItem('banchi.run-scope', JSON.stringify({ keys }))
+  }, ticked)
+  const { asked } = await runsReads(page, PAST, ['9/2', '9/3'])
+  const spends = await spendRoute(page, { cards: 2 })
+  await open(page)
+  await expect(page.locator('.review-identify-strip-said')).toContainText('Identify 2 cards')
+  expect(asked.find((row) => row.path === '/pipeline/waiting')?.body).toEqual({ keys: ticked })
+  await page.locator('.review-identify-now').click()
+  await expect.poll(() => spends.length).toBe(1)
+  expect(spends[0]?.body).toEqual({ confirm: true, keys: ['9/2', '9/3'], crop: true, max_edge: 1200 })
+})
+
+/* A REFUSED PRESS MOVES NOTHING (D118). The refusal is a toast, never a notice that grows the
+ * strip, so the card under review stays where it was. */
+test('a refused Identify now says so in a toast and moves nothing', async ({ page }) => {
+  await waiting(page, 12)
+  await runsReads(page, PAST, keysOf(12))
+  await spendRoute(page, { refuse: true })
+  await open(page)
+  const card = page.locator('.review-card')
+  const before = await card.boundingBox()
+  await page.locator('.review-identify-now').click()
+  await expect(page.locator('.bn-toast', { hasText: 'Nothing was paid for' })).toContainText('already paying to read 3')
+  const after = await card.boundingBox()
+  expect(after?.y).toBe(before?.y)
+  expect(after?.x).toBe(before?.x)
+})
+
+/* A DOUBLE PRESS BUYS ONCE. Two clicks land in one task, before React can draw the busy state,
+ * so the only thing that can stop the second is the screen's own in-flight guard. The server's
+ * claim (D174) still refuses a second tab; that half is `make submission-selftest`'s.
+ * PROVED RED: deleting the `spending` ref's early return sends two spends. */
+test('a double press on Identify now spends once', async ({ page }) => {
+  await waiting(page, 12)
+  await runsReads(page, [], keysOf(12))
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const spends = await spendRoute(page, { hold: held })
+  await open(page)
+  await page.locator('.review-identify-now').evaluate((button: HTMLButtonElement) => {
+    button.click()
+    button.click()
+  })
+  await expect.poll(() => spends.length).toBe(1)
+  await expect(page.locator('.review-identify-now')).toBeDisabled()
+  release()
+  await expect(page.locator('.review-runs-sheet')).toBeVisible()
+  expect(spends).toHaveLength(1)
+})

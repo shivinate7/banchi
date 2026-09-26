@@ -138,7 +138,6 @@ export function place(over: Partial<Place> = {}): Place {
     section_start: 12,
     section_end: null,
     box_total: 133,
-    box_closed: false,
     fraction: 0.13,
     neighbors: null,
     section_gaps: 0,
@@ -901,7 +900,7 @@ export async function seedPopulatedReview(page: Page): Promise<void> {
 
 /* ------------------------------------------------------------------------- the roster */
 
-/** The six routes `shell.ts:stubStore` leaves empty-ish, each mapped to the seed that
+/** The routes `shell.ts:stubStore` leaves empty-ish, each mapped to the seed that
  *  populates it — read by `routeSweep.ts:sweepEveryRoute`, which REGISTERS EVERY SEED ONCE,
  *  before the sweep starts, so every route reads the same populated store at both widths.
  *  (Registering each seed on arrival at its route piled the handlers up in nav order: a route
@@ -914,7 +913,95 @@ export async function seedPopulatedReview(page: Page): Promise<void> {
  *  `App.tsx`'s `all`/`hotkey` rosters, because that is the shape that goes silently stale —
  *  a sweep that is missing a route walks the routes it has and nothing goes red. This map is
  *  a different thing: it is not a sweep roster (every route is still discovered at run time
- *  off `routesFromNav`), it is which five of those discovered routes get a second, richer
+ *  off `routesFromNav`), it is which of those discovered routes get a second, richer
+ *  seed on top of the small store everything else reads. Keeping it in this module, which the
+ *  check does not scan, says that plainly rather than asking the check to special-case a
+ *  literal that is not the failure it exists for. */
+/* ------------------------------------------------------------------------ pricing */
+
+/** One worklist row, the fields `#/pricing` draws. Two copies of it cover the two drawn
+ *  columns a dollar figure sits in: Market and Lowest. */
+function pricingRow(sku: string, name: string, market: string, low: string, place: { box: number; index: number; label: string }) {
+  return {
+    sku,
+    game: 'pokemon',
+    name,
+    condition: 'Near Mint',
+    set_name: 'SV: Prismatic Evolutions',
+    bucket: 'listable',
+    copies: 1,
+    add_to_quantity: 1,
+    backstock: 0,
+    live_before: 0,
+    committed: 0,
+    copies_out: 0,
+    nothing_to_add: null,
+    at_cap: false,
+    row: { 'TCGplayer Id': sku, Number: '161/159', Rarity: 'Secret Rare', 'TCG Market Price': market, 'TCG Low Price': low },
+    snap: { market, direct_low: null, low, low_with_shipping: null, now: null },
+    presets: { market_match: market, market_undercut_5: market, low_undercut_1: low },
+    rule_price: market,
+    positions: [place],
+    listing: null,
+    in: [{ run: '2026-09-10-box2-01', add_to_quantity: 1 }],
+    claimed_add: 1,
+    over_cap: false,
+  }
+}
+
+/** `#/pricing` WITH ROWS, so the sweep reads its Market and Lowest figures (the coordinator's
+ *  R7 note: money-face drew no Market figure, so a Market chip in Inter was never seen). The
+ *  corpus is registered first, because `/\/pricing$/` also matches the worklist's path and the
+ *  newest handler wins. */
+export async function seedPopulatedPricing(page: Page): Promise<void> {
+  await page.route(/\/pricing$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { policy: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' } }, skus: {} },
+        path: 'inventory/prices.json',
+        revision: 'r0',
+      }),
+    }),
+  )
+  await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        runs: [],
+        roster: [],
+        skus: [
+          pricingRow('8608859', 'Articuno', '22.03', '21.98', { box: 2, index: 1, label: 'Box 2, Section 1, Card 1' }),
+          pricingRow('8608459', 'Dunsparce', '2.06', '1.48', { box: 3, index: 4, label: 'Box 3, Section 2, Card 4' }),
+        ],
+        written_at: {},
+        skipped: [],
+        asked: [],
+        threshold: '0.49',
+        floor: '0.49',
+      }),
+    }),
+  )
+}
+
+/* ------------------------------------------------------------------------- the roster */
+
+/** The routes `shell.ts:stubStore` leaves empty-ish, each mapped to the seed that
+ *  populates it — read by `routeSweep.ts:sweepEveryRoute`, which REGISTERS EVERY SEED ONCE,
+ *  before the sweep starts, so every route reads the same populated store at both widths.
+ *  (Registering each seed on arrival at its route piled the handlers up in nav order: a route
+ *  drawn before `#/orders` at 1440 read the empty ledger, and the same route at 390 read the
+ *  full one. That was the whole of the run-to-run variation the first build blamed on a
+ *  "seeded-random" fixture. Nothing in this fixture is random.)
+ *
+ *  DELIBERATELY NOT IN A `*.spec.ts` FILE. `scripts/docs-audit.py`'s `route rosters` row
+ *  reconciles a hand-typed list of THREE OR MORE route hashes found in a spec against
+ *  `App.tsx`'s `all`/`hotkey` rosters, because that is the shape that goes silently stale —
+ *  a sweep that is missing a route walks the routes it has and nothing goes red. This map is
+ *  a different thing: it is not a sweep roster (every route is still discovered at run time
+ *  off `routesFromNav`), it is which of those discovered routes get a second, richer
  *  seed on top of the small store everything else reads. Keeping it in this module, which the
  *  check does not scan, says that plainly rather than asking the check to special-case a
  *  literal that is not the failure it exists for. */
@@ -926,4 +1013,5 @@ export const POPULATED_ROUTE_SEEDS: Record<string, (page: Page) => Promise<void>
   '#/graveyard': seedPopulatedGraveyard,
   [PRODUCT_ROUTE]: seedPopulatedProduct,
   '#/review': seedPopulatedReview,
+  '#/pricing': seedPopulatedPricing,
 }

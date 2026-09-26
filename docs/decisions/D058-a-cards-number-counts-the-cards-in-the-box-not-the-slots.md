@@ -123,5 +123,8 @@ Box 1 holds 133 records with 18 sold, box 3 holds 39 with 24, and neither declar
 
 **What would reopen this: a box whose slots are fixed.** Everything above rests on the physical fact that a card pulled out of a stack lets the cards behind it slide forward — the same premise D10 ruling 1 already leans on for the mid-box delete. A binder, a sleeved page or any storage where a slot stays empty is a box this numbering describes wrongly, and the honest answer then is per-box rather than global: the flag would sit on `Box` beside `sections`, and the seal gate the owner dropped is the cheapest version of it.
 
----
+### Amended 2026-09-25: capacity is gone
 
+The paragraph above that keeps `capacity` for "its D20 job" is superseded. The owner removed the
+seal (D-sealed-boxes-removed), and `close_box` was the only writer of `capacity`. So a box has
+no capacity, and this entry's rule that every number counts the cards on hand is the only rule.

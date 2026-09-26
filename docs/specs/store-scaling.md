@@ -214,7 +214,17 @@ cards a single pass is the honest answer. At 50,000 it is not — and the cost w
 text match, it was building 50,000 card objects to get at the text. **FTS5 over `LIKE`, on
 the owner's word after a walkthrough**: they chose multi-word any-order matching and
 best-match ranking, were told mid-word matching (`izard` → Charizard) is lost, and took it;
-the playbook adds prefix matching so a partial word still hits. An external-content FTS5
+the playbook adds prefix matching so a partial word still hits.
+
+SUPERSEDED 2026-09-25 on the mid-word point (the owner's own later ruling, verbatim:
+"Add mid-word search"). D271 carries the supersession, the mechanism
+(`_fts_substring_candidates_for_term`) and the measured numbers, re-measured again by the
+round-4 Opus review at 3,000 and 10,000 cards. This paragraph stays as the record of the
+original trade-off. It is no longer the current behavior. D271 also records the ceiling
+that trade-off named. A real mid-word hit costs 249-260ms at 10,000 cards, over the
+200ms debounce budget, and D271 names the upgrade path: an FTS5 trigram index.
+
+An external-content FTS5
 table over `cards` with the three sync triggers, so the index maintains itself inside the
 same transaction as every write (D88's invariant, with no Python hook to forget). FTS5 is
 compiled into the rig's SQLite (3.54.0, probed); `cards` has a TEXT key and a stable
@@ -231,6 +241,35 @@ so no store lacks one, and D86's rule against reading a legacy path as a fallbac
 Proof: T7 asserts the index and the deleted walk agree on single-word and number queries
 over the fixture store, that a capture, a sale, a move and a rename are searchable in the
 same transaction, and that dropping one trigger fails it.
+
+**UX-173, 2026-09-25 (search-server lane, FLT-06/04).** The candidate query missed two
+shapes. A number typed without its own leading zeros: `number_key` always zfills to three
+digits, so a query for `54/132` never matched the indexed `054/132`. A hyphenated name:
+`-` is a tokenchars character, so `heimerdinger-inventor` was one token to the index. The
+field it should find tokenized its comma into two separate words instead. `_fts_query`
+now widens each term into an OR of spellings: zero-padded, a hyphen read as the
+collector-number slash, and a hyphen split into separate words. `_match_rank` compares
+numbers on their canonical form and folds accents the way the index already does. A bare
+substring never matches, so `54` cannot match `154/200`. `server/match.py` is the one
+shared matcher this repo argued for. `scripts/match-selftest.py` proves it against
+`app/src/kit/match.cases.json`, in `make check`. See D271 for the owner's own ruling.
+
+**UX-210, 2026-09-25 (search-server lane).** `_card_facets` and `_box_row`'s `matches`
+field take an optional `hide_sold` flag. `GET /boxes?hide_sold=true` is the wire form.
+Every facet count follows the OTHER active filters plus Hide sold. The order picked does
+not matter: rarity before Hide sold gives the same count as the reverse. The client wiring
+(`app/src/server.ts`, `Inventory.tsx`, `BoxBrowse.tsx`) is the inventory lane's own build.
+
+**UX-263, 2026-09-25 (search-server lane, FLT-36).** `app/src/useSearch.ts:
+SEARCH_DEBOUNCE_MS` (200ms) called itself an unmeasured assumption. Measured against a
+throwaway store of 2,500 cards, the owner's own size. Twenty requests per query shape, a
+real loopback HTTP round trip, JSON encoding included. A name or a short prefix answered
+in 46ms on average, p95 48ms. A bare card number answered in 24ms. A query matching
+nothing answered in 1ms. Every shape lands well inside the 200ms wait, with margin to
+spare. KEPT at 200ms. The server is not why a fast typist would notice lag. A shorter
+wait would only ask it more often, for no gain in how soon a result appears. The one risk
+the code already named stays true either way a debounce is sized: a slow `Store.write()`
+lock, held by a running `./pkmnscan identify`.
 
 **~9–11 days of one session; fewer on the wall clock under `00-phases.md`'s layout**, which
 runs items 2–5 in parallel worktrees once the guard is in, and 6–8 in parallel once those

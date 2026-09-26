@@ -1420,6 +1420,32 @@ CHECKS = (
         "gates": True,
         "governed_by": ("D18", "D173"),
     },
+    {
+        "target": "match-selftest",
+        "runs": "python3 scripts/match-selftest.py",
+        "asserts": "FLT-06/04's one forgiving matcher, server side (UX-173). "
+                   "server/match.py against every row of app/src/kit/match.cases.json — the "
+                   "filtering lane's own case table, so the server matcher is proved "
+                   "against the same table the client one is, rather than a second table "
+                   "that could drift. Then capture_server._match_rank directly, for the "
+                   "number tier's canonical comparison (a bare `54` must never match the "
+                   "longer `154/200`, rule 4's own 'never a substring') and its accent "
+                   "fold. Then capture_server.do_search end to end against a throwaway "
+                   "store, which is the only way to see the FTS5 CANDIDATE-step defect "
+                   "UX-173 was filed over: a bare `54/132` or a hyphenated "
+                   "`heimerdinger-inventor` never reaching `_match_rank` at all, because "
+                   "no token the index holds starts with either spelling.",
+        "needs": ("python3",),
+        "writes": "one sqlite store per do_search case, under `mktemp -d`. `PKMNSCAN_HOME` "
+                  "is repointed for every case, so the operator's own store is never "
+                  "opened.",
+        "commit_path": False,
+        "why_off_commit_path": "D18 — it writes a temp store. Same standing as "
+                               "decisions-selftest's cluster, not cid-selftest's — no "
+                               "process signalling, no photograph tree.",
+        "gates": True,
+        "governed_by": ("D166", "D213"),
+    },
 )
 
 

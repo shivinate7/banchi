@@ -1,114 +1,33 @@
-/* THE MASS-CLEAR SHEET (D168) — its own stylesheet, and the
-   prefix names the component rather than the screen it hangs off, which is `Markdown.css`'s own
-   rule after that sheet moved host and left forty class names asserting a screen it had left.
- *
- * THE KIT HAS THE SHEET AND NOT ITS CHROME. `.bn-sheet` is the fixed panel, the phone's
- * bottom-rise and the leave animation; a scrolling body between a fixed head and a fixed foot is
- * not a kit primitive. `Markdown.css` says this is *"the second time and therefore the last
- * before it is worth promoting"* — this is the third. IT IS NOT PROMOTED HERE and the reason is
- * that promoting it is its own change with its own blast radius across two existing sheets, made
- * on the way past a destructive money control. The debt is named rather than discharged badly:
- * the shared shape is `-top` / `-body` / `-foot` and the three declarations are byte-comparable.
- *
- * NO COLOR IS NAMED IN THIS FILE. Every surface, ink and line is a `--bn-*` token, which is the
- * rule `make docs-audit`'s `raw color` row reads these stylesheets for. The danger red belongs to
- * `Button variant="danger-solid"` and is the kit's, so this sheet paints none of it — a second
- * red here would be a second answer to what destructive looks like. */
-
-.clearprices {
-  width: min(540px, 100vw);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.clearprices[hidden] { display: none; }
-.clearprices:focus { outline: none; }
-
-.clearprices-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--bn-3);
-  padding: var(--bn-5) var(--bn-4) var(--bn-4) var(--bn-6);
-  padding-top: calc(var(--bn-5) + env(safe-area-inset-top));
-  border-bottom: 1px solid var(--bn-line);
-  flex: none;
-}
-.clearprices-heading { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.clearprices-head {
-  margin: 0;
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-2xl);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-}
-
-.clearprices-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--bn-4);
-  padding: var(--bn-5) var(--bn-6);
-}
-/* THE SCROLLING COLUMN MUST NOT SHRINK WHAT IS IN IT — `Markdown.css`'s measured rule, and it
-   applies for the identical reason: a flex item whose own `overflow` is not `visible` has an
-   automatic minimum size of zero, so in a column that overflows it is squeezed flat instead of
-   the body scrolling. */
-.clearprices-body > * { flex: none; }
+/* THE MASS-CLEAR SHEET (D168), inside the kit's `Sheet`: the kit draws the panel, the head, the
+   one Close and the foot. This file draws only what is inside. `--bn-*` only; the danger red is
+   `Button variant="danger-solid"`'s, so no second red is painted here. */
 
 .clearprices-says {
-  margin: 0;
+  margin: 0 0 var(--bn-4);
   font-size: var(--bn-fs-base);
-  line-height: 1.55;
   color: var(--bn-ink-2);
 }
-.clearprices-says strong { color: var(--bn-ink); }
 
-/* One of the two questions. The rule above each is the seam the eye needs; the first carries the
-   head straight after the standing sentence and needs none. */
 .clearprices-step {
   display: flex;
   flex-direction: column;
   gap: var(--bn-3);
-  padding-top: var(--bn-4);
+  padding-block: var(--bn-4);
   border-top: 1px solid var(--bn-line);
 }
-
-/* THE SENTENCE UNDER THE SCOPE CONTROL, AND IT CHANGES WITH THE CONTROL. This is where the blast
-   radius is stated in words — the label carries the figure and this carries what the figure is
-   OVER. Quiet, because it is a caveat on a number and never a refusal. */
-.clearprices-scope-says,
-.clearprices-age-says {
-  margin: 0;
-  font-size: var(--bn-fs-md);
-  line-height: 1.5;
-  color: var(--bn-ink-3);
-}
+.clearprices-step-head { margin: 0; font-size: var(--bn-fs-md); font-weight: 700; color: var(--bn-ink); }
+.clearprices-scope-says { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
 .clearprices-scope-says strong { color: var(--bn-ink); font-weight: 700; }
 
-/* THE AGE WINDOWS, EACH CARRYING ITS OWN COUNT. Not `Segmented`: that primitive draws one line
-   of label per option, and five options each needing a word AND a figure is a two-line cell — a
-   thing the kit's segmented control has no shape for. Built here, named for this sheet, and said
-   out loud, which is `CLAUDE.md`'s rule for the case where the kit genuinely lacks a primitive.
-
-   THE COUNT IS DRAWN BEFORE THE PRESS BECAUSE A WINDOW CAN BE EMPTY FOR A REASON THAT IS NOT
-   ABOUT THE ANSWERS. Measured on the owner's store: 7+ days selects 0, because the oldest typed
-   price in the file is five days old. D103 found the same shape and ruled the zero was the whole
-   argument for a filter over a gate. */
-.clearprices-ages {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--bn-2);
-}
+.clearprices-ages { display: flex; flex-wrap: wrap; gap: var(--bn-2); }
+/* NO `transition` HERE ON PURPOSE: `base.css`'s response floor eases the button already, and a
+   component's own `transition` would replace it (D50). */
 .clearprices-age {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
-  min-height: var(--bn-control-h);
+  gap: var(--bn-0-5);
+  min-height: var(--bn-8);
   padding: var(--bn-2) var(--bn-3);
   border: 1px solid var(--bn-line);
   border-radius: var(--bn-r);
@@ -117,11 +36,6 @@
   font: inherit;
   cursor: pointer;
 }
-/* NO `transition` IS DECLARED HERE ON PURPOSE. `base.css`'s response floor already eases
-   `background-color`, `border-color`, `color` and `box-shadow` on every `button`, and a
-   component's own `transition` REPLACES the floor's rather than adding to it — which is how
-   `.bn-nav-link`'s new hover came to snap, with `box-shadow` missing from a list it already
-   had. The dip under the finger is the floor's `translate` for the same reason. */
 .clearprices-age:hover:not([aria-pressed='true']) {
   border-color: var(--bn-line-strong);
   background: var(--bn-surface-2);
@@ -132,23 +46,10 @@
   background: var(--bn-accent-tint);
   color: var(--bn-ink);
 }
-.clearprices-age-label {
-  font-size: var(--bn-fs-md);
-  font-weight: 600;
-  white-space: nowrap;
-}
-/* Tabular, not mono: this is a number in a table of numbers, which is the type rule for every
-   figure in this product that is not a machine string. */
-.clearprices-age-count {
-  font-size: var(--bn-fs-sm);
-  font-variant-numeric: tabular-nums;
-  color: var(--bn-ink-3);
-}
+.clearprices-age-label { font-size: var(--bn-fs-md); font-weight: 600; white-space: nowrap; }
+.clearprices-age-count { font-size: var(--bn-fs-sm); font-variant-numeric: tabular-nums; color: var(--bn-ink-3); }
 .clearprices-age[aria-pressed='true'] .clearprices-age-count { color: var(--bn-ink-2); }
 
-/* WHAT IS LEFT ALONE. A list and not a paragraph, because these are separate facts about
-   separate sets and an operator scanning for "does this touch my holds" should find that line
-   without reading a sentence about dates. */
 .clearprices-spare-list {
   margin: 0;
   padding-left: var(--bn-4);
@@ -156,51 +57,5 @@
   flex-direction: column;
   gap: var(--bn-1);
   font-size: var(--bn-fs-md);
-  line-height: 1.5;
 }
 .clearprices-spares strong { font-variant-numeric: tabular-nums; }
-
-.clearprices-foot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--bn-2);
-  padding: var(--bn-3) var(--bn-6);
-  border-top: 1px solid var(--bn-line);
-  background: var(--bn-surface);
-  flex: none;
-}
-/* THE WAY BACK, PROMISED BEFORE THE PRESS AND NOT ONLY AFTER IT. An undo offered only on the
-   receipt is an undo the operator learns about once they have already decided; saying it here is
-   what makes the danger button pressable by somebody who is not sure. Under the foot rather than
-   in it, so it never competes with the two controls for the eye. */
-.clearprices-undo {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--bn-2);
-  margin: 0;
-  padding: 0 var(--bn-6) var(--bn-3);
-  padding-bottom: calc(var(--bn-3) + env(safe-area-inset-bottom));
-  background: var(--bn-surface);
-  font-size: var(--bn-fs-sm);
-  line-height: 1.45;
-  color: var(--bn-ink-3);
-  flex: none;
-}
-.clearprices-undo .bn-icon { flex: none; margin-top: 1px; color: var(--bn-ink-4); }
-
-@media (max-width: 767px) {
-  .clearprices-top { padding-left: var(--bn-4); }
-  .clearprices-body,
-  .clearprices-foot { padding-left: var(--bn-4); padding-right: var(--bn-4); }
-  .clearprices-undo { padding-left: var(--bn-4); padding-right: var(--bn-4); }
-  /* THE FOOT IS TWO FULL-WIDTH CONTROLS AT 390, not two shrunk ones. The danger button's label
-     carries a figure and a noun — `Clear 269 typed prices everywhere` — and at a phone width
-     sharing a row with Cancel it wrapped to three lines inside a 40px control. */
-  .clearprices-foot { flex-direction: column-reverse; align-items: stretch; }
-  .clearprices-foot .bn-btn { width: 100%; justify-content: center; }
-  /* AND THE WINDOWS GO TO A GRID. Five chips wrapping freely at 390 left a row of one, which
-     reads as a separated option rather than the fifth of five. */
-  .clearprices-ages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .clearprices-age { align-items: center; }
-}

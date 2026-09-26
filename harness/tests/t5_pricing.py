@@ -403,6 +403,12 @@ def run() -> Result:
         lambda: join.prices_for(report, sub_threshold=pricing.flat_floor()),
         "a run-wide sub-threshold choice does not answer for an unpriced SKU",
     )
+    left = join.prices_for(report, sub_threshold=pricing.flat_floor(), leave_unanswered=True)
+    c.ok(
+        ARTICUNO not in left and ACCELGOR not in left,
+        "a SEND leaves an unanswered no-price SKU out rather than refusing (D277 Q3) — and "
+        "never prices it at a guess: it is absent, not floored",
+    )
     priced = join.prices_for(
         report,
         sub_threshold=pricing.flat_floor(),
@@ -518,8 +524,9 @@ def run() -> Result:
     c.equal(choice.unanswered, [ACCELGOR], "a null no_market_data entry is unanswered")
     c.equal(
         len(choice.blocking([ARTICUNO])),
-        2,
-        "an unset sub_threshold and an unanswered SKU both block emit",
+        1,
+        "an unset sub_threshold blocks emit, and an unanswered no-price SKU does NOT any more "
+        "(D277 Q3): the send leaves it out and sends every other ready copy",
     )
     c.equal(
         len(decisions.Decisions.parse(

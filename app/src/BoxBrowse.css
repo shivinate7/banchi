@@ -169,16 +169,6 @@
 }
 .browse-boxcell-bar { width: 44px; height: 5px; border-radius: 3px; background: var(--bn-surface-2); overflow: hidden; }
 .browse-boxcell-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--bn-accent); transition: width var(--bn-t-slow) var(--bn-ease); }
-/* The track exists on every record row (sealed or not, D118's horizontal form): fixed
-   dimensions so an absent glyph still holds the same auto-column width the icon would. */
-.browse-boxcell-lock {
-  width: 12px;
-  height: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--bn-ink-4);
-}
 .browse-boxcell-count {
   font-size: var(--bn-fs-xs);
   color: var(--bn-ink-3);

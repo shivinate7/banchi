@@ -442,6 +442,11 @@ proves each one. Three choices the table left open are recorded here.
   form, and the move undo reads both. A divider put in behind the transplant builds on the
   move. A batch move is undone one card at a time, and only its last card is the newest, so
   only that card can be undone. The others are moved back.
+- **A chain of moves undoes one link.** Move a card from A to B, then from B to C. Undo the
+  second move, and the card is back at B. The first move is then built on, because box B
+  changed. Its fix is an ordinary move back to A. Section 11.1's table stands as it is.
+- **The move undo restores the order key too (D265).** The card comes home at its own index
+  and at its own place in the walk.
 - **"Still here" and the ledger: the owner's ruling, 2026-09-25, verbatim:**
 
   ```

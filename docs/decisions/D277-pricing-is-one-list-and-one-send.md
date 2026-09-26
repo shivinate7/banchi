@@ -76,7 +76,7 @@ steps. The sheet opens with 92 words and a shell command (UX-017, UX-120).
 
 ### What is built
 
-NOT BUILT. The owner released the pricing and runs lanes once this re-interview and the flow
-interview were done. Both touch Pricing's write bar, so they run in sequence. The runs lane goes
-first, with the send, live and reconcile plumbing. The pricing lane follows, with this screen.
-The Pricing drawer folds into the one product view in the pricing lane.
+BUILT, 2026-09-25, by the pricing lane. The entry with slug
+`pricing-rebuilt-to-the-reinterview` records what was built answer by answer, the calls the
+build made, and the send change for Q3. Q9's offer ("Make this the rule") is planned and not
+built. It waits on a read of the owner's store.

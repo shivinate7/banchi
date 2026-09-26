@@ -26,7 +26,10 @@ import {
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxRuns } from './BoxRuns'
+import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
+import { useViewParam } from './kit/viewState'
 import { CardLocations } from './CardLocations'
+import { InventorySets } from './InventorySets'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
 import { sayPlace } from './position'
@@ -249,7 +252,26 @@ function report(failure: Failure): void {
   toast({ kind: 'refusal', title: failure.message, body: failure.code })
 }
 
+/* ONE OWNER-SIDE VIEW OF STORED CARDS (D31), SEEN TWO WAYS: the walk, card by card, and the
+   shelf, every box from above with its sections as blocks that move (D264). Which one is in the
+   URL (`?view=shelf`, D285), so a reload keeps it. */
 export function Inventory() {
+  const [view, setView] = useViewParam('view', 'walk')
+  const onView = useCallback((next: InventoryView) => setView(next), [setView])
+  return view === 'shelf' ? <BoxShelf onView={onView} /> : <InventoryWalk view={view === 'sets' ? 'sets' : 'walk'} onView={onView} />
+}
+
+/* THE WALK, AND THE OWNER'S "BY SET" VIEW OF THE SAME CARDS (D-set-view), which shares this
+   page and its header: `?view=sets` swaps the box walk for `InventorySets` inside the one
+   `<Page>`. The Shelf (D264) is `?view=shelf` and draws its own page. One `view` key, three
+   values, one switch (`ShelfSwitch`), so no two views can claim the same URL. */
+function InventoryWalk({
+  view,
+  onView,
+}: {
+  readonly view: 'walk' | 'sets'
+  readonly onView: (next: InventoryView) => void
+}) {
   const [selected, setSelected] = useState<Row | null>(null)
   const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
   const [listings, setListings] = useState<Readonly<Record<string, Listing>>>(NO_LISTINGS)
@@ -676,8 +698,14 @@ export function Inventory() {
       icon="box"
       /* SILENT WITH NO BOX: the empty state says "No boxes yet" once, not the lede too. */
       lede={boxRecords.length === 0 ? undefined : 'Sell, retire or move any card.'}
+      /* THE ONE VIEW SWITCH (D264, D-set-view): Walk, Shelf and Sets. In the header's
+         actions slot, beside the h1, so a switch moves nothing else on screen (D118). */
+      actions={<ShelfSwitch view={view} onView={onView} />}
       className="inventory"
     >
+      {view === 'sets' ? (
+        <InventorySets reloadToken={reloads} />
+      ) : (
       <BoxBrowse
         detail={detail}
         onSelect={setSelected}
@@ -693,6 +721,7 @@ export function Inventory() {
         boxPanel={<BoxRuns box={runScope.box} indices={runScope.indices} />}
         actionBar={currentCopy === null || selected === null || currentCopy.key !== selected.key ? null : actionFor(currentCopy, true)}
       />
+      )}
 
       {retiring === null ? null : (
         <RetirePanel
@@ -1060,7 +1089,7 @@ function MovePanel({
      server's own `GET /boxes` order (box number), which said nothing about which box the hand
      was likeliest to reach for. */
   const others = boxesMostRecentFirst(
-    boxes.filter((record) => record.box !== copy.place.box && record.state !== 'closed'),
+    boxes.filter((record) => record.box !== copy.place.box),
   )
   return (
     <Overlay kind="dialog" label={`Move: ${sayPlace(copy.place.label ?? copy.key)}`} onClose={onCancel} className="inventory-confirm">
