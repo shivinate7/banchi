@@ -58,9 +58,10 @@
                                            moment the real one goes in (D10, the capture
                                            screen's `S`). Takes no index: the store reads it.
                                            `after` puts it right after that section
-    DELETE /boxes/<box>/sections           take out the EMPTY last divider, the capture
-                                           screen's `U` after `S` (UN-15). Moves no other.
-                                           `?div=` names the empty divider to take out
+    DELETE /boxes/<box>/sections?div=<k>   take out divider <k>, S's own, while it is the
+                                           last and empty, or an empty one S put after a
+                                           middle section: the capture screen's `U` after
+                                           `S` (UN-15). Moves no other
     POST   /pipeline/preflight             what a run would cost. FREE, creates no run
     POST   /pipeline/waiting               the photographed, unclaimed cards a spend over a
                                            selection would buy. FREE, decodes nothing
@@ -922,7 +923,10 @@ MOVE_UNDO_FIELDS = ("undo",)
 # way; there is no such thing as moving nowhere.
 MOVE_CARDS_FIELDS = ("indices", "to_box", "section")
 # `section` ON BOTH MOVES is a divider key of `to_box` (`docs/specs/subbox-capture.md` 1.5):
-# each card goes to the tail of that section. Absent, the card goes to the back of the box.
+# each card goes to the tail of that section. IT IS REQUIRED. The owner's ruling, 2026-09-26:
+# "i need to specify where it goes there no auto default". A body with no `section` used to
+# file the card at the back of the box, which is a silent misfile when a caller forgets the
+# field. The Map's drag names its own gap on another route, so it is not this rule's subject.
 
 
 def _optional_section(payload: dict, field: str) -> Optional[str]:
@@ -939,11 +943,22 @@ def _optional_section(payload: dict, field: str) -> Optional[str]:
     return value.strip()
 
 
-def _section_slot(inventory: master.Inventory, to_box: int, section: Optional[str]):
-    """Where a card moved into `section` of `to_box` lands: `(index, key)`, or None for the
-    back of the box. The same tail rule a capture uses (`Inventory.section_tail_key`)."""
+def _require_section(payload: dict) -> str:
+    """A Move to box's `section`, or 400 `section_required`. A move has no default place."""
+    section = _optional_section(payload, "section")
     if section is None:
-        return None
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "section_required",
+            "Choose the section of the box the card goes into. A move has no default place. "
+            "Send `section`, a section's `div` from GET /boxes.",
+        )
+    return section
+
+
+def _section_slot(inventory: master.Inventory, to_box: int, section: str):
+    """Where a card moved into `section` of `to_box` lands: `(index, key)`. The same tail
+    rule a capture uses (`Inventory.section_tail_key`)."""
     key, _ordinal, _last = inventory.section_tail_key(to_box, section)
     return inventory.next_index(to_box), key
 
@@ -5349,7 +5364,7 @@ def do_move_card(box: int, index: int, payload: dict) -> dict:
         )
     aimed_at = _optional_text(payload, "capture_id")
     to_box = _require_to_box(payload)
-    section = _optional_section(payload, "section")
+    section = _require_section(payload)
 
     key = master.position_key(box, index)
 
@@ -5422,7 +5437,7 @@ def do_move_cards(box: int, payload: dict) -> dict:
     """
     _reject_unknown(payload, MOVE_CARDS_FIELDS)
     to_box = _require_to_box(payload)
-    section = _optional_section(payload, "section")
+    section = _require_section(payload)
     raw_indices = payload.get("indices")
     if raw_indices is not None:
         if not isinstance(raw_indices, list) or not raw_indices:
@@ -5865,7 +5880,8 @@ def do_move_range(box: int, payload: dict) -> dict:
     `indices` are the stored indices of the cards, in the order they stand, all in one
     section. The gap is `before_card` (a card's index in `to_box`: the cards go on its far
     side, into its section) or `section_end` (an ordinal of `to_box`: after that section's
-    last card). No divider moves. `aim` is the screen's `{"count", "first", "last"}`.
+    last card). No gap is refused unless `to_box` is empty (400 `section_required`). No divider
+    moves. `aim` is the screen's `{"count", "first", "last"}`.
     """
     _reject_unknown(payload, MOVE_RANGE_FIELDS)
     raw = payload.get("indices")
@@ -5879,7 +5895,7 @@ def do_move_range(box: int, payload: dict) -> dict:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST, "range_invalid",
             "Send the cards to move, and at most one gap: a card to go in front of, or a "
-            "section's end. No gap is the end of the box nearest you.",
+            "section's end. Send no gap only for an empty box.",
         )
     if payload.get("to_box") is None:
         raise BadRequest(HTTPStatus.BAD_REQUEST, "to_box_required", "Send a box to move them into.")
@@ -5912,9 +5928,16 @@ def do_move_range(box: int, payload: dict) -> dict:
         dst_title = inventory.box_title(to_box)
         dst_sections = sections if same else inventory.layout_of(to_box)
         dst_names = inventory.section_names_for(to_box)
-        # NO GAP IS THE NEAR END: the end of the last section, or an empty box.
+        # NO GAP IS REFUSED, unless the box is empty (the owner's ruling, 2026-09-26: "i need
+        # to specify where it goes there no auto default"). An empty box has one place, so a
+        # drop there is exact. Anywhere else a body with no gap is a client bug, and it must
+        # fail loudly, not file the cards at the near end.
         if before_card is None and section_end is None and dst_sections:
-            section_end = len(dst_sections)
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST, "section_required",
+                f"Choose where in {dst_title} the cards go: in front of a card, or at the end "
+                f"of a section. A move has no default place.",
+            )
         if before_card is not None:
             # A CARD ON HAND ONLY: a sold card or a tombstone is not where a hand can put
             # anything in front of (the R3 review).
@@ -12889,18 +12912,55 @@ def do_open_section(box: int, payload: dict) -> dict:
     return body
 
 
-def do_close_section(box: int, div: Optional[str] = None) -> dict:
-    """`DELETE /boxes/<box>/sections`: take out the box's empty last divider (UN-15).
+def _s_added(store: Store, box: int, key, layout) -> bool:
+    """Whether the box's newest layout change is the S that added divider `key` (I9).
 
-    The capture screen's `U` after `S`. `Inventory.close_section` removes that one divider by
-    its own key and moves no other, and refuses when a card stands behind it. No body: the
-    store knows which divider is last. Answers with the box row, as `POST` does."""
-    with Store().write() as snapshot:
+    U after a mid-box S names a divider that is not the last. So is a divider that an editor
+    save put another one behind (the stale U, which must refuse). The layout alone cannot
+    tell them apart, and the `resectioned` log can: the newest line for this box must add
+    exactly `key` and leave the layout as it stands now. An unreadable log is a refusal."""
+    try:
+        events = store.named_events("resectioned")
+    except (files.StoreError, OSError, ValueError):
+        return False
+    latest = next((e for e in events if e.get("box") == int(box)), None)
+    if latest is None:
+        return False
+    try:
+        was = sorted(float(d) for d in latest.get("sections_from") or [])
+        now_ = [float(d) for d in latest.get("sections_to") or []]
+    except (TypeError, ValueError):
+        return False
+    return now_ == [float(d) for d in layout] and sorted(was + [float(key)]) == now_
+
+
+def do_close_section(box: int, div: Optional[str]) -> dict:
+    """`DELETE /boxes/<box>/sections?div=<divider_key>`: take out the divider S made (UN-15).
+
+    The capture screen's `U` after `S`. `div` is the key `POST /boxes/<box>/sections`
+    answered with, the last entry of its `sections`. `Inventory.close_section` removes that
+    one divider and moves no other. It refuses as 409 `divider_built_on` when `div` is not the
+    last divider any more (a dividers-editor save came between) or a card on hand stands
+    behind it. A missing or non-numeric `div` is a 400 `div_required`, and an unknown box a
+    404. Answers with the box row, as `POST` does."""
+    try:
+        key = master.as_order(div)
+    except (TypeError, ValueError, master.BadSections):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST, "div_required",
+            "Name the divider to take out, as ?div=<its key> from the answer that added it.",
+        ) from None
+    store = Store()
+    with store.write() as snapshot:
         inventory = snapshot.inventory
         if inventory.box(box) is None:
             raise BadRequest(HTTPStatus.NOT_FOUND, "box_not_found", f"No box {box}.")
-        # `?div=` names the divider to take out, for U after a mid-box S.
-        inventory.close_section(box, div=div)
+        try:
+            inventory.close_section(
+                box, key, after_s=_s_added(store, box, key, inventory.sections_for(box))
+            )
+        except master.DividerBuiltOn as exc:
+            raise BadRequest(HTTPStatus.CONFLICT, "divider_built_on", str(exc)) from None
         return _box_row(inventory, box)
 
 
@@ -15783,8 +15843,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # was well-formed — it carries no index to be wrong about — and lost to something
         # the STORE knows, which is where the last divider already is. It names that
         # divider in a sentence written for a person, so it is answered with its own text.
-        # (`section_ahead` went when the next card started going behind an empty last
-        # section, the owner's ruling of 2026-09-25, D10.)
+        # (`section_ahead` went on 2026-09-26, when the next card started going behind an
+        # empty last section: the owner's ruling of 2026-09-25, confirmed 2026-09-26, D10.)
         except master.SectionEmpty as exc:
             self._fail(HTTPStatus.CONFLICT, "section_empty", str(exc))
         # A section named by a divider key the box does not have now: another write changed
@@ -16809,14 +16869,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 body = do_delete_box(int(match.group(1)))
                 return self._json(HTTPStatus.OK, body)
-            # UN-15: the capture screen's divider undo. Only the empty last one.
+            # UN-15: the capture screen's divider undo, aimed by `?div=<divider_key>`.
             match = _BOX_SECTIONS_RE.match(path)
             if match:
-                div = parse_qs(urlparse(self.path).query, keep_blank_values=True).get("div")
-                return self._json(
-                    HTTPStatus.OK,
-                    do_close_section(int(match.group(1)), div[0] if div else None),
-                )
+                div = parse_qs(urlparse(self.path).query).get("div", [None])[0]
+                return self._json(HTTPStatus.OK, do_close_section(int(match.group(1)), div))
             # D61's way back. It drops a held batch — and the buyer addresses in it — now
             # rather than in half an hour, which is what CLAUDE.md's hard rule asks of
             # anything that makes this process hold one. Answers a body rather than a 204,

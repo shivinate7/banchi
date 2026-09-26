@@ -1187,19 +1187,20 @@ export function CaptureScreen() {
   const [sectionBusy, setSectionBusy] = useState(false)
 
   /* UN-15: A DIVIDER'S OWN UNDO, "WHILE NO CARD IS BEHIND IT". `closeSection` takes that one
-   * divider back out BY ITS OWN KEY (`div`, `ux/divider-fix`'s keyed route) — never only the
-   * box's last one, because an S in the middle no longer puts its divider there. `div` is
-   * `null` only when the response carried no `sections_detail[].div` at all — an older server
-   * or a fixture that predates the field — and `undoDivider` then falls back to the box-only
-   * form, which removes the last divider exactly as it always has. `at` is when the divider
-   * was opened, compared against the newest shot's own `at` (`sitting`, D164's stack) so `U`
-   * reaches whichever write is actually the newest — a capture into ANOTHER box after this one
-   * opened does not touch it, because a divider is a fact about ONE box (D10) and `doCapture`
-   * clears this only when the capture lands in the SAME box, which is "built on" in the plan's
-   * own words (11.1). */
+   * divider back out BY ITS OWN KEY (`div`, `ux/divider-fix`'s keyed route, now required —
+   * see `server.ts:closeSection`) — never only the box's last one, because an S in the middle
+   * no longer puts its divider there. This is set ONLY when the response actually carried a
+   * `sections_detail[].div` — an older server or a fixture that predates the field leaves no
+   * key to undo by, and `U` then falls through to the ordinary capture undo instead of trying
+   * a route that would refuse `div_required`. `at` is when the divider was opened, compared
+   * against the newest shot's own `at` (`sitting`, D164's stack) so `U` reaches whichever
+   * write is actually the newest — a capture into ANOTHER box after this one opened does not
+   * touch it, because a divider is a fact about ONE box (D10) and `doCapture` clears this only
+   * when the capture lands in the SAME box, which is "built on" in the plan's own words
+   * (11.1). */
   const [pendingDivider, setPendingDivider] = useState<{
     box: number
-    div: string | null
+    div: string
     at: number
   } | null>(null)
 
@@ -2820,13 +2821,13 @@ export function CaptureScreen() {
    *  key was not its count. Shares `busyRef`/`busy` and `undoNote` with the capture undo
    *  above — one strip, reporting on itself either way. */
   const undoDivider = useCallback(
-    async (target: { box: number; div: string | null }) => {
+    async (target: { box: number; div: string }) => {
       if (busyRef.current) return
       busyRef.current = true
       setBusy(true)
       setUndoNote(null)
       try {
-        const record = await closeSection(target.box, target.div ?? undefined)
+        const record = await closeSection(target.box, target.div)
         setBoxRecords((prev) => {
           const rest = prev.filter((entry) => entry.box !== record.box)
           return [...rest, record].sort((left, right) => left.box - right.box)
@@ -2835,6 +2836,9 @@ export function CaptureScreen() {
         setSectionNote(null)
         setUndoNote({ done: true, text: 'Undone', position: null, code: null, did: 1, want: 1 })
       } catch (err) {
+        // A REFUSED DIVIDER UNDO IS FINAL: the divider is built on, so `U` goes back to the
+        // captures, and the server's one sentence says why.
+        setPendingDivider(null)
         setUndoNote({ done: false, position: null, did: 0, want: 1, ...describe(err) })
       } finally {
         busyRef.current = false
@@ -3022,7 +3026,10 @@ export function CaptureScreen() {
       // UN-15: which divider `U` takes back out, and when it went in — its OWN key, never
       // the box's last one: an S in the middle puts its divider somewhere past the front,
       // and the keyed route (`ux/divider-fix`) is what `undoDivider` needs to reach it.
-      if (opened !== null) setPendingDivider({ box, div: opened.div ?? null, at: Date.now() })
+      // `closeSection` now REQUIRES a key, so this is only set when the response actually
+      // carried one — an older server or a fixture with no `div` field leaves `U` to fall
+      // through to the ordinary capture undo instead.
+      if (opened?.div != null) setPendingDivider({ box, div: opened.div, at: Date.now() })
       // A mid-box S renumbers every later section, and a shot's label was rendered against
       // the layout before it (D58) — reload the sitting and patch the strip by key.
       if (renumbered !== null) void refreshShotLabels()

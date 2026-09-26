@@ -846,11 +846,16 @@ class SectionEmpty(ValueError):
 class SectionGone(ValueError):
     """A request named a section, by its divider key, that the box does not have now.
 
-    The capture screen, S with `after`, the named divider undo and a Move-to-box all aim at a
+    The capture screen, S with `after` and a Move-to-box all aim at a
     section by its key (`docs/specs/subbox-capture.md` section 1). A key the box no longer
     has means another write changed the box after the screen read it. Filing the card
     anywhere else would be a silent misfile, so the request is refused and writes nothing.
     """
+
+
+class DividerBuiltOn(ValueError):
+    """`close_section` was asked to take out a divider that is no longer S's own to undo: it
+    is not the box's last divider any more, or a card on hand stands behind it (UN-15)."""
 
 
 class UnknownBox(ValueError):
@@ -3629,46 +3634,57 @@ class Inventory:
             )
         return self.set_sections(entry.box, layout + [at])
 
-    def close_section(self, number, div=None) -> Tuple[int, ...]:
-        """Take out the box's last divider while no card stands behind it. The capture
-        screen's `U` after `S` (UN-15).
+    def close_section(self, number, div, *, after_s: bool = False) -> Tuple[int, ...]:
+        """Take out the divider `div` (its order key) while it is the box's last divider and
+        no card stands behind it. The capture screen's `U` after `S` (UN-15).
 
         IT REMOVES THAT ONE DIVIDER BY ITS KEY AND WRITES NOTHING ELSE. The screen used to
         send the layout back through `set_sections`, but it sent stored order keys where
         `PUT /boxes/<box>` reads card counts, so every divider whose key differs from its
-        count moved (the divider proof's F2). Here the store drops the last key off its own
+        count moved (the divider proof's F2). Here the store drops that one key off its own
         list, so no other divider can move.
 
-        Refuses `BadSections` when a card on hand stands behind the last divider, or when the
-        box has no divider past its first. A departed record there (a card moved out, sold or
-        retired) is not in the box, so it does not hold the divider in.
+        THE CALLER NAMES THE DIVIDER S MADE. Without it, a stale `U` after a dividers-editor
+        save took out the EDITOR's last divider (the review's first finding). Refuses
+        `DividerBuiltOn` when `div` is not the last divider, or when a card on hand stands
+        behind it. A departed record there (moved out, sold or retired) is not in the box, so
+        it does not hold the divider in.
         """
         entry = self.ensure_box(number)
         layout = list(entry.layout())
-        if div is not None:
-            # U AFTER A MID-BOX S: that one divider, by its key, and no other (F2, in general).
-            ordinal = self.section_ordinal(entry.box, div)
+        title = self.box_title(entry.box)
+        # U AFTER A MID-BOX S (D-sections-are-sub-boxes, I9): S with `after` puts its divider
+        # in front of a later one, so S's own divider may not be the last. It goes when the
+        # caller read that the box's newest layout change is that S (`after_s`), it is a
+        # stored divider past the first, and no card on hand stands in its section. A divider
+        # that an editor save put a later one behind is not S's to undo, so it keeps
+        # `DividerBuiltOn`, below (the stale U).
+        want = as_order(div)
+        middle = [n for n, d in enumerate(layout[1:-1], 1) if float(d) == float(want)]
+        if middle and after_s:
+            n = middle[0]
             sections = self.layout_of(entry.box)
-            if ordinal < len(sections):
-                held = any(self._on_hand(entry.box, i) for i in sections[ordinal - 1]["slots"])
-                if ordinal == 1 or held or len(layout) != len(sections):
-                    raise BadSections(
-                        f"section {ordinal} of {self.box_title(entry.box)} is the front of the "
-                        f"box or holds a card, so no divider was taken out. Edit the dividers "
-                        f"instead."
-                    )
-                kept = layout[:ordinal - 1] + layout[ordinal:]
-                return self.set_sections(entry.box, kept if len(kept) > 1 else [])
-        last = self.layout_of(entry.box)[-1:]
-        held = any(self._on_hand(entry.box, i) for sec in last for i in sec["slots"])
-        if len(layout) < 2 or held:
-            raise BadSections(
-                f"{self.box_title(entry.box)} has no empty last section, so no divider was "
-                f"taken out. Edit the dividers instead."
+            held = len(sections) != len(layout) or any(
+                self._on_hand(entry.box, i) for i in sections[n]["slots"]
             )
-        kept = layout[:-1]
-        # `[1]` is the box `open_section` found undeclared (`[]`), so it goes back to that.
-        return self.set_sections(entry.box, kept if len(kept) > 1 else [])
+            if held:
+                raise DividerBuiltOn(
+                    f"A card is already behind the divider you added in {title}, so it stays. "
+                    f"Edit the dividers instead."
+                )
+            return self.set_sections(entry.box, layout[:n] + layout[n + 1:])
+        if len(layout) < 2 or float(layout[-1]) != float(want):
+            raise DividerBuiltOn(
+                f"The divider you added is no longer the last one in {title}, so it stays. "
+                f"Edit the dividers instead."
+            )
+        last = self.layout_of(entry.box)[-1:]
+        if any(self._on_hand(entry.box, i) for sec in last for i in sec["slots"]):
+            raise DividerBuiltOn(
+                f"A card is already behind the divider you added in {title}, so it stays. "
+                f"Edit the dividers instead."
+            )
+        return self.set_sections(entry.box, layout[:-1])
 
     def box_fill(self, number) -> int:
         """The highest index this box holds. `next_index` minus one, and DISPLAY ONLY."""

@@ -599,6 +599,13 @@ def sent_image(payload: dict) -> bytes:
     return base64.b64decode(payload["image"])
 
 
+def back_of(box: int) -> str:
+    """The divider key of `box`'s last section: where a Move to box went before it had to
+    name a section (`docs/specs/subbox-capture.md` 1.5). A test that meant "the back of the
+    box" says so with this."""
+    return master.divider_key(Store().read().inventory.dividers_of(box)[-1])
+
+
 def fake_cid(seed) -> str:
     """A distinct, deterministic 64-hex name for a card a test invents (D172).
 
@@ -3999,7 +4006,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             snapshot.inventory.cards["3/2"].sku = None
             snapshot.inventory.set_state("3/2", master.SOLD)
             snapshot.inventory.retire("3/4", "damaged")
-        move_result = capture_server.do_move_card(3, 3, {"capture_id": "r4", "to_box": 9})
+        move_result = capture_server.do_move_card(3, 3, {"capture_id": "r4", "to_box": 9, "section": back_of(9)})
         moved_to = move_result["to"]
         with Store().write() as snapshot:
             snapshot.inventory.set_state("3/1", master.IDENTIFIED)
@@ -6605,7 +6612,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         mover = before.cards["6/1"]
         neighbor = asdict(before.cards["6/2"])
         stayer = asdict(before.cards["7/1"])
-        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, "section": back_of(7)})
         undone = answers(
             checks,
             lambda: capture_server.do_move_card(6, 1, {"undo": True}),
@@ -6635,7 +6642,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
             (mover.cid, None),
             "the card wears its own name again, and is no transplant",
         )
-        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, "section": back_of(7)})
         capture_server.do_mark_sold(6, 2, {})
         refusal(
             checks,
@@ -6649,7 +6656,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         capture_server.do_capture(capture_payload(6))
         capture_server.do_capture(capture_payload(7))
         mover = Store().read().inventory.cards["6/1"]
-        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, "section": back_of(7)})
         capture_server.do_capture(capture_payload(7))
         with Store().write() as snapshot:
             checks.raises(
@@ -6661,7 +6668,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         capture_server.do_capture(capture_payload(6))
         capture_server.do_capture(capture_payload(7))
         mover = Store().read().inventory.cards["6/1"]
-        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, "section": back_of(7)})
         capture_server.do_open_section(7, {})
         refusal(
             checks,
@@ -6675,7 +6682,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         capture_server.do_capture(capture_payload(6))
         capture_server.do_capture(capture_payload(7))
         mover = Store().read().inventory.cards["6/1"]
-        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, "section": back_of(7)})
         with Store().write() as snapshot:
             snapshot.inventory.cards["6/1"].cid = f"{master.MOVED_CID_PREFIX}{mover.cid}"
         undone = answers(
@@ -6690,16 +6697,16 @@ def check_undo_until_built_on(checks: Checks) -> None:
         capture_server.do_capture(capture_payload(6))
         capture_server.do_capture(capture_payload(7))
         mover = Store().read().inventory.cards["6/1"]
-        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, "section": back_of(7)})
         back = answers(
             checks,
-            lambda: capture_server.do_move_card(7, 2, {"capture_id": mover.capture_id, "to_box": 6}),
+            lambda: capture_server.do_move_card(7, 2, {"capture_id": mover.capture_id, "to_box": 6, "section": back_of(6)}),
             "a transplant moves back to its first box without a UNIQUE clash on its name",
         )
         onward = answers(
             checks,
             lambda: capture_server.do_move_card(
-                6, 2, {"capture_id": mover.capture_id, "to_box": 8}
+                6, 2, {"capture_id": mover.capture_id, "to_box": 8, "section": back_of(8)}
             ),
             "and on to a third box",
         )
@@ -6774,7 +6781,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         for _ in range(2):
             capture_server.do_capture(capture_payload(6))
         mover = Store().read().inventory.cards["6/1"]
-        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, "section": back_of(7)})
         checks.equal(
             [row["key"] for row in capture_server.do_capture_sitting()["cards"]],
             ["6/2"],
@@ -6840,7 +6847,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
                 "and the store's own name check refuses it too, under the route's history read",
             )
         live = next(c for c in cards if c.state == master.IDENTIFIED and c.box == 1)
-        capture_server.do_move_card(1, live.index, {"capture_id": live.capture_id, "to_box": 2})
+        capture_server.do_move_card(1, live.index, {"capture_id": live.capture_id, "to_box": 2, "section": back_of(2)})
         undone = answers(
             checks,
             lambda: capture_server.do_move_card(1, live.index, {"undo": True}),
@@ -10522,6 +10529,37 @@ def check_place_neighbors(checks: Checks) -> None:
             1,
             "and an index with no record adds NOTHING to the gap count: only the sold record "
             "at 2 is a gap",
+        )
+
+        # --- an unallocated tail is not a gap --------------------------------------------
+        # The same divider far past the fill, TYPED AFTER THE CAPTURES: section 1 of box 9
+        # runs to index 50 while the box holds five cards. `section_gaps` counts terminal
+        # RECORDS, not unoccupied indices — that an empty tail adds nothing is the
+        # CONSTRUCTION, not a bounds check, and this is the box that would catch the bounds
+        # check creeping back in.
+        capture_server.do_create_box({"box": 9})
+        for _ in range(5):
+            capture_server.do_capture(capture_payload(9))
+        capture_server.do_put_box(9, {"sections": [1, 51]})
+        capture_server.do_mark_sold(9, 2, {})
+        place = capture_server.do_inventory()["cards"]["9/3"]["place"]
+        # 49, ONE DEPARTED CARD AND NOT A LOST PLAN. The divider is declared at index 51 and
+        # the box has sold one card, so it stands in front of the FIFTIETH card rather than
+        # the fifty-first slot. `Position._divider` keeps the other 45 slots counting for
+        # one card each.
+        checks.equal(
+            place["section_end"],
+            49,
+            "a divider typed past the fill still carries its unfilled slots — the block says "
+            "the section ends at 49, one short of the declared 50, because one card has left "
+            "the box in front of it (D58)",
+        )
+        checks.equal(
+            place["section_gaps"],
+            1,
+            "and the 45 unallocated indices behind it add NOTHING to the gap count: an "
+            "index with no record is a card that was never captured, not a hole where one "
+            "used to be — only the sold record at 2 is a gap",
         )
 
         # --- pooled: no section is not "no holes" ----------------------------------------

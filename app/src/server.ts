@@ -1797,16 +1797,22 @@ export async function openSection(box: number, after?: string): Promise<BoxRecor
   })) as BoxRecord
 }
 
-/** `DELETE /boxes/<box>/sections`: take out one empty divider by its own key, the capture
- * screen's `U` after `S` (UN-15). The store removes that one divider and moves no other. It
- * refuses when a card stands behind the divider, and refuses the first divider.
+/** `DELETE /boxes/<box>/sections?div=<key>`: take out the divider `openSection` added, the
+ * capture screen's `U` after `S` (UN-15, subbox-capture.md 1.4, `ux/divider-fix` at
+ * `20392e87`). `div` is REQUIRED now — the route refuses 400 `div_required` without one — and
+ * is the divider key `S`'s own answer named, `sections_detail[].div` or the response's own
+ * `div` at the moment it was opened, never composed here. The store removes that one divider
+ * and moves no other. It refuses 409 `divider_built_on` when the divider is not S's own to
+ * undo any more (a dividers-editor save came between, or a card on hand stands behind it).
  *
- * `div` NAMES THE DIVIDER — omitted, it works as before and removes the empty last one
- * (`ux/divider-fix`'s own keyed form of this route). Sent, it removes that one and no other,
- * which is what an `S` in the middle needs its own undo to reach (subbox-capture.md 1.4). */
-export async function closeSection(box: number, div?: string): Promise<BoxRecord> {
-  const query = div === undefined ? '' : `?div=${encodeURIComponent(div)}`
-  return (await request(`/boxes/${box}/sections${query}`, { method: 'DELETE' })) as BoxRecord
+ * A STRING, NOT A NUMBER — §1's own rule: "Compare keys as strings. Never parse one and
+ * never compose one." A fractional key reads as Python's `repr` (`"5.0009765625"`), and
+ * `String(numberValue)` on that value is JavaScript's OWN formatting, not Python's — the one
+ * way this call could silently name a divider the store does not have. */
+export async function closeSection(box: number, div: string): Promise<BoxRecord> {
+  return (await request(`/boxes/${box}/sections?div=${encodeURIComponent(div)}`, {
+    method: 'DELETE',
+  })) as BoxRecord
 }
 
 // --------------------------------------------------------------------------- capture ids
