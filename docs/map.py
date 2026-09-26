@@ -7901,7 +7901,8 @@ COMPONENTS = [
                                         "`MM-DD-YY_XXXXX` off the group's own `latest` date and "
                                         "the most recent order's id tail — never a typed dot "
                                         "(D218), never the full id.",
-                                 "governed_by": ["D103", "D114", "D118", "D181", "D209", "D218", "D220"]},
+                                 "governed_by": ["D24", "D103", "D114", "D118", "D181", "D193",
+                                                 "D209", "D218", "D220", "D221", "D-orders-sorts"]},
             "src/csvUpload.ts": {"does": "the one FileReader every CSV upload in this app goes "
                                          "through, lifted out of RunPanel.tsx on 2026-08-30 so "
                                          "#/runs and #/shipping cannot carry two encodings to "
@@ -7966,8 +7967,8 @@ COMPONENTS = [
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
                                                "D118", "D123", "D132", "D159", "D181", "D192",
                                                "D193", "D194", "D195", "D196", "D203", "D209",
-                                               "D212", "D218", "D220", "D221",
-                                               "D274", "D285"]},
+                                               "D212", "D218", "D220", "D221", "D274", "D285",
+                                               "D-orders-sorts"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -9231,7 +9232,7 @@ COMPONENTS = [
                                                      "D91", "D93", "D96", "D103", "D113", "D114",
                                                      "D118", "D123", "D132", "D181", "D193", "D194",
                                                      "D196", "D203", "D209", "D212", "D218", "D220",
-                                                     "D221", "D274", "D285"]},
+                                                     "D221", "D274", "D285", "D-orders-sorts"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "
