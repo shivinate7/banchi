@@ -21,7 +21,7 @@ import type {
   RunStartedRun,
   RunSummary,
 } from './types'
-import { Button, Chip, EmptyState, Icon, Kbd, Notice, Segmented } from './kit'
+import { Button, Chip, EmptyState, Icon, IconButton, Kbd, Notice, Segmented } from './kit'
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
@@ -351,6 +351,7 @@ export function RunsComposer({
   onStarted,
 }: Props) {
   const dialog = useRef<HTMLDivElement | null>(null)
+  const scrim = useRef<HTMLDivElement | null>(null)
   const [stage, setStage] = useState<StageKey>('select')
 
   /* ONE READING FOR THE PRESS. `RunSend` carries one `crop` and one `maxEdge`, so this is a
@@ -460,7 +461,7 @@ export function RunsComposer({
 
   /* Dialog chrome: focus lands inside on open, stays inside under Tab, and goes back to the
      button that opened it on close. Escape closes. */
-  useOverlayFocus(dialog, open, close)
+  useOverlayFocus(dialog, open, close, false, scrim)
 
   /* ------------------------------------------------------------------- the stage 1 pickers */
   useEffect(() => {
@@ -575,9 +576,18 @@ export function RunsComposer({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
       if (event.metaKey || event.ctrlKey || event.altKey) return
-      const target = event.target as HTMLElement | null
+      /* `document.activeElement`, not `event.target` alone (D291): once
+         this composer's own Modal mounts one layer deeper — inside Review's own Sheet — a
+         `window`-level keydown's `target` can read as the document body rather than the
+         focused field on some builds, and the guard must not trust it alone. */
+      const target = (event.target ?? document.activeElement) as HTMLElement | null
+      const active = document.activeElement as HTMLElement | null
       const tag = target?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return
+      const activeTag = active?.tagName
+      if (
+        tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable ||
+        activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT' || active?.isContentEditable
+      ) return
       event.preventDefault()
       stepPreview(event.key === 'ArrowRight' ? 1 : -1)
     }
@@ -754,7 +764,7 @@ export function RunsComposer({
      centres on the page column rather than the viewport and the scrim never reaches the nav. */
   return createPortal(
     <>
-      <div className="bn-scrim" onClick={close} />
+      <div ref={scrim} className="bn-scrim" onClick={close} />
       <div
         ref={dialog}
         className="bn-dialog runs-composer"
@@ -796,9 +806,7 @@ export function RunsComposer({
               )
             })}
           </ol>
-          <Button variant="ghost" icon="x" iconOnly onClick={close}>
-            Close
-          </Button>
+          <IconButton icon="x" label="Close" onClick={close} />
         </header>
 
         <div className="runs-composer-body">
@@ -1122,15 +1130,11 @@ export function RunsComposer({
                     /* The walk lives up here, above the frame, so it is on screen at every
                        viewport height — the arrow keys are only discoverable from it. */
                     <span className="run-preview-walk" role="group" aria-label="Walk the selection">
-                      <Button size="sm" iconOnly icon="chevronLeft" onClick={() => setPreviewOffset((was) => was - 1)}>
-                        The card before this one
-                      </Button>
+                      <IconButton size="sm" icon="chevronLeft" label="The card before this one" onClick={() => setPreviewOffset((was) => was - 1)} />
                       <span className="run-preview-count">
                         card {preview.offset + 1} of {count(preview.total)}
                       </span>
-                      <Button size="sm" iconOnly icon="chevronRight" onClick={() => setPreviewOffset((was) => was + 1)}>
-                        The card after this one
-                      </Button>
+                      <IconButton size="sm" icon="chevronRight" label="The card after this one" onClick={() => setPreviewOffset((was) => was + 1)} />
                     </span>
                   )}
                 </div>

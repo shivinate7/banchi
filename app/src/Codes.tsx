@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 
 import {
   applyBoxClaims,
@@ -22,8 +21,10 @@ import type {
   LotReceipt,
   LotResult,
 } from './types'
-import { Button, EmptyState, Icon, Notice, PageHeader, Pill, Segmented, Stat, type IconName } from './kit'
+import { Button, EmptyState, Icon, IconButton, Loading, Notice, Page, Pill, ReloadButton, Segmented, Select, Sheet, Stat, type IconName } from './kit'
 import { toast } from './kit/toast'
+import { absoluteDate } from './dates'
+import { SearchField } from './SearchField'
 import './Codes.css'
 
 /* CODES — the code-card track on a route of its own (D14, D70).
@@ -122,100 +123,28 @@ function laneOf(entry: CodeEntry): LaneFilter {
   return entry.premium ? 'premium' : 'bulk'
 }
 
+/** The box's name only (`D259`). A registry row that is absent or
+ *  stale falls back to the number — the honest answer where there is genuinely no name to
+ *  read, never a placeholder drawn over a fault that is not there. */
+function boxName(box: number, boxes: BoxRecord[] | null): string {
+  const name = boxes?.find((b) => b.box === box)?.name
+  return typeof name === 'string' && name.trim() !== '' ? name : `Box ${box}`
+}
+
 /* D218: this renders inside a native `<option>`, which is plain text only — no element can
    carry the seam, so this is a real sentence (a comma list) rather than a typed dot. */
 function boxLabel(box: BoxRecord): string {
   const held = box.on_hand ?? box.cards
-  return `Box ${box.box}${box.name ? `, ${box.name}` : ''}, ${plural(held, 'card')}`
+  const name = typeof box.name === 'string' && box.name.trim() !== '' ? box.name : `Box ${box.box}`
+  return `${name}, ${plural(held, 'card')}`
 }
 
-/** `Box 3 · RB Epics`, or `Box 3` alone where the box has no name (D20/D56). The registry read
- *  can be absent or stale, and a box the ledger names is still a box: a missing row falls back
- *  to the number rather than drawing a fault where there is none. */
-function boxTitle(box: number, boxes: BoxRecord[] | null): string {
-  const name = boxes?.find((b) => b.box === box)?.name
-  return name ? `Box ${box} · ${name}` : `Box ${box}`
-}
-
-function when(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const at = new Date(iso)
-  if (Number.isNaN(at.getTime())) return iso.slice(0, 10)
-  return at.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-}
-
-/* ---- sheet ----------------------------------------------------------------------------------- */
-
-function Sheet({
-  title,
-  icon,
-  onClose,
-  children,
-}: {
-  readonly title: string
-  readonly icon: IconName
-  readonly onClose: () => void
-  readonly children: ReactNode
-}) {
-  const panel = useRef<HTMLDivElement>(null)
-  /* The control that opened the sheet, read during the first render — a field's autoFocus has
-     already moved focus by the time an effect runs — so it gets focus back when the sheet closes. */
-  const [opener] = useState<HTMLElement | null>(() =>
-    document.activeElement instanceof HTMLElement ? document.activeElement : null,
-  )
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    const previous = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    document.body.setAttribute('data-codes-sheet', '')
-    /* A field with autoFocus has taken focus by now; otherwise the sheet itself takes it, so
-       Tab and a screen reader start inside the dialog rather than on the page behind. */
-    const frame = window.requestAnimationFrame(() => {
-      const el = panel.current
-      if (el !== null && !el.contains(document.activeElement)) el.focus({ preventScroll: true })
-    })
-    return () => {
-      window.cancelAnimationFrame(frame)
-      window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = previous
-      document.body.removeAttribute('data-codes-sheet')
-      if (opener !== null && document.contains(opener)) opener.focus({ preventScroll: true })
-    }
-  }, [onClose, opener])
-  /* Portalled to <body>: `main.bn-page` animates a transform, and a transformed ancestor is the
-     containing block for a fixed sheet — rendered inline, the sheet hung off the page column
-     rather than the viewport, and opened from a task card it was off-screen under a scrim. */
-  return createPortal(
-    <>
-      <div className="bn-scrim codes-scrim" onClick={onClose} />
-      <div
-        ref={panel}
-        className="bn-sheet codes-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="codes-sheet-title"
-        tabIndex={-1}
-      >
-        <header className="codes-sheet-head">
-          <span className="codes-sheet-icon">
-            <Icon name={icon} size={18} />
-          </span>
-          <h2 id="codes-sheet-title" className="codes-sheet-title">
-            {title}
-          </h2>
-          <Button variant="ghost" iconOnly icon="x" onClick={onClose}>
-            Close
-          </Button>
-        </header>
-        <div className="codes-sheet-body">{children}</div>
-      </div>
-    </>,
-    document.body,
-  )
-}
+/* ---- sheet -----------------------------------------------------------------------------------
+ * The kit's `Sheet` (`app/src/kit/overlay.tsx`) was seeded from this screen's own local one —
+ * the portal, the focus return, the Escape handling and the scroll lock all moved there, plus
+ * the overlay stack (D272's sibling, UX-057/UX-090/UX-091) this local copy never
+ * had. Each of the three sheets below stays mounted and toggles `open`, so the kit's own exit
+ * animation runs instead of the panel disappearing the instant `sheet` changes. */
 
 /* ---- a code string, masked until asked ----------------------------------------------------------- */
 
@@ -273,20 +202,20 @@ function CodeBlock({ codes, name }: { readonly codes: readonly string[]; readonl
       <div className="codes-block-bar">
         <span className="bn-label">{plural(codes.length, 'code')}</span>
         <span className="bn-spacer" />
-        <Button size="sm" variant="ghost" icon={shown ? 'lock' : 'eye'} onClick={() => setShown((s) => !s)} aria-pressed={shown}>
-          {shown ? 'Hide' : 'Reveal'}
-        </Button>
-        <Button
+        <IconButton
           size="sm"
-          variant={clip.copied ? 'ok' : undefined}
+          icon={shown ? 'eyeOff' : 'eye'}
+          label={shown ? 'Hide' : 'Reveal'}
+          pressed={shown}
+          onClick={() => setShown((s) => !s)}
+        />
+        <IconButton
+          size="sm"
           icon={clip.copied ? 'check' : 'copy'}
+          label={clip.copied ? 'Copied' : 'Copy all'}
           onClick={() => void clip.copy(codes.join('\n'))}
-        >
-          {clip.copied ? 'Copied' : 'Copy all'}
-        </Button>
-        <Button size="sm" icon="download" onClick={download}>
-          Download .txt
-        </Button>
+        />
+        <IconButton size="sm" icon="download" label="Download the codes" onClick={download} />
       </div>
       {clip.failed ? (
         <div className="codes-block-notice">
@@ -313,14 +242,12 @@ function ManifestPath({ path }: { readonly path: string }) {
     <>
       <div className="codes-path">
         <code>{path}</code>
-        <Button
+        <IconButton
           size="sm"
-          variant={clip.copied ? 'ok' : 'ghost'}
           icon={clip.copied ? 'check' : 'copy'}
+          label={clip.copied ? 'Copied' : 'Copy path'}
           onClick={() => void clip.copy(path)}
-        >
-          {clip.copied ? 'Copied' : 'Copy path'}
-        </Button>
+        />
       </div>
       {clip.failed ? (
         <Notice tone="danger" title="The clipboard refused">
@@ -458,6 +385,15 @@ export function Codes() {
 
   const closeSheet = useCallback(() => setSheet(null), [])
 
+  /* The kit's Sheet owns focus, Escape and the scroll lock now — this is the one thing it does
+     not do for a screen it does not know about: step the toast stack aside so a receipt never
+     covers the open sheet (Codes.css's `body[data-codes-sheet] .bn-toasts` rule). */
+  useEffect(() => {
+    if (sheet === null) return
+    document.body.setAttribute('data-codes-sheet', '')
+    return () => document.body.removeAttribute('data-codes-sheet')
+  }, [sheet])
+
   const runScan = useCallback(
     async (dryRun: boolean) => {
       const n = Number(box)
@@ -513,12 +449,12 @@ export function Codes() {
             ? {
                 kind: 'status',
                 title: 'Nothing moved',
-                body: `Every card reached in box ${box} already said ${named}.${stepped}`,
+                body: `Every card reached in ${boxName(box, boxes)} already said ${named}.${stepped}`,
               }
             : {
                 kind: 'ok',
                 title: `${plural(claimed.applied, 'card')} now ${named}`,
-                body: `Box ${box} read again — ${plural(reread.decoded, 'code')} decoded.${stepped}`,
+                body: `${boxName(box, boxes)} read again — ${plural(reread.decoded, 'code')} decoded.${stepped}`,
               },
         )
         await load()
@@ -529,7 +465,7 @@ export function Codes() {
         setPending(null)
       }
     },
-    [load],
+    [load, boxes],
   )
 
   const runPreview = useCallback(async () => {
@@ -756,25 +692,22 @@ export function Codes() {
     failure === null ? null : (
       <div className="codes-failure bn-anim-pop">
         <Notice tone="danger" title={failure.message} code={failure.code || undefined} />
-        <Button variant="ghost" size="sm" iconOnly icon="x" onClick={() => setFailure(null)}>
-          Dismiss
-        </Button>
+        <IconButton size="sm" icon="x" label="Dismiss" onClick={() => setFailure(null)} />
       </div>
     )
 
-  const boxField = (value: string, onChange: (next: string) => void, autoFocus?: boolean) => (
-    <label className="bn-field codes-field">
-      <span className="bn-field-label">Box</span>
-      {boxes !== null && boxes.length > 0 ? (
-        <select className="bn-select" value={value} onChange={(e) => onChange(e.target.value)} autoFocus={autoFocus}>
-          <option value="">Choose a box…</option>
-          {boxes.map((b) => (
-            <option key={b.box} value={String(b.box)}>
-              {boxLabel(b)}
-            </option>
-          ))}
-        </select>
-      ) : (
+  const boxField = (value: string, onChange: (next: string) => void, autoFocus?: boolean) =>
+    boxes !== null && boxes.length > 0 ? (
+      <Select
+        label="Box"
+        value={value === '' ? null : value}
+        onChange={onChange}
+        placeholder="Choose a box…"
+        options={boxes.map((b) => ({ value: String(b.box), label: boxLabel(b) }))}
+      />
+    ) : (
+      <label className="bn-field codes-field">
+        <span className="bn-field-label">Box</span>
         <input
           className="bn-input"
           inputMode="numeric"
@@ -783,9 +716,8 @@ export function Codes() {
           placeholder="Box number"
           autoFocus={autoFocus}
         />
-      )}
-    </label>
-  )
+      </label>
+    )
 
   const held = ledger === null ? 0 : ledger.lanes.premium + ledger.lanes.bulk + ledger.lanes.unclaimed
   const segments =
@@ -808,23 +740,25 @@ export function Codes() {
   /* ---- render -------------------------------------------------------------------------- */
 
   return (
-    <main className="codes bn-page">
-      <PageHeader
-        title="Codes"
-        icon="qr"
-        lede="Read, tier, and hand off code cards."
-        actions={
-          <>
-            <Button variant="ghost" iconOnly icon="refresh" onClick={() => void load()} disabled={busy}>
-              Reload
-            </Button>
+    // TXT-39: the lede restated D70 ("the QR is the code") to the owner. Deleted.
+    <Page
+      title="Codes"
+      icon="qr"
+      className="codes"
+      actions={
+        <>
+          <ReloadButton onReload={() => void load()} busy={busy} />
+          {/* UX-159: ONE first step. With nothing on file yet, the empty state's own "Go to
+              capture" is that step; this button would open a scan with nothing captured to
+              read. Once the ledger holds anything, this is the one persistent action again. */}
+          {ledger === null || ledger.total > 0 ? (
             <Button variant="primary" icon="qr" onClick={() => openSheet('scan')}>
               Read a box
             </Button>
-          </>
-        }
-      />
-
+          ) : null}
+        </>
+      }
+    >
       {sheet === null ? failureNode : null}
       {loadFailure !== null && ledger !== null ? (
         <div className="codes-failure bn-anim-pop">
@@ -839,55 +773,20 @@ export function Codes() {
 
       {ledger === null ? (
         loadFailure === null ? (
+          // R2-class: the pile/products/tasks regions stay (the real content below shares
+          // their layout), but every shimmer box now comes from the kit's own `Loading`
+          // rather than a hand-typed `bn-skeleton` div.
           <div className="codes-loading" aria-busy="true" aria-label="Reading codes">
             <div className="bn-panel codes-pile">
               <div className="codes-pile-main">
-                <div className="codes-pile-head">
-                  <div className="bn-skeleton" style={{ width: 96, height: 16 }} />
-                  <div className="bn-skeleton" style={{ width: 200, height: 14 }} />
-                </div>
-                <div className="codes-stats">
-                  {Array.from({ length: 6 }, (_, i) => (
-                    <div key={i} className="codes-skel-stat">
-                      <div className="bn-skeleton" style={{ width: 64, height: 36 }} />
-                      <div className="bn-skeleton" style={{ width: 72, height: 14 }} />
-                      <div className="bn-skeleton" style={{ width: 96, height: 12 }} />
-                    </div>
-                  ))}
-                </div>
-                <div className="codes-pile-bar">
-                  <div className="bn-skeleton" style={{ height: 14, borderRadius: 7 }} />
-                  <div className="codes-legend">
-                    {Array.from({ length: 3 }, (_, i) => (
-                      <div key={i} className="bn-skeleton" style={{ width: 84, height: 12 }} />
-                    ))}
-                  </div>
-                </div>
+                <Loading shape="summary" label="Reading the pile" />
               </div>
               <aside className="codes-products" aria-hidden="true">
-                <div className="codes-products-head">
-                  <div className="bn-skeleton" style={{ width: 92, height: 16 }} />
-                  <div className="bn-skeleton" style={{ width: 44, height: 12 }} />
-                </div>
-                <div className="codes-skel-products">
-                  {Array.from({ length: 4 }, (_, i) => (
-                    <div key={i} className="codes-skel-product">
-                      <div className="bn-skeleton" style={{ width: `${[62, 30, 74, 40][i]}%`, height: 14 }} />
-                      <div className="bn-skeleton" style={{ width: 48, height: 20, borderRadius: 999 }} />
-                      <div className="bn-skeleton" style={{ width: 36, height: 14 }} />
-                    </div>
-                  ))}
-                </div>
+                <Loading shape="cards" rows={4} label="Reading products" />
               </aside>
             </div>
             <div className="codes-tasks" aria-hidden="true">
-              {Array.from({ length: 3 }, (_, i) => (
-                <div key={i} className="codes-task codes-skel-task">
-                  <div className="bn-skeleton" style={{ width: 40, height: 40, borderRadius: 12 }} />
-                  <div className="bn-skeleton" style={{ width: '55%', height: 18 }} />
-                  <div className="bn-skeleton" style={{ width: '90%', height: 14 }} />
-                </div>
-              ))}
+              <Loading shape="cards" rows={3} label="Reading tasks" />
             </div>
           </div>
         ) : (
@@ -899,7 +798,7 @@ export function Codes() {
                 <>
                   <span className="codes-failure-msg">{loadFailure.message}</span>
                   Codes did not answer — nothing on this screen can be shown yet.
-                  {loadFailure.code ? <code className="bn-notice-code codes-failure-code">{loadFailure.code}</code> : null}
+                  {loadFailure.code ? <code className="codes-failure-code">{loadFailure.code}</code> : null}
                 </>
               }
               actions={
@@ -916,12 +815,11 @@ export function Codes() {
             <EmptyState
               icon="qr"
               title="No codes on file yet"
-              /* No second "Read a box" button here — the header's own (always present,
-                 regardless of ledger state) already does exactly this, and drawing a
-                 second one directly below it put two identical controls on screen at
-                 once. "Go to capture" stays: it is the OTHER thing this state can send
-                 you to do, and it is not duplicated anywhere else on this screen. */
-              body="Set Game to Pokémon code cards on Capture, then read the box above."
+              /* UX-159: ONE first step. With the ledger empty, the header hides its own
+                 "Read a box" (above) — there is nothing captured yet for it to read — so
+                 this is the only button on screen. Once a box is captured and read, the
+                 header's button takes over as the one persistent action instead. */
+              body="Set Game to Pokémon code cards on Capture, then come back and read the box."
               actions={
                 <Button icon="camera" onClick={() => (window.location.hash = '#/capture')}>
                   Go to capture
@@ -936,7 +834,7 @@ export function Codes() {
                   <Icon name="package" size={16} /> Lots
                 </span>
               </div>
-              <LotsTable lots={lots} />
+              <LotsTable lots={lots} boxes={boxes} />
             </section>
           )}
         </>
@@ -979,7 +877,7 @@ export function Codes() {
                           aria-label={shown ? 'Hide this code' : 'Reveal this code'}
                         >
                           <Code code={e.code} shown={shown} odd={!e.well_formed} />
-                          <Icon name={shown ? 'lock' : 'eye'} size={13} />
+                          <Icon name={shown ? 'eyeOff' : 'eye'} size={13} />
                         </button>
                         <span className="codes-dup-where">
                           {positions.map((p, i) =>
@@ -1001,12 +899,12 @@ export function Codes() {
                                 target="_blank"
                                 rel="noreferrer"
                                 className="codes-dup-link"
-                                aria-label={`Open the photograph at box ${p.box}, index ${p.index}`}
+                                aria-label={`Open the photograph at ${boxName(p.box, boxes)}, slot ${p.index}`}
                               >
                                 <Icon name="image" size={13} />
-                                <span>Box {p.box}</span>
+                                <span>{boxName(p.box, boxes)}</span>
                                 <span>
-                                  index <span className="codes-index">{p.index}</span>
+                                  slot <span className="codes-index">{p.index}</span>
                                 </span>
                               </a>
                             ),
@@ -1061,13 +959,7 @@ export function Codes() {
                         return (
                           <li key={row.box} className="codes-fix-row">
                             <div className="codes-fix-where">
-                              <span className="codes-fix-box">
-                                {boxTitle(row.box, boxes)
-                                  .split(' · ')
-                                  .map((part, at) => (
-                                    <span key={at}>{part}</span>
-                                  ))}
-                              </span>
+                              <span className="codes-fix-box">{boxName(row.box, boxes)}</span>
                               <span className="codes-fix-n">{plural(row.indices.length, 'unclaimed code')}</span>
                               {row.company === null ? null : (
                                 <span className="codes-fix-company">
@@ -1079,22 +971,14 @@ export function Codes() {
                                 820 the row wraps, and a button that wrapped on its own sat
                                 under the box name rather than under the picker it answers. */}
                             <div className="codes-fix-do">
-                              <label className="bn-field codes-fix-field">
-                                <span className="bn-field-label">Product</span>
-                                <select
-                                  className="bn-select"
-                                  value={chosen}
-                                  disabled={busy}
-                                  onChange={(e) => setFixPick((held) => ({ ...held, [row.box]: e.target.value }))}
-                                >
-                                  <option value="">Choose a product…</option>
-                                  {ledger.products.map((p) => (
-                                    <option key={p.key} value={p.key}>
-                                      {p.display}
-                                    </option>
-                                  ))}
-                                </select>
-                              </label>
+                              <Select
+                                label="Product"
+                                value={chosen === '' ? null : chosen}
+                                onChange={(next) => setFixPick((held) => ({ ...held, [row.box]: next }))}
+                                placeholder="Choose a product…"
+                                options={ledger.products.map((p) => ({ value: p.key, label: p.display }))}
+                                disabled={busy}
+                              />
                               {/* OUTLINED WHEN IT IS NOT PREMIUM. A default pill's fill is
                                   `--bn-surface-2`, which is this row's own ground, so Bulk
                                   drew as bare text beside a filled Premium chip and the two
@@ -1278,17 +1162,14 @@ export function Codes() {
                 </button>
               </div>
               {tab === 'codes' ? (
-                <div className="bn-input-wrap codes-search">
-                  <Icon name="search" size={15} />
-                  <input
-                    className="bn-input"
-                    type="search"
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                    placeholder="Find a code, product, set or order"
-                    aria-label="Find a code"
-                  />
-                </div>
+                <SearchField
+                  value={filter}
+                  onChange={setFilter}
+                  persona="owner"
+                  label="Find a code"
+                  placeholder="Find a code, product, set or order"
+                  controlHeight="bar"
+                />
               ) : null}
             </div>
 
@@ -1305,7 +1186,7 @@ export function Codes() {
                   }
                 />
               ) : (
-                <LotsTable lots={lots} />
+                <LotsTable lots={lots} boxes={boxes} />
               )
             ) : (
               <>
@@ -1344,9 +1225,13 @@ export function Codes() {
                     ))}
                   </div>
                   <span className="bn-spacer" />
-                  <Button size="sm" variant="ghost" icon={revealAll ? 'lock' : 'eye'} aria-pressed={revealAll} onClick={() => setRevealAll((r) => !r)}>
-                    {revealAll ? 'Hide codes' : 'Reveal codes'}
-                  </Button>
+                  <IconButton
+                    size="sm"
+                    icon={revealAll ? 'eyeOff' : 'eye'}
+                    label={revealAll ? 'Hide codes' : 'Reveal codes'}
+                    pressed={revealAll}
+                    onClick={() => setRevealAll((r) => !r)}
+                  />
                 </div>
 
                 {rows.length === 0 ? (
@@ -1355,7 +1240,7 @@ export function Codes() {
                     title="Nothing matches"
                     body="No code matches those filters."
                     actions={
-                      <Button icon="x" onClick={clearFilters}>
+                      <Button icon="x" words="only-primary" onClick={clearFilters}>
                         Clear filters
                       </Button>
                     }
@@ -1392,7 +1277,7 @@ export function Codes() {
                                     aria-label={shown ? 'Hide this code' : 'Reveal this code'}
                                   >
                                     <Code code={e.code} shown={shown} odd={!e.well_formed} />
-                                    <Icon name={shown ? 'lock' : 'eye'} size={13} />
+                                    <Icon name={shown ? 'eyeOff' : 'eye'} size={13} />
                                   </button>
                                 </td>
                                 <td data-th="State">
@@ -1413,9 +1298,9 @@ export function Codes() {
                                   ) : (
                                     <span className="codes-where">
                                       <span className="codes-where-parts">
-                                        <span>Box {e.box}</span>
+                                        <span>{boxName(e.box, boxes)}</span>
                                         <span>
-                                          index <span className="codes-index">{e.index}</span>
+                                          slot <span className="codes-index">{e.index}</span>
                                         </span>
                                       </span>
                                       {e.duplicate_positions.length > 0 ? <Pill tone="danger">Read twice</Pill> : null}
@@ -1434,7 +1319,7 @@ export function Codes() {
                                       target="_blank"
                                       rel="noreferrer"
                                       className="codes-photo-link"
-                                      aria-label={`Open the photograph at box ${e.box}, index ${e.index}`}
+                                      aria-label={`Open the photograph at ${boxName(e.box, boxes)}, slot ${e.index}`}
                                     >
                                       <Icon name="image" size={15} />
                                       <span className="codes-photo-word">Photograph</span>
@@ -1460,7 +1345,7 @@ export function Codes() {
                           Show all {rows.length.toLocaleString()}
                         </Button>
                       ) : filtered ? (
-                        <Button size="sm" variant="ghost" icon="x" onClick={clearFilters}>
+                        <Button size="sm" variant="ghost" icon="x" words="only-primary" onClick={clearFilters}>
                           Clear filters
                         </Button>
                       ) : null}
@@ -1474,12 +1359,9 @@ export function Codes() {
       )}
 
       {/* ================================================================ sheets */}
-      {sheet === 'scan' ? (
-        <Sheet title="Read a box" icon="qr" onClose={closeSheet}>
+      <Sheet open={sheet === 'scan'} title="Read a box" icon="qr" onClose={closeSheet} className="codes-sheet">
           {failureNode}
-          <p className="codes-sheet-lede">
-            Decodes every code-card photograph in the box. Free — the QR is the code.
-          </p>
+          <p className="codes-sheet-lede">Free.</p>
           <form
             className="codes-form"
             onSubmit={(e) => {
@@ -1501,7 +1383,7 @@ export function Codes() {
           {scan === null ? null : (
             <div className="codes-result bn-anim-in" key={`${scan.box}-${scan.preview ? 'p' : 'w'}-${scan.decoded}`}>
               <div className="codes-result-head">
-                <Figure n={scan.decoded} of={scan.code_cards} label={<>code cards decoded in box {scan.box}</>} />
+                <Figure n={scan.decoded} of={scan.code_cards} label={<>code cards decoded in {boxName(scan.box, boxes)}</>} />
                 {scan.preview ? (
                   <Pill tone="accent" icon="eye">
                     Preview — nothing written
@@ -1541,11 +1423,10 @@ export function Codes() {
               )}
             </div>
           )}
-        </Sheet>
-      ) : null}
+      </Sheet>
 
-      {sheet === 'hand' && ledger !== null ? (
-        <Sheet title="Hand codes to a buyer" icon="hand" onClose={closeSheet}>
+      {ledger !== null ? (
+        <Sheet open={sheet === 'hand'} title="Hand codes to a buyer" icon="hand" onClose={closeSheet} className="codes-sheet">
           {failureNode}
           <p className="codes-sheet-lede">
             Confirming reserves every code it returns, permanently. A reserved code is never offered again — that is what stands
@@ -1647,12 +1528,11 @@ export function Codes() {
         </Sheet>
       ) : null}
 
-      {sheet === 'lot' ? (
-        <Sheet title="Build a lot" icon="package" onClose={closeSheet}>
+      <Sheet open={sheet === 'lot'} title="Build a lot" icon="package" onClose={closeSheet} className="codes-sheet">
           {failureNode}
           <p className="codes-sheet-lede">
             A physical lot is <strong>the whole box, or nothing</strong> — anything left in the box would go in the parcel anyway.
-            Move the strays out first; the refusal names them by index.
+            Move the strays out first; the refusal names where they sit.
           </p>
           <form
             className="codes-form"
@@ -1715,7 +1595,7 @@ export function Codes() {
                     <>
                       <span>
                         {lotPlan.count === 1 ? 'code' : 'codes'}
-                        {lotPlan.box === null ? '' : ` in box ${lotPlan.box}`}
+                        {lotPlan.box === null ? '' : ` in ${boxName(lotPlan.box, boxes)}`}
                       </span>
                       <span>{venueLabel(lotPlan.venue)}</span>
                       <span>{deliveryLabel(lotPlan.delivery)}</span>
@@ -1808,9 +1688,8 @@ export function Codes() {
               )}
             </div>
           )}
-        </Sheet>
-      ) : null}
-    </main>
+      </Sheet>
+    </Page>
   )
 }
 
@@ -1854,7 +1733,7 @@ function TaskCard({
 
 /* ---- lots table --------------------------------------------------------------------------------- */
 
-function LotsTable({ lots }: { readonly lots: readonly LotReceipt[] }) {
+function LotsTable({ lots, boxes }: { readonly lots: readonly LotReceipt[]; readonly boxes: BoxRecord[] | null }) {
   return (
     <div className="codes-table-wrap">
       <table className="bn-table codes-table codes-lots">
@@ -1878,7 +1757,7 @@ function LotsTable({ lots }: { readonly lots: readonly LotReceipt[] }) {
               <td data-th="Codes" className="num">
                 {l.count.toLocaleString()}
               </td>
-              <td data-th="Box">{l.box === null ? <span className="bn-faint">—</span> : `Box ${l.box}`}</td>
+              <td data-th="Box">{l.box === null ? <span className="bn-faint">—</span> : boxName(l.box, boxes)}</td>
               <td data-th="Delivery">
                 <Pill icon={l.delivery === 'physical' ? 'package' : 'send'}>{deliveryLabel(l.delivery)}</Pill>
               </td>
@@ -1892,7 +1771,7 @@ function LotsTable({ lots }: { readonly lots: readonly LotReceipt[] }) {
                   ))}
                 </span>
               </td>
-              <td data-th="Built">{when(l.built_at)}</td>
+              <td data-th="Built">{absoluteDate(l.built_at)}</td>
             </tr>
           ))}
         </tbody>

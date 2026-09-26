@@ -1,4 +1,5 @@
 import { Icon, Pill, type PillTone } from './kit'
+import { relativeDate, toDate } from './dates'
 import type { RunSummary } from './types'
 import './Runs.css'
 
@@ -108,21 +109,11 @@ export function matchProblemTitle(code: string): string {
 const STAGE_NAMES = STAGES.map((name) => name.toLowerCase())
 const STAGE_WORDS = `${STAGE_NAMES.slice(0, -1).join(', ')} and ${STAGE_NAMES[STAGE_NAMES.length - 1]}`
 
-/** When something happened, in the words a person uses for it. */
+/** When something happened, in the words a person uses for it: the kit's one relative format
+ *  (`dates.ts`'s `relativeDate`), or nothing where there is no date. */
 export function whenLabel(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const at = new Date(iso)
-  const t = at.getTime()
-  if (Number.isNaN(t)) return ''
-  const mins = Math.floor((Date.now() - t) / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days === 1) return 'yesterday'
-  if (days < 7) return `${days} days ago`
-  return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const at = toDate(iso)
+  return at === null ? '' : relativeDate(at)
 }
 
 /** The six-segment stage bar. */

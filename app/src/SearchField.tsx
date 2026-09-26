@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
 import type { Persona } from './position'
-import { Icon } from './kit'
+import { Icon, IconButton } from './kit'
 import './SearchField.css'
 
 /* The one input in the search-and-sell flow: type a card's name, get every copy of it.
@@ -231,17 +231,17 @@ export function SearchField({
         />
 
         {persona === 'owner' && draft !== '' ? (
-          <button
-            type="button"
+          <IconButton
+            icon="x"
+            label="Clear"
+            name="Clear search"
+            size="sm"
             className="search-field-clear"
-            aria-label="Clear search"
             onClick={() => {
               handle('')
               input.current?.focus()
             }}
-          >
-            <Icon name="x" size={14} />
-          </button>
+          />
         ) : null}
 
         {/* Owner-side only, and absent rather than hidden on his: his screens are touch and

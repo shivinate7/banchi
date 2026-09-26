@@ -3,7 +3,7 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as 
 import { createPortal } from 'react-dom'
 
 import { Icon, type IconName } from './Icon'
-import { cropStyle, type Crop } from './index'
+import { cropStyle, IconButton, type Crop } from './index'
 import { STATUS_TONES, UNNAMED_BOX, type StatusKind } from './dataRules'
 import { hasSheet, openSheet, sheetHref } from './sheets'
 import { useOverlayLayer } from './overlay'
@@ -813,6 +813,7 @@ function PickTrigger({
   sizer,
   icon,
   active,
+  disabled,
   onToggle,
   onKeyDown,
   className,
@@ -828,6 +829,9 @@ function PickTrigger({
   readonly sizer: readonly ReactNode[]
   readonly icon?: IconName
   readonly active: boolean
+  /** The native attribute: a disabled trigger cannot be clicked, focused, or reached by
+   *  keyboard, so `onToggle`/`onKeyDown` below never fire and the list cannot open. */
+  readonly disabled?: boolean
   readonly onToggle: () => void
   readonly onKeyDown?: (event: ReactKeyboardEvent<HTMLButtonElement>) => void
   readonly className?: string
@@ -841,6 +845,7 @@ function PickTrigger({
       aria-expanded={open}
       aria-controls={open ? `${id}-list` : undefined}
       data-active={active ? 'true' : undefined}
+      disabled={disabled}
       onClick={onToggle}
       onKeyDown={onKeyDown}
     >
@@ -878,6 +883,7 @@ export function Select<T extends string>({
   onChange,
   placeholder = 'Any',
   icon,
+  disabled,
   className,
 }: {
   readonly label: string
@@ -887,6 +893,9 @@ export function Select<T extends string>({
   readonly onChange: (next: T) => void
   readonly placeholder?: string
   readonly icon?: IconName
+  /** The trigger cannot be clicked or opened by keyboard while true (base.css's disabled
+   *  cursor and press floors, D50). */
+  readonly disabled?: boolean
   readonly className?: string
 }) {
   const id = useId().replace(/:/g, '')
@@ -905,11 +914,12 @@ export function Select<T extends string>({
         sizer={sizer}
         icon={icon}
         active={false}
+        disabled={disabled}
         onToggle={pick.toggle}
         onKeyDown={openOnArrow(pick.open, pick.toggle)}
         className={className}
       />
-      {pick.open ? (
+      {pick.open && !disabled ? (
         <PickPanel
           id={id}
           label={label}
@@ -999,17 +1009,22 @@ function FacetChip({
       />
       {/* Drawn over the chevron's own slot, so the trigger is one width picked or not (D118). */}
       {active ? (
-        <button
-          type="button"
+        <IconButton
+          icon="x"
+          label="Clear"
+          name={`Clear ${facet.label}`}
+          /* `size="sm"` keeps its own WIDTH narrow, inside the chevron slot it is drawn over
+             (D118, the comment above). The `style` prop sets its HEIGHT to match `.bn-pick`
+             beside it (FLT-24) — through the SAME inline `style`, never a CSS override, so a
+             real pointer's hit-test never races a stylesheet rule fighting an inline one. */
+          size="sm"
+          style={{ height: 'var(--bn-control-h)' }}
           className="bn-fchip-clear"
-          aria-label={`Clear ${facet.label}`}
           onClick={() => {
             onChange([])
             pick.trigger.current?.focus()
           }}
-        >
-          <Icon name="x" size={12} />
-        </button>
+        />
       ) : null}
       {pick.open ? (
         <PickPanel
@@ -1128,16 +1143,16 @@ export function SortControl<K extends string>({
           onChange({ key, dir: next?.first ?? 'desc' })
         }}
       />
-      <button
-        type="button"
+      <IconButton
+        icon={value.dir === 'asc' ? 'sortAsc' : 'sortDesc'}
+        label={value.dir === 'asc' ? asc : desc}
+        name={`Order: ${value.dir === 'asc' ? asc : desc}. Press to reverse.`}
+        /* Sized to `Select`'s own height through the SAME inline `style` IconButton already
+           merges a caller's `style` into — never a CSS override (FLT-24). */
+        style={{ width: 'var(--bn-control-h)', height: 'var(--bn-control-h)' }}
         className="bn-sort-dir"
-        aria-label={`Order: ${value.dir === 'asc' ? asc : desc}. Press to reverse.`}
         onClick={() => onChange({ key: value.key, dir: value.dir === 'asc' ? 'desc' : 'asc' })}
-      >
-        <span className="bn-sort-dir-words" aria-hidden="true">
-          {value.dir === 'asc' ? asc : desc}
-        </span>
-      </button>
+      />
     </span>
   )
 }

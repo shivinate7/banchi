@@ -78,12 +78,49 @@
    `--rv-chrome` declaration and these four rules are the four lines of it. */
 .review.bn-page { padding-top: var(--bn-4); padding-bottom: var(--bn-4); }
 .review-pagehead { margin-bottom: var(--bn-3); }
+/* Three icon-only presses now sit in this header. `.bn-head-actions`'s own gap (`--bn-2`,
+   8px) is enough between a worded press and its neighbour, but not between two 28px faces
+   whose 40px hit areas each overflow 6px a side — 8px of gap leaves a 4px zone where the
+   later button's hit area wins the probe (phone.spec.ts: "Re-check every waiting card"
+   missed its own right edge to the Reload button beside it). 12px clears it exactly. */
+.review-pagehead .bn-head-actions { gap: var(--bn-3); }
 .review-progress { display: inline-flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; min-width: 0; }
 .review-progress-bar { width: 160px; height: 5px; flex: none; }
 .review-progress-text { color: var(--bn-ink-3); }
 .review-progress-text strong { color: var(--bn-ink); font-weight: 700; }
 .review-progress-parked { color: var(--bn-ink-3); }
 .review-progress-parked::before { content: '·'; margin: 0 var(--bn-2); color: var(--bn-ink-4); }
+
+/* D291: the strip, drawn only when cards wait. One line, a warm tint so
+   it reads as a call to act rather than a fact — the same tint family the group-offer chip
+   in the header uses. */
+.review-identify-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 var(--bn-3);
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-warn-tint);
+  color: var(--bn-warn);
+  font-size: var(--bn-fs-sm);
+  font-weight: 600;
+  transition: background-color var(--bn-t-fast) var(--bn-ease);
+}
+.review-identify-strip:hover { background: color-mix(in srgb, var(--bn-warn-tint) 70%, var(--bn-warn) 30%); }
+.review-identify-strip-arrow { opacity: 0.7; }
+
+/* D291: `.bn-sheet`'s own default width (kit.css, 420px) is sized for a
+   form or a detail — RunPanel's own master/detail split and the composer's 940px dialog were
+   both built for the full page `#/runs` used to be. A 420px drawer squeezed that content into
+   a column it was never measured against, moving rows and panel heights the D118 floors this
+   content already carries (`run-panel.spec.ts`) assert have not moved. Wide, not narrow. */
+.review-runs-sheet { width: min(1100px, 96vw); }
+@media (max-width: 767px) {
+  .review-runs-sheet { width: 100vw; }
+}
 
 /* The reason lens. Wide screens wrap it; below 1024px it is one scrolling strip with a
    fade for the affordance. The mask's colour is alpha-only and names no colour. */
@@ -446,7 +483,14 @@
   white-space: nowrap;
 }
 
-.review-claims { display: flex; gap: var(--bn-2); flex-wrap: wrap; }
+/* UX-251: a RESERVED FRAME (D28's pattern, the same one the photo already uses), so a card
+   with fewer chips — or none — never moves the rows below it (measured: a card with no chips
+   beside a card with one dropped the candidate rows by 53px). One row is the common case; a
+   card whose chips wrap to a second (D23's rarity claim beside the finish pair, both long
+   values) still grows past the reserve rather than being clipped — narrower than the ceiling
+   this used to reserve for every card, chips or not, which cost 720/390 the room UX-203/204
+   need. */
+.review-claims { display: flex; gap: var(--bn-2); flex-wrap: wrap; min-height: 30px; align-content: flex-start; }
 .review-chip {
   display: inline-flex;
   align-items: center;
@@ -675,6 +719,9 @@
 .review-receipt-text { display: flex; align-items: baseline; gap: var(--bn-2); flex: 1 1 auto; min-width: 0; }
 .review-receipt-said { font-weight: 600; font-size: var(--bn-fs-md); white-space: nowrap; flex: none; }
 .review-receipt-label { font-size: var(--bn-fs-sm); font-variant-numeric: tabular-nums; opacity: 0.65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* UX-255: the outcome, a description beside the one act-verb ("Closed"). Never a second
+   verb — quieter than the label, never bold. */
+.review-receipt-outcome { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; flex: none; }
 .review-receipt .bn-receipt-bar { color: var(--bn-ok); }
 .review-refusal { animation: bn-receipt-in var(--bn-t-slow) var(--bn-ease-spring) both, rv-shake var(--bn-t-slow) var(--bn-ease) var(--bn-t-slow) 1; }
 @keyframes rv-shake {
@@ -776,6 +823,7 @@
 .review-session-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
 .review-session-said { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .review-session-label { font-size: var(--bn-fs-xs); font-variant-numeric: tabular-nums; color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-session-outcome { font-size: var(--bn-fs-2xs); color: var(--bn-ink-4); white-space: nowrap; flex: none; }
 .review-session-row .bn-btn { flex: none; }
 .review-session-more { padding: 6px 0 2px; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-accent); }
 
@@ -830,7 +878,7 @@
 .review-row-parked-label > span + span::before { content: '·'; margin: 0 4px; color: var(--bn-ink-4); }
 .review-row-main { display: flex; justify-content: space-between; align-items: baseline; gap: var(--bn-2); }
 .review-row-name { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.review-row-price { font-family: var(--bn-font-display); font-size: var(--bn-fs-md); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bn-ink); white-space: nowrap; }
+.review-row-price { font-size: var(--bn-fs-md); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bn-ink); white-space: nowrap; }
 .review-row-sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .review-row-position { white-space: nowrap; }
 /* The current card's place shows once, on the photo caption. The selected row keeps the
@@ -876,7 +924,7 @@
     box-shadow: var(--bn-shadow-3);
     animation: bn-sheet-in var(--bn-t-slow) var(--bn-ease) both;
   }
-  .bn-shell:not([data-rail='true']) .review[data-queue-open='true'] .review-rail { display: flex; }
+  .bn-shell:not([data-rail='true']) .review.is-queue-open .review-rail { display: flex; }
 }
 @media (max-width: 1319px) {
   .review-body { grid-template-columns: minmax(0, 1fr); }
@@ -898,7 +946,7 @@
     box-shadow: var(--bn-shadow-3);
     animation: bn-sheet-in var(--bn-t-slow) var(--bn-ease) both;
   }
-  .review[data-queue-open='true'] .review-rail { display: flex; }
+  .review.is-queue-open .review-rail { display: flex; }
 }
 :root[data-theme='dark'] .review-rail { background: var(--bn-surface); }
 
@@ -911,7 +959,7 @@
      it holds rather than to the column: a full-width well drew two black bands beside the
      card (200px each at 820px). The height is the smaller of the viewport's share and what
      the column's width can carry, so the photograph grows into the room it has. */
-  .review { --rv-photo-h: min(56vh, calc((100vw - 48px) * 1.7778)); }
+  .review { --rv-photo-h: min(34vh, calc((100vw - 48px) * 1.7778)); }
   .review-card { grid-template-columns: minmax(0, 1fr); gap: var(--bn-4); }
   /* The whole stage narrows, not just the well: the lookahead pill is the stage's child and
      has to stay over the photograph. */
@@ -1014,10 +1062,14 @@
 @media (max-width: 767px) {
   .review-pagehead .bn-head-actions .bn-btn:not(.bn-btn-icon) { padding-left: var(--bn-3); padding-right: var(--bn-3); }
   .review-group-bar { bottom: calc(64px + var(--bn-3) + env(safe-area-inset-bottom)); }
+  /* UX-204: the receipt is where the thumb is. Sticky rather than fixed, so it still scrolls
+     with the card until its own reserved slot (`.review-tray`, above) would carry it off the
+     bottom edge — the same pattern `.review-group-bar` already uses above the tab bar. */
+  .review-tray { position: sticky; bottom: calc(var(--bn-tabbar-h) + var(--bn-3)); z-index: 4; }
   .review-progress-bar { width: 96px; }
   /* The queue sheet keeps a band of scrim beside it: 380px in a 390px viewport left a 10px
      sliver of the page, which reads as a misfit rather than as an overlay. */
-  .review[data-queue-open='true'] .review-rail { width: calc(100vw - var(--bn-7)); }
+  .review.is-queue-open .review-rail { width: calc(100vw - var(--bn-7)); }
   .review-filters { padding: 2px; margin-top: calc(-1 * var(--bn-3)); margin-bottom: var(--bn-5); }
   .review-question-title { font-size: var(--bn-fs-xl); }
   .review-candidate { min-height: 56px; padding: 10px var(--bn-3); gap: var(--bn-3); }

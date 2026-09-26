@@ -60,6 +60,7 @@ type RouteRow = {
   readonly label: string
   readonly title: string | null
   readonly persona: string | null
+  readonly redirect: boolean
   readonly view: string
   readonly file: string
 }
@@ -131,9 +132,17 @@ const EXEMPT: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   },
 }
 
-/** Is this route held to this assertion at all? `false` only for a named exemption. */
+/* A REDIRECT ROUTE (D291's `#/runs`) renders nothing of its own — it sends
+ * the browser straight to another route's screen. `h1` and `title` name what THAT screen drew,
+ * not this row's `label`, so holding a redirect to its own label is asking it to fail forever on
+ * a fact it was never going to make true. `page`/`width`/`top`/`scroll` still apply: they are
+ * measuring the screen the browser actually lands on. */
+const REDIRECT_EXEMPT = new Set(['h1', 'title'])
+
+/** Is this route held to this assertion at all? `false` for a named exemption or a redirect. */
 const applies = (route: RouteRow, assertion: string): boolean =>
-  route.persona === null || EXEMPT[route.persona]?.[assertion] === undefined
+  (route.persona === null || EXEMPT[route.persona]?.[assertion] === undefined) &&
+  !(route.redirect && REDIRECT_EXEMPT.has(assertion))
 
 /** Compare what failed against what the list excuses. Returns every disagreement, both ways. */
 function reconcile(route: RouteRow, failures: ReadonlyMap<string, readonly string[]>, measured: readonly string[]): string[] {
@@ -174,7 +183,11 @@ async function settle(page: Page): Promise<void> {
 test('the route table is read, and it names the same routes the nav does', async ({ page }) => {
   expect(ROUTE_TABLE.length, 'kit-adoption --routes returned almost nothing').toBeGreaterThan(3)
   await page.setViewportSize({ width: 1440, height: 900 })
-  const fromNav = (await routesFromNav(page)).map((hash) => hash.replace(/^#/, ''))
+  /* `routesFromNav` deliberately does not name `#/runs` — it redirects rather than drawing a
+     screen, so the content sweeps built on that helper must not land on it (see its own
+     comment). This reconciliation is the one place that does need it, so it is added here,
+     the same way `#/gallery` and `#/product` are added inside the helper itself. */
+  const fromNav = (await routesFromNav(page)).map((hash) => hash.replace(/^#/, '')).concat('/runs')
   expect([...new Set(fromNav)].sort(), 'ROUTES and the nav disagree about which routes exist').toEqual(
     ROUTE_TABLE.map((r) => r.path).sort(),
   )
@@ -309,7 +322,7 @@ test('the over-time title read goes red when a right title changes later (fixtur
   await page.clock.install()
   await page.goto('/#/gallery')
   await expect(page.locator('main').first()).toBeVisible()
-  const want = tabTitleOf({ path: '/gallery', label: 'Kit', title: null, persona: null, view: '', file: '' })
+  const want = tabTitleOf({ path: '/gallery', label: 'Kit', title: null, persona: null, redirect: false, view: '', file: '' })
   expect(titleFailure(await readTitles(page), want), 'the Kit page holds its title as it stands').toBeNull()
 
   await page.evaluate(() => {

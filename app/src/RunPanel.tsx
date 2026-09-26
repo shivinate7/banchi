@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import {
   describeFailure,
@@ -14,7 +14,7 @@ import {
 import type { ExportAsked, ExportFetched, ExportScope, RunDetail, RunSummary } from './types'
 import { usePoll } from './usePoll'
 import { readUpload } from './csvUpload'
-import { Button, EmptyState, Icon, Notice, Pill, Segmented, Stat } from './kit'
+import { Button, EmptyState, Icon, IconButton, Notice, Pill, Segmented, Stat } from './kit'
 import { toast } from './kit/toast'
 import { RunFiles } from './RunFiles'
 import { RunRescue } from './RunRescue'
@@ -436,13 +436,25 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
 
   /* The open step follows the run: a new run opens on the step it is waiting for, and a run
      whose phase moves under a poll follows it — unless a step's own answer is on screen. */
+  /* A POLL THAT MOVES NOTHING MOVES NO STEP (found at the PR 2 integration). Every poll hands
+     back a new `detail` object, so keying on `detail` alone re-opened the run's own step on every
+     poll and closed whatever step the owner had just opened (run-panel.spec.ts's "joined run"
+     case caught it under load). The step now follows only a new run or a moved phase. */
   const lastRun = useRef<string | null>(null)
-  useEffect(() => {
+  const lastStep = useRef<Command | null>(null)
+  /* A LAYOUT EFFECT, SO THE STEP IS SETTLED BEFORE PAINT (D128's rule, applied here at the PR 2
+     integration). A passive effect let one frame paint every step closed, and a press landing in
+     that frame was then reversed when the effect opened the run's own step. */
+  useLayoutEffect(() => {
     if (detail === null) return
+    const step = COMMANDS[Math.min(stageOf(detail).step, 3)] ?? 'identify'
     const changed = lastRun.current !== detail.run
+    const moved = lastStep.current !== step
     lastRun.current = detail.run
+    lastStep.current = step
+    if (!changed && !moved) return
     if (!changed && stepOutRef.current !== null) return
-    setOpenStep(COMMANDS[Math.min(stageOf(detail).step, 3)] ?? 'identify')
+    setOpenStep(step)
   }, [detail])
 
   /* ---------------------------------------------------------- D76: the export's scope */
@@ -624,14 +636,16 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
         aria-current={open ? 'true' : undefined}
         onClick={() => onOpenRun(open ? null : row.run)}
         style={{ animationDelay: `${Math.min(i, 10) * 35}ms` }}
+        /* D196: the run's own directory name is a repository path, never a user-visible
+           string. The box label plus the time (row-side, below) already tell two runs
+           apart; the raw id still rides the tooltip, the same pattern `claim()`'s
+           `raw` argument uses elsewhere on this screen for a pipeline spelling. */
+        title={row.run}
       >
         <span className="run-row-main">
           {/* The box label is what tells two runs apart, and the 320px master cuts it. */}
           <span className="run-row-scope" title={scopeOf(row)}>
             {scopeOf(row)}
-          </span>
-          <span className="run-row-name" title={row.run}>
-            {row.run}
           </span>
         </span>
         <span className="run-row-side">
@@ -689,9 +703,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
         <Notice tone="danger" code={trouble.failure.code}>
           {trouble.failure.message}
         </Notice>
-        <Button size="sm" variant="ghost" icon="x" iconOnly onClick={() => setTrouble(null)}>
-          Dismiss
-        </Button>
+        <IconButton size="sm" icon="x" label="Dismiss" onClick={() => setTrouble(null)} />
       </div>
     ) : null
 
@@ -702,9 +714,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
           <Pill tone={stepOut.ok ? 'ok' : 'danger'} icon={stepOut.ok ? 'check' : 'alert'}>
             {TITLES[cmd]} {stepOut.ok ? 'finished' : 'refused'}
           </Pill>
-          <Button size="sm" variant="ghost" onClick={() => setStepOut(null)}>
-            Dismiss
-          </Button>
+          <IconButton size="sm" icon="x" label="Dismiss" onClick={() => setStepOut(null)} />
         </div>
         <LogWell text={stepOut.console} label={`What ${TITLES[cmd]} printed`} />
       </div>
@@ -831,8 +841,14 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                     <span>{`started from ${STARTER[detail.started_by] ?? capitalize(detail.started_by)}`}</span>
                   ) : null}
                 </span>
-                <h2 className="runs-detail-h">{runBoxLabel(detail) ?? detail.run}</h2>
-                <span className="runs-detail-name">{detail.run}</span>
+                {/* D196: the run's own directory name is a repository path. The box label
+                    is the human title; where a run has none (a stranded run, D165), the
+                    title falls back to the raw id — the one case nothing better exists to
+                    say — with the id still on the title attribute for a reader who needs
+                    it. */}
+                <h2 className="runs-detail-h" title={runBoxLabel(detail) === null ? undefined : detail.run}>
+                  {runBoxLabel(detail) ?? detail.run}
+                </h2>
               </div>
               <div className="runs-detail-side">
                 {/* D165's repair, offered ONLY where the store can no longer join this run —
@@ -1047,15 +1063,12 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                     busy={busy === 'exports'}
                     onFiles={(files) => void joinWithExports(files)}
                   />
-                  <Button
-                    variant="ghost"
+                  <IconButton
                     icon="settings"
-                    iconRight={optionsOpen ? 'chevronUp' : 'chevronDown'}
+                    label="Options"
                     aria-expanded={optionsOpen}
                     onClick={() => setOptionsOpen((v) => !v)}
-                  >
-                    Options
-                  </Button>
+                  />
                 </div>
 
                 {optionsOpen ? (

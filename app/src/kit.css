@@ -140,6 +140,9 @@
 .bn-muted { color: var(--bn-ink-3); }
 .bn-faint { color: var(--bn-ink-3); }
 .bn-money { font-family: var(--bn-font-mono); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-money); }
+/* A Money inside a kit Button keeps the mono face (D221) but takes the button's own ink and
+   weight: `--bn-money` on a primary button's accent fill would fail its contrast. */
+.bn-btn .bn-money { color: inherit; font-weight: inherit; }
 
 /* ---- the heading scale: three steps (UX-067) ----------------------------------------------
    h1 is `.bn-title` (--bn-fs-h1). A section is `.bn-h2`, a part of a section `.bn-h3`. */
@@ -362,6 +365,118 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-btn-icon { width: var(--btn-h); padding: 0; }
 .bn-btn-block { width: 100%; }
 .bn-btn-pill { border-radius: var(--bn-r-full); }
+
+/* ---- IconButton ------------------------------------------------------------
+   ONE BOX, PAINTED AT ITS OWN FACE SIZE (28px at rest) — round 2's fix, option (a): the
+   visual box used to sit at a 40px floor, which broke FLT-24 (one height in a field row),
+   grew `SearchField` on the first keystroke (D118), and read wrong against `.bn-sort-dir`'s
+   own field edge. `app/src/kit/index.tsx` sizes `.bn-icon-btn` itself per `size` (inline
+   style, the FACE_PX table) — this file no longer sets a width or height on it at all. The
+   40px thumb floor (D117) is `::before`: `max(40px, 100%)`, centred over the real box, so it
+   never grows past 40px once the box itself is already 40 (`size="xl"`) and never shrinks the
+   floor below it otherwise. A `::before` expands the CLICKABLE region without existing in
+   layout, the same way `base.css` never lets `:hover`/`:active` move anything (D118). */
+.bn-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: var(--bn-r-sm);
+  background: transparent;
+  box-shadow: none;
+  color: var(--bn-ink-2);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
+}
+/* Centred by INSET ALONE, never `transform`. A `transform: translate(-50%, -50%)` centring
+   (round 2's first draft) promotes this pseudo onto its own compositor layer, and headless
+   Chromium's REAL pointer dispatch does not reliably hit-test a click landing in the part of
+   that layer past the host's own box — measured, `page.mouse.click()` 6px outside a 28px
+   face's edge (inside the 40px reach) never reached the button, though `document.
+   elementFromPoint` at the same point read it correctly (the DOM-based check does not see the
+   compositor gap). `min(0px, calc((100% - 40px) / 2))` reaches the identical box no
+   transform ever did: 0 once the host is already 40px or more on that axis, and the same
+   negative reach `max(40px, 100%)` gave otherwise — see `app/src/kit/data.css`'s
+   `.bn-fchip-clear` for the twin fix on a real element instead of a pseudo one. */
+.bn-icon-btn::before {
+  content: '';
+  position: absolute;
+  top: min(0px, calc((100% - 40px) / 2));
+  right: min(0px, calc((100% - 40px) / 2));
+  bottom: min(0px, calc((100% - 40px) / 2));
+  left: min(0px, calc((100% - 40px) / 2));
+}
+.bn-icon-btn:hover { background: var(--bn-accent-tint); color: var(--bn-ink); }
+.bn-icon-btn[data-tone='danger'] { color: var(--bn-danger); }
+.bn-icon-btn[data-tone='danger']:hover { background: var(--bn-danger-tint); }
+/* A toggle of one act (Hold/Release, Reveal/Hide): the box reads pressed, off the same pair
+   `Chip`'s own `aria-pressed` reads. */
+.bn-icon-btn[aria-pressed='true'] { background: var(--bn-accent-tint); color: var(--bn-accent); }
+/* `.bn-btn[data-busy='true']` (above) already sets `color: transparent`, which the icon
+   inherits directly now that it is a plain child — no second rule needed to reach it. */
+
+/* A small count at the corner — a filter bar's active-facet count. `position: absolute` and
+   drawn outside the flow, so its arrival moves nothing else (D118). The count is
+   `aria-hidden`; the caller's own `name` prop is what carries it to a screen reader. */
+.bn-icon-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 var(--bn-0-75);
+  border-radius: var(--bn-r-full);
+  background: var(--bn-accent);
+  color: var(--bn-on-accent);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+/* The tooltip: `label` (and `kbd`), never `name`, which is for a screen reader alone. It
+   stays a DOM child of the button (never a portal — `app/tests/icon-button.spec.ts` reads it
+   with `button.querySelector`), but its POSITION is `position: fixed`, set by
+   `IconButton`'s own `reposition()` on pointer-enter, focus and the long-press timer.
+   `position: fixed` is computed against the true viewport regardless of an ancestor's
+   `overflow` — no ancestor here carries a `transform`, which is the one thing that would
+   re-anchor it — so `.bn-sheet`'s own `overflow: hidden` no longer clips the overlay Close
+   tooltip the way it did before round 2 (measured: the tip's top landed at -14px). The
+   `left`/`top` this file leaves as `0` are the pre-position fallback, overwritten before the
+   fade-in starts. `pointer-events: none` so it is never what a click lands on. `:hover` is
+   wrapped in `@media (hover: hover)`, so a touchscreen tap does not leave a phantom hover
+   once the finger lifts (round 2's own finding) — `:focus-visible` (never a plain mouse
+   `:focus`, so a click does not leave it stuck open) and `[data-tip-open]` (the long-press,
+   set by `IconButton`'s own timer) still show it everywhere. */
+.bn-icon-tip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bn-1);
+  padding: var(--bn-1) var(--bn-2);
+  border-radius: var(--bn-r-sm);
+  background: var(--bn-ink);
+  color: var(--bn-bg);
+  font-size: var(--bn-fs-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 90;
+  transition: opacity var(--bn-t-fast) var(--bn-ease);
+}
+.bn-icon-tip .bn-kbd { color: inherit; background: color-mix(in srgb, currentColor 18%, transparent); border-color: transparent; }
+@media (hover: hover) {
+  .bn-icon-btn:hover .bn-icon-tip { opacity: 1; }
+}
+.bn-icon-btn:focus-visible .bn-icon-tip, .bn-icon-btn[data-tip-open='true'] .bn-icon-tip { opacity: 1; }
+/* A click dismisses its own tooltip (`kit/index.tsx`'s `dismissed` state) — same specificity
+   as the hover/focus rules above, so it wins on being LAST when both apply: the mouse has not
+   moved off the button, so `:hover` alone would keep reading a tooltip the press already
+   acted on. */
+.bn-icon-btn[data-tip-dismissed='true'] .bn-icon-tip { opacity: 0; }
 
 .bn-btn[data-busy='true'] { color: transparent; pointer-events: none; }
 /* Busy is one state whether or not the screen also passed disabled: the ring is drawn full-strength. */
@@ -696,6 +811,9 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   font-variant-numeric: tabular-nums;
   color: var(--bn-ink);
 }
+/* A money Stat (`money` prop) keeps D221's mono face: `.bn-stat-value` above sets the display
+   face at the same specificity as `.bn-money`, and sits later in this sheet, so it would win. */
+.bn-stat-value.bn-money { font-family: var(--bn-font-mono); }
 .bn-stat-label { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
 /* TWO SMALLER SIZES (S9): the tile shipped one ratio, 22:12, and two call sites hand-rolled
@@ -1217,6 +1335,13 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
      between words opens back up. Measured >=3.5px at 1440 and 390 (gallery.spec.ts). */
   word-spacing: 0.1em;
 }
+/* The Fulfiller's worded Close (`kit/overlay.tsx`, D5 spec rule 1: words only, never an icon
+   alone). Its `Button` would otherwise draw at `--bn-fs-md` (13px), under DESIGN.md's 20px
+   body floor for that persona (`app/tests/fulfillment.spec.ts`'s `BODY_FLOOR`). 20px here is
+   a LITERAL, not `--ff-fs-base` — that token is `Fulfillment.css`'s own, re-declared past its
+   portal boundary for ITS screen alone, and this button is the shared kit's, drawn under any
+   Fulfiller overlay, not only that screen's. */
+.bn-overlay-close-worded { font-size: 20px; }
 .bn-overlay-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--bn-5); }
 .bn-overlay-foot {
   flex: none;
@@ -1358,7 +1483,14 @@ img.bn-crop[data-cropped='true'] {
 .bn-toast-action:hover { background: rgba(255, 255, 255, 0.24); }
 :root[data-theme='dark'] .bn-toast-action { background: var(--bn-accent-tint); }
 .bn-toast-action .bn-kbd { background: transparent; color: inherit; border-color: rgba(255, 255, 255, 0.3); }
-.bn-toast-close { flex: none; width: 24px; height: 24px; border-radius: var(--bn-r-sm); display: grid; place-items: center; color: inherit; opacity: 0.6; }
+/* It is an IconButton now (D288), `size="sm"`: its own box is `.bn-icon-btn` in
+   this file. `color: inherit` is why it MUST come after `.bn-icon-btn` in this stylesheet —
+   the toast's own ink (white on a coloured toast, `--bn-ink` on the default surface one)
+   would otherwise lose to `.bn-icon-btn`'s own `color: var(--bn-ink-2)` at equal specificity,
+   which is exactly how round 2's review measured the dismiss glyph at 1.83:1 in light: the
+   OLD `.bn-icon-face` wrapper set its own fixed colour a level deeper than `color: inherit`
+   here could reach. There is no such wrapper to fight now. */
+.bn-toast-close { flex: none; color: inherit; opacity: 0.6; }
 .bn-toast-close:hover { opacity: 1; background: rgba(255, 255, 255, 0.12); }
 .bn-toast-drain {
   position: absolute;
@@ -1459,10 +1591,14 @@ img.bn-crop[data-cropped='true'] {
      already reads `--bn-control-h-sm` unconditionally, so the token's own phone lift (tokens.css)
      reached it without a copy anywhere. `phone.spec.ts` and `kit-data.spec.ts` still assert all
      three reach 40px at 390 — against the ONE rule each now has, not this one. */
-  .bn-toast-close { width: var(--bn-control-h-sm); height: var(--bn-control-h-sm); }
-  /* an icon-only button is square off `--btn-h`, but `.bn-btn` can still be squeezed narrower by
-     a flex parent — the drawer's and the palette's were 36px wide against a 42px height */
-  .bn-btn { min-width: var(--bn-control-h-sm); }
+  /* `.bn-toast-close` WAS HERE, forcing the same 40px growth `IconButton`'s own `::before`
+     now provides without resizing the box (D288, round 2) — removed, along with the
+     `.bn-icon-btn` exemption below, the same reason.
+     an icon-only `Button` (`.bn-btn-icon`, still `iconOnly` — not `IconButton`) is square off
+     `--btn-h`, but `.bn-btn` can still be squeezed narrower by a flex parent — the drawer's
+     and the palette's were 36px wide against a 42px height. `.bn-icon-btn` is exempt: it sets
+     its own size per `size`, on purpose (FLT-24), and this floor would fight that. */
+  .bn-btn:not(.bn-icon-btn) { min-width: var(--bn-control-h-sm); }
 
   /* THE UNLABELLED UTILITY GOES LAST ON A PHONE (D117). A header's actions are written primary-
      last and right-aligned, so on a desktop the icon-only Reload lands at the LEFT of a cluster

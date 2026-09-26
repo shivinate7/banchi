@@ -62,7 +62,6 @@ const NAV_LINK = `${NAV} a.bn-nav-link`
 const RING = [
   '#/',
   '#/capture',
-  '#/runs',
   '#/review',
   '#/pricing',
   '#/orders',
@@ -84,7 +83,6 @@ const RING = [
 const VIEW: Record<(typeof RING)[number], string> = {
   '#/': 'main.home',
   '#/capture': 'main.capture',
-  '#/runs': 'main.runs',
   '#/review': 'main.review',
   '#/pricing': 'main.pricing',
   '#/orders': 'main.orders-hub.orders',
@@ -387,15 +385,20 @@ test('the step walks back, and the first screen is the first', async ({ page }) 
 })
 
 test('a bare arrow is not the shell’s', async ({ page }) => {
-  await open(page, '#/runs')
+  /* `#/runs` itself now redirects into the fold (D291), so the screen
+     that owns the unmodified arrow is reached at its new address: the Runs sheet open over
+     `#/review`. */
+  await stub(page)
+  await page.goto('/#/runs')
+  await expect(page.locator('.review-runs-sheet .runs')).toBeVisible()
 
   /* The screens own the unmodified arrows — `BoxBrowse` walks a box with them and `RunPanel`
      steps the crop preview — so the modifier is not decoration on this binding, it is what
      keeps the shell out of their key. */
   await page.keyboard.press('ArrowRight')
   await page.keyboard.press('ArrowLeft')
-  await expect(page.locator(VIEW['#/runs'])).toBeVisible()
-  expect(page.url()).toContain('#/runs')
+  await expect(page.locator('.review-runs-sheet .runs')).toBeVisible()
+  expect(page.url()).toContain('#/review')
 })
 
 test('a held Cmd inside a field belongs to the caret', async ({ page }) => {

@@ -7,7 +7,7 @@ import { PositionLabel } from './PositionLabel'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import {
-  Button, Chip, ConfirmSheet, EmptyState, Icon, Kbd, Loading, Lockup, Logo, Modal, Notice, Page, Pill, Popover, Refusal, ReloadButton, Retry,
+  Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Money, Notice, Page, Pill, Popover, Refusal, ReloadButton, Retry,
   KeyHint, Section, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
   type ButtonSize, type ButtonVariant, type IconName, type PillTone,
 } from './kit'
@@ -49,7 +49,7 @@ const noop = () => {}
 /* EVERY OVERRIDE THAT MOVES `index` MUST MOVE `slot` TOO, and three of them did not until
    2026-09-05. `slot` is the numerator of `#N of M` (D58) and `index` is the store key; the base
    below is internally consistent (card 40 is the 15th card of a section starting at 26), so an
-   override setting `index: 12` and leaving `slot` alone drew `Box 7 · Section 1 · Card 12`
+   override setting `index: 12` and leaving `slot` alone drew `Box 7, Section 1, Card 12`
    over the caption `#40 of 62` — an impossible card, on the one sheet whose entire purpose is
    being looked at. Each fixture's `fraction` is what says which number is right. */
 function place(over: Partial<Place>): Place {
@@ -87,7 +87,7 @@ const NO_FRACTION = place({ label: 'Box 4 · Section 1 · Card 1', box: 4, index
 const DEPARTED = place({ label: 'Box 3 · departed · B3 #31', box: 3, index: 31, slot: null, section: null, card: null, fraction: null })
 /* A POOLED COPY (D24): a count, not a location. `located: false` is the whole of it — the block
    carries no label at all, so the row draws the game's own name where a position would be and
-   `pooled · <key>` under it. A different game from every other fixture here on purpose: the
+   `pooled, <key>` under it. A different game from every other fixture here on purpose: the
    pooled shape only ever arrives on a game whose registry entry says it is unlocated. */
 const POOLED = place({ located: false, label: null, game: 'pokemon_code', game_display: 'Pokémon code cards', box: 12, index: 5, slot: null, section: null, card: null, box_name: null, section_start: 1, section_end: null, box_total: 0, box_closed: false, fraction: null })
 
@@ -248,8 +248,8 @@ const SECTIONS: readonly { id: string; label: string; group: string }[] = [
 const COLORS: readonly { name: string; token: string; ink?: boolean }[] = [
   { name: 'Page', token: '--bn-bg' },
   { name: 'Surface', token: '--bn-surface' },
-  { name: 'Surface 2 · sunken', token: '--bn-surface-2' },
-  { name: 'Surface 3 · hover', token: '--bn-surface-3' },
+  { name: 'Surface 2, sunken', token: '--bn-surface-2' },
+  { name: 'Surface 3, hover', token: '--bn-surface-3' },
   { name: 'Ink', token: '--bn-ink', ink: true },
   { name: 'Ink 2', token: '--bn-ink-2', ink: true },
   { name: 'Ink 3', token: '--bn-ink-3', ink: true },
@@ -273,12 +273,12 @@ const COLORS: readonly { name: string; token: string; ink?: boolean }[] = [
 
 /* The text roles: one specimen each, named and labelled with the class that gives it. */
 const TEXT_ROLES: readonly { cls: string; name: string; sample: string }[] = [
-  { cls: 'bn-eyebrow', name: 'Eyebrow · mono caps', sample: 'Design system' },
-  { cls: 'bn-label', name: 'Label · Inter caps', sample: 'This session' },
-  { cls: 'bn-money', name: 'Money · tabular', sample: '$1,234.50' },
-  { cls: 'bn-mono', name: 'Mono · machine strings', sample: '2026-09-02-box3-01' },
-  { cls: 'bn-tnum', name: 'Tabular figures · Inter', sample: '1,625 cards · 443 SKUs' },
-  { cls: 'bn-muted', name: 'Muted · ink-3', sample: 'Metadata and captions' },
+  { cls: 'bn-eyebrow', name: 'Eyebrow, mono caps', sample: 'Design system' },
+  { cls: 'bn-label', name: 'Label, Inter caps', sample: 'This session' },
+  { cls: 'bn-money', name: 'Money, tabular', sample: '$1,234.50' },
+  { cls: 'bn-mono', name: 'Mono, machine strings', sample: '2026-09-02-box3-01' },
+  { cls: 'bn-tnum', name: 'Tabular figures, Inter', sample: '1,625 cards, 443 SKUs' },
+  { cls: 'bn-muted', name: 'Muted, ink-3', sample: 'Metadata and captions' },
   { cls: 'bn-faint', name: 'Faint, the faintest a word goes: ink-3', sample: 'The lightest word' },
 ]
 
@@ -286,14 +286,14 @@ const TYPE_SCALE: readonly { token: string; px: number; role: string }[] = [
   { token: '--bn-fs-5xl', px: 48, role: 'Home greeting' },
   { token: '--bn-fs-4xl', px: 36, role: 'Hero figure' },
   { token: '--bn-fs-3xl', px: 28, role: 'Page title' },
-  { token: '--bn-fs-2xl', px: 22, role: 'Stat value · question' },
+  { token: '--bn-fs-2xl', px: 22, role: 'Stat value, question' },
   { token: '--bn-fs-xl', px: 18, role: 'Section heading' },
   { token: '--bn-fs-lg', px: 16, role: 'Row primary' },
   { token: '--bn-fs-base', px: 14, role: 'Body' },
-  { token: '--bn-fs-md', px: 13, role: 'Controls · table' },
+  { token: '--bn-fs-md', px: 13, role: 'Controls, table' },
   { token: '--bn-fs-sm', px: 12, role: 'Metadata' },
-  { token: '--bn-fs-xs', px: 11, role: 'Label · pill' },
-  { token: '--bn-fs-2xs', px: 10, role: 'Keycap · badge' },
+  { token: '--bn-fs-xs', px: 11, role: 'Label, pill' },
+  { token: '--bn-fs-2xs', px: 10, role: 'Keycap, badge' },
 ]
 
 const SPACES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'] as const
@@ -362,6 +362,7 @@ function SelectSpecimen() {
 function ScaffoldSpecimens() {
   const [said, setSaid] = useState<'none' | 'short' | 'long'>('none')
   const [sort, setSort] = useState<'new' | 'old'>('new')
+  const [find, setFind] = useState('')
   return (
     <div className="kit-grid">
       <Spec name="verdict" label="verdict: where things stand" wide>
@@ -369,7 +370,7 @@ function ScaffoldSpecimens() {
       </Spec>
       <Spec name="toolbar" label="toolbar: folds as one unit" wide>
         <Toolbar label="Specimen filters">
-          <input className="bn-input" placeholder="Find a card" aria-label="Find a card" />
+          <SearchField persona="owner" value={find} onChange={setFind} placeholder="Find a card" label="Find a card" controlHeight="bar" />
           <Chip pressed>Unsold</Chip>
           <Chip>Sold</Chip>
           <Segmented
@@ -473,6 +474,8 @@ function OverlaySpecimens() {
   }
   const [second, setSecond] = useState(false)
   const anchor = useRef<HTMLButtonElement>(null)
+  const [sheetPop, setSheetPop] = useState(false)
+  const sheetAnchor = useRef<HTMLButtonElement>(null)
   return (
     <div className="kit-grid">
       <Spec name="overlays" label="sheet, modal, confirm, popover, two layers" wide>
@@ -527,6 +530,18 @@ function OverlaySpecimens() {
               Delete while editing
             </Button>
           </div>
+          {/* A POPOVER OPENED INSIDE THIS SHEET closes on a press elsewhere in the sheet: only
+              layers ABOVE a popover count as inside it. `gallery.spec.ts` asserts it. */}
+          <div className="kit-row">
+            <Button ref={sheetAnchor} onClick={() => setSheetPop((v) => !v)} aria-haspopup="menu" aria-expanded={sheetPop} data-kit-open="popover-in-sheet">
+              Card actions
+            </Button>
+          </div>
+          <Popover open={sheetPop} onClose={() => setSheetPop(false)} anchor={sheetAnchor} label="Card actions">
+            <button type="button" className="bn-menu-item" onClick={() => setSheetPop(false)}>
+              <Icon name="tag" size={16} /> Set a hint
+            </button>
+          </Popover>
         </Sheet>
         <Modal open={modal} onClose={() => setModal(false)} title="One decision" footer={<Button onClick={() => setModal(false)}>Done</Button>}>
           <p className="bn-read">A modal stops the page for one decision.</p>
@@ -628,7 +643,7 @@ export function Gallery() {
             lede="Six marks. Bluesteel is the default."
           >
             <Spec
-              label="The small cut · below 64px"
+              label="The small cut, below 64px"
               wide
               note="What the app draws, at every size it draws."
             >
@@ -642,7 +657,7 @@ export function Gallery() {
               </div>
             </Spec>
             <Spec
-              label="The display cut · 64px and up"
+              label="The display cut, 64px and up"
               wide
               note="The foil cut. Nothing in the app draws it this large."
             >
@@ -729,15 +744,15 @@ export function Gallery() {
             <div className="kit-faces">
               <div className="kit-face" style={{ fontFamily: 'var(--bn-font-display)', fontWeight: 800 }}>
                 <span>Manrope</span>
-                <span className="kit-face-role">display · headings, figures</span>
+                <span className="kit-face-role">display, headings, figures</span>
               </div>
               <div className="kit-face" style={{ fontFamily: 'var(--bn-font-ui)', fontWeight: 600 }}>
                 <span>Inter</span>
-                <span className="kit-face-role">ui · everything</span>
+                <span className="kit-face-role">ui, everything</span>
               </div>
               <div className="kit-face" style={{ fontFamily: 'var(--bn-font-mono)', fontWeight: 500 }}>
                 <span>JetBrains Mono</span>
-                <span className="kit-face-role">mono · SKUs, run names, codes, kbd</span>
+                <span className="kit-face-role">mono, SKUs, run names, codes, kbd</span>
               </div>
             </div>
             <div className="kit-type">
@@ -895,8 +910,62 @@ export function Gallery() {
                   </Button>
                 </div>
                 <Button variant="primary" block icon="dollar">
-                  Push 12 listings · $184.20
+                  Push 12 listings, <Money value={184.2} />
                 </Button>
+              </Spec>
+            </div>
+          </Section>
+
+          <Section
+            id="kit-icon-button"
+            data-kit-section="icon-button"
+            className="kit-section"
+            title="Icon button"
+            lede="A common, repeated action becomes an icon with a required label: the accessible name and the tooltip, never one or the other (owner's ruling, 2026-09-24). A press that spends money or cannot be undone keeps its words. docs/specs/iconography.md is the rule."
+          >
+            <div className="kit-grid">
+              <Spec label="the vocabulary">
+                <div className="kit-row kit-row-wrap">
+                  <IconButton icon="sold" label="Mark sold" />
+                  <IconButton icon="undo" label="Undo" />
+                  <IconButton icon="archive" label="Retire" />
+                  <IconButton icon="pencil" label="Edit" />
+                  <IconButton icon="trash" label="Delete" tone="danger" />
+                  <IconButton icon="eraser" label="Clear" />
+                  <IconButton icon="copy" label="Copy" />
+                  <IconButton icon="download" label="Download" />
+                  <IconButton icon="external" label="Open" />
+                  <IconButton icon="x" label="Close" />
+                  <IconButton icon="filter" label="Filter" />
+                  <IconButton icon="sortAsc" label="Low to high" />
+                  <IconButton icon="sortDesc" label="High to low" />
+                  <IconButton icon="moveTo" label="Move to a box" />
+                  <IconButton icon="grip" label="Drag to reorder" />
+                </div>
+              </Spec>
+              <Spec label="sizes" note="40px hit area at every size — only the 28-to-40px face shrinks, for a packed row.">
+                <div className="kit-row kit-row-wrap">
+                  {SIZES.map((s) => (
+                    <IconButton key={s} icon="undo" label={`Undo (${s})`} size={s} />
+                  ))}
+                </div>
+              </Spec>
+              <Spec label="pressed, busy, badge and a longer name" note="Rest, hover, keyboard focus and a touch long-press draw the tooltip the same way — the check is what a browser actually shows, not a class this page could fake.">
+                <div className="kit-row kit-row-wrap">
+                  <IconButton icon="lock" label="Hold" pressed />
+                  <IconButton icon="filter" label="Filters" badge={3} />
+                  <IconButton icon="refresh" label="Reload" busy />
+                  <IconButton icon="trash" label="Delete" tone="danger" disabled />
+                  <IconButton icon="undo" label="Undo" kbd="U" name="Undo the sale at Section 2, Card 5" />
+                </div>
+              </Spec>
+              <Spec
+                label="the anchor form"
+                note="`href` (plus `target`/`rel`) renders an `<a>` with the same face, hit area, tooltip and accessible name — an icon-only control that opens another route keeps the browser's own middle-click, right-click and copy-link, which a `window.open` in an `onClick` cannot give."
+              >
+                <div className="kit-row kit-row-wrap">
+                  <IconButton icon="external" label="Cards to pull" href="#/fulfillment" target="_blank" rel="noreferrer" />
+                </div>
               </Spec>
             </div>
           </Section>
@@ -926,7 +995,7 @@ export function Gallery() {
                   </KeyHint>
                 </p>
               </Spec>
-              <Spec label="in a button · on accent">
+              <Spec label="in a button, on accent">
                 <div className="kit-row kit-row-wrap">
                   <Button kbd="R" icon="refresh">
                     Reload
@@ -939,7 +1008,7 @@ export function Gallery() {
                   </Button>
                 </div>
               </Spec>
-              <Spec label="row keycap · 28px" note="A target a finger lands on. It stays on a touch screen.">
+              <Spec label="row keycap, 28px" note="A target a finger lands on. It stays on a touch screen.">
                 <div className="kit-row">
                   <kbd className="kit-keycap">1</kbd>
                   <kbd className="kit-keycap">2</kbd>
@@ -961,7 +1030,7 @@ export function Gallery() {
                   ))}
                 </div>
               </Spec>
-              <Spec label="with icon · mono · outline">
+              <Spec label="with icon, mono, outline">
                 <div className="kit-row kit-row-wrap">
                   <Pill tone="ok" icon="check">
                     reconciled
@@ -993,28 +1062,30 @@ export function Gallery() {
 
           <Section id="kit-fields" data-kit-section="fields" className="kit-section" title="Fields" lede="34px controls, 40px large. Focus is the accent ring, product-wide.">
             <div className="kit-grid">
-              <Spec label="input · with hint">
+              <Spec label="input, with hint">
                 <label className="bn-field">
                   <span className="bn-field-label">Box name</span>
                   <input className="bn-input" defaultValue="RB Epics" />
                   <span className="bn-field-hint">Names are unique; case is folded.</span>
                 </label>
               </Spec>
-              <Spec label="input-wrap · icon and key">
+              <Spec label="input-wrap, icon and key">
+                {/* A search box is `SearchField` (the toolbar specimen above). The wrap is for a
+                    field that is not one: Capture's section note is the real case. */}
                 <span className="bn-input-wrap">
-                  <Icon name="search" size={16} />
-                  <input className="bn-input" placeholder="Find a card" aria-label="Find a card" />
-                  <Kbd>/</Kbd>
+                  <Icon name="list" size={16} />
+                  <input className="bn-input" placeholder="A note for this section" aria-label="Section note" />
+                  <Kbd>N</Kbd>
                 </span>
               </Spec>
-              <Spec label="select · textarea">
+              <Spec label="select, textarea">
                 <SelectSpecimen />
                 <label className="bn-field">
                   <span className="bn-field-label">Note</span>
-                  <textarea className="bn-textarea" defaultValue="Held back: bullish above $5." />
+                  <textarea className="bn-textarea" defaultValue="Held back: the market is still moving." />
                 </label>
               </Spec>
-              <Spec label="large · mono · disabled">
+              <Spec label="large, mono, disabled">
                 <label className="bn-field">
                   <span className="bn-field-label">Card name</span>
                   <input className="bn-input bn-input-lg" placeholder="Type the name of the card" />
@@ -1122,13 +1193,13 @@ export function Gallery() {
 
           <Section id="kit-receipt" data-kit-section="receipt" className="kit-section" title="Receipt & toast" lede="A receipt is an undo anchored beside the thing it undoes, draining over its window. A toast is the same shape, floating.">
             <div className="kit-grid">
-              <Spec label="receipt · draining" wide>
+              <Spec label="receipt, draining" wide>
                 <div className="bn-receipt" style={{ ['--receipt-ms' as string]: '20000ms' }}>
                   <Icon name="check" size={16} style={{ color: 'var(--bn-ok)' }} />
                   <span className="bn-grow">
                     <strong>Answered as Near Mint Holofoil</strong>
                     <span className="bn-mono" style={{ display: 'block', fontSize: 11, opacity: 0.65 }}>
-                      Box 2 · Section 1 · Card 14
+                      Box 2, Section 1, Card 14
                     </span>
                   </span>
                   <span className="bn-receipt-bar" />
@@ -1137,30 +1208,29 @@ export function Gallery() {
                   </Button>
                 </div>
               </Spec>
-              <Spec label="toast · receipt / ok / refusal" wide>
+              <Spec label="toast, receipt / ok / refusal" wide>
                 <div className="kit-toasts">
                   <div className="bn-toast bn-toast-receipt">
                     <Icon name="undo" size={16} className="bn-toast-icon" />
                     <div className="bn-toast-text">
                       <div className="bn-toast-title">Marked sold</div>
-                      <div className="bn-toast-body">Box 3 · Section 2 · Card 15</div>
+                      <div className="bn-toast-body">Box 3, Section 2, Card 15</div>
                     </div>
                     <button type="button" className="bn-toast-action">
                       Undo <kbd className="bn-kbd">U</kbd>
                     </button>
-                    {/* THE DISMISS IS PART OF THE COMPONENT AND THE SPECIMEN LEFT IT OUT (D117).
-                        A sheet that draws a control's other half is the only place a floor over
-                        the kit can be measured — `.bn-toast-close` was 24px and this page could
-                        not say so, because nothing here drew one. */}
-                    <button type="button" className="bn-toast-close" aria-label="Dismiss">
-                      <Icon name="x" size={14} />
-                    </button>
+                    {/* THE REAL MARKUP, NOT A REDRAWN COPY (round 2's own finding): a hand-rolled
+                        <button> here could not catch the contrast regression `Toaster` itself
+                        had — the dismiss glyph inherited the wrong colour and axe never saw a
+                        real `.bn-icon-btn` to measure. `IconButton` is what `kit/toast.tsx`
+                        actually renders. */}
+                    <IconButton icon="x" label="Dismiss" size="sm" className="bn-toast-close" />
                   </div>
                   <div className="bn-toast bn-toast-ok">
                     <Icon name="check" size={16} className="bn-toast-icon" />
                     <div className="bn-toast-text">
                       <div className="bn-toast-title">Import file written</div>
-                      <div className="bn-toast-body">437 copies · one file</div>
+                      <div className="bn-toast-body">437 copies, one file</div>
                     </div>
                   </div>
                   <div className="bn-toast bn-toast-refusal">
@@ -1182,7 +1252,7 @@ export function Gallery() {
                   <EmptyState
                     icon="check"
                     title="All caught up."
-                    body="You answered 16 cards in 4 min 12 s · 2 closed."
+                    body="You answered 16 cards in 4 min 12 s, 2 closed."
                     actions={
                       <>
                         <Button variant="primary" icon="tag" iconRight="arrowRight">
@@ -1205,7 +1275,7 @@ export function Gallery() {
                 <div className="bn-skeleton" style={{ height: 56 }} />
                 <div className="bn-skeleton" style={{ height: 56 }} />
               </Spec>
-              <Spec label="progress · default and ok">
+              <Spec label="progress, default and ok">
                 <div className="bn-progress">
                   <span style={{ width: '34%' }} />
                 </div>
@@ -1214,7 +1284,7 @@ export function Gallery() {
                 </div>
                 <div className="kit-row">
                   <Stat value="16" label="answered" />
-                  <Stat value="$184" label="to list" />
+                  <Stat value="$184" label="to list" money />
                   <Stat value="2" label="closed" />
                 </div>
               </Spec>
@@ -1284,15 +1354,17 @@ export function Gallery() {
                     </thead>
                     <tbody>
                       {[
-                        ['Snorlax', 'Near Mint Holofoil', '8608002', '143.65', 1],
-                        ['Charizard ex', 'Near Mint', '8607411', '12.00', 3],
-                        ['Bidoof', 'Near Mint', '8601230', '0.12', 14],
+                        ['Snorlax', 'Near Mint Holofoil', '8608002', 143.65, 1],
+                        ['Charizard ex', 'Near Mint', '8607411', 12, 3],
+                        ['Bidoof', 'Near Mint', '8601230', 0.12, 14],
                       ].map(([name, cond, sku, market, n]) => (
                         <tr key={String(sku)}>
                           <td>{name}</td>
                           <td>{cond}</td>
                           <td className="bn-mono">{sku}</td>
-                          <td className="num bn-money">${market}</td>
+                          <td className="num">
+                            <Money value={Number(market)} />
+                          </td>
                           <td className="num">{n}</td>
                         </tr>
                       ))}
@@ -1303,13 +1375,13 @@ export function Gallery() {
               <Spec label="list rows">
                 <div className="bn-panel bn-list">
                   <button type="button" className="bn-list-row">
-                    <Icon name="box" size={16} /> <span className="bn-grow">Box 3 · RB Epics</span> <Pill>723</Pill>
+                    <Icon name="box" size={16} /> <span className="bn-grow">Box 3, RB Epics</span> <Pill>723</Pill>
                   </button>
                   <button type="button" className="bn-list-row" aria-current="true">
-                    <Icon name="box" size={16} /> <span className="bn-grow">Box 4 · WB1 R2</span> <Pill tone="accent">56</Pill>
+                    <Icon name="box" size={16} /> <span className="bn-grow">Box 4, WB1 R2</span> <Pill tone="accent">56</Pill>
                   </button>
                   <button type="button" className="bn-list-row">
-                    <Icon name="box" size={16} /> <span className="bn-grow">Box 5 · UNL BBOX C/UC 1</span> <Pill>105</Pill>
+                    <Icon name="box" size={16} /> <span className="bn-grow">Box 5, UNL BBOX C/UC 1</span> <Pill>105</Pill>
                   </button>
                 </div>
               </Spec>
@@ -1318,7 +1390,7 @@ export function Gallery() {
 
           <Section id="kit-surfaces" data-kit-section="surfaces" className="kit-section" title="Surfaces & menu" lede="A panel is raised, a well is sunken, a menu pops.">
             <div className="kit-grid">
-              <Spec label="panel · head and body">
+              <Spec label="panel, head and body">
                 <div className="bn-panel">
                   <div className="bn-panel-head">
                     <span className="bn-section-title">
@@ -1331,7 +1403,7 @@ export function Gallery() {
                   <div className="bn-panel-body">Body text sits at 14px on the surface.</div>
                 </div>
               </Spec>
-              <Spec label="well · rule">
+              <Spec label="well, rule">
                 <div className="bn-well">A sunken well for code or an inactive track.</div>
                 <div className="bn-rule">or</div>
                 <div className="bn-well bn-mono">banchi emit runs/2026-09-02-box6-01</div>
@@ -1365,7 +1437,7 @@ export function Gallery() {
           {/* ------------------------------------------------------------ screen pieces */}
           <Section id="kit-pull-confirm" data-kit-section="pull-confirm" className="kit-section" title="Pull-confirm" lede="The one solid fill the Fulfiller ever sees. Three states, and the owner-side key hint.">
             <div className="kit-stack kit-stack-narrow">
-              <Spec name="default" label="default · the Fulfillment case">
+              <Spec name="default" label="default, the Fulfillment case">
                 <PullConfirm label="Pull this card" onConfirm={noop} />
               </Spec>
               <Spec name="pressed" label="pressed" forcePressed>
@@ -1374,7 +1446,7 @@ export function Gallery() {
               <Spec name="disabled" label="disabled" note="Never drawn for the Fulfiller.">
                 <PullConfirm label="Pull this card" onConfirm={noop} disabled />
               </Spec>
-              <Spec name="with-key" label="default + key hint · owner-side only">
+              <Spec name="with-key" label="default + key hint, owner-side only">
                 <PullConfirm label="Pull this card" onConfirm={noop} keyHint="↵" />
               </Spec>
             </div>
@@ -1382,16 +1454,16 @@ export function Gallery() {
 
           <Section id="kit-position" data-kit-section="position" className="kit-section" title="Position bar" lede={<>How far into its box a card sits. A closed box earns a percentage; an open one counts what is in it.</>}>
             <div className="kit-stack">
-              <Spec name="bar-closed" label="closed box · 250 cards">
+              <Spec name="bar-closed" label="closed box, 250 cards">
                 <PositionBar place={CLOSED_BOX} />
               </Spec>
-              <Spec name="bar-open" label="open box · the denominator still moves">
+              <Spec name="bar-open" label="open box, the denominator still moves">
                 <PositionBar place={OPEN_BOX} />
               </Spec>
-              <Spec name="bar-single" label="one section · no dividers declared">
+              <Spec name="bar-single" label="one section, no dividers declared">
                 <PositionBar place={SINGLE_SECTION} />
               </Spec>
-              <Spec name="bar-unknown" label="no fraction · the server declined to say">
+              <Spec name="bar-unknown" label="no fraction, the server declined to say">
                 <PositionBar place={NO_FRACTION} />
               </Spec>
               <Spec name="bar-fulfiller" label="the Fulfiller's density">
@@ -1403,10 +1475,10 @@ export function Gallery() {
                   existed on the kit sheet only inside the `locations` specimen, three sections
                   down and four rows deep. The five above are left exactly as they are: the
                   no-depth shape is real too, and it is what the Fulfiller draws. */}
-              <Spec name="bar-depth" label="the section as the ruler · a divided box">
+              <Spec name="bar-depth" label="the section as the ruler, a divided box">
                 <PositionBar place={CLOSED_BOX} sections={BOX_SECTIONS} sectionDepth />
               </Spec>
-              <Spec name="bar-depth-gone" label="departed · the ruler stays and both marks leave it">
+              <Spec name="bar-depth-gone" label="departed, the ruler stays and both marks leave it">
                 <PositionBar place={DEPARTED} sections={BOX_SECTIONS} sectionDepth />
               </Spec>
             </div>
@@ -1414,17 +1486,17 @@ export function Gallery() {
 
           <Section id="kit-position-label" data-kit-section="position-label" className="kit-section" title="Position label" lede="One ranking, three flows: stacked, slot-led for a column, and run for a sentence.">
             <div className="kit-grid">
-              <Spec label="stack · path-led">
+              <Spec label="stack, path-led">
                 <div className="kit-poslabel" style={{ ['--pos-slot' as string]: '32px' }}>
                   <PositionLabel label="Box 3 · Section 2 · Card 15" />
                 </div>
               </Spec>
-              <Spec label="stack · slot-led">
+              <Spec label="stack, slot-led">
                 <div className="kit-poslabel" style={{ ['--pos-slot' as string]: '32px' }}>
                   <PositionLabel label="Box 3 · Section 2 · Card 15" lead="slot" />
                 </div>
               </Spec>
-              <Spec label="run · in a sentence">
+              <Spec label="run, in a sentence">
                 <p style={{ ['--pos-slot' as string]: '16px' }}>
                   The card is still at <PositionLabel label="Box 3 · Section 2 · Card 15" flow="run" />.
                 </p>
@@ -1439,10 +1511,10 @@ export function Gallery() {
 
           <Section id="kit-search" data-kit-section="search" className="kit-section" title="Search field" lede="The owner's carries a / hotkey and its chip; the Fulfiller's carries neither and keeps a visible label.">
             <div className="kit-stack">
-              <Spec name="search-owner" label="owner · dense, with the key chip">
+              <Spec name="search-owner" label="owner, dense, with the key chip">
                 <FieldSpecimen persona="owner" />
               </Spec>
-              <Spec name="search-fulfiller" label="fulfiller · large, no keys">
+              <Spec name="search-fulfiller" label="fulfiller, large, no keys">
                 <FieldSpecimen persona="fulfiller" />
               </Spec>
             </div>
@@ -1452,7 +1524,7 @@ export function Gallery() {
             <div className="kit-stack">
               <Spec
                 name="locations-owner"
-                label="owner · a bar on every row that has one"
+                label="owner, a bar on every row that has one"
                 note="The pooled and departed copies draw no position."
               >
                 {/* `.kit-copies` is a `copies` query container. Without it every
@@ -1464,14 +1536,14 @@ export function Gallery() {
               </Spec>
               <Spec
                 name="locations-owner-lone"
-                label="owner · one copy, no SKU"
+                label="owner, one copy, no SKU"
                 note="A card not yet identified draws no listing figures."
               >
                 <div className="kit-copies">
                   <CardLocations group={LOOSE_GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} />
                 </div>
               </Spec>
-              <Spec name="locations-fulfiller" label="fulfiller · every copy is its own card" note="A drawn specimen, not a stored photograph.">
+              <Spec name="locations-fulfiller" label="fulfiller, every copy is its own card" note="A drawn specimen, not a stored photograph.">
                 <CardLocations
                   group={GROUP}
                   persona="fulfiller"

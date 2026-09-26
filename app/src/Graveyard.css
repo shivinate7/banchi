@@ -33,9 +33,6 @@
   .graveyard-toolbar .bn-seg-item { flex: none; }
 }
 
-.graveyard-search { min-width: 220px; max-width: 320px; }
-@media (max-width: 767px) { .graveyard-search { max-width: none; } }
-
 /* THE SAME SCROLL-PROGRESS EDGE FADE AS ORDERS' CHIP ROW (D117) — a mask driven by the row's
    own scroll timeline, so a short row that does not actually overflow gets no fade at all
    rather than a decorative one nothing backs. See Orders.css for the full reasoning; this is
@@ -59,25 +56,46 @@
 }
 .graveyard-failure .bn-notice { flex: 1 1 auto; }
 
-/* ---- loading -------------------------------------------------------------------- */
-.graveyard-loading { display: flex; flex-direction: column; gap: var(--bn-3); padding: var(--bn-4); }
-.graveyard-skel-row {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-4);
-  padding-bottom: var(--bn-3);
-  border-bottom: 1px solid var(--bn-line);
-}
-.graveyard-skel-row:last-child { border-bottom: 0; padding-bottom: 0; }
-
+/* The loading skeleton is now `Page`'s own `Loading` (R2-class: no more hand-rolled
+   .bn-skeleton rows here). */
 .graveyard-unreadable { padding: var(--bn-6) var(--bn-4); }
 
 /* ---- the table -------------------------------------------------------------------- */
+/* UX-036: a fixed layout keeps the table inside the page at 1440 — auto layout let the Order
+   column (mostly "—") and the raw run id each claim their own natural width, together wider
+   than the column. `table-layout: fixed` sizes every column off the <colgroup> below, and a
+   value too long for its column truncates with an ellipsis rather than wrapping or pushing
+   the table wider than `.bn-page`. `overflow-x: auto` stays as a floor for a narrower rail. */
 .graveyard-table-wrap { overflow-x: auto; }
-.graveyard-table td[data-th='Card'] { min-width: 200px; }
+.graveyard-table { table-layout: fixed; }
+.graveyard-col-left { width: 10%; }
+.graveyard-col-card { width: 25%; }
+.graveyard-col-sku { width: 13%; }
+.graveyard-col-how { width: 18%; }
+.graveyard-col-where { width: 15%; }
+.graveyard-col-order { width: 9%; }
+.graveyard-col-captured { width: 10%; }
 .graveyard-table td[data-th='Order'],
-.graveyard-table td[data-th='Run'],
-.graveyard-table td[data-th='Where'] { white-space: nowrap; }
+.graveyard-table td[data-th='Captured'],
+.graveyard-table td[data-th='Where'] { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* UX-036 (720 pass): "Moved to <box name>" is unbounded — a pill is `white-space: nowrap`
+   by its own base rule (kit.css), so at a narrow column it drew past its cell and over the
+   Where column next to it. The cell clips; the pill itself ellipses so the text truncates
+   inside its own shape rather than the cell cutting the pill's rounded end off flat. */
+.graveyard-table td[data-th='How'] { overflow: hidden; }
+.graveyard-table td[data-th='How'] .bn-pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.graveyard-table td[data-th='Card'] .graveyard-name {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.graveyard-table td[data-th='SKU'] { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* The condition still ends on its own line under the SKU (mono, small) — it must not go
+   nowrap with the cell around it, or a longer name ("Lightly Played") clips instead of the SKU
+   it sits beneath. UX-036: this is the wrap the finding measured at three lines; one word
+   never wraps twice on its own line at this column's width. */
+.graveyard-condition { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .graveyard-row { animation: graveyard-row-in var(--bn-t-slow) var(--bn-ease-out) backwards; }
 @keyframes graveyard-row-in {
@@ -95,14 +113,24 @@
 /* INK-3, NOT INK-4 (UX review, 2026-09-20): a card's condition is a line a person reads, the
    same case CardLocations.css:130 already argued — ink-4 measures 3.34:1 here in light theme,
    under the 4.5:1 body-text floor. */
-.graveyard-condition { display: block; font-family: var(--bn-font-ui); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.graveyard-condition {
+  display: block;
+  font-family: var(--bn-font-ui);
+  font-size: var(--bn-fs-xs);
+  color: var(--bn-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* D218: `.bn-pill` is already `inline-flex; gap: 5px`, so the gap alone spaces the reason from
    "Retired"; the dot needs only a trailing margin to clear the reason after it. */
 .graveyard-reason::before { content: '·'; margin-right: 5px; }
 
-.graveyard-where { display: inline-flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
-/* D218: the box's name and the store key are sibling spans; the seam is CSS. */
-.graveyard-where-parts > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.graveyard-where { display: inline-flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); min-width: 0; }
+.graveyard-where-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* UX-036: a windowed list's own "Show N more" row. */
+.graveyard-more { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); padding: var(--bn-3) var(--bn-4); }
 
 /* ---- phones: the ledger becomes cards -------------------------------------------- */
 @media (max-width: 639px) {
@@ -111,23 +139,23 @@
   .graveyard-table tr {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: 'card when' 'how where' 'sku sku' 'order run';
+    grid-template-areas: 'card when' 'how where' 'sku sku' 'order captured';
     gap: var(--bn-2) var(--bn-3);
     align-items: start;
     padding: var(--bn-3) var(--bn-4);
     border-bottom: 1px solid var(--bn-line);
   }
   .graveyard-table tr:last-child { border-bottom: 0; }
-  .graveyard-table td { display: block; padding: 0; border: 0; text-align: left; }
+  .graveyard-table td { display: block; padding: 0; border: 0; text-align: left; width: auto; }
   .graveyard-table td[data-th='Card'] { grid-area: card; min-width: 0; }
   .graveyard-table td[data-th='Left'] { grid-area: when; justify-self: end; }
   .graveyard-table td[data-th='How'] { grid-area: how; }
   .graveyard-table td[data-th='Where'] { grid-area: where; justify-self: end; text-align: right; }
   .graveyard-table td[data-th='SKU'] { grid-area: sku; }
   .graveyard-table td[data-th='Order'] { grid-area: order; }
-  .graveyard-table td[data-th='Run'] { grid-area: run; justify-self: end; }
+  .graveyard-table td[data-th='Captured'] { grid-area: captured; justify-self: end; }
   .graveyard-table td[data-th='Order']::before,
-  .graveyard-table td[data-th='Run']::before {
+  .graveyard-table td[data-th='Captured']::before {
     content: attr(data-th);
     margin-right: 6px;
     font-size: var(--bn-fs-2xs);
@@ -136,6 +164,6 @@
     text-transform: uppercase;
     color: var(--bn-ink-3);
   }
-  /* a row with no order or no run draws nothing for it, rather than a labelled blank */
+  /* a row with no order or no captured date draws nothing for it, rather than a labelled blank */
   .graveyard-table td[data-empty] { display: none; }
 }

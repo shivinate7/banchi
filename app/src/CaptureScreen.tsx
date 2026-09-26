@@ -19,7 +19,7 @@ import {
   undoCapture,
   updateCard,
 } from './server'
-import { Overlay } from './InventoryOverlay'
+import { Dialog as Overlay } from './kit/overlay'
 import { resolveSetHint } from './setHint'
 import type { HintVerdict, SetOption } from './setHint'
 import { manualTrigger } from './trigger'
@@ -40,7 +40,7 @@ import { captureBoxLabel } from './runScope'
 // The one thing this screen takes from the library drawing: how long a pause has to be
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
-import { Button, Icon, Kbd, Notice, Pill, Stat } from './kit'
+import { Button, Icon, IconButton, Kbd, Notice, Page, Pill, Stat } from './kit'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
 import type { IconName, PillTone } from './kit'
@@ -79,6 +79,97 @@ const SECTION_KEY_LABEL = 'S'
 // and comes from `GET /games`; see `finishChips` below.
 
 const NO_CLAIM_LABEL = 'No claim'
+
+/** UX-076 (owner, 2026-09-24): "do we have that data? if so name the reason." We do —
+ *  `halt.code` already carries the server's own refusal code, and the screen used to print
+ *  it raw, behind the disclosure, and say nothing else about it. This is the roster of every
+ *  code `POST /capture`'s own call chain can answer with, collected from
+ *  `server/capture_server.py` (`_require_box`, `_require_image`, `_optional_game`,
+ *  `_optional_rarity_claim`/`_check_variant_members`, `allocate_capture`) and the dispatcher
+ *  that turns a store exception into one of these (`_dispatch`'s own `except` chain).
+ *
+ *  ONE ENTRY EACH, HEADLINE FIRST, NEVER THE CODE ITSELF (D196) — `capture-halt-code` still
+ *  prints the raw code behind "What the server said", which is the one place D196 exempts.
+ *  `resume` is what pressing Resume actually gets the operator: most codes clear on their
+ *  own (the box reopened, the lock let go), so the sentence says what to check rather than
+ *  promising a fix this button cannot make.
+ *
+ *  MOST OF THESE ARE DEFENSIVE, NOT LIKELY. `CaptureScreen.tsx` already refuses to fire on an
+ *  unpicked box, an unverified game or a game the operator did not choose from the loaded
+ *  registry, so `box_required`, `game_invalid` and `game_unverified` mean this device's own
+ *  copy of the registry or the setup has gone stale since the page loaded — the same class of
+ *  problem `box_closed` and `store_busy` are, just caught one layer later. `image_*` would
+ *  mean the frame the camera handed the screen was not a usable photograph. */
+const HALT_CODE_INFO: Record<string, { headline: string; resume: string }> = {
+  server_busy: {
+    headline: 'Captures are paused — the server is answering too many requests right now.',
+    resume: 'Nothing was read or written. Wait a moment, then resume.',
+  },
+  origin_not_allowed: {
+    headline: 'Captures are paused — this page is not the one the server trusts to write.',
+    resume: 'Reload the page from the address the server expects, then resume.',
+  },
+  box_closed: {
+    headline: 'Captures are paused — that box was sealed just now.',
+    resume: 'Pick a different box, or reopen this one from the Inventory screen, then resume.',
+  },
+  store_busy: {
+    headline: 'Captures are paused — the store is busy.',
+    resume: 'An `identify` or `emit` run is using it. Wait for it to finish, then resume.',
+  },
+  store_unavailable: {
+    headline: 'Captures are paused — the store could not be reached.',
+    resume: 'Check the capture server is still running, then resume.',
+  },
+  inventory_conflict: {
+    headline: 'Captures are paused — the store disagreed with what this screen expected.',
+    resume: 'Reload the page before you resume, so this screen reads the store fresh.',
+  },
+  game_invalid: {
+    headline: 'Captures are paused — this device is capturing as a game the server does not know.',
+    resume: 'Reload the page to pick up the current game list, then choose Game again.',
+  },
+  game_unverified: {
+    headline: 'Captures are paused — this game has no export to join against.',
+    resume: 'Choose a different game, or leave this one for a note-only capture, then resume.',
+  },
+  rarity_claim_invalid: {
+    headline: 'Captures are paused — the Rarity claim no longer matches this game.',
+    resume: 'Reopen Rarity and re-pick your claim, then resume.',
+  },
+  variant_invalid: {
+    headline: 'Captures are paused — the Finish claim no longer matches this game.',
+    resume: 'Reopen Finish and re-pick your claim, then resume.',
+  },
+  box_required: {
+    headline: 'Captures are paused — no box reached the server.',
+    resume: 'Reopen the Box field and pick one again, then resume.',
+  },
+  box_invalid: {
+    headline: 'Captures are paused — the box number did not reach the server whole.',
+    resume: 'Reopen the Box field and pick one again, then resume.',
+  },
+  image_required: {
+    headline: 'Captures are paused — no photograph reached the server.',
+    resume: 'Check the camera feed is live, then resume.',
+  },
+  image_invalid: {
+    headline: 'Captures are paused — the photograph did not reach the server intact.',
+    resume: 'Check the camera feed is live, then resume.',
+  },
+  image_too_large: {
+    headline: 'Captures are paused — the photograph was too large to send.',
+    resume: 'Check the camera resolution, then resume.',
+  },
+  image_not_jpeg: {
+    headline: 'Captures are paused — the camera sent a frame the server will not store.',
+    resume: 'Check the camera feed is live, then resume.',
+  },
+  server_error: {
+    headline: 'Captures are paused — the server hit a bug.',
+    resume: 'Check the server log names it, then resume.',
+  },
+}
 
 /** A finish member drawn as a word. The KEY — `reverse_holo` — is what the claim stores,
  *  sends and compares (D3); only the eye gets the label. An unknown member falls back to
@@ -587,6 +678,7 @@ function Row({
   right,
   onToggle,
   size,
+  className,
 }: {
   k: string
   label: string
@@ -594,11 +686,16 @@ function Row({
   right: ReactNode
   onToggle: () => void
   size?: 'lg'
+  /** UX-069: the Box row's own way of staying in flow (for its height) while an overlay
+   *  covers it. See `.capture-row-covered` in the stylesheet. */
+  className?: string
 }) {
+  const classes = [size === 'lg' ? 'capture-row capture-row-lg' : 'capture-row']
+  if (className !== undefined) classes.push(className)
   return (
     <button
       type="button"
-      className={size === 'lg' ? 'capture-row capture-row-lg' : 'capture-row'}
+      className={classes.join(' ')}
       aria-expanded={false}
       aria-keyshortcuts={k}
       onClick={onToggle}
@@ -622,6 +719,7 @@ function OpenField({
   onClose,
   children,
   size,
+  pin,
 }: {
   k: string
   label: string
@@ -630,9 +728,30 @@ function OpenField({
   onClose: () => void
   children: ReactNode
   size?: 'lg'
+  /** UX-069 (D118): opens as an overlay, out of flow, instead of pushing what is below it
+   *  down. Only the Box field asks for this — see `.capture-open-pinned` in the stylesheet
+   *  for why nothing else in this file needs it. */
+  pin?: boolean
 }) {
+  const classes = ['capture-open']
+  if (size === 'lg') classes.push('capture-open-lg')
+  if (pin === true) classes.push('capture-open-pinned')
+  const bodyRef = useRef<HTMLDivElement>(null)
+  /* UX-138: every field agrees on where focus goes when it opens, now — the body's own
+   *  first control. Box and Set hint already did this by hand, through their own refs (kept:
+   *  Set hint's effect also loads the set vocabulary, which is not this component's job to
+   *  know about); this is what puts Rarity, Finish, Game, Camera, Rotation and Trigger on the
+   *  same footing, in one place instead of six. `OpenField` remounts fresh each time a field
+   *  opens (the parent's own `openField === X ? <OpenField> : <Row>` ternary), so an
+   *  empty-deps effect fires exactly once per open — the same "just opened" moment a per-field
+   *  ref would have caught, without a ref for each one. */
+  useEffect(() => {
+    bodyRef.current
+      ?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex]')
+      ?.focus()
+  }, [])
   return (
-    <div className={size === 'lg' ? 'capture-open capture-open-lg' : 'capture-open'}>
+    <div className={classes.join(' ')}>
       <button
         type="button"
         className="capture-row"
@@ -646,7 +765,9 @@ function OpenField({
         <span className="capture-meta">{meta}</span>
         <Icon name="chevronUp" size={14} className="capture-chev" />
       </button>
-      <div className="capture-open-body">{children}</div>
+      <div className="capture-open-body" ref={bodyRef}>
+        {children}
+      </div>
     </div>
   )
 }
@@ -788,7 +909,14 @@ export function CaptureScreen() {
      PASSED AS A FUNCTION, NOT CALLED. An initialiser EXPRESSION is evaluated on every render
      and thrown away, and this one touches a synchronous store; a function is read on the first
      render and never again. That was already the rule for the per-key readers this replaced,
-     and it matters more now that one read serves six values. */
+     and it matters more now that one read serves six values.
+
+     A FRESH DEVICE ALWAYS ASKS (D286, amends D142): `storedCaptureSetup`
+     reads `restored.box` as `null` when this device has never written `banchi.capture.setup`,
+     and nothing below seeds it from anywhere else — not Home's own figure, not
+     `banchi.box-recency`'s top entry, not the store's highest-numbered box. The Box row opens
+     `No box yet. Pick one` on that device's first visit, by construction rather than by a
+     check that runs and happens to say no. */
   const [restored] = useState<CaptureSetup>(storedCaptureSetup)
 
   // Box, game, set hint and finish are client state resent on every capture (spec 5.2). The
@@ -901,6 +1029,21 @@ export function CaptureScreen() {
   
   const [boxRecords, setBoxRecords] = useState<BoxRecord[]>([])
 
+  /* D58, THE R1D FIX: `on_hand` is a fact off `GET /boxes`, fetched once on mount and
+   * again only when the Box field opens or closes, a box is created, or a divider goes in
+   * — never on a capture, an undo or a remove. Those three DO change on-hand, and nothing
+   * else told this screen so, so `newCardNumber` below kept answering the same number for
+   * every capture in a sitting. Each of the three write handlers now calls this with the
+   * server's own fresh count — never client arithmetic on a number the server can (and
+   * now does) say outright. A box `GET /boxes` never listed (known only from `/status`)
+   * is left alone: patching a record that does not exist would invent one with every
+   * other field guessed, and the next `GET /boxes` still corrects it. */
+  const patchOnHand = useCallback((forBox: number, onHand: number) => {
+    setBoxRecords((prev) =>
+      prev.map((record) => (record.box === forBox ? { ...record, on_hand: onHand } : record)),
+    )
+  }, [])
+
   /* WHETHER `GET /boxes` HAS ACTUALLY ANSWERED, which `boxRecords` cannot say: `[]` is both
      the starting value and what a store with no boxes returns. Only the restored-box check
      reads it, and only because judging a restore against a list that has not arrived would
@@ -949,30 +1092,16 @@ export function CaptureScreen() {
   const [halt, setHalt] = useState<Halt | null>(null)
   const haltRef = useRef<HTMLElement>(null)
   /* Display only. When a halt lands the keyboard goes to Resume — `role="alert"` already
-   * speaks it; this is for the hands — and the halt's height is handed to the page as
-   * `--cap-halt-h`, so the viewfinder and the last capture shrink to stay whole above the
-   * fold instead of being pushed under it. Observed rather than measured once: opening
-   * "What the server said" grows the block. */
+   * speaks it; this is for the hands. The halt is an absolute overlay (CaptureScreen.css,
+   * D118), so it no longer needs to hand its height to the page for the stage to shrink
+   * around — it just needs to be scrolled into view, at any width, since nothing else moves
+   * to bring it there any more. */
   useEffect(() => {
     if (halt === null) return
     const node = haltRef.current
-    const page = node?.closest<HTMLElement>('.capture') ?? null
-    if (node === null || page === null) return
+    if (node === null) return
     node.querySelector<HTMLButtonElement>('.capture-resume')?.focus({ preventScroll: true })
-    /* On a phone the halt lands at the top of a page that is usually scrolled down to the
-     * shutter, so it is brought into view — `.capture-halt`'s scroll-margin keeps it clear of
-     * the top bar. On wider screens the two frames shrink instead (see --cap-halt-h). */
-    if (window.matchMedia('(max-width: 767px)').matches) {
-      node.scrollIntoView({ block: 'start', behavior: 'smooth' })
-    }
-    const write = () => page.style.setProperty('--cap-halt-h', `${node.offsetHeight}px`)
-    write()
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(write)
-    observer?.observe(node)
-    return () => {
-      observer?.disconnect()
-      page.style.removeProperty('--cap-halt-h')
-    }
+    node.scrollIntoView({ block: 'start', behavior: 'smooth' })
   }, [halt])
   const [busy, setBusy] = useState(false)
   // `position` is the rendered label of what was deleted, shown separately from `text` so it
@@ -1323,9 +1452,18 @@ export function CaptureScreen() {
     return [...byNumber.values()].sort(handOrder(recency))
   }, [boxRecords, nextIndex, recency])
 
-  const boxes = useMemo(() => boxOptions.map((option) => option.box), [boxOptions])
-
   const nextForBox = box === null ? undefined : nextIndex[String(box)]
+
+  /* THE COUNTED NUMBER THE NEXT CARD GETS (D58, D92) — not `nextForBox`. `next_index` is
+   * the STORED slot's high-water mark (`store/master.py:next_index`, "not count+1, which
+   * agrees only while the set is dense") — it climbs and never comes back down, even past
+   * a sold, retired or moved card. D58's counted number does come back down: sell card 17
+   * and the next card becomes 17. `on_hand + 1` is that number, because a freshly
+   * captured card always lands after every card the box currently holds. `onHand` reads
+   * null for a box this screen knows about only from `/status` (D142's own gap, not yet
+   * in the registry) — the count is never guessed there. */
+  const boxOnHand = box === null ? null : (boxOptions.find((option) => option.box === box)?.onHand ?? null)
+  const newCardNumber = boxOnHand === null ? undefined : boxOnHand + 1
 
   // Information, not a confirmation step. The owner was offered a confirmation on a new box
   // and declined it (spec 5.2), and this does not reinstate one: nothing is blocked and
@@ -1903,6 +2041,24 @@ export function CaptureScreen() {
 
       if (isEditableTarget(event.target)) return
 
+      /* THE MOTION PAUSE KEY (owner, 2026-09-24, verbatim): "i'd love it if when i'm on
+       * motion mode i get a pause button and/or a super prominent / easy way (maybe
+       * spacebar) to just turn off the motion mode... if there was just a pause play of
+       * motion by one press that'd be a game change." Space is free — no `SHORTCUTS` row,
+       * no App.tsx binding, and `trigger.ts`'s own `manualTrigger` already anticipated it
+       * (`manual:Space`) without ever using it. THIS CALLS THE SAME `switchTrigger` THE
+       * TRACK'S OWN `1`/`2` OPTIONS CALL (owner correction: "literally be like if i
+       * switched it off motion mode ... no new behaviour"). No new state, no new hold,
+       * no re-baseline logic of its own — whatever `switchTrigger('motion')` already does
+       * on a resume is exactly what happens here too. `event.repeat` is guarded so a
+       * finger left on the bar cannot machine-gun the toggle. */
+      if (event.key === ' ') {
+        if (event.repeat) return
+        event.preventDefault()
+        switchTrigger(triggerMode === 'motion' ? 'manual' : 'motion')
+        return
+      }
+
       const key = event.key.toLowerCase()
       const field = FIELD_KEYS[key]
       if (field !== undefined) {
@@ -1929,7 +2085,7 @@ export function CaptureScreen() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [openField, gameEntry, toggleField, fieldPick])
+  }, [openField, gameEntry, toggleField, fieldPick, triggerMode, switchTrigger])
 
   /* What the video track actually negotiated — CameraPicker carried this readout and the
    * camera field inherits it whole, because it is the one number that makes the screen
@@ -2238,6 +2394,12 @@ export function CaptureScreen() {
             : [...prev, { card, setHint: hint ?? null, finish, game: gameEntry, at: Date.now() }],
         )
         setNextIndex((prev) => ({ ...prev, [String(card.box)]: card.index + 1 }))
+        // D58, R1d: the box's on-hand count after THIS capture, off the same response —
+        // never a client increment, which would drift the moment the server refused a
+        // replay or another device wrote into the same box.
+        // A POOLED OR UNLABELED PLACE CARRIES `box_total: 0` (the server's own degraded
+        // block): that is "no count", not "an empty box", so it never overwrites the row.
+        if (card.place.located !== false && card.place.label !== null) patchOnHand(card.box, card.place.box_total)
         setRevision((prev) => prev + 1)
         setFlash((prev) => prev + 1)
         setUndoNote(null)
@@ -2269,7 +2431,18 @@ export function CaptureScreen() {
     // It belongs here for the same reason `finish` and `rarityClaim` do, and it costs what
     // they cost: the identity moves when the operator makes a claim, which is an act, not a
     // render. The seam re-arms on a keypress the operator made and not on a paint.
-  }, [box, camera, finish, gameEntry, halt, product, rarityClaim, rememberCaptureId, setHint])
+  }, [
+    box,
+    camera,
+    finish,
+    gameEntry,
+    halt,
+    patchOnHand,
+    product,
+    rarityClaim,
+    rememberCaptureId,
+    setHint,
+  ])
 
   
   const undoBack = useCallback(
@@ -2285,13 +2458,15 @@ export function CaptureScreen() {
       try {
         for (const target of plan) {
           try {
-            /* The response is discarded on purpose. Its `deleted` is the store's own key —
-             * "3/7" — and that is not a thing the operator has ever seen on this screen or
-             * anywhere else; `types.ts` says as much where it defines the field ("Not a
-             * label and not a SKU"). What goes on screen is the rendered position that was
-             * under the control a moment ago, which is the same string the server sent when
-             * the card was captured. */
-            await undoCapture(target.box, target.index)
+            /* `deleted` is the store's own key — "3/7" — and that is not a thing the
+             * operator has ever seen on this screen or anywhere else; `types.ts` says as
+             * much where it defines the field ("Not a label and not a SKU"). What goes on
+             * screen is the rendered position that was under the control a moment ago,
+             * which is the same string the server sent when the card was captured.
+             * `on_hand`, unlike `deleted`, is NOT discarded (D58, R1d): it is the box's
+             * counted number after this undo, off the same response. */
+            const undone = await undoCapture(target.box, target.index)
+            patchOnHand(target.box, undone.on_hand)
           } catch (err) {
             // STOP, do not carry on down the plan. The next card is only undoable because
             // this one was going to be gone, so continuing would aim at a card that is no
@@ -2348,7 +2523,7 @@ export function CaptureScreen() {
         setBusy(false)
       }
     },
-    [undoStack],
+    [patchOnHand, undoStack],
   )
 
   /** One card, which is what `U` and the trigger seam mean by undo. Kept as its own
@@ -2396,6 +2571,8 @@ export function CaptureScreen() {
             ),
         )
         setNextIndex((prev) => ({ ...prev, [String(target.box)]: result.next_index }))
+        // D58, R1d: same as the undo path — the box's counted number after this remove.
+        patchOnHand(target.box, result.on_hand)
         setRevision((prev) => prev + 1)
         setReplayed(null)
         setUndoNote({
@@ -2411,7 +2588,7 @@ export function CaptureScreen() {
         })
       } catch (err) {
         // CLOSED HERE TOO, NOT ONLY ON SUCCESS. The dialog is portalled over the whole page
-        // (`InventoryOverlay.tsx`), and `undoNote` renders under the footer behind it — a
+        // (kit/overlay.tsx's `Dialog`), and `undoNote` renders under the footer behind it — a
         // refusal left open behind its own dialog would satisfy no reader at all. The
         // paragraph is the same one `undoBack`'s refusal already uses, so a blocked press
         // reads exactly the way a blocked walk does.
@@ -2429,7 +2606,7 @@ export function CaptureScreen() {
         setRemoveBusy(false)
       }
     },
-    [],
+    [patchOnHand],
   )
 
 
@@ -2445,7 +2622,14 @@ export function CaptureScreen() {
         const rest = prev.filter((entry) => entry.box !== record.box)
         return [...rest, record].sort((left, right) => left.box - right.box)
       })
-      const spans = record.sections_detail
+      /* UX-024: `sections_detail` itself can be MISSING from the answer, not only empty —
+       * measured against the demo server, whose `openSection` reply carries no such field at
+       * all. `spans[spans.length - 1]` on `undefined` is `Cannot read properties of
+       * undefined (reading 'length')`, a raw exception on screen instead of the receipt this
+       * whole function exists to produce. `?? []` first, so a box the server could not
+       * render a layout for falls through to the same "no detail" receipt as an EMPTY array
+       * already did, rather than crashing before it gets there. */
+      const spans = record.sections_detail ?? []
       /* `?? null` because `noUncheckedIndexedAccess` is on and is right to be: a record
        * that came back with no spans at all is a box the server could not render a layout
        * for, and the receipt then says the act's name with no detail rather than
@@ -2614,7 +2798,10 @@ export function CaptureScreen() {
     key: string
     icon: IconName
     tone: 'plain' | 'warn'
-    text: string
+    /* NULL WHEN THE FIX BUTTON ALREADY SAYS IT (TXT-29/30, density): "Open the camera." and
+     * "Pick or name a box." repeated the button sitting right beside them and were cut. A
+     * blocker with no fix keeps its sentence — that is the only place this list speaks. */
+    text: string | null
     fix: { label: string; icon: IconName; onPress: () => void } | null
   }
 
@@ -2640,7 +2827,7 @@ export function CaptureScreen() {
         key: 'camera',
         icon: 'camera',
         tone: 'plain',
-        text: 'Open the camera.',
+        text: null,
         fix: { label: 'Open the camera', icon: 'camera', onPress: camera.retry },
       })
     } else if (!camera.ready) {
@@ -2664,7 +2851,7 @@ export function CaptureScreen() {
         key: 'box',
         icon: 'box',
         tone: 'plain',
-        text: 'Pick or name a box.',
+        text: null,
         fix: { label: 'Pick a box', icon: 'box', onPress: () => toggleField('box') },
       })
     }
@@ -2804,10 +2991,17 @@ export function CaptureScreen() {
      screen, since the row above it opened with `Box 3` too. */
   const boxSentence = box === null ? 'No box' : captureBoxLabel(box, boxName)
 
-  /* The store's next index for the box, named as the index it is. `#N` is reserved for the
-   * counted card number every other screen draws (D58); a high-water mark is not one, and a
-   * person moving between screens should never have to guess which `#` they are reading. */
-  const boxNextText = boxIsEmpty ? 'Empty' : `next index ${nextForBox ?? '?'}`
+  /* THE COUNTED NUMBER, NOT THE STORED SLOT (D58, D92, the R1c finding): this used to read
+   * `next index ${nextForBox}`, the raw stored-slot high-water mark, and said so on purpose
+   * to avoid colliding with the `#N` other screens reserve for the counted number — but the
+   * odometer three lines below draws that same `nextForBox` labelled "next card", so the
+   * screen disagreed with itself the moment a card left the box. Both now read
+   * `newCardNumber`, and the word is "card", never "index" (D196). */
+  const boxNextText = boxIsEmpty ? 'Empty' : `next card ${newCardNumber ?? '?'}`
+
+  // UX-076: the known-code lookup for the halt banner, read once here so the two JSX spots
+  // that need it (headline, resume sentence) do not each re-index a possibly-undefined map.
+  const haltCodeInfo = halt?.code === null || halt?.code === undefined ? undefined : HALT_CODE_INFO[halt.code]
 
   const gameSentence =
     gameEntry === null ? (registryNote === null ? 'Loading…' : 'Unavailable') : gameEntry.display
@@ -2824,16 +3018,67 @@ export function CaptureScreen() {
       : null
   const rarityIsBlank = gameEntry === null || rarityClaim.length === 0
 
+  /* THE ODOMETER: this sitting's own count, on the kit's actions slot beside the title
+     (UX-048 — Page's own h1 stays reachable at every width, where the hand-rolled header it
+     replaces went to `display: none` at 390 with nothing left in its place). */
+  const odometer = (
+    <div className="capture-odo-wrap">
+      <div className="capture-odo" aria-label="This sitting">
+        <Stat value={runCount === null ? '0' : String(runCount.shots)} label="captured" />
+        <span className="capture-odo-rule" aria-hidden="true" />
+        <Stat value={box === null ? '—' : String(newCardNumber ?? '?')} label="next card" />
+        {runCount === null ? null : runCount.gaps === 0 && runCount.ids === runCount.shots ? (
+          <Pill tone="ok" icon="check" className="capture-odo-verdict">
+            no gaps
+          </Pill>
+        ) : (
+          <Pill tone="danger" icon="alert" className="capture-odo-verdict">
+            {runCount.gaps === 0 ? null : (
+              <span className="capture-list-part">{runCount.gaps} missing</span>
+            )}
+            {runCount.ids === runCount.shots ? null : (
+              <span className="capture-list-part">
+                {runCount.ids} ids of {runCount.shots}
+              </span>
+            )}
+          </Pill>
+        )}
+      </div>
+      {/* ALWAYS RENDERED, EVEN AT ONE DRAWER AND EVEN EMPTY — the line holds its own
+          height from a `min-height` in the sheet, so opening a second drawer adds a
+          figure and moves nothing (D118). A line that appeared on the first switch would
+          push the whole screen down at the exact moment the operator's hands are full. */}
+      <p className="capture-odo-split">
+        <span className="bn-sr">Where this sitting went: </span>
+        {runCount === null
+          ? null
+          : runCount.drawers.map((drawer) => (
+              <span
+                key={drawer.box}
+                className={
+                  drawer.box === box
+                    ? 'capture-odo-drawer is-here'
+                    : 'capture-odo-drawer'
+                }
+              >
+                Box {drawer.box} <b>{drawer.shots}</b>
+              </span>
+            ))}
+      </p>
+    </div>
+  )
+
   return (
-    <main className="capture bn-page" data-mode={triggerMode} data-live={camera.ready ? 'true' : 'false'}>
+    <Page className="capture" title="Capture" icon="camera" actions={odometer}>
       {/* Announces every record written, for anyone not looking at the screen. */}
       <div className="bn-sr" aria-live="polite">
         {last === undefined ? '' : `Recorded ${last.card.label}`}
       </div>
 
-      {/* THE HALT (spec 5.5): full width and first. A stopped run, the one number that
-          matters, and the one thing to press. The server's own sentence and its code are
-          kept verbatim behind a disclosure. */}
+      {/* THE HALT (spec 5.5): an overlay pinned over the top of the page (D118) — a stopped
+          run never moves the header or the shell under the operator's hand, it covers them
+          until Resume is pressed. The server's own sentence and its code are kept verbatim
+          behind a disclosure. */}
       {halt === null ? null : (
         <section className="capture-halt" role="alert" ref={haltRef}>
           <div className="capture-halt-main">
@@ -2844,13 +3089,23 @@ export function CaptureScreen() {
               <h2 className="capture-halt-title">
                 {halt.where === 'camera'
                   ? 'Captures are paused — no frame came from the camera.'
-                  : 'Captures are paused — the card was not recorded.'}
+                  /* UX-023: this used to say "the card was not recorded", a certainty the
+                     next line already contradicted ("if it was already recorded..."). A
+                     server halt means the response was lost, not that the write was — the
+                     replay on the next capture (`captureId`) exists exactly because the
+                     server may have already committed it. The headline now says what is
+                     actually known: the run stopped, and the card's fate is unconfirmed.
+                     UX-076: a KNOWN code overrides this generic sentence with its own —
+                     `HALT_CODE_INFO` — since a known cause is a stronger, truer headline
+                     than "unconfirmed" and D196 forbids printing the code itself here. */
+                  : (haltCodeInfo?.headline ?? 'Captures are paused — check whether that card was recorded.')}
               </h2>
               <p className="capture-halt-message">
                 {halt.where === 'camera'
                   ? 'Set aside the card at the lens and check the camera feed before you resume.'
-                  : 'Leave the card at the lens and capture it again after you resume — if it ' +
-                    'was already recorded, the app will say so and give it no second position.'}
+                  : (haltCodeInfo?.resume ??
+                      'Leave the card at the lens and capture it again after you resume — if it ' +
+                        'was already recorded, the app will say so and give it no second position.')}
               </p>
               {triggerMode !== 'manual' && swallowed.halted > 0 ? (
                 <p className="capture-halt-message capture-halt-count">
@@ -2913,72 +3168,6 @@ export function CaptureScreen() {
         </section>
       )}
 
-      {/* THE HEAD: the screen's name and the run's odometer, in the kit's register. The feed
-          lamp and the box sentence are the stage's, 60px lower, and are not drawn twice. */}
-      <header className="capture-head">
-        <div className="capture-head-text">
-          <h1 className="capture-title">
-            <Icon name="camera" size={20} />
-            Capture
-          </h1>
-        </div>
-        {/* THE ODOMETER IS THE SITTING'S, AND THE SPLIT UNDER IT IS WHERE THE SITTING WENT.
-            `index span` is still one drawer's — the current one — because two drawers do not
-            share an index space. See `runCount`. */}
-        <div className="capture-odo-wrap">
-          <div className="capture-odo" aria-label="This sitting">
-            <Stat value={runCount === null ? '0' : String(runCount.shots)} label="captured" />
-            <span className="capture-odo-rule" aria-hidden="true" />
-            <Stat value={box === null ? '—' : String(nextForBox ?? 1)} label="next index" />
-            <span className="capture-odo-rule" aria-hidden="true" />
-            <Stat
-              value={
-                runCount === null || runCount.span === null
-                  ? '—'
-                  : `${runCount.span.low}–${runCount.span.high}`
-              }
-              label="index span"
-            />
-            {runCount === null ? null : runCount.gaps === 0 && runCount.ids === runCount.shots ? (
-              <Pill tone="ok" icon="check" className="capture-odo-verdict">
-                no gaps
-              </Pill>
-            ) : (
-              <Pill tone="danger" icon="alert" className="capture-odo-verdict">
-                {runCount.gaps === 0 ? null : (
-                  <span className="capture-list-part">{runCount.gaps} missing</span>
-                )}
-                {runCount.ids === runCount.shots ? null : (
-                  <span className="capture-list-part">
-                    {runCount.ids} ids of {runCount.shots}
-                  </span>
-                )}
-              </Pill>
-            )}
-          </div>
-          {/* ALWAYS RENDERED, EVEN AT ONE DRAWER AND EVEN EMPTY — the line holds its own
-              height from a `min-height` in the sheet, so opening a second drawer adds a
-              figure and moves nothing (D118). A line that appeared on the first switch would
-              push the whole screen down at the exact moment the operator's hands are full. */}
-          <p className="capture-odo-split" aria-label="Where this sitting went">
-            {runCount === null
-              ? null
-              : runCount.drawers.map((drawer) => (
-                  <span
-                    key={drawer.box}
-                    className={
-                      drawer.box === box
-                        ? 'capture-odo-drawer is-here'
-                        : 'capture-odo-drawer'
-                    }
-                  >
-                    Box {drawer.box} <b>{drawer.shots}</b>
-                  </span>
-                ))}
-          </p>
-        </div>
-      </header>
-
       <div className="capture-shell">
         {/* ============ THE VIEWFINDER: the hero, on a dark stage in either theme ============ */}
         <section className="capture-stage" aria-label="Viewfinder">
@@ -3035,6 +3224,43 @@ export function CaptureScreen() {
                   </svg>
                 ) : null}
 
+                {/* THE PAUSE/PLAY OVERLAY (owner, 2026-09-24), a YouTube-style control on the
+                    pane itself rather than a row beside the shutter — the owner's own picture,
+                    left to this lane to place. Large and centred while paused (`triggerMode
+                    === 'manual'`): nothing is being judged, so the centre of the frame is
+                    free to hold it. Small and quiet, moved to a corner, while motion is
+                    running: it never sits over the middle of the frame, which is the region
+                    the presence read judges, and it never blocks a manual click on the card
+                    itself. It is `switchTrigger`, the exact call the Trigger field's own
+                    track makes — no new state, no new behaviour, just a second, faster door
+                    to the same act.
+
+                    ONLY WHILE THE CAMERA IS ACTUALLY LIVE (`camera.ready`, R3). With no feed
+                    there is no motion read to pause, and the button used to sit centred over
+                    the frame note's own "Open the camera" prompt at 390 — unreachable, since
+                    the note painted on top of it. `phone.spec.ts` caught it: a control drawn
+                    but not pressable is worse than one not drawn at all. */}
+                {camera.ready ? (
+                  <button
+                    type="button"
+                    className={
+                      triggerMode === 'manual'
+                        ? 'capture-pauseplay is-paused'
+                        : 'capture-pauseplay is-running'
+                    }
+                    onClick={() => switchTrigger(triggerMode === 'motion' ? 'manual' : 'motion')}
+                    aria-label={
+                      triggerMode === 'manual'
+                        ? 'Resume motion (Space)'
+                        : 'Pause motion (Space)'
+                    }
+                    title={triggerMode === 'manual' ? 'Resume motion — Space' : 'Pause motion — Space'}
+                  >
+                    <Icon name={triggerMode === 'manual' ? 'play' : 'pause'} size={triggerMode === 'manual' ? 30 : 16} />
+                    {triggerMode === 'manual' ? <span className="capture-pauseplay-label">Paused</span> : null}
+                  </button>
+                ) : null}
+
                 {camera.ready ? null : (
                   <div className="capture-frame-note">
                     {!camera.started ? (
@@ -3042,7 +3268,6 @@ export function CaptureScreen() {
                         <span className="capture-frame-glyph" aria-hidden="true">
                           <Icon name="camera" size={26} />
                         </span>
-                        <p className="capture-frame-title">The camera is not open</p>
                         <Button variant="primary" icon="camera" onClick={camera.retry}>
                           Open the camera
                         </Button>
@@ -3136,7 +3361,7 @@ export function CaptureScreen() {
               <Icon name="box" size={14} />
               <span className="capture-foot-box-name">{boxSentence}</span>
               {box === null ? null : (
-                <span className="capture-foot-next">next index {nextForBox ?? 1}</span>
+                <span className="capture-foot-next">next card {newCardNumber ?? '?'}</span>
               )}
             </span>
             {/* ============ TUNING: the machine's readout and instruments, off the surface ============ */}
@@ -3164,9 +3389,7 @@ export function CaptureScreen() {
               </summary>
               <div className="capture-tuning-body">
                 {triggerMode === 'manual' ? (
-                  <p className="capture-quiet">
-                    Arm the motion trigger under Rig (T) and the machine's readout appears here.
-                  </p>
+                  <p className="capture-quiet">Trigger is off.</p>
                 ) : motionDiag === null ? (
                   <p className="capture-quiet">
                     Motion is armed but no frame has reached it yet. Open a camera and the readout
@@ -3313,17 +3536,14 @@ export function CaptureScreen() {
                     value={noteDraft}
                     onChange={(event) => setNoteDraft(event.target.value)}
                   />
-                  <Button
+                  <IconButton
                     type="submit"
                     size="sm"
-                    variant="ghost"
                     icon="check"
-                    iconOnly
+                    label="Save note"
                     className="capture-note-save"
                     disabled={noteBusy}
-                  >
-                    Save note
-                  </Button>
+                  />
                 </div>
               </form>
               {last.game.catalogued ? null : (
@@ -3345,16 +3565,54 @@ export function CaptureScreen() {
         </aside>
 
         {/* ============ THE RUN: the box, the shutter, the divider ============ */}
-        <section className="capture-card capture-card-run" aria-label="Run">
-          <p className="bn-label capture-card-label">Run</p>
+        {/* UX-080 (copy): this panel used to say "RUN", which is a pipeline job everywhere
+            else on this screen and on #/runs, #/pricing and #/inventory. "Shooting" names
+            what actually happens here — pick a box, fire the shutter, start a section. */}
+        <section className="capture-card capture-card-run" aria-label="Shooting">
+          <p className="bn-label capture-card-label">Shooting</p>
 
-          {openField === 'box' ? (
+          {/* UX-069 (D118): the closed Row is now ALWAYS rendered, open or shut — only
+              hidden visually (`visibility`, not removed) when the field opens. Its natural
+              height is what reserves the slot, whatever the row's own content shape (one
+              line empty, two lines picked) — a fixed number here was tried first and was
+              8px short against the two-line state, because `min-height: 54px` is the empty
+              row's own floor, not this one's. The OpenField overlay sits on top of it. */}
+          <div className="capture-box-slot">
+          <Row
+            k="B"
+            label="Box"
+            icon="box"
+            size="lg"
+            className={openField === 'box' ? 'capture-row-covered' : undefined}
+            right={
+              box === null ? (
+                <span className="capture-box-val is-empty">
+                  <strong>No box yet</strong>
+                  <span>Pick one, or type a new name</span>
+                </span>
+              ) : (
+                /* THE NAME IS THE HEADLINE AND THE NUMBER IS GONE (D142).
+                   It read `Box 3` over `RB Epics · next index 41`, which made the operator
+                   read past the number to reach the word they think in. `captureBoxLabel`
+                   falls back to `Box 3` for a drawer nobody has named, so an unnamed box is
+                   still identifiable and no placeholder is invented (D56). */
+                <span className="capture-box-val">
+                  <strong>{captureBoxLabel(box, boxName)}</strong>
+                  <span>{boxNextText}</span>
+                </span>
+              )
+            }
+            onToggle={() => toggleField('box')}
+          />
+          {openField !== 'box' ? null : (
             <OpenField
               k="B"
               label="Box"
               icon="box"
               size="lg"
-              meta={`${boxes.length} ${boxes.length === 1 ? 'box' : 'boxes'}`}
+              pin
+              // TXT-32 (density): "4 boxes" counted what the list under it already shows.
+              meta={null}
               onClose={closeField}
             >
               <div className="capture-entry">
@@ -3371,7 +3629,14 @@ export function CaptureScreen() {
                        and must (D20 makes this one control over both), a drawer may have no
                        name at all, and a placeholder that stopped saying so would make a
                        working search undiscoverable. */
-                    aria-label="Find a box by name or number, or type a new one"
+                    /* R2-search (owner, 2026-09-24: "move it onto the kit's search primitive
+                       if that is small"). It is not: this is a combobox that picks a row by
+                       key or creates a box by name (D20), not `SearchField`'s type-then-see-
+                       results shape, and it has no server call to debounce. What the linter
+                       actually read was this label's own wording — "Find" matched R2-search's
+                       heuristic for a box it cannot tell apart from a real search field. The
+                       control is unchanged; only the word that looked like one is gone. */
+                    aria-label="Type a box's name or number, or type a new one"
                     placeholder="Name or number"
                     value={boxEntry}
                     disabled={boxBusy}
@@ -3391,7 +3656,9 @@ export function CaptureScreen() {
                       : boxTop !== undefined
                         ? boxTop.sealed
                           ? 'Sealed'
-                          : `Next index ${boxTop.next ?? '?'}`
+                          : /* The box picker's own words for this fact, "next 43" (see its trail
+                               below): never "index", a pipeline noun (D196). */
+                            `Next ${boxTop.next ?? '?'}`
                         : boxOffer !== null
                           ? 'New box'
                           : ''}
@@ -3412,7 +3679,12 @@ export function CaptureScreen() {
                        never doubles it. */
                     name={captureBoxLabel(option.box, option.name)}
                     sfx={boxNumberShown(option) ? ` Box ${option.box}` : null}
-                    trail={option.sealed ? 'Sealed' : `next index ${option.next ?? '?'}`}
+                    /* TXT-32 (density) asked for "#43" here; `#N` is reserved elsewhere in
+                       this file for the counted card number (D58, see `boxNextText` below),
+                       and reusing it for a box's own next-allocation index would recreate
+                       the exact cross-screen confusion that reservation exists to prevent.
+                       "next 43" keeps the cut without the collision — see PROGRESS.md. */
+                    trail={option.sealed ? 'Sealed' : `next ${option.next ?? '?'}`}
                     trailWord={option.sealed}
                     onPick={() => {
                       if (option.sealed) {
@@ -3436,11 +3708,15 @@ export function CaptureScreen() {
                   />
                 )}
               </div>
-              <p className="capture-opennote">
-                {boxMatchTotal > boxRows.length
-                  ? `${boxMatchTotal} boxes match; ${boxRows.length} shown. Narrow it, or press Enter to take the top row.`
-                  : 'Enter takes the top row. Anything new is created by name.'}
-              </p>
+              {/* TXT-32 (density): the general-case sentence ("Enter takes the top row.
+                  Anything new is created by name.") described what the list and the New row
+                  already show. Kept only where the list is narrowed and the top row is not
+                  the whole answer any more — that fact is not visible elsewhere. */}
+              {boxMatchTotal > boxRows.length ? (
+                <p className="capture-opennote">
+                  {`${boxMatchTotal} boxes match; ${boxRows.length} shown. Narrow it, or press Enter to take the top row.`}
+                </p>
+              ) : null}
               {/* THE NAME NUDGE, AT THE MOMENT A BRAND-NEW BOX IS BEING OFFERED — the walkthrough's
                   gap: nothing told the operator, typing a name in a hurry, that this exact string
                   is what every other screen (Home, the rail, the Fulfiller's list) shows verbatim
@@ -3460,33 +3736,8 @@ export function CaptureScreen() {
                 </p>
               )}
             </OpenField>
-          ) : (
-            <Row
-              k="B"
-              label="Box"
-              icon="box"
-              size="lg"
-              right={
-                box === null ? (
-                  <span className="capture-box-val is-empty">
-                    <strong>No box yet</strong>
-                    <span>Pick one, or type a new name</span>
-                  </span>
-                ) : (
-                  /* THE NAME IS THE HEADLINE AND THE NUMBER IS GONE (D142).
-                     It read `Box 3` over `RB Epics · next index 41`, which made the operator
-                     read past the number to reach the word they think in. `captureBoxLabel`
-                     falls back to `Box 3` for a drawer nobody has named, so an unnamed box is
-                     still identifiable and no placeholder is invented (D56). */
-                  <span className="capture-box-val">
-                    <strong>{captureBoxLabel(box, boxName)}</strong>
-                    <span>{boxNextText}</span>
-                  </span>
-                )
-              }
-              onToggle={() => toggleField('box')}
-            />
           )}
+          </div>
 
           <div className="capture-controls">
             <Button
@@ -3514,7 +3765,9 @@ export function CaptureScreen() {
                   {blockers.map((blocker) => (
                     <li key={blocker.key} className="capture-block-row" data-tone={blocker.tone}>
                       <Icon name={blocker.icon} size={14} />
-                      <span className="capture-block-say">{blocker.text}</span>
+                      {blocker.text === null ? null : (
+                        <span className="capture-block-say">{blocker.text}</span>
+                      )}
                       {blocker.fix === null ? null : (
                         <Button
                           size="sm"
@@ -3618,15 +3871,13 @@ export function CaptureScreen() {
           {undoStack.length === 0 ? (
             <p className="capture-quiet capture-film-empty">
               <Icon name="film" size={14} />
-              {/* THE SECOND BRANCH IS BOTH FACTS AT ONCE, which is the only way to reach it:
-                  the stack falls back to the box's own newest when this sitting has no
-                  shots, so an empty strip with a box picked means this sitting is empty AND
-                  the box is. It read "Nothing in this box to undo yet", which was the box
-                  filter speaking — under a sitting-ordered stack a full box and an empty
-                  strip is a state that cannot happen. */}
-              {box === null
-                ? 'Pick a box to start.'
-                : 'Nothing to undo yet.'}
+              {/* ONE SENTENCE FOR BOTH CASES (TXT-30, density): "Pick a box to start." repeated
+                  the Box field a few rows up and was cut. The stack falls back to the box's
+                  own newest when this sitting has no shots, so an empty strip with a box
+                  picked means this sitting is empty AND the box is — the same sentence
+                  answers both, which used to be "Nothing in this box to undo yet" before a
+                  sitting-ordered stack made a full box and an empty strip impossible together. */}
+              Nothing to undo yet.
             </p>
           ) : (
             <ul className="capture-undo-list">
@@ -3681,8 +3932,12 @@ export function CaptureScreen() {
                         own complaint — undoing a mid-sitting shot loses every capture after
                         it too. `removeCardInPlace` is the route that already exists for it
                         (D10 ruling 1), and this is its second door, beside the row's own. */}
-                    <button
-                      type="button"
+                    <IconButton
+                      icon="trash"
+                      label="Remove just this card"
+                      name={`Remove just this card, ${positionText(target)}`}
+                      tone="danger"
+                      size="sm"
                       className="capture-undo-drop"
                       disabled={busy}
                       onClick={(event) => {
@@ -3690,10 +3945,7 @@ export function CaptureScreen() {
                         setUndoNote(null)
                         setRemoveConfirm(target)
                       }}
-                      aria-label={`Remove just this card, ${positionText(target)}`}
-                    >
-                      <Icon name="x" size={13} />
-                    </button>
+                    />
                   </div>
                 </li>
               ))}
@@ -3779,7 +4031,9 @@ export function CaptureScreen() {
                  export cannot be fetched without one, this field is required in every sense
                  but the shutter's, and the head is where that belongs — the meta beside the
                  cursor reports what is TYPED, not what is asked for. */
-              meta={needsHint ? 'Needed for this game' : 'Optional'}
+              // TXT-33 (density): "Needed for this game" repeated "Needed", the same field's
+              // own closed-row value a few pixels away.
+              meta={needsHint ? 'Needed' : 'Optional'}
               onClose={closeField}
             >
               <form
@@ -4068,7 +4322,7 @@ export function CaptureScreen() {
                     </span>
                     <span className="capture-list-part">{camera.rotation}°</span>
                     <span className="capture-list-part">
-                      {triggerMode === 'manual' ? 'Key' : 'Motion'}
+                      {triggerMode === 'manual' ? 'Manual' : 'Motion'}
                     </span>
                   </span>
                 )}
@@ -4280,7 +4534,11 @@ export function CaptureScreen() {
                   <span className="capture-list-part">
                     {triggerMode === 'motion' ? 'the machine fires it' : `${CAPTURE_KEY_LABEL} fires it`}
                   </span>
-                  <span className="bn-sr capture-trigger">{captureTrigger.name}</span>
+                  {/* THE MACHINE STRING IS AN ATTRIBUTE, NEVER TEXT (D196): `motion-live.spec.ts`,
+                      `capture-undo.spec.ts` and `capture-claims.spec.ts` tell manual from motion
+                      apart by `data-trigger`, and nothing a person or a screen reader gets reads
+                      "manual:c". The human label is "Manual"/"Motion" above. */}
+                  <span className="capture-trigger" data-trigger={captureTrigger.name} hidden />
                 </>
               }
               onClose={closeField}
@@ -4319,10 +4577,9 @@ export function CaptureScreen() {
               icon={triggerIcon(triggerMode)}
               right={
                 <span className={triggerMode === 'manual' ? 'capture-val' : 'capture-val is-armed'}>
-                  {triggerMode === 'manual' ? 'Key' : 'Motion'}
-                  <em className="bn-sr capture-trigger">
-                    {captureTrigger.name}
-                  </em>
+                  {triggerMode === 'manual' ? 'Manual' : 'Motion'}
+                  {/* Same as the open field's own marker above: an attribute, never text. */}
+                  <span className="capture-trigger" data-trigger={captureTrigger.name} hidden />
                 </span>
               }
               onToggle={() => toggleField('trigger')}
@@ -4335,9 +4592,9 @@ export function CaptureScreen() {
               It reaches all three panels — the box in Run, the four claims in Stack, the game
               here — so there is no panel it BELONGS to, and the foot of the column is where a
               control that ends a sitting reads as ending one. The head was the alternative and
-              was refused: `.capture-head-text` is display:none under 767px, so the head is the
-              odometer alone on a phone and a reset button would be crowding the one row that is
-              already tight there.
+              was refused: the kit's own head actions row is the odometer alone on a phone
+              (Page wraps it full-width under the title), and a reset button would be crowding
+              the one row that is already tight there.
 
               QUIET, NOT DANGER. It destroys nothing — `docs/DESIGN.md` reserves red for acts
               that do — and the sentence under it names the store explicitly, because this is
@@ -4347,21 +4604,25 @@ export function CaptureScreen() {
               variant="quiet"
               size="sm"
               block
-              icon="refresh"
+              icon="eraser"
+              words="not-in-vocabulary"
               onClick={clearSetup}
               disabled={!setupChosen}
             >
               Clear the setup
             </Button>
-            <p className="capture-opennote capture-clear-note">
-              {setupChosen
-                ? 'Resets the box, game, and claims. The camera, rotation, and store are untouched.'
-                : 'Nothing to clear.'}
-            </p>
+            {/* TXT-31 (density): "Nothing to clear." under a disabled button said nothing the
+                disabled state had not already said. The sentence now only earns its place
+                when there is something to explain. */}
+            {setupChosen ? (
+              <p className="capture-opennote capture-clear-note">
+                Resets the box, game, and claims. The camera, rotation, and store are untouched.
+              </p>
+            ) : null}
           </div>
         </section>
 
       </div>
-    </main>
+    </Page>
   )
 }

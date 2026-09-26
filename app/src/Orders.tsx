@@ -1,32 +1,49 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
-import { Button, Chip, EmptyState, Icon, Kbd, Notice, PageHeader, Pill, Segmented, type IconName, type PillTone } from './kit'
+import {
+  Button,
+  EmptyState,
+  FilterBar,
+  HideToggle,
+  Icon,
+  IconButton,
+  Loading,
+  matchQuery,
+  Notice,
+  Page,
+  patchViewQuery,
+  Pill,
+  Sheet,
+  Stat,
+  useFacetParams,
+  useSortParam,
+  useViewFlag,
+  useViewParam,
+  type FilterFacet,
+  type IconName,
+  type PillTone,
+  type SortOption,
+  type SortValue,
+} from './kit'
+import { absoluteDate, relativeDate } from './dates'
 import { toast } from './kit/toast'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
-import { isOrderReason, ORDER_REASONS, orderReasonLabel, orderReasonRemedy } from './orderReasons'
+import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
 import { rememberHideSold, rememberOrderFilter, storedHideSold, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
-import { hubState, setHub, touchHub, useHub, type PullFilter, type Stage } from './OrdersHubStore'
+import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore'
 import { isEditableTarget } from './keys'
 import { PositionLabel } from './PositionLabel'
 import { sayPlace } from './position'
-import { SearchField } from './SearchField'
-import { groupBuyers, groupForOrderKey, type BuyerGroup } from './orderBuyers'
+import { buyerKeyOf, groupBuyers, groupForOrderKey, groupMissing, lineReason, MISSING_FACET, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
-  applyTake,
-  DEFAULT_ORDER_VIEW,
-  orderStalenessSentence,
+  buyerLabel,
+  orderBuyerLabel,
+  groupHasUnseenLine,
+  groupIsReadyToShip,
   passesHideUnknown,
-  passesQuery,
-  passesStatus,
+  sortedReadyFirst,
   sortGroups,
-  staleCount,
   statusVocabulary,
-  takeOrder,
-  TAKE_IS_CURRENT,
-  unnamedBuyerLabel,
-  type OrderSort,
-  type OrderTake,
-  type OrderView,
 } from './orderView'
 import {
   closeLines,
@@ -50,15 +67,11 @@ import {
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
-import { useOrderWalk, WalkList, WalkMainPane, type WalkPullFn, type WalkUndoFn } from './OrdersWalkPane'
-import { Overlay } from './InventoryOverlay'
-import './BoxBrowse.css'
-import './BoxOps.css'
+import { useOrderWalk, WalkCardPane, WalkList, type WalkPullFn, type WalkUndoFn } from './OrdersWalkPane'
 import type {
   IngestResult,
   Inventory,
   InventoryCard,
-  Listing,
   NamesResult,
   OrderCloseReason,
   OrderFillReason,
@@ -78,17 +91,15 @@ import type {
 } from './types'
 import './Orders.css'
 
-/* THE ORDERS HUB — one screen, two stages (D69).
+/* THE ORDERS HUB: two screens, two sidebar rows, one shared state (D69,
+ * D274).
  *
- *   ORDERS   which copies each buyer gets and where they are; one press per copy, aimed by the
- *            row's own `capture_id`, with twenty seconds to take it back. Worked one order at a
- *            time (a list beside the open order) or as one walk through the boxes.
+ *   ORDERS   the buyers, the walk through the boxes for the buyers walked, and the card to pick,
+ *            with every copy of it and Mark sold. One press per copy, aimed by `capture_id`.
  *   SHIPPING TCGplayer's Export Shipping file sorted into three lanes, and the Pirate Ship import.
  *
- * `#/orders` renders the hub with the first selected and `#/shipping` with the second; the tabs
- * move the hash, so bookmarks, the nav and the `,O` / `,S` chords all keep working. What each
- * stage knows of the other is a client-side join by order number and nothing is written across
- * the seam.
+ * `#/orders` and `#/shipping` each draw the kit `Page`. No tab strip joins them. What each knows
+ * of the other is a client-side join by order number, and nothing is written across the seam.
  *
  * ONE READ ANSWERS BOTH HALVES OF THE LEDGER. `GET /orders` computes the order list and the
  * resolution out of ONE store snapshot, and this screen makes exactly one call for the pair.
@@ -246,17 +257,9 @@ type FetchReceiptData = {
   readonly continuingInS: number | null
 }
 
-/** When something happened, in the words a person would use. */
+/** When something happened, in the one relative format (`dates.ts`). */
 function whenWord(at: number, now: number): string {
-  const seconds = Math.max(0, Math.round((now - at) / 1000))
-  if (seconds < 45) return 'just now'
-  const minutes = Math.round(seconds / 60)
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
-  const then = new Date(at)
-  const time = then.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  if (then.toDateString() === new Date(now).toDateString()) return `today at ${time}`
-  if (then.toDateString() === new Date(now - 86_400_000).toDateString()) return `yesterday at ${time}`
-  return `${then.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${time}`
+  return relativeDate(at, new Date(now))
 }
 
 function plural(n: number, one: string, many: string): string {
@@ -502,9 +505,7 @@ function StatusPicker({
         </div>
       ) : loading ? (
         <div className="orders-statuses-state" aria-busy="true">
-          <span className="bn-skeleton orders-statuses-skel" />
-          <span className="bn-skeleton orders-statuses-skel" />
-          <span className="bn-skeleton orders-statuses-skel" />
+          <Loading rows={3} label="Counting orders" />
           <p className="orders-statuses-note">Counting this account&rsquo;s window. Nothing is being fetched.</p>
         </div>
       ) : rows.length === 0 && absent.length === 0 ? (
@@ -649,11 +650,6 @@ function aimOf(line: ResolvedLine, pick: PickRow): PullTarget | null {
  * store, this reproduces the server's own `on_hand` figure on all 59 lines, exactly. */
 const GONE = new Set(['sold', 'retired', 'moved'])
 
-/** `BoxBrowse.tsx`'s own `NO_LISTINGS` — one shared empty object rather than a fresh `{}`
- *  on every render with nothing to show, so a consumer keyed on identity never re-renders
- *  for no reason. */
-const NO_LISTINGS: Readonly<Record<string, Listing>> = {}
-
 /** The store's on-hand copies keyed by sku, each already shaped as the pick it would have been —
  *  so nothing downstream can tell a resolver's copy from the store's. */
 type StoreCopies = ReadonlyMap<string, readonly PickRow[]>
@@ -736,28 +732,26 @@ function indexClaims(answers: ReadonlyMap<string, ResolvedOrder>): Claims {
   return out
 }
 
-/** The counts a line carries beside its reason, every part drawn including the zeros. */
+/** The counts a line carries beside its reason: only the parts above zero (UX-238). */
 function breakdownOf(line: ResolvedLine): string {
-  return [`${line.on_hand} on hand`, `${line.sold} sold`, `${line.retired} retired`, `${line.pooled} pooled`].join(', ')
+  const parts = [
+    [line.on_hand, 'on hand'],
+    [line.sold, 'sold'],
+    [line.retired, 'retired'],
+    [line.pooled, 'pooled'],
+  ] as const
+  const said = parts.filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
+  return said.length === 0 ? 'None on hand' : said.join(', ')
 }
 
-/** Relative time in the product's one vocabulary — the strings `RunsStage.whenLabel` draws
- *  (`18h ago`, `yesterday`, `3 days ago`), kept local so this screen does not import a sibling
- *  another group is rebuilding at the same time. */
+/** The marketplace's name as a person writes it: the feed may send it in lower case (UX-238). */
+function sourceName(source: string): string {
+  return source.trim().toLowerCase() === 'tcgplayer' ? 'TCGplayer' : source
+}
+
+/** How long ago, in the one relative format (`dates.ts`). */
 function whenLabel(iso: string | null): string | null {
-  if (iso === null) return null
-  const at = new Date(iso)
-  const t = at.getTime()
-  if (Number.isNaN(t)) return null
-  const mins = Math.max(0, Math.floor((Date.now() - t) / 60000))
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days === 1) return 'yesterday'
-  if (days < 7) return `${days} days ago`
-  return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return iso === null ? null : relativeDate(iso)
 }
 
 function text(value: string | null | undefined): value is string {
@@ -826,7 +820,6 @@ function headlineOf(line: ResolvedLine): Headline {
 
 /* ---- status ---------------------------------------------------------------------------------- */
 
-type Status = 'ready' | 'short' | 'look' | 'unresolved' | 'done'
 
 /** Does this order still have a body worth drawing — a walk, its lines, a Pull button — even
  *  though `order.open` says no? An order the marketplace calls done for having every copy
@@ -839,14 +832,7 @@ function ownsAWalkableBody(order: OrderRow): boolean {
   return order.terminal && order.wanted > order.recorded
 }
 
-function statusOf(order: OrderRow, answer: ResolvedOrder | null): Status {
-  if (!order.open) return 'done'
-  if (answer === null) return 'unresolved'
-  const reasons = answer.lines.map((line) => line.reason)
-  if (reasons.some((reason) => reason !== 'resolved' && reason !== 'short')) return 'look'
-  if (reasons.some((reason) => reason === 'short')) return 'short'
-  return 'ready'
-}
+
 
 const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconName }> = {
   /* THE WORD IS "Ready" — one word, not "Ready to sell" (owner's ruling, 2026-09-19). */
@@ -857,13 +843,20 @@ const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconNam
   done: { label: 'Done', tone: 'default', icon: 'check' },
 }
 
-const STATUS_DOT: Record<Status, 'ok' | 'warn' | 'default'> = {
-  ready: 'ok',
-  short: 'warn',
-  look: 'warn',
-  unresolved: 'default',
-  done: 'default',
-}
+/** The one sort: when the buyer's newest order was placed (FLT-01: a press re-sorts at once). */
+type OrderSortKey = 'placed'
+const SORT_OPTIONS: readonly SortOption<OrderSortKey>[] = [
+  { key: 'placed', label: 'Placed', desc: 'Newest first', asc: 'Oldest first', first: 'desc' },
+]
+const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'desc' }
+
+/** The "Show" facet's choices: a buyer's one state, worst first (UX-171, UX-199), after
+ *  "Missing a copy" — every buyer who owes at least one copy the store cannot find, across
+ *  states (`orderBuyers.ts:groupMissing`, the owner's option c). Home's "Cannot be filled"
+ *  press opens that one. */
+type ShowValue = Status | typeof MISSING_FACET
+const SHOW_ORDER: readonly ShowValue[] = [MISSING_FACET, 'look', 'short', 'ready', 'unresolved', 'done']
+const showLabel = (value: ShowValue): string => (value === MISSING_FACET ? 'Missing a copy' : STATUS_PILL[value].label)
 
 const LANE_TONE: Record<ShippingLane, PillTone> = { envelope: 'ok', parcel: 'default', unjudged: 'warn' }
 const LANE_ICON: Record<ShippingLane, IconName> = { envelope: 'mail', parcel: 'package', unjudged: 'alert' }
@@ -872,19 +865,8 @@ const LANE_ICON: Record<ShippingLane, IconName> = { envelope: 'mail', parcel: 'p
    draw two identical pills meaning two different things. */
 const ORDER_LANE_LABEL: Record<ShippingLane, string> = { envelope: 'Envelope', parcel: 'Parcel', unjudged: 'Lane undecided' }
 
-/* The six reasons: a short label for the filter select's own options, a tone and an icon for
-   the line's own reason banner, and a phrase for the summary sentence. The long human label
-   (`orderReasonLabel`) and the remedy stay on the line that has the problem, and the machine
-   string rides THERE as a tag — never on the filter. */
-const REASON_SHORT: Record<OrderLineReason, string> = {
-  resolved: 'Every copy found',
-  short: 'Short',
-  no_copies_on_hand: 'None left',
-  sku_unknown: 'No record',
-  sku_unseen: 'Never seen',
-  not_a_single: 'Sealed, not a single',
-}
-
+/* The six reasons: a tone and an icon for the line's own reason banner. The long human label
+   (`orderReasonLabel`) and the remedy stay on the line that has the problem. */
 const REASON_TONE: Record<OrderLineReason, 'ok' | 'warn' | 'danger' | 'info'> = {
   resolved: 'ok',
   short: 'warn',
@@ -908,21 +890,17 @@ function joinPhrases(parts: string[]): string {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
 }
 
-/** The lede, drawn once the ledger has answered — THE TOTAL, PLUS WHO IT IS SPREAD ACROSS
- *  (UX review, 2026-09-20). The open/done breakdown and per-reason phrases this used to spell
- *  out are the same figures the tab pills and the filter select already draw, at 820 and 1440
- *  both; keeping both was two sentences for one fact — but a bare "551 lines" is a steep drop
- *  from the loading sentence it replaces, and "line" is order-fulfilment jargon with no
- *  reader outside this store. Naming the buyer count restores a little of what a first-time
- *  reader needs, at the cost of D194's word-count ratchet: this raises `#/orders`' pinned
- *  ceiling (`app/tests/copy-budget.json`) by a few words next time it is re-measured, which
- *  needs `node scripts/copy-budget.mjs --pin` on the owner's word, same as any other addition. */
-function summaryOf(counts: Record<OrderLineReason, number>, buyerCount: number): ReactNode {
-  const lineTotal = ORDER_REASONS.reduce((sum, reason) => sum + counts[reason], 0)
+/** The verdict, drawn once the ledger has answered: ONE fact over ONE set (UX-167). The copies
+ *  owed and the buyers they are owed to are both counted over the OPEN orders. The old lede
+ *  counted lines over the open orders and buyers over every order in the ledger, so a long
+ *  history read "611 lines across 806 buyers". */
+function verdictOf(open: readonly OrderRow[]): ReactNode {
+  const owed = open.reduce((sum, order) => sum + Math.max(0, order.wanted - order.recorded), 0)
+  const buyers = new Set(open.map(buyerKeyOf)).size
+  if (owed === 0) return 'Every open order has its copies.'
   return (
     <>
-      <strong>{lineTotal}</strong> line{lineTotal === 1 ? '' : 's'} across{' '}
-      <strong>{buyerCount}</strong> buyer{buyerCount === 1 ? '' : 's'}
+      <strong>{owed}</strong> {plural(owed, 'copy', 'copies')} owed to <strong>{buyers}</strong> {plural(buyers, 'buyer', 'buyers')}
     </>
   )
 }
@@ -981,47 +959,48 @@ type CloseLineHandler = (order: OrderRow, line: ResolvedLine, reason: OrderClose
  *  `?buyer=`. Both are read, `?buyer=` first, and a link naming one order is resolved
  *  through `groupForOrderKey` to whichever group holds it (D193). */
 const ORDER_PARAM = 'order'
-/** THE OUTBOUND LINK — `#/orders?buyer=<group key>`, this screen's own selection, read and
- *  written together. */
+/** THE SELECTION — `#/orders?buyer=<group key>`, read live through the view state, so Back and a
+ *  typed URL both select (FLT-11). Written with `replaceState` (`patchViewQuery`), so stepping
+ *  through twenty buyers leaves one history entry. */
 const BUYER_PARAM = 'buyer'
+/** WALK MODE (the owner's ruling, 2026-09-24: "look at how much space is wasted by stuff i dont
+ *  need to see when im in the order walk"). `?walk=1` while a buyer is walked. Under 1000px of
+ *  column, everything the walk does not need folds into one line and a thin card row. It is
+ *  in the URL, so entering and leaving it is a navigation (D118), and Back leaves it. */
+const WALK_PARAM = 'walk'
+/** A square the filter bar's own height, so the bar stays one line of one height (UX-217). */
+const BAR_SQUARE: CSSProperties = { width: 'var(--bn-control-h)', height: 'var(--bn-control-h)' }
 
-function hashQuery(): URLSearchParams | null {
+/** Walk one buyer: select them and enter walk mode. A NEW history entry the first time, so Back
+ *  leaves the walk. Already walking, a new buyer replaces the entry. */
+function walkTo(buyerKey: string): void {
   const hash = window.location.hash
   const at = hash.indexOf('?')
-  if (at === -1) return null
-  return new URLSearchParams(hash.slice(at + 1))
+  const query = new URLSearchParams(at === -1 ? '' : hash.slice(at + 1))
+  /* ONLY WHERE WALK MODE DRAWS ANYTHING: under 1000px of column. A desk selection writes no
+     `walk=1`, so a link copied at the desk does not open walk mode on a phone (review, round 3).
+     The column is read once, at the press, the same edge `Orders.css` asks. */
+  const column = document.querySelector('.orders-body')?.getBoundingClientRect().width ?? 0
+  if (query.get(WALK_PARAM) === '1' || column >= 1000) {
+    patchViewQuery({ [BUYER_PARAM]: buyerKey, [ORDER_PARAM]: null })
+    return
+  }
+  query.set(BUYER_PARAM, buyerKey)
+  query.delete(ORDER_PARAM)
+  query.set(WALK_PARAM, '1')
+  window.location.hash = `#/orders?${query.toString()}`
 }
 
-function orderParam(): string | null {
-  return hashQuery()?.get(ORDER_PARAM) ?? null
-}
-
-function buyerParam(): string | null {
-  return hashQuery()?.get(BUYER_PARAM) ?? null
-}
-
-/** `#/orders?buyer=<key>`, written with `replaceState` so stepping through twenty buyers leaves
- *  one history entry and fires no `hashchange` — the shell's router keys on the path alone. */
-function mirrorBuyerParam(key: string): void {
-  const hash = window.location.hash
-  const path = hash.replace(/^#/, '').split('?')[0] ?? ''
-  if (path !== '/orders') return
-  const next = `#/orders?${BUYER_PARAM}=${encodeURIComponent(key)}`
-  if (hash === next) return
-  window.history.replaceState(window.history.state, '', next)
-}
-
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() => (typeof window === 'undefined' ? false : window.matchMedia(query).matches))
+/** Hands the walk line to the page header, which draws it (the header is the hub's). */
+function WalkLinePublisher({ words }: { readonly words: readonly string[] | null }) {
+  const sig = words === null ? null : words.join('\n')
   useEffect(() => {
-    const media = window.matchMedia(query)
-    const onChange = () => setMatches(media.matches)
-    media.addEventListener('change', onChange)
-    setMatches(media.matches)
-    return () => media.removeEventListener('change', onChange)
-  }, [query])
-  return matches
+    setHub({ walkLine: sig === null ? null : sig.split('\n') })
+    return () => setHub({ walkLine: null })
+  }, [sig])
+  return null
 }
+
 
 /* ---- the copy map: where a card's copies are, ranked by density ---------------------------- */
 
@@ -1098,7 +1077,6 @@ type MapStop = {
   readonly total: number
   readonly free: number
   readonly spoken: number
-  readonly claimed: number
   readonly sections: MapSection[]
   readonly copies: LineCopy[]
 }
@@ -1137,7 +1115,6 @@ function buildCopyMap(line: ResolvedLine, store: StoreCopies | null, claims: Cla
     total: number
     free: number
     spoken: number
-    claimed: number
     sections: Map<string, SectionDraft>
   }
 
@@ -1160,7 +1137,6 @@ function buildCopyMap(line: ResolvedLine, store: StoreCopies | null, claims: Cla
         total: 0,
         free: 0,
         spoken: 0,
-        claimed: 0,
         sections: new Map(),
       }
       drafts.set(key, stop)
@@ -1168,7 +1144,6 @@ function buildCopyMap(line: ResolvedLine, store: StoreCopies | null, claims: Cla
     stop.total += 1
     if (copy.free) stop.free += 1
     if (copy.spokenFor !== null) stop.spoken += 1
-    if (copy.claimedBy !== null) stop.claimed += 1
 
     const section = pooled ? null : place.section
     const sectionKey = section === null ? 'none' : `s${section}`
@@ -1208,7 +1183,6 @@ function buildCopyMap(line: ResolvedLine, store: StoreCopies | null, claims: Cla
         total: draft.total,
         free: draft.free,
         spoken: draft.spoken,
-        claimed: draft.claimed,
         sections: sections.map(({ key, label, total, free }) => ({ key, label, total, free })),
         copies: sections.flatMap((bucket) => bucket.copies),
       }
@@ -1265,11 +1239,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
    *  names (`skusOf`), which is always a superset of what a walk over open orders can stand
    *  on. */
   const [rawCards, setRawCards] = useState<ReadonlyMap<string, InventoryCard>>(new Map())
-  /** THE SAME READ'S THIRD FACE — `POST /inventory/copies`' own `listings`, narrowed
-   *  server-side to the SKUs any open order names, same as `BoxBrowse.tsx`'s own `listings`
-   *  is narrowed to one box's SKUs. Reused whole by the walk pane's `CardDetailsSection`
-   *  (`market-and-listings parity`, queued after D220) — never a second fetch. */
-  const [listings, setListings] = useState<Readonly<Record<string, Listing>>>(NO_LISTINGS)
   const [storeFailed, setStoreFailed] = useState(false)
   const [localBusy, setBusy] = useState<string | null>(null)
   /* A write pressed here locks from inside; an undo pressed on a toast locks from outside, through
@@ -1280,6 +1249,8 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   /** The last fetch's receipt. It outlives the well it was pressed from, because the remainder
    *  it names is the reason to press again. */
   const [receipt, setReceipt] = useState<FetchReceiptData | null>(null)
+  /** The store's own sheet: fetch, paste and both stand-downs (UX-165, UX-193). */
+  const [storeOpen, setStoreOpen] = useState(false)
 
   /* ---------------------------------------------------------- the fetch filter (D114) ---- */
 
@@ -1306,7 +1277,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
 
   const live = useRef(true)
   const pasteBox = useRef<HTMLTextAreaElement>(null)
-  const phone = useMediaQuery('(max-width: 767px)')
 
   useEffect(() => {
     live.current = true
@@ -1385,7 +1355,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       if (live.current) {
         setStore(indexStore({ cards: {} }))
         setRawCards(new Map())
-        setListings(NO_LISTINGS)
         setStoreFailed(false)
       }
       return
@@ -1395,7 +1364,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       if (!live.current) return
       setStore(indexStore(inventory))
       setRawCards(new Map(Object.values(inventory.cards).map((card) => [`${card.box}/${card.index}`, card])))
-      setListings(inventory.listings ?? NO_LISTINGS)
       setStoreFailed(false)
     } catch {
       if (!live.current) return
@@ -1404,7 +1372,6 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
          map that is quietly narrow. */
       setStore(null)
       setRawCards(new Map())
-      setListings(NO_LISTINGS)
       setStoreFailed(true)
     }
   }, [])
@@ -2088,23 +2055,9 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
 
   /* --------------------------------------------------------------------- what is drawn */
 
-  const setStage = (next: Stage) => {
-    window.location.hash = next === 'pull' ? '#/orders' : '#/shipping'
-  }
-
   const orders = payload?.orders ?? []
   const open = orders.filter((one) => one.open)
-  const done = orders.filter((one) => !one.open)
-  const counts = payload?.resolution.counts ?? null
   const populated = payload !== null && orders.length > 0
-  /* The lede's buyer count (UX review, 2026-09-20): "551 lines" alone is order-fulfilment
-   *  jargon with no context. `groupBuyers` is the one place two spellings of a buyer already
-   *  fold into one walk (D193), so counting its groups rather than a raw Set over `buyer`
-   *  gives the same number the buyer index itself would draw. */
-  const buyerCount = useMemo(() => {
-    const { recent, earlier } = groupBuyers(payload?.orders ?? [], Date.now())
-    return recent.length + earlier.length
-  }, [payload])
 
   /* The well: the textarea, "Read this paste", and — beside the list — "Fetch from TCGplayer".
      Under the empty state the fetch is the EmptyState's own action, so the well there carries
@@ -2112,7 +2065,9 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
   const wellOf = (withFetch: boolean) => (
     <section className="orders-paste" aria-label="Add orders">
       <label className="bn-field">
-        <span className="bn-field-label">Paste the order as JSON</span>
+        <span className="bn-field-label" title={`Only the SKU, the count and the card's name leave this browser. An order with no source is stamped ${DEFAULT_ORDER_SOURCE}.`}>
+          Paste the order as JSON
+        </span>
         <textarea
           ref={pasteBox}
           className="bn-textarea bn-input-mono orders-paste-box"
@@ -2132,7 +2087,14 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         {/* The fetch is behind the same well as the paste: the same errand with the copying done
             for you, arriving at the ledger through the one door `orderPaste.ts` owns. */}
         {withFetch ? (
-          <Button icon="refresh" onClick={() => onFetch()} busy={busy === 'fetch'} disabled={busy !== null}>
+          <Button
+            variant="primary"
+            icon="refresh"
+            onClick={() => onFetch()}
+            busy={busy === 'fetch'}
+            disabled={busy !== null}
+            title="A repeat skips the orders already here."
+          >
             Fetch from TCGplayer
           </Button>
         ) : null}
@@ -2151,14 +2113,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
             operator may never open, and the press works identically if they do not. */}
         {withFetch ? statusControl : null}
       </div>
-      {withFetch ? (
-        <p className="orders-paste-source">A repeat skips known orders.</p>
-      ) : null}
       {withFetch ? statusPanel : null}
-      <p className="orders-paste-source">
-        Only the SKU, the count and what the feed called the card leave this browser. An order that names no source is
-        stamped {DEFAULT_ORDER_SOURCE}.
-      </p>
       {pasteNote === null ? null : (
         <p className="orders-paste-note" role="status">
           <Icon name="info" size={14} />
@@ -2176,138 +2131,113 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     </section>
   )
 
-  /* The lede carries the ledger's summary once it has answered, so the count pills and the
-     sentence that used to sit under the header are one line here. */
-  const lede =
-    stage === 'pull'
-      ? populated && counts !== null
-        ? summaryOf(counts, buyerCount)
-        : 'Which copies each buyer gets, and where in the boxes they are. One press per copy, with twenty seconds to take it back.'
-      : "TCGplayer's shipping export, sorted into three lanes."
-
-  /* THE TWO ROUTES ARE TABS, NAMED AS THE NAV NAMES THEM. Each is a real link (the hash is the
-     router), and the leader chords ride as hover hints where there is a keyboard. */
-  const tabs = (
-    <div className="bn-tabs orders-tabs" role="tablist" aria-label="Orders and shipping">
-      <a
-        role="tab"
-        className="bn-tab orders-tab"
-        href="#/orders"
-        aria-selected={stage === 'pull'}
-        aria-current={stage === 'pull' ? 'page' : undefined}
-        onClick={(event) => {
-          event.preventDefault()
-          setStage('pull')
-        }}
-      >
-        <Icon name="cart" size={14} />
-        Orders
-        {payload === null ? null : open.length > 0 ? (
-          <Pill size="sm" tone="accent">
-            {open.length} open
-          </Pill>
-        ) : (
-          <Pill size="sm">{done.length} done</Pill>
-        )}
-        {phone ? null : <Kbd>,O</Kbd>}
-      </a>
-      <a
-        role="tab"
-        className="bn-tab orders-tab"
-        href="#/shipping"
-        aria-selected={stage === 'ship'}
-        aria-current={stage === 'ship' ? 'page' : undefined}
-        onClick={(event) => {
-          event.preventDefault()
-          setStage('ship')
-        }}
-      >
-        <Icon name="truck" size={14} />
-        Shipping
-        {hub.batch === null ? (
-          <Pill size="sm" outline>
-            No export
-          </Pill>
-        ) : (
-          <Pill size="sm" tone="accent">
-            {hub.batch.shipments} orders
-          </Pill>
-        )}
-        {phone ? null : <Kbd>,S</Kbd>}
-      </a>
-    </div>
-  )
+  /* ORDERS AND SHIPPING ARE TWO SIDEBAR ROWS, AND NO TAB STRIP JOINS THEM (UX-233,
+     D274). Each route draws its own kit `Page`. The two still share
+     this hub's state, so a row on one that names an order still finds it on the other. */
+  if (stage === 'ship') {
+    return (
+      <Page icon="truck" lede="TCGplayer's shipping export, sorted into three lanes." className="orders-hub shipping">
+        <ShipStage payload={payload} />
+      </Page>
+    )
+  }
 
   return (
-    <main className={`orders-hub bn-page ${stage === 'pull' ? 'orders' : 'shipping'}`}>
-      <PageHeader
-        icon={stage === 'pull' ? 'cart' : 'truck'}
-        title={stage === 'pull' ? 'Orders' : 'Shipping'}
-        lede={lede}
-        actions={
-          stage === 'pull' && populated ? (
-            <>
-              {/* The hand-off the sidebar makes, made here too: the Fulfiller's page, in its own tab. */}
-              <a className="bn-btn orders-handoff" href="#/fulfillment" target="_blank" rel="noopener">
-                <Icon name="hand" size={16} />
-                Cards to pull
-                <Icon name="external" size={14} />
-              </a>
-            </>
-          ) : undefined
+    <Page
+      icon="cart"
+      className={hub.walkLine === null ? 'orders-hub orders' : 'orders-hub orders is-walking'}
+      verdict={populated ? verdictOf(open) : undefined}
+      lede={populated ? undefined : 'Which copies each buyer gets, and where they are.'}
+      /* THE WALK LINE (walk mode, under 1000px of column): who, how many, what is next, opening
+         the buyer list, and one press out of the walk. CSS draws it only there. Out of the walk
+         the header holds no press at all: an empty slot would still take a row at 390. */
+      actions={
+        populated && hub.walkLine !== null ? (
+          <span className="orders-walkline">
+            <button type="button" className="orders-walkchip" aria-haspopup="dialog" onClick={() => setHub({ buyersOpen: true })}>
+              <span className="orders-walkchip-text bn-facts">
+                {hub.walkLine.map((word, at) => (
+                  <span key={at}>{word}</span>
+                ))}
+              </span>
+              <Icon name="chevronDown" size={14} />
+            </button>
+            <IconButton icon="x" label="Leave the walk" size="xl" className="orders-walkleave" onClick={() => patchViewQuery({ [WALK_PARAM]: null })} />
+          </span>
+        ) : undefined
+      }
+    >
+
+      <PullStage
+        payload={payload}
+        store={store}
+        rawCards={rawCards}
+        storeFailed={storeFailed}
+        onRereadStore={() => void rereadStore()}
+        failure={failure}
+        busy={busy}
+        emptyWell={wellOf(false)}
+        /* The empty state draws its own primary Fetch, so it needs the narrowing beside it —
+           the populated path gets both inside `wellOf(true)`, and only one of the two paths
+           renders, so the panel is never on screen twice. */
+        statusControl={statusControl}
+        statusPanel={statusPanel}
+        /* The receipt is drawn by the STAGE and not by the well, so closing "Add orders" — or
+           arriving at a populated ledger from an empty one — cannot take the remainder away
+           with it. */
+        receipt={
+          receipt === null ? null : (
+            <FetchReceipt
+              receipt={{ ...receipt, continuingInS }}
+              busy={busy === 'fetch'}
+              onFetchMore={() => onFetch()}
+              onStop={continuingInS === null ? undefined : onStopFetch}
+            />
+          )
         }
-      />
+        onPull={onPull}
+        onWalkPull={onWalkPull}
+        onWalkUndo={onWalkUndo}
+        onFill={onFill}
+        onDeclareKind={onDeclareKind}
+        onCloseLine={onCloseLine}
+        onFetch={onFetch}
+        onReread={() => void reread()}
+        /* THE STORE'S OWN CONTROLS (UX-165, UX-193), two small squares on the filter bar's line
+           (the owner's plan, D274). Fetch, paste and the two
+           stand-downs act on the whole store, so they open from the page, never from one
+           buyer's sheet. The second is the hand-off the sidebar makes: the Fulfiller's page, in
+           its own tab. */
+        storeControls={
+          <span className="orders-store-controls">
+            <IconButton icon="plus" label="Add orders" style={BAR_SQUARE} aria-haspopup="dialog" onClick={() => setStoreOpen(true)} />
+            <IconButton
+              icon="external"
+              label="Cards to pull"
+              name="Cards to pull, in a new tab"
+              style={BAR_SQUARE}
+              href="#/fulfillment"
+              target="_blank"
+              rel="noreferrer"
+            />
+          </span>
+        }
+    />
 
-      {tabs}
-
-      {stage === 'ship' ? (
-        <ShipStage payload={payload} />
-      ) : (
-        <PullStage
-          payload={payload}
-          store={store}
-          rawCards={rawCards}
-          listings={listings}
-          storeFailed={storeFailed}
-          onRereadStore={() => void rereadStore()}
-          failure={failure}
-          busy={busy}
-          filter={hub.filter}
-          selected={hub.selected}
-          phone={phone}
-          well={wellOf(true)}
-          emptyWell={wellOf(false)}
-          /* The empty state draws its own primary Fetch, so it needs the narrowing beside it —
-             the populated path gets both inside `wellOf(true)`, and only one of the two paths
-             renders, so the panel is never on screen twice. */
-          statusControl={statusControl}
-          statusPanel={statusPanel}
-          /* The receipt is drawn by the STAGE and not by the well, so closing "Add orders" — or
-             arriving at a populated ledger from an empty one — cannot take the remainder away
-             with it. */
-          receipt={
-            receipt === null ? null : (
-              <FetchReceipt
-                receipt={{ ...receipt, continuingInS }}
-                busy={busy === 'fetch'}
-                onFetchMore={() => onFetch()}
-                onStop={continuingInS === null ? undefined : onStopFetch}
-              />
-            )
-          }
-          onPull={onPull}
-          onWalkPull={onWalkPull}
-          onWalkUndo={onWalkUndo}
-          onFill={onFill}
-          onDeclareKind={onDeclareKind}
-          onStandDown={onStandDown}
-          onReconcileBacklog={onReconcileBacklog}
-          onCloseLine={onCloseLine}
-          onFetch={onFetch}
-          onReread={() => void reread()}
-        />
-      )}
-    </main>
+      <Sheet open={storeOpen} onClose={() => setStoreOpen(false)} title="Add orders" icon="plus" className="orders-store-sheet">
+        {wellOf(true)}
+        {receipt === null ? null : (
+          <FetchReceipt
+            receipt={{ ...receipt, continuingInS }}
+            busy={busy === 'fetch'}
+            onFetchMore={() => onFetch()}
+            onStop={continuingInS === null ? undefined : onStopFetch}
+          />
+        )}
+        <BacklogPrompt open={open} busy={busy} onStandDown={onStandDown} />
+        <ReconcileBacklogPanel orders={open} busy={busy} onPress={onReconcileBacklog} />
+      </Sheet>
+    </Page>
   )
 }
 
@@ -2372,44 +2302,36 @@ function BacklogPrompt({
   const busyHere = busy === 'close'
 
   return (
-    <Notice className="orders-backlog" tone="warn" title={`${candidates.length} open ${plural(candidates.length, 'order is', 'orders are')} already gone`}>
+    <section className="orders-backlog">
+      <h3 className="bn-section-title">
+        {candidates.length} open {plural(candidates.length, 'order is', 'orders are')} already shipped
+      </h3>
       <p>
-        TCGplayer reports {candidates.length === 1 ? 'it' : 'them'} as{' '}
-        {joinPhrases(statuses.map((status) => `“${status}”`))}, but this store never recorded which
-        copies went — still open here, holding copies back.
-      </p>
-      <p>
-        Standing down marks <strong>nothing</strong> sold and claims no copy left. Any card shipped
-        is still in its box — reconcile on <code>#/inventory</code>.
+        TCGplayer says {joinPhrases(statuses.map((status) => `“${status}”`))}, and here they still owe copies. Standing down
+        marks nothing sold.
       </p>
       <div className="orders-standdown-row">
-        <Button
-          variant="primary"
-          icon="check"
-          busy={busyHere}
-          disabled={busy !== null}
-          onClick={() => onStandDown(candidates, 'shipped_elsewhere')}
-        >
+        <Button busy={busyHere} disabled={busy !== null} onClick={() => onStandDown(candidates, 'shipped_elsewhere')}>
           Stand down {candidates.length} shipped {plural(candidates.length, 'order', 'orders')}
         </Button>
       </div>
-    </Notice>
+    </section>
   )
 }
 
-/** The one-time backlog reconcile (D203): every open order carrying
- *  NOTHING RECORDED, placed before a cutoff, closed with `shipped_elsewhere`. UNLIKE
- *  `BacklogPrompt` above, the predicate here is never a status word — age and "nothing
- *  recorded" alone — so the breakdown is what tells a live order sharing that shape apart from
- *  real backlog, drawn before the count ever moves.
+/** The one-time backlog reconcile (D203): every open order carrying NOTHING RECORDED, placed
+ *  before a cutoff, closed with `shipped_elsewhere`. The predicate is age and "nothing recorded"
+ *  alone, never a status word, so the panel must SHOW what a cutoff would take before the press
+ *  (UX-165): the cutoff itself, which the owner can move, the oldest and newest order it closes,
+ *  the breakdown by the feed's own status, and every order TCGplayer still calls Ready to ship,
+ *  named. It is store-wide, so it lives in the store's own sheet, never in one buyer's.
  *
- *  IT ASKS THE WIRE FOR NOTHING BEYOND WHAT THIS SCREEN ALREADY READ. `GET /orders`'s own
- *  answer carries `open`, `recorded` and `placed_at` for every order in the store — exactly
- *  what `POST /orders/reconcile-backlog {preview: true}` would compute server-side — so a
- *  second network call to preview it would duplicate a primitive this screen already holds
- *  (`no-bandaids`'s own question, asked and answered). Only the PRESS reaches the wire, and
- *  the server recomputes the candidate set from its own store at that moment regardless of
- *  what this panel displayed, exactly as `BacklogPrompt`'s stand-down already works. */
+ *  THE DEFAULT CUTOFF IS THE SAFE ONE. With no live order in the pool it is today, the server's
+ *  own default. With one, it is the day the oldest live order was placed, so the first view
+ *  closes no order TCGplayer calls Ready to ship. Moving the cutoff past it names each one.
+ *
+ *  Only the PRESS reaches the wire, with the cutoff drawn here. The server recomputes the set
+ *  from its own store at that moment. */
 function ReconcileBacklogPanel({
   orders,
   busy,
@@ -2419,20 +2341,28 @@ function ReconcileBacklogPanel({
   readonly busy: string | null
   readonly onPress: (cutoff: string) => void
 }) {
-  /* TODAY, PLAIN. The server's own default (`store/orders.py:today()`) is the same UTC date;
-     the one edge this can disagree with it on is an order placed in the last few hours of UTC
-     yesterday read from a browser already into local today, which moves a single order's
-     candidacy by at most one day and is corrected the moment the operator presses — the write
-     always recomputes server-side. */
-  const cutoff = useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const candidates = useMemo(
-    () =>
-      orders.filter(
-        (row) =>
-          row.open && row.recorded === 0 && row.placed_at !== null && row.placed_at.slice(0, 10) < cutoff,
-      ),
-    [orders, cutoff],
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  /* EVERY ORDER THE RULE COULD REACH AT ANY CUTOFF: open, nothing recorded, a placed date. There
+     is NO cut at today here. The review found that one: the preview dropped orders placed today,
+     while a date typed past the field's max was still sent, and the server takes any cutoff. So
+     the preview is computed from the cutoff alone, and a cutoff after today refuses the press. */
+  const pool = useMemo(
+    () => orders.filter((row) => row.open && row.recorded === 0 && row.placed_at !== null),
+    [orders],
   )
+  const safe = useMemo(() => {
+    const live = pool.filter(isReadyToShip).map(dayOf).sort()[0]
+    return live === undefined || live > today ? today : live
+  }, [pool, today])
+  const [picked, setPicked] = useState<string | null>(null)
+  const cutoff = picked ?? safe
+  const valid = /^\d{4}-\d{2}-\d{2}$/.test(cutoff) && cutoff <= today
+  const fieldId = useId()
+  const candidates = useMemo(
+    () => pool.filter((row) => dayOf(row) < cutoff).sort((a, b) => dayOf(a).localeCompare(dayOf(b))),
+    [pool, cutoff],
+  )
+  const live = candidates.filter(isReadyToShip)
   const breakdown = useMemo(() => {
     const counts = new Map<string, number>()
     for (const row of candidates) {
@@ -2442,44 +2372,101 @@ function ReconcileBacklogPanel({
     return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
   }, [candidates])
 
-  if (candidates.length === 0) return null
+  /* Drawn only while there is a backlog at today's cutoff: an order placed before today. */
+  if (!pool.some((row) => dayOf(row) < today)) return null
   const busyHere = busy === 'reconcile'
+  const oldest = candidates[0]
+  const newest = candidates[candidates.length - 1]
 
   return (
-    <Notice
-      className="orders-reconcile"
-      tone="warn"
-      title={`${candidates.length} ${plural(candidates.length, 'order', 'orders')}, nothing recorded`}
-    >
-      <p>{joinPhrases(breakdown.map(([status, count]) => `${count} “${status}”`))}. Nothing sold, nothing claimed.</p>
+    <section className="orders-reconcile" aria-labelledby={`${fieldId}-title`}>
+      <h3 className="bn-section-title" id={`${fieldId}-title`}>
+        Stand down old orders
+      </h3>
+      <p>Closes open orders with nothing recorded, placed before the date. Nothing is marked sold.</p>
+      <div className="bn-field orders-reconcile-cutoff">
+        <label className="bn-field-label" htmlFor={fieldId}>
+          Placed before
+        </label>
+        <input
+          className="bn-input"
+          id={fieldId}
+          type="date"
+          value={cutoff}
+          max={today}
+          onChange={(event) => setPicked(event.target.value)}
+        />
+      </div>
+      {!valid ? (
+        <p className="orders-reconcile-span">Pick a day on or before today.</p>
+      ) : null}
+      {oldest === undefined || newest === undefined ? (
+        valid ? <p className="orders-reconcile-span">No order with nothing recorded was placed before {dayLabel(cutoff)}.</p> : null
+      ) : (
+        <>
+          <p className="orders-reconcile-span">
+            {candidates.length === 1
+              ? `1 order, placed ${dayLabel(dayOf(oldest))}.`
+              : `${candidates.length} orders, placed ${dayLabel(dayOf(oldest))} to ${dayLabel(dayOf(newest))}.`}{' '}
+            {joinPhrases(breakdown.map(([status, count]) => `${count} “${status}”`))}.
+          </p>
+          {live.length === 0 ? null : (
+            <Notice
+              className="orders-reconcile-live"
+              tone="danger"
+              title={`${live.length} of ${plural(live.length, 'them is', 'them are')} still Ready to ship at TCGplayer`}
+            >
+              <ul>
+                {live.map((row) => (
+                  <li key={row.key}>
+                    <LabelText text={orderBuyerLabel(row)} />, placed {dayLabel(dayOf(row))}
+                  </li>
+                ))}
+              </ul>
+            </Notice>
+          )}
+        </>
+      )}
       <div className="orders-standdown-row">
         <Button
-          variant="primary"
-          icon="check"
+          variant={live.length > 0 ? 'danger' : 'default'}
           busy={busyHere}
-          disabled={busy !== null}
-          onClick={() => onPress(cutoff)}
+          disabled={busy !== null || !valid || candidates.length === 0}
+          onClick={() => {
+            if (valid) onPress(cutoff)
+          }}
         >
           Stand down {candidates.length} {plural(candidates.length, 'order', 'orders')}
         </Button>
       </div>
-    </Notice>
+    </section>
   )
+}
+
+/** The UTC day an order was placed: the same ten characters the server compares. */
+function dayOf(row: OrderRow): string {
+  return (row.placed_at ?? '').slice(0, 10)
+}
+
+/** A `YYYY-MM-DD` day in the one absolute format. Noon, so no zone moves it a day. */
+function dayLabel(day: string): string {
+  return absoluteDate(`${day}T12:00:00`)
+}
+
+/** TCGplayer's own word that an order is live work. A positive match, read to NAME the order and
+ *  to pick the safe default, never to exclude it (D203: the breakdown is the guard). */
+function isReadyToShip(row: OrderRow): boolean {
+  return (row.status ?? '').trim().toLowerCase() === 'ready to ship'
 }
 
 function PullStage({
   payload,
   store,
   rawCards,
-  listings,
   storeFailed,
   onRereadStore,
   failure,
   busy,
-  filter,
-  selected,
-  phone,
-  well,
   emptyWell,
   receipt,
   onPull,
@@ -2487,13 +2474,12 @@ function PullStage({
   onWalkUndo,
   onFill,
   onDeclareKind,
-  onStandDown,
-  onReconcileBacklog,
   onCloseLine,
   onFetch,
   statusControl,
   statusPanel,
   onReread,
+  storeControls,
 }: {
   readonly payload: OrdersPayload | null
   /** Every on-hand copy the store holds, keyed by sku. Null while the first read is in flight and
@@ -2502,17 +2488,10 @@ function PullStage({
   /** The same read, whole — `InventoryCard` by `box/index`, for the walk pane's own
    *  `CardHeroHead`/`CardDetailsSection` (§13: inventory's card pane, unchanged). */
   readonly rawCards: ReadonlyMap<string, InventoryCard>
-  /** The same read's third face — `POST /inventory/copies`' own `listings`, for
-   *  `CardDetailsSection`'s "Listed" fact (market-and-listings parity, queued after D220). */
-  readonly listings: Readonly<Record<string, Listing>>
   readonly storeFailed: boolean
   readonly onRereadStore: () => void
   readonly failure: Failure | null
   readonly busy: string | null
-  readonly filter: PullFilter
-  readonly selected: string | null
-  readonly phone: boolean
-  readonly well: ReactNode
   readonly emptyWell: ReactNode
   /** The last fetch's receipt, or null before one has been pressed. */
   readonly receipt: ReactNode
@@ -2520,11 +2499,11 @@ function PullStage({
   /** `Walk the boxes`' own pull and undo — `OrdersWalk.tsx`'s own shape, over the same
    *  underlying write `onPull` makes for `By buyer`. */
   readonly onWalkPull: WalkPullFn
+  /** Add orders and Cards to pull, drawn on the filter bar's own line. */
+  readonly storeControls: ReactNode
   readonly onWalkUndo: WalkUndoFn
   readonly onFill: FillHandler
   readonly onDeclareKind: KindHandler
-  readonly onStandDown: StandDownHandler
-  readonly onReconcileBacklog: (cutoff: string) => void
   readonly onCloseLine: CloseLineHandler
   readonly onFetch: () => void
   readonly statusControl: ReactNode
@@ -2536,35 +2515,13 @@ function PullStage({
 
   /* ------------------------------------------------------------- the buyer list's own view */
 
-  /** Status / sort / hide-unknown, read from `banchi.orders.fetch-filter`'s own document
-   *  (`app/src/deviceMemory.ts`) — not a new key. Read once on mount, the same habit as the
-   *  fetch filter above it. */
-  const [view, setViewState] = useState<OrderView>(() => storedOrderFilter().view ?? DEFAULT_ORDER_VIEW)
-  const setView = (next: OrderView) => {
-    setViewState(next)
-    rememberOrderFilter({ ...storedOrderFilter(), view: next })
-  }
-
-  /* THE ORDER TAKEN, AND HELD UNTIL SOMEBODY ASKS FOR A NEW ONE (D181, on `frozenRank.ts`'s
-   *  own ruling — a press may reorder, nothing else may). Empty is "current": nothing is
-   *  frozen and the list draws whatever a fresh sort produces, which is both the opening
-   *  state and what an explicit re-sort restores. */
-  const [take, setTake] = useState<OrderTake>(TAKE_IS_CURRENT)
-
-  /* THE BUYER SEARCH — transient component state, deliberately NOT `banchi.orders.fetch-filter`
-   *  and NOT any `localStorage` key. A remembered query would hide orders on the next visit
-   *  with no chip on screen saying why, which is exactly the hiding D103's anti-hiding floor
-   *  refuses for staleness; this control gets the same rule. Cleared on unmount for free by
-   *  being ordinary state. */
-  const [query, setQuery] = useState('')
-  const onQueryChange = (next: string) => {
-    setQuery(next)
-    /* A changed search is an explicit retake, the same rule `onStatusChange` and
-       `onHideUnknownChange` already apply (D181 — narrowing the shown set is a request to see
-       the shelf as it stands now, not a reason to hold last take's positions over rows the
-       new query may not even include). */
-    setTake(TAKE_IS_CURRENT)
-  }
+  /* THE LIST'S VIEW LIVES IN THE URL (FLT-11, D285): a link, a bookmark and Back
+   *  restore it, and nothing about it is kept on the device. `q` is the search, `show` and
+   *  `status` the two facets (read below, once their options are known), `sort`/`dir` the sort,
+   *  `unknown` the hide toggle. A sort press re-sorts at once (FLT-01, amending D209). */
+  const [query, setQuery] = useViewParam('q')
+  const [sort, setSort] = useSortParam<OrderSortKey>(SORT_AT_REST, { options: SORT_OPTIONS })
+  const [hideUnknown, setHideUnknown] = useViewFlag('unknown', false)
 
   /* THE SECOND TIER'S CACHE: real picks and places, fetched on demand for exactly the orders
    *  this screen is looking at (`POST /orders/picks`, `server/capture_server.py:do_orders`'s
@@ -2601,6 +2558,11 @@ function PullStage({
    *  the very refetch the `detail` reset exists to force, leaving the panel showing nothing
    *  after a write that changed what it should show. */
   const pendingPicks = useRef<Set<string>>(new Set())
+  /** EVERY KEY ALREADY ANSWERED FOR THIS `payload`, whether the answer carried it or not. An
+   *  answer that leaves a key out (an order the server no longer resolves) still replaces
+   *  `detail`, and `detail` alone would ask for that key again on the next render, for ever:
+   *  4,934 requests in 10 s, measured. Cleared with `pendingPicks`, on a real payload change. */
+  const askedPicks = useRef<Set<string>>(new Set())
   /* GUARDS AGAINST STRICTMODE'S OWN DOUBLE-FETCH, WHICH IS A SECOND REAL BUG THIS RESET
    *  EFFECT CAN CAUSE, AND A REFERENCE CHECK DOES NOT FIX. `main.tsx` mounts under
    *  `<StrictMode>`, and the mount effect above that calls `reread()` (`getOrders()`) has no
@@ -2630,17 +2592,21 @@ function PullStage({
     payloadSignature.current = signature
     setDetail(new Map())
     pendingPicks.current = new Set()
+    askedPicks.current = new Set()
   }, [payload])
 
   /** Fetch real picks for exactly the keys not already answered and not already in flight,
    *  in one batched `POST /orders/picks` — the one door both fetch effects below use, so the
    *  dedupe rule lives in one place rather than twice. */
   const fetchMissingPicks = useCallback((keys: readonly string[]) => {
-    const missing = keys.filter((key) => !detail.has(key) && !pendingPicks.current.has(key))
+    const missing = keys.filter(
+      (key) => !detail.has(key) && !pendingPicks.current.has(key) && !askedPicks.current.has(key),
+    )
     if (missing.length === 0) return
     for (const key of missing) pendingPicks.current.add(key)
     fetchOrderPicks(missing)
       .then((found: OrderPicksPayload) => {
+        for (const key of missing) askedPicks.current.add(key)
         setDetail((prev) => {
           const next = new Map(prev)
           for (const one of found.orders) next.set(one.key, one)
@@ -2694,58 +2660,99 @@ function PullStage({
   const groups = useMemo(() => groupBuyers(payload?.orders ?? [], Date.now()), [payload])
   const allGroups = useMemo(() => [...groups.recent, ...groups.earlier], [groups])
 
-  /* THE FILTER SELECT NARROWS GROUPS, NOT ORDERS. 'all' is every group carrying an open order;
-     a reason option narrows to groups whose open orders carry a line with that reason; 'done'
-     is every group with nothing open — which is exactly `groups.recent`'s closed members plus the whole
-     of `groups.earlier`, since a group with anything open can never be `earlier` (see
-     `orderBuyers.ts`).
+  /* ------------------------------------------------ the buyer list: one unit, the buyer */
 
-     THE STATUS SELECT AND "HIDE UNKNOWN SKUS" COMPOSE WITH IT (`orderView.ts`) — an AND over
-     everything above, never a second gate. Both default to "show everything"
-     (`status: null`, `hideUnknown: false`), so a device that has never touched either control
-     drops nothing here: the anti-hiding floor D103 already set for staleness. */
-  const filteredGroups = useMemo(
-    () =>
-      (filter === 'all'
-        ? groups.recent.filter((group) => group.open.length > 0)
-        : filter === 'done'
-          ? groups.recent.filter((group) => group.open.length === 0)
-          : groups.recent.filter(
-              (group) =>
-                group.open.length > 0 &&
-                group.open.some((order) => (answers.get(order.key)?.lines ?? []).some((line) => line.reason === filter)),
-            )
-      ).filter(
-        (group) =>
-          passesStatus(group, view.status) && passesHideUnknown(group, view.hideUnknown, answers) && passesQuery(group, query),
-      ),
-    [filter, groups, answers, view.status, view.hideUnknown, query],
+  /* A BUYER'S STATE IS ITS WORST OPEN ORDER, one per buyer (UX-199), and the "Show" facet
+     filters on exactly that state (UX-171): "Short" lists only buyers who are short. Every count
+     in the bar is buyers, the rows the list draws (UX-172). */
+  const statusByGroup = useMemo(() => {
+    const out = new Map<string, Status>()
+    for (const group of allGroups) out.set(group.key, worstStatus(group, answers))
+    return out
+  }, [allGroups, answers])
+
+  /* A BUYER FINISHED ON THIS SCREEN STAYS ON IT, marked done, until the next visit (the owner's
+     "nothing jumps" ruling, FLT-22, read for this list; UX-197): the last Mark sold never pulls
+     the row, or the walk, out from under the hand. */
+  /* Keyed by buyer, holding whether it led as Ready to ship when it left, so it keeps its place
+     in the sort too (a finished buyer has no open order left to say so). */
+  /* TAKEN IN THE RENDER THAT SEES THE BUYER FINISH (React's "adjust state during render"), never in
+     an effect: an effect let one committed render drop the buyer from the list, move the selection
+     to the next buyer and ask for that buyer's walk (the re-review's race, round 3). */
+  const [finished, setFinished] = useState<ReadonlyMap<string, boolean>>(new Map())
+  const [seenGroups, setSeenGroups] = useState(allGroups)
+  if (seenGroups !== allGroups) {
+    const openNow = new Set(allGroups.filter((group) => group.open.length > 0).map((group) => group.key))
+    const left = seenGroups.filter((group) => group.open.length > 0 && !openNow.has(group.key))
+    setSeenGroups(allGroups)
+    if (left.length > 0) setFinished((prev) => new Map([...prev, ...left.map((group) => [group.key, groupIsReadyToShip(group)] as const)]))
+  }
+  const readyOf = (group: BuyerGroup) => finished.get(group.key) ?? groupIsReadyToShip(group)
+
+  const feedStatuses = useMemo(() => statusVocabulary(payload?.orders ?? []), [payload])
+  const facetShape: readonly FilterFacet[] = useMemo(
+    () => [
+      { key: 'show', label: 'Show', multiple: false, options: SHOW_ORDER.map((value) => ({ value, label: showLabel(value) })) },
+      { key: 'status', label: 'TCGplayer status', options: feedStatuses.map((one) => ({ value: one.status, label: one.status })) },
+    ],
+    [feedStatuses],
   )
-  /* THE EARLIER FOLD IS DONE-ONLY. A closed buyer older than `RECENT_DAYS` has nothing an 'all'
-     or reason filter would ever show, so it is drawn nowhere but under the "Done" option.
-     THE SEARCH REACHES IT TOO — a Done buyer past the 7-day fold is exactly the one a name
-     search has to find, since it is unreachable any other way (the owner's own case: cmd-F-ing
-     the page for someone whose only order closed weeks ago). */
-  const earlierGroups = useMemo(
-    () =>
-      filter === 'done'
-        ? groups.earlier.filter(
-            (group) =>
-              passesStatus(group, view.status) && passesHideUnknown(group, view.hideUnknown, answers) && passesQuery(group, query),
-          )
-        : [],
-    [filter, groups, answers, view.status, view.hideUnknown, query],
+  const [picked, setPicked] = useFacetParams(facetShape)
+  const show = (picked.show?.[0] ?? null) as ShowValue | null
+  const statuses = picked.status ?? []
+
+  const inOpenBase = (group: BuyerGroup) => group.open.length > 0 || finished.has(group.key)
+  const inDoneBase = (group: BuyerGroup) => group.open.length === 0
+  const passesFeed = (group: BuyerGroup) =>
+    statuses.length === 0 || group.orders.some((order) => statuses.includes((order.status ?? '').trim()))
+  const passesSearch = (group: BuyerGroup) =>
+    matchQuery(query, { text: [group.name, buyerLabel(group), ...group.orders.map((order) => order.number)] })
+  const passesHide = (group: BuyerGroup) => passesHideUnknown(group, hideUnknown, answers)
+  const passesShow = (group: BuyerGroup, value: ShowValue | null) =>
+    value === null ||
+    value === 'done' ||
+    (value === MISSING_FACET ? groupMissing(group, answers).copies > 0 : statusByGroup.get(group.key) === value)
+
+  const base = allGroups.filter(show === 'done' ? inDoneBase : inOpenBase)
+  const shownGroups = sortGroups(
+    base.filter((group) => passesFeed(group) && passesSearch(group) && passesHide(group) && passesShow(group, show)),
+    sort.dir === 'asc' ? 'oldest' : 'newest',
+    readyOf,
   )
 
-  /* THE DEFAULT ORDER: Ready to Ship leads, newest first within a group, read as an ORDERING
-     rather than a hiding — the owner's ruling, verbatim in intent. `liveSorted` is what a
-     fresh take would produce RIGHT NOW; `shownGroups` is what is actually drawn, which keeps
-     every known group at the position `take` gave it and appends anything new after them
-     (D181). */
-  const liveSorted = useMemo(() => sortGroups(filteredGroups, view.sort), [filteredGroups, view.sort])
-  const shownGroups = useMemo(() => applyTake(liveSorted, take), [liveSorted, take])
-  const staleGroups = staleCount(liveSorted, take)
-  const staleSentence = orderStalenessSentence(staleGroups)
+  /* EACH OPTION'S COUNT IS THE ROWS IT WOULD SHOW, under the other facets (FilterChips' rule). */
+  const facets: readonly FilterFacet[] = [
+    {
+      ...facetShape[0]!,
+      options: SHOW_ORDER.map((value) => ({
+        value,
+        label: showLabel(value),
+        count: allGroups.filter(
+          (group) =>
+            (value === 'done' ? inDoneBase(group) : inOpenBase(group)) &&
+            passesShow(group, value) &&
+            passesFeed(group) &&
+            passesSearch(group) &&
+            passesHide(group),
+        ).length,
+      })).filter((option) => (option.value !== 'unresolved' && option.value !== MISSING_FACET) || option.count > 0),
+    },
+    {
+      ...facetShape[1]!,
+      options: feedStatuses.map((one) => ({
+        value: one.status,
+        label: one.status,
+        count: base.filter(
+          (group) =>
+            group.orders.some((order) => (order.status ?? '').trim() === one.status) &&
+            passesSearch(group) &&
+            passesHide(group) &&
+            passesShow(group, show),
+        ).length,
+      })),
+    },
+  ]
+  const unknownCount = base.filter((group) => groupHasUnseenLine(group, answers)).length
 
   /* ------------------------------------------------------------------- the walk's selection */
 
@@ -2764,24 +2771,12 @@ function PullStage({
    *  frozen PASS) must not either. */
   const [walkTicked, setWalkTicked] = useState<ReadonlySet<string>>(new Set())
 
-  /** THE ORDER PANEL'S OWN `Manage` SHEET (§13) — the one place left for the fetch/paste well,
-   *  the fetch receipt, the status picker and both stand-down prompts once the mode strip that
-   *  used to hold them at the top of the screen is gone. `BoxOps.tsx`'s own Manage sheet is the
-   *  precedent: box-level operations reached from the box panel because the skeleton has no
-   *  other slot for them; this is the same move for the ledger. */
+  /** The selected buyer's own orders, in a sheet from the walk's head (Manage). */
   const [manageOpen, setManageOpen] = useState(false)
 
-  /** THE PHONE RAIL SHEET (defect fix, this pass) — `BoxBrowse.tsx`'s own `railOpen`, over the
-   *  buyer picker rather than the box list. Below 768px `.browse-body > .browse-map` is hidden
-   *  by `BoxBrowse.css` (already imported here), so the search slot, the select bar and the
-   *  buyer list — otherwise part of that column — would have no way onto the screen at all.
-   *  This chip and bottom sheet are that way back in, exactly `BoxBrowse.css`'s
-   *  `.browse-railsheet` styling, not a second stylesheet for the same shape. */
-  const [railOpen, setRailOpen] = useState(false)
-
-  /** THE DESKTOP RAIL'S COLLAPSE (S17, the owner's ruling 2026-09-19) — `BoxBrowse.tsx`'s own
-   *  `railCollapsed`, not persisted there either: a plain `useState`, reset on remount. */
-  const [railCollapsed, setRailCollapsed] = useState(false)
+  /** The buyer list as a sheet, on a column too narrow to draw it beside the walk (UX-194). */
+  const buyersOpen = hub.buyersOpen
+  const setBuyersOpen = (open: boolean) => setHub({ buyersOpen: open })
 
   /** Hide sold (D132) — `#/inventory`'s own persisted `banchi.inventory.hide-sold`, on the
    *  owner's word: same preference, same screen family, one key. No new key. */
@@ -2823,65 +2818,38 @@ function PullStage({
     return out
   }, [allGroups])
 
-  /** THE ROWS IN VIEW THAT CAN HOLD A TICK — both lists the current filter yields, because the
-   *  `Earlier` fold is a disclosure and not a filter (it is drawn, and only ever under the
-   *  Done option). This is the set `Tick all` and `Untick all` act on (§12 answer 1) and the
-   *  set the prune below keeps the stored ticks inside. */
-  const tickableKeys = useMemo(() => {
-    const out = new Set<string>()
-    for (const group of [...shownGroups, ...earlierGroups]) {
-      if ((walkableOf.get(group.key)?.length ?? 0) > 0) out.add(group.key)
-    }
-    return out
-  }, [shownGroups, earlierGroups, walkableOf])
-
+  /* Keyed by the keys drawn, not by the array's identity: the list is rebuilt every render. */
+  const shownSig = shownGroups.map((group) => group.key).join('\n')
+  const tickableKeys = useMemo(
+    () => new Set(shownSig.split('\n').filter((key) => key !== '' && (walkableOf.get(key)?.length ?? 0) > 0)),
+    [shownSig, walkableOf],
+  )
   /* A TICK DOES NOT SURVIVE A FILTER THAT HIDES ITS ROW, AND FILTERING BACK DOES NOT BRING IT
-   * BACK (§12 answer 1, the owner's ruling 2026-09-18). "The tick is a property of the list as
-   * drawn, not a set held behind it."
-   *
-   * THIS IS A REAL PRUNE OF THE STORED SET AND NOT A RENDER-TIME INTERSECTION, and the
-   * difference is the whole ruling: `ticked ∩ visible` computed at draw time would keep the
-   * member in state and hand the tick straight back the moment the filter was cleared, which
-   * is exactly what answer 1 says must not happen. The set only ever LOSES members here.
-   *
-   * It is an effect rather than a line in each of the six handlers that can change what is
-   * drawn (four filter controls, the search, and a fresh `payload` retiring a buyer) — one
-   * reader of one derived set cannot be the handler somebody forgets to amend. */
+   * BACK (§12 answer 1, the owner's ruling 2026-09-18): a real prune of the stored set, never a
+   * render-time intersection. AND THE WALK SAYS SO (UX-182): the number of buyers a filter took
+   * out of the walk is one line over it, until the next change of what is walked. */
+  const [walkNote, setWalkNote] = useState<string | null>(null)
   useEffect(() => {
     setWalkTicked((prev) => {
       if (prev.size === 0) return prev
       const next = new Set<string>()
       for (const key of prev) if (tickableKeys.has(key)) next.add(key)
-      return next.size === prev.size ? prev : next
+      if (next.size === prev.size) return prev
+      const gone = prev.size - next.size
+      setWalkNote(`${gone} ${plural(gone, 'buyer', 'buyers')} left the walk: the filter hides ${gone === 1 ? 'that row' : 'those rows'}.`)
+      return next
     })
   }, [tickableKeys])
 
-  const statusOptions = useMemo(() => statusVocabulary(payload?.orders ?? []), [payload])
+  const [buyerQ] = useViewParam(BUYER_PARAM)
+  const [walking] = useViewFlag(WALK_PARAM)
+  const [orderQ] = useViewParam(ORDER_PARAM)
+  const selected = buyerQ !== '' ? buyerQ : orderQ !== '' ? (groupForOrderKey(groups, orderQ)?.key ?? null) : null
 
-  /** A control narrowed the shown set: retake immediately (D181 — "a changed filter is an
-   *  explicit retake"). */
-  const onStatusChange = (status: string | null) => {
-    setView({ ...view, status })
-    setTake(TAKE_IS_CURRENT)
-  }
-  const onHideUnknownChange = (hideUnknown: boolean) => {
-    setView({ ...view, hideUnknown })
-    setTake(TAKE_IS_CURRENT)
-  }
-  /** A change of SORT never reorders on its own (D181): whatever is on screen right now is
-   *  frozen exactly where it sits, and the new direction is offered as a re-sort. */
-  const onSortChange = (sort: OrderSort) => {
-    setTake(takeOrder(shownGroups))
-    setView({ ...view, sort })
-  }
-  const onReSort = () => setTake(TAKE_IS_CURRENT)
-
-  /* The selection falls back to the first group shown, so a filter that hides the selected one
-     never leaves the detail blank. */
+  /* THE SELECTION IS ALWAYS A ROW THE LIST DRAWS (UX-235): a filter that hides the selected
+     buyer moves the selection to the first row shown, never to a buyer the list hides. */
   const selectedKey =
-    selected !== null && allGroups.some((group) => group.key === selected)
-      ? selected
-      : (shownGroups[0]?.key ?? earlierGroups[0]?.key ?? null)
+    selected !== null && shownGroups.some((group) => group.key === selected) ? selected : (shownGroups[0]?.key ?? null)
   const selectedGroup = allGroups.find((group) => group.key === selectedKey) ?? null
 
   /* FETCH REAL PICKS FOR THE BUYER ACTUALLY OPEN. `OrderDetail`'s body and `BuyerDetail`'s
@@ -2926,48 +2894,20 @@ function PullStage({
 
   const walk = useOrderWalk({ walkedKeys, ordersByKey, rawCards, onPull: onWalkPull, onUndo: onWalkUndo })
 
-  /* THE HASH NAMES A BUYER, OR — FOR AN OLD LINK — AN ORDER RESOLVED TO ITS BUYER, ONCE THE
-     LEDGER HAS ACTUALLY ANSWERED; from then on the store leads and the hash follows. `?buyer=`
-     is read first because it is this screen's own current spelling; `?order=` is kept only so
-     a link written before this change still lands somewhere real.
-     A MOUNT-ONLY EFFECT CANNOT DO THIS: `payload` is still null on the first render, so
-     `groups` is empty and `groupForOrderKey` can never resolve anything — the read has to wait
-     for the read it is reading. `linkHandled` makes it run once in EFFECT, the first time
-     `groups` holds something (or `?buyer=`, which needs no group lookup at all and is applied
-     the moment the effect first runs). */
-  const linkHandled = useRef(false)
-  /* THE SKIP LINK'S LANDING SPOT (interaction review, "32 tab stops"). A Tab-only pass over
-   *  the wide layout has to cross the whole buyer rail — search, filters, every row — before
-   *  it reaches the selected buyer's own cards, which sit in `.browse-side` after all of it in
-   *  DOM order. The shell's own jump grammar (`,` then a letter, `App.tsx`'s `SHORTCUTS`) moves
-   *  between SCREENS, not between regions of one screen, so it does not reach this; a
-   *  tabindex change on every rail control was rejected as the bandaid it would be, since it
-   *  would not shorten the rail, only make it feel arbitrary to reorder. A skip link — focus a
-   *  landmark that is already there — is the standard fix for exactly this complaint and needs
-   *  no new keybinding to document in the reference sheet, because it rides the browser's own
-   *  Tab order rather than adding one. */
-  const paneRef = useRef<HTMLDivElement>(null)
+  /* THE SKIP LINK'S LANDING SPOT (interaction review, "32 tab stops"). A Tab-only pass has to
+   *  cross the filter bar and the buyer list before it reaches the walk. A skip link, one press
+   *  that focuses a landmark already there, is the standard fix and needs no new key. */
+  const walkRef = useRef<HTMLElement>(null)
+  /* A LINK TO A BUYER WITH NOTHING OPEN OPENS THE DONE VIEW, so the list draws the row the link
+     names (UX-235). Once per link value: a filter picked after it is the owner's to keep. */
+  const doneLinkHandled = useRef<string | null>(null)
   useEffect(() => {
-    if (linkHandled.current) return
-    const buyerWanted = buyerParam()
-    if (buyerWanted !== null) {
-      linkHandled.current = true
-      setHub({ selected: buyerWanted })
-      return
-    }
-    const orderWanted = orderParam()
-    if (orderWanted === null) {
-      linkHandled.current = true
-      return
-    }
-    if (allGroups.length === 0) return // wait for the read this link is about
-    linkHandled.current = true
-    const resolved = groupForOrderKey(groups, orderWanted)
-    if (resolved !== null) setHub({ selected: resolved.key })
-  }, [groups, allGroups])
-  useEffect(() => {
-    if (selectedKey !== null) mirrorBuyerParam(selectedKey)
-  }, [selectedKey])
+    if (selected === null || doneLinkHandled.current === selected) return
+    const group = allGroups.find((one) => one.key === selected)
+    if (group === undefined) return // wait for the read this link is about
+    doneLinkHandled.current = selected
+    if (group.open.length === 0 && show !== 'done' && !finished.has(group.key)) patchViewQuery({ show: 'done' })
+  }, [selected, allGroups, show, finished])
 
   /* THE ARROWS STEP THE LIST OF BUYERS where there is a list beside the detail. Never with a
    *  modifier (Cmd-arrow is the shell's, D51) and never out of a field.
@@ -2977,7 +2917,7 @@ function PullStage({
    *  answer to the same bare letters. `↑`/`↓` keep doing what `J`/`K` used to for buyers; the
    *  reference sheet (`App.tsx`'s `SHORTCUTS`) says so. */
   useEffect(() => {
-    if (phone || shownGroups.length === 0) return
+    if (shownGroups.length === 0) return
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
@@ -2988,11 +2928,11 @@ function PullStage({
       const next = shownGroups[Math.min(shownGroups.length - 1, Math.max(0, (at === -1 ? 0 : at) + step))]
       if (next === undefined) return
       event.preventDefault()
-      setHub({ selected: next.key })
+      patchViewQuery({ [BUYER_PARAM]: next.key, [ORDER_PARAM]: null })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phone, shownGroups, selectedKey])
+  }, [shownGroups, selectedKey])
 
   /* `J`/`K` STEP THE WALK LIST (§13). Same guard rules as the buyer list's own arrows. */
   useEffect(() => {
@@ -3010,12 +2950,9 @@ function PullStage({
     return () => window.removeEventListener('keydown', onKey)
   }, [walk])
 
-  const setFilter = (next: PullFilter) => setHub({ filter: next })
-  /* The phone's rail sheet closes once a buyer is chosen (`BoxBrowse.tsx`'s own `pickRow`) —
-   *  picking a buyer is this sheet's one job, unlike the box picker it mirrors. */
   const select = (key: string) => {
-    setHub({ selected: key })
-    if (phone) setRailOpen(false)
+    walkTo(key)
+    setBuyersOpen(false)
   }
 
   if (failure !== null && payload === null) {
@@ -3025,11 +2962,7 @@ function PullStage({
           <EmptyState
             icon="alert"
             title="Orders did not answer"
-            body={
-              <>
-                {failure.message} <code className="bn-mono orders-failure-code">{failure.code}</code>
-              </>
-            }
+            body={failure.message}
             actions={
               <Button icon="refresh" onClick={onReread}>
                 Try again
@@ -3043,21 +2976,16 @@ function PullStage({
 
   if (payload === null || counts === null) {
     return (
-      <div className="orders-stage orders-skeleton" aria-busy="true" aria-label="Reading orders">
-        <span className="bn-skeleton orders-skel-line" />
-        <span className="bn-skeleton orders-skel-filter" />
-        <span className="bn-skeleton orders-skel-card" />
-        <span className="bn-skeleton orders-skel-card" />
+      <div className="orders-stage">
+        <Loading rows={6} label="Reading orders" />
       </div>
     )
   }
 
-  /* ---------------------------------------------------------------------------- empty */
-
   if (open.length + done.length === 0) {
     return (
       <div className="orders-stage">
-        {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
+        {failure === null ? null : <Notice tone="danger" title={failure.message} />}
         <div className="bn-panel orders-empty">
           <EmptyState
             icon="cart"
@@ -3081,733 +3009,478 @@ function PullStage({
     )
   }
 
-  /* -------------------------------------------------------------------------- populated */
+  /* ---------------------------------------------------------------------- the filter bar */
 
-  const why = <WhyPanel counts={counts} openByDefault={open.length === 0} />
-
-  const filterOptions: { readonly value: PullFilter; readonly label: string; readonly count: number }[] = [
-    { value: 'all', label: 'All open', count: open.length },
-    ...ORDER_REASONS.filter((reason) => counts[reason] > 0).map((reason) => ({
-      value: reason as PullFilter,
-      label: REASON_SHORT[reason],
-      count: counts[reason],
-    })),
-    { value: 'done', label: 'Done', count: done.length },
-  ]
-
-  const chips = (
-    <select
-      className="bn-select orders-filter-select"
-      aria-label="Show orders by how their lines answered"
-      value={filter}
-      onChange={(event) => {
-        const next = event.target.value
-        setFilter(next === 'all' || next === 'done' || isOrderReason(next) ? next : 'all')
-      }}
-    >
-      {filterOptions.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label} ({option.count})
-        </option>
-      ))}
-    </select>
+  const filterBar = (
+    <FilterBar<OrderSortKey>
+      className="orders-filterbar"
+      facets={facets}
+      value={picked}
+      onChange={setPicked}
+      count={{ shown: shownGroups.length, total: base.length, noun: { one: 'buyer', many: 'buyers' } }}
+      search={{ query, onChange: setQuery, placeholder: 'Buyer or order', label: 'Search buyers' }}
+      sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
+      hide={unknownCount === 0 && !hideUnknown ? undefined : { checked: hideUnknown, onChange: setHideUnknown, label: 'Hide unknown cards', count: unknownCount }}
+      beside={storeControls}
+    />
   )
 
-  /* A SEARCH THAT LEAVES NOTHING GETS ITS OWN SENTENCE, ahead of the filter-shaped ones below
-     — the query is the reason nothing is drawn regardless of which filter is chosen, and "Clear
-     search" is the one action that actually restores something. */
-  const nothingShown =
-    query !== '' ? (
-      <div className="bn-panel">
-        <EmptyState
-          icon="search"
-          title="No buyer matches"
-          body={`Nobody's name or order number contains “${query}”.`}
-          actions={
-            <Button icon="x" onClick={() => onQueryChange('')}>
-              Clear search
-            </Button>
-          }
-        />
-      </div>
-    ) : (
-      <div className="bn-panel">
-        <EmptyState
-          icon={filter === 'done' ? 'check' : 'sparkles'}
-          title={filter === 'all' ? 'Nothing outstanding' : filter === 'done' ? 'Nothing fulfilled yet' : `Nothing left under “${REASON_SHORT[filter]}”`}
-          body={filter === 'all' ? 'Every order has its copies.' : 'Pick another filter, or show every open order.'}
-          actions={
-            filter === 'all' ? undefined : (
-              <Button icon="list" onClick={() => setFilter('all')}>
-                Show all open
-              </Button>
-            )
-          }
-        />
+  /* ONE EMPTY STATE, AND NOTHING UNDER IT (UX-234): no buyer panel, no walk, until a row shows. */
+  if (shownGroups.length === 0) {
+    const searched = query.trim() !== ''
+    const nothingOwed = show === null && statuses.length === 0 && !hideUnknown && base.length === 0
+    return (
+      <div className="orders-stage">
+        {filterBar}
+        <div className="bn-panel">
+          {searched ? (
+            <EmptyState
+              icon="search"
+              title="No buyer matches"
+              body={`No buyer or order number matches “${query.trim()}”.`}
+              actions={
+                <Button variant="primary" icon="x" onClick={() => setQuery('')}>
+                  Clear search
+                </Button>
+              }
+            />
+          ) : nothingOwed ? (
+            <EmptyState
+              icon="check"
+              title="Nothing is owed"
+              body="Every open order has its copies."
+              actions={
+                <Button icon="list" onClick={() => setPicked({ show: ['done'] })}>
+                  Show done buyers
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon="sparkles"
+              title={show === 'done' ? 'Nothing done yet' : 'No buyer in this view'}
+              body="Clear the filters to see every open buyer."
+              actions={
+                <Button icon="list" onClick={() => setPicked({})}>
+                  Show every open buyer
+                </Button>
+              }
+            />
+          )}
+        </div>
       </div>
     )
+  }
 
-  /* ----------------------------------------------------------------- the walk, on one screen */
+  /* ---------------------------------------------------------------------- the buyer list */
 
-  /** THE TICK, BESIDE THE ROW AND NEVER INSIDE IT. `BuyerRow` is a `<button>`; a checkbox
-   *  nested in one is invalid, and a screen reader would have two controls where the markup
-   *  claims one. The `<li>` is the flex row and carries both.
-   *
-   *  A BUYER WITH NOTHING WALKABLE DRAWS NO TICK — not a disabled one (§12). There is nothing
-   *  to select, and the row keeps its own full width where a dead control would sit. */
   const tickFor = (group: BuyerGroup) => {
-    if ((walkableOf.get(group.key)?.length ?? 0) === 0) return null
-    const on = walkTicked.has(group.key)
+    if (!tickableKeys.has(group.key)) return <span className="orders-index-tick" aria-hidden="true" />
     return (
       <label className="bn-check orders-index-tick">
         <input
           type="checkbox"
-          checked={on}
-          onChange={() => toggleWalkTick(group.key)}
-          aria-label={`Walk ${group.name ?? `order ${group.number ?? ''}`.trim()}`}
+          checked={walkTicked.has(group.key)}
+          onChange={() => {
+            setWalkNote(null)
+            toggleWalkTick(group.key)
+          }}
+          aria-label={`Walk ${buyerLabel(group)}`}
         />
       </label>
     )
   }
 
-  /** TICK SHOWN / UNTICK SHOWN, OVER THE ROWS IN VIEW AND ONLY THOSE (§12 answer 1). Named
-   *  after the reach it actually has — "all" over-claimed a filter it never crossed, the same
-   *  wording `#/inventory` already uses for this capability. Always drawn, so neither its
-   *  arrival nor its departure can move the list beneath it (D118).
-   *
-   *  THE TWO BUTTONS READ TWO DIFFERENT SETS FOR THEIR DISABLED STATE, because they act on
-   *  two different sets. `Tick shown` disables on `tickableKeys` (nothing in view can hold a
-   *  tick, so there is nothing to add) and `Untick shown` disables on `walkTicked` (nothing is
-   *  ticked at all, in view or out of it, so there is nothing to remove) — reading `tickableKeys`
-   *  for both left `Untick shown` enabled with an empty tick set whenever the view held a
-   *  walkable row, a press that would visibly do nothing.
-   *
-   *  `Untick shown` SUBTRACTS the rows in view rather than clearing the set. The prune above
-   *  keeps the stored set inside the visible one, so the two are the same thing today — but
-   *  the subtraction is the RULE, and a clear would only happen to agree with it. */
-  /* THE IDIOM (S5): `.browse-quiet`, `#/inventory`'s own text-not-boxed grammar for this
-   *  reach — D220 breaks the tie toward Inventory, so Orders adopts its idiom rather than
-   *  keeping the boxed `Button` pair this used to be. The two-button SEMANTICS above are
-   *  unchanged (each still disables on the set it actually acts on); only the paint moves
-   *  from a filled control to plain text, and the shared grid keeps both the same width
-   *  (D195) regardless of which idiom draws inside it. */
-  const selectBar = (
-    <div className="orders-select-bar" role="group" aria-label="Choose which buyers to walk">
-      <button
-        type="button"
-        className="browse-quiet orders-select-quiet"
-        disabled={tickableKeys.size === 0}
-        onClick={() => setWalkTicked((prev) => new Set([...prev, ...tickableKeys]))}
+  /* ONE CONTROL THAT SAYS WHAT IT DOES (UX-232): "Walk all 6 buyers", with the same verb the
+     checkboxes carry. It becomes "Walk one buyer" once every row is ticked. */
+  const allTicked = tickableKeys.size > 0 && [...tickableKeys].every((key) => walkTicked.has(key))
+  const walkAll =
+    tickableKeys.size < 2 ? null : (
+      <Button
+        variant="quiet"
+        size="sm"
+        className="orders-walkall"
+        aria-pressed={allTicked}
+        onClick={() => {
+          setWalkNote(null)
+          setWalkTicked(allTicked ? new Set() : new Set(tickableKeys))
+        }}
       >
-        Tick shown
-      </button>
-      <button
-        type="button"
-        className="browse-quiet orders-select-quiet"
-        disabled={walkTicked.size === 0}
-        onClick={() => setWalkTicked((prev) => new Set([...prev].filter((key) => !tickableKeys.has(key))))}
-      >
-        Untick shown
-      </button>
-    </div>
-  )
-
-  /** THE RAIL'S SEARCH/STATUS/SORT SLOT (§13, point 1) — exactly section 12's own controls,
-   *  restated as a fragment so both the rail and the phone rail sheet draw the same markup
-   *  rather than two hand-kept copies. */
-  const searchSlot = (
-    <div className="orders-toolbar orders-rail-toolbar">
-      <div className="orders-rail-controls">
-        {chips}
-        <div className="orders-view-controls" role="group" aria-label="Sort and narrow the buyer list">
-          <div className="orders-search-field">
-            <SearchField
-              value={query}
-              onChange={onQueryChange}
-              persona="owner"
-              label="Search buyers"
-              placeholder="Search buyers or order #"
-            />
-          </div>
-          <select
-            className="bn-select orders-status-select"
-            aria-label="Filter by status"
-            value={view.status ?? ''}
-            onChange={(event) => onStatusChange(event.target.value === '' ? null : event.target.value)}
-          >
-            <option value="">Status</option>
-            {statusOptions.map((option) => (
-              <option key={option.status} value={option.status}>
-                {option.status} ({option.count})
-              </option>
-            ))}
-          </select>
-          <Segmented<OrderSort>
-            className="orders-sort"
-            value={view.sort}
-            label="Sort"
-            options={[
-              { value: 'newest', label: 'Newest' },
-              { value: 'oldest', label: 'Oldest' },
-            ]}
-            onChange={onSortChange}
-          />
-          <label className="orders-hide-unknown">
-            <input type="checkbox" checked={view.hideUnknown} onChange={(event) => onHideUnknownChange(event.target.checked)} />
-            Hide never-seen SKUs
-          </label>
-          <span className="orders-resort-slot">
-            {staleSentence === null ? null : (
-              <Chip icon="refresh" className="orders-resort" title="Sorted before this changed." onClick={onReSort}>
-                {staleSentence}, re-sort
-              </Chip>
-            )}
-          </span>
-        </div>
-      </div>
-      {/* THE RAIL-COLLAPSE TOGGLE (S17) — `BoxBrowse.tsx`'s own `.browse-rail-toggle`, over
-          the buyer rail rather than the box list. Phone-only (`searchSlot` is also the phone
-          sheet's content) never draws it: the sheet is already the collapsed state's own
-          substitute below 768px, so a second way to shrink it inside itself has nothing to
-          do. */}
-      {phone ? null : (
-        <Button
-          variant="ghost"
-          icon="chevronLeft"
-          iconOnly
-          className="browse-rail-toggle"
-          onClick={() => setRailCollapsed(true)}
-        >
-          Collapse the buyer rail
-        </Button>
-      )}
-    </div>
-  )
-
-  /** THE ORDERS LIST, EXACTLY BUYERROW'S SHAPE — `.browse-boxes.bn-panel`, where inventory
-   *  lists its boxes (§13, point 2). */
-  const ordersList =
-    shownGroups.length === 0 && earlierGroups.length === 0 ? (
-      nothingShown
-    ) : (
-      <>
-        <ol className="orders-index bn-stagger">
-          {shownGroups.map((group, at) => (
-            <li key={group.key} className="orders-index-item" style={{ '--i': at } as CSSProperties}>
-              {tickFor(group)}
-              <BuyerRow group={group} answers={answers} selected={group.key === selectedKey} onSelect={() => select(group.key)} />
-            </li>
-          ))}
-        </ol>
-        {earlierGroups.length === 0 ? null : (
-          <details className="orders-earlier">
-            <summary>
-              Earlier: {earlierGroups.length} {plural(earlierGroups.length, 'buyer', 'buyers')}
-            </summary>
-            <ol className="orders-index">
-              {earlierGroups.map((group) => (
-                <li key={group.key} className="orders-index-item">
-                  {tickFor(group)}
-                  <BuyerRow group={group} answers={answers} selected={group.key === selectedKey} onSelect={() => select(group.key)} />
-                </li>
-              ))}
-            </ol>
-          </details>
-        )}
-        {phone ? null : (
-          <p className="orders-index-hint">
-            <Kbd>↑</Kbd>
-            <Kbd>↓</Kbd> step through buyers
-          </p>
-        )}
-      </>
+        {allTicked ? 'Walk one buyer' : `Walk all ${tickableKeys.size} buyers`}
+      </Button>
     )
+  const readyFirst = sortedReadyFirst(shownGroups, readyOf)
 
-  /** WHERE INVENTORY SHOWS THE BOX PANEL AND ITS SECTION LIST (§13, points 3-5): the selected
-   *  order's panel (mock A), the strip, and the walk. `.browse-walk.bn-panel`. */
-  const railWalkPanel = (
-    <div className="browse-walk bn-panel">
-      <div className="browse-box-head">
-        {selectedGroup === null ? (
-          <div className="browse-shelfnote">
-            <span className="boxops-identity-num">No buyer selected</span>
-            <p>Choose a buyer on the left.</p>
-          </div>
-        ) : (
-          <OrderPanel group={selectedGroup} answers={answers} onManage={() => setManageOpen(true)} />
-        )}
-      </div>
-
-      <div className="browse-status">
-        {walk.sections.length < 2 ? (
-          <span className="browse-status-text">
-            {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
-          </span>
-        ) : (
-          <button className="browse-quiet" type="button" onClick={() => setSectionsCollapsed((v) => !v)}>
-            <Icon name={sectionsCollapsed ? 'chevronDown' : 'chevronUp'} size={12} />
-            <span className="bn-facts">
-              <span>{sectionsCollapsed ? 'expand all' : 'collapse all'}</span>{' '}
-              <span>
-                {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
-              </span>
-            </span>
-          </button>
-        )}
-        <span className="bn-spacer" />
-        <Chip pressed={hideSold} count={walk.soldKeys.size} className="browse-hidesold" onClick={() => setHideSold(!hideSold)}>
-          Hide sold
-        </Chip>
-      </div>
-
-      <WalkList walk={walk} hideSold={hideSold} collapsed={sectionsCollapsed} />
-
-      {walk.rows.length === 0 ? null : (
-        <p className="browse-listkeys">
-          <span>
-            <Kbd>J</Kbd>
-            <Kbd>K</Kbd> card
-          </span>
-        </p>
-      )}
-    </div>
-  )
-
-  /** THE RAIL, BUILT ONCE (`BoxBrowse.tsx:1707`'s own `const rail = (...)`) — the search slot,
-   *  the buyer-list panel and the selected buyer's own walk panel, exactly what `.browse-map`
-   *  held before the phone sheet existed. Rendered in `.browse-map` OR inside the phone's
-   *  `Overlay`, never both: the two are mutually exclusive on `phone` below, so this single
-   *  React element is only ever mounted in one place at a time. Writing this out twice (this
-   *  file's own first draft of the fix) put a second `role="group"` with the identical
-   *  `aria-label`, and every id and aria-label inside `searchSlot`, into the SAME document
-   *  whenever the phone sheet was open — `.browse-map`'s copy is CSS-hidden, not unmounted, so
-   *  a hidden duplicate was still in the DOM beside the sheet's own. One value closes that. */
-  const rail = (
+  const buyerList = (
     <>
-      {searchSlot}
-      <div className="browse-boxes bn-panel" role="group" aria-label="Choose an order to walk">
-        {selectBar}
-        {ordersList}
-      </div>
-      {railWalkPanel}
+      {walkAll === null && !readyFirst ? null : (
+        <div className="orders-buyers-head">
+          {readyFirst ? <span className="orders-buyers-note">Ready to ship first</span> : <span />}
+          {walkAll}
+        </div>
+      )}
+      <ol className="orders-index bn-stagger">
+        {shownGroups.map((group, at) => (
+          <li key={group.key} className="orders-index-item" style={{ '--i': at } as CSSProperties}>
+            {tickFor(group)}
+            <BuyerRow
+              group={group}
+              answers={answers}
+              status={statusByGroup.get(group.key) ?? 'done'}
+              missing={show === MISSING_FACET ? groupMissing(group, answers) : null}
+              selected={group.key === selectedKey}
+              onSelect={() => select(group.key)}
+            />
+          </li>
+        ))}
+      </ol>
     </>
   )
 
-  /** THE COLLAPSED RAIL (S17) — `BoxBrowse.tsx`'s own `miniRail`, `.browse-rail-mini` and
-   *  `.browse-boxcell-mini` reused verbatim rather than restyled: a glyph per SHOWN buyer
-   *  (never the Earlier fold — that list is the one thing this rail already hides behind a
-   *  disclosure at full width, so collapsing it further would bury it twice), the same first-
-   *  word-or-tail short label `BoxBrowse.tsx:miniLabel` derives for a box name. */
-  const miniRail = (
-    <div className="browse-rail-mini">
-      <Button variant="ghost" icon="chevronRight" iconOnly onClick={() => setRailCollapsed(false)}>
-        Expand the buyer rail
-      </Button>
-      {shownGroups.map((group) => {
-        const heading = group.name ?? unnamedBuyerLabel(group)
-        return (
-          <button
-            key={group.key}
-            type="button"
-            className="browse-boxcell-mini"
-            aria-label={heading}
-            title={heading}
-            aria-current={group.key === selectedKey ? 'true' : undefined}
-            onClick={() => {
-              select(group.key)
-              setRailCollapsed(false)
-            }}
-          >
-            {buyerMiniLabel(group)}
-          </button>
-        )
-      })}
-    </div>
+  /* ---------------------------------------------------------------------- the walk */
+
+  /* WHO THE WALK IS FOR, AND WHAT IT STILL WANTS OF EACH CARD. `walkedBuyers` counts the
+     selected buyer and every ticked one; `owedBySku` is the "of N" on every walk row. */
+  const walkedGroups = allGroups.filter(
+    (group) => group.key === selectedKey || walkTicked.has(group.key),
+  )
+  const owedBySku = new Map<string, number>()
+  for (const key of walkedKeys) {
+    for (const line of answers.get(key)?.lines ?? []) owedBySku.set(line.sku, (owedBySku.get(line.sku) ?? 0) + line.owed)
+  }
+  const cardsToPull = [...walkedKeys].reduce(
+    (sum, key) => sum + (answers.get(key)?.lines ?? []).reduce((s, line) => s + Math.max(0, line.owed - line.outstanding), 0),
+    0,
   )
 
-  return (
-    <div className="orders-stage">
-      {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
-
-      {/* THE DEGRADED MAP, SAID ONCE. Every line is narrower when the card map did not answer, so
-          the sentence belongs here and not repeated down eighty lines. Nothing else is affected:
-          the ledger answered, the copies it offered are drawn, and every Mark sold still works. */}
-      {storeFailed ? (
-        <p className="orders-store-note" role="status">
-          <Icon name="info" size={14} />
-          <span>Showing only the copies this order was offered — not every copy in the store.</span>
-          <button type="button" className="orders-fold-btn" onClick={onRereadStore}>
-            <Icon name="refresh" size={13} />
-            Read it again
-          </button>
+  const walkHead =
+    walkedGroups.length > 1 ? (
+      <div className="orders-walk-crowd">
+        <h2 className="orders-walk-title">{walkedGroups.length} buyers</h2>
+        <p className="orders-walk-sub">
+          {cardsToPull} {plural(cardsToPull, 'card', 'cards')} to pick
         </p>
-      ) : null}
+      </div>
+    ) : selectedGroup === null ? null : (
+      <OrderPanel group={selectedGroup} answers={answers} status={statusByGroup.get(selectedGroup.key) ?? 'done'} onManage={() => setManageOpen(true)} />
+    )
 
-      {/* `#/orders` TAKES INVENTORY'S EXACT SKELETON (§13): `.browse-body`'s rail and pane, the
-          same widths and breakpoints `BoxBrowse.css` already gives `#/inventory`. The rail is
-          orders where inventory has boxes; the pane is the selected card's `CardLocations`,
-          reused rather than rebuilt (`OrdersWalkPane.tsx`).
+  const buyerDone = walkedGroups.length === 1 && selectedGroup !== null && selectedGroup.open.length === 0
 
-          ONE STRUCTURE, ALWAYS — never a second branch picked in JavaScript (D123: a screen
-          asks its column, browser zoom is not the lever). `.browse-body`'s own breakpoints
-          (`BoxBrowse.css:12-26`, already imported here) collapse the rail below 768px; there is
-          no 1024px reader left in this file to disagree with them. */}
-      {/* THE PHONE RAIL CHIP — below 768px `.browse-body > .browse-map` below is hidden by
-          that same CSS, so the buyer picker needs its own way onto the screen: the chip
-          `BoxBrowse.tsx`'s own `.browse-mobilebar` opens its rail sheet from, sibling to
-          `.browse-body` for the same reason theirs is (the chip's sticky-top and bleed
-          margin read the page's own padding, not a grid column's). */}
-      {phone ? (
-        <div className="browse-mobilebar">
-          <button
-            type="button"
-            className="browse-boxchip"
-            aria-haspopup="dialog"
-            onClick={() => setRailOpen(true)}
-          >
-            <Icon name="list" size={16} />
-            <span className={`browse-boxchip-text${selectedGroup !== null && selectedGroup.name === null ? ' bn-mono' : ''}`}>
-              {selectedGroup === null ? 'Choose a buyer' : selectedGroup.name ?? unnamedBuyerLabel(selectedGroup)}
-            </span>
-            <Icon name="chevronDown" size={14} className="browse-boxchip-chev" />
-          </button>
+  const walkColumn = (
+    <section className="orders-walk" aria-label="The walk" ref={walkRef} tabIndex={-1}>
+      <header className="orders-walk-head">{walkHead}</header>
+      {walkNote === null ? null : (
+        <p className="orders-walk-note" role="status">
+          <Icon name="info" size={14} />
+          {walkNote}
+        </p>
+      )}
+      {buyerDone ? (
+        <div className="orders-walk-done">
+          <p>
+            <Icon name="check" size={16} /> All {selectedGroup.orders.reduce((sum, one) => sum + one.recorded, 0)} sold.
+          </p>
+          <a className="bn-btn bn-btn-primary" href="#/shipping">
+            <Icon name="truck" size={16} />
+            Go to Shipping
+          </a>
         </div>
-      ) : !phone && shownGroups.length > 0 ? (
-        <button type="button" className="orders-skip-link" onClick={() => paneRef.current?.focus()}>
-          Skip to cards
-        </button>
-      ) : null}
+      ) : (
+        <>
+          <div className="orders-walk-tools">
+            {walk.sections.length < 2 ? (
+              <span className="orders-walk-count">
+                {walk.sections.length} {plural(walk.sections.length, 'section', 'sections')}
+              </span>
+            ) : (
+              <Button variant="quiet" size="sm" icon={sectionsCollapsed ? 'chevronDown' : 'chevronUp'} onClick={() => setSectionsCollapsed((v) => !v)}>
+                {sectionsCollapsed ? 'Open' : 'Fold'} {walk.sections.length} sections
+              </Button>
+            )}
+            <span className="bn-spacer" />
+            <HideToggle checked={hideSold} onChange={setHideSold} count={walk.soldKeys.size}>
+              Hide picked
+            </HideToggle>
+          </div>
+          <WalkList walk={walk} hideSold={hideSold} collapsed={sectionsCollapsed} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} />
+        </>
+      )}
+    </section>
+  )
 
-      <div className="browse-body" data-rail={railCollapsed && !phone ? 'collapsed' : undefined}>
-        {/* ONE VALUE, RENDERED IN EXACTLY ONE PLACE AT A TIME (see `rail`'s own comment above):
-            `phone` picks between here and the `Overlay` below, and — now that S17 gives this
-            rail the same toggle `BoxBrowse.tsx`'s own does — `railCollapsed` picks between
-            `rail` and `miniRail` the same way that file's own render does. Below 768px this
-            slot draws nothing regardless of `railCollapsed`: `.browse-body > .browse-map`'s
-            own CSS already hides it, and now there is nothing duplicated underneath for that
-            CSS to be hiding. */}
-        {phone ? null : railCollapsed ? miniRail : <div className="browse-map">{rail}</div>}
-        <div className="browse-side" ref={paneRef} tabIndex={-1}>
-          <WalkMainPane walk={walk} phone={phone} listings={listings} />
-          {why}
+  /* ON A NARROW COLUMN THE BUYER LIST IS A SHEET, and the line that opens it says who, how many
+     and what is next (UX-194). CSS decides which of the two is drawn (a container query), never
+     a width read here. */
+  const nextRow = walk.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? null
+  const chipWords = [
+    walkedGroups.length > 1 ? `${walkedGroups.length} buyers` : selectedGroup === null ? 'Choose a buyer' : buyerLabel(selectedGroup),
+    `${cardsToPull} ${plural(cardsToPull, 'card', 'cards')} to pick`,
+    ...(nextRow === null || nextRow.copy.place.label === null ? [] : [`next: ${sayPlace(nextRow.copy.place.label)}`]),
+  ]
+
+  return (
+    <div className={walking ? 'orders-stage is-walking' : 'orders-stage'}>
+      <WalkLinePublisher words={walking && selectedGroup !== null ? chipWords : null} />
+      {filterBar}
+      {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
+      {/* THE DEGRADED MAP, SAID ONCE (UX-266), in the kit's notice shape. The ledger answered and
+          every Mark sold still works; only the other copies of each card are missing. */}
+      {storeFailed ? (
+        <Notice tone="warn" title="Could not read where every copy is" className="orders-store-note">
+          <Button size="sm" icon="refresh" onClick={onRereadStore}>
+            Try again
+          </Button>
+        </Notice>
+      ) : null}
+      <div className="orders-body">
+        <button type="button" className="orders-skip-link" onClick={() => walkRef.current?.focus()}>
+          Skip to the walk
+        </button>
+        <div className="orders-layout">
+          <nav className="orders-buyers" aria-label="Buyers">
+            {buyerList}
+          </nav>
+          <button type="button" className="orders-buyerchip" aria-haspopup="dialog" onClick={() => setBuyersOpen(true)}>
+            <Icon name="list" size={16} />
+            <span className="orders-buyerchip-text bn-facts">
+              {chipWords.map((word, at) => (
+                <span key={at}>{word}</span>
+              ))}
+            </span>
+            <Icon name="chevronDown" size={14} />
+          </button>
+          {/* DOM order is the desk's visual order (buyers, walk, card), so Tab reads as the eye does. */}
+          {walkColumn}
+          <div className="orders-cardcol">
+            <WalkCardPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} />
+          </div>
         </div>
       </div>
 
-      {phone && railOpen ? (
-        <Overlay kind="bottom" label="Choose a buyer" onClose={() => setRailOpen(false)} passKeys className="browse-railsheet">
-          {rail}
-        </Overlay>
-      ) : null}
+      <Sheet open={buyersOpen} onClose={() => setBuyersOpen(false)} title="Buyers" icon="list" className="orders-buyers-sheet">
+        {buyerList}
+      </Sheet>
 
-      {!manageOpen ? null : (
-        <Overlay kind="sheet" label="Manage orders" onClose={() => setManageOpen(false)} className="orders-manage-sheet">
-          <section className="bn-panel-body">
-            <div className="bn-panel-head">
-              <span className="bn-section-title">
-                <Icon name="plus" size={16} /> Add orders
-              </span>
-            </div>
-            {well}
-          </section>
-          {receipt}
-          {/* FIXED, THIS PASS: `statusControl`/`statusPanel` were ALSO drawn here, a second time
-              — `wellOf`'s own `{withFetch ? statusControl : null}` (inline in the paste row) and
-              `{withFetch ? statusPanel : null}` right under it already put both on screen inside
-              `.orders-paste`, `well`'s own section above. This second copy dated to the Manage
-              sheet's first landing (5a42cb62) and every case that opened the picker got two
-              `.orders-statuses-ask` elements — a Playwright strict-mode violation, not a screen
-              a person had reason to look at differently, since the two copies were identical.
-              Removing this block leaves the one inside `well`, which is also the one the
-              narrowing control's own comment says is correct: "the narrowing sits beside the
-              press, not in front of it." */}
-          <BacklogPrompt open={open} busy={busy} onStandDown={onStandDown} />
-          <ReconcileBacklogPanel orders={open} busy={busy} onPress={onReconcileBacklog} />
-
-          {/* THE SELECTED BUYER'S OWN ORDERS — stand-down, close-line, declare-kind and
-              hand-fill, still reachable per order (§13: "nothing lost"). `hidePicks`: the walk
-              beside this sheet is the one place to Mark sold from, so this never draws a second
-              set of pressable copy rows for the same card. */}
-          {selectedGroup === null ? null : (
-            <div className="orders-manage-orders">
-              <span className="bn-section-title">
-                {selectedGroup.name ?? <span className="bn-mono">{unnamedBuyerLabel(selectedGroup)}</span>}'s orders
-              </span>
-              {selectedGroup.orders.map((order) => (
-                <OrderDetail
-                  key={order.key}
-                  order={order}
-                  answer={answers.get(order.key) ?? null}
-                  lane={lanesByOrder.get(order.number) ?? null}
-                  store={store}
-                  claims={claims}
-                  busy={busy}
-                  onPull={onPull}
-                  onFill={onFill}
-                  onDeclareKind={onDeclareKind}
-                  onCloseLine={onCloseLine}
-                  onReread={onReread}
-                  variant="panel"
-                  hidePicks
-                />
-              ))}
-            </div>
-          )}
-        </Overlay>
-      )}
+      {/* THE SELECTED BUYER'S OWN ORDERS: stand-down, close-line, declare-kind and hand-fill, per
+          order. The store's own controls (fetch, paste, the backlog stand-downs) are not here:
+          they act on every buyer, so they open from the page (UX-165, UX-193). `hidePicks`: the
+          walk is the one place to Mark sold from. */}
+      <Sheet
+        open={manageOpen && selectedGroup !== null}
+        onClose={() => setManageOpen(false)}
+        title={selectedGroup === null ? 'Orders' : `${buyerLabel(selectedGroup)}'s orders`}
+        className="orders-manage-sheet"
+      >
+        {selectedGroup === null ? null : (
+          <div className="orders-manage-orders">
+            <StandDownLegend group={selectedGroup} answers={answers} />
+            {selectedGroup.orders.map((order) => (
+              <OrderDetail
+                key={order.key}
+                order={order}
+                answer={answers.get(order.key) ?? null}
+                lane={lanesByOrder.get(order.number) ?? null}
+                store={store}
+                claims={claims}
+                busy={busy}
+                onPull={onPull}
+                onFill={onFill}
+                onDeclareKind={onDeclareKind}
+                onCloseLine={onCloseLine}
+                onReread={onReread}
+                variant="panel"
+                hidePicks
+              />
+            ))}
+          </div>
+        )}
+      </Sheet>
     </div>
   )
 }
 
-/* ================================================================ why each line answered */
+/* ============================================================ the stand-down legend */
 
-function WhyPanel({ counts, openByDefault }: { readonly counts: Record<OrderLineReason, number>; readonly openByDefault: boolean }) {
-  /* ALL SIX REASONS, INCLUDING THE ZEROS. `Resolution.counts` returns every one and nothing here
-     filters them — reporting only what fired would make "nothing was short" and "nothing was
-     checked" the same screen. `sku_unknown` is structurally unreachable from this route and
-     always draws a zero; the note says so. */
+/** WHAT EACH STAND-DOWN PRESS MEANS, SAID ONCE PER SHEET (UX-240). Each stuck line used to carry
+ *  its own 80-word paragraph. Only the presses the buyer's lines actually offer are named. */
+function StandDownLegend({ group, answers }: { readonly group: BuyerGroup; readonly answers: ReadonlyMap<string, ResolvedOrder> }) {
+  const reasons = new Set<OrderLineReason>()
+  for (const order of group.orders) for (const line of answers.get(order.key)?.lines ?? []) reasons.add(line.reason)
+  const gone = reasons.has('no_copies_on_hand')
+  const byHand = reasons.has('sku_unseen') || reasons.has('not_a_single')
+  if (!gone && !byHand) return null
   return (
-    <details className="bn-panel orders-why" open={openByDefault}>
-      <summary className="orders-why-summary">
-        <Icon name="info" size={16} />
-        Why each line answered as it did
-        <Icon name="chevronDown" size={14} className="orders-why-chev" />
-      </summary>
-      <ul className="orders-counts" aria-label="Why each line answered as it did">
-        {ORDER_REASONS.map((reason) => (
-          <li key={reason} className={`orders-count orders-count-${reason}${counts[reason] === 0 ? ' orders-count-zero' : ''}`}>
-            <span className="orders-count-figure">{counts[reason]}</span>
-            <span className="orders-count-text">
-              <span className="orders-count-label">{orderReasonLabel(reason)}</span>
-              <code className="orders-count-machine">{reason}</code>
-              {reason === 'sku_unknown' ? <span className="orders-count-note">Not asked on this screen; always 0.</span> : null}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </details>
+    <dl className="orders-manage-legend">
+      {gone ? (
+        <>
+          <dt>I already sent it</dt>
+          <dd>The copy left through a sale on Inventory. Nothing is marked sold twice.</dd>
+          <dt>It isn&apos;t shipping</dt>
+          <dd>Closes the line with no copy sent: a refund, a cancellation or a damaged card.</dd>
+        </>
+      ) : null}
+      {byHand ? (
+        <>
+          <dt>Sealed product</dt>
+          <dd>Marks the line as sealed product, not a single card.</dd>
+          <dt>I shipped these by hand</dt>
+          <dd>Counts copies this store never photographed. Nothing is marked sold.</dd>
+        </>
+      ) : null}
+    </dl>
   )
 }
 
 /* ================================================================== a buyer, in the list */
 
-/** Worst-of ordering over a group's open orders — `look` and `unresolved` outrank `short`,
- *  which outranks `ready`. A group with nothing open is `done`. Used only to pick the ONE dot
- *  colour a multi-order buyer's row shows; every order's own status still shows on its own
- *  chip beside it. */
-const STATUS_RANK: Record<Status, number> = { look: 0, unresolved: 1, short: 2, ready: 3, done: 4 }
 
-function worstStatus(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): Status {
-  let worst: Status = 'done'
+/** A buyer's three figures, each over ONE set (UX-168, UX-235). `owed` is what the open orders
+ *  still want. `short` is the copies that cannot be pulled: per line, what it owes less what is
+ *  on hand (`outstanding`), so owed less short is the cards in the walk. `sold` counts every
+ *  order the buyer has, open or done. */
+function figuresOf(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): { owed: number; sold: number; short: number } {
+  let owed = 0
+  let short = 0
   for (const order of group.open) {
-    const status = statusOf(order, answers.get(order.key) ?? null)
-    if (STATUS_RANK[status] < STATUS_RANK[worst]) worst = status
+    owed += Math.max(0, order.wanted - order.recorded)
+    for (const line of answers.get(order.key)?.lines ?? []) short += line.outstanding
   }
-  return worst
+  const sold = group.orders.reduce((sum, order) => sum + order.recorded, 0)
+  return { owed, sold, short: Math.min(short, owed) }
 }
 
-/** The mini rail's own glyph (S17) — `BoxBrowse.tsx`'s own `miniLabel`, over a buyer's first
- *  name instead of a box's own name: the first word, to 4 characters, or `unnamedBuyerLabel`'s
- *  own short id/date tail when there is no name to take a word from. */
-function buyerMiniLabel(group: BuyerGroup): string {
-  const word = group.name?.trim().split(/\s+/)[0] ?? ''
-  return word === '' ? unnamedBuyerLabel(group).slice(0, 4) : word.slice(0, 4)
+/** What "Needs a look" is about, in words (UX-200): the most common reason a buyer's lines
+ *  cannot be pulled, counted in cards. "1 card not in the store", "2 cards sealed". */
+function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): string {
+  const words: Partial<Record<OrderLineReason, string>> = {
+    sku_unseen: 'not in the store',
+    sku_unknown: 'not in the store',
+    no_copies_on_hand: 'none left',
+    not_a_single: 'sealed',
+  }
+  const tally = new Map<string, number>()
+  for (const order of group.open) {
+    for (const line of answers.get(order.key)?.lines ?? []) {
+      const said = words[lineReason(order, line)]
+      if (said !== undefined) tally.set(said, (tally.get(said) ?? 0) + line.owed)
+    }
+  }
+  const top = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]
+  if (top === undefined) return STATUS_PILL.look.label
+  return `${top[1]} ${plural(top[1], 'card', 'cards')} ${top[0]}`
 }
 
-/** The buyer's index row and phone accordion head — replaces `OrderSummaryRow`
- *  (`D193`). A nameless buyer draws `unnamedBuyerLabel`'s own short id/date tail, never a
- *  literal "No name"; a buyer with more than one order draws an `N orders` pill and a chip
- *  per open order, so a two-order buyer is visibly one that needs both counted rather than a
- *  single order in disguise. */
+/** The one status a buyer shows, in words. */
+function statusWords(status: Status, group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): string {
+  return status === 'look' ? lookWords(group, answers) : STATUS_PILL[status].label
+}
+
+/** A buyer, in the list: the name, ONE status (the worst, and only when it is not Ready), and
+ *  ONE figure (UX-199). No dot beside the chip (it repeated it), no per-order chips, no bar. */
 function BuyerRow({
   group,
   answers,
+  status,
+  missing = null,
   selected,
-  expanded,
   onSelect,
 }: {
   readonly group: BuyerGroup
   readonly answers: ReadonlyMap<string, ResolvedOrder>
+  readonly status: Status
+  /** Under "Missing a copy", the figure the list is filtered on: the buyer's missing copies and
+   *  the open orders that miss one, so the list adds up to Home's "Cannot be filled" line. */
+  readonly missing?: { readonly copies: number; readonly orders: number } | null
   readonly selected: boolean
-  /** Set where the row is an accordion head rather than a list entry beside a detail. */
-  readonly expanded?: boolean
   readonly onSelect: () => void
 }) {
-  const unnamed = group.name === null
-  const heading = group.name ?? unnamedBuyerLabel(group)
-  const status = worstStatus(group, answers)
-  const pct = group.wanted > 0 ? Math.min(100, Math.round((group.recorded / group.wanted) * 100)) : 0
+  const figures = figuresOf(group, answers)
+  const pill = STATUS_PILL[status]
   const ref = useRef<HTMLButtonElement>(null)
-
   useEffect(() => {
-    if (selected && expanded !== true) ref.current?.scrollIntoView({ block: 'nearest' })
-  }, [selected, expanded])
+    if (selected) ref.current?.scrollIntoView({ block: 'nearest' })
+  }, [selected])
 
   return (
-    <button
-      ref={ref}
-      type="button"
-      className="orders-index-row"
-      aria-current={expanded === true ? undefined : selected ? 'true' : undefined}
-      aria-expanded={expanded === true ? selected : undefined}
-      onClick={onSelect}
-      title={heading}
-    >
-      <span className={`orders-index-dot orders-index-dot-${STATUS_DOT[status]}`} aria-hidden="true" />
-      <span className="bn-sr">{STATUS_PILL[status].label}</span>
+    <button ref={ref} type="button" className="orders-index-row" aria-current={selected ? 'true' : undefined} onClick={onSelect}>
       <span className="orders-index-main">
-        <span className={`orders-index-number${unnamed ? ' bn-mono' : ''}`}>{heading}</span>
-        {/* THE SECOND >1 SIGNAL LIVES IN THE DETAIL HEADER; THIS ONE IS THE FIRST. Drawn only
-            when there is something to count — a single order's row looks exactly as it always
-            did. The wrapping span itself is now conditional too (UX review, 2026-09-20): an
-            empty `.orders-index-meta` was emitted on every single-order row for no reason. */}
-        {group.orders.length > 1 || group.open.some((order) => statusOf(order, answers.get(order.key) ?? null) !== 'ready') ? (
+        <span className="orders-index-number"><LabelText text={buyerLabel(group)} /></span>
+        {status === 'ready' && group.orders.length < 2 ? null : (
           <span className="orders-index-meta">
-            {group.orders.length > 1 ? (
-              <Pill size="sm" className="orders-index-count">
-                {group.orders.length} orders
+            {status === 'ready' ? null : (
+              <Pill size="sm" tone={pill.tone} icon={pill.icon}>
+                {statusWords(status, group, answers)}
               </Pill>
-            ) : null}
-            {/* THE DATE IS THE PANEL'S OWN FACT NOW (nits review): drawn once, in `OrderPanel`,
-                rather than here and there at once for whichever buyer is selected. */}
-            {group.open.map((order) => {
-              const orderStatus = statusOf(order, answers.get(order.key) ?? null)
-              if (orderStatus === 'ready') return null
-              const pill = STATUS_PILL[orderStatus]
-              return (
-                <Pill key={order.key} size="sm" tone={pill.tone} icon={pill.icon}>
-                  {pill.label}
-                </Pill>
-              )
-            })}
+            )}
+            {group.orders.length > 1 ? <span className="orders-index-count">{group.orders.length} orders</span> : null}
           </span>
-        ) : null}
+        )}
       </span>
-      <span className="orders-index-side">
-        <span className="orders-index-figure">
-          {group.wanted === 0 ? 'nothing open' : group.recorded >= group.wanted ? 'all sold' : (
-            <>
-              <b>{group.wanted - group.recorded}</b> owed
-            </>
-          )}
-        </span>
-        <span
-          className={`bn-progress orders-index-bar${group.wanted > 0 && group.recorded >= group.wanted ? ' bn-progress-ok' : ''}`}
-          role="progressbar"
-          aria-valuenow={group.recorded}
-          aria-valuemin={0}
-          aria-valuemax={group.wanted}
-          aria-label="Copies sold"
-        >
-          <span style={{ width: `${pct}%` }} />
-        </span>
+      <span className="orders-index-figure">
+        {missing !== null ? (
+          <>
+            <b>{missing.copies}</b> missing in <b>{missing.orders}</b> {missing.orders === 1 ? 'order' : 'orders'}
+          </>
+        ) : status === 'done' ? (
+          <>
+            <b>{figures.sold}</b> sold
+          </>
+        ) : (
+          <>
+            <b>{figures.owed}</b> owed
+          </>
+        )}
       </span>
-      {expanded === true ? <Icon name="chevronDown" size={16} className="orders-index-chev" /> : null}
     </button>
   )
 }
 
 /* ============================================================== the selected order's panel */
 
-/** WHERE INVENTORY SHOWS THE BOX PANEL, ORDERS SHOWS THIS (§13, mock A): `BoxOps.tsx`'s own
- *  `.boxops-identity` SHAPE — the small-caps label, the title, `Manage` top-right, the status
- *  pill — with the dotted `.boxops-identity-line` replaced by the kit's `bn-stat` triad, the
- *  same one `CardLocations.tsx`'s "Every copy of this card" draws (owed/sold/short in place of
- *  copies/on-hand/live). Classes only, never `BoxOps.tsx` itself — a second builder owns that
- *  file's own line on a separate branch. */
+/** The walk's head for one buyer: the name, the order, ONE status, and three figures that add
+ *  up (owed less short is the walk, UX-168). Manage opens that buyer's own orders. */
 function OrderPanel({
   group,
   answers,
+  status,
   onManage,
 }: {
   readonly group: BuyerGroup
   readonly answers: ReadonlyMap<string, ResolvedOrder>
+  readonly status: Status
   readonly onManage: () => void
 }) {
-  const status = worstStatus(group, answers)
+  const figures = figuresOf(group, answers)
   const pill = STATUS_PILL[status]
-  const owed = Math.max(0, group.wanted - group.recorded)
-  const short = group.orders.reduce((sum, order) => {
-    const lines = answers.get(order.key)?.lines ?? []
-    return sum + lines.filter((line) => line.reason === 'short').reduce((s, line) => s + line.owed, 0)
-  }, 0)
-  const placed = whenLabel(group.latest)
-  const pct = group.wanted > 0 ? Math.min(100, Math.round((group.recorded / group.wanted) * 100)) : 0
-  /* MOCK A NAMES ONE ORDER; A BUYER MAY HOLD SEVERAL (D193). §13 does not resolve this case, so
-   * this is this build's own call, kept for the owner to overrule: a two-order buyer's panel
-   * reads `2 ORDERS` in the small-caps slot instead of a single id, and owed/sold/short
-   * aggregate across every order the buyer holds — the same total `BuyerRow`'s own figure
-   * already counts, not a second arithmetic. */
   const single = group.orders.length === 1 ? group.orders[0]!.number : null
-
   return (
-    <div className="boxops-identity">
-      <div className="boxops-identity-top">
-        <div className="boxops-identity-text">
-          {/* `.boxops-identity-num` IS `BoxOps.tsx`'s SMALL-CAPS LABEL, BUILT FOR "BOX 3" (S8):
-              its uppercase transform and 0.1em tracking wrap a real order id mid-identifier at
-              165px. The id itself is a machine string (D221: mono goes to SKUs, run ids, card
-              numbers — an order id is the same kind of string), so it gets its own span rather
-              than inheriting the label's display casing and spacing, `nowrap` plus an ellipsis
-              rather than a wrap, and never `text-overflow` on the "N ORDERS" plural — that one
-              is short by construction, at most two digits and a word. */}
-          <span className="boxops-identity-num orders-buyer-order-num">
+    <div className="orders-panel">
+      <div className="orders-panel-top">
+        <div className="orders-panel-text">
+          <h2 className="orders-panel-name"><LabelText text={buyerLabel(group)} /></h2>
+          <p className="orders-panel-order">
             {single === null ? (
-              `${group.orders.length} ORDERS`
+              `${group.orders.length} orders`
             ) : (
               <>
-                ORDER <span className="bn-mono orders-buyer-order-id">{single}</span>
+                Order <span className="bn-mono orders-buyer-order-id">{single}</span>
               </>
             )}
-          </span>
-          <h2 className={`boxops-identity-name${group.name === null ? ' bn-mono' : ''}`}>
-            {group.name ?? unnamedBuyerLabel(group)}
-          </h2>
+          </p>
         </div>
-        <Button variant="quiet" size="sm" icon="settings" className="browse-manage" aria-haspopup="dialog" onClick={onManage}>
-          Manage
-        </Button>
+        <IconButton icon="settings" label="Manage" name="Manage this buyer's orders" className="orders-manage" aria-haspopup="dialog" onClick={onManage} />
       </div>
-
-      <p className="boxops-identity-line">
+      <div className="orders-panel-facts">
         <Pill tone={pill.tone} icon={pill.icon}>
-          {pill.label}
+          {statusWords(status, group, answers)}
         </Pill>
-      </p>
-
-      <div className="card-locations-stats">
-        <div className="bn-stat card-locations-stat">
-          <span className="bn-stat-value">{owed}</span>
-          <span className="bn-stat-label">owed</span>
-        </div>
-        <div className="bn-stat card-locations-stat">
-          <span className="bn-stat-value">{group.recorded}</span>
-          <span className="bn-stat-label">sold</span>
-        </div>
-        <div className="bn-stat card-locations-stat">
-          <span className="bn-stat-value">{short}</span>
-          <span className="bn-stat-label">short</span>
+        <div className="orders-panel-figures">
+          <Stat size="sm" value={figures.owed} label="owed" />
+          <Stat size="sm" value={figures.sold} label="sold" />
+          <Stat size="sm" value={figures.short} label="short" />
         </div>
       </div>
-
-      {group.wanted === 0 ? null : (
-        <div
-          className="bn-progress"
-          role="progressbar"
-          aria-valuenow={group.recorded}
-          aria-valuemin={0}
-          aria-valuemax={group.wanted}
-          aria-label="Copies sold"
-        >
-          <span style={{ width: `${pct}%` }} />
-        </div>
-      )}
-
-      {placed === null ? null : (
-        <div className="boxruns">
-          <span className="bn-dot" aria-hidden="true" />
-          <p className="boxruns-said">placed {placed}</p>
-        </div>
-      )}
     </div>
   )
 }
@@ -3862,10 +3535,10 @@ function OrderDetail({
       )}
       <span className="orders-feed-word">
         {order.status === null ? (
-          order.source
+          sourceName(order.source)
         ) : (
           <>
-            {order.source} says <q>{order.status}</q>
+            {sourceName(order.source)} says <q>{order.status}</q>
           </>
         )}
       </span>
@@ -4061,7 +3734,6 @@ function LineStandDown({
           {/* THE ONE PLACE `not_shipping` IS REACHABLE, and it is LINE-shaped: on a three-line
               order this closes this line and leaves the other two exactly as they were. */}
           <Button
-            icon="undo"
             busy={busy === `close/${line.order_key}/${line.sku}`}
             disabled={locked}
             onClick={() => onCloseLine(order, line, 'not_shipping')}
@@ -4069,15 +3741,6 @@ function LineStandDown({
             It isn&apos;t shipping
           </Button>
         </div>
-        <p className="orders-standdown-note">
-          {/* THE COUNTS ARE THE EVIDENCE and they are already on the breakdown row above, so this
-              says what each press MEANS rather than repeating them. */}
-          “I already sent it” records that the copy went out for this order but left through the
-          sale on <code>#/inventory</code>, so nothing counted it here — it adds to the order&apos;s
-          count and marks nothing sold, because it already is. “It isn’t shipping” closes this line
-          claiming no copy went at all — a refund, a cancellation, or a card retired damaged
-          {order.lines.length === 1 ? '' : ', leaving the order’s other lines alone'}.
-        </p>
       </div>
     )
   }
@@ -4105,14 +3768,14 @@ function LineStandDown({
             Sealed product
           </Button>
         ) : (
-          <Button
+          <IconButton
             icon="undo"
+            label="Undo"
+            name="Undo: not sealed"
             busy={claiming}
             disabled={locked}
             onClick={() => onDeclareKind(order, line, null)}
-          >
-            Undo — not sealed
-          </Button>
+          />
         )}
         {owed < 1 ? null : (
           <Button
@@ -4129,11 +3792,6 @@ function LineStandDown({
           </Button>
         )}
       </div>
-      <p className="orders-standdown-note">
-        {sealed
-          ? 'Recorded as a sealed product picked by hand. Nothing is marked sold — there is no card here to sell.'
-          : 'Recorded as shipped from stock this store never photographed. Nothing is marked sold — there is no card here to sell.'}
-      </p>
     </div>
   )
 }
@@ -4249,7 +3907,11 @@ function OrderLineRow({
               />
             ) : null}
           </div>
-          <code className="orders-tag orders-line-reason">{line.reason}</code>
+          {/* THE REASON'S CODE, behind a disclosure (D196): the label above says it in words. */}
+          <details className="orders-line-code">
+            <summary>Code</summary>
+            <code>{line.reason}</code>
+          </details>
         </div>
       )}
 
@@ -4275,7 +3937,6 @@ function OrderLineRow({
               line={line}
               pick={copy.pick}
               offered={copy.offered}
-              claimedBy={copy.claimedBy}
               busy={busy}
               onPull={onPull}
               /* The heading already names the card; the row repeats it only where the store's
@@ -4456,14 +4117,6 @@ function CopyMapView({
                 {stop.spoken} spoken for
               </span>
             )}
-            {/* Copies in this drawer that another OPEN order was offered. They stay pressable —
-                the rank is what moves, not the button — so this is said, not enforced. */}
-            {stop.claimed === 0 ? null : (
-              <span className="orders-map-claimed">
-                <Icon name="cart" size={11} />
-                {stop.claimed} wanted elsewhere
-              </span>
-            )}
             <span className="orders-map-sections">
               {stop.sections.map((section, sectionAt) => (
                 <span
@@ -4490,6 +4143,21 @@ function CopyMapView({
 
 /* ============================================================================== a copy */
 
+/** A buyer's label as drawn. A nameless label's tail ("order …00099") is held on one line: it
+ *  broke between the ellipsis and the digits at 1440 (review, round 3). A no-break space in the
+ *  string cannot stop that break, because a line may still break after the ellipsis. */
+function LabelText({ text }: { readonly text: string }) {
+  const bound = text.indexOf('\u00a0')
+  if (bound < 0) return <>{text}</>
+  const cut = text.lastIndexOf(' ', bound) + 1
+  return (
+    <>
+      {text.slice(0, cut)}
+      <span className="orders-label-tail">{text.slice(cut)}</span>
+    </>
+  )
+}
+
 function PickLine({
   order,
   line,
@@ -4504,7 +4172,6 @@ function PickLine({
   lit,
   lead,
   offered,
-  claimedBy,
 }: {
   readonly order: OrderRow
   readonly line: ResolvedLine
@@ -4524,8 +4191,6 @@ function PickLine({
   /** This copy is one the resolver offered THIS line — the machine's own choice, marked so the
    *  operator can take it or ignore it. Absent in the walk, where every row is an offered copy. */
   readonly offered?: boolean
-  /** Another open order was offered this copy. Said, never enforced. */
-  readonly claimedBy?: string | null
 }) {
   const target = aimOf(line, pick)
   const pressing = target !== null && busy === `${line.order_key}/${line.sku}/${target.capture_id}`
@@ -4563,20 +4228,11 @@ function PickLine({
             ordinary row: same ground, same button, same place in the order — the operator's eye
             is told where the resolver landed and nothing is decided for him. */}
         {offered === true ? <span className="orders-pick-offered">Offered</span> : null}
-        {/* ANOTHER OPEN ORDER WAS OFFERED THIS ONE. Take it and that order re-resolves onto a
-            different copy, or goes short — worth knowing before the press, not after it. The
-            button stays: this is the fact, not a veto. */}
-        {text(claimedBy) ? (
-          <span className="orders-pick-claim" title={`Order ${claimedBy} was offered this copy`}>
-            <Icon name="cart" size={11} />
-            wanted by <span className="bn-mono">{claimedBy}</span>
-          </span>
-        ) : null}
         {showOrder === true ? (
           <button
             type="button"
             className="orders-pick-order"
-            onClick={() => setHub({ selected: order.key })}
+            onClick={() => patchViewQuery({ [ORDER_PARAM]: order.key, [BUYER_PARAM]: null })}
             title={`Show order ${order.number}`}
           >
             <Icon name="cart" size={11} />
@@ -4590,7 +4246,7 @@ function PickLine({
       {pick.held_by !== null ? (
         <span className="orders-pick-held">
           <Icon name="lock" size={13} />
-          Spoken for by <span className="bn-mono">{pick.held_by.order}</span>
+          Held for order <span className="bn-mono">{pick.held_by.order}</span>
         </span>
       ) : target === null ? (
         <span className="orders-pick-held">
@@ -4598,22 +4254,20 @@ function PickLine({
           {pick.capture_id === null ? 'This copy has no capture record, so it cannot be marked sold from here.' : 'Not offered for this reason.'}
         </span>
       ) : (
-        <Button
-          /* THE ONE PLACE THE MAP'S RANK REACHES THE BUTTON, and it is a state rather than a
-             recommendation: a copy another order is counting on is quieter than one nobody is.
-             Every other copy — offered or found in the store, near drawer or far — carries the
-             same primary Pull, because ranking is not picking. */
-          variant={text(claimedBy) ? 'default' : 'primary'}
-          size="sm"
-          icon="hand"
+        /* ONE PRESS PER ROW, THE SAME ON EVERY COPY — offered or found in the store, near drawer or
+           far — because ranking is not picking. Every copy is fungible (D212), so a copy another
+           open order counts on gets no caption of its own: Mark sold looks the same on every row
+           (owner's ruling, 2026-09-25 — no "wanted by <order>" visual descriptor). */
+        <IconButton
+          icon="sold"
+          label="Mark sold"
+          name={`Mark sold: ${pick.place.label === null ? `box ${pick.box}` : sayPlace(pick.place.label)}`}
           className="orders-pull"
           data-capture-id={target.capture_id}
           onClick={() => onPull(order, line, pick, target)}
           busy={pressing}
           disabled={busy !== null && !pressing}
-        >
-          Mark sold
-        </Button>
+        />
       )}
     </li>
   )

@@ -1004,9 +1004,11 @@ type Run = { text: string; where: string; size: number; color: string; ground: s
  *
  * `checkVisibility()` alone still says yes to the kit's own `.bn-sr` (`kit.css`): visible per
  * `display`/`visibility`, clipped to a 1x1 box on purpose (the accessible name an icon-only
- * `Button` gives a screen reader — the "?" sheet's own Close button, since it moved onto the
- * kit's `Modal`, is the first place this file draws one). `checkVisibility()` has no option
- * for `clip`, so the box itself is read: on-screen text is never 1px in both directions.
+ * `Button` gives a screen reader, its `iconOnly` prop). The "?" sheet's own Close button is
+ * NOT this case since round 2 (D288): the Fulfiller reads words there, per spec
+ * rule 1, so its Close is a plain worded `Button` and draws no `.bn-sr` at all.
+ * `checkVisibility()` has no option for `clip`, so the box itself is read: on-screen text is
+ * never 1px in both directions.
  *
  * The ground is resolved by walking up to the first opaque background, which is what the eye
  * does: `.pull-confirm-label` is white on nothing, sitting on a button filled with --accent.
@@ -1738,6 +1740,20 @@ test("the owner's position treatment never reaches the Fulfiller", async ({ page
   await expect(view(page).locator('.card-locations-place-large')).not.toHaveCount(0)
 })
 
+test('N7 — the fold under a card says which box the rest are in by name, never the number', async ({
+  page,
+}) => {
+  /* `inBoxes` (`Fulfillment.tsx`) composed "in Box 4" straight off `copy.place.box` — a raw
+   * store number on the Fulfiller's own screen, the one persona D31 keeps the owner's every
+   * position-numbering convention off of. Eiscue's second copy is box 4; the fixture's own
+   * `searchAnswer` sends every `place.box_name` as `null` (unnamed), so a fixed box number
+   * gone from the text is what a fix here looks like. */
+  await openSearch(page, 'Eiscue', 2)
+  const where = view(page).locator('.ff-more-where')
+  await expect(where).toBeVisible()
+  await expect(where).not.toContainText('Box 4')
+  await expect(where).not.toContainText(/\bBox\b/)
+})
 
 test('the cards for sale are listed in box-walk order, and nothing else is listed', async ({
   page,

@@ -834,6 +834,50 @@ function catalogRow(sku: string, overrides: Record<string, unknown> = {}) {
  *  replaces what the SEARCH answers, the way `stubStore`'s own comment says a populated
  *  catalog answer follows from populating the queue at all. */
 export async function seedPopulatedReview(page: Page): Promise<void> {
+  /* A PRICED SECOND ENTRY BESIDE `stubStore`'s UNPRICED ONE (the PR 2 screen pass, D221): the
+     queue's price column (`.review-row-price`) and the "next" line's price
+     (`.review-next-price`) draw a dollar figure only for an entry with a market, and the one
+     entry the seal seeds has none. So no sweep ever drew either figure, and both sat in the
+     display and UI faces unseen. The first entry is unchanged, so the catalog stays open on it. */
+  await page.route(/\/queues$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        review: [
+          {
+            position: 'Box 2, Section 1, Card 1',
+            box: 2,
+            index: 1,
+            label: 'Box 2, Section 1, Card 1',
+            photo: 'photos/2/1.jpg',
+            read: { name: 'Volcanion', number: '025', printed_total: '132', set_hint: 'ME01' },
+            confidence: null,
+            reason: 'no_catalog_row',
+            candidates: [],
+            first_seen: '2026-09-01T12:00:00+00:00',
+            market: null,
+            cleared_by_human: false,
+          },
+          {
+            position: 'Box 2, Section 1, Card 2',
+            box: 2,
+            index: 2,
+            label: 'Box 2, Section 1, Card 2',
+            photo: 'photos/2/2.jpg',
+            read: { name: 'Snorlax', number: '051', printed_total: '132', set_hint: 'ME01' },
+            confidence: null,
+            reason: 'no_catalog_row',
+            candidates: [],
+            first_seen: '2026-09-01T12:05:00+00:00',
+            market: '4.20',
+            cleared_by_human: false,
+          },
+        ],
+        parked: [],
+      }),
+    }),
+  )
   const rows = Array.from({ length: 200 }, (_, at) =>
     catalogRow(String(9139800 + at), { market: `${(at % 9) + 1}.00` }),
   )

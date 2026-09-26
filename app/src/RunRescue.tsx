@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 
 import { describeFailure, rescueRun, type Failure } from './server'
 import type { RescueResult } from './types'
-import { Button, Notice, Stat } from './kit'
+import { Button, IconButton, Notice, Stat } from './kit'
 import { toast } from './kit/toast'
 import { useOverlayFocus } from './runsOverlay'
 import './RunRescue.css'
@@ -55,6 +55,7 @@ export function RunRescue({
   const [result, setResult] = useState<RescueResult | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const sheet = useRef<HTMLElement | null>(null)
+  const scrim = useRef<HTMLDivElement | null>(null)
 
   const send = useCallback(
     async (write: boolean) => {
@@ -95,13 +96,13 @@ export function RunRescue({
     void send(false)
   }, [open, send])
 
-  useOverlayFocus(sheet, open, onClose, busy)
+  useOverlayFocus(sheet, open, onClose, busy, scrim)
 
   const applyable = result !== null && result.ok && !result.wrote && result.already_rescued === null && result.counts.rebound > 0
 
   return createPortal(
     <>
-      {open ? <div className="bn-scrim" onClick={onClose} /> : null}
+      {open ? <div ref={scrim} className="bn-scrim" onClick={onClose} /> : null}
       <aside
         ref={sheet}
         className="bn-sheet rescue-sheet"
@@ -121,9 +122,7 @@ export function RunRescue({
               Rebind this run
             </h2>
           </div>
-          <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
-            Close
-          </Button>
+          <IconButton icon="x" label="Close" onClick={onClose} />
         </header>
 
         <div className="rescue-sheet-body">

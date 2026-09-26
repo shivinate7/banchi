@@ -4,6 +4,7 @@ import { test, expect, type Page } from '@playwright/test'
 
 import { sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'
+import { settleMotion } from './motionSettled'
 import { matchSpans } from '../src/kit/highlight'
 import { countFacets, filterRows, withCounts } from '../src/kit/facets'
 import { parseViewQuery, readFacets, readFlag, readSort, writeFlag } from '../src/kit/viewState'
@@ -158,6 +159,24 @@ async function open(page: Page, width: (typeof WIDTHS)[number], theme: 'light' |
 }
 
 const BAR = '[data-specimen="FilterBar"]'
+const RAIL = '[data-specimen-rail]'
+const POPOVER = '[data-bn-overlay="popover"]'
+const SHEET = '[data-bn-overlay="sheet"]'
+
+/** Opens `scope`'s "Filters" trigger and waits for its overlay (D270's
+ *  amendment: one line, at every width — the trigger is the only way to reach a facet, the
+ *  sort or the hide toggle now, and its `compact` prop picks a `Popover` or a `Sheet`). */
+async function openTrigger(page: Page, scope: string, kind: 'popover' | 'sheet' = 'popover') {
+  await page.locator(`${scope} .bn-filterbar-trigger`).click()
+  const overlay = page.locator(kind === 'popover' ? POPOVER : SHEET)
+  await expect(overlay).toBeVisible()
+  /* THE POPOVER POPS IN (`.bn-menu`'s `bn-pop` animation, kit.css). A height or width read
+   *  inside that window is a real, transient frame, not noise (`motionSettled.ts`'s own
+   *  argument) — measured here too: every control inside the panel read 1px short of the
+   *  search field beside it until this wait was added. */
+  await settleMotion(page)
+  return overlay
+}
 
 for (const theme of ['light', 'dark'] as const) {
   for (const width of WIDTHS) {
@@ -180,35 +199,42 @@ for (const theme of ['light', 'dark'] as const) {
  * ============================================================================================ */
 
 test.describe('FilterBar', () => {
-  /* THE WIDE ROW ONLY: 1440, 820 and 720. The search field and the hide toggle are IN this row
-   *  (gripe 3: "the filters aren't even the same widths"), so they carry the SAME height as every
-   *  other control here. */
-  for (const width of [1440, 820, 720] as const) {
-    test(`every control in the wide row, the search and the hide toggle included, is one height at ${width} (FLT-24)`, async ({ page }) => {
+  /* ONE LINE, AT EVERY WIDTH (D270's amendment, 2026-09-24): there is no wide
+   *  row any more. `BAR`'s own trigger (default `compact="popover"`) opens a `Popover` at
+   *  every width, 1440 down to 390 — never a container query. The search field stays outside
+   *  the popover, in the bar's own line; the facets, the sort and the hide toggle live inside
+   *  it. The trigger is sized to the field beside it (the orders lane's own finding,
+   *  ux/orders 555d6b62), so it carries the SAME height as the search and the popover's own
+   *  controls. */
+  for (const width of [1440, 820, 720, 390] as const) {
+    test(`the trigger and the search read one height at ${width}, and the popover's own controls match it (FLT-24)`, async ({ page }) => {
       await open(page, width)
-      const heights = await page
-        .locator(
-          `${BAR} .bn-filterbar-row .bn-pick, ${BAR} .bn-filterbar-row .bn-sort-dir, ` +
-            `${BAR} .bn-filterbar-row .bn-hidetoggle, ${BAR} .bn-filterbar-search .search-field-box`,
-        )
-        .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)))
+      const search = await page.locator(`${BAR} .bn-filterbar-search .search-field-box`).evaluate((el) => Math.round(el.getBoundingClientRect().height))
+      const trigger = await page.locator(`${BAR} .bn-filterbar-trigger`).evaluate((el) => Math.round(el.getBoundingClientRect().height))
+      const overlay = await openTrigger(page, BAR)
+      const inside = await overlay.locator('.bn-pick, .bn-sort-dir, .bn-hidetoggle').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)))
+      const heights = [search, trigger, ...inside]
       expect(heights.length).toBeGreaterThanOrEqual(7)
       expect(new Set(heights).size, `heights ${heights.join(', ')}`).toBe(1)
       /* `--bn-control-h`: 34px on a desk, raised to 42px below 768px for a thumb (tokens.css). */
       expect(heights[0]).toBe(width >= 768 ? 34 : 42)
+      await page.keyboard.press('Escape')
     })
 
-    test(`the search input reads at the bar's own 13px, same as the facet triggers, inside FilterBar only at ${width}`, async ({ page }) => {
+    test(`the search input reads at the bar's own 13px, same as the facet triggers inside the popover, at ${width}`, async ({ page }) => {
       await open(page, width)
       const barInput = await page.locator(`${BAR} .bn-filterbar-search .search-field-input`).evaluate((el) => getComputedStyle(el).fontSize)
-      const pick = await page.locator(`${BAR} .bn-filterbar-row .bn-pick`).first().evaluate((el) => getComputedStyle(el).fontSize)
+      const overlay = await openTrigger(page, BAR)
+      const pick = await overlay.locator('.bn-pick').first().evaluate((el) => getComputedStyle(el).fontSize)
       expect(barInput).toBe(pick)
       expect(barInput).toBe('13px')
+      await page.keyboard.press('Escape')
     })
 
-    test(`every facet trigger in one bar is ONE width at ${width}, and a pick changes none (the owner's gripe, D118)`, async ({ page }) => {
+    test(`every facet trigger in the popover is ONE width at ${width}, and a pick changes none (the owner's gripe, D118)`, async ({ page }) => {
       await open(page, width)
-      const triggers = page.locator(`${BAR} .bn-filterbar-row .bn-fchip > .bn-pick`)
+      const overlay = await openTrigger(page, BAR)
+      const triggers = overlay.locator('.bn-fchip > .bn-pick')
       const widths = () => triggers.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)))
       const before = await widths()
       expect(before).toHaveLength(3)
@@ -219,6 +245,7 @@ test.describe('FilterBar', () => {
       await page.locator('.bn-pick-opt', { hasText: 'Obsidian Flames' }).click()
       await expect(triggers.nth(1)).toContainText('Obsidian Flames')
       expect(await widths()).toEqual(before)
+      await page.keyboard.press('Escape')
     })
   }
 
@@ -230,13 +257,14 @@ test.describe('FilterBar', () => {
     await expect(count).toContainText('Pokémon')
     await expect(count).toContainText('Hide sold')
 
-    /* THE SEARCH IS NAMED TOO, in the words typed. */
+    /* THE SEARCH IS NAMED TOO, in the words typed. The search field stays outside the popover. */
     await page.locator(`${BAR} .search-field-input`).fill('ex')
     await expect(count).toContainText('“ex”')
 
     /* ONE clear-all in the bar: the count line's. FilterChips' own would show once two facets
      * are on, so pick a second one first. */
-    await page.locator(`${BAR} .bn-filterbar-row .bn-fchip > .bn-pick`).nth(2).click()
+    const overlay = await openTrigger(page, BAR)
+    await overlay.locator('.bn-fchip > .bn-pick').nth(2).click()
     await page.locator('.bn-pick-opt', { hasText: /^Rare/ }).click()
     await page.keyboard.press('Escape')
     await expect(count).toContainText('Rare')
@@ -253,7 +281,8 @@ test.describe('FilterBar', () => {
     await open(page, 1440)
     /* `PickPanel` is portalled to `document.body`: this locator is deliberately page-wide. Under
      * Game = Pokémon, the two sets from other games count zero and are still offered. */
-    await page.locator(`${BAR} .bn-filterbar-row .bn-pick`).nth(1).click()
+    const overlay = await openTrigger(page, BAR)
+    await overlay.locator('.bn-pick').nth(1).click()
     const zero = page.locator('.bn-pick-opt[data-zero="true"]')
     await expect(zero).toHaveCount(2)
     await expect(zero.first()).toContainText('0')
@@ -262,7 +291,8 @@ test.describe('FilterBar', () => {
 
   test('a pick in one facet changes the counts in ANOTHER (the counts helper, FLT-10)', async ({ page }) => {
     await open(page, 1440)
-    const rarity = page.locator(`${BAR} .bn-filterbar-row .bn-fchip > .bn-pick`).nth(2)
+    const overlay = await openTrigger(page, BAR)
+    const rarity = overlay.locator('.bn-fchip > .bn-pick').nth(2)
     const commonCount = page.locator('.bn-pick-opt', { hasText: 'Common' }).locator('.bn-pick-count')
 
     await rarity.click()
@@ -270,7 +300,7 @@ test.describe('FilterBar', () => {
     await page.keyboard.press('Escape')
 
     /* Clear Game: Rarity's Common count now counts every game. */
-    await page.locator(`${BAR} .bn-filterbar-row .bn-fchip-clear`).first().click()
+    await overlay.locator('.bn-fchip-clear').first().click()
     await rarity.click()
     await expect(commonCount).not.toHaveText(underPokemon ?? '')
     expect(underPokemon).toBe('4')
@@ -280,7 +310,8 @@ test.describe('FilterBar', () => {
 
   test("no facet is disabled: every one opens in any order (the owner's ruling against Inventory's game-then-set-then-rarity lock)", async ({ page }) => {
     await open(page, 1440)
-    const triggers = page.locator(`${BAR} .bn-filterbar-row .bn-fchip .bn-pick`)
+    const overlay = await openTrigger(page, BAR)
+    const triggers = overlay.locator('.bn-fchip .bn-pick')
     const count = await triggers.count()
     expect(count).toBe(3)
     for (let at = 0; at < count; at++) {
@@ -291,7 +322,8 @@ test.describe('FilterBar', () => {
 
   test('a single-choice facet marks its options differently from a multi-choice one (gripe 5: "one selection rule, drawn honestly")', async ({ page }) => {
     await open(page, 1440)
-    const facets = page.locator(`${BAR} .bn-filterbar-row .bn-fchip .bn-pick`)
+    const overlay = await openTrigger(page, BAR)
+    const facets = overlay.locator('.bn-fchip .bn-pick')
     await facets.nth(0).click()
     await expect(page.locator('.bn-pick-opt').first()).toHaveAttribute('data-multiple', 'true')
     await page.keyboard.press('Escape')
@@ -300,22 +332,19 @@ test.describe('FilterBar', () => {
     await page.keyboard.press('Escape')
   })
 
-  test('at 390, the compact trigger opens a sheet, nothing outside it moves (D118), and no blank band sits in it', async ({ page }) => {
+  test('at 390, the popover trigger opens a floating panel, nothing outside it moves (D118)', async ({ page }) => {
     await open(page, 390)
     const before = await page.locator('[data-specimen="HideToggle"]').boundingBox()
-    await expect(page.locator(`${BAR} .bn-filterbar-row`)).toBeHidden()
     const trigger = page.locator(`${BAR} .bn-filterbar-trigger`)
     await expect(trigger).toBeVisible()
-    await trigger.click()
-    const sheet = page.locator('[data-bn-overlay="sheet"]')
-    await expect(sheet).toBeVisible()
-    await expect(sheet.locator('.bn-filterchips')).toBeVisible()
+    const overlay = await openTrigger(page, BAR)
+    await expect(overlay.locator('.bn-filterchips')).toBeVisible()
     const after = await page.locator('[data-specimen="HideToggle"]').boundingBox()
     expect(after?.y).toBe(before?.y)
 
     /* THE BLANK BAND: FilterChips' reserved Clear-all slot took a 42px row under the last facet.
-     * The gap from the last facet to the sort is the sheet's own gap, nothing more. */
-    const gap = await sheet.evaluate((root) => {
+     * The gap from the last facet to the sort is the overlay's own gap, nothing more. */
+    const gap = await overlay.evaluate((root) => {
       const facets = root.querySelectorAll('.bn-fchip')
       const last = facets[facets.length - 1]?.getBoundingClientRect()
       const sort = root.querySelector('.bn-sort')?.getBoundingClientRect()
@@ -324,29 +353,28 @@ test.describe('FilterBar', () => {
     expect(gap).toBeGreaterThanOrEqual(0)
     expect(gap).toBeLessThanOrEqual(16)
 
-    /* The thumb floor in the sheet: every control is 40px or taller. */
-    const heights = await sheet
+    /* The thumb floor inside the popover: every control is 40px or taller (below 768px, the
+       raised `--bn-control-h`). */
+    const heights = await overlay
       .locator('.bn-pick, .bn-sort-dir, .bn-hidetoggle')
       .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)))
     expect(Math.min(...heights), `heights ${heights.join(', ')}`).toBeGreaterThanOrEqual(40)
 
     await page.keyboard.press('Escape')
-    await expect(sheet).toBeHidden()
+    await expect(overlay).toBeHidden()
   })
 
-  test('at 390, a pick list inside the sheet works by keyboard: the arrows move, and Escape closes the list only', async ({ page }) => {
+  test('at 390, a pick list inside the popover works by keyboard: the arrows move, and Escape closes the list only', async ({ page }) => {
     await open(page, 390)
-    await page.locator(`${BAR} .bn-filterbar-trigger`).click()
-    const sheet = page.locator('[data-bn-overlay="sheet"]')
-    await expect(sheet).toBeVisible()
+    const overlay = await openTrigger(page, BAR)
 
-    const game = sheet.locator('.bn-fchip > .bn-pick').first()
+    const game = overlay.locator('.bn-fchip > .bn-pick').first()
     await game.focus()
     await page.keyboard.press('ArrowDown')
     const panel = page.locator('[data-bn-pick-panel]')
     await expect(panel).toBeVisible()
-    /* FOCUS STAYS IN THE LIST. Before the list joined the overlay stack, the sheet's trap pulled
-     * it straight back into the sheet. */
+    /* FOCUS STAYS IN THE LIST. Before the list joined the overlay stack, the overlay's own trap
+     * pulled it straight back into the popover. */
     await expect.poll(() => page.evaluate(() => document.activeElement?.closest('[data-bn-pick-panel]') !== null)).toBe(true)
 
     const active = () => panel.locator('.bn-pick-opt[data-active="true"]').textContent()
@@ -356,34 +384,46 @@ test.describe('FilterBar', () => {
     await page.keyboard.press('Space')
     await expect(panel.locator('.bn-pick-opt[aria-selected="true"]')).toHaveCount(2)
 
-    /* Escape closes the LIST, and the sheet stays, with focus back on the trigger. */
+    /* Escape closes the LIST, and the popover stays, with focus back on the trigger. */
     await page.keyboard.press('Escape')
     await expect(panel).toHaveCount(0)
-    await expect(sheet).toBeVisible()
+    await expect(overlay).toBeVisible()
     await expect(game).toBeFocused()
 
     await page.keyboard.press('Escape')
-    await expect(sheet).toBeHidden()
+    await expect(overlay).toBeHidden()
   })
 
   test('at 390, the "Filters" badge counts what differs from rest: a Hide sold on by default is not counted', async ({ page }) => {
     await open(page, 390)
-    const badge = page.locator(`${BAR} .bn-filterbar-trigger-count`)
+    /* `.bn-filterbar-trigger-count` WAS HERE — the trigger is an IconButton now
+       (D288), and its badge is `.bn-icon-count`, generic across every IconButton
+       that carries one. */
+    const badge = page.locator(`${BAR} .bn-filterbar-trigger .bn-icon-count`)
     /* Game = Pokémon is one. Hide sold is on, and on is its default. */
     await expect(badge).toHaveText('1')
-    await page.locator(`${BAR} .bn-filterbar-trigger`).click()
-    await page.locator('[data-bn-overlay="sheet"] .bn-hidetoggle').click()
+    const overlay = await openTrigger(page, BAR)
+    await overlay.locator('.bn-hidetoggle').click()
     await page.keyboard.press('Escape')
     await expect(badge).toHaveText('2')
   })
 
-  test('a bar in a 280px rail is compact by ITS OWN width at 1440, with a screen control beside a busy search', async ({ page }) => {
+  test('compact picks the overlay: the default bar opens a Popover, the rail (compact="sheet") opens a Sheet, both at 1440', async ({ page }) => {
     await open(page, 1440)
-    const rail = page.locator('[data-specimen-rail]')
-    await expect(rail.locator('.bn-filterbar-row')).toBeHidden()
+    const rail = page.locator(RAIL)
     await expect(rail.locator('.bn-filterbar-trigger')).toBeVisible()
-    /* And the full-width bar above it, at the same window width, is the wide row. */
-    await expect(page.locator(`${BAR} .bn-filterbar-row`)).toBeVisible()
+    /* And the full-width bar, at the same window width, is also the trigger alone — no wide
+       row at any width (D270's amendment). */
+    await expect(page.locator(`${BAR} .bn-filterbar-trigger`)).toBeVisible()
+
+    await rail.locator('.bn-filterbar-trigger').click()
+    await expect(page.locator(SHEET)).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.locator(SHEET)).toBeHidden()
+
+    await page.locator(`${BAR} .bn-filterbar-trigger`).click()
+    await expect(page.locator(POPOVER)).toBeVisible()
+    await page.keyboard.press('Escape')
 
     const search = await rail.locator('.search-field-box').boundingBox()
     const beside = await rail.locator('.bn-filterbar-beside .bn-btn').boundingBox()
@@ -536,16 +576,18 @@ test.describe('view state in the URL', () => {
     await expect(page.locator('[data-hide]')).toHaveText('true')
     expect(new URL(page.url()).hash).not.toContain('hidesold')
 
-    await page.locator(`${DEMO} .bn-filterbar-row .bn-hidetoggle`).click()
+    let overlay = await openTrigger(page, DEMO)
+    await overlay.locator('.bn-hidetoggle').click()
     await expect(page.locator('[data-hide]')).toHaveText('false')
     expect(new URL(page.url()).hash).toContain('hidesold=0')
 
     await page.reload()
     await expect(page.locator('[data-hide]')).toHaveText('false')
-    await expect(page.locator(`${DEMO} .bn-filterbar-row .bn-hidetoggle`)).toHaveAttribute('aria-pressed', 'false')
+    overlay = await openTrigger(page, DEMO)
+    await expect(overlay.locator('.bn-hidetoggle')).toHaveAttribute('aria-pressed', 'false')
 
     /* Back on: the default again, so no key. */
-    await page.locator(`${DEMO} .bn-filterbar-row .bn-hidetoggle`).click()
+    await overlay.locator('.bn-hidetoggle').click()
     await expect(page.locator('[data-hide]')).toHaveText('true')
     expect(new URL(page.url()).hash).not.toContain('hidesold')
   })
@@ -600,7 +642,8 @@ test.describe('view state in the URL', () => {
 
   test('reversing the DEFAULT column writes only `?dir=`, and the value reads back at once and survives a reload (the reversed-default regression, filtering round 3)', async ({ page }) => {
     await open(page, 1440)
-    const dir = page.locator(`${DEMO} .bn-filterbar-row .bn-sort-dir`)
+    let overlay = await openTrigger(page, DEMO)
+    const dir = overlay.locator('.bn-sort-dir')
     await expect(page.locator('[data-sort]')).toHaveText('name:asc')
     expect(new URL(page.url()).hash).not.toContain('sort=')
 
@@ -614,7 +657,8 @@ test.describe('view state in the URL', () => {
     await page.reload()
     expect(new URL(page.url()).hash).toContain('dir=desc')
     await expect(page.locator('[data-sort]')).toHaveText('name:desc')
-    await expect(page.locator(`${DEMO} .bn-filterbar-row .bn-sort-dir`)).toHaveAccessibleName('Order: Z to A. Press to reverse.')
+    overlay = await openTrigger(page, DEMO)
+    await expect(overlay.locator('.bn-sort-dir')).toHaveAccessibleName('Order: Z to A. Press to reverse.')
   })
 
   test('a link elsewhere in the app (a path change) leaves a place for Back to return to', async ({ page }) => {

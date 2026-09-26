@@ -114,8 +114,16 @@ async function open(
   options: {
     refuseDeleteFrom?: number
     nextIndex?: Record<string, number>
+    /** The `GET /boxes` roster this screen reads on mount. Defaults to `[BOX, BOX4]` — a
+     *  case that needs a box shaped differently (a sold card, D58) passes its own. */
+    boxes?: readonly unknown[]
     /** Section 6: the index a single-card remove refuses over (`renumber_blocked`). */
     blockRemoveOf?: number
+    /** D58: the box's on-hand count BEFORE this sitting, keyed by box. Defaults to 0 — a
+     *  fresh box, where on-hand after the Nth capture is simply N. A box carrying a
+     *  departed card starts here above 0, so the stub's on_hand answers stay correct
+     *  through a sitting that captures on top of one. */
+    onHandStart?: Record<string, number>
   } = {},
 ): Promise<Wire> {
   const wire: Wire = { deletes: [], removes: [], captures: 0 }
@@ -158,7 +166,7 @@ async function open(
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ boxes: [BOX, BOX4] }),
+      body: JSON.stringify({ boxes: options.boxes ?? [BOX, BOX4] }),
     }),
   )
 
@@ -172,6 +180,14 @@ async function open(
      store does not have — and the `serverNewest` comparison the blind arm turns on reads one
      drawer's high-water mark, so a shared counter would quietly change which arm fires. */
   const allocated: Record<string, number> = { ...(options.nextIndex ?? {}) }
+  /* D58: this sitting's own capture COUNT per box, separate from `allocated`'s stored
+   * index — the two only coincide when nothing was ever departed. On-hand after the Nth
+   * capture into a box is `onHandStart + N`. */
+  const capturedThisSitting: Record<string, number> = {}
+  const onHandAfterCapture = (box: string): number => {
+    capturedThisSitting[box] = (capturedThisSitting[box] ?? 0) + 1
+    return (options.onHandStart?.[box] ?? 0) + capturedThisSitting[box]
+  }
   await page.route(/\/capture$/, (route) => {
     wire.captures += 1
     const asked = route.request().postDataJSON() as { box?: number }
@@ -192,6 +208,9 @@ async function open(
         created: true,
         photo: `/tmp/${box}-${index}.jpg`,
         capture_id: null,
+        // D58, R1d: `place.box_total`, the box's on-hand count after this capture —
+        // `onHandStart` plus this sitting's own capture count, never the stored index.
+        place: { box_total: onHandAfterCapture(String(box)) },
       }),
     })
   })
@@ -231,6 +250,10 @@ async function open(
         cache_deleted: true,
         shifted: Math.max(0, higher),
         next_index: Number(allocated[box] ?? 1) - 1,
+        // D58, R1d: on-hand after this remove. Removing any one card (middle or newest)
+        // drops the on-hand count by exactly one, from the same fixture-shape argument the
+        // undo stub's own comment makes.
+        on_hand: Number(allocated[box] ?? 1) - 2,
       }),
     })
   })
@@ -257,10 +280,18 @@ async function open(
         }),
       })
     }
+    // D58, R1d: `on_hand` after this undo. Every box this file captures into is a plain
+    // append with nothing ever departed, so deleting the newest card (index `N`) always
+    // leaves `N - 1` on hand — the same number `store/master.py`'s own `_Places.total`
+    // would answer for this fixture's shape.
+    const deletedIndex = Number(path.split('/').pop())
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ deleted: path.replace('/inventory/', '') }),
+      body: JSON.stringify({
+        deleted: path.replace('/inventory/', ''),
+        on_hand: deletedIndex - 1,
+      }),
     })
   })
 
@@ -618,7 +649,10 @@ test('the odometer counts the sitting and says which drawers it went to', async 
 
   const captured = page.locator('.capture-odo .bn-stat').first().locator('.bn-stat-value')
   await expect(captured).toHaveText('3')
-  await expect(page.locator('.capture-odo-split')).toHaveText('Box 3 3')
+  /* THE LEAD-IN IS `bn-sr` (UX-096): visually hidden, absolutely positioned so it costs the
+     paragraph no height, but still part of its textContent — hence the prefix here. It
+     replaced an `aria-label` on a plain `<p>`, which axe's `aria-prohibited-attr` flags. */
+  await expect(page.locator('.capture-odo-split')).toHaveText('Where this sitting went: Box 3 3')
 
   await switchBox(page, 4)
 
@@ -631,12 +665,143 @@ test('the odometer counts the sitting and says which drawers it went to', async 
   await expect(captured).toHaveText('5')
   /* THE DOT IS CSS NOW, NOT TYPED TEXT (D218) — `.capture-odo-drawer + .capture-odo-drawer::before`
      draws it, so the two drawers' own text runs together with no separator character. */
-  await expect(page.locator('.capture-odo-split')).toHaveText('Box 3 3Box 4 2')
+  await expect(page.locator('.capture-odo-split')).toHaveText(
+    'Where this sitting went: Box 3 3Box 4 2',
+  )
 
-  /* THE SPAN STAYS IN ONE DRAWER'S INDEX SPACE, because two drawers do not share one. `1–2`
-     is box 4's; a sitting-wide span would read `1–3` and mean nothing. */
-  const span = page.locator('.capture-odo .bn-stat').nth(2).locator('.bn-stat-value')
-  await expect(span).toHaveText('1–2')
+  /* THE "INDEX SPAN" STAT IS GONE (UX-052, density): it duplicated the drawer split line a
+     few pixels below it, in "index" language the owner called wasted space (D153), and this
+     odometer now has exactly two stats — captured, and the next card. */
+  await expect(page.locator('.capture-odo .bn-stat')).toHaveCount(2)
+})
+
+test('a box with a sold card shows the counted number, never the stored slot (D58, R1c)', async ({
+  page,
+}) => {
+  /* THE TWO NUMBERS DISAGREE ON PURPOSE. `next_index` is the store's high-water mark over
+   * every index the box has ever handed out (`store/master.py:next_index`) — 10 cards
+   * captured, one later sold, so the mark still reads 11. `on_hand` is what D58 counts: 9
+   * cards on hand, so the CARD a fresh capture gets is 10, not 11. A screen that showed 11
+   * anywhere would be showing the slot the sold card's replacement will never occupy — D10
+   * never reuses a stored index — as if it were the count. */
+  const SOLD_BOX = {
+    ...BOX,
+    cards: 10,
+    sold: 1,
+    on_hand: 9,
+    next_index: 11,
+  }
+  await open(page, { boxes: [SOLD_BOX, BOX4], nextIndex: { '3': 11 } })
+
+  /* THE BOX ROW, CLOSED. `10`, never `11`, and the word is "card", never "index" (D196). */
+  const boxRow = page.locator('.capture-row').filter({ hasText: /Box/ })
+  await expect(boxRow).toContainText('card 10')
+  await expect(boxRow).not.toContainText('11')
+  await expect(boxRow).not.toContainText(/index/i)
+
+  /* THE ODOMETER'S "NEXT CARD" STAT, THE SAME NUMBER. Two stats — captured, next card — so
+   * the second one is the one this reads. */
+  await expect(page.locator('.capture-odo .bn-stat').nth(1).locator('.bn-stat-value')).toHaveText(
+    '10',
+  )
+
+  /* THE STAGE FOOT, THE THIRD PLACE THIS FACT IS DRAWN. Camera opened by `open()` already,
+   * so the foot is live. */
+  await expect(page.locator('.capture-foot-next')).toContainText('card 10')
+  await expect(page.locator('.capture-foot-next')).not.toContainText('11')
+})
+
+/** Reads the same number off all three surfaces (Box row, odometer, stage foot) and fails
+ *  loudly if they disagree — the R1d bug's own shape. */
+async function nextCardEverywhere(page: Page): Promise<number> {
+  const boxText = await page
+    .locator('.capture-row')
+    .filter({ hasText: /Box/ })
+    .innerText()
+  const boxMatch = /card (\d+)/.exec(boxText)
+  const odoText = await page
+    .locator('.capture-odo .bn-stat')
+    .nth(1)
+    .locator('.bn-stat-value')
+    .innerText()
+  const footText = await page.locator('.capture-foot-next').innerText()
+  const footMatch = /card (\d+)/.exec(footText)
+  if (boxMatch === null || footMatch === null) {
+    throw new Error(`"next card N" not found: box="${boxText}" foot="${footText}"`)
+  }
+  expect(boxMatch[1], 'box row vs odometer').toBe(odoText)
+  expect(footMatch[1], 'stage foot vs odometer').toBe(odoText)
+  return Number(odoText)
+}
+
+test('the counted number stays true across a sitting: every capture, every undo (D58, R1d)', async ({
+  page,
+}) => {
+  /* THE BUG THIS CASE CATCHES: `on_hand` is a fact off `GET /boxes`, and nothing re-fetches
+   * it on a capture or an undo — only a field open/close, a box creation or a divider do.
+   * So three captures with no field touched, using the R1c fix alone, drew the SAME "next
+   * card N" three times running: the number came from a `boxRecords` entry that never
+   * moved. Red on d452b5c4 for exactly that reason. */
+  await open(page)
+
+  await page.keyboard.press('c')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 1$/)
+  const afterFirst = await nextCardEverywhere(page)
+
+  await page.keyboard.press('c')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 2$/)
+  const afterSecond = await nextCardEverywhere(page)
+  expect(afterSecond).toBe(afterFirst + 1)
+
+  await page.keyboard.press('c')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 3$/)
+  const afterThird = await nextCardEverywhere(page)
+  expect(afterThird).toBe(afterFirst + 2)
+
+  await page.keyboard.press('u')
+  await expect(rows(page)).toHaveCount(2)
+  const afterUndo = await nextCardEverywhere(page)
+  expect(afterUndo).toBe(afterSecond)
+})
+
+test('a departed card in the box and several live captures in the same sitting (D58, R2)', async ({
+  page,
+}) => {
+  /* THE TWO BUGS TOGETHER, NOT SEPARATELY. R1c proved the STATIC divergence (a box that
+   * already carries a sold card shows the counted number, not the stored slot) and R1d
+   * proved the DYNAMIC tracking (the number moves with every capture). Neither alone
+   * proves the box starts already offset AND keeps counting correctly on top of that
+   * offset — a box with a departed card, on_hand 4 of 5 stored, where three fresh
+   * captures must read 5, 6, 7, never 6, 7, 8 (which is what the stored slot, still
+   * climbing from 6, would answer) and never 5, 5, 5 (which is what a `boxRecords` read
+   * with no per-capture patch — the R1d bug — would answer). */
+  const DEPARTED_BOX = {
+    ...BOX,
+    cards: 5,
+    sold: 1,
+    on_hand: 4,
+    next_index: 6,
+  }
+  await open(page, {
+    boxes: [DEPARTED_BOX, BOX4],
+    nextIndex: { '3': 6 },
+    onHandStart: { '3': 4 },
+  })
+
+  // BEFORE ANY CAPTURE: on_hand 4, so the upcoming card — the 5th on hand — reads 5.
+  expect(await nextCardEverywhere(page)).toBe(5)
+
+  await page.keyboard.press('c')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 6$/)
+  expect(await nextCardEverywhere(page)).toBe(6)
+
+  await page.keyboard.press('c')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 7$/)
+  expect(await nextCardEverywhere(page)).toBe(7)
+
+  await page.keyboard.press('c')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Box 3, Section 1, Card 8$/)
+  expect(await nextCardEverywhere(page)).toBe(8)
 })
 
 test('the strip does not change height when the drawer label appears (D118)', async ({
@@ -790,4 +955,195 @@ test('a blocked removal reaches the operator as a sentence naming what blocked i
   // "capture id" or names the route, only what blocked it and why.
   await expect(refusal).not.toContainText('capture_id')
   await expect(refusal).not.toContainText('/inventory/')
+})
+
+/* ------------------------------------------------------------------------------------------
+ * THE PAUSE/PLAY OVERLAY (owner, 2026-09-24, verbatim): "we shouldn't change any actions from
+ * how it operates now, this pause button should literally be like if i switched it off motion
+ * mode and play being switching it back onto motion mode." It calls the exact `switchTrigger`
+ * the Trigger field's own track calls, through a button on the pane and through Space — no new
+ * state, no new hold, no behaviour of its own. This is the file that captures for real
+ * (capture-claims.spec.ts's own rule is the opposite), so it is the one that can prove the
+ * manual key genuinely fires while paused and genuinely does not once resumed.
+ * ------------------------------------------------------------------------------------------ */
+
+/** Arms motion on the box `open()` already picked. D211 folds the Rig once a box is known;
+ *  unfolded here defensively, the way the odometer test above does it. */
+async function armMotion(page: Page): Promise<void> {
+  const rigSummary = page.locator('.capture-rig-summary')
+  if ((await rigSummary.getAttribute('aria-expanded')) === 'false') await rigSummary.click()
+  await page.getByRole('button', { name: /Trigger/ }).click()
+  await page.getByRole('button', { name: 'motion', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
+}
+
+function pauseplay(page: Page) {
+  return page.locator('.capture-pauseplay')
+}
+
+test('the pause button switches motion off, and the manual key fires while it is down', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await armMotion(page)
+  await expect(pauseplay(page)).toHaveClass(/is-running/)
+
+  await pauseplay(page).click()
+  await expect(pauseplay(page)).toHaveClass(/is-paused/)
+  await expect(pauseplay(page)).toHaveAccessibleName(/Resume motion/)
+  // `switchTrigger('manual')` is the same call the track's own `key` cell makes — the machine
+  // string is `manual:c`, not a name this button invented.
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'manual:c')
+
+  // C is disarmed in motion mode and live in manual (map.py's own rule); firing it for real
+  // is the proof that pausing switched the mode rather than only redrawing the button.
+  await page.keyboard.press('c')
+  await expect.poll(() => wire.captures).toBe(1)
+})
+
+test('the play button switches motion back on, and the manual key stops firing again', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await armMotion(page)
+  await pauseplay(page).click()
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'manual:c')
+
+  await pauseplay(page).click()
+  await expect(pauseplay(page)).toHaveClass(/is-running/)
+  await expect(pauseplay(page)).toHaveAccessibleName(/Pause motion/)
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
+
+  await page.keyboard.press('c')
+  // Asserted against something that DOES change on a real fire (the odometer's own count),
+  // rather than a fixed pause after a negative — the wait this repo refuses elsewhere.
+  await expect(page.locator('.capture-odo .bn-stat-value').first()).toHaveText('0')
+  expect(wire.captures).toBe(0)
+})
+
+test('Space is the same toggle, and does nothing while typing', async ({ page }) => {
+  await open(page)
+  await armMotion(page)
+  await page.keyboard.press(' ')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'manual:c')
+  await page.keyboard.press(' ')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
+
+  // Typing a space into the Box field's own entry must type a space, not toggle the trigger.
+  await page.keyboard.press('b')
+  const entry = page.locator('.capture-filter')
+  await entry.fill('New')
+  await entry.press(' ')
+  await expect(entry).toHaveValue('New ')
+  await expect(page.locator('.capture-trigger')).toHaveAttribute('data-trigger', 'motion')
+  await page.keyboard.press('Escape')
+})
+
+test('pressing the pause button moves nothing else on the screen (D118)', async ({ page }) => {
+  await open(page)
+  await armMotion(page)
+  const before = await shutter(page).boundingBox()
+  await pauseplay(page).click()
+  const after = await shutter(page).boundingBox()
+  expect(after).toEqual(before)
+})
+
+/* ------------------------------------------------------------------------------------------
+ * UX-076 (owner, 2026-09-24): "do we have that data? if so name the reason." `halt.code`
+ * already carried the server's own code; `CaptureScreen.tsx`'s `HALT_CODE_INFO` now maps
+ * each one `POST /capture`'s call chain can answer with to its own headline, never the raw
+ * code (D196) — that still shows only behind "What the server said". One case per code, plus
+ * the fallback for a code this roster does not know.
+ * ------------------------------------------------------------------------------------------ */
+
+const HALT_CODES: readonly { code: string; headline: string }[] = [
+  { code: 'server_busy', headline: 'the server is answering too many requests right now' },
+  { code: 'origin_not_allowed', headline: 'this page is not the one the server trusts to write' },
+  { code: 'box_closed', headline: 'that box was sealed just now' },
+  { code: 'store_busy', headline: 'the store is busy' },
+  { code: 'store_unavailable', headline: 'the store could not be reached' },
+  { code: 'inventory_conflict', headline: 'the store disagreed with what this screen expected' },
+  { code: 'game_invalid', headline: 'capturing as a game the server does not know' },
+  { code: 'game_unverified', headline: 'this game has no export to join against' },
+  { code: 'rarity_claim_invalid', headline: 'the Rarity claim no longer matches this game' },
+  { code: 'variant_invalid', headline: 'the Finish claim no longer matches this game' },
+  { code: 'box_required', headline: 'no box reached the server' },
+  { code: 'box_invalid', headline: 'the box number did not reach the server whole' },
+  { code: 'image_required', headline: 'no photograph reached the server' },
+  { code: 'image_invalid', headline: 'the photograph did not reach the server intact' },
+  { code: 'image_too_large', headline: 'the photograph was too large to send' },
+  { code: 'image_not_jpeg', headline: 'the camera sent a frame the server will not store' },
+  { code: 'server_error', headline: 'the server hit a bug' },
+]
+
+/** Overrides `open()`'s own always-succeeds `/capture` stub with one refusal, carrying the
+ *  code a case names. Playwright takes the newest handler, so this shadows it without
+ *  needing a second `open()` variant. */
+async function refuseCapture(page: Page, code: string): Promise<void> {
+  await page.route(/\/capture$/, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code, message: `refused: ${code}` } }),
+    }),
+  )
+}
+
+for (const { code, headline } of HALT_CODES) {
+  test(`a ${code} halt reads its own headline, never the raw code`, async ({ page }) => {
+    await open(page)
+    await refuseCapture(page, code)
+    await page.keyboard.press('c')
+
+    const title = page.locator('.capture-halt-title')
+    await expect(title).toContainText(headline)
+    // D196: the code itself is never the headline — it is only behind the disclosure.
+    await expect(title).not.toContainText(code)
+    await expect(page.locator('.capture-halt-code')).toHaveText(code)
+  })
+}
+
+test('an unmapped code falls back to the honest, hedged sentence', async ({ page }) => {
+  await open(page)
+  await refuseCapture(page, 'a_code_this_roster_does_not_know')
+  await page.keyboard.press('c')
+
+  await expect(page.locator('.capture-halt-title')).toHaveText(
+    'Captures are paused — check whether that card was recorded.',
+  )
+  await expect(page.locator('.capture-halt-code')).toHaveText('a_code_this_roster_does_not_know')
+})
+
+/* F5, THE PR 2 INTEGRATION REVIEW: A DEGRADED PLACE CARRIES `box_total: 0`, AND THAT IS "NO
+ * COUNT", NEVER "AN EMPTY BOX". The server answers a pooled card's place, and a place whose
+ * position will not read, with `box_total: 0` beside `located: false` or a null label. The
+ * capture used to write that 0 onto the box row, so the next card read "1" in a box holding 9.
+ * The row keeps its last known count now. */
+test('a capture whose place is unlabeled never writes a zero count onto the box', async ({ page }) => {
+  const SOLD_BOX = { ...BOX, cards: 10, sold: 1, on_hand: 9, next_index: 11 }
+  await open(page, { boxes: [SOLD_BOX, BOX4], nextIndex: { '3': 11 } })
+  expect(await nextCardEverywhere(page)).toBe(10)
+
+  await page.route(/\/capture$/, (route) =>
+    route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        box: 3,
+        index: 11,
+        key: '3/11',
+        label: 'Box 3, Section 1, Card 11',
+        section: 1,
+        card: 11,
+        new_box: false,
+        created: true,
+        photo: '/tmp/3-11.jpg',
+        capture_id: null,
+        place: { box_total: 0, label: null, located: true },
+      }),
+    }),
+  )
+  await shootInto(page, 3, 11, 1)
+  expect(await nextCardEverywhere(page), 'the box row keeps its count, never "next card 1"').toBe(10)
 })

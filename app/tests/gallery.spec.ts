@@ -77,13 +77,20 @@ test('the departed row shell is drawn', async ({ page }) => {
 test('the departed row says one state and offers no action', async ({ page }) => {
   const row = page.locator(DEPARTED_ROW)
 
-  /* ONE STATE WORD. The state cell holds up to three things — a `Viewing` marker, an order's
-     `Wanted` claim, and the state pill — and a departed copy has only the last of them. Counting
-     pills rather than reading text is what makes this fail if a marker starts appearing on a row
-     that has left the box, which is a claim about a card nobody can walk to. */
+  /* NO PILL (S2, round 2, `CardLocations.tsx`'s own comment on this span): a departed copy's
+     state pill was deleted outright, not merely hidden for the current row — the struck
+     figure `PositionLabel` draws is this row's own mark, in past tense
+     (`data-departed`/`aria-label="Was at …"`, `PositionLabel.tsx`), and pairing it with a
+     second, present-tense "Sold" pill said the same fact twice in two tenses. This case
+     asserted the pre-S2 pill until this round: `git show 0ebe59cf:app/src/CardLocations.tsx`
+     already carried the exclusion, so the code was already this way three rounds ago and the
+     case was simply never run against it (`gallery.spec.ts` was outside round 2's own
+     design-check scope) — not a regression this lane's own round 3-5 work introduced. */
   const pills = row.locator('.card-locations-state .bn-pill')
-  await expect(pills).toHaveCount(1)
-  await expect(pills).toHaveText('Sold')
+  await expect(pills).toHaveCount(0)
+  const mark = row.locator('.card-locations-label [data-departed="true"]').first()
+  await expect(mark).toHaveAttribute('data-departed', 'true')
+  await expect(mark).toHaveAttribute('aria-label', /^Was at /)
 
   /* AND NOTHING WHERE AN ACTION WOULD BE. `Mark sold` on a copy that is already gone is the
      press this component refuses to offer, and the state pill beside it has already said so —
@@ -689,6 +696,25 @@ test('a confirm opened from inside an open sheet dims the sheet with its own scr
 
   await confirm.getByRole('button', { name: 'Cancel' }).click()
   await expect(confirm).toHaveCount(0)
+  await expect(sheet).toBeVisible()
+})
+
+/* F6, THE PR 2 INTEGRATION REVIEW: A POPOVER INSIDE A SHEET CLOSES ON A PRESS ELSEWHERE IN
+ * THAT SHEET. The popover's outside check counted every layer in the stack as inside, the Sheet
+ * beneath it too, so a press on the Sheet's own text left it open. Only layers above it count. */
+test('a popover inside a sheet closes on a press elsewhere in that sheet', async ({ page }) => {
+  const openSheet = page.locator('[data-kit-open="sheet"]')
+  await openSheet.scrollIntoViewIfNeeded()
+  await openSheet.click()
+  const sheet = page.locator('[data-bn-overlay="sheet"]')
+  await expect(sheet).toBeVisible()
+
+  await sheet.locator('[data-kit-open="popover-in-sheet"]').click()
+  const menu = page.locator('[data-bn-overlay="popover"]', { hasText: 'Set a hint' })
+  await expect(menu).toBeVisible()
+
+  await sheet.getByRole('heading', { name: 'The hint' }).click()
+  await expect(menu).toHaveCount(0)
   await expect(sheet).toBeVisible()
 })
 

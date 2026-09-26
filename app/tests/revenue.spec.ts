@@ -303,8 +303,13 @@ test('a same-path query change never scrolls the page back to the top (D201)', a
   await page.setViewportSize({ width: 390, height: 360 })
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.evaluate(() => window.scrollTo(0, 400))
-  await page.waitForFunction(() => window.scrollY > 0)
+  /* THE TABLE FIRST, THEN THE SCROLL (the PR 2 integration's full run, twice under load): a
+     scroll sent while the screen still drew its short loading state clamped to 0, and one
+     `scrollTo` never repeated, so the wait below timed out before the page was ever tall. */
+  await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible()
+  await expect
+    .poll(async () => page.evaluate(() => (window.scrollTo(0, 400), window.scrollY)))
+    .toBeGreaterThan(0)
   await page.getByRole('columnheader', { name: 'Name' }).getByRole('button').click()
   const y = await page.evaluate(() => window.scrollY)
   expect(y).toBeGreaterThan(0)
@@ -315,8 +320,8 @@ test('a custom range shows week buckets for a short span, and states the range i
   await open(page, '?period=all')
 
   await page.getByRole('button', { name: 'Custom' }).click()
-  await page.getByLabel('From').fill('2026-09-01')
-  await page.getByLabel('To').fill('2026-09-15')
+  await page.getByLabel('From', { exact: true }).fill('2026-09-01')
+  await page.getByLabel('To', { exact: true }).fill('2026-09-15')
 
   await expect(page.getByText(/from Sep 1, 2026 to Sep 15, 2026/)).toBeVisible()
   await expect(page.getByRole('heading', { name: 'By week' })).toBeVisible()
@@ -375,7 +380,7 @@ test('no horizontal scroll at 390, with Custom selected — the fifth period opt
   await stub(page, generalOrders())
   await open(page, '?period=all')
   await page.getByRole('button', { name: 'Custom' }).click()
-  await expect(page.getByLabel('From')).toBeVisible()
+  await expect(page.getByLabel('From', { exact: true })).toBeVisible()
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
 })

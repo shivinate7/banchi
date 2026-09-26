@@ -50,16 +50,16 @@
  */
 export const REASON_LABELS: Readonly<Record<string, string>> = {
   // pipeline/variant.py — the ladder could not settle the finish.
-  no_catalog_row: 'Not in the export',
+  no_catalog_row: 'No listing on TCGplayer',
   metadata_not_stocked: 'Toggle names a finish that is not stocked',
   /* D23's stack claim contradicted the catalog: every candidate row's Rarity sits outside
    * what the operator claimed the stack holds. Deliberately NOT `metadata_*` — those three
    * are about the finish toggle, and a fourth reading as one at a glance is why the name
    * was rejected (D23 records it). */
-  rarity_claim_mismatch: 'Claimed rarities match no row',
+  rarity_claim_mismatch: 'Claimed rarities match no listing',
   detected_finish_not_stocked: 'Photo names a finish that is not stocked',
   ambiguous_no_signal: 'Nothing decided the finish',
-  duplicate_condition: 'Two rows, one condition',
+  duplicate_condition: 'Two listings, one condition',
 
   // pipeline/routing.py — the answer exists but is not trusted enough to list.
   low_confidence: 'Low confidence read',
@@ -71,7 +71,7 @@ export const REASON_LABELS: Readonly<Record<string, string>> = {
    * photograph matches none of them. Like D35's below, the JOIN writes it over a ladder
    * resolution that succeeded — the row is found, the entry offers it, and a human is asked
    * anyway because the two things read off one card disagree. */
-  name_disputed: 'The read name matches no row',
+  name_disputed: 'The read name matches no listing',
 
   /* D35. The one reason the JOIN writes over a successful ladder resolution — the row is
    * found and the entry offers it, and the card is queued anyway because the field that tells

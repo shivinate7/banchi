@@ -1,5 +1,7 @@
-/* Overlays on the inventory screen: the right sheet, the phone's bottom sheet, the dialog and
-   the lightbox. The panels themselves are the kit's; this adds their inner rhythm. */
+/* `kit/overlay.tsx`'s `Dialog` (promoted from `InventoryOverlay.tsx`, round 4): the right
+   sheet, the phone's bottom sheet, the centred dialog and the lightbox. The panels themselves
+   are the kit's own `.bn-sheet`/`.bn-dialog` (kit.css); this adds their inner rhythm — every
+   caller across Inventory, Capture and Orders shares it. */
 
 .inv-sheet,
 .inv-sheet-bottom,

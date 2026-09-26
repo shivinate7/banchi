@@ -85,3 +85,31 @@ test('every visible dollar figure on every route is drawn in the mono face', asy
 
   expect(problems, problems.join('\n')).toEqual([])
 })
+
+/* THE KIT'S OWN `Stat`, WHICH NO SWEEP READS (the PR 2 screen pass, D221). `#/gallery` is out of
+ * the sweep (`routeExclusions.ts`), and no owner screen passes `Stat` a dollar figure today, so
+ * the one place a money `Stat` is drawn is the kit sheet. `.bn-stat-value` sets the display face,
+ * so a figure passed through `Stat` broke D221 by construction. `Stat`'s `money` prop takes the
+ * mono face; this reads the gallery's own "$184 to list" specimen through the same scan. */
+test('a dollar figure drawn through the kit Stat is in the mono face', async ({ page }) => {
+  await page.goto('/#/gallery')
+  const stat = page.locator('.bn-stat', { hasText: 'to list' }).first()
+  await stat.scrollIntoViewIfNeeded()
+  const face = await stat.locator('.bn-stat-value').evaluate((el) => getComputedStyle(el).fontFamily)
+  expect(face, `"$184 to list" drawn as "${face}"`).toContain('JetBrains Mono')
+})
+
+/* EVERY DOLLAR FIGURE ON THE KIT SHEET (the PR 2 delta review, D221). The sweep skips
+ * `#/gallery`, and the Stat case above read one specimen, so the primary button's
+ * "Push 12 listings, $184.20" sat in Inter unseen. This reads every dollar text node and money
+ * field in the gallery's `.bn-view` through the sweep's own scanner. */
+test('every dollar figure on the kit sheet is drawn in the mono face', async ({ page }) => {
+  await page.goto('/#/gallery')
+  await expect(page.locator('main.gallery')).toBeVisible()
+  const result = await page.evaluate(scanMoneyFace)
+  const misses = [
+    ...result.text.map((hit) => `'${hit.amount}' drawn as "${hit.fontFamily}" in "${hit.sample}"`),
+    ...result.fields.map((hit) => `'${hit.amount}' in a <${hit.tag}> drawn as "${hit.fontFamily}"`),
+  ]
+  expect(misses, misses.join('\n')).toEqual([])
+})

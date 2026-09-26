@@ -2,7 +2,7 @@ import { Fragment, useEffect, useId, useMemo, useState, type CSSProperties } fro
 
 import { describeFailure, getHoldingsValue, getOrders, getSoldPrices, type Failure, type SoldPricesLookup } from './server'
 import type { HoldingsRange, HoldingsTotal, HoldingsValuePayload, OrderLineWire, OrderRow } from './types'
-import { Button, EmptyState, Icon, Notice, PageHeader, Pill, Segmented } from './kit'
+import { Button, EmptyState, Icon, IconButton, Money, Notice, PageHeader, Pill, Segmented } from './kit'
 import { money, moneyGrouped } from './money'
 import { saleDate } from './dates'
 import { sparkSegments } from './PriceHistory'
@@ -959,7 +959,9 @@ export function Revenue() {
       <section className="revenue-verdict">
         <p className="revenue-verdict-said">
           {'You grossed '}
-          <strong>{moneyGrouped(total)}</strong>
+          <strong>
+            <Money value={total} />
+          </strong>
           {` ${periodPhrase}, across ${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}.`}
         </p>
         <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
@@ -1048,9 +1050,7 @@ export function Revenue() {
           {activeBucketLabel !== null ? (
             <div className="revenue-active-filter">
               <Pill tone="accent">{`${activeBucketLabel} only`}</Pill>
-              <Button variant="ghost" size="sm" icon="x" onClick={() => setActiveBucket(null)}>
-                Clear
-              </Button>
+              <IconButton size="sm" icon="x" label="Clear the month" onClick={() => setActiveBucket(null)} />
             </div>
           ) : null}
           <div className="revenue-search">
@@ -1127,16 +1127,16 @@ export function Revenue() {
                   <Fragment key={row.name}>
                     <tr style={{ '--i': i } as CSSProperties}>
                       <td className="revenue-disclosure-col">
-                        <button
-                          type="button"
+                        <IconButton
+                          size="sm"
                           className="revenue-disclosure"
+                          icon={isOpen ? 'chevronDown' : 'chevronRight'}
+                          label={isOpen ? 'Hide' : 'Show'}
+                          name={`${isOpen ? 'Hide' : 'Show'} the orders behind ${row.name}`}
                           aria-expanded={isOpen}
                           aria-controls={detailId}
-                          aria-label={`${isOpen ? 'Hide' : 'Show'} the orders behind ${row.name}`}
                           onClick={() => toggleExpanded(row.name)}
-                        >
-                          <Icon name={isOpen ? 'chevronDown' : 'chevronRight'} size={14} />
-                        </button>
+                        />
                       </td>
                       <td>{row.nameIsSku ? <span className="bn-mono">{row.name}</span> : row.name}</td>
                       <td className="num">{row.copies.toLocaleString()}</td>

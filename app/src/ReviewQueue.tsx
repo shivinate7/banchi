@@ -12,6 +12,7 @@ import type {
   QueueRead,
   QueueSnapshot,
   RetireReason,
+  ServerStatus,
   StandDownReason,
 } from './types'
 import type { Failure } from './server'
@@ -21,6 +22,7 @@ import {
   answerReviewGroup,
   describeFailure,
   getQueues,
+  getStatus,
   isDeparted,
   neighborWords,
   placeParts,
@@ -33,10 +35,11 @@ import {
   undoRetire,
   undoStandDown,
 } from './server'
-import { Button, EmptyState, Icon, Kbd, Notice, PageHeader, Pill } from './kit'
+import { Button, EmptyState, Icon, IconButton, Kbd, Money, Notice, Page, Pill, ReloadButton, Sheet } from './kit'
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
+import { RunsContent, boxInHash, runInHash, stateInHash } from './Runs'
 import './ReviewQueue.css'
 import { isRetiredReason, reasonLabel } from './reasons'
 import { collectorNumber as sharedCollectorNumber } from './cardNumber'
@@ -57,12 +60,19 @@ import { collectorNumber as sharedCollectorNumber } from './cardNumber'
 
 type Segment =
   | { kind: 'text'; text: string }
+  /** A machine string: a collector number or a set hint. Mono (CLAUDE.md's three type
+   *  roles). */
   | { kind: 'value'; text: string }
+  /** A card's own name. Never mono (UX-270): a name is prose, not a machine string, and the
+   *  three type roles reserve the mono face for SKUs, run names, reason codes, key caps and
+   *  card numbers alone. */
+  | { kind: 'name'; text: string }
   /** A claim is drawn as a word; the pipeline's own spelling rides in `raw` for the title. */
   | { kind: 'claim'; text: string; raw: string }
 
 const say = (text: string): Segment => ({ kind: 'text', text })
 const value = (text: string): Segment => ({ kind: 'value', text })
+const cardName = (text: string): Segment => ({ kind: 'name', text })
 const claim = (raw: string, word: string = humanize(raw)): Segment => ({ kind: 'claim', text: word, raw })
 
 /** A trimmed field, or null. Every field of `read` is treated as absent-or-blank. */
@@ -132,7 +142,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
    * sentence this screen deleted on purpose. */
   if (isRetiredReason(entry.reason)) {
     return [
-      say('This screen no longer asks this question — the answer was the same row either way. The card was queued before it was dropped: the rows below are the ones that matched, and answering one lists it.'),
+      say('This screen no longer asks this question — the answer was the same listing either way. The card was queued before it was dropped: the listings below are the ones that matched, and answering one lists it.'),
     ]
   }
 
@@ -149,53 +159,53 @@ function sentence(entry: QueueEntryWire): Segment[] {
   switch (entry.reason) {
     case 'no_catalog_row':
       return number === null
-        ? [say('The export has no row for this card.')]
-        : [say('The export has no row for '), value(number), say('.')]
+        ? [say('TCGplayer has no listing for this card.')]
+        : [say('TCGplayer has no listing for '), value(number), say('.')]
 
     case 'number_unread_name_matched': {
       const head: Segment[] =
         number === null
           ? [say('No collector number could be read from this photograph. ')]
-          : [say('The number read as '), value(number), say(', which is in no row. ')]
+          : [say('The number read as '), value(number), say(', which is in no listing. ')]
       const matched: Segment[] =
         only === null
-          ? [say(' matched one row in this set by name.')]
-          : [say(' matched one '), claim(only), say(' row in this set by name.')]
+          ? [say(' matched one listing in this set by name.')]
+          : [say(' matched one '), claim(only), say(' listing in this set by name.')]
       return name === null
-        ? [...head, say('The name matched one row in this set.')]
-        : [...head, value(name), ...matched]
+        ? [...head, say('The name matched one listing in this set.')]
+        : [...head, cardName(name), ...matched]
     }
 
     case 'metadata_not_stocked': {
-      if (toggle === null || toggleWord === null) return [say('The export stocks no row for the finish recorded on this stack.')]
+      if (toggle === null || toggleWord === null) return [say('TCGplayer has no listing for the finish recorded on this stack.')]
       const head = [say('You sorted this stack as '), claim(toggle, toggleWord)]
       return only === null
-        ? [...head, say(', and the export stocks no such row for this number.')]
-        : [...head, say(', and the export stocks only '), claim(only), say(' for this number.')]
+        ? [...head, say(', and TCGplayer has no such listing for this number.')]
+        : [...head, say(', and TCGplayer has only '), claim(only), say(' for this number.')]
     }
 
     case 'detected_finish_not_stocked': {
       const head = [say('The photograph reads as '), detected === null ? say('a finish this entry does not record') : claim(detected)]
       return only === null
-        ? [...head, say(', and the export stocks no such row for this number.')]
-        : [...head, say(', and the export stocks only '), claim(only), say(' for this number.')]
+        ? [...head, say(', and TCGplayer has no such listing for this number.')]
+        : [...head, say(', and TCGplayer has only '), claim(only), say(' for this number.')]
     }
 
     case 'ambiguous_no_signal':
-      return [say('No finish recorded, and the photograph didn\'t settle it — every row below is possible.')]
+      return [say('No finish recorded, and the photograph didn\'t settle it — every listing below is possible.')]
 
     case 'duplicate_condition': {
       const duplicate = duplicatedCondition(entry.candidates)
       return duplicate === null
-        ? [say('Two export rows claim the same condition for this number — nothing can choose between them.')]
-        : [say('Two export rows claim '), claim(duplicate), say(' for this number — nothing can choose between them.')]
+        ? [say('Two of TCGplayer\'s listings claim the same condition for this number — nothing can choose between them.')]
+        : [say('Two of TCGplayer\'s listings claim '), claim(duplicate), say(' for this number — nothing can choose between them.')]
     }
 
     case 'low_confidence': {
       const head: Segment[] =
         name === null
           ? [say('The system read this photograph as a card it could not name')]
-          : [say('The system read this photograph as '), value(name)]
+          : [say('The system read this photograph as '), cardName(name)]
       const middle: Segment[] = number === null ? [] : [say(' '), value(number)]
       const confidence = text(entry.confidence) ?? 'low'
       return [...head, ...middle, say(', with '), claim(confidence, confidence.replace(/[_-]+/g, ' ')), say(' confidence, which is not enough to list it on.')]
@@ -213,14 +223,14 @@ function sentence(entry: QueueEntryWire): Segment[] {
         hint === null
           ? [say('and no set hint was recorded to break the tie.')]
           : [say('and the set hint '), value(hint), say(' names none of them.')]
-      return [...head, say('matches rows in more than one set, '), ...tail]
+      return [...head, say('matches listings in more than one set, '), ...tail]
     }
 
     case 'card_not_detected':
       return [say('No card found in this photograph — no number corner to crop or read.')]
 
     case 'no_market_data':
-      return [say('This row carries no market price — a missing price is unknown, not low.')]
+      return [say('This listing carries no market price — a missing price is unknown, not low.')]
 
     /* D23's job (a): the only reason that can mean the rows themselves are the wrong card.
      *
@@ -237,17 +247,17 @@ function sentence(entry: QueueEntryWire): Segment[] {
           ? [
               say('You claimed this stack holds '),
               claim(claimed.join(' or '), orList(claimed.map(humanize))),
-              say(number === null ? ', and every row below is ' : ', and every row '),
+              say(number === null ? ', and every listing below is ' : ', and every listing '),
               ...(number === null ? [] : [value(number), say(' found is ')]),
               claim(rowWords.join(' or '), orList(rowWords.map(humanize))),
               say('. '),
             ]
           : number === null
-            ? [say('The rarities claimed at capture match none of the rows below. ')]
-            : [say('The rarities claimed at capture match none of the rows '), value(number), say(' found. ')]
+            ? [say('The rarities claimed at capture match none of the listings below. ')]
+            : [say('The rarities claimed at capture match none of the listings '), value(number), say(' found. ')]
       return [
         ...head,
-        say('A confident misread number can land on real rows for a different card. Check against the photograph before answering.'),
+        say('A confident misread number can land on real listings for a different card. Check against the photograph before answering.'),
       ]
     }
 
@@ -264,13 +274,13 @@ function sentence(entry: QueueEntryWire): Segment[] {
       const offersBoth = entry.candidates.some((row) => row.found_by === 'name')
       const head: Segment[] =
         name === null
-          ? [say('The name on this photograph could not be checked against the row below. ')]
+          ? [say('The name on this photograph could not be checked against the listing below. ')]
           : rowName === null
-            ? [say('This photograph reads as '), value(name), say(', which is not what the row below is called. ')]
+            ? [say('This photograph reads as '), cardName(name), say(', which is not what the listing below is called. ')]
             : [
                 say('This photograph reads as '),
-                value(name),
-                say(number === null ? ', but the row it matched is ' : ', but '),
+                cardName(name),
+                say(number === null ? ', but the listing it matched is ' : ', but '),
                 ...(number === null ? [] : [value(number), say(' is ')]),
                 value(rowName),
                 say('. '),
@@ -302,18 +312,18 @@ function sentence(entry: QueueEntryWire): Segment[] {
  * A reason with no entry here is not asked about — a retired code draws the headline below
  * instead, and an unknown one draws its label. */
 const QUESTIONS: Readonly<Record<string, string>> = {
-  no_catalog_row: 'Which row is this card?',
+  no_catalog_row: 'Which listing is this card?',
   metadata_not_stocked: 'Which finish is stocked?',
   rarity_claim_mismatch: 'Is this the right card at all?',
   detected_finish_not_stocked: 'Which finish is this?',
   ambiguous_no_signal: 'Which finish is this?',
-  duplicate_condition: 'Which of the two rows?',
+  duplicate_condition: 'Which of the two listings?',
   low_confidence: 'Is this the card?',
   no_position: 'Where is this card?',
   identification_failed: 'What is this card?',
   set_ambiguous: 'Which set is it from?',
   card_not_detected: 'What is in this photograph?',
-  number_unread_name_matched: 'Is this the row it matched?',
+  number_unread_name_matched: 'Is this the listing it matched?',
   name_disputed: 'Is this the right card at all?',
   no_market_data: 'Is this the card?',
   /* `pipeline/routing.py:LISTING_DISPUTED` (identity-follows-sku.md §7.3, lane 2): a held
@@ -655,9 +665,17 @@ type Receipt = {
   dropped: Row[]
   at: number
   said: string
+  /** UX-255: the one verb for the act ("Closed") is `said`. This is the ONE place the
+   *  outcome still shows — "left in place" or "retired" — as a description, never as a
+   *  second verb competing with `said`. Unset for an answer's own receipt. */
+  outcome?: string
   /** Which session counter this write moved, so an undo can move it back. */
   counts: 'answered' | 'closed'
   reverse: (box: number, index: number) => Promise<unknown>
+  /** UX-205: every write gets a receipt. Not every write is reversible — `canTakeBack`'s
+   *  `restores_to` check is real, and a card the server cannot restore keeps its receipt
+   *  with the Undo control simply left off it. */
+  undoable: boolean
 }
 
 type Refusal = { failure: Failure; at: string | null }
@@ -704,6 +722,34 @@ export function ReviewQueue() {
   const [queueOpen, setQueueOpen] = useState(false)
   /** The store-wide re-check sheet. Closed on arrival: opening it takes a reading. */
   const [recheckOpen, setRecheckOpen] = useState(false)
+
+  /* RUNS, FOLDED IN (D291). Open on arrival when the hash still carries
+   * the intent a redirected `#/runs` link left behind — `?run=`, `?state=captured`,
+   * `?box=`, or the bare `?runs=1` a link with none of those adds (`Runs.tsx:RunsRedirect`).
+   * `RunsContent` itself reads the same three functions off the SAME hash to decide which
+   * run opens or whether the composer does; this state is only whether the SHEET is up. */
+  const [runsOpen, setRunsOpen] = useState(() => {
+    const query = window.location.hash.split('?')[1] ?? ''
+    return stateInHash() || runInHash() !== null || boxInHash() !== null || new URLSearchParams(query).get('runs') === '1'
+  })
+
+  /* THE STRIP: "Identify N cards", drawn only when the pipeline has cards waiting
+   * (`status.states.captured`, the same figure Home's own standing sentence reads). A
+   * light-weight read, not the composer's own preflight — opening the sheet runs that, with
+   * the real estimate, the way it always has. */
+  const [status, setStatus] = useState<ServerStatus | null>(null)
+  useEffect(() => {
+    let live = true
+    void getStatus()
+      .then((answer) => {
+        if (live) setStatus(answer)
+      })
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [reloads])
+  const captured = status?.states.captured ?? 0
 
   useEffect(() => {
     let live = true
@@ -858,7 +904,9 @@ export function ReviewQueue() {
           setRows((prev) => (prev === null ? prev : prev.filter((held) => held.entry.position !== position)))
           count('closed', 1)
           const reversible = how.kind === 'stand_down' || (result as { restores_to?: unknown } | null)?.restores_to != null
-          if (!reversible) return
+          /* UX-205: the receipt is unconditional. Only the Undo control depends on
+             `reversible` — a stand-down is always reversible; a retirement is only when the
+             server hands back a `restores_to`. */
           remember({
             key: position,
             reverse: how.kind === 'stand_down' ? undoStandDown : undoRetire,
@@ -866,8 +914,10 @@ export function ReviewQueue() {
             label: row.entry.label,
             dropped,
             at,
-            said: how.kind === 'stand_down' ? 'Stood down' : 'Retired',
+            said: 'Closed',
+            outcome: how.kind === 'stand_down' ? 'left in place' : 'retired',
             counts: 'closed',
+            undoable: reversible,
           })
         })
         .catch((err: unknown) => {
@@ -909,7 +959,10 @@ export function ReviewQueue() {
           if (kept.length > 0) restore(kept)
           if (kept.length === 0) count('answered', 1)
 
-          if (kept.length === 0 && canTakeBack(result as AnswerResult)) {
+          /* UX-205: the receipt is unconditional — every write it advances gets one, so the
+             session list is never silently short of what the operator did. Only Undo depends
+             on `canTakeBack`. */
+          if (kept.length === 0) {
             remember({
               key: position,
               reverse: undoAnswer,
@@ -919,6 +972,7 @@ export function ReviewQueue() {
               at,
               said: `Answered as ${candidate.condition}`,
               counts: 'answered',
+              undoable: canTakeBack(result as AnswerResult),
             })
           }
 
@@ -1046,8 +1100,11 @@ export function ReviewQueue() {
         setRows((prev) => (prev === null ? prev : prev.filter((row) => !clearedRow(row))))
         count('answered', new Set(dropped.map((row) => row.entry.position)).size)
 
+        /* UX-205: the receipt is unconditional, as it is for a single answer above. Undo
+           still needs EVERY member reversible — a partial undo would leave the group split
+           between two states with no way to tell which is which. */
         const reversible = result.results.every((member) => member.restores_to !== null)
-        if (reversible && dropped.length > 0) {
+        if (dropped.length > 0) {
           remember({
             key: result.answered.join('+'),
             reverse: undoAnswer,
@@ -1062,6 +1119,7 @@ export function ReviewQueue() {
             at,
             said: `Answered all ${result.count} together`,
             counts: 'answered',
+            undoable: reversible,
           })
         }
 
@@ -1339,66 +1397,84 @@ export function ReviewQueue() {
   )
 
   return (
-    <main className="review bn-page" data-queue-open={queueOpen ? 'true' : undefined} data-lens={lens ? 'true' : undefined}>
-      <PageHeader
-        icon="inbox"
-        title="Review"
-        className={lens ? 'review-pagehead has-lens' : 'review-pagehead'}
-        lede={
-          <span className="review-progress" aria-live="polite">
-            <span className="review-progress-text bn-tnum">
-              {rows === null ? (
-                loading ? (
-                  'Reading the queues…'
-                ) : (
-                  'The queues did not load.'
-                )
-              ) : total === 0 ? (
-                'Nothing is waiting.'
-              ) : current === null ? (
-                `${done} of ${total} done.`
+    <Page
+      className={['review', queueOpen ? 'is-queue-open' : '', lens ? 'review-pagehead has-lens' : 'review-pagehead'].filter(Boolean).join(' ')}
+      icon="inbox"
+      title="Review"
+      lede={
+        <span className="review-progress" aria-live="polite">
+          <span className="review-progress-text bn-tnum">
+            {rows === null ? (
+              loading ? (
+                'Reading the queues…'
               ) : (
-                <>
-                  Card <strong>{Math.min(done + 1, total)}</strong> of <strong>{total}</strong>
-                </>
-              )}
-              {counts !== null && counts.parked > 0 ? <span className="review-progress-parked">{counts.parked} parked</span> : null}
-            </span>
-            {total === 0 ? null : (
-              <span className="bn-progress review-progress-bar" aria-hidden="true">
-                <span style={{ width: `${Math.round(progress * 100)}%` }} />
-              </span>
+                'The queues did not load.'
+              )
+            ) : total === 0 ? (
+              'Nothing is waiting.'
+            ) : (
+              /* UX-256: one count, not two that can differ by one. "to go" is
+                 `everyone.length`, the same number the Queue button's own badge shows
+                 (D164's counter), so the two never disagree again. */
+              <>
+                <strong>{done}</strong> done, <strong>{everyone.length}</strong> to go
+              </>
             )}
+            {counts !== null && counts.parked > 0 ? <span className="review-progress-parked">{counts.parked} parked</span> : null}
           </span>
-        }
-        actions={
-          <>
-            {groupOffer === null || grouping ? null : (
-              <Button icon="layers" kbd={GROUP_KEY_LABEL} onClick={() => setGrouping(true)} disabled={disabled}>
-                Answer all {groupOffer.rows.length} together
-              </Button>
-            )}
-            {/* NOT THE RELOAD BESIDE IT, and the two labels are written to be unmistakable:
-                that one re-fetches these two queues, this one asks the pipeline to look at
-                every waiting card again. Same header, different verb, and neither says
-                "refresh" — the word that would make them one control. */}
-            <Button icon="wand" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open">
-              {phone ? 'Re-check all' : 'Re-check every waiting card'}
+          {total === 0 ? null : (
+            <span className="bn-progress review-progress-bar" aria-hidden="true">
+              <span style={{ width: `${Math.round(progress * 100)}%` }} />
+            </span>
+          )}
+        </span>
+      }
+      actions={
+        <>
+          {groupOffer === null || grouping ? null : (
+            <Button icon="layers" kbd={GROUP_KEY_LABEL} onClick={() => setGrouping(true)} disabled={disabled}>
+              Answer all {groupOffer.rows.length} together
             </Button>
-            <Button variant="ghost" icon="refresh" iconOnly kbd={phone ? undefined : RELOAD_KEY_LABEL} onClick={reload} disabled={disabled} className="review-reload">
-              Reload the queue
-            </Button>
-            {everyone.length === 0 ? null : (
-              <Button icon="list" onClick={() => setQueueOpen(true)} className="review-queue-toggle" aria-expanded={queueOpen}>
-                Queue
-                <Pill tone="accent" size="sm">
-                  {everyone.length}
-                </Pill>
-              </Button>
-            )}
-          </>
-        }
-      />
+          )}
+          {/* The header rule (owner, 2026-09-24): one worded primary. "Answer all N
+              together" is it, when a group offer is on screen — the rest are icons. NOT
+              THE RELOAD BESIDE IT: one re-fetches these two queues, this one asks the
+              pipeline to look at every waiting card again. Same icon vocabulary word would
+              make them read as one control, so the tooltip keeps the fuller sentence. */}
+          <IconButton icon="wand" label="Re-check every waiting card" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open" />
+          {/* The kit's own reload control (D288), with its internal 'r' hotkey
+              OFF: this screen wires RELOAD_KEY into the same switch every other key rides,
+              because a second listener would fire the read twice. */}
+          <ReloadButton onReload={reload} busy={disabled} label="Reload the queue" hotkey={false} className="review-reload" />
+          {/* D291: every Runs capability, one press away. */}
+          <IconButton icon="play" label="Past runs" onClick={() => setRunsOpen(true)} className="review-runs-open" />
+          {everyone.length === 0 ? null : (
+            <IconButton
+              icon="list"
+              label="Queue"
+              /* The badge is aria-hidden (D118), so the count reaches a screen reader
+                 through `name` only — the same pattern `kit/filters.tsx`'s own trigger
+                 uses for its active-facet count. */
+              name={`Queue, ${everyone.length}`}
+              badge={everyone.length}
+              onClick={() => setQueueOpen(true)}
+              className="review-queue-toggle"
+              aria-expanded={queueOpen}
+            />
+          )}
+        </>
+      }
+    >
+      {/* THE STRIP (D291): drawn only when the pipeline has cards
+          waiting. Opens the same sheet, on the composer's own default "needed" start — the
+          real cost estimate is the composer's preflight, not a second one guessed here. */}
+      {captured === 0 ? null : (
+        <button type="button" className="review-identify-strip" onClick={() => setRunsOpen(true)}>
+          <Icon name="play" size={16} />
+          {`Identify ${captured} ${captured === 1 ? 'card' : 'cards'}`}
+          <Icon name="arrowRight" size={14} className="review-identify-strip-arrow" />
+        </button>
+      )}
 
       {!lens ? null : (
         <div className="review-filters" role="group" aria-label="Work one reason at a time">
@@ -1435,7 +1511,7 @@ export function ReviewQueue() {
 
       {rows !== null && worklist.length === 0 ? (
         everyone.length === 0 ? (
-          <Done tally={tally} startedAt={startedAt.current} receipts={receipts} onUndo={undo} disabled={disabled} />
+          <Done tally={tally} startedAt={startedAt.current} receipts={receipts} onUndo={undo} disabled={disabled} onOpenRuns={() => setRunsOpen(true)} />
         ) : (
           <section className="review-lone bn-panel">
             <EmptyState
@@ -1500,7 +1576,14 @@ export function ReviewQueue() {
       </div>
 
       <QueueRefresh open={recheckOpen} onClose={closeRecheck} onWrote={reload} />
-    </main>
+
+      {/* D291: every Runs capability, reachable from here. Mounted only
+          while open (`Sheet`'s own `useLeave`), so its GET /boxes and GET /pipeline/runs
+          reads happen only when the operator is looking at it. */}
+      <Sheet open={runsOpen} onClose={() => setRunsOpen(false)} title="Runs" icon="play" className="review-runs-sheet">
+        <RunsContent />
+      </Sheet>
+    </Page>
   )
 }
 
@@ -1533,7 +1616,8 @@ function Tray({
       {!allSkipped ? null : (
         <Notice tone="info" title="Every waiting card has been skipped" className="review-tray-notice">
           Skipping again only moves this one behind the rest.{' '}
-          <Button size="sm" variant="quiet" kbd={CLEAR_KEY_LABEL} onClick={onClearSkips} disabled={disabled}>
+          {/* words="word-only-control" (rule 5): a press inside a sentence. */}
+          <Button size="sm" variant="quiet" kbd={CLEAR_KEY_LABEL} onClick={onClearSkips} disabled={disabled} words="word-only-control">
             Clear skips
           </Button>
         </Notice>
@@ -1544,11 +1628,14 @@ function Tray({
           <span className="review-receipt-text">
             <span className="review-receipt-said">{receipt.said}</span>
             <span className="review-receipt-label">{receipt.label}</span>
+            {/* UX-255: the outcome, as a description beside the one act-verb — never a
+                second verb competing with "Closed". */}
+            {receipt.outcome === undefined ? null : <span className="review-receipt-outcome">{receipt.outcome}</span>}
           </span>
           <span className="bn-receipt-bar" aria-hidden="true" />
-          <Button size="sm" icon="undo" kbd={UNDO_KEY_LABEL} onClick={() => onUndo(receipt)} disabled={disabled}>
-            Undo
-          </Button>
+          {!receipt.undoable ? null : (
+            <IconButton icon="undo" label="Undo" size="sm" kbd={UNDO_KEY_LABEL} onClick={() => onUndo(receipt)} disabled={disabled} />
+          )}
         </div>
       )}
     </div>
@@ -1560,14 +1647,14 @@ function RefusalNotice({ refusal, onReload, onDismiss, disabled }: { refusal: Re
   return (
     <Notice tone="danger" title={refusal.failure.message} code={`${refusal.failure.code}${refusal.at === null ? '' : ` ${refusal.at}`}`} className="review-refusal review-note">
       <span className="review-refusal-actions">
+        {/* ICON-MAP (review): words, not an icon — this is the notice's own recovery, the
+            one primary action beside Dismiss. words="only-primary" (rule 4). */}
         {stale ? (
-          <Button size="sm" icon="refresh" kbd={RELOAD_KEY_LABEL} onClick={onReload} disabled={disabled}>
+          <Button size="sm" icon="refresh" kbd={RELOAD_KEY_LABEL} onClick={onReload} disabled={disabled} words="only-primary">
             Reload the queue
           </Button>
         ) : null}
-        <Button size="sm" onClick={onDismiss}>
-          Dismiss
-        </Button>
+        <IconButton icon="x" label="Dismiss" size="sm" onClick={onDismiss} />
       </span>
     </Notice>
   )
@@ -1587,10 +1674,11 @@ function SessionList({ receipts, onUndo, disabled, limit }: { receipts: readonly
           <span className="review-session-text">
             <span className="review-session-said">{receipt.said}</span>
             <span className="review-session-label">{receipt.label}</span>
+            {receipt.outcome === undefined ? null : <span className="review-session-outcome">{receipt.outcome}</span>}
           </span>
-          <Button size="sm" variant="ghost" icon="undo" kbd={at === 0 ? UNDO_KEY_LABEL : undefined} onClick={() => onUndo(receipt)} disabled={disabled}>
-            Undo
-          </Button>
+          {!receipt.undoable ? null : (
+            <IconButton icon="undo" label="Undo" size="sm" kbd={at === 0 ? UNDO_KEY_LABEL : undefined} onClick={() => onUndo(receipt)} disabled={disabled} />
+          )}
         </li>
       ))}
       {hidden > 0 ? (
@@ -1606,7 +1694,21 @@ function SessionList({ receipts, onUndo, disabled, limit }: { receipts: readonly
 
 // ------------------------------------------------------------------------- the empty state
 
-function Done({ tally, startedAt, receipts, onUndo, disabled }: { tally: Tally; startedAt: number; receipts: readonly Receipt[]; onUndo: (receipt: Receipt) => void; disabled: boolean }) {
+function Done({
+  tally,
+  startedAt,
+  receipts,
+  onUndo,
+  disabled,
+  onOpenRuns,
+}: {
+  tally: Tally
+  startedAt: number
+  receipts: readonly Receipt[]
+  onUndo: (receipt: Receipt) => void
+  disabled: boolean
+  onOpenRuns: () => void
+}) {
   const done = tally.answered + tally.closed
   const body =
     done === 0 ? (
@@ -1630,7 +1732,7 @@ function Done({ tally, startedAt, receipts, onUndo, disabled }: { tally: Tally; 
             <Button variant="primary" size="lg" icon="tag" iconRight="arrowRight" onClick={() => (window.location.hash = '#/pricing')}>
               Price the answers
             </Button>
-            <Button size="lg" icon="play" onClick={() => (window.location.hash = '#/runs')}>
+            <Button size="lg" icon="play" onClick={onOpenRuns}>
               Run another box
             </Button>
           </>
@@ -1848,7 +1950,12 @@ function Card({
             <>
               <span className="review-next-label">Next</span>
               <span className="review-next-name">{text(next.entry.read.name) ?? 'not identified'}</span>
-              <span className="review-next-price bn-tnum">{priceText(next.entry.market)}</span>
+              {/* A dollar figure is the kit's `Money` (D221, mono); "no market price" is words. */}
+              {priceOf(next.entry.market) === null ? (
+                <span className="review-next-price">{priceText(next.entry.market)}</span>
+              ) : (
+                <Money className="review-next-price" value={priceOf(next.entry.market)} />
+              )}
             </>
           )}
         </p>
@@ -1878,6 +1985,7 @@ function Card({
                 </span>
               )
             }
+            if (part.kind === 'name') return <span key={at}>{part.text}</span>
             return (
               <span key={at} className="review-value">
                 {part.text}
@@ -1923,18 +2031,22 @@ function Card({
               disabled={busy}
               aria-expanded={looking}
             >
-              {looking ? 'Back to rows' : phone ? 'Search export' : 'Search the export'}
+              {looking ? 'Back to listings' : phone ? 'Search TCGplayer' : 'Search TCGplayer\'s list'}
             </Button>
           )}
+          {/* ICON-MAP (review): words at every width, including the phone — dropped
+              `iconOnly` on purpose. `words="not-in-vocabulary"`: this "Close" means "close
+              this question without answering it" (D37's stand-down umbrella), not the
+              vocabulary's generic dismiss-a-panel sense the rule is written for. */}
           <Button
             variant="quiet"
             icon="x"
             kbd={phone ? undefined : CLOSE_KEY_LABEL}
-            iconOnly={phone}
             className="review-action review-action-close"
             onClick={onClose}
             disabled={busy}
             aria-expanded={closing}
+            words="not-in-vocabulary"
           >
             Close
           </Button>
@@ -2033,7 +2145,10 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
       )
     }
   }
-  if (chips.length === 0) return null
+  /* UX-251/D28: always the reserved frame, chips or not, so a card with no evidence chips
+   * does not pull the candidate rows below it up into the space a neighbouring card's chips
+   * used. The frame's own min-height (ReviewQueue.css) does the actual reserving; an empty
+   * `<div>` here is what lets it apply on a card with nothing to show. */
   return <div className="review-claims">{chips}</div>
 }
 
@@ -2169,9 +2284,7 @@ function ClosePanel({ onChoice, onClose, disabled }: { onChoice: (choice: CloseC
     <div className="review-close bn-dialog" role="dialog" aria-modal="true" aria-label="Close this card without answering it" ref={panel} tabIndex={-1} onKeyDown={trapTab}>
       <div className="review-close-title">
         <span className="bn-section-title">Close without answering</span>
-        <Button size="sm" variant="ghost" iconOnly icon="x" kbd="Esc" onClick={onClose}>
-          Cancel
-        </Button>
+        <IconButton icon="x" label="Close the panel" kbd="Esc" size="sm" onClick={onClose} />
       </div>
       <p className="review-close-lede">Stops the queue asking about it. Can be undone.</p>
       {group('stand_down', 'Stand down', 'the card stays where it is')}
@@ -2589,9 +2702,7 @@ function Waiting({
           Up next
           <Pill>{rows.length}</Pill>
         </span>
-        <Button size="sm" variant="ghost" iconOnly icon="x" onClick={onClose} className="review-rail-close">
-          Close the queue
-        </Button>
+        <IconButton icon="x" label="Close the queue" size="sm" onClick={onClose} className="review-rail-close" />
       </div>
 
       {done === 0 && tally.skipped === 0 && receipts.length === 0 ? null : (
@@ -2634,7 +2745,11 @@ function Waiting({
                 <span className="review-row-name" title={text(row.entry.read.name) ?? undefined}>
                   {text(row.entry.read.name) ?? 'not identified'}
                 </span>
-                <span className="review-row-price">{priceText(row.entry.market)}</span>
+                {priceOf(row.entry.market) === null ? (
+                  <span className="review-row-price">{priceText(row.entry.market)}</span>
+                ) : (
+                  <Money className="review-row-price" value={priceOf(row.entry.market)} />
+                )}
               </span>
               <span className="review-row-sub">
                 <span className="review-row-position">
@@ -2700,6 +2815,7 @@ function QueueRefresh({
   const [refused, setRefused] = useState<number | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
   const sheet = useRef<HTMLElement | null>(null)
+  const scrim = useRef<HTMLDivElement | null>(null)
 
   const send = useCallback(
     async (write: boolean) => {
@@ -2748,7 +2864,7 @@ function QueueRefresh({
 
   /* Focus lands inside on open, stays inside under Tab, and returns to the header button on
      close; Escape closes unless a read or a write is in flight. */
-  useOverlayFocus(sheet, open, onClose, busy)
+  useOverlayFocus(sheet, open, onClose, busy, scrim)
 
   /* The press that writes exists only while there is a preview to have read and nothing has
      been written yet. A refusal takes it away too: the write would refuse identically, and
@@ -2759,7 +2875,7 @@ function QueueRefresh({
      and a fixed sheet inside it would hang off the column. */
   return createPortal(
     <>
-      {open ? <div className="bn-scrim" onClick={onClose} /> : null}
+      {open ? <div ref={scrim} className="bn-scrim" onClick={onClose} /> : null}
       <aside
         ref={sheet}
         className="bn-sheet review-recheck"
@@ -2779,9 +2895,7 @@ function QueueRefresh({
               Re-check every waiting card
             </h2>
           </div>
-          <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
-            Close
-          </Button>
+          <IconButton icon="x" label="Close" onClick={onClose} />
         </header>
 
         <div className="review-recheck-body">
@@ -2798,7 +2912,7 @@ function QueueRefresh({
           <p className="review-recheck-safe">
             <Icon name="lock" size={14} />
             <span>
-              An already-answered card never returns to the queue. Only <strong>Undo</strong>
+              An already-answered card never returns to the queue. Only <strong>Undo</strong>{' '}
               reverses an answer.
             </span>
           </p>

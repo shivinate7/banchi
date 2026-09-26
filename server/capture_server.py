@@ -3992,13 +3992,16 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
             present = {at for at, _, _ in targets} | {at for at, _ in skipped}
             missing = sorted(selected - present)
             if missing:
+                # D196 (UX-208's carried refusal-leak item, and the PR 2 integration review): a
+                # card that is not in this box has no place to name. `place_within_box` falls
+                # back to "card <index>" for one, which is the raw store index again. So the
+                # refusal says how many named cards are not here, and names no number.
+                count = len(missing)
                 raise BadRequest(
                     HTTPStatus.NOT_FOUND,
                     "card_not_found",
-                    f"{join.said_place(inventory, box)} holds no card at "
-                    + ", ".join(str(at) for at in missing[:8])
-                    + (f" (+{len(missing) - 8} more)" if len(missing) > 8 else "")
-                    + ". Nothing was changed.",
+                    f"{count} of the cards you named {'is' if count == 1 else 'are'} not in "
+                    f"{join.said_place(inventory, box)}. Nothing was changed.",
                 )
 
         # PHASE ONE — membership, against the game each card will be read as. A body that
@@ -4453,6 +4456,14 @@ def do_delete_card(box: int, index: int) -> dict:
         photo_deleted = _unlink(photo)
         sidecar_deleted = _unlink(sidecar)
         released = inventory.next_index(box)
+        # D58, THE R1D FIX: the app's own on-hand count of this box drifts from the moment
+        # of the LAST `GET /boxes` and never updates on a capture or an undo, so the screen
+        # cannot compute the counted number itself — it has to be told. Read inside the
+        # lock, like every other fact this route reports, on the box the deletion just
+        # changed. `_Places` is the one renderer the whole module counts cards through
+        # (D58's own class docstring), so this is the same number `place.box_total` answers
+        # for a capture, not a second arithmetic path that could drift from it.
+        on_hand = _Places(inventory).total(box)
 
         # LOGGED LAST, after every deletion this route performs, so the line describes work
         # that actually happened rather than work that was about to be attempted. It commits
@@ -4497,6 +4508,11 @@ def do_delete_card(box: int, index: int) -> dict:
         # position from this rather than decrementing its own counter, which would drift the
         # moment the other device (D13) captured into the same box.
         "next_index": released,
+        # D58's counted number, after this undo — the box's on-hand count. Read for the same
+        # reason `next_index` is: the app must redraw from the server's own answer rather
+        # than decrementing a number it holds itself, which would drift the moment another
+        # device (D13) touched the same box.
+        "on_hand": on_hand,
     }
 
 
@@ -4841,6 +4857,10 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
                     renumbered_from=old_key,
                 )
         released = inventory.next_index(box)
+        # D58, THE R1D FIX — see `do_delete_card`'s own note. A remove changes the box's
+        # on-hand count exactly as an undo does, and the app cannot derive it from what it
+        # already holds without drifting.
+        on_hand = _Places(inventory).total(box)
 
     return {
         "deleted": key,
@@ -4857,6 +4877,8 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         # The index this box hands out next. After a shift that is the old high-water
         # mark: the top slot emptied, so the box got one position shorter.
         "next_index": released,
+        # D58's counted number, after this remove.
+        "on_hand": on_hand,
     }
 
 
@@ -8737,10 +8759,14 @@ def _require_group_answers(payload: dict) -> List[Tuple[int, int, str, str, str]
             )
         key = master.position_key(box, index)
         if key in seen:
+            # D196 (UX-208's carried refusal-leak item): `key` is the store's own position
+            # key ("7/1"), never spoken outside the store. `said_place` is the one refusal
+            # helper (locating review, 2026-09-24); read lazily, only on the refusal path.
+            place = join.said_place(Store().read().inventory, box, index)
             raise BadRequest(
                 HTTPStatus.BAD_REQUEST,
                 "duplicate_position",
-                f"{where} repeats {key}, which an earlier element already answers. One "
+                f"{where} repeats {place}, which an earlier element already answers. One "
                 f"element per card — remove the duplicate and send the group again.",
             )
         seen.add(key)
@@ -8910,7 +8936,33 @@ def do_review_group_answer(payload: dict) -> dict:
             )
 
         if refused:
-            named = "; ".join(f"{key}: {exc.code} — {exc}" for key, exc in refused)
+            # D196 (UX-208's carried refusal-leak item): `key` is the store's own position
+            # key ("7/1"), never spoken outside the store. A refused group can span more
+            # than one box, so each box's view is scanned once and cached
+            # (`join.box_view`'s own pattern, e.g. the claims refusal above).
+            positions = {key: (box, index) for box, index, _sku, _condition, key in parsed}
+            views: Dict[int, "join.BoxView"] = {}
+            named_parts: List[str] = []
+            # A card that is not in its box has no place to name (the PR 2 integration review):
+            # `place_within_box` would fall back to "card <index>", the raw store index. Such
+            # cards are counted per box and said plainly instead.
+            absent: Dict[int, int] = {}
+            for key, exc in refused:
+                box, index = positions[key]
+                if box not in views:
+                    _, views[box] = join.box_view(snapshot.inventory, box)
+                view = views[box]
+                if index not in (view.occupied or ()) and index not in (view.departed or ()):
+                    absent[box] = absent.get(box, 0) + 1
+                    continue
+                where = join.place_within_box(view, box, index)
+                named_parts.append(f"{where}: {exc.code} — {exc}")
+            for box, count in sorted(absent.items()):
+                named_parts.append(
+                    f"{count} of the cards you named {'is' if count == 1 else 'are'} not in "
+                    f"{join.said_place(snapshot.inventory, box)}"
+                )
+            named = "; ".join(named_parts)
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "group_entry_refused",
@@ -10386,7 +10438,7 @@ def _card_matches_filters(card: master.Card, filters: Dict[str, Optional[str]]) 
     )
 
 
-def _card_facets(inventory: master.Inventory) -> dict:
+def _card_facets(inventory: master.Inventory, cells: Optional[List[dict]] = None) -> dict:
     """The game/set/rarity vocabulary THIS STORE ACTUALLY HOLDS, with counts (D213).
 
     ONE INDEXED-COLUMN SCAN, NEVER A HARDCODED LIST. `game`, `set_name` and `rarity` are
@@ -10419,17 +10471,14 @@ def _card_facets(inventory: master.Inventory) -> dict:
     games: Dict[Optional[str], int] = {}
     sets: Dict[Optional[str], Dict[Optional[str], int]] = {}
     rarities: Dict[Optional[str], Dict[Optional[str], int]] = {}
-    for _, (game, set_name, rarity) in inventory.cards.select(
-        ("game", "set_name", "rarity")
-    ):
-        game = _facet_norm(game)
-        games[game] = games.get(game, 0) + 1
-        set_name = _facet_norm(set_name)
+    # FOLDED FROM THE FACET CELLS (FLT-09), so `GET /boxes` pays ONE scan for both blocks.
+    for cell in cells if cells is not None else _facet_cells(inventory):
+        game, set_name, rarity, n = cell["game"], cell["set"], cell["rarity"], cell["count"]
+        games[game] = games.get(game, 0) + n
         sets.setdefault(game, {})
-        sets[game][set_name] = sets[game].get(set_name, 0) + 1
-        rarity = _facet_norm(rarity)
+        sets[game][set_name] = sets[game].get(set_name, 0) + n
         rarities.setdefault(game, {})
-        rarities[game][rarity] = rarities[game].get(rarity, 0) + 1
+        rarities[game][rarity] = rarities[game].get(rarity, 0) + n
 
     def _rows(counts: Dict[Optional[str], int], key: str) -> List[dict]:
         # Real values first, alphabetically; the null bucket always last, so a screen
@@ -10445,6 +10494,41 @@ def _card_facets(inventory: master.Inventory) -> dict:
         "sets": {(game or ""): _rows(counts, "set") for game, counts in sets.items()},
         "rarities": {(game or ""): _rows(counts, "rarity") for game, counts in rarities.items()},
     }
+
+
+def _facet_cells(inventory: master.Inventory) -> List[dict]:
+    """The store's cards, grouped by box, game, set, rarity and whether they left, with counts
+    (the filtering ruling FLT-09: "filters must work in any order and combine").
+
+    `#/inventory`'s filter picks several values per facet, in any order, and each option shows
+    how many cards it would show under the OTHER picks and Hide sold. A query per combination
+    cannot answer that without a round trip per press. These cells can: the screen folds them
+    with `app/src/kit/facets.ts:countFacets` for the counts and sums them per box for the rail,
+    so a pick costs no request at all. One indexed-column scan, the same one `_card_facets`
+    already pays. The cell count is bounded by the distinct combinations, never by the cards.
+
+    `gone` is D26's two doors plus D83's third: sold, retired and moved. It is the set the
+    rail's Hide sold hides, so a count under Hide sold is a count of what the walk draws.
+
+    The null bucket is kept, never dropped (D213): a card with no set is a cell with `set` None.
+    """
+    gone_states = {master.SOLD, master.RETIRED, master.MOVED}
+    cells: Dict[Tuple[Optional[int], Optional[str], Optional[str], Optional[str], bool], int] = {}
+    for _, (box, game, set_name, rarity, state) in inventory.cards.select(
+        ("box", "game", "set_name", "rarity", "state")
+    ):
+        try:
+            number: Optional[int] = int(box) if box is not None else None
+        except (TypeError, ValueError):
+            number = None
+        key = (number, _facet_norm(game), _facet_norm(set_name), _facet_norm(rarity), state in gone_states)
+        cells[key] = cells.get(key, 0) + 1
+    return [
+        {"box": box, "game": game, "set": set_name, "rarity": rarity, "gone": gone, "count": n}
+        for (box, game, set_name, rarity, gone), n in sorted(
+            cells.items(), key=lambda kv: tuple((part is None, str(part)) for part in kv[0])
+        )
+    ]
 
 
 def _box_row(
@@ -10688,9 +10772,11 @@ def do_boxes(
         filters = active
 
     places = _Places(inventory)
+    cells = _facet_cells(inventory)
     return {
         "boxes": [_box_row(inventory, box, places, filters=filters) for box in sorted(numbers)],
-        "facets": _card_facets(inventory),
+        "facets": _card_facets(inventory, cells),
+        "facet_cells": cells,
     }
 
 

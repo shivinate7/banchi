@@ -266,6 +266,17 @@ export type CardSummary = {
    *  Optional because a server predating D172 sends no key at all, which is what an absent
    *  key honestly is; `photoUrl` reads `undefined` as "no name offered". */
   cid?: string | null
+
+  /** THE FULL PLACE BLOCK, ALWAYS SENT (`server/capture_server.py:_card_summary` builds it
+   *  off `_Places.of` for every response) but untyped here until R1d: `label`, `section`
+   *  and `card` above are the same values duplicated for callers that predate this field
+   *  (`_card_summary`'s own docstring). `place.box_total` is D58's on-hand count of the box
+   *  AFTER this capture — the freshest answer there is, since the write that produced it
+   *  is the same one this response reports on. Reading it here, rather than adding a
+   *  second server field, is `_Places`' "one renderer" rule held from the wire side: a
+   *  capture's own response already carries the count, so nothing needs to compute it
+   *  again. */
+  place: Place
 }
 
 /** `GET /status`. Counts, the next index per box, and whether the store is healthy. */
@@ -821,6 +832,12 @@ export type RemoveResult = {
   cache_deleted: boolean
   shifted: number
   next_index: number
+
+  /** D58's counted number for the box, after this remove — `on_hand`, the same fact
+   *  `BoxRecord.on_hand` and a capture's own `place.box_total` carry. Read from here rather
+   *  than recomputed on the client: a remove changes it exactly as an undo does, and
+   *  neither event refreshes `GET /boxes` on its own (R1c/R1d, D58). */
+  on_hand: number
 }
 
 /** What `POST /inventory/<box>/<index>/move` answers — D83's third door.
@@ -1810,6 +1827,20 @@ export type InventoryFacets = {
 export type BoxSummary = {
   boxes: BoxRecord[]
   facets: InventoryFacets
+  /** Every card, grouped by box, game, set, rarity and whether it left (sold, retired or
+   *  moved). `#/inventory` folds these for its facet counts and per-box matches, so a pick in
+   *  any order costs no request (FLT-09). `null` is the unclassified bucket. Absent from an
+   *  older server, where the rail shows no counts. */
+  facet_cells?: FacetCell[]
+}
+
+export type FacetCell = {
+  readonly box: number | null
+  readonly game: string | null
+  readonly set: string | null
+  readonly rarity: string | null
+  readonly gone: boolean
+  readonly count: number
 }
 
 /** The filter `BoxBrowse.tsx` sends `getBoxes` (D213). A key ABSENT from this object means

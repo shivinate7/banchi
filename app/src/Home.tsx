@@ -17,7 +17,8 @@ import type {
   ServerStatus,
 } from './types'
 import { useCardCrop } from './cardCrop'
-import { Button, cropStyle, Icon, Kbd, type IconName } from './kit'
+import { Button, cropStyle, Icon, Kbd, Loading, Page, type IconName } from './kit'
+import { dayMonth, weekdayDate } from './dates'
 import { runsOwingPrice, standing, type Standing } from './standing'
 import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
 import { StagePill, stageOf, whenLabel } from './RunsStage'
@@ -26,10 +27,14 @@ import { runBoxLabel } from './runScope'
 import { hubState } from './OrdersHubStore'
 import { useLiveCheck } from './liveCheck'
 import { matchWaiting } from './autoMatch'
+import { storedBoxRecency } from './deviceMemory'
 import './Home.css'
 
-/* BANCHI HOME — the one page where the product is drawn as a picture: the six-stage spine
+/* BANCHI HOME — the one page where the product is drawn as a picture: the five-stage spine
    with live counts under each stage, the boxes, the recent runs, and one primary action.
+   FIVE, NOT SIX (2026-09-24): Runs folded into Review, so the spine no longer gives Runs its
+   own tile — Review's own figure carries the identify backlog too, once the review queue
+   itself is empty.
 
    Every figure here is the SAME figure the stage's own screen draws — a run's stage comes from
    `RunsStage.stageOf`, the pull backlog from the ledger's own `wanted − recorded`, the pricing
@@ -183,6 +188,15 @@ function plural(n: number, one: string, many = `${one}s`): string {
   return `${n.toLocaleString()} ${n === 1 ? one : many}`
 }
 
+/** A BOX IS SHOWN BY ITS NAME, EVERYWHERE (the owner's ruling, 2026-09-23) — never a bare
+ *  number standing for the drawer. `Box ${box.box}` is the one exception the ruling itself
+ *  names: the owner's own default for a box nobody has named yet ("it can default to count+1
+ *  Box as a default name"), so this is what the STORE will hand back once the backfill lands
+ *  and never a second, different-looking guess drawn here in the meantime. */
+function boxDisplayName(box: { readonly name: string | null; readonly box: number }): string {
+  return box.name ?? `Box ${box.box}`
+}
+
 type Stage = {
   readonly path: string
   readonly icon: IconName
@@ -196,7 +210,7 @@ type Stage = {
 
 /** The ranked sentence. Renders what `standing.ts` decided and judges nothing itself. */
 function StandingLine({ standing: say }: { readonly standing: Standing | null }) {
-  if (say === null) return <div className="home-standing-skel bn-skeleton" />
+  if (say === null) return <Loading rows={1} shape="rows" className="home-standing-skel" />
   /* A row that cannot be pressed is PROSE, not a control: it drops the surface, the ring and
      the shadow, so the shape says whether there is work before the colour or the words do. */
   const body = (
@@ -246,18 +260,14 @@ function StandingLine({ standing: say }: { readonly standing: Standing | null })
           {body}
         </a>
       )}
+      {/* THE "BEHIND THAT" LINE NEVER REPEATS A SPINE FIGURE (the owner's ruling, 2026-09-24).
+          `standing.ts` hands over plain sentences only — there is no figure left to draw here,
+          so this is a supplementary line, never a second copy of a number 24px below. */}
       {say.behind.length === 0 && say.problem === null ? null : (
         <p className="home-standing-behind">
-          {say.behind.some((b) => b.figure !== null) ? <span className="home-standing-behind-lab">Behind that:</span> : null}
-          {say.behind.map((b, i) => (
-            <span key={i}>
-              {b.figure === null ? (
-                <span className="home-standing-behind-lab">{b.label}</span>
-              ) : (
-                <>
-                  <b>{b.figure}</b> {b.label}
-                </>
-              )}
+          {say.behind.map((label, i) => (
+            <span key={i} className="home-standing-behind-lab">
+              {label}
             </span>
           ))}
         </p>
@@ -319,7 +329,7 @@ function HistoryFoot({
     total = realTotal * DEMO_HISTORY_SCALE
     everSold = total - onHand - retired * DEMO_HISTORY_SCALE
   }
-  const since = plot?.from ? new Date(plot.from).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }) : null
+  const since = plot?.from ? dayMonth(plot.from) : null
   const newest = plot?.blocks[plot.blocks.length - 1]?.sitting ?? null
   return (
     <div className="home-foot">
@@ -338,12 +348,23 @@ function HistoryFoot({
             not a sum, so the clause degrades and the sentence does not. */}
         <b>{onHand.toLocaleString()}</b> on hand
         {boxes === null ? null : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
-        {everSold === null || everSold === 0 ? null : <><i aria-hidden="true" /><b>{everSold.toLocaleString()}</b> sold</>}
+        {everSold === null || everSold === 0 ? null : (
+          <>
+            <i aria-hidden="true" />
+            {/* THIS STORE'S OWN COUNT, NOT SALES' (UX-019): Sales totals the order ledger,
+                this totals every card this store has ever marked sold, and the two are
+                different universes on purpose — the link is the way to the one that reasons
+                about money. Also Home's one link into the loop's last stage (UX-032). */}
+            <a className="home-foot-sold" href="#/revenue">
+              <b>{everSold.toLocaleString()}</b> sold
+            </a>
+          </>
+        )}
       </p>
       {plot === null ? null : <Ribbon plot={plot} live={live} />}
       {newest === null ? null : (
         <p className="home-foot-last">
-          <b>{new Date(newest.from).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}</b>
+          <b>{dayMonth(newest.from)}</b>
           {' — '}
           <b>{newest.cards.toLocaleString()}</b> {newest.cards === 1 ? 'card' : 'cards'}
           {newest.box === null ? null : <> into Box {newest.box}</>}
@@ -411,6 +432,30 @@ function Ribbon({ plot, live }: { readonly plot: Ribbon; readonly live: boolean 
 export function Home() {
   const status = useLoad<ServerStatus>(getStatus)
   const boxes = useLoad<BoxRecord[]>(async () => (await getBoxes()).boxes)
+  /* BOXES LIST MOST RECENT FIRST (the owner's ruling, 2026-09-23), off the SAME store
+     `BoxBrowse`'s own rail sorts by (D142): the box this browser last reached for, then the
+     box holding the most cards, then the number — read once on mount, the way that screen
+     reads it, since this panel is a summary and never the place a pick gets recorded. */
+  const [recency] = useState<ReadonlyMap<number, string>>(() => storedBoxRecency())
+  /* A NAME FOR A BOX NUMBER THIS SCREEN DID NOT ALREADY HAVE ONE FOR — the hero's card-based
+     pass (`deckFromCards`) can front a card from a DIFFERENT box than `deckFromBoxes`'s own
+     "newest box", so its fallback needs a lookup rather than `deckBox`'s own record. */
+  const boxNameByNumber = useMemo(
+    () => new Map(boxes.state === 'ready' ? boxes.value.map((b) => [b.box, b.name] as const) : []),
+    [boxes],
+  )
+  const orderedBoxes = useMemo(() => {
+    if (boxes.state !== 'ready') return []
+    return [...boxes.value].sort((a, b) => {
+      const ra = recency.get(a.box) ?? ''
+      const rb = recency.get(b.box) ?? ''
+      if (ra !== rb) return ra > rb ? -1 : 1
+      const ha = a.on_hand ?? a.cards - a.sold - a.retired - a.moved
+      const hb = b.on_hand ?? b.cards - b.sold - b.retired - b.moved
+      if (ha !== hb) return hb - ha
+      return a.box - b.box
+    })
+  }, [boxes, recency])
   const [runsRead, setRunsRead] = useState(0)
   const runs = useLoad<RunSummary[]>(getRuns, runsRead)
   const orders = useLoad<OrdersPayload>(getOrders)
@@ -458,7 +503,11 @@ export function Home() {
      a named, accepted imprecision rather than a silent mismatch. */
   const reviewTotal = review === null || parked === null ? null : review + parked
   const lastBox = boxes.state === 'ready' ? [...boxes.value].sort((a, b) => b.box - a.box)[0] : undefined
-  const liveRuns = runs.state === 'ready' ? runs.value.filter((r) => r.live).length : null
+  /* CARDS PHOTOGRAPHED AND NEVER SENT TO A RUN — `standing.ts`'s own branch 6 reads the same
+     `states.captured`. Runs folded into Review (the owner's ruling, 2026-09-24): the spine no
+     longer gives Runs its own tile, so the Review tile surfaces this the moment its own queue
+     is empty, which is the one case a missing Runs tile would otherwise hide. */
+  const captured = status.state === 'ready' ? (status.value.states.captured ?? 0) : null
 
   /* Orders: the figure is open orders; the note is the PULL BACKLOG the Orders screen itself
      draws as "N of M pulled" — `wanted − recorded` over the ledger's open rows. The resolver's
@@ -475,7 +524,6 @@ export function Home() {
     orders.state === 'ready' && openKeys !== null
       ? orders.value.resolution.orders.reduce((n, o) => n + (openKeys.has(o.key) ? (o.outstanding ?? 0) : 0), 0)
       : 0
-
   /* Pricing: the runs the worklist says still owe an answer — `owes` is emit's own reason. */
   const runsToPrice = pricing.state === 'ready' ? runsOwingPrice(pricing.value.roster) : null
   /* And the copies every joined run still holds that TCGplayer does not (D156)
@@ -505,29 +553,52 @@ export function Home() {
       path: '/capture',
       icon: 'camera',
       label: 'Capture',
-      figure: lastBox ? `Box ${lastBox.box}` : '—',
-      note: lastBox ? `${plural(lastBox.cards, 'card')}${lastBox.name ? ` in ${lastBox.name}` : ''}` : 'no boxes yet',
+      /* THE NEWEST BOX, RELABELLED TO SAY SO (the owner's D142 ruling): this tile never claimed
+         to be the box the operator is capturing INTO right now, only the newest one holding
+         cards — the figure is that box's own card count, matching every other tile's numeral,
+         and the note names it BY NAME (never a number — the owner's box-numbers ruling,
+         2026-09-23). */
+      figure: boxes.state === 'ready' ? (lastBox ? String(lastBox.cards) : '0') : '—',
+      note: lastBox
+        ? `newest: ${boxDisplayName(lastBox)}`
+        : boxes.state === 'loading'
+          ? 'reading…'
+          : boxes.state === 'failed'
+            ? 'boxes not read'
+            : 'no boxes yet',
     },
     {
-      path: '/runs',
-      icon: 'play',
-      label: 'Runs',
-      figure: liveRuns === null ? '—' : liveRuns > 0 ? String(liveRuns) : runs.state === 'ready' ? String(runs.value.length) : '—',
-      note: liveRuns !== null && liveRuns > 0 ? 'running now' : 'runs on file',
-      tone: liveRuns !== null && liveRuns > 0 ? 'accent' : undefined,
-    },
-    {
+      /* REVIEW CARRIES THE IDENTIFY BACKLOG TOO (Runs folded into Review, the owner's ruling,
+         2026-09-24): once the review queue itself is answered, this tile falls back to the
+         count of cards photographed and never sent to a run — exactly what the removed Runs
+         tile used to show, so that backlog is never invisible for want of its own tile. */
       path: '/review',
       icon: 'inbox',
       label: 'Review',
-      figure: reviewTotal === null ? '—' : String(reviewTotal),
+      figure:
+        reviewTotal !== null && reviewTotal > 0
+          ? String(reviewTotal)
+          : captured !== null && captured > 0
+            ? String(captured)
+            : reviewTotal === null
+              ? '—'
+              : '0',
       note:
-        review === 0 && parked === 0
-          ? 'nothing waiting'
-          : parked !== null && parked > 0
-            ? `${review} to answer and ${parked} parked`
-            : 'to answer',
-      tone: review === 0 && parked === 0 ? 'ok' : reviewTotal !== null && reviewTotal > 0 ? 'warn' : undefined,
+        reviewTotal !== null && reviewTotal > 0
+          ? parked !== null && parked > 0
+            ? `${review} waiting, ${parked} parked`
+            : 'waiting'
+          : captured !== null && captured > 0
+            ? `${plural(captured, 'card')} to identify`
+            : reviewTotal === 0
+              ? 'nothing waiting'
+              : '',
+      tone:
+        (reviewTotal !== null && reviewTotal > 0) || (captured !== null && captured > 0)
+          ? 'warn'
+          : reviewTotal === 0
+            ? 'ok'
+            : undefined,
     },
     {
       path: '/pricing',
@@ -543,7 +614,9 @@ export function Home() {
             ? unsentCopies !== null && unsentCopies > 0
               ? `${plural(unsentCopies, 'copy', 'copies')} ready to send`
               : 'nothing to price'
-            : `${runsToPrice === 1 ? 'run' : 'runs'} to price`,
+            : runsToPrice === 1
+              ? 'run'
+              : 'runs',
       tone: runsToPrice ? 'warn' : runsToPrice === 0 ? 'ok' : undefined,
     },
     {
@@ -559,8 +632,8 @@ export function Home() {
           : openOrders === 0
             ? 'no open orders'
             : toPull
-              ? `${plural(toPull, 'copy', 'copies')} to pull${unfindable ? ` and ${unfindable} not found` : ''}`
-              : `open and every copy pulled${unfindable ? ` and ${unfindable} not found` : ''}`,
+              ? `${toPull} to pull${unfindable ? `, ${unfindable} missing` : ''}`
+              : `every copy pulled${unfindable ? `, ${unfindable} missing` : ''}`,
       tone: toPull ? 'warn' : openOrders === 0 ? 'ok' : undefined,
     },
     {
@@ -569,32 +642,13 @@ export function Home() {
       label: 'Shipping',
       figure: batch ? String(batch.shipments) : '—',
       quiet: !batch,
-      note: batch ? `${batch.name}: ${batch.shipments} ${batch.shipments === 1 ? 'shipment' : 'shipments'} in lanes` : 'no export read yet',
+      note: batch ? `${batch.name}: ${batch.shipments} ${batch.shipments === 1 ? 'shipment' : 'shipments'} in lanes` : 'no export yet',
     },
   ]
 
-  return (
-    <main className="home bn-page">
-      <section className="home-hero">
-        <div className="home-hero-text">
-          <span className="bn-eyebrow">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
-          <h1 className="home-title">{greeting()}.</h1>
-          <StandingLine standing={say} />
-          <div className="home-actions">
-            <Button
-              variant="primary"
-              size="lg"
-              icon="camera"
-              kbd=",C"
-              onClick={() => (window.location.hash = '#/capture')}
-            >
-              {status.state === 'ready' && status.value.cards === 0 ? 'Photograph the first box' : 'Start capturing'}
-            </Button>
-          </div>
-          <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={shelf.state === 'ready' ? shelf.value : null} live={say?.running ?? false} />
-        </div>
-        <div className="home-hero-art">
-          {front === undefined || deckBox === null ? (
+  const deckArt = (
+    <div className="home-hero-art">
+      {front === undefined || deckBox === null ? (
             /* Nothing photographed yet: the frames alone, and no name. A deck that invents a
                card is the defect this replaced. */
             <div className="home-deck" aria-hidden="true" data-empty="true">
@@ -608,11 +662,10 @@ export function Home() {
               href={`#/inventory?box=${frontCard?.box ?? deckBox.box}`}
               aria-label={
                 frontCard === null
-                  ? `The last cards photographed into box ${deckBox.box}${
-                      deckBox.name === null ? '' : `, ${deckBox.name}`
-                    }. Open the box on Inventory.`
+                  ? `The last cards photographed into ${boxDisplayName(deckBox)}. Open the box on Inventory.`
                   : `${frontCard.name ?? 'The last card you photographed'}, ${
-                      frontCard.place?.label ?? `box ${frontCard.box}`
+                      frontCard.place?.label ??
+                      boxDisplayName({ box: frontCard.box, name: boxNameByNumber.get(frontCard.box) ?? null })
                     }. Open it on Inventory.`
               }
             >
@@ -667,21 +720,36 @@ export function Home() {
                     ))}
                   </span>
                 ) : (
-                  <>
-                    <span>Box {deckBox.box}</span>
-                    {deckBox.name === null ? null : (
-                      <>
-                        <span className="home-deck-sep" aria-hidden="true" />
-                        <span className="home-deck-card-no">{deckBox.name}</span>
-                      </>
-                    )}
-                  </>
+                  <span className="home-deck-card-no">{boxDisplayName(deckBox)}</span>
                 )}
               </div>
             </a>
           )}
         </div>
-      </section>
+  )
+
+  return (
+    <Page
+      className="home"
+      title={<>{greeting()}.</>}
+      lede={<span className="bn-eyebrow">{weekdayDate(new Date())}</span>}
+      actions={deckArt}
+    >
+      <div className="home-hero-body">
+        <StandingLine standing={say} />
+        <div className="home-actions">
+          <Button
+            variant="primary"
+            size="lg"
+            icon="camera"
+            kbd=",C"
+            onClick={() => (window.location.hash = '#/capture')}
+          >
+            {status.state === 'ready' && status.value.cards === 0 ? 'Photograph the first box' : 'Start capturing'}
+          </Button>
+        </div>
+        <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={shelf.state === 'ready' ? shelf.value : null} live={say?.running ?? false} />
+      </div>
 
       <section className="home-spine bn-stagger" aria-label="The workflow">
         {stages.map((stage, i) => (
@@ -716,19 +784,23 @@ export function Home() {
           </div>
           <div className="home-boxes">
             {boxes.state === 'loading' ? (
-              Array.from({ length: 4 }, (_, i) => <div key={i} className="bn-skeleton home-skel-row" />)
+              <Loading rows={4} shape="rows" className="home-skel-rows" />
             ) : boxes.state === 'failed' ? (
               <p className="home-empty">The server did not answer.</p>
             ) : boxes.value.length === 0 ? (
               <p className="home-empty">No boxes yet. Capture a card to make the first one.</p>
             ) : (
-              boxes.value.map((box) => {
+              orderedBoxes.map((box) => {
                 const held = box.on_hand ?? box.cards - box.sold - box.retired - box.moved
                 const pct = box.cards > 0 ? Math.round((held / box.cards) * 100) : 0
-                const name = box.name ?? `Box ${box.box}`
+                const name = boxDisplayName(box)
                 return (
                   <a key={box.box} className="home-box" href={`#/inventory?box=${box.box}`}>
-                    <span className="home-box-num">{box.box}</span>
+                    {/* AN ICON, NEVER THE BOX'S NUMBER (the owner's ruling, 2026-09-23): the
+                        number is an arbitrary internal index, not a fact worth a badge. */}
+                    <span className="home-box-num" aria-hidden="true">
+                      <Icon name="box" size={16} />
+                    </span>
                     <span className="home-box-text">
                       <span className="home-box-name" title={name}>
                         {name}
@@ -742,7 +814,6 @@ export function Home() {
                     <span className="home-box-bar" title={`${pct}% on hand`}>
                       <span style={{ width: `${pct}%` }} />
                     </span>
-                    <span className="home-box-count">{box.cards}</span>
                   </a>
                 )
               })
@@ -761,7 +832,7 @@ export function Home() {
           </div>
           <div className="home-runs">
             {runs.state === 'loading' ? (
-              Array.from({ length: 4 }, (_, i) => <div key={i} className="bn-skeleton home-skel-row" />)
+              <Loading rows={4} shape="rows" className="home-skel-rows" />
             ) : runs.state === 'failed' ? (
               <p className="home-empty">The server did not answer.</p>
             ) : runs.value.length === 0 ? (
@@ -797,6 +868,6 @@ export function Home() {
           </div>
         </div>
       </section>
-    </main>
+    </Page>
   )
 }

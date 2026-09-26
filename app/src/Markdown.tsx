@@ -219,6 +219,7 @@ export function Markdown({
   const fetchedName = useRef<string | null>(null)
   const edited = useRef<CsvUpload | null>(null)
   const sheet = useRef<HTMLElement | null>(null)
+  const scrim = useRef<HTMLDivElement | null>(null)
 
   const refresh = useCallback(() => {
     void getMarkdowns()
@@ -530,7 +531,7 @@ export function Markdown({
      Escape closes. The same hook the composer and the store-wide reconcile use. */
   /* `busy` is the hold: Escape does nothing while a survey, a worklist write, a check or an
      import is in flight. Everything else in here survives a close — the sheet stays mounted. */
-  useOverlayFocus(sheet, open, onClose, busy)
+  useOverlayFocus(sheet, open, onClose, busy, scrim)
 
   /* WHICH PRESS IS NEXT — the footer's whole content, and three absences rather than three
      disabled buttons (D33). Each is unreachable until the read before it has answered. */
@@ -556,7 +557,7 @@ export function Markdown({
      inside it would hang off the column. */
   return createPortal(
     <>
-      {open ? <div className="bn-scrim" onClick={onClose} /> : null}
+      {open ? <div ref={scrim} className="bn-scrim" onClick={onClose} /> : null}
       <aside
         ref={sheet}
         className="bn-sheet markdown"

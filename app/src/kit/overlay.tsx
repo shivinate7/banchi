@@ -2,8 +2,10 @@ import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, u
 import type { ComponentType, ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
-import { Button, useLeave } from './index'
+import { Button, IconButton, useLeave } from './index'
+import { usePageRoute } from './Page'
 import { closeSheet, useOpenSheet, type OpenSheet } from './sheets'
+import './dialog.css'
 
 /* ONE SHEET, ONE MODAL, ONE POPOVER, AND ONE STACK OF LAYERS (UX-057, UX-090, UX-091).
  *
@@ -190,12 +192,16 @@ export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, on
     }
   }, [ref, active, scrim])
 
+  /* BOTH ARE LAYOUT EFFECTS, SO A LAYER THAT IS PAINTED ALREADY HEARS ITS KEYS (D128, applied
+     here at the PR 2 integration). As passive effects they attached after paint, so an Escape
+     pressed the moment a Sheet drew was lost, and the Sheet stayed open (`filters.spec.ts`'s
+     compact-overlay case, once, under the full suite's load). */
   const escape = useRef(onEscape)
-  useEffect(() => {
+  useLayoutEffect(() => {
     escape.current = onEscape
   })
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = ref.current
     if (!active || root === null) return
     const onKey = (event: KeyboardEvent) => {
@@ -343,6 +349,108 @@ export function useInOverlay(): boolean {
   return useContext(OverlayContext)
 }
 
+/* ---- Dialog: the bare panel, for a caller that builds its own head -------------------------------- */
+
+/** PROMOTED FROM `InventoryOverlay.tsx` (round 4, docs/map.py's own note on `runsOverlay.ts`:
+ *  "the behavior `InventoryOverlay` has, waiting to be promoted to a kit Dialog so the product
+ *  has one of these rather than two"). Unlike `Sheet`/`Modal`, `Dialog` owns no title, no icon
+ *  and no Close of its own — every caller here already builds its own head (BoxOps' sheet
+ *  title, Inventory's Move dialog, the lightbox's own single control) and mounting IS opening:
+ *  a caller renders it only while its own `open` state is true, so there is no `open` prop and
+ *  no leave animation, matching what `InventoryOverlay.tsx` always did. Four kinds: a
+ *  right-side sheet, the phone's bottom sheet, a centred dialog, and the photograph's
+ *  lightbox — the fourth closes on any press and carries one visible control, the kit's own
+ *  `IconButton` now rather than an inline `<svg>`. Joins the ONE STACK above through the same
+ *  `useOverlayLayer` every other layer here does, which `InventoryOverlay.tsx` never did — a
+ *  nested kit `Popover` opened from inside one of these did not z-index above it correctly
+ *  before this promotion. */
+export type DialogKind = 'sheet' | 'bottom' | 'dialog' | 'lightbox'
+
+const DIALOG_PANEL: Record<DialogKind, string> = {
+  sheet: 'bn-sheet inv-sheet',
+  bottom: 'bn-sheet bn-sheet-bottom inv-sheet-bottom',
+  dialog: 'bn-dialog inv-dialog',
+  lightbox: 'inv-lightbox',
+}
+
+export function Dialog({
+  kind,
+  label,
+  onClose,
+  children,
+  className,
+  /** Let the walk's arrow keys through (the phone's box sheet wants them). Off by default so a
+   *  sheet over the screen does not step the card behind it. */
+  passKeys = false,
+}: {
+  readonly kind: DialogKind
+  readonly label: string
+  readonly onClose: () => void
+  readonly children: ReactNode
+  readonly className?: string
+  readonly passKeys?: boolean
+}) {
+  const panel = useRef<HTMLDivElement | null>(null)
+  const scrim = useRef<HTMLDivElement | null>(null)
+  const close = useRef(onClose)
+  useEffect(() => {
+    close.current = onClose
+  })
+  useReturnFocus()
+  useOverlayLayer(panel, { active: true, onEscape: () => close.current(), scrim })
+  useScrollLock(true)
+  useFirstFocus(panel, true)
+
+  /* passKeys is this component's own concern, outside what useOverlayLayer covers: it stops
+     ArrowLeft/ArrowRight reaching the walk behind the panel, except where a caller says the
+     panel itself wants them through. */
+  useEffect(() => {
+    if (passKeys) return
+    const onKey = (event: KeyboardEvent) => {
+      const root = panel.current
+      if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && root !== null && isTop(root)) {
+        event.stopPropagation()
+      }
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [passKeys])
+
+  return createPortal(
+    <>
+      <div ref={scrim} className="bn-scrim" onClick={() => close.current()} />
+      <div
+        ref={panel}
+        className={[DIALOG_PANEL[kind], className].filter(Boolean).join(' ')}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        tabIndex={-1}
+        data-bn-overlay={kind}
+        onClick={kind === 'lightbox' ? () => close.current() : undefined}
+      >
+        {/* The lightbox closes on any press, which a mouse learns from `cursor: zoom-out` and a
+            thumb learns from nothing. So it gets one visible control — which is also the only
+            focusable thing inside it, so the focus trap has somewhere to land. */}
+        {kind === 'lightbox' ? (
+          <IconButton
+            icon="x"
+            label="Close photo"
+            className="inv-lightbox-close"
+            /* The 44px circular face, the backdrop blur and the stage-palette colors are
+               `dialog.css`'s own (`.inv-lightbox-close`) — sized here, not at a kit face size,
+               the same escape hatch `BoxBrowse.css`'s stepper buttons use. */
+            style={{ width: 44, height: 44 }}
+            onClick={() => close.current()}
+          />
+        ) : null}
+        {children}
+      </div>
+    </>,
+    document.body,
+  )
+}
+
 /* ---- sheet and modal ---------------------------------------------------------------------------- */
 
 type OverlayProps = {
@@ -366,6 +474,11 @@ type FrameProps = OverlayProps & {
 
 function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose, title, icon, footer, children, className }: FrameProps) {
   const { mounted, leaving } = useLeave(open)
+  /* THE FULFILLER GETS WORDS, ALWAYS (D288, spec rule 1; DESIGN.md's 20px floor).
+     A Sheet or Modal is portalled to <body>, so it cannot read its persona from where it
+     sits in the DOM — `usePageRoute()` is a React context read, which a portal does not
+     break, since context follows the component tree rather than the DOM tree. */
+  const fulfiller = usePageRoute()?.persona === 'fulfiller'
   const panel = useRef<HTMLDivElement>(null)
   const scrim = useRef<HTMLDivElement>(null)
   const titleId = useId()
@@ -404,9 +517,19 @@ function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose
           <h2 className="bn-overlay-title" id={titleId}>
             {title}
           </h2>
-          <Button variant="ghost" iconOnly icon="x" onClick={onClose} disabled={!dismissible} className="bn-overlay-close">
-            Close
-          </Button>
+          {fulfiller ? (
+            <Button
+              variant="ghost"
+              icon="x"
+              onClick={onClose}
+              disabled={!dismissible}
+              className="bn-overlay-close bn-overlay-close-worded"
+            >
+              Close
+            </Button>
+          ) : (
+            <IconButton icon="x" label="Close" onClick={onClose} disabled={!dismissible} className="bn-overlay-close" />
+          )}
         </div>
         <OverlayContext.Provider value>
           <div className="bn-overlay-body">{children}</div>
@@ -543,8 +666,24 @@ export function Popover({
   }, [mounted, anchor])
   useEffect(() => {
     if (!live) return
-    const outside = (target: EventTarget | null) =>
-      target instanceof Node && panel.current?.contains(target) !== true && anchor.current?.contains(target) !== true
+    /* A CONTROL INSIDE THE POPOVER THAT OPENS ITS OWN NESTED LAYER (a `Select`/`FilterChips`
+     * pick list, `PickPanel` in `kit/data.tsx`) portals to `document.body` too, as a SIBLING of
+     * this panel, never a DOM descendant of it. Read alone, `panel.current?.contains(target)`
+     * calls that click OUTSIDE and closes the popover under the list that is still open (FilterBar's
+     * own popover mode found this: opening a facet inside it closed the popover at once). Every
+     * layer that has joined `stack` ABOVE this panel (this file's own layering, above) is part
+     * of the CURRENT foreground regardless of DOM nesting, so a target inside one of them is
+     * never outside — the same idea `isTop` already reads `stack` for.
+     * ONLY LAYERS ABOVE IT, NEVER BELOW (the PR 2 integration review). The first build counted
+     * every layer in the stack, so a popover opened inside a `Sheet` treated the whole Sheet as
+     * "inside" and never closed on a press elsewhere in it. */
+    const outside = (target: EventTarget | null) => {
+      if (!(target instanceof Node)) return false
+      if (panel.current?.contains(target) === true || anchor.current?.contains(target) === true) return false
+      const at = panel.current === null ? -1 : stack.indexOf(panel.current)
+      const above = at < 0 ? [] : stack.slice(at + 1)
+      return !above.some((root) => root.contains(target))
+    }
     const onDown = (event: PointerEvent) => {
       if (outside(event.target)) onClose()
     }

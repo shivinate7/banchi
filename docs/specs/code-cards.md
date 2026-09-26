@@ -348,6 +348,14 @@ Named rather than buried, and none of it blocks the build.
 7. **Whether the code string itself encodes the product** is unverified in either direction.
    If it did, section 4's picker becomes unnecessary — worth ten minutes against the first
    real batch.
+8. **`#/codes` names a card by its stored index, and D196 stays open on it.** The round-2
+   library-lane review found `Codes.tsx` printing `slot {index}` on screen. It shows in the
+   dup-positions list and the Position column. That is the ledger's own row number. D196
+   bans a user-visible string naming a pipeline-internal noun. D24 already hides this same
+   number from a card's identity, for the reason D58 hides a singles card's stored index.
+   No fix landed. Codes carry no section-relative number the way a located singles card
+   does (D260). There is nothing today to compose in its place. The owner's ruling,
+   2026-09-25: **"Leave it, known gap."** Open until the dormant feature wakes.
 
 ---
 

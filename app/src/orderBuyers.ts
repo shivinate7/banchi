@@ -32,7 +32,7 @@
  * receipt above it so the two cannot disagree about what "today" means mid-render.
  */
 
-import type { OrderRow } from './types'
+import type { OrderLineReason, OrderRow, ResolvedLine, ResolvedOrder } from './types'
 
 /** How long a buyer with nothing open still counts as RECENT rather than sinking under the
  *  `Earlier` fold — a client-side cut on `placed_at`, not a server concept. */
@@ -187,4 +187,88 @@ export function groupForOrderKey(
     if (group.orders.some((order) => order.key === orderKey)) return group
   }
   return null
+}
+
+/* ---- a buyer's status: one state per order, the worst per buyer (UX-199). Pure, so Home's
+   "Cannot be filled" press can name the same facet the Orders list filters on. */
+
+export type Status = 'ready' | 'short' | 'look' | 'unresolved' | 'done'
+
+/** A line whose on-hand copies were all pulled FOR THIS ORDER is short, not "none left"
+ *  (UX-196): the owner's own sale is not a problem to look at. */
+export function lineReason(order: OrderRow, line: ResolvedLine): OrderLineReason {
+  if (line.reason !== 'no_copies_on_hand') return line.reason
+  const got = order.progress.find((one) => one.sku === line.sku)?.recorded ?? 0
+  return got > 0 ? 'short' : line.reason
+}
+
+export function statusOf(order: OrderRow, answer: ResolvedOrder | null): Status {
+  if (!order.open) return 'done'
+  if (answer === null) return 'unresolved'
+  const reasons = answer.lines.map((line) => lineReason(order, line))
+  if (reasons.some((reason) => reason !== 'resolved' && reason !== 'short')) return 'look'
+  if (reasons.some((reason) => reason === 'short')) return 'short'
+  return 'ready'
+}
+
+/** Worst-of ordering over a group's open orders — `look` and `unresolved` outrank `short`,
+ *  which outranks `ready`. A group with nothing open is `done`. Used only to pick the ONE dot
+ *  colour a multi-order buyer's row shows; every order's own status still shows on its own
+ *  chip beside it. */
+export const STATUS_RANK: Record<Status, number> = { look: 0, unresolved: 1, short: 2, ready: 3, done: 4 }
+
+export function worstStatus(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): Status {
+  let worst: Status = 'done'
+  for (const order of group.open) {
+    const status = statusOf(order, answers.get(order.key) ?? null)
+    if (STATUS_RANK[status] < STATUS_RANK[worst]) worst = status
+  }
+  return worst
+}
+
+/** THE ONE RULE FOR "MISSING A COPY" (UX-077, the owner's option c at the PR 2 integration): a
+ *  buyer's missing copies are the `outstanding` copies on its OPEN orders (D202), and its missing
+ *  orders are the open orders with any. Home's "Cannot be filled" sentence and the Orders "Show"
+ *  facet `missing` both read this, so the sentence and the list it opens count the same thing. */
+export function groupMissing(
+  group: BuyerGroup,
+  answers: ReadonlyMap<string, ResolvedOrder>,
+): { readonly copies: number; readonly orders: number } {
+  let copies = 0
+  let orders = 0
+  for (const order of group.open) {
+    const out = answers.get(order.key)?.outstanding ?? 0
+    if (out > 0) {
+      copies += out
+      orders += 1
+    }
+  }
+  return { copies, orders }
+}
+
+/** The "Show" facet value for every buyer who owes at least one missing copy. */
+export const MISSING_FACET = 'missing'
+
+/** WHAT HOME'S "Cannot be filled" LINE SAYS: every missing copy, and only the open orders that
+ *  miss one, summed over `groupMissing`. The press opens `#/orders?show=missing`, which lists
+ *  exactly the buyers counted here.
+ *
+ *  History (D287): the first build mapped a line reason to a facet, and the second
+ *  opened the `worstStatus` facet holding the most copies. On the owner's store that still split
+ *  135 copies across two facets (125 and 10), so no single status list matched the sentence. */
+export function missingCopies(
+  orders: readonly OrderRow[],
+  resolution: readonly ResolvedOrder[],
+  now: number,
+): { readonly copies: number; readonly orders: number } {
+  const answers = new Map(resolution.map((one) => [one.key, one] as const))
+  const { recent, earlier } = groupBuyers(orders, now)
+  let copies = 0
+  let missingOrders = 0
+  for (const group of [...recent, ...earlier]) {
+    const missing = groupMissing(group, answers)
+    copies += missing.copies
+    missingOrders += missing.orders
+  }
+  return { copies, orders: missingOrders }
 }

@@ -525,9 +525,9 @@ hand-typed hash list.
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
-159<!-- derived:app_src_file_count --> files under `app/src`: none read the
+158<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
-310<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
+305<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before
@@ -1303,6 +1303,13 @@ D282 Sales leads with a summary band and the best sellers, and a line with no pr
 D283 The send press's review record: each round's findings, and the fix for each
 D284 Three checks replace one ceiling, and none of them is a pinned number
 D285 A screen's filter, sort, search and hide state lives in the URL
+D286 Capture always asks on a fresh device, and Home's tile is the thing that lied
+D287 Home keeps its shape, the "Behind that" line stops repeating the spine, and the spine drops to five stages
+D288 A common, repeated action is an icon with a required label, and a press that spends money or cannot be undone keeps its words
+D289 The walk list is the rail's main part, and 720 is a desk
+D290 the photo reserve shrinks below the rail breakpoint
+D291 the fold's plan, D196 done, the build not yet
+D292 The lane order stays, a phone opens every lane folded, and the rule is said once
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

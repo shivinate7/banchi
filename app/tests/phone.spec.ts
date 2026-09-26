@@ -164,8 +164,19 @@ const auditSource = (mode: Mode) => `(() => {
         return { name, x: Math.round(cx + dx), y: Math.round(cy + dy), tag: n ? n.tagName.toLowerCase() + (n.className ? '.' + (n.className + '').split(' ')[0] : '') : null, owns: owns(n) }
       })
     const misses = hitDetail.filter((h) => !h.owns).length
+    /* THE HIT AREA, NOT THE VISUAL BOX (D288, round 2, option (a)). An IconButton
+       paints at its own FACE size and floors its hit area with a ::before inset instead
+       (max(40px, 100%), kit.css) -- the box alone now under-reports a control the pseudo
+       already covers. getComputedStyle(t, '::before') reads its used size the same way the
+       probe-mode retry below reads the box, and only counts when the pseudo actually draws
+       (content is not 'none'), so a plain control with no such pseudo is judged on its own
+       box exactly as before. */
+    const before = getComputedStyle(t, '::before')
+    const hasBefore = before.content !== 'none' && before.content !== ''
+    const effW = hasBefore ? Math.max(box.width, parseFloat(before.width) || 0) : box.width
+    const effH = hasBefore ? Math.max(box.height, parseFloat(before.height) || 0) : box.height
     // rounded, because a 39.6px control reports 40 and a floor nobody can see is a floor nobody fixes
-    const small = Math.round(box.width) < FLOOR || Math.round(box.height) < FLOOR
+    const small = Math.round(effW) < FLOOR || Math.round(effH) < FLOOR
     const covered = !centreOwns(document.elementFromPoint(cx, cy))
     // A COVERED CENTRE IS A FAILURE ON ITS OWN NOW, not only descriptive text (DEBTS #22). Before
     // this it drove nothing — fails read misses alone, so a control whose every probe and
@@ -401,7 +412,10 @@ test('the sheets and menus a phone opens hold the floor too', async ({ page }) =
     await page.keyboard.press('Escape')
   }
 
-  await page.goto(find('/runs'))
+  /* `#/runs` redirects into the fold now (D291) rather than drawing its
+     own screen, so it never appears in the drawer's own roster — the Runs sheet opens over
+     `#/review` instead, at the address its own redirect lands on. */
+  await page.goto(`${find('/review')}?runs=1`)
   await page.waitForTimeout(600)
   const identify = page.getByRole('button', { name: /Identify a box/i }).first()
   if (await identify.count()) {

@@ -2501,8 +2501,23 @@ def check_undo(checks: Checks) -> None:
             "three captures into box 3, and the newest has both a photo and a sidecar",
         )
 
+        def on_hand_in(box: int) -> int:
+            """Box `box`'s on-hand cards, counted off the store itself (F5, the PR 2
+            integration review): every record in the box that has not left it."""
+            return sum(
+                1
+                for card in Store().read().inventory.cards.values()
+                if card.box == box and card.state not in master.TERMINAL_STATES
+            )
+
         body = capture_server.do_delete_card(3, 3)
         checks.equal(body["deleted"], "3/3", "undo answers with the position it removed")
+        checks.equal(
+            body["on_hand"],
+            on_hand_in(3),
+            "and its on_hand is the box's own count after the undo (D58, R1d): the capture "
+            "screen writes this number straight onto the box row",
+        )
         checks.ok(
             Store().read().inventory.get("3/3") is None,
             "the RECORD is deleted, not tombstoned — there is no state between captured "
@@ -2542,6 +2557,11 @@ def check_undo(checks: Checks) -> None:
         second = capture_server.do_delete_card(3, 2)
         checks.equal(
             second["deleted"], "3/2", "a second undo walks back one more card, with no extra state"
+        )
+        checks.equal(
+            (body["on_hand"] - second["on_hand"], second["on_hand"]),
+            (1, on_hand_in(3)),
+            "and on_hand steps down by exactly the one card that left",
         )
         checks.equal(
             Store().read().inventory.next_index(3), 2, "and releases that index too"
@@ -2635,6 +2655,11 @@ def check_undo(checks: Checks) -> None:
         # Remedy three, the mid-box remove: deletes the identified card undo may not touch.
         # 3/3 is the top of its box, so the shift is empty — the remove route's floor case.
         gone = capture_server.do_remove_card(3, 3, {"capture_id": "undo-remedy-reshoot"})
+        checks.equal(
+            gone["on_hand"],
+            on_hand_in(3),
+            "remove answers the box's own on_hand count after the card left (D58, R1d)",
+        )
         checks.ok(
             gone["deleted"] == "3/3"
             and gone["shifted"] == 0
@@ -5614,8 +5639,10 @@ def check_group_answer(checks: Checks) -> None:
                 getattr(caught, "code", None), "duplicate_position", "in its own code"
             )
             checks.ok(
-                "4/1" in str(caught),
-                "and the message names the repeated position",
+                # D196 (UX-208's carried refusal-leak item): the raw store key ("4/1")
+                # used to ride the message. `said_place` names the same position now.
+                "Section 1, Card 1" in str(caught) and "4/1" not in str(caught),
+                "and the message names the repeated position, said the way the screens say it",
                 f"message was: {caught}",
             )
 
@@ -5634,9 +5661,10 @@ def check_group_answer(checks: Checks) -> None:
                 "as group_entry_refused",
             )
             checks.ok(
-                "4/6" in str(caught) and "not_in_queue" in str(caught),
+                # D196: same fix — the raw key is gone, the said place is not.
+                "Section 1, Card 6" in str(caught) and "4/6" not in str(caught) and "not_in_queue" in str(caught),
                 "and the failing position is named WITH ITS OWN CODE, so one 409 still "
-                "reports per position",
+                "reports per position, said the way the screens say it",
                 f"message was: {caught}",
             )
         untouched = Store().read()
@@ -5656,6 +5684,22 @@ def check_group_answer(checks: Checks) -> None:
             "and no `answered` history line exists: validate everything, then write "
             "everything — a refused group leaves the store as if the call never arrived",
         )
+
+        # A MEMBER THAT IS NOT IN ITS BOX IS COUNTED, NEVER NAMED BY INDEX (the PR 2 integration
+        # review). `place_within_box` fell back to "card 99998" for it: the raw store index.
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_review_group_answer(
+                {"answers": [member(1, "9101"), member(99998, "9199")]}
+            ),
+            "a group naming a card its box does not hold refuses whole",
+        )
+        if caught is not None:
+            checks.ok(
+                "1 of the cards you named is not in" in str(caught) and "99998" not in str(caught),
+                "and that card is counted plainly, with no raw index in the message",
+                f"message was: {caught}",
+            )
 
         refusal(
             checks,
@@ -8326,6 +8370,72 @@ def check_inventory_filter_facets(checks: Checks) -> None:
             thread.join()
 
 
+def check_inventory_facet_cells(checks: Checks) -> None:
+    """FLT-09 — `#/inventory`'s filters work in any order, so `GET /boxes` ships the cells.
+
+    `facet_cells` groups every card by box, game, set, rarity and whether it left. The screen
+    folds them for every count under the OTHER picks and Hide sold. So the cells must keep the
+    null bucket, split a sold copy from a live one, and add up to every card in the store.
+    """
+    checks.note("")
+    checks.note("FLT-09 — GET /boxes CARRIES THE FACET CELLS")
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            a, _ = inv.allocate_capture(1, game="riftbound", cid=fake_cid("cell-a"))
+            inv.cards[a.key].set_name, inv.cards[a.key].rarity = "Unleashed", "Rare"
+            b, _ = inv.allocate_capture(1, game="riftbound", cid=fake_cid("cell-b"))
+            inv.cards[b.key].set_name, inv.cards[b.key].rarity = "Unleashed", "Rare"
+            inv.cards[b.key].state = master.SOLD
+            c, _ = inv.allocate_capture(2, game="pokemon", cid=fake_cid("cell-c"))
+            inv.cards[c.key].set_name, inv.cards[c.key].rarity = None, "Rare"
+            # N1: `gone_states` NAMES ALL THREE OF D26/D83's DOORS, and until this the fixture
+            # only ever walked one of them through — a regression narrowing `gone_states` to
+            # `{SOLD}` alone would still pass every check above. Own boxes, so each is its own
+            # cell rather than folding into `b`'s.
+            d, _ = inv.allocate_capture(3, game="riftbound", cid=fake_cid("cell-d"))
+            inv.cards[d.key].set_name, inv.cards[d.key].rarity = "Unleashed", "Rare"
+            inv.cards[d.key].state = master.RETIRED
+            e, _ = inv.allocate_capture(4, game="riftbound", cid=fake_cid("cell-e"))
+            inv.cards[e.key].set_name, inv.cards[e.key].rarity = "Unleashed", "Rare"
+            inv.cards[e.key].state = master.MOVED
+
+        cells = capture_server.do_boxes()["facet_cells"]
+        seen = sorted(
+            (cell["box"], cell["game"], cell["set"], cell["rarity"], cell["gone"], cell["count"])
+            for cell in cells
+        )
+        checks.equal(
+            seen,
+            [
+                (1, "riftbound", "Unleashed", "Rare", False, 1),
+                (1, "riftbound", "Unleashed", "Rare", True, 1),
+                (2, "pokemon", None, "Rare", False, 1),
+                (3, "riftbound", "Unleashed", "Rare", True, 1),
+                (4, "riftbound", "Unleashed", "Rare", True, 1),
+            ],
+            "one cell per box, game, set, rarity and gone: the sold, retired and moved copies "
+            "are each their own cell, and the Pokemon card with no set keeps a null set rather "
+            "than being dropped",
+        )
+        checks.equal(
+            sum(cell["count"] for cell in cells),
+            5,
+            "and the cells add up to every card in the store, so no count on the screen can "
+            "miss one",
+        )
+        rare_live = sum(
+            cell["count"] for cell in cells if cell["rarity"] == "Rare" and not cell["gone"]
+        )
+        checks.equal(
+            rare_live,
+            2,
+            "Rarity 'Rare' with no game picked and Hide sold on counts two cards across two "
+            "games: a rarity is reachable before a game, which the per-game menu could not say",
+        )
+
+
 # ---------------------------------------------------------------- box routes and search
 
 
@@ -9599,16 +9709,38 @@ def check_box_claims(checks: Checks) -> None:
                 Store().read().inventory.cards[f"8/{i}"].set_hint for i in range(1, 6)
             ]
         before = hints()
-        refusal(
-            checks,
+        caught = checks.raises(
+            capture_server.BadRequest,
             lambda: capture_server.do_put_box_claims(
                 8, {"indices": [1, 99], "set_hint": "swept"}
             ),
-            "card_not_found",
             "a selection naming a card the box does not hold refuses the WHOLE call — a "
             "selection is a statement about a set, and an operator wrong about one member "
             "may be wrong about which box they are looking at",
         )
+        if caught is not None:
+            checks.equal(
+                getattr(caught, "code", None), "card_not_found", "in its own code"
+            )
+            where = join.said_place(Store().read().inventory, 8)
+            checks.ok(
+                # D196 (UX-208's carried refusal-leak item): the raw "box/index" key used
+                # to ride the message ("holds no card at 3, 7"). `said_place` names the
+                # box the same way a card row does, and `place_within_box` never spells
+                # the missing index as a store key.
+                where in str(caught) and "8/99" not in str(caught),
+                "and the message names the box the said way, never the raw box/index "
+                "key",
+                f"message was: {caught}",
+            )
+            checks.ok(
+                # The PR 2 integration review: `place_within_box` fell back to "card 99" for
+                # an index the box does not hold, the raw store index again. A card that is
+                # not here has no place to name, so the count is said instead.
+                "1 of the cards you named is not in" in str(caught) and "99" not in str(caught),
+                "and a card the box does not hold is counted plainly, with no raw index",
+                f"message was: {caught}",
+            )
         checks.equal(
             hints(),
             before,
@@ -36520,6 +36652,7 @@ def run() -> Result:
     check_capture_claim_chain(checks)
     check_game_and_note_seam(checks)
     check_inventory_filter_facets(checks)
+    check_inventory_facet_cells(checks)
     check_box_routes_and_search(checks)
     check_search_fts5(checks)
     check_inventory_box_route(checks)

@@ -1,81 +1,31 @@
 {
   "_about": "THE SHRINKING OFFENDER LIST (the owner's ruling on Q3, 2026-09-23; D275). static: file -> rule -> the lane that owes the fix, read by scripts/kit-adoption.mjs. runtime: route path -> assertion -> lane, read by app/tests/scaffold.spec.ts. Both FAIL on a violation not listed here AND on an entry that no longer matches a violation. A lane that fixes one deletes its entry in the same commit. The list ONLY SHRINKS: scripts/kit-adoption.mjs refuses any key in either block that the list at the merge-base with origin/main does not hold, unless the key's rule is not defined at the merge-base (a rule born on the branch; the check prints which rule allowed it and why). Never add an entry to make a new screen pass: render <Page> from ./kit and use the kit's primitives.",
   "static": {
-    "app/src/BoxBrowse.tsx": {
-      "R2-select": "inventory",
-      "R2-class": "inventory"
-    },
-    "app/src/BoxOps.tsx": {
-      "R2-select": "inventory",
-      "R2-class": "inventory"
-    },
-    "app/src/CaptureScreen.tsx": {
-      "R1": "capture",
-      "R2-search": "capture",
-      "R2-class": "capture"
-    },
-    "app/src/CardHero.tsx": {
-      "R2-date": "inventory",
-      "R2-money": "inventory"
-    },
     "app/src/ClearPrices.tsx": {
       "R2-dialog": "b-pricing",
-      "R2-class": "b-pricing"
+      "R2-class": "b-pricing",
+      "R2-icon-only-button": "icons"
     },
     "app/src/Codes.tsx": {
-      "R1": "library",
-      "R2-dialog": "library",
-      "R2-search": "library",
-      "R2-select": "library",
-      "R2-class": "library",
-      "R2-date": "library"
+      "R2-filter-row": "library"
     },
     "app/src/Fulfillment.tsx": {
       "R1": "fulfillment",
       "R2-class": "fulfillment"
     },
-    "app/src/Gallery.tsx": {
-      "R2-search": "kit-frame",
-      "R2-money": "kit-frame"
-    },
-    "app/src/Graveyard.tsx": {
-      "R1": "library",
-      "R2-search": "library",
-      "R2-class": "library"
-    },
-    "app/src/Home.tsx": {
-      "R1": "home",
-      "R2-class": "home",
-      "R2-date": "home"
-    },
-    "app/src/Inventory.tsx": {
-      "R1": "inventory",
-      "R2-class": "inventory"
-    },
-    "app/src/InventoryOverlay.tsx": {
-      "R2-dialog": "inventory"
-    },
     "app/src/LiveReconcile.tsx": {
-      "R2-dialog": "b-runs",
-      "R2-class": "b-runs"
+      "R2-dialog": "review",
+      "R2-class": "review"
     },
     "app/src/Markdown.tsx": {
       "R2-dialog": "b-pricing",
       "R2-select": "b-pricing",
       "R2-class": "b-pricing",
-      "R2-date": "b-pricing"
+      "R2-date": "b-pricing",
+      "R2-icon-only-button": "icons"
     },
-    "app/src/Orders.tsx": {
-      "R1": "orders",
-      "R2-select": "orders",
-      "R2-class": "orders",
-      "R2-date": "orders"
-    },
-    "app/src/OrdersShipStage.tsx": {
-      "R2-money": "shipping"
-    },
-    "app/src/OrdersWalkPane.tsx": {
-      "R2-class": "orders"
+    "app/src/PriceHistory.tsx": {
+      "R2-icon-only-button": "icons"
     },
     "app/src/PriceTrend.tsx": {
       "R2-class": "b-pricing"
@@ -85,7 +35,11 @@
       "R2-dialog": "b-pricing",
       "R2-class": "b-pricing",
       "R2-date": "b-pricing",
-      "R2-money": "b-pricing"
+      "R2-money": "b-pricing",
+      "R2-icon-only-button": "icons"
+    },
+    "app/src/ProductHistory.tsx": {
+      "R2-icon-only-button": "icons"
     },
     "app/src/Revenue.tsx": {
       "R1": "sales",
@@ -93,7 +47,6 @@
       "R2-date": "sales"
     },
     "app/src/ReviewQueue.tsx": {
-      "R1": "review",
       "R2-dialog": "review",
       "R2-search": "review",
       "R2-class": "review",
@@ -101,60 +54,38 @@
       "R2-money": "review"
     },
     "app/src/RunPanel.tsx": {
-      "R2-select": "b-runs",
-      "R2-class": "b-runs"
+      "R2-select": "review",
+      "R2-class": "review"
     },
     "app/src/RunRescue.tsx": {
-      "R2-dialog": "b-runs",
-      "R2-class": "b-runs"
-    },
-    "app/src/Runs.tsx": {
-      "R1": "b-runs",
-      "R2-class": "b-runs"
+      "R2-dialog": "review",
+      "R2-class": "review"
     },
     "app/src/RunsComposer.tsx": {
-      "R2-dialog": "b-runs",
-      "R2-select": "b-runs",
-      "R2-class": "b-runs"
+      "R2-dialog": "review",
+      "R2-select": "review",
+      "R2-class": "review"
     },
-    "app/src/RunsStage.tsx": {
-      "R2-date": "b-runs"
-    },
-    "app/src/Shipping.tsx": {
-      "R1": "shipping"
-    },
-    "app/src/SubmissionClaims.tsx": {
-      "R2-date": "capture"
+    "app/src/SendCard.tsx": {
+      "R2-icon-only-button": "icons"
     },
     "app/src/ValueBands.tsx": {
       "R2-class": "b-pricing",
       "R2-money": "b-pricing"
-    },
-    "app/src/cardState.ts": {
-      "R2-date": "inventory"
     }
   },
   "runtime": {
     "/": {
-      "page": "home",
       "h1": "home",
-      "width": "home",
       "top": "home"
     },
     "/capture": {
-      "page": "capture",
-      "h1": "capture",
-      "width": "capture",
       "top": "capture"
     },
     "/runs": {
-      "page": "b-runs",
-      "width": "b-runs",
-      "top": "b-runs"
+      "top": "review"
     },
     "/review": {
-      "page": "review",
-      "width": "review",
       "top": "review"
     },
     "/pricing": {
@@ -162,35 +93,10 @@
       "width": "b-pricing",
       "top": "b-pricing"
     },
-    "/orders": {
-      "page": "orders",
-      "width": "orders",
-      "top": "orders"
-    },
-    "/shipping": {
-      "page": "shipping",
-      "width": "shipping",
-      "top": "shipping"
-    },
     "/revenue": {
       "page": "sales",
       "width": "sales",
       "top": "sales"
-    },
-    "/inventory": {
-      "page": "inventory",
-      "width": "inventory",
-      "top": "inventory"
-    },
-    "/graveyard": {
-      "page": "library",
-      "width": "library",
-      "top": "library"
-    },
-    "/codes": {
-      "page": "library",
-      "width": "library",
-      "top": "library"
     },
     "/fulfillment": {
       "page": "fulfillment"

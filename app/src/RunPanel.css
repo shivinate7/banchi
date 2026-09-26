@@ -143,18 +143,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Two lines before the cut: the box name inside the run name is how two runs are told apart. */
-.run-row-name {
-  font-family: var(--bn-font-mono);
-  font-size: var(--bn-fs-xs);
-  line-height: 1.4;
-  color: var(--bn-ink-3);
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
 .run-row-side {
   grid-area: side;
   display: flex;
@@ -192,7 +180,6 @@
   line-height: 1.15;
   overflow-wrap: anywhere;
 }
-.runs-detail-name { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .runs-detail-side { flex: none; display: flex; align-items: center; gap: var(--bn-2); margin-top: 4px; }
 
 /* the stepper */

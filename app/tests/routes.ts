@@ -111,6 +111,16 @@ export async function routesFromNav(page: Page): Promise<string[]> {
      list above never finds it. It is still an OWNER screen and D194's ratchet is written
      against "every owner screen", not "every screen the sidebar draws" — dropping it from
      this list would exempt a real screen from the one rule that keeps this app's copy from
-     growing, by an accident of routing rather than a decision anybody made. */
+     growing, by an accident of routing rather than a decision anybody made.
+
+     `#/runs` IS DELIBERATELY NOT NAMED HERE, unlike those two. It still exists as a
+     registered route — bookmarks and old links must keep working — but it REDIRECTS
+     straight to `#/review` (D291) rather than drawing a screen of its
+     own, so a content sweep built on this harvester (`routeSweep.ts` and everything that
+     calls it: text-shape, machine-words, phone) would land on `#/review` and then fail its
+     own `data-route` assertion, or simply re-measure Review a second time under the wrong
+     name. `scaffold.spec.ts`'s route-census reconciliation is the one place that does need
+     `#/runs` in its list, and it adds it there itself rather than through this shared
+     helper. */
   return [...hashes, '#/gallery', '#/product']
 }

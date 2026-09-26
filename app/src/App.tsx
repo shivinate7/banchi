@@ -5,7 +5,7 @@ import { rememberRail, storedRail, storedTheme } from './deviceMemory'
 import { getStatus, onServerBoot, onServerReachable } from './server'
 import { useSearch } from './useSearch'
 import { usePoll } from './usePoll'
-import { Button, Icon, Kbd, KeyHint, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
+import { Button, Icon, IconButton, Kbd, KeyHint, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
   applyTheme, openSheet, overlayOpen, readTheme, type IconName, type Theme } from './kit'
 import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from './kit/lockupGeometry'
 import { Toaster, toast } from './kit/toast'
@@ -13,7 +13,7 @@ import { SearchField } from './SearchField'
 
 import { Home } from './Home'
 import { CaptureScreen } from './CaptureScreen'
-import { Runs } from './Runs'
+import { RunsRedirect } from './Runs'
 import { ReviewQueue } from './ReviewQueue'
 import { Inventory } from './Inventory'
 import { Graveyard } from './Graveyard'
@@ -66,6 +66,12 @@ export type Route = {
   readonly hotkey?: string
   readonly nav?: boolean
   readonly tab?: boolean
+  /** True only for a route whose view redirects elsewhere and renders nothing of its own
+   *  (D291's `#/runs`). Read by scripts/kit-adoption.mjs's `--routes` and
+   *  `analyze()` (R1 does not apply — there is no page here to render) and by
+   *  app/tests/scaffold.spec.ts (the per-route h1/title sweep does not apply either, since
+   *  what the browser shows a moment later is the redirect target's own screen). */
+  readonly redirect?: boolean
   /** What a person might TYPE to find this screen in the palette — the verbs it holds. */
   readonly keywords?: string
   /** The screen's own keys. The keyboard sheet draws them as the screen's own group. */
@@ -85,6 +91,7 @@ const CAPTURE_OPTION_KEYS = '1234567890adeijklmnqwxyz'.toUpperCase().split('')
 const CAPTURE_KEYS: ScreenKeys = {
   rows: [
     { keys: ['C'], does: 'Take the photograph', when: 'while the trigger is on Manual' },
+    { keys: ['Space'], does: 'Pause motion, or resume it', when: 'not while typing' },
     { keys: ['S'], does: 'Put a divider in, at the card you are about to shoot' },
     { keys: ['U'], does: 'Undo the newest capture' },
     { keys: ['B'], does: 'Open or close the Box field' },
@@ -102,13 +109,6 @@ const CAPTURE_KEYS: ScreenKeys = {
   ],
 }
 
-const RUNS_KEYS: ScreenKeys = {
-  rows: [
-    { keys: ['←', '→'], does: 'Walk the box, card by card', when: 'while a preview is on screen' },
-    { keys: ['Esc'], does: 'Close the open sheet', when: 'not while it is sending' },
-  ],
-}
-
 const REVIEW_KEYS: ScreenKeys = {
   rows: [
     { keys: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], seq: true, does: 'Answer with that candidate, or that row of the lookup' },
@@ -123,6 +123,9 @@ const REVIEW_KEYS: ScreenKeys = {
     { keys: ['Esc'], does: 'Leave the lookup, the close panel or the queue drawer' },
     { keys: ['R'], does: 'Reload the queue' },
     { keys: ['U'], does: 'Undo the newest answer' },
+    /* From the runs fold (D291): the same two rows RUNS_KEYS carried
+       on its own route, now read while the "Past runs" sheet is open instead. */
+    { keys: ['←', '→'], does: 'Walk the box, card by card', when: 'while a run preview is on screen' },
   ],
 }
 
@@ -199,8 +202,7 @@ const FULFILLMENT_KEYS: ScreenKeys = {
 export const ROUTES: readonly Route[] = [
   { path: '/', label: 'Home', icon: 'home', view: Home, persona: 'owner', group: 'home', hotkey: 'h', nav: true, keywords: 'start overview' },
   { path: '/capture', label: 'Capture', icon: 'camera', view: CaptureScreen, persona: 'owner', group: 'work', hotkey: 'c', nav: true, tab: true, keywords: 'camera photograph scan feeder new box section', keys: CAPTURE_KEYS },
-  { path: '/runs', label: 'Runs', icon: 'play', view: Runs, persona: 'owner', group: 'work', hotkey: 'r', nav: true, keywords: 'pipeline identify join emit import csv reconcile the store live quantities my pricing', keys: RUNS_KEYS },
-  { path: '/review', label: 'Review', icon: 'inbox', view: ReviewQueue, persona: 'owner', group: 'work', hotkey: 'q', nav: true, tab: true, keywords: 'queue answer questions parked', keys: REVIEW_KEYS },
+  { path: '/review', label: 'Review', icon: 'inbox', view: ReviewQueue, persona: 'owner', group: 'work', hotkey: 'q', nav: true, tab: true, keywords: 'queue answer questions parked pipeline identify join emit import csv reconcile the store live quantities my pricing run runs', keys: REVIEW_KEYS },
   { path: '/pricing', label: 'Pricing', icon: 'tag', view: Pricing, persona: 'owner', group: 'work', hotkey: 'p', nav: true, keywords: 'price hold write files emit worklist markdown stale reprice live listings mark down', keys: PRICING_KEYS },
   { path: '/orders', label: 'Orders', icon: 'cart', view: Orders, persona: 'owner', group: 'sell', hotkey: 'o', nav: true, tab: true, keywords: 'pull sell fetch orders paste ledger', keys: ORDERS_KEYS },
   { path: '/shipping', label: 'Shipping', icon: 'truck', view: Shipping, persona: 'owner', group: 'sell', hotkey: 's', nav: true, keywords: 'ship lanes envelope parcel export' },
@@ -244,6 +246,15 @@ export const ROUTES: readonly Route[] = [
    * with no nav entry earns no chord, per this file's own rule for `#/fulfillment` and
    * `#/gallery`. */
   { path: '/product', label: 'Product history', icon: 'chart', view: ProductHistory, persona: 'owner', group: 'aside', keywords: 'sku market price archive per product history sold' },
+  /* RUNS FOLDED INTO REVIEW (D291, the owner's ruling, RULINGS.md Q6).
+   * `#/runs` stays a registered route, off-nav (the same D227 shape `#/product` above
+   * already has), because a route is not a feature — a bookmark, a link Pricing or
+   * ValueBands still carries, or a person's own habit all still say `#/runs`. Its view is a
+   * redirect: it rewrites the hash to `#/review`, carrying `?run=`/`?state=`/`?box=` over
+   * unread by itself, and Review reads them (`RunsContent`'s own hash functions, unchanged)
+   * to know which of "Past runs" the operator meant to open. No hotkey, on `#/product`'s own
+   * rule for a route with no nav entry. */
+  { path: '/runs', label: 'Runs', icon: 'play', view: RunsRedirect, persona: 'owner', redirect: true, group: 'aside', keywords: 'pipeline identify join emit import csv reconcile the store live quantities my pricing' },
 ]
 
 const GROUPS: readonly { readonly id: Group; readonly label: string | null }[] = [
@@ -1212,9 +1223,7 @@ function PhoneBar({ onPalette }: { onPalette: () => void }) {
       >
         Banchi
       </span>
-      <Button variant="ghost" icon="search" iconOnly onClick={onPalette} aria-haspopup="dialog">
-        Go to
-      </Button>
+      <IconButton icon="search" label="Go to" onClick={onPalette} aria-haspopup="dialog" />
     </header>
   )
 }
@@ -1417,10 +1426,18 @@ export function App() {
   }, [theme, rail, toggleRail, toggleTheme])
 
   if (!chrome) {
+    /* THE SAME PROVIDER THE CHROMED BRANCH SETS BELOW, MISSING HERE UNTIL ROUND 2's OWN REVIEW
+       CAUGHT IT. The Fulfiller's route reads `hasChrome` false and returns here instead of
+       falling through to the shell's own render, so a Modal opened from `route.view` (the "?"
+       sheet, `Fulfillment.tsx`) called `usePageRoute()` against no provider at all and read
+       `null` — never 'fulfiller' — and drew an IconButton's Close instead of the word (D5 spec
+       rule 1). */
     return (
-      <RouteBoundary path={path} plain>
-        {route === undefined ? <NoSuchView path={path} /> : <route.view />}
-      </RouteBoundary>
+      <PageRouteContext.Provider value={route ?? null}>
+        <RouteBoundary path={path} plain>
+          {route === undefined ? <NoSuchView path={path} /> : <route.view />}
+        </RouteBoundary>
+      </PageRouteContext.Provider>
     )
   }
 

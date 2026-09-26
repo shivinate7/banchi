@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 
 import { describeFailure, fetchLiveExport, reconcileLive, type Failure } from './server'
 import { readUpload } from './csvUpload'
-import { Button, Icon, Notice } from './kit'
+import { Button, Icon, IconButton, Notice } from './kit'
 import { toast } from './kit/toast'
 import { DropZone } from './RunsDrop'
 import { whenLabel } from './RunsStage'
@@ -34,6 +34,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
   const [readAt, setReadAt] = useState<string | null>(null)
   const held = useRef<Awaited<ReturnType<typeof readUpload>> | null>(null)
   const sheet = useRef<HTMLElement | null>(null)
+  const scrim = useRef<HTMLDivElement | null>(null)
   /** The live export the SERVER holds, by name — the fetched counterpart to `held`'s bytes. */
   const fetchedName = useRef<string | null>(null)
   const [fetching, setFetching] = useState(false)
@@ -87,13 +88,13 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
   /* Focus lands inside on open, stays inside under Tab, and returns to the opener on close;
      Escape closes, unless a read or a write is in flight — `busy` is the hold, and it covers
      both presses of the two-step gate. */
-  useOverlayFocus(sheet, open, onClose, busy)
+  useOverlayFocus(sheet, open, onClose, busy, scrim)
 
   /* Portalled to <body> for the same reason the composer is: `main.bn-page` keeps a filled
      transform after its enter animation, and a fixed sheet inside it would hang off the column. */
   return createPortal(
     <>
-      {open ? <div className="bn-scrim" onClick={onClose} /> : null}
+      {open ? <div ref={scrim} className="bn-scrim" onClick={onClose} /> : null}
       <aside
         ref={sheet}
         className="bn-sheet livecheck"
@@ -113,9 +114,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
               Check what is live
             </h2>
           </div>
-          <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
-            Close
-          </Button>
+          <IconButton icon="x" label="Close" onClick={onClose} />
         </header>
 
         <div className="livecheck-body">
