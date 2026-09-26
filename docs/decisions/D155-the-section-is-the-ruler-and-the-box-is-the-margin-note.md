@@ -120,10 +120,19 @@ action icon on the row rose to `size="xl"`. Undo stayed `size="sm"` inside the s
 That shrank the action cell the moment a sale fired. Undo now reads `size="xl"`
 unconditionally, matching its siblings rather than branching on `primary`.
 
-**One test caught both bugs: `"every copy row draws the same bar height, located or not"`.**
-Each fix was reverted to a `.bak` copy in turn. The test went red at 200px against
-212px for the icon bug, and 221px against 212px for the caption bug. Restoring each fix turned
-the test green again. This is the mutation-proof.
+**The icon fix is mutation-proven against one test.** `"The press that sells a copy moves
+nothing outside the panel it lands in"` presses a real `Mark sold` and measures the row's own
+height before and after. It needs a live sale, so it reaches the Undo button's own size. A
+static-fixture test never does. Reverted to a `.bak` copy of `Inventory.tsx`, the test went
+red. It read 186px after the sale against a real 190px before it. Restoring the fix turned it
+green again.
+
+**Corrected 2026-09-25, a lane review's finding.** An earlier draft of this entry named a
+different test for both fixes: `"every copy row draws the same bar height, located or not"`.
+That test's own fixture carries no undoable row at all. It never could have caught the icon
+fix. The caption fix needs no mutation-proof of its own. The caption is retired from every
+render path. `PositionBar.tsx` no longer has a branch left to take. That is a stronger
+guarantee than a passing runtime check.
 
 **A third defect, in contrast rather than layout, turned up along the way.**
 `.card-locations-identity`'s ink went through `--bn-ink-3`, and that failed the dark theme's
@@ -184,12 +193,10 @@ grid changes from `'place state action' / 'bar bar bar'` to `'place action' / 'n
 under the address into its own grid row. That is what lets the icons sit level with the
 address text itself, by ordinary `align-items: center`, with no override.
 
-**Two real D118 regressions turned up while building this, and both are fixed at the cause.**
-The ruler's caption toggled visibility across a sale, because the departed state still carried
-a tail fact the live state's tail had gone empty for. The Undo button stayed a smaller size
-while its siblings grew to the kit's `xl`. `inventory.spec.ts`'s `"every copy row draws the
-same bar height, located or not"` caught both. Each was reverted to a `.bak` copy in turn.
-The test went red at 200px and 221px against a real 212px. It went green again on restore.
+**The two D118 regressions this section once claimed for round two belong to round one.**
+They are correctly recorded above and not repeated here. Round two touched none of
+`position.ts`, `Inventory.tsx`, or their icon sizes. Saying so twice, once per round, misdated
+a fix that happened once.
 
 **The net cost against D119's own fold budget is negative.** Collapsing the ladder and moving
 the icons removed roughly 90 to 100 pixels of row height. Nothing here added any back.

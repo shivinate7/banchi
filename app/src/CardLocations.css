@@ -428,7 +428,13 @@
 }
 .card-locations-owner .card-locations-identity-fact { min-width: 0; }
 /* D218: the seam between facts is CSS, never typed. */
-.card-locations-owner .card-locations-identity-fact + .card-locations-identity-fact::before {
+/* `::after` on the fact BEFORE the seam, never `::before` on the one after it (the lane
+   review's finding, 2026-09-25): at a width narrow enough for this line to wrap, `::before` on
+   the next fact travels WITH that fact onto its own new line, so the wrapped line starts with a
+   bare dot and nothing before it — the identical shape of defect the flex-grow bug in this same
+   round was, on the seam instead of the box. `::after` on the fact ending the line keeps the dot
+   on the line it punctuates, whether that line wraps or not. */
+.card-locations-owner .card-locations-identity-fact:not(:last-child)::after {
   content: '·';
   margin: 0 var(--bn-1-5);
   color: var(--bn-ink-4);

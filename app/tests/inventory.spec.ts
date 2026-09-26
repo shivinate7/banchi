@@ -5092,6 +5092,39 @@ test('the address is drawn without a separator, and the server string survives o
   await expect(num).toHaveText(/Card (\d+)$/.exec(String(label))?.[1] ?? '')
 })
 
+test('no wrapped line of the identity row begins with the separator, at 390 and 820', async ({ page }) => {
+  /* THE LANE REVIEW'S FINDING, 2026-09-25: the separator was `::before` on the fact AFTER the
+     seam, so at a width narrow enough for the identity line to wrap, the dot travelled WITH
+     the wrapped fact onto its own new line — every wrapped line but the first read as starting
+     with a bare dot. Fixed by moving the mark to `::after` on the fact BEFORE the seam, which
+     stays on the line it punctuates whichever line that is.
+
+     `innerText` WAS TRIED FIRST AND IS BLIND HERE: Chromium's `innerText` reads real text
+     nodes and never CSS generated content, so it cannot tell `::before` from `::after` at all
+     — both render as invisible to it, and a case built on it would pass on either. This reads
+     the pseudo-elements' own computed `content` instead, which is the actual mechanism the
+     lane review named: `::after` on every fact but the last, `::before` on none. */
+  for (const width of [390, 820]) {
+    await page.setViewportSize({ width, height: 900 })
+    await open(page, BOXES, STORE, () => PRICING, SALE, { settle: '.card-locations-owner' })
+    const identity = page.locator('.card-locations-row.is-current .card-locations-identity')
+    await expect(identity).toBeVisible()
+
+    const marks = await identity.evaluate((el) =>
+      [...el.querySelectorAll('.card-locations-identity-fact')].map((fact, at, all) => ({
+        before: getComputedStyle(fact, '::before').content,
+        after: getComputedStyle(fact, '::after').content,
+        isLast: at === all.length - 1,
+      })),
+    )
+    expect(marks.length, `at least two facts render at ${width}`).toBeGreaterThan(1)
+    for (const mark of marks) {
+      expect(mark.before, `no leading mark at ${width}`).toBe('none')
+      expect(mark.after, `a trailing mark on every fact but the last, at ${width}`).toBe(mark.isLast ? 'none' : '"·"')
+    }
+  }
+})
+
 test('the box fact never grows past its own text, and the dot never floats away from it', async ({ page }) => {
   /* A WIDE VIEWPORT, DELIBERATELY: the free width a `flex-grow` bug needs to be visible at all —
      at the suite's narrower default this fact's own row happens to have none to spend, so the
@@ -5119,7 +5152,12 @@ test('the box fact never grows past its own text, and the dot never floats away 
     range.selectNodeContents(el)
     return { rendered: el.getBoundingClientRect().width, text: range.getBoundingClientRect().width }
   })
-  expect(widths.rendered).toBeLessThan(widths.text + 4)
+  /* THE TOLERANCE IS THE SEPARATOR'S OWN WIDTH, NOT SLACK FOR A GROWN BOX: this fact is not the
+     row's last, so it carries the trailing `::after` dot (D218's own seam), which the `Range`
+     above never selects — a real, legitimate ~16px of margin and glyph the box's rendered width
+     is SUPPOSED to include. 24px covers that with room to spare and stays far short of the
+     roughly 300px the flex-grow bug actually produced. */
+  expect(widths.rendered).toBeLessThan(widths.text + 24)
 })
 
 test('the address holds one line at both widths, including the longest label the store can emit', async ({

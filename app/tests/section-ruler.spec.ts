@@ -229,41 +229,40 @@ async function assertRulerNeverOverflows(page: Page) {
 }
 
 for (const sectionCount of [12, 30]) {
-  test(`the section ruler stays inside its card at ${sectionCount} sections, 1440`, async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 })
-    await open(page, sectionCount, 5)
-    await assertRulerNeverOverflows(page)
-  })
-
-  test(`the section ruler stays inside its card at ${sectionCount} sections, 390`, async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 900 })
-    await open(page, sectionCount, 5)
-    await assertRulerNeverOverflows(page)
-  })
+  for (const width of [1440, 820, 390]) {
+    test(`the section ruler stays inside its card at ${sectionCount} sections, ${width}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await open(page, sectionCount, 5)
+      await assertRulerNeverOverflows(page)
+    })
+  }
 }
 
-test('past the shrink floor, the strip scrolls in its own track and the current section stays fully visible', async ({
-  page,
-}) => {
-  // 60 sections at 2 cards each on a 390px phone: comfortably past the point where 20px-floor
-  // chips plus gaps exceed the card's own width, so this is the scroll-track path and not the
-  // shrink-to-fit one.
-  await page.setViewportSize({ width: 390, height: 900 })
-  await open(page, 60, 2)
-  await page.locator('.card-locations-row.is-current').scrollIntoViewIfNeeded()
-  const track = page.locator('.card-locations-row.is-current .position-bar-owner[data-depth] > .position-bar-track')
-  const info = await track.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }))
-  // THE FLOOR IS REAL: 60 chips at the 20px legible minimum cannot fit a 390px phone, so this
-  // case is proof the SCROLL path is what is carrying it, not a shrink that happened to fit.
-  expect(info.scrollWidth).toBeGreaterThan(info.clientWidth + 50)
+for (const width of [1440, 820, 390]) {
+  test(`past the shrink floor, the strip scrolls in its own track and the current section stays fully visible, ${width}`, async ({
+    page,
+  }) => {
+    // 60 sections at 2 cards each: comfortably past the point where 20px-floor chips plus gaps
+    // exceed even the widest of these cards, so this is the scroll-track path at every one of
+    // them and not the shrink-to-fit one — 1440 and 820 included, not only the 390 phone case.
+    await page.setViewportSize({ width, height: 900 })
+    await open(page, 60, 2)
+    await page.locator('.card-locations-row.is-current').scrollIntoViewIfNeeded()
+    const track = page.locator('.card-locations-row.is-current .position-bar-owner[data-depth] > .position-bar-track')
+    const info = await track.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }))
+    // THE FLOOR IS REAL: 60 chips at the 20px legible minimum cannot fit any of these widths,
+    // so this case is proof the SCROLL path is what is carrying it, not a shrink that happened
+    // to fit.
+    expect(info.scrollWidth).toBeGreaterThan(info.clientWidth + 50)
 
-  const here = track.locator('.position-bar-here')
-  await expect(here).toBeInViewport({ ratio: 1 })
+    const here = track.locator('.position-bar-here')
+    await expect(here).toBeInViewport({ ratio: 1 })
 
-  const pageScrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
-  const viewportWidth = await page.evaluate(() => window.innerWidth)
-  expect(pageScrollWidth, 'no page-level horizontal scroll from the ruler').toBeLessThanOrEqual(viewportWidth)
-})
+    const pageScrollWidth = await page.evaluate(() => document.documentElement.scrollWidth)
+    const viewportWidth = await page.evaluate(() => window.innerWidth)
+    expect(pageScrollWidth, 'no page-level horizontal scroll from the ruler').toBeLessThanOrEqual(viewportWidth)
+  })
+}
 
 test('the section ruler is drawn above the card ruler', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
