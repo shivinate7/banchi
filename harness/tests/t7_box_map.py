@@ -894,7 +894,7 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                 capture_server.do_create_box(dict(box=b, name="B" + str(b)))
                 phys[b] = [[]]
 
-            def capture(b, j=None):
+            def capture(b, j=None, phys=phys):
                 extra = dict(section=_divs(b)[j - 1]) if j else dict()
                 _, row = capture_server.do_capture(capture_payload(b, **extra))
                 inv = Store().read().inventory
@@ -909,10 +909,10 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                 phys[b].append([])
                 capture(b)
 
-            def cards(b):
+            def cards(b, phys=phys):
                 return [c for sec in phys[b] for c in sec]
 
-            def drop(b, cid):
+            def drop(b, cid, phys=phys):
                 for sec in phys[b]:
                     if cid in sec:
                         sec.remove(cid)
