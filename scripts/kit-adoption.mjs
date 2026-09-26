@@ -60,7 +60,7 @@
  *                            variable is not seen.
  *                R2-icon-only-button
  *                            a hand-rolled icon-only control (owner's ruling, 2026-09-24,
- *                            ICONOGRAPHY; D-icon-buttons): a native `<button>` whose only
+ *                            ICONOGRAPHY; D288): a native `<button>` whose only
  *                            non-blank child is an `<Icon>`, or any element carrying the
  *                            `iconOnly` JSX attribute (the kit's own `Button` prop, read by
  *                            presence, never by its value) — the kit has `IconButton` for

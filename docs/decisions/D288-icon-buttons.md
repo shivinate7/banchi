@@ -1,4 +1,4 @@
-## D-icon-buttons — A common, repeated action is an icon with a required label, and a press that spends money or cannot be undone keeps its words
+## D288 — A common, repeated action is an icon with a required label, and a press that spends money or cannot be undone keeps its words
 
 **The owner's ruling, 2026-09-24, ICONOGRAPHY.** Verbatim:
 

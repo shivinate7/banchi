@@ -400,7 +400,7 @@ test('the step walks back, and the first screen is the first', async ({ page }) 
 })
 
 test('a bare arrow is not the shell’s', async ({ page }) => {
-  /* `#/runs` itself now redirects into the fold (D-runs-folds-into-review), so the screen
+  /* `#/runs` itself now redirects into the fold (D291), so the screen
      that owns the unmodified arrow is reached at its new address: the Runs sheet open over
      `#/review`. */
   await stub(page)

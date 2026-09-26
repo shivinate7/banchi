@@ -1485,6 +1485,12 @@ test('a game whose export needs a set hint says so, in all three states of the f
 test('a set hint that names no set never clips its sub-line, at every width this app is verified at', async ({
   page,
 }) => {
+  /* MEASURED AT REST, NEVER MID-TRANSITION (DEBT36). Below 1280 the shell collapses the sidebar
+     to the rail, and `.bn-shell` animates `grid-template-columns` over `--bn-t-slow`. The PR 2
+     CI trace caught this case reading the row and its value about 200ms into that animation at
+     820, with the main column still narrowing between the two reads. Reduced motion is base.css's
+     own floor, which ends every transition at once, so the boxes below are the settled layout. */
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   await routeSets(page, RIFTBOUND_SETS)
   await open(page, { box: 3, bid: 23 }, NEEDS_HINT, HAND_BOXES)
   await page.keyboard.press('h')
@@ -1498,18 +1504,45 @@ test('a set hint that names no set never clips its sub-line, at every width this
   await expect(row).toContainText('Spiritfoged')
   const sub = row.locator('.capture-sub')
   await expect(sub).toHaveText(/names no set/i)
-  const value = row.locator('.capture-val')
+
+  /* MEASURED AT REST, IN ONE FRAME (DEBT36). A resize across 1280 collapses the shell to the
+     rail a task later (`App.tsx:useRailNarrow`, a `matchMedia` listener into React state), and
+     `.bn-shell` then animates `grid-template-columns`. The PR 2 CI trace caught this case at 820
+     reading the row, then its value, about 200ms into that collapse: the main column was still
+     narrowing, the stack card above reflowed between the two reads, and the value read 25px above
+     the row it sits in. So every box is read in ONE `evaluate` (one frame, no gap between reads),
+     and only once two reads in a row agree. Reduced motion is base.css's own floor and ends the
+     column's transition at once. The assertions are unchanged. */
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const boxes = () =>
+    row.evaluate((node) => {
+      const box = (el: Element | null) => {
+        if (el === null) return null
+        const r = el.getBoundingClientRect()
+        return { x: r.x, y: r.y, width: r.width, height: r.height, overflow: el.scrollWidth - el.clientWidth }
+      }
+      return { row: box(node), value: box(node.querySelector('.capture-val')), sub: box(node.querySelector('.capture-sub')) }
+    })
 
   for (const width of [1440, 820, 390]) {
     await page.setViewportSize({ width, height: 900 })
     await expect(row).toContainText('Spiritfoged')
     await expect(sub).toHaveText(/names no set/i)
 
-    const rowBox = await row.boundingBox()
+    let last = ''
+    await expect
+      .poll(async () => {
+        const now = JSON.stringify(await boxes())
+        const still = now === last
+        last = now
+        return still
+      }, { message: `the layout holds still at ${width}` })
+      .toBe(true)
+    const measured = JSON.parse(last) as Awaited<ReturnType<typeof boxes>>
+    const rowBox = measured.row
     expect(rowBox).not.toBeNull()
 
-    for (const el of [value, sub]) {
-      const elBox = await el.boundingBox()
+    for (const elBox of [measured.value, measured.sub]) {
       expect(elBox).not.toBeNull()
       // Fully inside the row's own box, on both edges — a clipped element still reports its
       // full un-clipped bounding box in the accessibility tree, but not once its content has
@@ -1521,8 +1554,7 @@ test('a set hint that names no set never clips its sub-line, at every width this
 
       // And its own content is not overflowing ITS box — the direct symptom of being nested
       // inside an `overflow: hidden` ancestor narrower than it needs.
-      const overflow = await el.evaluate((node) => node.scrollWidth - node.clientWidth)
-      expect(overflow).toBeLessThanOrEqual(1)
+      expect(elBox!.overflow).toBeLessThanOrEqual(1)
     }
   }
 })

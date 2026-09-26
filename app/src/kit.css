@@ -1483,7 +1483,7 @@ img.bn-crop[data-cropped='true'] {
 .bn-toast-action:hover { background: rgba(255, 255, 255, 0.24); }
 :root[data-theme='dark'] .bn-toast-action { background: var(--bn-accent-tint); }
 .bn-toast-action .bn-kbd { background: transparent; color: inherit; border-color: rgba(255, 255, 255, 0.3); }
-/* It is an IconButton now (D-icon-buttons), `size="sm"`: its own box is `.bn-icon-btn` in
+/* It is an IconButton now (D288), `size="sm"`: its own box is `.bn-icon-btn` in
    this file. `color: inherit` is why it MUST come after `.bn-icon-btn` in this stylesheet —
    the toast's own ink (white on a coloured toast, `--bn-ink` on the default surface one)
    would otherwise lose to `.bn-icon-btn`'s own `color: var(--bn-ink-2)` at equal specificity,
@@ -1592,7 +1592,7 @@ img.bn-crop[data-cropped='true'] {
      reached it without a copy anywhere. `phone.spec.ts` and `kit-data.spec.ts` still assert all
      three reach 40px at 390 — against the ONE rule each now has, not this one. */
   /* `.bn-toast-close` WAS HERE, forcing the same 40px growth `IconButton`'s own `::before`
-     now provides without resizing the box (D-icon-buttons, round 2) — removed, along with the
+     now provides without resizing the box (D288, round 2) — removed, along with the
      `.bn-icon-btn` exemption below, the same reason.
      an icon-only `Button` (`.bn-btn-icon`, still `iconOnly` — not `IconButton`) is square off
      `--btn-h`, but `.bn-btn` can still be squeezed narrower by a flex parent — the drawer's

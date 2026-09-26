@@ -67,7 +67,7 @@ export type Route = {
   readonly nav?: boolean
   readonly tab?: boolean
   /** True only for a route whose view redirects elsewhere and renders nothing of its own
-   *  (D-runs-folds-into-review's `#/runs`). Read by scripts/kit-adoption.mjs's `--routes` and
+   *  (D291's `#/runs`). Read by scripts/kit-adoption.mjs's `--routes` and
    *  `analyze()` (R1 does not apply — there is no page here to render) and by
    *  app/tests/scaffold.spec.ts (the per-route h1/title sweep does not apply either, since
    *  what the browser shows a moment later is the redirect target's own screen). */
@@ -123,7 +123,7 @@ const REVIEW_KEYS: ScreenKeys = {
     { keys: ['Esc'], does: 'Leave the lookup, the close panel or the queue drawer' },
     { keys: ['R'], does: 'Reload the queue' },
     { keys: ['U'], does: 'Undo the newest answer' },
-    /* From the runs fold (D-runs-folds-into-review): the same two rows RUNS_KEYS carried
+    /* From the runs fold (D291): the same two rows RUNS_KEYS carried
        on its own route, now read while the "Past runs" sheet is open instead. */
     { keys: ['←', '→'], does: 'Walk the box, card by card', when: 'while a run preview is on screen' },
   ],
@@ -246,7 +246,7 @@ export const ROUTES: readonly Route[] = [
    * with no nav entry earns no chord, per this file's own rule for `#/fulfillment` and
    * `#/gallery`. */
   { path: '/product', label: 'Product history', icon: 'chart', view: ProductHistory, persona: 'owner', group: 'aside', keywords: 'sku market price archive per product history sold' },
-  /* RUNS FOLDED INTO REVIEW (D-runs-folds-into-review, the owner's ruling, RULINGS.md Q6).
+  /* RUNS FOLDED INTO REVIEW (D291, the owner's ruling, RULINGS.md Q6).
    * `#/runs` stays a registered route, off-nav (the same D227 shape `#/product` above
    * already has), because a route is not a feature — a bookmark, a link Pricing or
    * ValueBands still carries, or a person's own habit all still say `#/runs`. Its view is a

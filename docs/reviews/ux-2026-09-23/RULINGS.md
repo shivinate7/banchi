@@ -529,7 +529,7 @@
   cost and no risk. The live server still has 4 request slots (DEBT11), so one agent at a
   time. Nothing contacts TCGplayer or spends money: that still needs the owner present.
 - Review close word "Closed" (owner, 2026-09-25, on the screenshots, verbatim): "sure it looks
-  decent". Accepted. D-review-narrow-layout records it.
+  decent". Accepted. D290 records it.
 - Measured on a copy of the owner's store, 2026-09-25: 3,510 cards, 2,455 on hand, 916 SKUs,
   5 boxes and 13 runs. Q2's "Needs you" holds 9 of 33 unsent SKU rows: 0 with no market, 4
   worth $5 or more, and 5 typed 25% or more away. Q9: no single rule fits (the best is market
@@ -553,7 +553,7 @@
 - Home "Cannot be filled" against the Orders filter removal (orchestrator, an integration
   conflict): option 2. Home opens `#/orders?show=<facet>`, chosen from the dominant reason.
   UX-077's intent is kept at buyer level, and the orders lane is not reopened.
-  D-home-owed-line records the build.
+  D287 records the build.
 - PR 2 scope rule (orchestrator, process-only): search-server or b-pricing may not pass by
   the time the integration branch is otherwise green. Then that lane moves to PR 3, and PR 2
   goes without it.
@@ -589,7 +589,7 @@
 - Home "Cannot be filled" (owner, 2026-09-25, the owner's chosen option, verbatim): "New
   \"missing a copy\" filter". Orders gets a show facet for every buyer who is missing a copy,
   and Home opens it. So the number on Home and the list on Orders always agree.
-  D-home-owed-line and D285 record the build.
+  D287 and D285 record the build.
 - Home's h1 (owner, 2026-09-25, verbatim): "yeah just keep the greeting". Home's h1 stays the
   greeting (D121). The scaffold check learns it as a deliberate exception, not as an
   allow-list entry. A hidden "Home" h1 was declined, because the document title already says

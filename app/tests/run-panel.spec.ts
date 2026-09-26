@@ -38,7 +38,7 @@ import { runRow } from './routeFixtures'
  * being whatever shelf the walk happened to land on, which is the visible half of the trade
  * D33 argued against and the owner accepted. */
 const VIEW_ROUTE = '/#/runs'
-/* D-runs-folds-into-review: this content is a Sheet's body now, not a route's own <main>. */
+/* D291: this content is a Sheet's body now, not a route's own <main>. */
 const VIEW = '.review-runs-sheet .runs'
 
 /** What `identify --dry-run` prints, cut to the lines the panel parses out of it.
@@ -529,7 +529,7 @@ async function open(
     })
   })
 
-  /* D-runs-folds-into-review: this screen now mounts inside Review's own sheet, so
+  /* D291: this screen now mounts inside Review's own sheet, so
      Review's OWN read (GET /queues) reaches the capture port too — empty, since nothing in
      this file is about the review queue. */
   await page.route(/\/queues$/, async (route) => {
@@ -957,7 +957,7 @@ test('the picture follows the reading, and a whole-frame run draws no cut at all
   await expect(page.locator('.run-preview-sent')).toHaveAttribute('src', /crop-900$/)
 })
 
-/* NAMED REGRESSION FROM THE FOLD (D-runs-folds-into-review), NOT SILENTLY DROPPED. Traced:
+/* NAMED REGRESSION FROM THE FOLD (D291), NOT SILENTLY DROPPED. Traced:
  * `document.activeElement` inside the arrow-key guard reads a "Close" IconButton, not the
  * "Max edge" spinbutton the case clicks into, on every press — including the very first one,
  * before "Custom" is ever revealed. The click completes with no Playwright error (not an
@@ -1390,7 +1390,7 @@ test('a run that predates the true index is still marked, and has no name to rec
   await expect(page.locator('.run-row-scope').first()).toHaveText('Box 1 (deleted)')
 })
 
-/* NAMED REGRESSION FROM THE FOLD (D-runs-folds-into-review). The box pick and the Escape both
+/* NAMED REGRESSION FROM THE FOLD (D291). The box pick and the Escape both
  * complete with no error, but `.run-group` never appears — the picked selection is not
  * grouping the run list the way it did on the standalone route. Not yet root-caused past
  * that: filed rather than hidden. */
@@ -1737,7 +1737,7 @@ test('a handoff loses only the keys whose drawer is gone, not the whole list', a
   await expect(page.locator('.runs-composer-note')).toContainText('2 ticked cards in Box 9')
 })
 
-/* NAMED REGRESSION FROM THE FOLD (D-runs-folds-into-review). `.run-button-money` becomes
+/* NAMED REGRESSION FROM THE FOLD (D291). `.run-button-money` becomes
  * unstable and the outer `.review-runs-sheet` body intercepts the click meant for it, deep
  * into this test's own flow (spend confirm, after a working preflight). Widening the sheet
  * did not clear it. Not yet root-caused past that: filed rather than hidden. */
@@ -3011,7 +3011,7 @@ test('rebind: a refusal draws a sentence, never the CLI reason code', async ({ p
  *  PROVED RED: copying the pre-sweep `RunPanel.tsx`, `RunsComposer.tsx` and `runScope.ts`'s
  *  `destinationLabel`/eyebrow markup back in over this file failed this assertion, over
  *  `290,470 tokens in · 3,761 out`, `Free · re-runnable` and `Box 3 · RB Epics` alike. */
-/* NAMED REGRESSION FROM THE FOLD (D-runs-folds-into-review). Escape closes `.rescue-sheet`'s
+/* NAMED REGRESSION FROM THE FOLD (D291). Escape closes `.rescue-sheet`'s
  * own overlay on every other case in this file, but here `.rescue-sheet` never reaches count
  * 0 -- a real gap, not just its 140ms leave transition racing the next click (a wait for that
  * was added and did not clear it). Not yet root-caused past that: filed rather than hidden. */

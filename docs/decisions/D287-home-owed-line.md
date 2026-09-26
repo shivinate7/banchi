@@ -1,4 +1,4 @@
-## D-home-owed-line — Home keeps its shape, the "Behind that" line stops repeating the spine, and the spine drops to five stages
+## D287 — Home keeps its shape, the "Behind that" line stops repeating the spine, and the spine drops to five stages
 
 **Wave 2, home lane, 2026-09-24. Amends D121.** The owner's ruling on this lane was short and
 specific. Quoted here: *"Keep Home as is". The Home button stays, and the "Behind that"

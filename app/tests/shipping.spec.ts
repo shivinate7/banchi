@@ -608,7 +608,7 @@ test('an order the ledger already knows opens it; an order it does not stays pla
 
 /* -------------------------------------------------------------------------------------- 12 */
 
-test('on a phone every lane opens folded; off a phone every lane opens shown (UX-016/D-ship-lanes-collapse)', async ({
+test('on a phone every lane opens folded; off a phone every lane opens shown (UX-016/D292)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })

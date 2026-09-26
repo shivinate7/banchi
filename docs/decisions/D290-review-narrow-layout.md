@@ -1,4 +1,4 @@
-## D-review-narrow-layout — the photo reserve shrinks below the rail breakpoint
+## D290 — the photo reserve shrinks below the rail breakpoint
 
 **Amends D28's first half.** D28 reserves the photo's height so answering one card does not shift the candidate rows. It fixed the SHIFT. It did not fix the SIZE the reserve claims below the rail breakpoint (Q2, ~640px). There, the reserve pushed the first answer row off the first viewport entirely.
 

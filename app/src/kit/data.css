@@ -228,7 +228,7 @@
 .bn-fchip[data-active='true'] > .bn-pick .bn-pick-label { color: var(--bn-accent-hover); }
 .bn-fchip[data-active='true'] > .bn-pick .bn-pick-chev { visibility: hidden; }
 .bn-fchip-more { font-weight: 500; color: var(--bn-ink-2); font-variant-numeric: tabular-nums; }
-/* It is an IconButton now (D-icon-buttons): its own box, colour and hover paint are
+/* It is an IconButton now (D288): its own box, colour and hover paint are
    `.bn-icon-btn` in kit.css. This rule only places it — centred over the trigger's own
    chevron slot, so revealing it changes no width (D118), the reason it was absolute here
    before IconButton existed. */
@@ -267,7 +267,7 @@
 .bn-filterchips-clear[data-off='true'] { visibility: hidden; }
 
 /* SortControl: the key stays in words (a `Select`); the direction is an IconButton
-   (D-icon-buttons) and carries no styling of its own here — `.bn-icon-btn` in kit.css is
+   (D288) and carries no styling of its own here — `.bn-icon-btn` in kit.css is
    the whole of it. */
 .bn-sort { display: inline-flex; align-items: center; gap: var(--bn-1); }
 

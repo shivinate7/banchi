@@ -234,7 +234,7 @@
    show; dropping it to the lightest ink took it to 2.4:1 in light. The fold is carried by the
    chevron and the ground — not by making the number hard to read. A folded lane draws no
    sentence beneath the chip: the count is already there, and on a phone, where every lane
-   opens folded (D-ship-lanes-collapse), three lanes repeating "N orders folded away" was the
+   opens folded (D292), three lanes repeating "N orders folded away" was the
    exact repeated-sentence shape TXT-01 exists to catch. */
 .shipping-chip[aria-pressed='false'] { background: var(--bn-surface-2); box-shadow: none; }
 .shipping-chip[aria-pressed='false'] .shipping-chip-count { color: var(--bn-ink-2); }

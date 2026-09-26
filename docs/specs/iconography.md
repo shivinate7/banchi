@@ -1,8 +1,8 @@
 # Iconography for Banchi wave 2
 
-This is the map for the ICONOGRAPHY ruling (`docs/decisions/D-icon-buttons.md`). It covers
+This is the map for the ICONOGRAPHY ruling (D288). It covers
 every press in the code at the time it was written, about 340 `<Button>` sites and 150 raw
-`<button>` sites. `D-icon-buttons.md` cites this file. Read that entry first for the ruling
+`<button>` sites. `D288.md` cites this file. Read that entry first for the ruling
 itself. This file is the detail: the rule, the icon set, and the risks.
 
 Key to the columns in every table below:
@@ -527,12 +527,12 @@ that owns the screen:**
    `moveTo` would be a fourth, and they blur at 14px. `moveTo` draws no box.
 
 Rationale for the ruling itself, the words-vs-icon split, and the check's own build: see
-`docs/decisions/D-icon-buttons.md`.
+D288.
 
 ## 5. Round 2: an independent review, and what it found
 
 An Opus review of the built kit found real defects this map's own risks did not name. Its
-full report and probes are kept at `SD/review/kit-icons/`. `docs/decisions/D-icon-buttons.md`
+full report and probes are kept at `SD/review/kit-icons/`. D288
 has the built fix for each one:
 - the hit area moved off the visual box onto a `::before` pseudo-element (FLT-24, D118)
 - the tooltip's position moved to a viewport-clamped `position: fixed` (the overlay Close

@@ -118,7 +118,7 @@
 .bn-sortth[data-active='true'] .bn-sortth-icon { opacity: 1; }
 
 /* ---- The compact trigger and its sheet -------------------------------------------------------- */
-/* It is an IconButton now (D-icon-buttons): its own box, colour, hover paint and active-count
+/* It is an IconButton now (D288): its own box, colour, hover paint and active-count
    badge are `.bn-icon-btn`/`.bn-icon-count` in kit.css. The bordered field look, its own
    18px count pill and its own hover paint (a "second paint on the face", round 2's own
    finding) all predate the conversion and are gone. */
@@ -139,7 +139,7 @@
 .bn-filterbar-sheet-body .bn-filterchips { flex-direction: column; align-items: stretch; }
 .bn-filterbar-sheet-body .bn-filterchips > .bn-fchip { flex: none; width: 100%; }
 .bn-filterbar-sheet-body .bn-filterchips > .bn-fchip > .bn-pick { width: 100%; min-width: 0; max-width: none; }
-/* The direction is now an IconButton (D-icon-buttons): compact, not a field, so it stays at
+/* The direction is now an IconButton (D288): compact, not a field, so it stays at
    its own size beside the key instead of stacking full width with it. */
 .bn-filterbar-sheet-body .bn-sort > .bn-pick { flex: 1; min-width: 0; max-width: none; justify-content: flex-start; }
 
