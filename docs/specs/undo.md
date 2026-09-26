@@ -256,8 +256,15 @@ first answer ("Anytime, from a history").
 path is the record's own control. Only the limit changes:
 
 - **A clock limits nothing.** A toast still fades. The undo does not fade with it.
-- **Rank replaces the clock on the fast path.** Section 10 already rules this for the walk.
-  The newest reversible write on a screen keeps its Undo until a newer write replaces it.
+- **Rank decides the FAST PATH, never which rows draw a control (the delta review round,
+  item 6, the owner's own ruling).** `U` and the toast reach only the newest reversible
+  write on a screen. This section first read that as the only rule there was. Inventory's
+  own row-level Undo followed it (finding #12): an older sold row lost its own Undo the
+  moment a newer sale took the rank. The owner's ruling settles it the other way for the
+  ROW — an undo lasts until it is built on. Every sold row keeps its own Undo until IT is
+  built on, on Inventory and Cards to pull alike. Fulfillment's "Pulled today" list already
+  worked this way. Inventory now matches it, rather than the other way round. Rank still
+  decides the ONE thing `U` and a toast's own Undo reach.
 - **"Built on" limits both paths.** The server decides it and refuses with a sentence. The
   screen never guesses it.
 - **"Never ask" holds everywhere but one press.** No other press gets a confirm. A press that

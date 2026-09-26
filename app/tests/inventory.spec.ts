@@ -7336,7 +7336,7 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
   ])
 })
 
-test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute later, and a newer sale is what takes it', async ({ page }) => {
+test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute later, and a newer sale keeps its own row too', async ({ page }) => {
   /* D28 AND D57 ARE AMENDED, 2026-09-25 (`docs/specs/undo.md` §11.1): rank replaces the
      clock. `UNDO_WINDOW_MS` still times the TOAST's own fade; it no longer prunes `receipts`,
      so the row's `Undo` and `U` reach the newest sale or retirement for as long as it stays
@@ -7388,14 +7388,22 @@ test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute l
   /* And the control is still offering the re-rank, because nothing has taken a new order. */
   await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
 
-  /* NOW A NEWER SALE (finding #12, `docs/specs/undo.md` §11.1): only the newest sale is
-     undoable, never every sale of the session. Card 39 is sold second. */
+  /* NOW A NEWER SALE (the delta review round's own item 6, reversing finding #12): the
+     owner's ruling is that undo lasts "until it's built on", on every sold row, the same
+     way Fulfillment's "Pulled today" list already keeps every sale of a session undoable.
+     Card 39 is sold second. */
   await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 39' })).toHaveCount(1)
-  /* Card 38's own Undo is gone — it is no longer the newest, and its row draws nothing extra
-     (the struck number already says sold, S2's own reasoning). */
-  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 38' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /^Undo the sale at/ })).toHaveCount(1)
+  /* Card 38's own Undo STAYS — it is not built on by anything, so it is still reversible even
+     though it is no longer the newest sale. */
+  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 38' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /^Undo the sale at/ })).toHaveCount(2)
+
+  /* `U` AND THE TOAST STILL REACH ONLY THE NEWEST (39), never 38 — "newest-only" survives
+     for the one fast path, even though both rows now draw their own control. */
+  await page.keyboard.press('u')
+  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 39' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 38' })).toHaveCount(1)
 })
 
 test('a retirement holds its row too, and it is the freeze alone that does it', async ({ page }) => {

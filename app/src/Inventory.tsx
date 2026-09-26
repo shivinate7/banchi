@@ -672,19 +672,17 @@ function InventoryWalk({
     })
   }, [])
 
-  /** The one sale a row may still take back — the NEWEST reversible receipt, and only if it is
-   *  a sale (`docs/specs/undo.md` §11.1, the Opus review round, finding #12): "only the newest
-   *  sale is undoable by U or the toast." An older sold row keeps its own row (the freeze,
-   *  D132) but its Undo leaves the instant a later write takes the newest rank, the same way
-   *  Orders' `newestUndoKey` gates `RowAction`. Filtering every `canUndo` receipt here (the
-   *  first build) kept EVERY sale of the session undoable at once, which is what the review
-   *  caught: §11.1 asks for one. */
+  /** EVERY sold row keeps its own Undo until it is BUILT ON (the owner's ruling: undo lasts
+   *  "until it's built on" — the delta review round's own item 6, reversing finding #12's
+   *  newest-only reading). Fulfillment's "Pulled today" list already works this way; this
+   *  makes Inventory match it, rather than the other way round. `canUndo` is per-receipt and
+   *  already false the instant a later write builds on it (a re-shoot, a section move, and
+   *  so on) — `receipts` filters to that alone, never to rank. `U` and the toast still reach
+   *  only the NEWEST one (`newestUndoable`, below): "newest-only" survives for the ONE fast
+   *  path, not for which rows draw a control. */
   const undoableSales = useMemo(
-    () =>
-      newestUndoable !== null && newestUndoable.kind === 'sale'
-        ? new Map([[newestUndoable.key, newestUndoable] as const])
-        : new Map<string, Receipt>(),
-    [newestUndoable],
+    () => new Map(receipts.filter((r) => r.kind === 'sale' && r.canUndo).map((r) => [r.key, r] as const)),
+    [receipts],
   )
 
   /* The press is the sale (D57). A retire panel standing over another copy is closed first. */
