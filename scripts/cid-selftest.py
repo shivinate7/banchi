@@ -840,7 +840,8 @@ def case_a_move_moves_no_file() -> None:
 
     with Tally() as tally:
         answer = capture_server.do_move_card(
-            1, 1, {"to_box": 4, "capture_id": "mv", "section": "1"})
+            1, 1, {"to_box": 4, "capture_id": "mv", "section": "1",
+                   "layout_token": Store().read().inventory.layout_token(4)})
     equal(tally.touched, 0,
           "A MOVE TOUCHES NO FILE AT ALL — not a rename, not a sidecar rewrite, not an "
           "unlink. It was a rename plus a sidecar write plus a sidecar unlink, ordered "
