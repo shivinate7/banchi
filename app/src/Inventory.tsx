@@ -19,6 +19,7 @@ import {
   isDeparted,
   markSold,
   moveCard,
+  undoMove,
   photoUrl,
   retireCard,
   undoRetire,
@@ -35,8 +36,19 @@ import { PositionLabel } from './PositionLabel'
 import { sayPlace } from './position'
 import { RETIRE_REASONS, reasonWord } from './cardState'
 import { useSearch } from './useSearch'
-import { isEditableTarget } from './keys'
-import { Button, Icon, IconButton, Loading, Notice, Page, Pill, Select, boxesMostRecentFirst } from './kit'
+import {
+  Button,
+  Icon,
+  IconButton,
+  Loading,
+  Notice,
+  Page,
+  Pill,
+  Select,
+  UNDO_KEY_LABEL,
+  boxesMostRecentFirst,
+  useUndoHotkey,
+} from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
@@ -50,22 +62,21 @@ import './Inventory.css'
  *
  * `BoxBrowse` owns the walk, the box operations, the photograph and the card-level
  * corrections; this file owns the one flow that writes a card — the sale, the retirement, their
- * receipts and their twenty-second undo — and draws the copies beside the photograph. Nothing
+ * receipts and their undo — and draws the copies beside the photograph. Nothing
  * here holds a second copy of the inventory: every write is followed by a re-read.
  *
  * IT DREW A LOCATION CARD ABOVE THAT LIST UNTIL D119, and the copy the walk stands on is an
  * ordinary row of the list now. What that deletion moved here rather than losing is the
  * receipt: a sale is taken back where it was pressed.
- */
+ *
+ * THE RECEIPT HAS NO CLOCK (`docs/specs/undo.md` §11.1, UN-5, D28 and D57 amended
+ * 2026-09-25). Rank replaces it: the newest sale or retirement keeps its `Undo`, in the row
+ * and on the page, until a newer one takes its place. `UNDO_WINDOW_MS` is only the toast's own
+ * fade — a toast still fades; the undo does not fade with it. */
 
-/** How long a receipt's undo stays. Fulfillment.tsx's number, kept in step. */
+/** How long a receipt's TOAST stays on screen — the fade, never the undo. Fulfillment.tsx's
+ *  number, kept in step. */
 const UNDO_WINDOW_MS = 20_000
-
-/** The one key for the newest reversible write, wherever one stands (`docs/specs/undo.md`
- *  §3). Same letter, same meaning as `CaptureScreen.tsx` and `ReviewQueue.tsx` — it reaches
- *  the newest receipt still carrying an undo, sale or retirement alike. */
-const UNDO_KEY = 'u'
-const UNDO_KEY_LABEL = 'U'
 
 /* The refusal codes this screen branches on. `already_sold` on a sale is not this device's
  * sale: a receipt with NO undo. `not_sold` on a reversal is success. The retirement pair
@@ -78,6 +89,7 @@ const ALREADY_SOLD = 'already_sold'
 const NOT_SOLD = 'not_sold'
 const ALREADY_RETIRED = 'already_retired'
 const NOT_RETIRED = 'not_retired'
+const NOT_MOVED = 'not_moved'
 
 const NO_LAYOUTS: ReadonlyMap<number, readonly SectionDetail[]> = new Map()
 
@@ -234,10 +246,16 @@ function loneGroup(row: Row, copy: SearchCopy): SearchGroup {
 }
 
 /** One write that has just been recorded — a sale, or a retirement — and what can still be
- *  done about it. A list of these, each with its own deadline, holding its own copy of the
- *  position because the rows may move underneath it. */
+ *  done about it. A list of these, holding its own copy of the position because the rows may
+ *  move underneath it.
+ *
+ *  NO CLOCK (`docs/specs/undo.md` §11.1, UN-5): the newest reversible write on this screen
+ *  keeps its Undo until a newer write replaces it — rank, never a deadline. `remember` already
+ *  prepends and dedupes by `key`, so the array is newest-first by construction and `.find` /
+ *  `[0]` reach the same answer a clock used to gate. A toast still fades (`kit/toast.tsx`'s own
+ *  `ttlMs`); the row's and the page's Undo do not fade with it. */
 type Receipt = {
-  kind: 'sale' | 'retirement'
+  kind: 'sale' | 'retirement' | 'move'
   key: string
   box: number
   index: number
@@ -245,11 +263,20 @@ type Receipt = {
   said: string
   canUndo: boolean
   note: string | null
-  until: number
+  /** MOVE ONLY: where the transplant reads now, and its capture id. `undoMove` aims at the
+   *  tombstone (`box`/`index` above) and refuses `move_built_on` once either box has changed
+   *  again. The remedy then is an ordinary `moveCard`, aimed at THIS location, back to `box`
+   *  (`server.ts:moveCard`'s own doc comment). */
+  current?: { box: number; index: number; captureId: string | null }
 }
 
+const MOVE_BUILT_ON = 'move_built_on'
+
+/* NO RAW CODE ON SCREEN (D196, D269 — the Opus review round's finding #7): a toast has no
+ * disclosure to put a machine string behind, so it does not carry one. The server's own
+ * sentence, already in `failure.message`, is what a person reads; `code` stays off-screen. */
 function report(failure: Failure): void {
-  toast({ kind: 'refusal', title: failure.message, body: failure.code })
+  toast({ kind: 'refusal', title: failure.message })
 }
 
 /* ONE OWNER-SIDE VIEW OF STORED CARDS (D31), SEEN TWO WAYS: the walk, card by card, and the
@@ -377,21 +404,6 @@ function InventoryWalk({
     }
   }, [reloads])
 
-  /* One timer for the whole list, armed at the soonest deadline. */
-  useEffect(() => {
-    if (receipts.length === 0) return
-    const soonest = Math.min(...receipts.map((receipt) => receipt.until))
-    const timer = window.setTimeout(
-      () =>
-        setReceipts((held) => {
-          const standing = held.filter((receipt) => receipt.until > Date.now())
-          return standing.length === held.length ? held : standing
-        }),
-      Math.max(0, soonest - Date.now()) + 25,
-    )
-    return () => window.clearTimeout(timer)
-  }, [receipts])
-
   /* Escape closes the retire panel. */
   useEffect(() => {
     if (retiring === null) return
@@ -407,18 +419,17 @@ function InventoryWalk({
   /** Newest first, and a second write against one position replaces its receipt. Every
    *  receipt is also a toast — with its Undo where there is one, and its note where there is
    *  not. */
-  const remember = useCallback((receipt: Omit<Receipt, 'until'>) => {
-    const full: Receipt = { ...receipt, until: Date.now() + UNDO_WINDOW_MS }
-    setReceipts((held) => [full, ...held.filter((standing) => standing.key !== receipt.key)])
+  const remember = useCallback((receipt: Receipt) => {
+    setReceipts((held) => [receipt, ...held.filter((standing) => standing.key !== receipt.key)])
     const previous = toasts.current.get(receipt.key)
     if (previous !== undefined) dismissToast(previous)
     const id = toast({
-      kind: full.canUndo ? 'receipt' : 'status',
-      icon: full.kind === 'sale' ? 'check' : 'archive',
-      title: full.said,
-      body: receiptBody(full.place, full.note),
+      kind: receipt.canUndo ? 'receipt' : 'status',
+      icon: receipt.kind === 'sale' ? 'check' : receipt.kind === 'move' ? 'package' : 'archive',
+      title: receipt.said,
+      body: receiptBody(receipt.place, receipt.note),
       ttlMs: UNDO_WINDOW_MS,
-      action: full.canUndo ? { label: 'Undo', onPress: () => void doUndoRef.current(full) } : undefined,
+      action: receipt.canUndo ? { label: 'Undo', onPress: () => void doUndoRef.current(receipt) } : undefined,
     })
     toasts.current.set(receipt.key, id)
   }, [])
@@ -521,21 +532,30 @@ function InventoryWalk({
     [busyKey, remember, holdRank],
   )
 
-  /* D83's third door, for one copy (UX-244). No undo here: undo is its own later session. */
+  /* D83's third door, for one copy (UX-244). UN-14 (`docs/specs/undo.md` §11.1, D28/D57
+   * amended 2026-09-25): the move gets the same fast path a sale does — `remember` folds it
+   * into the SAME receipt list, so `U` and the toast's own Undo reach whichever write, sale,
+   * retirement or move, was pressed last. `undoMove` is aimed at the TOMBSTONE (the source
+   * `box`/`index` this call sent), never the new one — the card comes back to its own index,
+   * and nothing else in either box moves. */
   const doMove = useCallback(
     async (copy: SearchCopy, toBox: number) => {
       if (busyKey !== null) return
       setBusyKey(copy.key)
+      const seat = { key: copy.key, box: copy.place.box, index: copy.place.index }
       try {
-        await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox)
+        const result = await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox)
         setMoving(null)
         holdRank(copy.key)
         const where = boxRecords.find((record) => record.box === toBox)?.name ?? UNNAMED_BOX
-        toast({
-          kind: 'ok',
-          icon: 'package',
-          title: `Moved to ${where}`,
-          body: receiptBody(sayPlace(copy.place.label ?? copy.key), renumberNote(copy.place)),
+        remember({
+          ...seat,
+          place: sayPlace(copy.place.label ?? copy.key),
+          kind: 'move',
+          said: `Moved to ${where}`,
+          canUndo: true,
+          note: renumberNote(copy.place),
+          current: { box: result.new_box, index: result.new_index, captureId: result.card.capture_id },
         })
         setReloads((n) => n + 1)
       } catch (err) {
@@ -544,24 +564,50 @@ function InventoryWalk({
         setBusyKey(null)
       }
     },
-    [busyKey, holdRank, boxRecords],
+    [busyKey, holdRank, boxRecords, remember],
   )
 
   const doUndo = useCallback(
     async (receipt: Receipt) => {
       if (busyKey !== null) return
       setBusyKey(receipt.key)
+      let movedBack = false
+      /* WHERE THE REMEDY ACTUALLY PUT IT (finding #5, the Opus review round): the remedy
+       * lands at a FRESH index in the origin box, never the tombstoned one, so `receipt.place`
+       * — the copy's place from BEFORE the original move — names the wrong shelf once this
+       * runs. `result.card.label` is the server's own answer to the move-back itself. */
+      let movedBackTo: string | null = null
       try {
         if (receipt.kind === 'sale') await undoSale(receipt.box, receipt.index)
-        else await undoRetire(receipt.box, receipt.index)
+        else if (receipt.kind === 'retirement') await undoRetire(receipt.box, receipt.index)
+        else await undoMove(receipt.box, receipt.index)
       } catch (err) {
-        /* `not_sold` / `not_retired` is success — the copy is not in the state the press asked
-         * to leave. Anything else keeps the receipt standing. */
-        const settled = receipt.kind === 'sale' ? NOT_SOLD : NOT_RETIRED
-        if (refusalCode(err) !== settled) {
-          report(describeFailure(err))
-          setBusyKey(null)
-          return
+        /* `not_sold` / `not_retired` / `not_moved` is success — the copy is not in the state
+         * the press asked to leave. Anything else keeps the receipt standing, EXCEPT
+         * `move_built_on` (UN-14): the ordinary reversal aims at the tombstone and refuses
+         * once either box has changed again since — same reason `undoSale` refuses
+         * `sale_built_on`. There is no separate route for the fix-after here, unlike a sale's
+         * `saleStillHere`: `server.ts:moveCard`'s own doc comment names the remedy as an
+         * ORDINARY `moveCard` again, aimed at the transplant's CURRENT position, back to the
+         * box the receipt started from. It lands at a fresh index there, never the
+         * tombstoned one. */
+        if (receipt.kind === 'move' && refusalCode(err) === MOVE_BUILT_ON && receipt.current !== undefined) {
+          try {
+            const result = await moveCard(receipt.current.box, receipt.current.index, receipt.current.captureId, receipt.box)
+            movedBack = true
+            movedBackTo = result.card.label === undefined ? null : sayPlace(result.card.label)
+          } catch (remedyErr) {
+            report(describeFailure(remedyErr))
+            setBusyKey(null)
+            return
+          }
+        } else {
+          const settled = receipt.kind === 'sale' ? NOT_SOLD : receipt.kind === 'retirement' ? NOT_RETIRED : NOT_MOVED
+          if (refusalCode(err) !== settled) {
+            report(describeFailure(err))
+            setBusyKey(null)
+            return
+          }
         }
       }
       setReceipts((held) => held.filter((standing) => standing.key !== receipt.key))
@@ -571,12 +617,27 @@ function InventoryWalk({
         toasts.current.delete(receipt.key)
       }
       if (receipt.kind === 'sale') setSold((held) => held.filter((key) => key !== receipt.key))
-      else setRetired((held) => held.filter((key) => key !== receipt.key))
+      else if (receipt.kind === 'retirement') setRetired((held) => held.filter((key) => key !== receipt.key))
       /* THE COPY IS BACK, SO THE ORDER IS NO LONGER STALE BY IT. Releasing rather than leaving
          it held is what keeps the staleness figure a count of what actually left: an undone sale
          that went on being counted would offer a re-rank for a store that never moved. */
       releaseRank(receipt.key)
-      toast({ kind: 'ok', icon: 'undo', title: receipt.kind === 'sale' ? 'Sale undone' : 'Retirement undone', body: receipt.place, ttlMs: 4000 })
+      toast({
+        kind: 'ok',
+        icon: 'undo',
+        /* ONE VOCABULARY (UN-5, finding #15, the Opus review round, `docs/specs/undo.md`
+         * §11.9): every reversal reads "<what it undid> undone", whether the write went
+         * through the ordinary reversal route or, for a move, back through `moveCard`
+         * itself (`movedBack`) — a distinction the operator has no reason to see. */
+        title:
+          receipt.kind === 'sale'
+            ? 'Sale undone'
+            : receipt.kind === 'retirement'
+              ? 'Retirement undone'
+              : 'Move undone',
+        body: movedBack ? (movedBackTo ?? receipt.place) : receipt.place,
+        ttlMs: 4000,
+      })
       setReloads((n) => n + 1)
       setBusyKey(null)
     },
@@ -591,29 +652,12 @@ function InventoryWalk({
   receiptsRef.current = receipts
   const newestUndoable = useMemo(() => receipts.find((receipt) => receipt.canUndo) ?? null, [receipts])
 
-  /* `U` IS THE ONE KEY FOR THE NEWEST REVERSIBLE WRITE (`docs/specs/undo.md` §3), the same
-   * ruling `CaptureScreen.tsx` and `ReviewQueue.tsx` already carry out. Registered once,
-   * armed by `handlerRef` rather than a dependency list, for the reason `ReviewQueue.tsx`
-   * gives it: an effect runs after paint, and a key pressed in the gap between a state
-   * change and its effect would close over the previous receipts. Nothing where there is
-   * nothing to undo — no beep, no toast, no navigation. */
-  const onUndoKey = (event: KeyboardEvent) => {
-    if (event.repeat) return
-    if (event.metaKey || event.ctrlKey || event.altKey) return
-    if (isEditableTarget(event.target)) return
-    if (event.key.toLowerCase() !== UNDO_KEY) return
+  /* THE SHARED HOOK (`docs/specs/undo.md` §11.3, UN-10) — one primitive for the newest
+   * reversible write, in place of this screen's own listener. */
+  useUndoHotkey(() => {
     const newest = receiptsRef.current.find((receipt) => receipt.canUndo)
-    if (newest === undefined) return
-    event.preventDefault()
-    void doUndoRef.current(newest)
-  }
-  const undoKeyRef = useRef(onUndoKey)
-  undoKeyRef.current = onUndoKey
-  useEffect(() => {
-    const fire = (event: KeyboardEvent) => undoKeyRef.current(event)
-    window.addEventListener('keydown', fire)
-    return () => window.removeEventListener('keydown', fire)
-  }, [])
+    return newest === undefined ? null : () => void doUndoRef.current(newest)
+  })
 
   const soldKeys = useMemo(() => new Set(sold), [sold])
   const retiredKeys = useMemo(() => new Set(retired), [retired])
@@ -628,14 +672,16 @@ function InventoryWalk({
     })
   }, [])
 
-  /** The sales a row may still take back, by copy key. Only sales, only reversible ones. */
+  /** EVERY sold row keeps its own Undo until it is BUILT ON (the owner's ruling: undo lasts
+   *  "until it's built on" — the delta review round's own item 6, reversing finding #12's
+   *  newest-only reading). Fulfillment's "Pulled today" list already works this way; this
+   *  makes Inventory match it, rather than the other way round. `canUndo` is per-receipt and
+   *  already false the instant a later write builds on it (a re-shoot, a section move, and
+   *  so on) — `receipts` filters to that alone, never to rank. `U` and the toast still reach
+   *  only the NEWEST one (`newestUndoable`, below): "newest-only" survives for the ONE fast
+   *  path, not for which rows draw a control. */
   const undoableSales = useMemo(
-    () =>
-      new Map(
-        receipts
-          .filter((receipt) => receipt.kind === 'sale' && receipt.canUndo)
-          .map((receipt) => [receipt.key, receipt] as const),
-      ),
+    () => new Map(receipts.filter((r) => r.kind === 'sale' && r.canUndo).map((r) => [r.key, r] as const)),
     [receipts],
   )
 
@@ -987,29 +1033,26 @@ function Action({
         </Pill>
       ) : null
     ) : (
-      /* THE CLOCK IS THE ROW'S TOO, SINCE D119, AND THE SENTENCE IS NOT — which is D118 deciding
-         the shape rather than taste. The location card drew the whole receipt and the row got a
-         bare `Undo`; with that card gone the row is where a sale is taken back, and an `Undo`
-         with no clock says what it does but not for how long. What could NOT come with it is the
-         panel: `.card-locations-action` reserves the button pair's own 137x28 so a press cannot
-         resize the slot it lands in, and a `bn-receipt` pill is 268px wide and 36px tall — put
-         in the cell it shoves the address, given a grid row of its own it grows the row 38px,
-         and either one is the screen shake D118 was built to end. Measured both ways.
-         SO THE ROW GETS THE DRAIN AND THE BUTTON, inside the slot, at the slot's size. The
-         sentence is not lost: the state pill beside it already reads `Sold`, and the toast this
-         sale posted carries `Marked sold.` with the same clock and the same Undo. The phone's
-         action bar is unchanged — it has no state pill beside it, and it is what `primary` now
-         means. */
-      <span
-        className={primary ? 'bn-receipt inventory-receipt' : 'inventory-copy-actions inventory-receipt'}
-        style={{ ['--receipt-ms' as string]: `${UNDO_WINDOW_MS}ms` }}
-      >
+      /* THE ROW HAS NO CLOCK EITHER, SINCE UN-5 (D28 and D57 amended 2026-09-25) — which is
+         D118 deciding the shape rather than taste. The location card drew the whole receipt
+         and the row got a bare `Undo`; with that card gone the row is where a sale is taken
+         back, and it stands until a newer sale replaces it rather than for a counted twenty
+         seconds. What could NOT come with it is the panel: `.card-locations-action` reserves
+         the button pair's own 137x28 so a press cannot resize the slot it lands in, and a
+         `bn-receipt` pill is 268px wide and 36px tall — put in the cell it shoves the address,
+         given a grid row of its own it grows the row 38px, and either one is the screen shake
+         D118 was built to end. Measured both ways.
+         SO THE ROW GETS ONLY THE BUTTON, inside the slot, at the slot's size — no drain, since
+         a drain that finished and stayed empty is exactly the "it looks dead but it still
+         works" shape UN-5 removes. The sentence is not lost: the state pill beside it already
+         reads `Sold`, and the toast this sale posted carries `Marked sold.` with the same
+         Undo. The phone's action bar is unchanged — it has no state pill beside it, and it is
+         what `primary` now means. */
+      <span className={primary ? 'bn-receipt inventory-receipt' : 'inventory-copy-actions inventory-receipt'}>
         {primary ? <span className="inventory-receipt-said">Marked sold.</span> : null}
-        {/* The undo window draining, the same clock the toast for this sale shows. */}
-        <span className="bn-receipt-bar" aria-hidden="true" />
         {/* ICON, U IN THE TOOLTIP (ICONOGRAPHY): Undo is reversed by pressing it again, so it
             keeps no words in either sector — the row and the phone bar both read it from the
-            sentence/clock beside it. */}
+            sentence beside it. */}
         <IconButton
           size="xl"
           icon="undo"

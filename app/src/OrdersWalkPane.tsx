@@ -396,24 +396,6 @@ export function useOrderWalk({
     })
   }
 
-  /** Step to the next row after a sale — `#387 of 675 so far` moving on. While the take is not
-   *  yet fully recorded, the next UNSOLD copy of the SAME take leads, so the operator keeps
-   *  marking that card; once it is, the first row of the next take lights (§13: "when a card's
-   *  owed copies are all sold, the next card lights"). */
-  const advanceAfter = (soldRowKey: string, satisfied: boolean, justSold: ReadonlySet<string>) => {
-    const at = rows.findIndex((row) => row.rowKey === soldRowKey)
-    if (at === -1) return
-    if (!satisfied) {
-      const next = rows.find((row, i) => i > at && row.takeKey === rows[at]!.takeKey && !justSold.has(row.copy.key))
-      if (next !== undefined) {
-        setCurrent(next.rowKey)
-        return
-      }
-    }
-    const next = rows.find((row, i) => i > at && row.takeKey !== rows[at]!.takeKey)
-    if (next !== undefined) setCurrent(next.rowKey)
-  }
-
   const select = (rowKey: string) => setCurrent(rowKey)
 
   const step = (direction: 1 | -1) => {
@@ -474,19 +456,20 @@ export function useOrderWalk({
           next.set(take.sku, bySku)
           return next
         })
-        const justSold = new Set([...soldKeys, copy.key])
+        /* UN-6's rebuild deletes the walk's own auto-advance (below), so the per-stop
+           `satisfied` tally walk-fix computed here (finding 4: `take` is THIS STOP's own
+           instance, never summed store-wide) has no `advanceAfter` left to feed. `sku` on
+           the receipt stays: `undoCopy`/`noteExternalUndo` read it to lower the right tally. */
         setReceipts((prev) => new Map(prev).set(copy.key, { at: Date.now(), target, place: outcome.place, orderKey: order.key, sku: take.sku }))
-        /* PER-STOP, NEVER PER-SKU (the review round's finding 4): `take` is THIS STOP's own
-           take instance — a SKU split across two stops (D212's own case, e.g. Mirror Image at
-           two sections) gets one `WalkPlanTake` per stop, each with its own `wanted` share.
-           `totalRecorded(take.sku)` summed every order's tally for the sku STORE-WIDE, so the
-           second stop read as satisfied after only 2 of its own 3 picks — the first stop's
-           already-recorded copy was still being counted here. The right count is how many of
-           THIS TAKE's own "here" copies (this stop's physical reach) are now sold. */
-        const hereCount = take.copies.filter((c) => c.here && justSold.has(c.key)).length
-        const satisfied = hereCount >= take.wanted
-        advanceAfter(currentRow.rowKey, satisfied, justSold)
       }
+      /* UN-6, REBUILT (`docs/specs/undo.md` §11.3, D57, D118): the walk no longer advances
+         itself. The sold copy's own `RowAction` reads `receipts` fresh every render and turns
+         into `Undo` in the exact row it was pressed from — nothing else on the pane is
+         re-mounted, so no OTHER row's button can ever land under a repeated tap. The operator
+         moves to the next card on their own press (J/K, or a row in the walk list), the same
+         door every other screen's Undo leaves open. The earlier fix disabled the new card's
+         button for `ADVANCE_GUARD_MS` after an automatic jump; the jump itself was the defect,
+         so there is nothing left here to guard against. */
       setBusyCopy(null)
     })()
   }
@@ -666,6 +649,13 @@ export function WalkList({
                   const current = line.rows.some((row) => row.rowKey === walk.current)
                   const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
                   const next = line.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? line.rows[0]
+                  /* FINDING #16 (the Opus review round): the struck-out row is reached only
+                   * through the card pane before this — the operator had to re-select the take
+                   * to find its own copy's Undo. `newestUndoKey` names the one reversible copy
+                   * store-wide (no clock, see above), so a line carrying it draws its own Undo
+                   * beside the row instead of nesting a second button inside `orders-walk-press`
+                   * (D57: the row's own control becomes Undo). */
+                  const undoRow = line.rows.find((row) => row.copy.key === walk.newestUndoKey)
                   return (
                     <li className={done ? 'orders-walk-line is-done' : 'orders-walk-line'} key={line.takeKey}>
                       <button
@@ -691,6 +681,17 @@ export function WalkList({
                         </span>
                         {showBuyers ? <span className="orders-walk-for">{takeBuyers(line.take)}</span> : null}
                       </button>
+                      {undoRow === undefined ? null : (
+                        <IconButton
+                          icon="undo"
+                          label="Undo"
+                          name={`Undo: ${undoRow.copy.place.label === null ? undoRow.copy.key : sayPlace(undoRow.copy.place.label)}`}
+                          className="orders-walk-line-undo"
+                          busy={walk.busyCopy === undoRow.copy.key}
+                          disabled={walk.busyCopy !== null && walk.busyCopy !== undoRow.copy.key}
+                          onClick={() => walk.undoCopy(undoRow.copy.key)}
+                        />
+                      )}
                     </li>
                   )
                 })}

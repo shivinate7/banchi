@@ -187,6 +187,7 @@ export const HOME = {
   'R2-search': 'app/src/SearchField.tsx',
   'R2-date': 'app/src/dates.ts',
   'R2-money': 'app/src/money.ts',
+  'R2-undo-key': 'app/src/kit/undo.ts',
 }
 /** THE KIT'S OWN SPECIMEN SHEET. `#/gallery` draws each kit class raw so a person can see it
  *  (a `bn-skeleton` bar, a `bn-money` figure, the `bn-title` size), which is its whole job. It is
@@ -251,6 +252,7 @@ export const RULES = {
   'R2-icon-only-button': 'a hand-rolled icon-only control outside the kit (use IconButton)',
   'R2-header-actions': 'more than one worded <Button> in a <Page>/<PageHeader> actions slot (the rest must be IconButtons or a More menu)',
   'R2-filter-row': 'a hand-built filter row (a SearchField beside a facet control) that does not go through the kit FilterBar',
+  'R2-undo-key': "a screen binding the U key itself outside kit/undo.ts (use useUndoHotkey)",
 }
 
 /** R2-header-actions: the tags whose `actions` prop draws a page header (`Page.tsx`'s and
@@ -596,6 +598,74 @@ function endsInDollar(expr) {
 const isIntlNumberFormat = (callee) =>
   ts.isPropertyAccessExpression(callee) && callee.name.text === 'NumberFormat' && ts.isIdentifier(callee.expression) && callee.expression.text === 'Intl'
 
+const isEqualityOp = (kind) => kind === ts.SyntaxKind.EqualsEqualsEqualsToken || kind === ts.SyntaxKind.EqualsEqualsToken
+
+/** A local `const NAME = 'u'` (or `'U'`) declared anywhere in the same file — the shape a
+ *  screen takes to name its own key literal instead of writing it inline. Returns that
+ *  literal node, so `undoKeyCompare` can read its text same as an inline literal. */
+function constAssignedULiteral(name, sf) {
+  let found
+  const visit = (node) => {
+    if (found) return
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name && node.initializer) {
+      const init = node.initializer
+      if (ts.isStringLiteral(init) && (init.text === 'u' || init.text === 'U')) found = init
+    }
+    if (!found) ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return found
+}
+
+/** R2-undo-key: a `key.toLowerCase() === 'u'` / `event.key === 'U'` shape — a screen reading a
+ *  keyboard event's own key and comparing it to the literal 'u' or 'U', case either way, or to
+ *  a same-file constant bound to that same literal (`const UNDO_KEY = 'u'`). This
+ *  is `kit/undo.ts`'s own `useUndoHotkey` reimplemented by hand: repeat/modifier/editable-
+ *  target guards, a window listener, all over again, one copy per screen (the comment on
+ *  `UNDO_KEY_LABEL` in that file: "a screen that still binds `U` itself is what `make
+ *  kit-adoption` fails"). Scoped to the two shapes every real instance in this repo took
+ *  (`event.key === 'u'`, and a normalized `lower`/`key` variable built from
+ *  `.toLowerCase()`), never a bare identifier alone on the KEY side — a generic single-letter
+ *  comparison unrelated to a keyboard event (a SKU suffix, a game code) reads the same as a
+ *  key check to an AST with no type information, and this rule cannot tell those apart
+ *  without one. */
+function undoKeyCompare(n, sf) {
+  const isULiteral = (e) => ts.isStringLiteral(e) && (e.text === 'u' || e.text === 'U')
+  const uConstant = (e) => (ts.isIdentifier(e) ? constAssignedULiteral(e.text, sf) : undefined)
+  let literalText
+  let other
+  if (isULiteral(n.left)) {
+    literalText = n.left.text
+    other = n.right
+  } else if (isULiteral(n.right)) {
+    literalText = n.right.text
+    other = n.left
+  } else {
+    const leftConst = uConstant(n.left)
+    const rightConst = uConstant(n.right)
+    if (leftConst !== undefined) {
+      literalText = leftConst.text
+      other = n.right
+    } else if (rightConst !== undefined) {
+      literalText = rightConst.text
+      other = n.left
+    }
+  }
+  if (literalText === undefined) return null
+  const e = unwrap(other)
+  if (e === undefined) return null
+  const looksLikeKey = (x) => {
+    if (ts.isPropertyAccessExpression(x) && x.name.text === 'key') return true
+    if (ts.isIdentifier(x) && (x.text === 'lower' || x.text === 'key')) return true
+    if (ts.isCallExpression(x) && ts.isPropertyAccessExpression(x.expression)) {
+      const prop = x.expression.name.text
+      return prop === 'toLowerCase' || prop === 'toUpperCase'
+    }
+    return false
+  }
+  return looksLikeKey(e) ? `\`${e.getText(sf)} === '${literalText}'\`` : null
+}
+
 function attr(element, name) {
   const attrs = ts.isJsxSelfClosingElement(element) || ts.isJsxOpeningElement(element) ? element.attributes.properties : []
   return attrs.find((a) => ts.isJsxAttribute(a) && a.name.getText() === name)
@@ -850,6 +920,8 @@ function scanFile(rel, sf) {
     } else if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === 'toLocaleString') {
       if (asksCurrency(n.arguments)) add('R2-money', n, "toLocaleString with style 'currency'")
       else if (asksDate(n.arguments)) add('R2-date', n, 'toLocaleString with a date or time option')
+    } else if (ts.isBinaryExpression(n) && isEqualityOp(n.operatorToken.kind) && undoKeyCompare(n, sf) !== null) {
+      add('R2-undo-key', n, undoKeyCompare(n, sf))
     } else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isPropertyAccessExpression(n.left) && n.left.name.text === 'className') {
       for (const t of classTokens(n.right)) if (reserved(t)) add('R2-class', n, t)
     } else if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === 'add' && ts.isPropertyAccessExpression(n.expression.expression) && n.expression.expression.name.text === 'classList') {
@@ -1304,6 +1376,40 @@ function selfTest() {
     return !has(r.unlisted, 'app/src/Gallery.tsx', 'R2-class') && has(r.unlisted, 'app/src/Gallery.tsx', 'R2-select')
   })
   add('a raw <select> is red', () => has(outcome(tree({ 'app/src/S.tsx': 'export const S = () => <select><option /></select>\n' })).unlisted, 'app/src/S.tsx', 'R2-select'))
+  add("event.key === 'u' is red; event.key === 'U' is red too (finding #11)", () => {
+    const r = outcome(
+      tree({ 'app/src/S.tsx': "export const s = (e) => { if (e.key === 'u' || e.key === 'U') go() }\n" }),
+    )
+    return r.violations.filter((v) => v.rule === 'R2-undo-key').length === 2
+  })
+  add("lower === 'u' off a `.toLowerCase()` variable is red (Pricing's own field-level shape)", () =>
+    has(
+      outcome(tree({ 'app/src/S.tsx': "export const s = (key) => { const lower = key.toLowerCase(); if (lower === 'u') go() }\n" }))
+        .unlisted,
+      'app/src/S.tsx',
+      'R2-undo-key',
+    ))
+  add("key.toLowerCase() === 'u' inline is red too", () =>
+    has(
+      outcome(tree({ 'app/src/S.tsx': "export const s = (event) => { if (event.key.toLowerCase() === 'u') go() }\n" })).unlisted,
+      'app/src/S.tsx',
+      'R2-undo-key',
+    ))
+  add("the SAME comparison inside kit/undo.ts, the primitive itself, is green", () =>
+    green(outcome(tree({ 'app/src/kit/undo.ts': "export const s = (e) => { if (e.key === 'u') go() }\n" }))))
+  add("event.key === UNDO_KEY is red too, where UNDO_KEY is a same-file const bound to 'u' (the delta review round)", () =>
+    has(
+      outcome(tree({ 'app/src/S.tsx': "const UNDO_KEY = 'u'\nexport const s = (e) => { if (e.key === UNDO_KEY) go() }\n" }))
+        .unlisted,
+      'app/src/S.tsx',
+      'R2-undo-key',
+    ))
+  add("a bare identifier compared to another identifier, no 'u' constant in the file, stays green", () =>
+    green(outcome(tree({ 'app/src/S.tsx': "export const s = (a, b) => { if (a.key === b.other) go() }\n" }))))
+  add("a bare identifier equal to 'u' with no key/lower/toLowerCase shape is green (this rule cannot see intent, only shape)", () =>
+    green(outcome(tree({ 'app/src/S.tsx': "export const s = (suffix) => suffix === 'u'\n" }))))
+  add("comparing to a DIFFERENT letter ('h', 'p') is green — only 'u'/'U' is the undo key", () =>
+    green(outcome(tree({ 'app/src/S.tsx': "export const s = (lower) => lower === 'h'\n" }))))
   add('a reserved class in className, a template, a ternary, .className= and classList.add is red', () => {
     const src = [
       'export const A = () => <span className="bn-money x" />',

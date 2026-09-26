@@ -40,10 +40,12 @@ export type HubState = {
   /** THE NEWEST PULL THIS SCREEN MADE THAT IS STILL UNDOABLE — `docs/specs/undo.md` §3's fast
    *  path, `U`, reached from `OrdersHub` regardless of which stage or order is on screen. It
    *  lives here rather than in a component because the pull's own toast outlives the row it
-   *  was pressed from. Overwritten by the next pull, cleared by its own undo, and never
-   *  re-armed by a clock — `until` is read at the moment `U` is pressed, the same "no window,
-   *  no clock" ruling every other undo in this store answers to. */
-  readonly lastPull: { readonly target: PullTarget; readonly place: string; readonly name: string; readonly until: number } | null
+   *  was pressed from. Overwritten by the next pull, cleared by its own undo, and NO CLOCK
+   *  (UN-5, `docs/specs/undo.md` §11.1, D28/D57 amended 2026-09-25): rank replaces it, the same
+   *  ruling every other undo in this store answers to. It was called that already before UN-5
+   *  and still carried an `until` the `U` handler gated on — this field's own removal is what
+   *  makes the comment true. */
+  readonly lastPull: { readonly target: PullTarget; readonly place: string; readonly name: string } | null
   /** THE MOST RECENT SUCCESSFUL UNDO MADE FROM A TOAST OR `U` — `undoFromToast` in
    *  `Orders.tsx` sets this beside clearing `lastPull`, and `PullStage` watches `undoneAt` to
    *  tell its own mounted walk (`useOrderWalk`'s `noteExternalUndo`) that this copy is no

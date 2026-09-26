@@ -402,6 +402,37 @@ test('every card needs a price: Home says price it, and counts no copy as ready'
   await expect(page.locator('.home-standing')).not.toContainText('before it can be sent')
 })
 
+/* DEBT42, THE OWNER'S RULING ("Screen shows $5.16"): a typed price on the `price` channel is
+ * what the send lists at, even after the card's market went blank. So Home counts that copy as
+ * ready and names no card that needs a price. The server's roster already agrees: it owes only
+ * the first send. */
+test('a typed price on a card whose market went blank counts as ready on Home', async ({ page }) => {
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
+    json(route, {
+      runs: [],
+      roster: [{ ...runRow({ joined: true, phase: 'emit' }), owes: ['never emitted'], owed: [{ code: 'never_emitted', count: null }], open: true, unsent: 3 }],
+      skus: [mixedSku('7001', 'listable', 1), mixedSku('7002', 'listable', 1), mixedSku('7003', 'no_market_data', 1)],
+      written_at: {},
+      skipped: [],
+      asked: [],
+      threshold: '0.49',
+      floor: '0.49',
+    }),
+  )
+  await page.route(
+    (url) => url.pathname.endsWith('/pricing') && !url.pathname.includes('/pipeline/'),
+    (route) =>
+      route.request().method() === 'GET'
+        ? json(route, { corpus: { version: 1, policy: { rule: 'match', basis: 'market', sub_threshold: { flat: '0.49' } }, skus: { '7003': { value: '5.16' } } }, path: '/tmp/prices.json', revision: 'rev-1' })
+        : route.fallback(),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  await expect(page.locator('.home-standing .home-standing-say')).toContainText('send 3 copies to TCGplayer')
+  await expect(page.locator('.home-standing')).not.toContainText('needs a price')
+})
+
 /* THE SCREEN READS THE CODE, NEVER THE SENTENCE (the coordinator's ruling on R4): the server's
  * words for a price owed may change, and Home must not change with them. The code stays
  * `needs_price`, so the line still sends the priced copies and blames no cut-off. */

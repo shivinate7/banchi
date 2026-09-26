@@ -10,6 +10,9 @@
       "R2-class": "review",
       "R2-date": "review",
       "R2-money": "review"
+    },
+    "app/src/Pricing.tsx": {
+      "R2-undo-key": "pricing: the field-scoped complement `useUndoHotkey` cannot reach on its own -- the shared hook yields to an editable target by design, so a price field's own onKey answers U while the cursor sits inside it (the window-level U is still useUndoHotkey, unaffected)"
     }
   },
   "runtime": {

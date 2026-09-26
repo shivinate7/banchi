@@ -661,7 +661,11 @@ type Priced = () => unknown
  *  `restores_to` IS THE FIELD THE SCREEN BRANCHES ON, and a stub answering null draws no Undo
  *  anywhere — which is a real server case (`sold_origin_unknown`) and also the shape of a broken
  *  fixture. Both cases below say which one they are. */
-type SaleStub = (box: number, index: number, undo: boolean) => { status: number; body: unknown }
+/** `stillHere` (UN-7, `docs/specs/undo.md` §11.1): true for `saleStillHere`'s own request,
+ *  `{still_here: true}` — distinct from `undo`, which reads `{undo: true}`. A stub that
+ *  ignores its fourth argument still type-checks; only a case that needs to answer
+ *  "This card is still here" differently from an ordinary reversal declares it. */
+type SaleStub = (box: number, index: number, undo: boolean, stillHere?: boolean) => { status: number; body: unknown }
 
 /** The ordinary sale and the ordinary reversal. `identified` is what `_state_before_sale` reads
  *  back off the history line for a card that was identified before it sold, which is every card
@@ -765,10 +769,10 @@ async function open(
      that mistake once. */
   await page.route(/\/inventory\/\d+\/\d+\/sold$/, async (route) => {
     const request = route.request()
-    const body = request.postDataJSON() as { undo?: boolean } | null
+    const body = request.postDataJSON() as { undo?: boolean; still_here?: boolean } | null
     record(request.method(), request.url(), body)
     const path = new URL(request.url()).pathname.split('/')
-    const answer = sale(Number(path[2]), Number(path[3]), body?.undo === true)
+    const answer = sale(Number(path[2]), Number(path[3]), body?.undo === true, body?.still_here === true)
     await route.fulfill({
       status: answer.status,
       contentType: 'application/json',
@@ -4337,12 +4341,128 @@ test('S1 — bringing a card back names the box, never its number', async ({ pag
   await expect(bring).toBeVisible()
   await bring.click()
 
-  const toast = page.locator('.bn-toast', { hasText: 'Card brought back' })
+  const toast = page.locator('.bn-toast', { hasText: 'Sale undone' })
   await expect(toast).toContainText('ME01 commons #4 is back in its box')
   await expect(toast).not.toContainText('B2 #4')
 
   const sent = wire.find((entry) => entry.path === '/inventory/2/4/sold')
   expect(sent?.body).toEqual({ undo: true })
+})
+
+test('UN-7 — a sale built on is refused, and "This card is still here" is a different write', async ({
+  page,
+}) => {
+  /* `docs/specs/undo.md` §11.1: an ordinary reversal is refused ON PURPOSE once the photo is
+   * gone or the order it was pulled for has shipped or closed — `sale_built_on`. The fix
+   * after that is `saleStillHere`, `{still_here: true}`, never a retry of the same request. */
+  const wire = await open(page, BOXES, STORE, () => PRICING, (box, index, _undo, stillHere) => {
+    if (stillHere) {
+      return {
+        status: 200,
+        body: {
+          position: `${box}/${index}`,
+          box,
+          index,
+          undone: true,
+          restores_to: null,
+          order_released: null,
+          /* FINDING #4 (the Opus review round): the card this fixture reverses WAS pulled for
+             a shipped order, so the server's own answer names that fact. */
+          order_effect: 'filled_by_hand',
+          still_here: true,
+        },
+      }
+    }
+    return {
+      status: 409,
+      body: { error: { code: 'sale_built_on', message: 'This sale can no longer be undone. The card is still here instead.' } },
+    }
+  })
+  await expandAll(page)
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  await page.getByRole('button', { name: 'Card actions' }).click()
+
+  /* THE FIRST PRESS LEARNS IT, the same shape `sold_origin_unknown` already takes: there is
+     no route to ask in advance, so the ordinary control is what refuses. */
+  await page.getByRole('menuitem', { name: 'Bring this card back' }).click()
+
+  /* THE MENU ITEM CHANGES, NEVER A RETRY BUTTON: this is a different write with a different
+     name, not the same request offered again. */
+  const stillHere = page.getByRole('menuitem', { name: 'This card is still here' })
+  await expect(stillHere).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Bring this card back' })).toHaveCount(0)
+  await stillHere.click()
+
+  /* THE OWNER'S RULING, 2026-09-25: "Card back, order re-points." Plain, not neutral. */
+  const toast = page.locator('.bn-toast', { hasText: 'Card undone' })
+  await expect(toast).toContainText('ME01 commons #4 is back in stock')
+  await expect(toast).toContainText('marked filled by hand')
+
+  const calls = wire.filter((entry) => entry.path === '/inventory/2/4/sold')
+  expect(calls).toHaveLength(2)
+  expect(calls[0]?.body).toEqual({ undo: true })
+  expect(calls[1]?.body).toEqual({ still_here: true })
+})
+
+test('UN-7 finding #4 — "still here" reads the server\'s own order_effect, never one guessed sentence for all three facts', async ({
+  page,
+}) => {
+  /* THE OPUS REVIEW ROUND: "the toast always says '...marked filled by hand.' That is false
+   * when the card had no order, and false when the order is still open (the line is
+   * released, not filled by hand)." Two presses here, over two different cards, each
+   * answering a different `order_effect` — proving the sentence follows the server's own
+   * field rather than being the same string every time. */
+  const cards2: Cards = {
+    '2/4': card({ index: 4, state: 'sold', name: 'Eiscue', sku: '8937371', section: 1, sectionStart: 1, sectionEnd: 5 }),
+    '2/5': card({ index: 5, state: 'sold', name: 'Sneasler', sku: '8607460', section: 1, sectionStart: 1, sectionEnd: 5 }),
+  }
+  const store2: Store = { cards: cards2, search: (query) => searchAnswer(query, cards2) }
+  const effects: Record<string, string> = { '2/4': 'none', '2/5': 'released' }
+  await open(page, BOXES, store2, () => PRICING, (box, index, _undo, stillHere) => {
+    const key = `${box}/${index}`
+    if (stillHere) {
+      return {
+        status: 200,
+        body: {
+          position: key,
+          box,
+          index,
+          undone: true,
+          restores_to: null,
+          order_released: effects[key] === 'released' ? { key: 'TCGplayer:100200300', sku: '8607460' } : null,
+          order_effect: effects[key],
+          still_here: true,
+        },
+      }
+    }
+    return {
+      status: 409,
+      body: { error: { code: 'sale_built_on', message: 'This sale can no longer be undone. The card is still here instead.' } },
+    }
+  })
+  await expandAll(page)
+
+  await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
+  await page.getByRole('button', { name: 'Card actions' }).click()
+  await page.getByRole('menuitem', { name: 'Bring this card back' }).click()
+  await page.getByRole('menuitem', { name: 'This card is still here' }).click()
+  const noneToast = page.locator('.bn-toast', { hasText: 'Card undone' })
+  /* order_effect: 'none' — no order sentence at all, and neither of the other two claims. */
+  await expect(noneToast).toContainText('is back in stock')
+  await expect(noneToast).not.toContainText('order')
+
+  await page.locator('.browse-row', { hasText: 'Sneasler' }).click()
+  await page.getByRole('button', { name: 'Card actions' }).click()
+  await page.getByRole('menuitem', { name: 'Bring this card back' }).click()
+  await page.getByRole('menuitem', { name: 'This card is still here' }).click()
+  const releasedToast = page.locator('.bn-toast', { hasText: 'Card undone' }).last()
+  /* order_effect: 'released' — the OPPOSITE claim from 'filled by hand': the order no longer
+     counts the copy, because it was open and this reversal released its line. Never
+     "shipped" — an open order's line was never shipped, so there is nothing to un-count as
+     shipped (a low finding of the delta review round). */
+  await expect(releasedToast).toContainText('no longer counts it')
+  await expect(releasedToast).not.toContainText('shipped')
+  await expect(releasedToast).not.toContainText('filled by hand')
 })
 
 test('S2 — a sold card says so once, not on the hero, the row and the phone bar all at once', async ({
@@ -4417,7 +4537,15 @@ test('UX-244 — one copy moves to another box from its own row, and the receipt
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ moved: '2/1', to: '7/41', box: 2, index: 1, new_box: 7, new_index: 41 }),
+      body: JSON.stringify({
+        moved: '2/1',
+        to: '7/41',
+        box: 2,
+        index: 1,
+        new_box: 7,
+        new_index: 41,
+        card: { capture_id: 'cap-244' },
+      }),
     })
   })
   const row = page.locator('.card-locations-row.is-current')
@@ -4431,6 +4559,146 @@ test('UX-244 — one copy moves to another box from its own row, and the receipt
   expect(sent).toHaveLength(1)
   expect(sent[0]?.path).toBe('/inventory/2/1/move')
   expect(sent[0]?.body).toMatchObject({ to_box: 7 })
+})
+
+test('UN-14 — a move gets an undo, the same fast path a sale gets, and it never renumbers', async ({
+  page,
+}) => {
+  /* `docs/specs/undo.md` §11.1: "Move, then undo. The card is back at its index, and nothing
+   * else moves." No clock either (UN-5) — this reuses `remember`'s own rank mechanism, so
+   * `U` and the toast's Undo reach the move exactly as they reach a sale or a retirement. */
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+  const sent: { path: string; body: unknown }[] = []
+  await page.route(/\/inventory\/\d+\/\d+\/move$/, async (route) => {
+    const url = new URL(route.request().url())
+    const body = route.request().postDataJSON() as { undo?: boolean } | null
+    sent.push({ path: url.pathname, body })
+    if (body?.undo === true) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ moved: '2/1', to: '2/1', box: 2, index: 1, undone: true }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        moved: '2/1',
+        to: '7/41',
+        box: 2,
+        index: 1,
+        new_box: 7,
+        new_index: 41,
+        card: { capture_id: 'cap-14' },
+      }),
+    })
+  })
+  const row = page.locator('.card-locations-row.is-current')
+  await row.getByRole('button', { name: 'Move to another box' }).click()
+  const dialog = page.getByRole('dialog', { name: /^Move/ })
+  await expect(dialog).toBeVisible()
+  await dialog.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  await dialog.getByRole('button', { name: 'Move', exact: true }).click()
+
+  const toast = page.locator('.bn-toast', { hasText: 'Moved to ME01 spares' })
+  const undo = toast.getByRole('button', { name: 'Undo' })
+  await expect(undo).toBeVisible()
+  await undo.click()
+
+  await expect(page.locator('.bn-toast', { hasText: 'Move undone' })).toBeVisible()
+  expect(sent).toHaveLength(2)
+  expect(sent[0]?.body).toMatchObject({ to_box: 7 })
+  expect(sent[1]?.path).toBe('/inventory/2/1/move')
+  expect(sent[1]?.body).toEqual({ undo: true })
+})
+
+test('UN-14 — a move built on is refused, and "Move back" is an ordinary move in the other direction', async ({
+  page,
+}) => {
+  /* `server.ts:moveCard`'s own doc comment: once either box has changed again since a move,
+   * `undoMove` refuses `move_built_on`, and the fix is an ORDINARY `moveCard` again, aimed at
+   * the transplant's CURRENT position, back to the box the receipt started from. No second
+   * route — unlike UN-7's `saleStillHere`, this reuses the same write the first move made. */
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+  const sent: { path: string; body: unknown }[] = []
+  await page.route(/\/inventory\/\d+\/\d+\/move$/, async (route) => {
+    const url = new URL(route.request().url())
+    const body = route.request().postDataJSON() as { undo?: boolean; to_box?: number } | null
+    sent.push({ path: url.pathname, body })
+    if (body?.undo === true) {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'move_built_on',
+            message: 'This move can no longer be undone. Move the card back instead.',
+          },
+        }),
+      })
+      return
+    }
+    if (url.pathname === '/inventory/7/41/move') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          moved: '7/41',
+          to: '2/9',
+          box: 7,
+          index: 41,
+          new_box: 2,
+          new_index: 9,
+          /* FINDING #5 (the Opus review round): the remedy lands at a FRESH index, never the
+             tombstoned one — `2/9` here, not `2/1` where the receipt's own `place` still
+             points. The toast must read this label, not the stale one. */
+          card: { capture_id: 'cap-14', label: 'ME01 commons, Section 4, Card 9' },
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        moved: '2/1',
+        to: '7/41',
+        box: 2,
+        index: 1,
+        new_box: 7,
+        new_index: 41,
+        card: { capture_id: 'cap-14' },
+      }),
+    })
+  })
+  const row = page.locator('.card-locations-row.is-current')
+  await row.getByRole('button', { name: 'Move to another box' }).click()
+  const dialog = page.getByRole('dialog', { name: /^Move/ })
+  await expect(dialog).toBeVisible()
+  await dialog.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  await dialog.getByRole('button', { name: 'Move', exact: true }).click()
+
+  const toast = page.locator('.bn-toast', { hasText: 'Moved to ME01 spares' })
+  const undo = toast.getByRole('button', { name: 'Undo' })
+  await expect(undo).toBeVisible()
+  await undo.click()
+
+  /* THE REMEDY, NEVER A SECOND ROUTE: the same POST, aimed at where the card reads now
+     (box 7, index 41), back to box 2 — the receipt's own origin. */
+  const backToast = page.locator('.bn-toast', { hasText: 'Move undone' })
+  await expect(backToast).toBeVisible()
+  /* FINDING #5: the toast names where the remedy actually put it — the fresh index the
+     server's own answer carries — never the receipt's stale pre-move place. */
+  await expect(backToast).toContainText('ME01 commons, Section 4, Card 9')
+  expect(sent).toHaveLength(3)
+  expect(sent[1]?.path).toBe('/inventory/2/1/move')
+  expect(sent[1]?.body).toEqual({ undo: true })
+  expect(sent[2]?.path).toBe('/inventory/7/41/move')
+  expect(sent[2]?.body).toMatchObject({ to_box: 2 })
 })
 
 test('the header holds one worded primary and the filter bar one line, at 390 and 720', async ({
@@ -7076,21 +7344,27 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
   ])
 })
 
-test('and the row is still there when its receipt has run out, which is the half the optimism was hiding', async ({ page }) => {
-  /* THE TWENTY SECONDS ARE NOT THE FREEZE, AND A CASE INSIDE THEM CANNOT TELL THE TWO APART.
-     `stays` keeps a row for three reasons — it is the copy the walk stands on, this screen just
-     sold it and is holding a receipt (D132/D119), or the order is frozen by it. Every assertion
-     in the cases above lands inside the receipt window, so the SECOND reason answers them and
-     the third is never exercised: measured, deleting the freeze from that predicate leaves the
-     whole file green. What the owner is doing takes minutes, and the receipt takes twenty
-     seconds — so this is the case that is actually about them.
+test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute later, and a newer sale keeps its own row too', async ({ page }) => {
+  /* D28 AND D57 ARE AMENDED, 2026-09-25 (`docs/specs/undo.md` §11.1): rank replaces the
+     clock. `UNDO_WINDOW_MS` still times the TOAST's own fade; it no longer prunes `receipts`,
+     so the row's `Undo` and `U` reach the newest sale or retirement for as long as it stays
+     the newest — never for a counted twenty seconds. This is that ruling's own case, where the
+     prior draft asserted the opposite: that the receipt "ran out" and only the freeze (D132)
+     held the row. Measured: `stays` still keeps a row for the freeze too, but that is no longer
+     the ONLY thing holding this one.
 
      THE CLOCK IS FAKED AND ONLY ADVANCED (D136), for the reason `brand.spec.ts` records at
-     length: a twenty-second sleep is the suite's longest case by a distance and buys nothing a
-     jump does not. Installed before the first navigation. */
+     length: a real sleep buys nothing a jump does not. Installed before the first navigation. */
   await page.clock.install()
   const { store, depart } = stackedStore()
-  await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
+  /* A SALE STUB THAT DEPARTS WHICHEVER CARD WAS PRESSED, not one fixed key — the Opus review
+     round's own finding (#12): the prior draft only ever sold 7/38, so it could not prove a
+     second, NEWER sale takes the row's Undo away from the first. */
+  const saleStub: SaleStub = (box, index, undo) => {
+    if (!undo) depart(`${box}/${index}`)
+    return SALE(box, index, undo)
+  }
+  await open(page, STACKED_BOXES, store, () => PRICING, saleStub, {
     route: '/#/inventory?box=2',
     hideSold: true,
   })
@@ -7107,19 +7381,37 @@ test('and the row is still there when its receipt has run out, which is the half
     page.locator('.card-locations-row .card-locations-identity[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
 
-  /* PAST THE WINDOW. `UNDO_WINDOW_MS` is 20s and the receipt's own timer is armed for it, so
-     this is the frame after the optimism lets go: `soldKeys` drops the copy, its Undo goes, and
-     the only thing left holding the row is the freeze. */
-  await page.clock.runFor(25_000)
-  await expect(page.locator('.inventory-receipt')).toHaveCount(0)
+  /* PAST THE OLD WINDOW, WHICH IS NO LONGER A DEADLINE. `UNDO_WINDOW_MS` (20s) once pruned
+     `receipts` here; a minute is well past it, and the row's own Undo is still there — the
+     opposite of what a clock-gated receipt would show. */
+  await page.clock.runFor(60_000)
+  await expect(page.locator('.inventory-receipt')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /^Undo the sale at/ })).toHaveCount(1)
 
-  /* STILL SIX ROWS, STILL IN THE SAME ORDER, AND THE SOLD ONE STILL AT THE TOP. Without the
-     freeze the row folds away here and the five beneath it come up one — the same jump the
-     owner reported, arriving twenty seconds late. */
+  /* STILL SIX ROWS, STILL IN THE SAME ORDER, AND THE SOLD ONE STILL AT THE TOP — the freeze
+     (D132) holds the row's place either way; what changed is that its Undo did not leave with
+     a clock that no longer exists. */
   await expect(labels).toHaveCount(6)
   expect(await copyOrder(page)).toEqual(['Was at Box 7, Section 1, Card 38', ...before.slice(1)])
   /* And the control is still offering the re-rank, because nothing has taken a new order. */
   await expect(page.locator('.card-locations-rerank')).toContainText('Order is 1 copy stale')
+
+  /* NOW A NEWER SALE (the delta review round's own item 6, reversing finding #12): the
+     owner's ruling is that undo lasts "until it's built on", on every sold row, the same
+     way Fulfillment's "Pulled today" list already keeps every sale of a session undoable.
+     Card 39 is sold second. */
+  await copyRow(page, 'Box 7, Section 1, Card 39').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 39' })).toHaveCount(1)
+  /* Card 38's own Undo STAYS — it is not built on by anything, so it is still reversible even
+     though it is no longer the newest sale. */
+  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 38' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /^Undo the sale at/ })).toHaveCount(2)
+
+  /* `U` AND THE TOAST STILL REACH ONLY THE NEWEST (39), never 38 — "newest-only" survives
+     for the one fast path, even though both rows now draw their own control. */
+  await page.keyboard.press('u')
+  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 39' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Undo the sale at Box 7, Section 1, Card 38' })).toHaveCount(1)
 })
 
 test('a retirement holds its row too, and it is the freeze alone that does it', async ({ page }) => {

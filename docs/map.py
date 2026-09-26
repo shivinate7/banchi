@@ -6106,6 +6106,18 @@ COMPONENTS = [
                                           "server-restart notice went when `ServerReloaded` was "
                                           "deleted.",
                                   "governed_by": ["D5", "D28", "D53", "D57", "D94"]},
+            "src/kit/undo.ts": {"does": "THE ONE `U` PRIMITIVE (UN-10, `docs/specs/undo.md` §11.3): "
+                                        "`useUndoHotkey` arms `U` for the newest reversible write on "
+                                        "a screen, in place of five screens' own near-identical "
+                                        "listeners. `getUndo` is read through a ref on every "
+                                        "keypress, never a dependency list, the same reason "
+                                        "`ReviewQueue.tsx`'s own prior copy gave: an effect runs "
+                                        "after paint, and a key pressed in the gap between a write "
+                                        "and its effect would close over stale data. Yields to a "
+                                        "repeat, a modifier and typing. `PageUndo`, the button this "
+                                        "hook is usually paired with, lives in `kit/index.tsx` "
+                                        "instead, to avoid a circular import with `Button`.",
+                                "governed_by": []},
             "src/kit/Page.tsx": {"does": "the page scaffold every screen is built from: `Page` draws "
                                          "`<main class=\"bn-page\" data-bn-page>` with one h1 (the "
                                          "route's title by default, read from `PageRouteContext`), "
@@ -6114,7 +6126,7 @@ COMPONENTS = [
                                          "top gap, one left edge, and the page is the `bn-page` "
                                          "query container. `Section` draws an h2. A new screen is "
                                          "one ROUTES entry plus a view that returns `<Page>`.",
-                                 "governed_by": ["D94", "D118", "D197", "D272", "D275", "D288"]},
+                                 "governed_by": ["D57", "D94", "D118", "D197", "D272", "D275", "D288"]},
             "src/kit/overlay.tsx": {"does": "the kit's overlays: `Sheet`, `Modal`, `Popover` and "
                                             "`ConfirmSheet`, each with one header and one Close, "
                                             "focus kept inside and given back, Escape for the top "
@@ -6925,9 +6937,9 @@ COMPONENTS = [
                         "The re-check sheet owns it the same way, and for the same reason.",
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
                                 "D28", "D29", "D32", "D33", "D35", "D37", "D46", "D55", "D67",
-                                "D77", "D87", "D118", "D137", "D162", "D164", "D167", "D172",
-                                "D174", "D180", "D194", "D218", "D221", "D252", "D253", "D259",
-                                "D288", "D291"],
+                                "D77", "D87", "D117", "D118", "D137", "D162", "D164", "D167",
+                                "D172", "D174", "D180", "D194", "D218", "D221", "D252", "D253",
+                                "D259", "D288", "D291"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -7019,7 +7031,7 @@ COMPONENTS = [
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
                                 "D58", "D68", "D71", "D83", "D90", "D93", "D118", "D119", "D125",
                                 "D132", "D172", "D181", "D192", "D196", "D213", "D218", "D260",
-                                "D264", "D275", "D285", "D-set-view"],
+                                "D264", "D269", "D275", "D285", "D-set-view"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -7163,9 +7175,9 @@ COMPONENTS = [
                         "order, photo-confirm before each pull, one-tap mark-sold with an undo "
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
-                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D32", "D69",
-                                "D83", "D93", "D94", "D125", "D172", "D192", "D193", "D212", "D218",
-                                "D259", "D265", "D275"],
+                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D28", "D31",
+                                "D32", "D57", "D69", "D83", "D93", "D94", "D125", "D172", "D192",
+                                "D193", "D212", "D218", "D259", "D265", "D275"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -7646,8 +7658,8 @@ COMPONENTS = [
                                                 "D78", "D79", "D85", "D86", "D89", "D98", "D99",
                                                 "D100", "D101", "D103", "D105", "D107", "D109",
                                                 "D115", "D117", "D118", "D125", "D137", "D156",
-                                                "D159", "D168", "D172", "D181", "D208", "D210",
-                                                "D218", "D273", "D277", "D278"]},
+                                                "D159", "D168", "D172", "D181", "D196", "D208",
+                                                "D210", "D218", "D269", "D273", "D277", "D278"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, a kit Sheet off #/pricing's header (D168). The owner's own "
                                             "ask: typed prices go stale and there was no way to clear many at once. IT IS A "
                                             "PRESS AND NOT A POLICY: nothing here runs on a clock. The scope is the "
@@ -7993,7 +8005,8 @@ COMPONENTS = [
                                               "long as the tab, which is the batch's own "
                                               "lifetime, and D27 permits persistence rather than "
                                               "requiring it.",
-                                      "governed_by": ["D27", "D61", "D63", "D66", "D69", "D73", "D94", "D96"]},
+                                      "governed_by": ["D27", "D28", "D57", "D61", "D63", "D66",
+                                                      "D69", "D73", "D94", "D96"]},
             "src/OrdersShipStage.tsx": {"does": "the SHIP stage of that hub: TCGplayer's Orders "
                                                 "-> Export Shipping read into D61's three "
                                                 "lanes, with the Pirate Ship import CSV as a "
@@ -8038,8 +8051,9 @@ COMPONENTS = [
                                            "one-line collapsed row — are deleted with it; "
                                            "`preserveOrder` stays, the trap this rebuild's own "
                                            "brief named first (never re-sort the walk).",
-                                   "governed_by": ["D24", "D58", "D62", "D79", "D93", "D96", "D97",
-                                                   "D116", "D118", "D132", "D164", "D171", "D181",
+                                   "governed_by": ["D24", "D57", "D58", "D62", "D79", "D93", "D96",
+                                                   "D97", "D116", "D118", "D132", "D164", "D171",
+                                                   "D181",
                                                    "D193", "D209", "D212", "D218", "D220", "D252",
                                                    "D279"]},
             "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
@@ -9240,9 +9254,9 @@ COMPONENTS = [
                                              "app/tests/order-walk.spec.ts. Not a harness test — "
                                              "it starts a browser; `make design-check` runs it.",
                                      "governed_by": ["D20", "D24", "D27", "D28", "D36", "D49",
-                                                     "D50", "D58", "D63", "D69", "D73", "D90",
-                                                     "D91", "D93", "D96", "D103", "D113", "D114",
-                                                     "D118", "D123", "D132", "D171", "D181",
+                                                     "D50", "D57", "D58", "D63", "D69", "D73",
+                                                     "D90", "D91", "D93", "D96", "D103", "D113",
+                                                     "D114", "D118", "D123", "D132", "D171", "D181",
                                                      "D193", "D194", "D196", "D203", "D209",
                                                      "D212", "D218", "D220", "D221", "D274",
                                                      "D285", "D-orders-sorts"]},
@@ -9605,9 +9619,9 @@ COMPONENTS = [
                         "rendered view, with every contrast ratio computed from the colors "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
-                "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D93", "D115",
-                                "D118", "D125", "D136", "D193", "D212", "D218",
-                                "D259", "D288"],
+                "governed_by": ["D5", "D10", "D13", "D21", "D24", "D28", "D31", "D41", "D57", "D93",
+                                "D115", "D118", "D125", "D136", "D193", "D212", "D218", "D259",
+                                "D288"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "
                         "being built and being routed — all of them because every test asserts "

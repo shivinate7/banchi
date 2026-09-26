@@ -7,7 +7,7 @@ import { PositionLabel } from './PositionLabel'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import {
-  Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Money, Notice, Page, Pill, Popover, Refusal, ReloadButton, Retry,
+  Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Money, Notice, Page, PageUndo, Pill, Popover, Refusal, ReloadButton, Retry,
   KeyHint, Section, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
   type ButtonSize, type ButtonVariant, type IconName, type PillTone,
 } from './kit'
@@ -382,6 +382,11 @@ function ScaffoldSpecimens() {
             ]}
           />
         </Toolbar>
+      </Spec>
+      <Spec name="page-undo" label="undo: the newest reversible write's own door (UN-10)" wide>
+        <div className="bn-page-undo">
+          <PageUndo onPress={() => {}} />
+        </div>
       </Spec>
       <Spec name="status-slot" label="status slot: holds its space" wide>
         <div className="kit-row kit-row-wrap">

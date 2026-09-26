@@ -1112,6 +1112,16 @@ export type SaleResult = {
   /** True when this call was "This card is still here" (UN-7): a reversal past a sale that
    *  was built on. A shipped order keeps its count, so `order_released` stays null. */
   still_here?: boolean
+
+  /** WHICH OF THREE THINGS HAPPENED TO THE ORDER LINE (the Opus review round, finding #4):
+   *  `order_released` alone answers `null` for two different facts — no order ever held this
+   *  copy, and a shipped order that was hand-filled instead — and a screen cannot build the
+   *  right sentence from one field that means either. `'none'`: no order held this copy.
+   *  `'released'`: an OPEN order's line let this copy go, same as `order_released` names.
+   *  `'filled_by_hand'`: a SHIPPED order kept its count, and this card's id came off the
+   *  line as a hand-fill (`sold_separately`) instead. Optional: an older server sends
+   *  neither this nor a body a screen can build a sentence from at all. */
+  order_effect?: 'none' | 'released' | 'filled_by_hand'
 }
 
 /** Why a retired card left (D26). The send-side union — the four words the server's

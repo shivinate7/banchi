@@ -31,6 +31,7 @@ import {
   reshootPhoto,
   updateCard,
   newCaptureId,
+  saleStillHere,
   undoRetire,
   undoSale,
 } from './server'
@@ -2806,6 +2807,11 @@ function CardOps({
   // write's own lock), so the FIRST press is what learns it; every one after degrades to the
   // note, the same way the sale receipt withholds Undo once `restores_to` reads null.
   const [originUnknown, setOriginUnknown] = useState(false)
+  // Set once `undoSale` refuses `sale_built_on` (UN-7, `docs/specs/undo.md` §11.1): the photo
+  // is gone or the order shipped or closed, and the ordinary reversal is refused ON PURPOSE.
+  // The fix after that is "This card is still here" — a different write, `saleStillHere`,
+  // which puts the card back without touching a shipped order's own count.
+  const [builtOn, setBuiltOn] = useState(false)
   const anchor = useRef<HTMLDivElement | null>(null)
 
   const terminal = row.card.state === 'sold' || row.card.state === 'retired'
@@ -2891,14 +2897,17 @@ function CardOps({
       // sigil-ok: a store key, `storeKeyText`'s own shape (D92) with the box respelled from
       // its number to its name — this card is not in a slot to count, same as that one.
       const label = `${row.card.place?.box_name ?? UNNAMED_BOX} #${row.card.index}`
+      /* ONE VOCABULARY (UN-5, finding #15, the Opus review round, `docs/specs/undo.md`
+       * §11.9): a true reversal is always "<what it undid> undone", the same words
+       * `Inventory.tsx` uses for the identical write reached from its own screen. */
       if (row.card.state === 'sold') {
         const result: SaleResult = await undoSale(row.card.box, row.card.index)
         toast({
           kind: 'ok',
           icon: 'undo',
-          title: 'Card brought back',
+          title: 'Sale undone',
           body: result.order_released
-            ? `${label} is back in its box. The order it was pulled for no longer counts it shipped.`
+            ? `${label} is back in its box. The order it was pulled for no longer counts it.`
             : `${label} is back in its box.`,
           ttlMs: 12000,
         })
@@ -2907,7 +2916,7 @@ function CardOps({
         toast({
           kind: 'ok',
           icon: 'undo',
-          title: 'Card brought back',
+          title: 'Retirement undone',
           body: `${label} is back in its box.`,
           ttlMs: 12000,
         })
@@ -2919,7 +2928,53 @@ function CardOps({
       if (failure.code === 'sold_origin_unknown' || failure.code === 'retired_origin_unknown') {
         setOriginUnknown(true)
       }
+      if (failure.code === 'sale_built_on') setBuiltOn(true)
       setTrouble(failure)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /* THE FIX AFTER "BUILT ON" (UN-7): the ordinary reversal refused ON PURPOSE, because the
+   * photo is gone or the order it was pulled for has shipped or closed. This is a DIFFERENT
+   * write — never a retry of the same one.
+   *
+   * THE OWNER'S RULING, 2026-09-25: "Card back, order re-points." The card goes back on the
+   * shelf, and a SHIPPED order's line is marked filled by hand instead (`sold_separately`,
+   * lane S's own doc, §11.8) — a shipped order's own count stands, so the screen may say
+   * this plainly rather than staying silent about the order.
+   *
+   * THE OPUS REVIEW ROUND, FINDING #4: the sentence used to claim an order changed every
+   * time, even when this card never had one, or when the order it had was OPEN (released,
+   * not filled). `order_effect` names which of the three actually happened, so the toast is
+   * built from the server's own answer rather than assumed. */
+  const stillHere = async () => {
+    if (busy) return
+    setBusy(true)
+    setTrouble(null)
+    try {
+      // sigil-ok: a store key, the same shape `resurrect`'s own label above draws and the
+      // same reason (D92) — this card is not in a slot to count, same as that one.
+      const label = `${row.card.place?.box_name ?? UNNAMED_BOX} #${row.card.index}`
+      const result = await saleStillHere(row.card.box, row.card.index)
+      const orderNote =
+        result.order_effect === 'filled_by_hand'
+          ? ' The order it was pulled for is now marked filled by hand.'
+          : result.order_effect === 'released'
+            ? ' The order it was pulled for no longer counts it.'
+            : ''
+      toast({
+        kind: 'ok',
+        icon: 'undo',
+        title: 'Card undone',
+        body: `${label} is back in stock.${orderNote}`,
+        ttlMs: 12000,
+      })
+      setMenu(false)
+      setBuiltOn(false)
+      onChanged()
+    } catch (err) {
+      setTrouble(describeFailure(err))
     } finally {
       setBusy(false)
     }
@@ -2972,6 +3027,19 @@ function CardOps({
                         ? 'The store has no earlier state for this card, so the sale cannot be reversed here. Set it by hand instead.'
                         : 'The store has no earlier state for this card, so the retirement cannot be reversed here. Set it by hand instead.'}
                     </p>
+                  ) : builtOn ? (
+                    /* UN-7: the ordinary reversal is refused ON PURPOSE — its photo is gone or
+                       its order has shipped or closed — so this is a different write, never a
+                       retry of the same one. */
+                    <button
+                      role="menuitem"
+                      type="button"
+                      className="bn-menu-item"
+                      disabled={busy}
+                      onClick={() => void stillHere()}
+                    >
+                      <Icon name="undo" size={16} /> This card is still here
+                    </button>
                   ) : (
                     <button
                       role="menuitem"

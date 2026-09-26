@@ -6379,6 +6379,12 @@ def check_mark_sold_releases_ledger(checks: Checks) -> None:
             "done before this card was ever marked sold",
         )
         checks.equal(
+            sold.get("order_effect"),
+            "none",
+            "the Opus review round's finding #4: a plain sale (never a reversal) also "
+            "answers 'none', so no screen may read this field as a claim about undo alone",
+        )
+        checks.equal(
             Store().read().ledger.recorded(key, "9191486").fulfilled,
             1,
             "and the ledger is untouched by the sale itself — only the undo direction reads it",
@@ -6392,6 +6398,13 @@ def check_mark_sold_releases_ledger(checks: Checks) -> None:
             {"key": key, "sku": "9191486"},
             "and the response NAMES the line it released, so a screen can say the order "
             "moved without a second request",
+        )
+        checks.equal(
+            back.get("order_effect"),
+            "released",
+            "finding #4: an OPEN order's own reversal answers 'released', never the "
+            "'filled_by_hand' a SHIPPED order's reversal answers — the two claims are "
+            "opposites and a screen must not read one when the field says the other",
         )
 
         after = Store().read().ledger.recorded(key, "9191486")
@@ -6483,6 +6496,13 @@ def check_undo_until_built_on(checks: Checks) -> None:
             (master.IDENTIFIED, True),
             "and puts the card back to its earlier state anyway",
         )
+        checks.equal(
+            field(back, "order_effect"),
+            "none",
+            "the Opus review round's finding #4: no order ever held this copy, so the field "
+            "that answers which of three things happened says so by name, not by a null "
+            "that also means 'a shipped order got hand-filled instead'",
+        )
 
     # ---------------------------------------- UN-7: a sale whose order has shipped
     with isolated_home():
@@ -6531,6 +6551,12 @@ def check_undo_until_built_on(checks: Checks) -> None:
             (1, 1, False),
             "and the shipped order keeps its count (D212): the card's id comes off the line "
             "as a hand-fill, so pulling this card again is not refused as a double shipment",
+        )
+        checks.equal(
+            field(back, "order_effect"),
+            "filled_by_hand",
+            "finding #4: the screen reads THIS field to say the order was hand-filled, "
+            "rather than the ambiguous null `order_released` also answers for 'no order'",
         )
 
     # ------------------------------------------------ UN-8: a retired card leaves Review

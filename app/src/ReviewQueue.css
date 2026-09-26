@@ -736,7 +736,6 @@
 /* UX-255: the outcome, a description beside the one act-verb ("Closed"). Never a second
    verb — quieter than the label, never bold. */
 .review-receipt-outcome { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; flex: none; }
-.review-receipt .bn-receipt-bar { color: var(--bn-ok); }
 .review-refusal { animation: bn-receipt-in var(--bn-t-slow) var(--bn-ease-spring) both, rv-shake var(--bn-t-slow) var(--bn-ease) var(--bn-t-slow) 1; }
 @keyframes rv-shake {
   0%, 100% { transform: none; }

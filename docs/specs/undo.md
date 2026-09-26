@@ -256,8 +256,15 @@ first answer ("Anytime, from a history").
 path is the record's own control. Only the limit changes:
 
 - **A clock limits nothing.** A toast still fades. The undo does not fade with it.
-- **Rank replaces the clock on the fast path.** Section 10 already rules this for the walk.
-  The newest reversible write on a screen keeps its Undo until a newer write replaces it.
+- **Rank decides the FAST PATH, never which rows draw a control (the delta review round,
+  item 6, the owner's own ruling).** `U` and the toast reach only the newest reversible
+  write on a screen. This section first read that as the only rule there was. Inventory's
+  own row-level Undo followed it (finding #12): an older sold row lost its own Undo the
+  moment a newer sale took the rank. The owner's ruling settles it the other way for the
+  ROW — an undo lasts until it is built on. Every sold row keeps its own Undo until IT is
+  built on, on Inventory and Cards to pull alike. Fulfillment's "Pulled today" list already
+  worked this way. Inventory now matches it, rather than the other way round. Rank still
+  decides the ONE thing `U` and a toast's own Undo reach.
 - **"Built on" limits both paths.** The server decides it and refuses with a sentence. The
   screen never guesses it.
 - **"Never ask" holds everywhere but one press.** No other press gets a confirm. A press that
@@ -485,3 +492,134 @@ Built on branch `ux/undo-capture`, `app/tests/capture-undo.spec.ts`.
   (D118)` fails at roughly 1 in 2 to 1 in 8 runs, `--workers=1` included, on the tree before
   this lane's own commits too. Checked by running the prior commit's `CaptureScreen.tsx`
   against the same spec. Not this lane's defect. Not investigated further here.
+
+### 11.10 Lane R, as built (2026-09-25)
+
+The screen halves are built on branch `ux/undo-screens`, over lane S's `ux/undo-store`.
+
+- **UN-5.** `Inventory.tsx`, `Orders.tsx` and `Fulfillment.tsx` no longer prune their receipt
+  lists on `UNDO_WINDOW_MS`. Rank replaces the clock. `remember` still prepends and dedupes
+  by key. The newest sale or retirement keeps `Undo`, in the row and on the toast, until a
+  newer write replaces it. The drain bars this made misleading are removed.
+- **UN-6.** The first build here froze a just-pulled copy inside `OrderLineRow`/`PickLine`.
+  It was UNREACHABLE. `OrderDetail`'s only call site always renders `PickLine` with
+  `hidePicks` true. A takeable copy's own Mark sold never draws there in the shipped product.
+  `make orient` traced this after the blind audit saw the real defect on a live screen, at
+  390: the walk's own card pane, not the Manage sheet. That change is reverted in full.
+  The real fix is `OrdersWalkPane.tsx`. `advanceAfter` moves the whole card pane to the next
+  take the instant a sale satisfies it. `busyCopy` disables every OTHER row while one sale is
+  in flight, but it cleared at once. The new card's own row was never disabled against the
+  tap that just landed. `ADVANCE_GUARD_MS` holds `busyCopy` a beat longer after an advance.
+  A rect-diff case at 390 (`tests/orders.spec.ts`) is red without the guard and green with it.
+  Fulfillment's own row-per-card list never removed a copy the way Orders' did. Its defect was
+  the `.ff-sheet`, and it needed no row-freeze.
+- **UN-9, UN-10.** `kit/undo.ts`'s `useUndoHotkey` is the one `U` primitive. It is armed once
+  per screen instead of five near-identical listeners. `kit/index.tsx`'s `PageUndo` was
+  Review's own door onto its below-the-fold receipt, first reached through a prop `Page`
+  carried for it. It is measured NOT to reserve space: doing so on every load cost
+  `#/review`'s no-scrolling floor 54px it had no slack for (`answering a card costs no
+  scrolling`). Inventory and Orders keep their own row-level `Undo` (D57) and never drew one.
+  **AMENDED, §11.12: Review no longer draws that header door at all.** The finding #10
+  conflict this created is resolved there. The reserved in-body row wins over the
+  unreserved header door. **AMENDED AGAIN, the delta review round, low item 7: `Page`'s
+  `undo` prop is deleted.** With Review gone, no screen passed it. `Gallery.tsx`'s specimen
+  now draws `PageUndo` and its `.bn-page-undo` wrapper directly, the pattern any screen
+  reaching for this door again would repeat.
+- **UN-12.** `Pricing.tsx`'s `Undo` type is now `{ entries: readonly UndoEntry[] }`. `write`
+  is `writeMany`'s one-op case. `setHold` pushes both fields it touches as one entry. One `U`
+  now undoes a hold completely.
+- **UN-13.** The store-wide cut-off (`setCut`) gets a receipt and a `'cutoff'`-kind
+  `UndoEntry` holding the prior `threshold`/`sub_threshold`. It reverts on the same pop
+  other entries do.
+- **UN-7 (screen half).** `BoxBrowse.tsx:CardOps` offers "This card is still here"
+  (`saleStillHere`) once the ordinary reversal refuses `sale_built_on`. It is never a retry of
+  the same request. The toast follows the owner's ruling above: the card is back in stock,
+  and the order line it was pulled for is marked filled by hand.
+- **UN-14 (screen half).** `Inventory.tsx`'s `Receipt.kind` gains `'move'`. `doMove` folds a
+  move into the same `remember`/`receipts` list a sale or retirement uses. `U` and the
+  toast's own Undo reach it, ranked the same way. `Receipt` also keeps the transplant's
+  CURRENT box/index and capture id (`MoveResult.new_box`/`new_index`/`card.capture_id`). On
+  `move_built_on`, `moveBack` fires an ordinary `moveCard` again. It aims at that current
+  position, back to the receipt's own origin box. `server.ts:moveCard`'s own doc comment
+  names this remedy. It is never a second route the way UN-7's `saleStillHere` is.
+- **UN-11 (screen half).** `Pricing.tsx` reads `GET /pricing`'s `last_clear`. It offers
+  "Restore N cleared" once the toast that named the clear is gone. `restoreLastClear`'s own
+  answer carries no per-SKU values, so this reads the corpus fresh afterward. It takes each
+  restored SKU's answer off THAT read — the same "the response decides which rows come back"
+  rule `withRestored` already follows for the toast's own path.
+
+### 11.11 One vocabulary (the Opus review round, finding #15)
+
+Converged by the orchestrator in the delta review round.
+
+The review found the same outcome named differently on different screens. "Sale undone".
+"Move undone". "Card moved back". "Card brought back". "Put X back". "N prices restored".
+"Not restored". "The card was not put back". "Already put back". A person reading two of
+these got no signal that they name the same kind of event.
+
+This section first drew a line between a true reversal and a write that only looks like
+one, and kept each its own phrase. The orchestrator's own delta-review ruling folds that
+line away. Every write an Undo press or a toast's own Undo reaches reads `"<what it undid>
+undone"`, whichever of the two kinds it is. A REFUSAL is the one thing that stays its own
+plain sentence, never forced into the pattern. A refusal is not an outcome to name. It is
+a reason to give.
+
+The vocabulary, as built:
+
+- **Sale, retirement, move, hold, cut-off.** `"Sale undone"`, `"Retirement undone"`, `"Move
+  undone"`, and Pricing's own hold/cut-off writes all already read this way.
+- **`BoxBrowse.tsx:CardOps.resurrect`** (a true reversal of a sale or retirement) reads
+  `"Sale undone"` / `"Retirement undone"`. Same words `Inventory.tsx` already uses for the
+  identical write.
+- **`BoxBrowse.tsx:CardOps.stillHere`** (UN-7's `saleStillHere`, a DIFFERENT write reached
+  only after an ordinary reversal refuses `sale_built_on`) reads `"Card undone"` now,
+  in place of the old `"Card brought back"`.
+- **Orders' pull undo** (a true reversal) reads `"Pull undone"`, in place of the old
+  `"Put X back"`.
+- **Orders' `pull_not_recorded` case** (finding #8: the pull was already reversed
+  elsewhere, a DIFFERENT write from the ordinary undo) reads `"Already undone"`, in place
+  of the old `"Already put back"`.
+- **Pricing's cut-off/mass-clear restore** reads `"N prices undone"`, in place of the old
+  `"N prices restored"`.
+- **Every refusal stays plain**, never forced into "<subject> undone": `"Not undone"`,
+  `"The card was not put back"`, `"Not undone"` (Pricing's own restore refusal). The reason
+  goes in the body, never the raw code (finding #7).
+
+The rule for a new screen: name the result of ANY press an Undo control reaches
+`"<subject> undone"`. This holds whether the write is a provable reversal, or a different
+write with the same visible effect. Name a refusal plainly. Never borrow "undone" for it.
+
+### 11.12 Finding #10, decided by the orchestrator (the Opus review round)
+
+The review asked that Review's receipt row reserve its own space. Then nothing else moves
+when it mounts (D118). Section 11.10's own UN-9/UN-10 entry recorded the opposite ruling,
+from the same round. `PageUndo` does NOT reserve space on Review. Reserving it cost the
+no-scrolling floor 54px it had no slack for.
+
+Measured for this finding: Review rendered the SAME receipt twice. `.review-tray`'s own row,
+in the body, already reserved its height. It moved nothing (proven by the finding #14 test).
+`PageUndo`, in the page header, was the redundant second copy. It was the one that was not
+reserved. Its mount pushed `.review-filters` and everything below it down 56px on the first
+answer of a session.
+
+**Decided: drop the header's `PageUndo` on Review.** `ReviewQueue.tsx` no longer passes
+`undo` to `Page` at all. The in-body Tray is the only Undo door Review ever draws. Nothing
+is lost on a screen wide enough to see the Tray. `kit/undo.ts`'s own comment says `PageUndo`
+exists so a phone reaches Undo "without hunting the in-page receipt, which sits below the
+fold on a phone". Review's own Tray sits inside `.review-body`, on screen with the card at
+every width this product ships. That reach was never actually lost here. This removes the
+duplicate. It keeps both floors, D118 and the no-scrolling floor, intact at once. `PageUndo`
+itself is untouched.
+
+**AMENDED, the delta review round, low item 7.** Review was the one screen passing `undo`
+to `Page`. With that call site gone, `Page`'s own `undo` prop reached no screen at all.
+`Page.tsx` dropped the prop and its `<div className="bn-page-undo">` wrapper. `PageUndo`
+the component, and the `.bn-page-undo` class, are UNTOUCHED — `Gallery.tsx`'s specimen
+sheet renders both directly, its own `<div className="bn-page-undo">` around its own
+`<PageUndo>`, never through `Page`. A screen that wants the header door back writes that
+same pair itself, the way the gallery does.
+
+The second option this section once offered stays open. A screen may genuinely need both
+a header door and zero reserved space. An overlay `.bn-page-undo` never moves layout. It
+spends no permanent space on any screen that draws `PageUndo`. Review does not need it. Its
+Tray already does the job.

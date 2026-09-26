@@ -220,6 +220,10 @@ async function open(
      *  exist to hold. Absent means a server that predates the route, and the control is then
      *  not offered at all. */
     clearable?: { days: Record<string, number | null>; holds: number; unknown: number }
+    /** UN-11: the newest clear the server still remembers, on `GET /pricing`'s own envelope,
+     *  beside `clearable`. Absent means no clear stands (the ordinary case, and the state
+     *  after a restore or after a send has built on it). */
+    lastClear?: { count: number; at: number } | null
     /** What `POST /pricing/clear` answers. A function of the request body, because the
      *  interesting cases are about WHAT THE SCREEN SENT — the scope and the window — and a
      *  fixed payload could not tell a store-wide press from a scoped one. */
@@ -512,6 +516,7 @@ async function open(
            a case names it, which is the pre-route server and the state that hides the
            control. */
         ...(options.clearable === undefined ? {} : { clearable: options.clearable }),
+        ...(options.lastClear === undefined ? {} : { last_clear: options.lastClear }),
       }),
     })
   })
@@ -1958,6 +1963,120 @@ test('a hold writes a reason and a watch, and never a price', async ({ page }) =
   })
 })
 
+test("finding #9 (the delta review round) — the hold toast's own Undo clears the fixed bar, at 390", async ({
+  page,
+}) => {
+  /* THE OPUS AUDIT'S OWN REPRO: at 390 the hold toast's Undo (714-754px) sat ON TOP of the
+   * pinned "Send N copies" button (726-772px) — a fade-out tap aimed at Undo landed on Send.
+   * The cause: `Pricing.css` cleared `.pricing-ship`, which pr3's own rebuild renamed
+   * `.pricing-bar` — the clearance rule (and this case) went missing with the old name. At
+   * 390 the bar is `position: fixed` regardless of content height (unlike the desktop
+   * `sticky` case above), so the default fixture already puts it on screen. */
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page)
+
+  await page.locator('.pricing-hold').first().click()
+  await expect(page.locator('.pricing-holdpanel')).toBeVisible()
+  await page.getByRole('button', { name: /Bullish/ }).click()
+  await page.getByRole('button', { name: 'Hold it' }).click()
+
+  const undo = page.locator('.bn-toast').getByRole('button', { name: 'Undo' })
+  await expect(undo).toBeVisible()
+  const bar = page.locator('.pricing-bar')
+  await expect(bar).toBeVisible()
+
+  const undoBox = await undo.boundingBox()
+  const barBox = await bar.boundingBox()
+  expect(undoBox).not.toBeNull()
+  expect(barBox).not.toBeNull()
+  /* A REAL GAP, NEVER JUST "ABOVE": a real thumb target's own floor (40px) is the bar this
+     asks for. */
+  const gap = (barBox?.y ?? 0) - ((undoBox?.y ?? 0) + (undoBox?.height ?? 0))
+  expect(gap).toBeGreaterThanOrEqual(40)
+})
+
+test('finding #6 (the delta review round) — focusing an ALREADY-WRITTEN cut-off and blurring with no change writes nothing', async ({
+  page,
+}) => {
+  /* THE REVIEWER'S OWN REPRO: "the policy was already written at $0.49. I focused the cut-off
+   * and clicked away, and I got 'Cut-off changed ... reads 0.49' with Undo, plus an undo entry
+   * that does nothing." The guard belongs in `setCut`, which has `book` — the STORED policy,
+   * never the field's own default suggestion for a policy nobody has written yet (that was
+   * the earlier, wrong guard's mistake, and why it had to come out of BigMoney). */
+  const wire = await open(page, {
+    skus: [sku({ sku: '1', bucket: 'sub_threshold', snap: { market: '0.12', direct_low: null, low: '0.10', low_with_shipping: '1.10', now: null } })],
+    decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {} },
+  })
+  await page.getByRole('button', { name: 'Change' }).click()
+  const cut = page.getByLabel('Cut-off', { exact: true })
+  await expect(cut).toHaveValue('0.49')
+
+  await cut.focus()
+  await cut.blur()
+
+  await expect(page.locator('.bn-toast', { hasText: 'Cut-off changed' })).toHaveCount(0)
+  expect(wire.filter((r) => r.method === 'PUT')).toHaveLength(0)
+  /* NO GHOST UNDO ENTRY EITHER: `U` afterwards must reach nothing this no-op pushed. */
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: 'Pricing rule' })).toHaveCount(0)
+  await page.keyboard.press('u')
+  await expect(page.locator('.bn-toast')).toHaveCount(0)
+})
+
+test('UN-12 (the delta review round) — a hold on a no-market-price SKU is ONE answer that keeps its reason, watch and note', async ({
+  page,
+}) => {
+  /* THE FINAL PRICING REVIEW'S HIGH FINDING. `book.skus[sku]` holds ONE answer per SKU, and
+   * `setHold` once wrote two for a no-market SKU: the hold record, then 'unlisted' on the
+   * `unknown` channel. The second replaced the first, so the reason, the watch and the note
+   * never reached the store. A hold is now ONE answer on the `price` channel, where `join`
+   * honours it before the bucket. The stack half is kept: one `U` puts the typed price back
+   * and leaves the stack empty. */
+  const wire = await open(page, {
+    skus: [sku({ sku: '5', name: 'Unpriced', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
+    decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {}, no_market_data: { '5': '5.16' } },
+  })
+  const sent = () =>
+    (wire.filter((row) => row.method === 'PUT').pop()?.body as { corpus?: { skus?: Record<string, { value: unknown; channel?: string }> } } | undefined)
+      ?.corpus?.skus?.['5']
+
+  await page.locator('.pricing-hold').first().click()
+  await expect(page.locator('.pricing-holdpanel')).toBeVisible()
+  await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByLabel('Tell me when market is above').fill('9.50')
+  await page.getByLabel('Note', { exact: true }).fill('waiting on a reprint')
+  await page.getByRole('button', { name: 'Hold it' }).click()
+
+  await expect.poll(() => sent()?.value).toMatchObject({ withheld: expect.any(String), watch_above: '9.50', note: 'waiting on a reprint' })
+  expect(sent()?.channel ?? 'price').toBe('price')
+  await expect(page.locator('.pricing-row')).toHaveAttribute('data-answer', 'held')
+
+  /* ONE HOLD, ONE `U` PRESS, AND THE STACK IS EMPTY — the toolbar Undo's disabled state is
+   * the stack depth. The typed price comes back on its own channel. */
+  await page.locator(`${VIEW} h1`).click()
+  const toolbarUndo = page.getByRole('button', { name: 'Undo', exact: true })
+  await page.keyboard.press('u')
+  await expect(toolbarUndo).toBeDisabled()
+  await expect.poll(() => sent()).toMatchObject({ value: '5.16', channel: 'unknown' })
+})
+
+test('DEBT42 — a typed price on a row whose market went blank is shown, because the send lists at it', async ({
+  page,
+}) => {
+  /* THE OWNER'S RULING, "Screen shows $5.16". The price sits on the `price` channel and the
+   * market went blank in a later export. `join` reads the `price` channel before it asks for a
+   * market price, so the send lists this card at $5.16. The screen once read only the `unknown`
+   * channel on this row and said "Needs a price". */
+  await open(page, {
+    skus: [sku({ sku: '5', name: 'Void Assault', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
+    decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: { '5': '5.16' } },
+  })
+  const row = page.locator('.pricing-row')
+  await expect(field(page)).toHaveValue('5.16')
+  await expect(row).toContainText('No market price')
+  await expect(row).not.toContainText('Needs a price')
+})
+
 test('a held row says so, in both registers, and has no price field', async ({ page }) => {
   await open(page, {
     decisions: {
@@ -3302,6 +3421,64 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
   )
 })
 
+test('UN-11 (the delta review round) — the newest clear survives a reload, and Restore N reaches every SKU it cleared', async ({
+  page,
+}) => {
+  /* THE OPUS AUDIT'S OWN REPRO: "I cleared 49 prices and waited 23s. After a reload the
+   * server still held last_clear: {count: 49}, but the page showed no Restore control and
+   * its Undo was disabled." `GET /pricing`'s own `last_clear` is read on the FIRST load here
+   * too, standing for the reload the audit performed — the control has to survive it, never
+   * only the toast that named the clear. */
+  const restoredSkus = Array.from({ length: 49 }, (_, i) => `SKU${i}`)
+  let lastClear: { count: number; at: number } | null = { count: 49, at: 1758870000 }
+  const wire: { method: string; path: string; body: unknown }[] = []
+  await open(page, { skus: CLEAR_ROWS })
+  /* REGISTERED AFTER `open()`'s OWN STUB, so Playwright tries these first and `route.fallback()`
+     defers whatever they do not answer — the same pattern the pull-undo case in orders.spec.ts
+     already uses for the same reason (DEBT23). */
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: {} },
+        path: '/tmp/prices.json',
+        revision: 'rev-1',
+        clearable: CLEARABLE,
+        ...(lastClear === null ? {} : { last_clear: lastClear }),
+      }),
+    })
+  })
+  await page.route(/\/pricing\/restore$/, async (route) => {
+    const body = route.request().postDataJSON() as { last_clear?: boolean; revision?: string }
+    wire.push({ method: 'POST', path: '/pricing/restore', body })
+    lastClear = null
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, restored: restoredSkus, skipped: [], revision: 'rev-restored' }),
+    })
+  })
+  await page.reload()
+  await settleFonts(page)
+
+  const restore = page.getByRole('button', { name: 'Restore 49 cleared' })
+  await expect(restore).toBeVisible()
+  await expect(page.locator('.pricing-restore-clear')).toContainText('49 typed prices cleared')
+
+  await restore.click()
+
+  /* `last_clear: true`, NEVER A GUESS AT THE SKUS: unlike the toast's own Undo, this route
+     names no per-SKU values, so the server decides what comes back. */
+  expect(wire[0]?.body).toEqual({ last_clear: true, revision: 'rev-1' })
+  const toast = page.locator('.bn-toast', { hasText: '49 prices undone' })
+  await expect(toast).toBeVisible()
+
+  /* THE CONTROL IS GONE — the same read that answered the restore no longer names a clear. */
+  await expect(page.getByRole('button', { name: /^Restore \d+ cleared/ })).toHaveCount(0)
+})
+
 test('the clear is refused while the screen has an unsaved answer', async ({ page }) => {
   /* `#/pricing` autosaves the whole document, so a clear landing under an unsaved keystroke
      would be undone by the next save — D86's two-writer defect reached from inside one tab.
@@ -3612,6 +3789,85 @@ test('Undo has a fixed place, and U undoes from anywhere on the screen', async (
   await expect(undo).toBeEnabled()
   expect(await undo.boundingBox()).toEqual(before)
   /* U OUTSIDE ANY FIELD (UX-075): the key the tooltip names works where it says. */
+  await page.locator(`${VIEW} h1`).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => sentAnswers(wire)).toEqual({})
+})
+
+test('finding #2 (the Opus review round) — a hold toast\'s own Undo reverses that hold, never whatever a newer answer put on top', async ({
+  page,
+}) => {
+  const skus = [
+    sku({ sku: '1', name: 'Articuno', snap: { market: '3.00', direct_low: null, low: '2.80', low_with_shipping: '3.80', now: null } }),
+    sku({ sku: '2', name: 'Dunsparce', snap: { market: '2.00', direct_low: null, low: '1.80', low_with_shipping: '2.80', now: null } }),
+  ]
+  const wire = await open(page, { skus })
+
+  await page.getByRole('button', { name: 'Hold back Dunsparce' }).click()
+  await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByRole('button', { name: 'Hold it' }).click()
+  const holdToast = page.locator('.bn-toast', { hasText: 'Held Dunsparce' })
+  await expect(holdToast).toBeVisible()
+
+  /* A NEWER WRITE LANDS ON TOP OF THE STACK — the old code's toast called whatever `undoLast`
+   * held by press time, which by then would be THIS one, not the hold it named. */
+  await page.getByLabel('Price for Articuno').fill('9.00')
+  await page.getByLabel('Price for Articuno').press('Enter')
+  await expect.poll(() => sentAnswers(wire)['1']).toBe('9.00')
+
+  await holdToast.getByRole('button', { name: 'Undo' }).click()
+
+  /* THE HOLD IS GONE. THE NEWER ANSWER STANDS. */
+  await expect(page.locator('.pricing-row', { hasText: 'Dunsparce' }).locator('.pricing-state')).toHaveCount(0)
+  await expect.poll(() => sentAnswers(wire)['1']).toBe('9.00')
+})
+
+test('finding #6 (the Opus review round) — Enter commits once, not twice on the blur it triggers', async ({
+  page,
+}) => {
+  /* THE PUT ITSELF DEBOUNCES, so two `onCommit` calls in one tick would coalesce into one
+   * network write regardless — the visible symptom is the TOAST, which does not debounce:
+   * the old code fired `onCommit` from Enter, then again from the blur Enter itself
+   * triggers, stacking two "Cut-off changed" toasts for one keystroke. */
+  await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const cut = page.getByLabel('Cut-off', { exact: true })
+  await cut.fill('0.45')
+  await cut.press('Enter')
+  await expect(page.locator('.bn-toast', { hasText: 'Cut-off changed' })).toHaveCount(1)
+})
+
+test('finding #9/#15 (the Opus review round) — a cut-off change gets its own "Cut-off changed" toast, with Undo', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const cut = page.getByLabel('Cut-off', { exact: true })
+  await cut.fill('0.45')
+  await cut.press('Enter')
+  await expect.poll(() => sentPolicy(wire).threshold).toBe('0.45')
+
+  const cutToast = page.locator('.bn-toast', { hasText: 'Cut-off changed' })
+  await expect(cutToast).toBeVisible()
+  await cutToast.getByRole('button', { name: 'Undo' }).click()
+  await expect(cut).toHaveValue('0.40')
+})
+
+test('finding #11 (the Opus review round) — `U` still undoes a minute later, off the shared hook rather than a second copy', async ({
+  page,
+}) => {
+  /* Pricing used to reimplement the whole window listener itself (`kit/undo.ts`'s own
+   * comment: "a screen that still binds `U` itself is what `make kit-adoption` fails").
+   * `useUndoHotkey` reads no clock, so this is the same proof `review.spec.ts`,
+   * `fulfillment.spec.ts` and `orders.spec.ts` already carry, here too. */
+  await page.clock.install()
+  const wire = await open(page)
+  await field(page).focus()
+  await page.keyboard.type('12.00')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => sentAnswers(wire)['8608859']).toBe('12.00')
+
+  await page.clock.runFor(60_000)
   await page.locator(`${VIEW} h1`).click()
   await page.keyboard.press('u')
   await expect.poll(() => sentAnswers(wire)).toEqual({})

@@ -99,7 +99,12 @@ export function isWithheld(value: unknown): value is WithheldRecord | 'unlisted'
 export function corpusAnswer(book: PricingCorpus, row: Pick<PricingSku, 'sku' | 'bucket'>): unknown {
   const answer = (book.skus ?? {})[row.sku]
   if (answer === null || answer === undefined) return undefined
-  return (answer.channel === 'unknown') === (row.bucket === 'no_market_data') ? answer.value : undefined
+  /* AN ANSWER ON THE `price` CHANNEL COUNTS ON EVERY ROW, a hold or a typed price. `join` reads
+   * it before it asks whether the row has a market price, so a card whose market went blank
+   * still lists at the price typed before (the owner's DEBT42 ruling, "Screen shows $5.16").
+   * The `unknown` channel counts only on a row with no market price, as `join` reads it. */
+  if (answer.channel !== 'unknown') return answer.value
+  return row.bucket === 'no_market_data' ? answer.value : undefined
 }
 
 /** THE BAR'S RULE FOR ONE ROW, AND HOME READS THE SAME ONE (the delta review, R4 F1). The

@@ -1056,6 +1056,145 @@ test('the pull sends the capture_id of the row that was pressed, and its own pos
   })
 })
 
+test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus review round)', async ({
+  page,
+}) => {
+  /* THE BLIND AUDIT'S OWN WORDS: "Orders on phone: after tapping $, the next card (Tricksy
+   * Tentacles) slid in with its $ button exactly where I had just tapped." The FIRST build here
+   * kept the auto-advance and only disabled the new card's button for a beat (`ADVANCE_GUARD_MS`)
+   * — a timing bandaid the Opus review caught with a slower second tap. THE REBUILD DELETES THE
+   * ADVANCE: `OrdersWalkPane.tsx`'s `onSell` no longer calls anything that changes `current`.
+   * `RowAction` already reads `receipts` fresh every render, so the SAME row's own button turns
+   * into `Undo` in place (D57) and nothing else on the pane is re-mounted. This is a REAL D118
+   * rect-diff: every other measured box on the pane is asserted equal before and after the
+   * press, not just the one button's own coordinate. */
+  await page.setViewportSize({ width: 390, height: 844 })
+  const SKU_B = '9191487'
+  const lineB = line({
+    sku: SKU_B,
+    wanted: 1,
+    owed: 1,
+    fulfilled: 0,
+    outstanding: 1,
+    on_hand: 1,
+    line: { sku: SKU_B, quantity: 1, name: 'Tricksy Tentacles', number: '008', printing: 'Normal', condition: 'Near Mint', rarity: 'Rare', unit_price: '1.24', kind: 'single' },
+    picks: [
+      pick({
+        card_name: 'Tricksy Tentacles',
+        card_number: '008',
+        box: 3,
+        index: 22,
+        capture_id: 'cap-b',
+        place: place({ box: 3, index: 22, slot: 18, card: 18, label: 'Box 3, Section 2, Card 18' }),
+      }),
+    ],
+  })
+  await open(page, {
+    orders: payloadOf(
+      [
+        order({
+          wanted: 2,
+          lines: [line().line, lineB.line],
+          progress: [
+            ...order().progress,
+            { sku: SKU_B, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
+          ],
+        }),
+      ],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [line(), lineB] }],
+    ),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({ wanted: 1, copies: [walkPlanCopy({ capture_id: 'cap-a' })] }),
+          walkPlanTake({
+            sku: SKU_B,
+            name: 'Tricksy Tentacles',
+            wanted: 1,
+            copies: [
+              walkPlanCopy({
+                box: 3,
+                index: 22,
+                slot: 18,
+                card: 18,
+                label: 'Box 3, Section 2, Card 18',
+                capture_id: 'cap-b',
+              }),
+            ],
+          }),
+        ],
+      }),
+    ]),
+  })
+
+  /* AT 390, THE LIST AND THE CARD PANE ARE TWO STOPS, not one screen: `.orders-walk-press`
+     opens the row a phone shows one at a time. Desktop draws both, which is why the older
+     case here never had to do this. */
+  await page.getByRole('button', { name: /Volcanion/ }).click()
+
+  /* THE PRESSED BUTTON'S OWN SUBTREE IS EXEMPT (its icon and label are meant to change, from
+     `Mark sold` to `Undo` — D118 is about the REST of the page, never the control itself).
+     Every other geometry on the pane, including every OTHER copy's row, is measured. */
+  const rectsOf = () =>
+    page.locator('.orders-card-pane').evaluate((el) => {
+      const controls = [...el.querySelectorAll('.orders-card-thin-action, .orders-card-action')]
+      return [...el.querySelectorAll('*')]
+        .filter((node) => !controls.some((control) => control === node || control.contains(node)))
+        .map((node) => {
+          const r = node.getBoundingClientRect()
+          return `${r.top}:${r.left}:${r.width}:${r.height}`
+        })
+    })
+  const before = await rectsOf()
+
+  const action = page.getByRole('button', { name: /^Mark sold/ })
+  await action.click()
+  await expect
+    .poll(async () => (await page.getByRole('button', { name: /^Undo/ }).count()) > 0)
+    .toBe(true)
+
+  /* THE CARD DID NOT ADVANCE (the rebuilt fix): Volcanion is still what the pane shows, its own
+     row now reading Undo. Tricksy Tentacles stays in the walk list (it was always the next
+     row) but never becomes the pane's own card. */
+  await expect(page.locator('.orders-card-name')).toHaveText('Volcanion')
+  await expect(page.locator('.orders-card-pane').getByText('Tricksy Tentacles')).toHaveCount(0)
+
+  /* NO ROW MOVES UNDER THE FINGER (D118): every box on the pane, not only the pressed button's
+     own, is unchanged — a real rect-diff, not a same-spot check on one element. */
+  const after = await rectsOf()
+  expect(after).toEqual(before)
+})
+
+test('finding #16 (the Opus review round) — the struck-out row in the walk list, at 390, carries its own Undo', async ({
+  page,
+}) => {
+  /* THE REVIEW'S OWN REPRO: reaching Undo for a sale meant re-opening the card pane — the
+   * walk list's own row, once struck through, offered nothing back. `newestUndoKey` already
+   * names the one reversible copy; this proves the list itself now draws it, never only the
+   * pane above. */
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, { walkPlan: walkPlanOf([walkPlanStop()]) })
+
+  /* HIDE SOLD DEFAULTS ON (D132), so a done line leaves `.orders-walk-list` entirely unless
+   * turned off — the same thing `UN-6`'s own D118 case above turns off for the same reason:
+   * this case is about the row's OWN control, not about what stays visible once it is done. */
+  await page.getByRole('button', { name: /^Hide picked/ }).click()
+
+  const walkLine = page.locator('.orders-walk-line', { hasText: 'Volcanion' })
+  await expect(walkLine).not.toHaveClass(/is-done/)
+  await expect(walkLine.getByRole('button', { name: /^Undo/ })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect(walkLine).toHaveClass(/is-done/)
+
+  const undo = walkLine.getByRole('button', { name: /^Undo/ })
+  await expect(undo).toBeVisible()
+  await undo.click()
+
+  await expect(walkLine).not.toHaveClass(/is-done/)
+  await expect(page.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+})
+
 /* -------------------------------------------------------------------------------------- 5 */
 
 test('the receipt names where the card just was, never the departed label the sale answers with', async ({
@@ -1138,7 +1277,95 @@ test('U undoes the newest pull, on the Pull stage', async ({ page }) => {
     .toBe(2)
   const pulls = wire.filter((one) => one.path.endsWith('/orders/pull'))
   expect(pulls[1]?.body).toEqual({ undo: true, targets: [{ box: 3, index: 21, capture_id: 'cap-a' }] })
-  await expect(page.locator('.bn-toast', { hasText: 'Put Volcanion back' })).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: 'Pull undone' })).toBeVisible()
+})
+
+test('finding #11 (the Opus review round) — `U` still undoes the newest pull a faked minute later', async ({
+  page,
+}) => {
+  /* `useUndoHotkey` reads no clock (`kit/undo.ts`) — proof on Orders too, pressing the key
+   * itself rather than only checking the toast's own button stayed on screen. */
+  await page.clock.install()
+  const wire = await open(page, {
+    pull: {
+      undone: false,
+      order_key: `TCGplayer:${ORDER_NUMBER}`,
+      sku: SKU,
+      newly: 1,
+      recorded: 1,
+      outstanding: 0,
+      places: [place()],
+      sales: [{ card: { place: place({ label: 'Box 3 · departed', slot: null, section: null, card: null }) } }],
+    },
+    walkPlan: walkPlanOf([walkPlanStop()]),
+  })
+
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
+    .toBe(1)
+  await expect(page.locator('.bn-toast-receipt')).toBeVisible()
+
+  await page.clock.runFor(60_000)
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
+    .toBe(2)
+})
+
+test('finding #8 (the Opus review round) — a pull already reversed elsewhere reads as done, never a failure to retry', async ({
+  page,
+}) => {
+  /* THE REVIEW'S OWN REPRO: "I undid a sale directly on the server, then pressed U on
+   * Orders. It refused with the raw text... Also, after one U, U does nothing more, while
+   * the card pane's Undo moves to the next sale." `pull_not_recorded` is the server's own
+   * answer for exactly this — the ledger no longer holds the pull, because it was already
+   * reversed some other way. The old build showed a REFUSAL ("The card was not put back")
+   * for a card that was, in fact, already back. */
+  const wire = await open(page, {
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [{ card: { place: place({ label: 'Box 3 · departed', slot: null, section: null, card: null }) } }] },
+    walkPlan: walkPlanOf([walkPlanStop()]),
+  })
+  /* THE UNDO CALL ONLY: registered AFTER `open()`'s own stub, so Playwright tries this one
+     first and `route.fallback()` defers the ordinary pull to `open()`'s own handler. */
+  await page.route(/\/orders\/pull$/, async (route) => {
+    const body = route.request().postDataJSON() as { undo?: boolean } | null
+    if (body?.undo !== true) {
+      await route.fallback()
+      return
+    }
+    wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'pull_not_recorded',
+          message: 'The ledger has no record of this copy being pulled for an order. If it was marked sold on #/inventory, reverse it there.',
+        },
+      }),
+    })
+  })
+
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
+    .toBe(1)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+
+  /* NEVER "THE CARD WAS NOT PUT BACK" — it reads as settled, the same register `not_sold`
+     and `not_retired` already answer with elsewhere in this product. */
+  await expect(page.locator('.bn-toast', { hasText: 'Already undone' })).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: 'The card was not put back' })).toHaveCount(0)
+
+  /* AND THE TARGET IS GONE: a second `U` reaches nothing, because there is nothing left to
+     undo — not a stuck target repeating the same refused request forever. */
+  await page.keyboard.press('u')
+  expect(wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(2)
 })
 
 test('u typed into the buyer search field does not undo the pull', async ({ page }) => {
@@ -1165,7 +1392,7 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
   await page.keyboard.press('u')
 
   // No second `/orders/pull` call — the field ate the key.
-  await expect(page.locator('.bn-toast', { hasText: 'Put Volcanion back' })).toHaveCount(0)
+  await expect(page.locator('.bn-toast', { hasText: 'Pull undone' })).toHaveCount(0)
   expect(wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   await expect(page.getByRole('searchbox', { name: 'Search buyers' })).toHaveValue('u')
 })
@@ -3471,6 +3698,10 @@ test('a sale does not re-sort the walk list, and this section leads', async ({ p
   const before = await page.locator('.orders-walk-list .browse-secttitle, .orders-walk-list .orders-walk-name').allTextContents()
 
   await page.locator('.orders-card-pane').getByRole('button', { name: 'Mark sold' }).click()
+  /* UN-6 REBUILD: the pane no longer advances itself. Wait for the sale to land (the row's
+     own control reads Undo), then step forward on purpose — the same door the operator has. */
+  await expect(page.locator('.orders-card-pane').getByRole('button', { name: /^Undo/ })).toBeVisible()
+  await page.keyboard.press('j')
   await expect
     .poll(async () => (await page.locator('.orders-card-pane .orders-card-name').textContent()) ?? '')
     .not.toBe('Volcanion')
@@ -3541,9 +3772,9 @@ test('the walk folds every section at once, and Hide picked carries a count', as
   const hide = page.locator('.orders-walk-tools').getByRole('button', { name: /^Hide picked/ })
   await expect(hide).toContainText('0')
   await page.locator('.orders-card-pane').getByRole('button', { name: 'Mark sold' }).click()
-  await expect
-    .poll(async () => (await page.locator('.orders-card-pane .orders-card-name').textContent()) ?? '')
-    .not.toBe('Volcanion')
+  /* UN-6 REBUILD: the sale lands in place — the row's own control reads Undo — rather than
+     the pane advancing on its own, so the sync point is the control, not the card name. */
+  await expect(page.locator('.orders-card-pane').getByRole('button', { name: /^Undo/ })).toBeVisible()
   await expect(hide).toContainText('1')
   void wire
 })
@@ -3600,7 +3831,13 @@ test('J steps to the next card in the walk list, K steps back', async ({ page })
   expect(second).not.toBe(first)
 })
 
-test('when a card\'s owed copies are all sold, the next card in the walk lights', async ({ page }) => {
+test('a sale never advances the pane on its own (UN-6 rebuild): the operator steps to the next card with J', async ({ page }) => {
+  /* THIS CASE USED TO ASSERT THE OPPOSITE — that Volcanion's own `wanted: 1` being satisfied
+   * lit Sunrise "without a press beyond the sale itself." That auto-advance was UN-6's real
+   * defect (the Opus review round, `docs/specs/undo.md` §11.3): the new card's own button
+   * landed exactly where the finger had been. The rebuilt walk never changes `current` on a
+   * sale — the sold row's own control turns into `Undo` in place (D57), and the operator steps
+   * on their own, `J`/`K` (§13), the same door every other advance already used. */
   const wire = await open(page, {
     orders: secondBuyerPayload().payload,
     pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
@@ -3615,8 +3852,12 @@ test('when a card\'s owed copies are all sold, the next card in the walk lights'
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBeGreaterThan(0)
 
-  /* Volcanion's own `wanted: 1` is now satisfied by the one sale, so the pane lights the next
-     card — Sunrise — without a press beyond the sale itself. */
+  /* Volcanion stays, its own row now reading Undo — no auto-advance. */
+  await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
+  await expect(page.locator('.orders-card-pane').getByRole('button', { name: /^Undo/ })).toBeVisible()
+
+  /* The operator's own press moves the walk on. */
+  await page.keyboard.press('j')
   await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Sunrise')
 })
 
@@ -3673,36 +3914,49 @@ test('a SKU split across two stops does not advance early — the second stop ne
     },
   })
   const pulls = () => wire.filter((one) => one.path.endsWith('/orders/pull'))
-  /* THE BUTTON COUNT, NEVER THE WIRE ALONE (the same trap the toast/`U` case above names): a
-     press changes the count of Mark-sold buttons in the CURRENT pane the instant the state
-     update lands, so waiting for it before the next click is what keeps four sequential
-     presses from racing each other. */
+  /* UN-6 REBUILD (the Opus review round): the pane no longer advances itself between stops —
+     the sold copy's own row turns into Undo in place, and the operator steps on their own
+     press (J). This case used to assert the deleted auto-advance; it now asserts the per-stop
+     `satisfied` calculation walk-fix built (finding 4: a SKU split across two stops is judged
+     by THIS stop's own copies, never a store-wide tally) still holds, over the pull count and
+     the row that reads Undo, without depending on the pane switching on its own. */
+  const undoBtn = page.locator('.orders-card-pane').getByRole('button', { name: /^Undo/ })
   const markSold = page.locator('.orders-card-copy').getByRole('button', { name: 'Mark sold' })
   await expect(markSold).toHaveCount(1)
 
-  // James's own single copy — its own stop, fully satisfied on its own, so the pane switches to
-  // Konstantinos's own three, all still unsold.
+  // James's own single copy — its own stop, fully satisfied on its own.
   await markSold.first().click()
-  await expect(markSold).toHaveCount(3)
+  await expect(undoBtn).toBeVisible()
   await expect.poll(() => pulls().length).toBe(1)
   await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
 
-  // Two of Konstantinos's own three — NOT satisfied yet, so the pane must not advance to Riposte.
+  // The operator steps to Konstantinos's own stop — all three copies still unsold.
+  await page.keyboard.press('j')
+  await expect(markSold).toHaveCount(3)
+  await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
+
+  // Two of Konstantinos's own three sold, in place — the pane stays put either way.
   await markSold.first().click()
-  await expect(markSold).toHaveCount(2)
   await expect.poll(() => pulls().length).toBe(2)
   await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
   await markSold.first().click()
-  await expect(markSold).toHaveCount(1)
   await expect.poll(() => pulls().length).toBe(3)
   await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
 
-  // The THIRD of Konstantinos's own three — now the second stop is genuinely done, and the
-  // pane advances to Riposte, whose own single copy is the only Mark-sold button left.
+  // The THIRD of Konstantinos's own three — the second stop is genuinely done now, its own
+  // per-stop tally (finding 4) rather than a store-wide count of the SKU.
   await markSold.first().click()
-  await expect(markSold).toHaveCount(1)
   await expect.poll(() => pulls().length).toBe(4)
+  await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
+
+  // The operator steps to Riposte's own stop, whose one copy is the only Mark-sold left.
+  // `current` never moved off Konstantinos's FIRST row while the three sales landed (UN-6:
+  // selling never touches it), so this steps past his own other two rows first.
+  await page.keyboard.press('j')
+  await page.keyboard.press('j')
+  await page.keyboard.press('j')
   await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Riposte')
+  await expect(markSold).toHaveCount(1)
 })
 
 /* --------------------------------------------------------------------------------- the words */

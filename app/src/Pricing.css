@@ -450,6 +450,16 @@
   .pricing-bar-says { display: none; }
   .pricing-bar .send-card { flex: 1 1 auto; }
   .pricing-body { padding-bottom: calc(var(--pricing-bar-h, 0px) + var(--bn-4)); }
+  /* FINDING #9 (the Opus review round, re-fixed in the delta review): at 390 the fixed
+     `.pricing-bar` sits above the phone tab bar, and a toast's own default `bottom` put its
+     Undo UNDER that bar — a fade-out tap aimed at Undo landed on Send instead. Cleared by the
+     bar's own measured height (`--pricing-bar-h`, set in Pricing.tsx) plus a floor's worth of
+     breathing room, so the toast always clears whatever the bar is showing (Send N copies,
+     or the collapsed one-line phone shape). Re-keyed off `.pricing-bar` — pr3's own rename of
+     `.pricing-ship`, which is why this rule went missing the first time. */
+  body:has(.pricing-bar) .bn-toasts {
+    bottom: calc(64px + env(safe-area-inset-bottom) + var(--bn-2) + var(--pricing-bar-h, 0px) + var(--bn-4));
+  }
 }
 
 /* THE HEADER'S ICON PRESSES SIT FAR ENOUGH APART THAT EACH 40PX HIT AREA IS ITS OWN (D117). */
