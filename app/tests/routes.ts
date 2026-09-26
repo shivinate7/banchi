@@ -115,7 +115,7 @@ export async function routesFromNav(page: Page): Promise<string[]> {
 
      `#/runs` IS DELIBERATELY NOT NAMED HERE, unlike those two. It still exists as a
      registered route — bookmarks and old links must keep working — but it REDIRECTS
-     straight to `#/review` (D-runs-folds-into-review) rather than drawing a screen of its
+     straight to `#/review` (D291) rather than drawing a screen of its
      own, so a content sweep built on this harvester (`routeSweep.ts` and everything that
      calls it: text-shape, machine-words, phone) would land on `#/review` and then fail its
      own `data-route` assertion, or simply re-measure Review a second time under the wrong

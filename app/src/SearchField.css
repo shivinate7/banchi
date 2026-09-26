@@ -57,7 +57,7 @@
 .search-field-input::placeholder { color: var(--bn-ink-3); }
 .search-field-input::-webkit-search-cancel-button { appearance: none; }
 
-/* It is an IconButton now (D-icon-buttons), `size="sm"`: its own box, colour and hover paint
+/* It is an IconButton now (D288), `size="sm"`: its own box, colour and hover paint
    are `.bn-icon-btn` in kit.css. This file only says it does not shrink the row (`flex: none`);
    the 24px size and its own hover paint predate the conversion. */
 .search-field-clear { flex: none; }
@@ -173,7 +173,7 @@
 
 /* THE THUMB FLOOR (D117). This sheet had no breakpoint of any kind — the input a thumb taps
    into carried a literal 37px at 390. The clear button's own floor moved to IconButton's
-   `::before` (D-icon-buttons, round 2): growing this box to match used to grow the whole
+   `::before` (D288, round 2): growing this box to match used to grow the whole
    field on the first keystroke (D118, measured 40px to 42px), because a 40px clear button is
    taller than the field's own resting height. */
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {

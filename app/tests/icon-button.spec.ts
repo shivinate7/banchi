@@ -8,7 +8,7 @@ declare global {
   }
 }
 
-/* ICONBUTTON, THE ROUND-2 FINDINGS KEPT AS BROWSER ASSERTIONS. `docs/decisions/D-icon-buttons.md`
+/* ICONBUTTON, THE ROUND-2 FINDINGS KEPT AS BROWSER ASSERTIONS. D288
  * and `docs/specs/iconography.md` carry the argument; this file is what proved the fixes and
  * refuses their return.
  *
@@ -234,7 +234,7 @@ test('the toast dismiss glyph clears 4.5:1 against the toast ground, in both the
   }
 })
 
-/* THE ANCHOR FORM (round-2 sibling of D-icon-buttons): `href` renders an `<a>` instead of a
+/* THE ANCHOR FORM (round-2 sibling of D288): `href` renders an `<a>` instead of a
  * `<button>`, so a link that opens another route or tab keeps the browser's own middle-click,
  * right-click "open in new tab" and "copy link" — none of which a `window.open` in an
  * `onClick` can give. The specimen is `#/gallery`'s "the anchor form" spec, `IconButton icon=

@@ -723,7 +723,7 @@ export function ReviewQueue() {
   /** The store-wide re-check sheet. Closed on arrival: opening it takes a reading. */
   const [recheckOpen, setRecheckOpen] = useState(false)
 
-  /* RUNS, FOLDED IN (D-runs-folds-into-review). Open on arrival when the hash still carries
+  /* RUNS, FOLDED IN (D291). Open on arrival when the hash still carries
    * the intent a redirected `#/runs` link left behind — `?run=`, `?state=captured`,
    * `?box=`, or the bare `?runs=1` a link with none of those adds (`Runs.tsx:RunsRedirect`).
    * `RunsContent` itself reads the same three functions off the SAME hash to decide which
@@ -1442,11 +1442,11 @@ export function ReviewQueue() {
               pipeline to look at every waiting card again. Same icon vocabulary word would
               make them read as one control, so the tooltip keeps the fuller sentence. */}
           <IconButton icon="wand" label="Re-check every waiting card" onClick={() => setRecheckOpen(true)} disabled={disabled} className="review-recheck-open" />
-          {/* The kit's own reload control (D-icon-buttons), with its internal 'r' hotkey
+          {/* The kit's own reload control (D288), with its internal 'r' hotkey
               OFF: this screen wires RELOAD_KEY into the same switch every other key rides,
               because a second listener would fire the read twice. */}
           <ReloadButton onReload={reload} busy={disabled} label="Reload the queue" hotkey={false} className="review-reload" />
-          {/* D-runs-folds-into-review: every Runs capability, one press away. */}
+          {/* D291: every Runs capability, one press away. */}
           <IconButton icon="play" label="Past runs" onClick={() => setRunsOpen(true)} className="review-runs-open" />
           {everyone.length === 0 ? null : (
             <IconButton
@@ -1465,7 +1465,7 @@ export function ReviewQueue() {
         </>
       }
     >
-      {/* THE STRIP (D-runs-folds-into-review): drawn only when the pipeline has cards
+      {/* THE STRIP (D291): drawn only when the pipeline has cards
           waiting. Opens the same sheet, on the composer's own default "needed" start — the
           real cost estimate is the composer's preflight, not a second one guessed here. */}
       {captured === 0 ? null : (
@@ -1577,7 +1577,7 @@ export function ReviewQueue() {
 
       <QueueRefresh open={recheckOpen} onClose={closeRecheck} onWrote={reload} />
 
-      {/* D-runs-folds-into-review: every Runs capability, reachable from here. Mounted only
+      {/* D291: every Runs capability, reachable from here. Mounted only
           while open (`Sheet`'s own `useLeave`), so its GET /boxes and GET /pipeline/runs
           reads happen only when the operator is looking at it. */}
       <Sheet open={runsOpen} onClose={() => setRunsOpen(false)} title="Runs" icon="play" className="review-runs-sheet">

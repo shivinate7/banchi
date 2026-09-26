@@ -164,7 +164,7 @@ const auditSource = (mode: Mode) => `(() => {
         return { name, x: Math.round(cx + dx), y: Math.round(cy + dy), tag: n ? n.tagName.toLowerCase() + (n.className ? '.' + (n.className + '').split(' ')[0] : '') : null, owns: owns(n) }
       })
     const misses = hitDetail.filter((h) => !h.owns).length
-    /* THE HIT AREA, NOT THE VISUAL BOX (D-icon-buttons, round 2, option (a)). An IconButton
+    /* THE HIT AREA, NOT THE VISUAL BOX (D288, round 2, option (a)). An IconButton
        paints at its own FACE size and floors its hit area with a ::before inset instead
        (max(40px, 100%), kit.css) -- the box alone now under-reports a control the pseudo
        already covers. getComputedStyle(t, '::before') reads its used size the same way the
@@ -412,7 +412,7 @@ test('the sheets and menus a phone opens hold the floor too', async ({ page }) =
     await page.keyboard.press('Escape')
   }
 
-  /* `#/runs` redirects into the fold now (D-runs-folds-into-review) rather than drawing its
+  /* `#/runs` redirects into the fold now (D291) rather than drawing its
      own screen, so it never appears in the drawer's own roster — the Runs sheet opens over
      `#/review` instead, at the address its own redirect lands on. */
   await page.goto(`${find('/review')}?runs=1`)

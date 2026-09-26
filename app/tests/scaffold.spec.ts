@@ -132,7 +132,7 @@ const EXEMPT: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   },
 }
 
-/* A REDIRECT ROUTE (D-runs-folds-into-review's `#/runs`) renders nothing of its own — it sends
+/* A REDIRECT ROUTE (D291's `#/runs`) renders nothing of its own — it sends
  * the browser straight to another route's screen. `h1` and `title` name what THAT screen drew,
  * not this row's `label`, so holding a redirect to its own label is asking it to fail forever on
  * a fact it was never going to make true. `page`/`width`/`top`/`scroll` still apply: they are

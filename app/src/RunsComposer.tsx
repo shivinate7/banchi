@@ -576,7 +576,7 @@ export function RunsComposer({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
       if (event.metaKey || event.ctrlKey || event.altKey) return
-      /* `document.activeElement`, not `event.target` alone (D-runs-folds-into-review): once
+      /* `document.activeElement`, not `event.target` alone (D291): once
          this composer's own Modal mounts one layer deeper — inside Review's own Sheet — a
          `window`-level keydown's `target` can read as the document body rather than the
          focused field on some builds, and the guard must not trust it alone. */

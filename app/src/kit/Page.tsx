@@ -18,7 +18,7 @@ import { useInOverlay } from './overlay'
  * view in `PageRouteContext`, so the title defaults to the route's own `title ?? label`. */
 
 /** What the shell knows about the route a view is drawn for. `persona`, added for
- *  D-icon-buttons: the Fulfiller's route is the one place the ICONOGRAPHY rule does not
+ *  D288: the Fulfiller's route is the one place the ICONOGRAPHY rule does not
  *  apply (`docs/specs/iconography.md` section 2, rule 1) — `OverlayFrame`'s Close reads it
  *  to decide word or icon, since a Sheet or Modal is portalled and cannot tell from its own
  *  DOM position which persona is looking at it. */
