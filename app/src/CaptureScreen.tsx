@@ -3,13 +3,22 @@ import type { CSSProperties, ReactNode } from 'react'
 
 import { PositionLabel } from './PositionLabel'
 import { storeKeyText } from './storeKey'
-import type { BoxRecord, CardSummary, FinishClaim, GameEntry, GameRegistry, RemoveResult } from './types'
+import type {
+  BoxRecord,
+  CardSummary,
+  CaptureSitting,
+  FinishClaim,
+  GameEntry,
+  GameRegistry,
+  RemoveResult,
+} from './types'
 import {
   getTcgSets,
   ServerError,
   capture,
   createBox,
   getBoxes,
+  getCaptureSitting,
   getGames,
   getStatus,
   newCaptureId,
@@ -1110,7 +1119,18 @@ export function CaptureScreen() {
   // stopped early — the one outcome the operator cannot see for themselves, because the
   // cards that went and the cards that did not both leave the list.
   const [undoNote, setUndoNote] = useState<
-    (Note & { done: boolean; position: string | null; did: number; want: number }) | null
+    (Note & {
+      done: boolean
+      position: string | null
+      did: number
+      want: number
+      /* UN-2's "built on" fix-after (undo.md 11.1's own table row for Capture): "Manage
+       * box removes the card." Set only when the refusal's own code is `capture_built_on`
+       * — the sitting the failing card belongs to has already ended (a run identified it,
+       * or the 30-minute gap closed it) — and it names the box the fix-after link goes to.
+       * Null otherwise, including for every other refusal, which keeps its plain sentence. */
+      builtOnBox?: number | null
+    }) | null
   >(null)
   /* SECTION 6'S GRANULARITY: A SEPARATE PRESS BESIDE `U`, NOT INSTEAD OF IT. `undoBack` above
    * always deletes the newest of a box (`undoCapture`) and walks newest-first; this is D10
@@ -1309,7 +1329,52 @@ export function CaptureScreen() {
     [registry, game],
   )
 
-  
+  /* UN-2: A RELOAD KEEPS THE SITTING. `GET /capture/sitting` rebuilds it off the store, by
+   * the same `GAP_MINUTES` gap `sitting` below already applies to `shots` — the two never
+   * disagree about when a sitting ended, because the server's is the one this screen's own
+   * `sitting` memo is a client-side echo of.
+   *
+   * READ ONCE, AND ONLY ONCE THE REGISTRY CAN RESOLVE A CARD'S `game` KEY. Not before: a
+   * card fetched with no `GameEntry` to carry has nothing for `last.game.display` to read.
+   * Not twice: this only refills memory a reload emptied, and a second read after the
+   * operator has already shot into this browser would duplicate every row `shots` holds. */
+  const sittingHydrated = useRef(false)
+  useEffect(() => {
+    if (registry === null || sittingHydrated.current) return
+    sittingHydrated.current = true
+    void (async () => {
+      let sitting: CaptureSitting
+      try {
+        sitting = await getCaptureSitting()
+      } catch {
+        // The strip stays exactly where it started — empty — which is no worse than every
+        // reload before UN-2 existed.
+        return
+      }
+      if (!sitting.open || sitting.cards.length === 0) return
+      setShots((prev) =>
+        prev.length > 0
+          ? prev
+          : sitting.cards.map((card) => ({
+              card,
+              setHint: card.set_hint,
+              finish: (Array.isArray(card.metadata_finish)
+                ? card.metadata_finish
+                : card.metadata_finish === null
+                  ? []
+                  : [card.metadata_finish]) as unknown as FinishClaim,
+              /* A GAME REMOVED FROM THE REGISTRY SINCE THIS CARD WAS SHOT IS THE ONE CASE
+               * THIS FALLS BACK ON: `registry.games[0]` rather than a crash, because the
+               * card and its own undo belong on the strip even where its exact game entry
+               * no longer resolves. */
+              game: registry.games.find((entry) => entry.key === card.game) ?? registry.games[0]!,
+              at: card.captured_at === null ? Date.now() : Date.parse(card.captured_at),
+            })),
+      )
+    })()
+  }, [registry])
+
+
   const pickGame = useCallback((key: string) => {
     setGame(key)
     setFinish([])
@@ -2530,12 +2595,18 @@ export function CaptureScreen() {
            * A PARTIAL WALK IS REPORTED AS ONE. `did` cards really are gone and the rest are
            * not, and both halves leave the list either way — so the count is the only thing
            * left that says where the operator actually is. */
+          const failed = describe(failure)
           setUndoNote({
             done: false,
             position: did === 0 || reached === undefined ? null : positionText(reached),
             did,
             want: plan.length,
-            ...describe(failure),
+            ...failed,
+            // UN-2: `capture_built_on` names the sitting the failing card already left —
+            // identified, or the gap closed. `plan[did]` is that card, the first one this
+            // walk never reached. undo.md 11.1's own fix-after for Capture, once its sitting
+            // is built on, is "Manage box removes the card" — offered below by box.
+            builtOnBox: failed.code === 'capture_built_on' ? (plan[did]?.box ?? null) : null,
           })
         }
       } finally {
@@ -4038,6 +4109,20 @@ export function CaptureScreen() {
                 <span className="capture-halt-code"> {undoNote.code}</span>
               )}
             </p>
+          )}
+          {/* UN-2's fix-after (undo.md 11.1's table row for Capture): once the sitting is
+              built on, the strip cannot reach the card any more, so the way back is the
+              other route that already reaches it. */}
+          {undoNote?.builtOnBox == null ? null : (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="box"
+              iconRight="arrowRight"
+              onClick={() => (window.location.hash = `#/inventory?box=${undoNote.builtOnBox}`)}
+            >
+              Manage box
+            </Button>
           )}
         </footer>
 

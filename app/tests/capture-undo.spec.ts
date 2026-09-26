@@ -539,6 +539,82 @@ test('a capture behind the divider is built on it, and U reaches the capture ins
   expect(wire.sections).toEqual([])
 })
 
+/* UN-2: A RELOAD KEEPS THE SITTING. `GET /capture/sitting` is the read this proves — the
+ * strip appears with NO capture made in this browser at all, which is the one thing
+ * `shoot()` could never demonstrate on its own. */
+test('a reload rebuilds the strip from the store (UN-2)', async ({ page }) => {
+  await page.route(/\/capture\/sitting$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        open: true,
+        gap_minutes: 30,
+        cards: [1, 2].map((index) => ({
+          box: 3,
+          index,
+          key: `3/${index}`,
+          label: `Box 3, Section 1, Card ${index}`,
+          section: 1,
+          card: index,
+          new_box: index === 1,
+          created: true,
+          photo: `/tmp/3-${index}.jpg`,
+          capture_id: null,
+          place: { box_total: index },
+          captured_at: '2026-09-25T12:00:00+00:00',
+          set_hint: null,
+          metadata_finish: null,
+          game: 'pokemon',
+          state: 'captured',
+        })),
+      }),
+    }),
+  )
+  const wire = await open(page)
+
+  // Two rows, newest first, with no capture pressed in this browser.
+  await expect(rows(page)).toHaveCount(2)
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Card 2$/)
+  await expect(rows(page).last()).toHaveAttribute('aria-label', /Card 1$/)
+
+  // And the undo still reaches it — a hydrated row is not a read-only picture.
+  await page.keyboard.press('u')
+  expect(wire.deletes).toEqual(['/inventory/3/2'])
+})
+
+/* UN-2's fix-after: once the sitting has ended (or a run has identified it), the ordinary
+ * undo route refuses `capture_built_on` (undo.md 11.1's own table row for Capture), and the
+ * strip offers the route that DOES still reach the card — Manage box. */
+test('a capture built on its sitting refuses, and offers Manage box', async ({ page }) => {
+  const wire = await open(page)
+  await shoot(page, 1)
+  // Registered after `open()`'s own DELETE stub, so it wins (Playwright matches newest first).
+  await page.route(/\/inventory\/\d+\/\d+$/, (route) => {
+    if (route.request().method() !== 'DELETE') return route.fallback()
+    wire.deletes.push(new URL(route.request().url()).pathname)
+    return route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'capture_built_on',
+          message: 'This sitting has ended. Manage box removes the card instead.',
+        },
+      }),
+    })
+  })
+
+  await page.keyboard.press('u')
+
+  await expect(page.locator('.capture-refused')).toContainText('This sitting has ended')
+  await expect(page.locator('.capture-halt-code')).toHaveText('capture_built_on')
+  const fix = page.getByRole('button', { name: 'Manage box' })
+  await expect(fix).toBeVisible()
+  await fix.click()
+  await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#/inventory?box=3')
+})
+
 test('U undoes the most recent one, and only that one', async ({ page }) => {
   const wire = await open(page)
   await shoot(page, 4)

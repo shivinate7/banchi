@@ -314,6 +314,13 @@ async function stubShell(page: Page, cards: number): Promise<void> {
   await page.route(/\/pipeline\/sends$/, (route) =>
     json(route, { sends: [], unconfirmed: { copies: 0, stamps: [] }, due: false, check_at: null, now: '2026-09-24T12:00:00+00:00' }),
   )
+  /* UN-2: `CaptureScreen` reads this once, on mount, to rebuild a sitting a reload emptied.
+     The shared answer is a closed, empty one — nothing to hydrate — so a spec that never
+     meant to be about the capture strip still draws it exactly as before. A spec about the
+     sitting itself registers its own handler, which is newer and wins. */
+  await page.route(/\/capture\/sitting$/, (route) =>
+    json(route, { open: false, gap_minutes: 30, cards: [] }),
+  )
   /* THE PALETTE'S CARD SEARCH IS THE SHELL'S OWN READ NOW (D276): typing two letters
      into "Go to" asks `GET /search`. It is answered EMPTY, and ONLY while the palette is open.
      A screen's own search falls back to the seal, so a spec that forgot to stub its screen's
