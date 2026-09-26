@@ -6268,9 +6268,9 @@ def check_mark_sold(checks: Checks) -> None:
     )
     checks.equal(
         capture_server.SOLD_FIELDS,
-        ("undo",),
-        "and mark-sold's whole body is the undo flag: the position is in the path and the "
-        "state is a constant",
+        ("undo", "still_here"),
+        "and mark-sold's whole body is two flags, the undo and its \"still here\" form "
+        "(UN-7): the position is in the path and the state is a constant",
     )
 
     # ROUTING, and specifically that the sale does not shadow the two verbs already living

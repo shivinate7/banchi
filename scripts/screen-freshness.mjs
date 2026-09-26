@@ -226,6 +226,8 @@ const RECORDED = {
     // price-history archive, one range at a time. A plain read, same shape as
     // `getSoldPrices` above and never merged with it.
     'getHoldingsValue',
+    // The capture strip's sitting, read back off the store (undo.md UN-2).
+    'getCaptureSitting',
   ],
   writes: [
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',
@@ -272,6 +274,8 @@ const RECORDED = {
                                                // pair, same shape: `ListingCorrection` folds
                                                // the response into `written` the identical
                                                // way `correctAnswer`/`undoCorrectAnswer` do
+
+    'saleStillHere', 'undoMove', 'restoreLastClear', // undo.md UN-7, UN-14 and UN-11
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.
