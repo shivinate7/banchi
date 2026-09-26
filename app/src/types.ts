@@ -3544,8 +3544,9 @@ export type WalkPlanCopy = {
  *  `wanted`, or at this stop's own copies, would put an address back on a fungible copy.
  *
  *  `copies` ORDER IS LOAD-BEARING AND THE CLIENT MUST NOT RE-SORT: (1) copies with `here: true`,
- *  in the solver's own order (densest first, as before); (2) every other copy, ascending
- *  (box, index). D212: all of them are pressable. D93: none is hidden. */
+ *  in the solver's own order (densest first, as before); (2) every other copy, in box-walk
+ *  order: by box, then by the card's order key (D265). D212: all of them are pressable. D93:
+ *  none is hidden. */
 export type WalkPlanTake = {
   sku: string
   /** The identified card's own name, off its first ranked copy — null where the store holds

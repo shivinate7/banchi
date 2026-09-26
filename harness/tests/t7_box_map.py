@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import sqlite3
 import threading
 from typing import List, Optional, Tuple
 
@@ -69,7 +70,7 @@ def check_box_map_safety(checks: Checks) -> None:
 
         refusal(
             checks,
-            lambda: capture_server.do_move_cards(5, {"to_box": 7, "section": back_of(7), "indices": [3]}),
+            lambda: capture_server.do_move_cards(5, {"to_box": 7, **back_of(7), "indices": [3]}),
             "card_being_read",
             "a card with a live paid reading does not move (D262, D174)",
         )
@@ -78,7 +79,7 @@ def check_box_map_safety(checks: Checks) -> None:
             "and nothing moved: the card is still where the paid answer will land",
         )
 
-        capture_server.do_move_cards(5, {"to_box": 7, "section": back_of(7), "indices": [2]})
+        capture_server.do_move_cards(5, {"to_box": 7, **back_of(7), "indices": [2]})
         loaded = resolve.load(run, {"pokemon": run.path("export.csv")})
         where = sorted(
             (p.box, p.index) for match in loaded.matches.values() for p in match.positions
@@ -91,7 +92,7 @@ def check_box_map_safety(checks: Checks) -> None:
 
         # The second move of one card commits: its second tombstone has its own name.
         try:
-            capture_server.do_move_cards(7, {"to_box": 8, "section": back_of(8), "indices": [1]})
+            capture_server.do_move_cards(7, {"to_box": 8, **back_of(8), "indices": [1]})
             twice = True
         except Exception as caught:  # noqa: BLE001 — the failure is the assertion
             twice = f"{type(caught).__name__}: {caught}"
@@ -891,6 +892,15 @@ def _where(inv, cid):
     return int(card.index)
 
 
+def _force_respace(box: int) -> bool:
+    """Re-space `box` now, as twenty Map drags into one gap would. True when that changed
+    the box's layout token, so an aim read before it must be refused."""
+    with Store().write() as snapshot:
+        before = snapshot.inventory.layout_token(box)
+        snapshot.inventory._respace(box)
+        return snapshot.inventory.layout_token(box) != before
+
+
 def _fuzz_dividers(seeds, rounds, sections=False):
     """The divider proof's fuzz. A PHYSICAL MODEL of each box (sections of card names) is
     kept beside the store, every operation goes through its route, and after each one the
@@ -899,7 +909,9 @@ def _fuzz_dividers(seeds, rounds, sections=False):
 
     `sections=True` is the sub-box fuzz (`docs/specs/subbox-capture.md`): a capture, an S, a
     U and a move-in each aim at a random section by its divider key, and a sale and a sale
-    undone join the writes."""
+    undone join the writes. A quarter of the captures, S presses and move-ins re-space the
+    box between the aim and the write (the review's first finding): each must then refuse
+    with `SectionGone` when the token moved, and write nothing."""
     bad = []
     ops = 0
     for seed in seeds:
@@ -910,8 +922,17 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                 capture_server.do_create_box(dict(box=b, name="B" + str(b)))
                 phys[b] = [[]]
 
+            state = dict(stale=False, gone=False)
+
+            def stale(box, state=state):
+                """A re-space between the aim and the write, on a quarter of the aims."""
+                if state["stale"]:
+                    state["gone"] = _force_respace(box)
+
             def capture(b, j=None, phys=phys):
-                extra = dict(section=_divs(b)[j - 1]) if j else dict()
+                extra = aim_at(b, _divs(b)[j - 1]) if j else dict()
+                if j:
+                    stale(b)
                 _, row = capture_server.do_capture(capture_payload(b, **extra))
                 inv = Store().read().inventory
                 phys[b][j - 1 if j else -1].append(
@@ -945,6 +966,8 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                 saved = [[list(sec) for sec in phys[x]] for x in (1, 2, 3)]
                 # DRAWN ONLY IN THE SUB-BOX FUZZ, so the divider proof's seeds replay as before.
                 j = rng.randrange(len(phys[b])) + 1 if sections else None
+                state["stale"] = sections and rng.random() < 0.25
+                state["gone"] = False
                 empty_ok = not phys[b][-1]
                 try:
                     if kind == "capture" and sections:
@@ -954,7 +977,9 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                     elif kind == "S" and sections:
                         # S AFTER A PICKED SECTION: the new one goes right after it (Q1).
                         empty_ok = not phys[b][j - 1]
-                        capture_server.do_open_section(b, dict(after=_divs(b)[j - 1]))
+                        aim = after_at(b, _divs(b)[j - 1])
+                        stale(b)
+                        capture_server.do_open_section(b, aim)
                         phys[b].insert(j, [])
                     elif kind == "undo_S" and sections:
                         if phys[b][j - 1] or j < 2:
@@ -964,8 +989,10 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                     elif kind == "move_into" and b != dst and cards(b):
                         cid = rng.choice(cards(b))
                         k = rng.randrange(len(phys[dst])) + 1
-                        capture_server.do_move_cards(b, dict(
-                            to_box=dst, indices=[_where(inv, cid)], section=_divs(dst)[k - 1]))
+                        aim = aim_at(dst, _divs(dst)[k - 1])
+                        stale(dst)
+                        at = _where(Store().read().inventory, cid)
+                        capture_server.do_move_cards(b, dict(to_box=dst, indices=[at], **aim))
                         drop(b, cid)
                         phys[dst][k - 1].append(cid)
                     elif kind in ("sell", "sell_undo") and cards(b):
@@ -989,7 +1016,7 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                         phys[b].pop()
                     elif kind == "move" and b != dst and cards(b):
                         cid = rng.choice(cards(b))
-                        capture_server.do_move_cards(b, dict(to_box=dst, section=back_of(dst), indices=[_where(inv, cid)]))
+                        capture_server.do_move_cards(b, dict(to_box=dst, **back_of(dst), indices=[_where(inv, cid)]))
                         drop(b, cid)
                         phys[dst][-1].append(cid)
                     elif kind == "range" and cards(b):
@@ -1043,7 +1070,10 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                     # shows only as a refused section move, so this is what sees it.
                     for x, secs in zip((1, 2, 3), saved):
                         phys[x] = secs
-                    if not (isinstance(caught, master.SectionEmpty) and empty_ok):
+                    legal = (isinstance(caught, master.SectionEmpty) and empty_ok) or (
+                        isinstance(caught, master.SectionGone) and state["gone"]
+                    )
+                    if not legal:
                         bad.append((seed, ops, kind + " raised " + type(caught).__name__,
                                     b, [len(sec) for sec in phys[b]], str(caught)[:60]))
                 ops += 1
@@ -1190,7 +1220,7 @@ def check_divider_anchor(checks: Checks) -> None:
             cap(1)
         cap(2)
         capture_server.do_move_range(1, dict(indices=[5], to_box=1, before_card=1))
-        capture_server.do_move_cards(2, dict(to_box=1, section=back_of(1), indices=[1]))
+        capture_server.do_move_cards(2, dict(to_box=1, **back_of(1), indices=[1]))
         capture_server.do_open_section(1, dict())
 
         def unmove():
@@ -1218,6 +1248,18 @@ def _divs(box: int) -> List[str]:
     """Each section's divider key, as `GET /boxes` sends it (`sections_detail[].div`)."""
     row = next(b for b in capture_server.do_boxes()["boxes"] if b["box"] == box)
     return [d["div"] for d in row["sections_detail"]]
+
+
+def aim_at(box: int, div) -> dict:
+    """A capture's or a move's aim at section `div` of `box`, with the box's token as it
+    stands now (`docs/specs/subbox-capture.md` 1): what a screen that just read the box
+    sends."""
+    return {"section": div, "layout_token": Store().read().inventory.layout_token(box)}
+
+
+def after_at(box: int, div) -> dict:
+    """S's aim: right after section `div` of `box`, with the box's token as it stands now."""
+    return {"after": div, "layout_token": Store().read().inventory.layout_token(box)}
 
 
 def _attempt(fn):
@@ -1257,7 +1299,7 @@ def check_capture_into_section(checks: Checks) -> None:
         with isolated_home():
             capture_server.do_create_box(dict(box=1, name="A"))
             for n in range(5):
-                extra = dict(section=_divs(1)[-1]) if aim == "last" and n else dict()
+                extra = aim_at(1, _divs(1)[-1]) if aim == "last" and n else dict()
                 capture_server.do_capture(capture_payload(1, **extra))
                 if n == 2:
                     capture_server.do_open_section(1, dict())
@@ -1282,7 +1324,7 @@ def check_capture_into_section(checks: Checks) -> None:
         inv = Store().read().inventory
         before_labels = _labels(inv, 1)
         answer, caught = _attempt(
-            lambda: capture_server.do_capture(capture_payload(1, section=_divs(1)[1]))
+            lambda: capture_server.do_capture(capture_payload(1, **aim_at(1, _divs(1)[1])))
         )
         checks.ok(caught is None, "I2: a capture into section 2 of 3 is taken", repr(caught))
         if caught is None:
@@ -1319,7 +1361,7 @@ def check_capture_into_section(checks: Checks) -> None:
         before_keys = _keys(1)
         before_divs = list(Store().read().inventory.sections_for(1))
         before_labels = _labels(Store().read().inventory, 1)
-        _, caught = _attempt(lambda: capture_server.do_open_section(1, dict(after=_divs(1)[1])))
+        _, caught = _attempt(lambda: capture_server.do_open_section(1, dict(**after_at(1, _divs(1)[1]))))
         stored = list(Store().read().inventory.sections_for(1))
         added = [d for d in stored if d not in before_divs]
         checks.ok(
@@ -1339,7 +1381,7 @@ def check_capture_into_section(checks: Checks) -> None:
         )
         new_div = _divs(1)[2] if len(_divs(1)) == 4 else "none"
         answer, caught = _attempt(
-            lambda: capture_server.do_capture(capture_payload(1, section=new_div))
+            lambda: capture_server.do_capture(capture_payload(1, **aim_at(1, new_div)))
         )
         if caught is None:
             _, body = answer
@@ -1376,7 +1418,7 @@ def check_capture_into_section(checks: Checks) -> None:
         )
         # THE STALE U, mid-box: S after section 2, then an editor save, then U. The newest
         # layout change is the save, not the S, so the undo is not S's any more.
-        capture_server.do_open_section(1, dict(after=_divs(1)[1]))
+        capture_server.do_open_section(1, dict(**after_at(1, _divs(1)[1])))
         stale = _divs(1)[2]
         row = next(b for b in capture_server.do_boxes()["boxes"] if b["box"] == 1)
         capture_server.do_put_box(1, {"sections": [d["start"] for d in row["sections_detail"]]})
@@ -1390,7 +1432,7 @@ def check_capture_into_section(checks: Checks) -> None:
             "I9: and the saved dividers all stay",
         )
         checks.raises(
-            master.SectionGone, lambda: capture_server.do_open_section(1, dict(after="41")),
+            master.SectionGone, lambda: capture_server.do_open_section(1, dict(**after_at(1, "41"))),
             "I8: S refuses an `after` the box does not have",
         )
 
@@ -1405,7 +1447,7 @@ def check_capture_into_section(checks: Checks) -> None:
             b for b in capture_server.do_boxes()["boxes"] if b["box"] == 1
         )["sections_detail"][1]["start"]
         before = start()
-        _attempt(lambda: capture_server.do_capture(capture_payload(1, section=_divs(1)[0])))
+        _attempt(lambda: capture_server.do_capture(capture_payload(1, **aim_at(1, _divs(1)[0]))))
         checks.equal(
             (before, start(), _keys(1).get(6)), (51, 51, 6),
             "I5: with dividers [1, 51] on 5 cards, a capture into section 1 takes key 6, and "
@@ -1419,7 +1461,7 @@ def check_capture_into_section(checks: Checks) -> None:
         before = (inv.next_index(1), _keys(1), list(inv.sections_for(1)), _photos(home))
         checks.raises(
             master.SectionGone,
-            lambda: capture_server.do_capture(capture_payload(1, section="41")),
+            lambda: capture_server.do_capture(capture_payload(1, **aim_at(1, "41"))),
             "I6: a capture aimed at a divider the box does not have is refused",
         )
         inv = Store().read().inventory
@@ -1429,7 +1471,7 @@ def check_capture_into_section(checks: Checks) -> None:
         )
         checks.raises(
             master.SectionGone,
-            lambda: capture_server.do_capture(capture_payload(7, section="1.5")),
+            lambda: capture_server.do_capture(capture_payload(7, **aim_at(7, "1.5"))),
             "I6: a capture into a box that does not exist, aimed at a section, is refused",
         )
         checks.equal(
@@ -1444,14 +1486,14 @@ def check_capture_into_section(checks: Checks) -> None:
     # I7: a forced narrow gap re-spaces once, and keeps order and membership.
     with isolated_home():
         _three_by_three()
-        capture_server.do_open_section(1, dict(after=_divs(1)[0]))
+        capture_server.do_open_section(1, dict(**after_at(1, _divs(1)[0])))
         narrow = _divs(1)[1]
-        _, body = capture_server.do_capture(capture_payload(1, section=narrow))
+        _, body = capture_server.do_capture(capture_payload(1, **aim_at(1, narrow)))
         with Store().write() as snapshot:
             snapshot.inventory.cards[master.position_key(1, body["index"])].order = 4 - 5e-4
         walk = _layout(Store().read().inventory, 1)
         answer, caught = _attempt(
-            lambda: capture_server.do_capture(capture_payload(1, section=narrow))
+            lambda: capture_server.do_capture(capture_payload(1, **aim_at(1, narrow)))
         )
         if caught is None:
             _, body = answer
@@ -1469,9 +1511,9 @@ def check_capture_into_section(checks: Checks) -> None:
     # I10: the capture undo of a mid-box card.
     with isolated_home():
         _three_by_three()
-        capture_server.do_open_section(1, dict(after=_divs(1)[1]))
+        capture_server.do_open_section(1, dict(**after_at(1, _divs(1)[1])))
         empty = _divs(1)[2]
-        _, body = capture_server.do_capture(capture_payload(1, section=empty))
+        _, body = capture_server.do_capture(capture_payload(1, **aim_at(1, empty)))
         keys = {i: k for i, k in _keys(1).items() if i != body["index"]}
         stored = list(Store().read().inventory.sections_for(1))
         _, caught = _attempt(lambda: capture_server.do_delete_card(1, body["index"]))
@@ -1481,7 +1523,7 @@ def check_capture_into_section(checks: Checks) -> None:
             "I10: the capture undo deletes the newest card although it is mid-box, and "
             "writes no key and no divider",
         )
-        _, again = capture_server.do_capture(capture_payload(1, section=empty))
+        _, again = capture_server.do_capture(capture_payload(1, **aim_at(1, empty)))
         checks.equal(
             float(_keys(1)[again["index"]]), float(empty),
             "I10: the next capture into the emptied section takes the divider's key again",
@@ -1496,7 +1538,7 @@ def check_capture_into_section(checks: Checks) -> None:
         inv = Store().read().inventory
         mover = inv.cards["2/1"]
         answer, caught = _attempt(lambda: capture_server.do_move_card(
-            2, 1, dict(capture_id=mover.capture_id, to_box=1, section=_divs(1)[1])))
+            2, 1, dict(capture_id=mover.capture_id, to_box=1, **aim_at(1, _divs(1)[1]))))
         checks.equal(
             (caught, _labels(Store().read().inventory, 1).get(mover.cid)), (None, (2, 4)),
             "I12: a card moved into section 2 of 3 goes to the tail of section 2",
@@ -1512,7 +1554,7 @@ def check_capture_into_section(checks: Checks) -> None:
         )
         cids = [Store().read().inventory.cards[f"2/{i}"].cid for i in (2, 3)]
         _, caught = _attempt(lambda: capture_server.do_move_cards(
-            2, dict(to_box=1, indices=[2, 3], section=_divs(1)[0])))
+            2, dict(to_box=1, indices=[2, 3], **aim_at(1, _divs(1)[0]))))
         labels = _labels(Store().read().inventory, 1)
         checks.equal(
             (caught, [labels.get(c) for c in cids]), (None, [(1, 4), (1, 5)]),
@@ -1520,7 +1562,7 @@ def check_capture_into_section(checks: Checks) -> None:
         )
         checks.raises(
             master.SectionGone,
-            lambda: capture_server.do_move_cards(1, dict(to_box=3, indices=[1], section="41")),
+            lambda: capture_server.do_move_cards(1, dict(to_box=3, indices=[1], **aim_at(3, "41"))),
             "I12: a move aimed at a section the box does not have is refused",
         )
         checks.equal(
@@ -1549,7 +1591,7 @@ def check_capture_into_section(checks: Checks) -> None:
     # I15: the divider editor after a mid-box S.
     with isolated_home():
         _three_by_three()
-        capture_server.do_open_section(1, dict(after=_divs(1)[0]))
+        capture_server.do_open_section(1, dict(**after_at(1, _divs(1)[0])))
         before = list(Store().read().inventory.sections_for(1))
         row = next(b for b in capture_server.do_boxes()["boxes"] if b["box"] == 1)
         _, caught = _attempt(lambda: capture_server.do_put_box(
@@ -1562,7 +1604,7 @@ def check_capture_into_section(checks: Checks) -> None:
     # Plan section 4: a SKU's copies are listed in box-walk order, by key.
     with isolated_home():
         _three_by_three()
-        _, body = capture_server.do_capture(capture_payload(1, section=_divs(1)[0]))
+        _, body = capture_server.do_capture(capture_payload(1, **aim_at(1, _divs(1)[0])))
         with Store().write() as snapshot:
             for key in ("1/8", master.position_key(1, body["index"])):
                 snapshot.inventory.cards[key].sku = "900001"
@@ -1571,6 +1613,132 @@ def check_capture_into_section(checks: Checks) -> None:
             walk, [body["index"], 8],
             "a SKU's copies are listed in the order they stand, so a card captured mid-box "
             "is not listed as if at the back",
+        )
+
+    # THE REVIEW'S FIRST FINDING: a re-space re-uses a divider key. Dividers [1, 7, 10] over
+    # sections of three cards re-space to [1, 4, 7], so "7" names section 3 afterwards. An aim
+    # read before the re-space carries the old token, and it is refused.
+    with isolated_home() as home:
+        capture_server.do_create_box(dict(box=1, name="A"))
+        with Store().write() as snapshot:
+            for index, key in enumerate((1, 2, 3, 7, 8, 9, 10, 11, 12), 1):
+                snapshot.inventory.record_capture(master.Card(
+                    box=1, index=index, cid=fake_cid(f"reuse-{index}"), order=float(key)))
+            snapshot.inventory.set_sections(1, [1, 7, 10])
+        stale_capture = aim_at(1, "7")
+        stale_s = after_at(1, "7")
+        stale_move = aim_at(1, "7")
+        capture_server.do_create_box(dict(box=2, name="B"))
+        capture_server.do_capture(capture_payload(2))
+        _force_respace(1)
+        checks.equal(_divs(1), ["1", "4", "7"], "the re-space re-uses key 7 for section 3")
+        inv = Store().read().inventory
+        before = (inv.next_index(1), _keys(1), list(inv.sections_for(1)), _photos(home))
+        checks.raises(
+            master.SectionGone,
+            lambda: capture_server.do_capture(capture_payload(1, **stale_capture)),
+            "a capture aimed at section 2 before the re-space is refused, not filed in section 3",
+        )
+        checks.raises(
+            master.SectionGone, lambda: capture_server.do_open_section(1, stale_s),
+            "and so is an S after section 2 aimed before the re-space",
+        )
+        aim2 = Store().read().inventory.cards["2/1"].capture_id
+        checks.raises(
+            master.SectionGone,
+            lambda: capture_server.do_move_card(
+                2, 1, dict(capture_id=aim2, to_box=1, **stale_move)),
+            "and so is a Move to box aimed before the re-space",
+        )
+        inv = Store().read().inventory
+        checks.equal(
+            (inv.next_index(1), _keys(1), list(inv.sections_for(1)), _photos(home),
+             inv.cards["2/1"].state),
+            before + (master.CAPTURED,),
+            "and none of the three wrote a key, a divider, a photograph or a move",
+        )
+        answer, caught = _attempt(
+            lambda: capture_server.do_capture(capture_payload(1, **aim_at(1, _divs(1)[1])))
+        )
+        checks.ok(
+            caught is None and answer[1]["section"] == 2 and answer[1]["section_div"] == "4"
+            and answer[1]["layout_token"] == Store().read().inventory.layout_token(1),
+            "an aim read after the re-space files the card in section 2, and the answer "
+            "carries the box's token",
+            repr(caught or answer[1].get("section")),
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_capture(capture_payload(1, section=_divs(1)[1])),
+            "layout_token_required",
+            "a section sent without a token is refused",
+        )
+
+    # U AFTER A RE-SPACE: U's own proof is the resectioned line, and a re-space writes none.
+    with isolated_home():
+        _three_by_three()
+        capture_server.do_open_section(1, dict(**after_at(1, _divs(1)[0])))
+        made = _divs(1)[1]
+        changed = _force_respace(1)
+        refusal(
+            checks, lambda: capture_server.do_close_section(1, made), "divider_built_on",
+            "U after S and then a re-space refuses: the layout is not the one S wrote",
+        )
+        checks.ok(changed, "and the re-space in that case did move the keys")
+
+    # THE REVIEW'S FIFTH FINDING: an unreadable log is a named refusal, never a 500.
+    with isolated_home():
+        _three_by_three()
+        s_row = capture_server.do_open_section(1, dict())
+        broken = capture_server.Store.named_events
+
+        def unreadable(self, event):
+            raise sqlite3.DatabaseError("database disk image is malformed")
+
+        capture_server.Store.named_events = unreadable
+        try:
+            refusal(
+                checks, lambda: capture_server.do_close_section(1, str(s_row["sections"][-1])),
+                "history_unreadable", "U whose log read fails is a named refusal",
+            )
+        finally:
+            capture_server.Store.named_events = broken
+        checks.equal(
+            list(Store().read().inventory.sections_for(1)), list(s_row["sections"]),
+            "and the divider stays",
+        )
+
+    # THE REVIEW'S THIRD FINDING: a box that ended with an empty section before the move.
+    with isolated_home():
+        for b in (1, 2):
+            capture_server.do_create_box(dict(box=b, name="B" + str(b)))
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(2))
+        capture_server.do_open_section(2, dict())
+        capture_server.do_capture(capture_payload(1))
+        mover = Store().read().inventory.cards["1/1"]
+        capture_server.do_move_card(
+            1, 1, dict(capture_id=mover.capture_id, to_box=2, **aim_at(2, _divs(2)[0])))
+        _, caught = _attempt(lambda: capture_server.do_move_card(1, 1, dict(undo=True)))
+        checks.ok(
+            caught is None,
+            "a move into the section before an empty last section can be undone: that "
+            "divider was there before the move",
+            repr(caught),
+        )
+
+    with isolated_home():
+        _three_by_three()
+        capture_server.do_create_box(dict(box=2, name="B"))
+        capture_server.do_capture(capture_payload(2))
+        mover = Store().read().inventory.cards["2/1"]
+        capture_server.do_move_card(
+            2, 1, dict(capture_id=mover.capture_id, to_box=1, **aim_at(1, _divs(1)[1])))
+        capture_server.do_open_section(1, dict(**after_at(1, _divs(1)[1])))
+        refusal(
+            checks, lambda: capture_server.do_move_card(2, 1, dict(undo=True)),
+            "move_built_on",
+            "a move whose card got a new divider behind it after the move cannot be undone",
         )
 
     ops, bad = _fuzz_dividers(range(6, 12), 150, sections=True)
