@@ -1900,7 +1900,7 @@ export function Pricing() {
           onPress: () => {
             void (async () => {
               try {
-                const back = await restorePricingAnswers(result.cleared, revision.current)
+                const back = await restorePricingAnswers(result.cleared, revision.current, result.clear_id)
                 revision.current = back.revision
                 const kept = savedBook.current
                 if (kept !== null) {

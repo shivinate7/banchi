@@ -2787,11 +2787,12 @@ export async function clearPricingAnswers(options: {
 export async function restorePricingAnswers(
   answers: PricingClearResult['cleared'],
   revision?: string,
+  clear?: string,
 ): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
   return (await request('/pricing/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(revision === undefined ? { answers } : { answers, revision }),
+    body: JSON.stringify({ answers, ...(revision === undefined ? {} : { revision }), ...(clear === undefined ? {} : { clear }) }),
   })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
 }
 

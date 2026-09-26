@@ -6648,6 +6648,61 @@ def check_undo_until_built_on(checks: Checks) -> None:
         checks.equal(sorted(back["restored"]), ["2000", "2001"], "the clear's own rows still come back")
         checks.equal(corpus.Corpus.read().answers["2000"].at, first, "verbatim, with their first date")
 
+    # ------------------------------------------------ every clear keeps its undo, until built on
+    # The owner's standing undo rule, "until it's built on". A second clear once replaced the
+    # first, so the first clear's Undo refused while its toast was still up. The server keeps
+    # every clear not yet restored, and each restore names its own.
+    with isolated_home():
+        first = "2026-09-01T10:00:00+00:00"
+        book = corpus.Corpus()
+        book.answers = {"3000": corpus.Answer(value="4.50", at=first), "3001": corpus.Answer(value="1.25", at=first)}
+        book.write()
+        one = pipeline_routes.do_pricing_clear({"skus": ["3000"]})
+        two = pipeline_routes.do_pricing_clear({"skus": ["3001"]})
+        checks.ok(one.get("clear_id") and two.get("clear_id") and one["clear_id"] != two["clear_id"], "two clears, two ids")
+        checks.equal(
+            (pipeline_routes.do_pricing_corpus()["last_clear"] or {}).get("id"),
+            two["clear_id"],
+            "the Restore notice offers the newest clear",
+        )
+        older = answers(
+            checks,
+            lambda: pipeline_routes.do_pricing_restore({"answers": one["cleared"], "clear": one["clear_id"]}),
+            "the older clear's Undo answers after a newer clear",
+        )
+        checks.equal(field(older, "restored"), ["3000"], "the older clear's Undo still works after a newer clear")
+        checks.equal([row["id"] for row in corpus.read_clears()], [two["clear_id"]], "and only that clear is removed")
+        newer = answers(
+            checks,
+            lambda: pipeline_routes.do_pricing_restore({"answers": two["cleared"], "clear": two["clear_id"]}),
+            "the newer clear's Undo answers",
+        )
+        checks.equal(field(newer, "restored"), ["3001"], "then the newer one comes back too")
+        checks.equal(corpus.read_clears(), [], "and no clear is left kept")
+        back_first = corpus.Corpus.read().answers.get("3000")
+        checks.equal(back_first and back_first.at, first, "each verbatim, with its first date")
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers = {"3100": corpus.Answer(value="4.50"), "3101": corpus.Answer(value="1.25")}
+        book.write()
+        one = pipeline_routes.do_pricing_clear({"skus": ["3100"]})
+        pipeline_routes.do_pricing_clear({"skus": ["3101"]})
+        with Store().write() as snapshot:
+            snapshot.postings.record(sku="3100", price="0.49", source="emit")
+        try:
+            pipeline_routes.do_pricing_restore({"answers": one["cleared"], "clear": one["clear_id"]})
+        except pipeline_routes.PipelineRefusal as caught:
+            checks.equal(caught.code, "clear_built_on", "a clear a send has built on refuses its Undo")
+        else:
+            checks.ok(False, "a clear a send has built on refuses its Undo", "did not refuse")
+        checks.ok("3100" not in corpus.Corpus.read().answers, "and writes nothing")
+        checks.equal(
+            sorted(pipeline_routes.do_pricing_restore({"last_clear": True})["restored"]),
+            ["3101"],
+            "the Restore notice skips the built-on clear and offers the newest it can still undo",
+        )
+
     # ------------------------------------------------ UN-14: a move, until either box changes
     with isolated_home():
         for _ in range(2):
