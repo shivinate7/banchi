@@ -4428,6 +4428,17 @@ def do_delete_card(box: int, index: int) -> dict:
                 f"if it has left; either way, leave the position alone.",
             )
 
+        # BUILT ON ONCE ITS SITTING ENDS (UN-2, `docs/specs/undo.md` 11.1). The server
+        # decides it, with the same rule `GET /capture/sitting` answers by, so the strip and
+        # this refusal cannot disagree. After it, Manage box removes the card (D10 ruling 1).
+        if key not in _open_sitting(inventory):
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "capture_built_on",
+                f"The sitting that took {join.said_place(inventory, box, index)} has ended, so "
+                f"the capture can no longer be undone. Remove it from Manage box instead.",
+            )
+
         if int(index) != newest:
             raise BadRequest(
                 HTTPStatus.CONFLICT,
@@ -6123,19 +6134,9 @@ def do_capture_sitting() -> dict:
     """
     snapshot = Store().read()
     inventory = snapshot.inventory
-    keys = inventory.newest_sitting(SITTING_GAP_MINUTES * 60)
-    cards = [inventory.cards[key] for key in keys if key in inventory.cards]
-    newest = None
-    if cards:
-        try:
-            newest = datetime.fromisoformat(str(cards[-1].captured_at))
-        except (TypeError, ValueError):
-            newest = None
-    open_ = newest is not None and (
-        datetime.now(timezone.utc) - newest
-    ).total_seconds() <= SITTING_GAP_MINUTES * 60
+    keys = _open_sitting(inventory)
     rows = []
-    for card in cards if open_ else []:
+    for card in (inventory.cards[key] for key in keys):
         row = _card_summary(inventory, card, created=False)
         row.update(
             captured_at=card.captured_at,
@@ -6145,7 +6146,26 @@ def do_capture_sitting() -> dict:
             state=card.state,
         )
         rows.append(row)
-    return {"open": open_, "gap_minutes": SITTING_GAP_MINUTES, "cards": rows}
+    return {"open": bool(keys), "gap_minutes": SITTING_GAP_MINUTES, "cards": rows}
+
+
+def _open_sitting(inventory: master.Inventory) -> List[str]:
+    """The keys of the sitting still going on, oldest first, or none once it has ended.
+
+    ONE RULE FOR THE STRIP AND FOR THE CAPTURE UNDO (UN-2). The newest sitting is open
+    while its newest capture is at most `SITTING_GAP_MINUTES` old. After that the sitting
+    has ended, and every capture in it is built on.
+    """
+    keys = [key for key in inventory.newest_sitting(SITTING_GAP_MINUTES * 60)
+            if key in inventory.cards]
+    if not keys:
+        return []
+    try:
+        newest = datetime.fromisoformat(str(inventory.cards[keys[-1]].captured_at))
+    except (TypeError, ValueError):
+        return []
+    age = (datetime.now(timezone.utc) - newest).total_seconds()
+    return keys if age <= SITTING_GAP_MINUTES * 60 else []
 
 
 def do_queues() -> dict:

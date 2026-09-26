@@ -866,7 +866,8 @@ export type MoveResult = {
 /** What `GET /capture/sitting` answers (UN-2): the newest sitting, rebuilt from the store, so
  *  a reload does not end the capture strip. `open` is false once the newest capture is more
  *  than `gap_minutes` old. That sitting has ended, and `cards` is empty. The server decides
- *  this, and the screen never measures the gap itself. `cards` runs oldest first. Each row is
+ *  this, and the screen never measures the gap itself. The capture undo reads the same rule
+ *  and refuses `capture_built_on` for a card outside the open sitting. `cards` runs oldest first. Each row is
  *  a `CardSummary` plus the claims the strip draws under a shot, and the card's `state`. */
 export type CaptureSitting = {
   open: boolean
