@@ -1352,10 +1352,18 @@ export function CaptureScreen() {
         return
       }
       if (!sitting.open || sitting.cards.length === 0) return
+      /* A MOVED CARD IS NEVER AN UNDOABLE ROW (the coordinator's word, 2026-09-25, after
+       * lane S's own review found the server once answering one). The server already
+       * leaves a moved card out of `_open_sitting` — this is the second reader of that same
+       * fact, not the first: undoing a capture deletes the record and its photograph
+       * (D10 ruling 1), and a card this screen never captured into its CURRENT box is not
+       * that, whatever a future server answer says. */
+      const captured = sitting.cards.filter((card) => card.state === 'captured')
+      if (captured.length === 0) return
       setShots((prev) =>
         prev.length > 0
           ? prev
-          : sitting.cards.map((card) => ({
+          : captured.map((card) => ({
               card,
               setHint: card.set_hint,
               finish: (Array.isArray(card.metadata_finish)

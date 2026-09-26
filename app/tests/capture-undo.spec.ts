@@ -542,7 +542,27 @@ test('a capture behind the divider is built on it, and U reaches the capture ins
 /* UN-2: A RELOAD KEEPS THE SITTING. `GET /capture/sitting` is the read this proves — the
  * strip appears with NO capture made in this browser at all, which is the one thing
  * `shoot()` could never demonstrate on its own. */
-test('a reload rebuilds the strip from the store (UN-2)', async ({ page }) => {
+test('a reload rebuilds the strip from the store (UN-2), and never a moved card', async ({
+  page,
+}) => {
+  const sittingCard = (index: number, state: string) => ({
+    box: 3,
+    index,
+    key: `3/${index}`,
+    label: `Box 3, Section 1, Card ${index}`,
+    section: 1,
+    card: index,
+    new_box: index === 1,
+    created: true,
+    photo: `/tmp/3-${index}.jpg`,
+    capture_id: null,
+    place: { box_total: index },
+    captured_at: '2026-09-25T12:00:00+00:00',
+    set_hint: null,
+    metadata_finish: null,
+    game: 'pokemon',
+    state,
+  })
   await page.route(/\/capture\/sitting$/, (route) =>
     route.fulfill({
       status: 200,
@@ -550,35 +570,22 @@ test('a reload rebuilds the strip from the store (UN-2)', async ({ page }) => {
       body: JSON.stringify({
         open: true,
         gap_minutes: 30,
-        cards: [1, 2].map((index) => ({
-          box: 3,
-          index,
-          key: `3/${index}`,
-          label: `Box 3, Section 1, Card ${index}`,
-          section: 1,
-          card: index,
-          new_box: index === 1,
-          created: true,
-          photo: `/tmp/3-${index}.jpg`,
-          capture_id: null,
-          place: { box_total: index },
-          captured_at: '2026-09-25T12:00:00+00:00',
-          set_hint: null,
-          metadata_finish: null,
-          game: 'pokemon',
-          state: 'captured',
-        })),
+        /* THE SERVER ALREADY LEAVES A MOVED CARD OUT OF THIS LIST (lane S's own review
+         * round). Card 3 is here anyway — the client's OWN filter is what this case
+         * proves, not the server's, because an undo here deletes a photograph and that is
+         * one guard too important to rest on a single reader. */
+        cards: [sittingCard(1, 'captured'), sittingCard(2, 'captured'), sittingCard(3, 'moved')],
       }),
     }),
   )
   const wire = await open(page)
 
-  // Two rows, newest first, with no capture pressed in this browser.
+  // Two rows, newest first — never card 3, whatever state it moved to.
   await expect(rows(page)).toHaveCount(2)
   await expect(rows(page).first()).toHaveAttribute('aria-label', /Card 2$/)
   await expect(rows(page).last()).toHaveAttribute('aria-label', /Card 1$/)
 
-  // And the undo still reaches it — a hydrated row is not a read-only picture.
+  // And the undo still reaches the captured cards — a hydrated row is not a read-only picture.
   await page.keyboard.press('u')
   expect(wire.deletes).toEqual(['/inventory/3/2'])
 })
