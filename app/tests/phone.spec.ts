@@ -505,7 +505,8 @@ test('the shutter clears the phone tab bar on first paint, with a real safe-area
     await expect(open, `${capture} at ${height}px drew no "Open the camera" press in the frame`).toBeVisible()
     await expect(open).toHaveAccessibleName('Open the camera')
     const clip = await open.evaluate((el) => {
-      if (el.classList.contains('bn-btn-icon')) return null
+      /* Icon-only: the kit's IconButton (`.bn-icon-btn`) or an `iconOnly` Button (`.bn-btn-icon`). */
+      if (el.classList.contains('bn-icon-btn') || el.classList.contains('bn-btn-icon')) return null
       const b = el.getBoundingClientRect()
       let p = el.parentElement
       while (p !== null && getComputedStyle(p).overflow === 'visible') p = p.parentElement

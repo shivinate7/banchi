@@ -799,6 +799,10 @@
 @container (max-height: 400px) {
   .capture-frame-note .capture-frame-open-words { display: none; }
   .capture-frame-note .capture-frame-open-icon { display: inline-flex; }
+  /* The kit's IconButton is a ghost. On the dark frame this is the one press, so it wears
+     the primary face the worded press wears. */
+  .capture-frame-note .capture-frame-open-icon { color: var(--bn-on-accent); background: var(--bn-accent); box-shadow: var(--bn-shadow-1); }
+  .capture-frame-note .capture-frame-open-icon:hover { background: var(--bn-accent-hover); }
   .capture-frame-note:has(.capture-frame-open-icon) .capture-frame-glyph { display: none; }
 }
 .capture-frame-spinner {

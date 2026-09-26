@@ -3258,9 +3258,7 @@ export function CaptureScreen() {
                             390x844, against a 166px press). CaptureScreen.css shows exactly one
                             of these two presses by the viewport's own height; the other is
                             `display: none`, so a screen reader meets one "Open the camera". */}
-                        <Button variant="primary" icon="camera" iconOnly className="capture-frame-open-icon" onClick={camera.retry}>
-                          Open the camera
-                        </Button>
+                        <IconButton icon="camera" size="lg" label="Open the camera" className="capture-frame-open-icon" onClick={camera.retry} />
                       </>
                     ) : cameraFault ? (
                       <>
