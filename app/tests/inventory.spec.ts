@@ -4583,22 +4583,23 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
   const band = page.locator('.card-locations-row.is-current .nb')
   await expect(band).toBeVisible()
 
-  /* THE KEYS ARE THE COMPOSER'S OWN TWO WORDS. `in front` / `behind` was built first and reads
-     better as a physical pair, and it takes the NEIGHBOUR as its subject where `placeParts`
-     takes THIS CARD — so the row and the `aria-label` would have disagreed about which side
-     the same name was on. */
-  /* Back, this card, front: the owner's orientation, card 1 at the far back (LOC-07). */
-  await expect(band.locator('.nb-key')).toHaveText(['back', 'this', 'front'])
+  /* BACK THEN FRONT, the owner's orientation, card 1 at the far back (LOC-07) — `data-side`
+     marks the order with no visible word for it any more (Direction B, 2026-09-25: the ladder's
+     `back`/`this`/`front` words collapsed into one line, an arrow between the two names). */
+  expect(await band.locator('.nb-side').evaluateAll((els) => els.map((el) => el.getAttribute('data-side')))).toEqual([
+    'back',
+    'front',
+  ])
 
-  /* THE SPLIT, which is what makes two proper nouns findable in a column: the champion is the
+  /* THE SPLIT, which is what makes two proper nouns findable side by side: the champion is the
      recognition token at ink and the epithet is the disambiguator, demoted and never dropped —
      61 of 99 champions carry more than one, so `Master Yi` alone names fourteen cards. */
-  await expect(band.locator('.nb-name b')).toHaveText(['Galio', 'Evelynn'])
+  await expect(band.locator('.nb-side b')).toHaveText(['Galio', 'Evelynn'])
   await expect(band.locator('.nb-rest')).toHaveText([', Indefaticable', ', Entrancing'])
 
-  /* THE JOINED SENTENCE SURVIVES ON `aria-label`, so a screen reader hears one sentence where
-     the eye is given two rows — and it is `placeParts`' own composition, not a second author's,
-     which is what the one-composer rule in server.ts is for. */
+  /* THE JOINED SENTENCE SURVIVES ON `aria-label`, so a screen reader hears one full sentence
+     where the eye is given two names and an arrow — and it is `placeParts`' own composition,
+     not a second author's, which is what the one-composer rule in server.ts is for. */
   await expect(band).toHaveAttribute(
     'aria-label',
     'It sits in front of Galio, Indefaticable and behind Evelynn, Entrancing.',
@@ -4611,7 +4612,7 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
     search: (query) => searchAnswer(query, NEIGHBORLY),
   })
 
-  /* THE TWO DEFECTS THIS REPLACED, ASSERTED AS THE PROPERTIES THEY ARE.
+  /* THE DEFECT THIS REPLACED, ASSERTED AS THE PROPERTY IT IS.
      `.card-locations-boxname` drew this at 10px UPPERCASE TRACKED MONO — the metadata register
      — which made the only running English in the product a row of rectangles. docs/DESIGN.md
      cuts on exactly this line: "Mono carries all metadata… the body face is reserved for
@@ -4619,7 +4620,7 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
      fast route to a name last seen on a piece of cardboard.
 
      Asserted on the COPIES ROW and not the band, because the row is where the borrow was. */
-  const name = page.locator('.card-locations-owner .nb-name').first()
+  const name = page.locator('.card-locations-owner .nb-side').first()
   await expect(name).toBeVisible()
   const drawn = await name.evaluate((node) => {
     const style = getComputedStyle(node)
@@ -4646,11 +4647,6 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
      which is the same fact from the DOM's side, and the one a `text-transform` regression
      would leave true while the screen went back to rectangles. */
   expect(drawn.text).toContain('Galio')
-
-  /* THE KEY KEEPS THE TRACKING, and that is not an inconsistency. An isolated two-word token
-     has no word boundary to protect; an eighty-eight-character sentence does. */
-  const key = page.locator('.card-locations-owner .nb-key').first()
-  await expect(key).toHaveCSS('text-transform', 'uppercase')
 })
 
 test('a card at the back of the box gets one row, not a pretend between', async ({ page }) => {
@@ -4664,13 +4660,16 @@ test('a card at the back of the box gets one row, not a pretend between', async 
      asserts the block at the site that draws it once per copy. */
   const front = page.locator('.card-locations-owner .nb').nth(1)
   await expect(front).toBeVisible()
-  await expect(front.locator('.nb-row')).toHaveCount(2)
-  await expect(front.locator('.nb-key')).toHaveText(['this', 'front'])
+  /* ONE SIDE, NOT A PRETEND BETWEEN: no `back`, and no arrow — an arrow only ever draws between
+     two real sides (`PlaceNeighbors.tsx`). */
+  await expect(front.locator('.nb-side')).toHaveCount(1)
+  await expect(front.locator('.nb-side')).toHaveAttribute('data-side', 'front')
+  await expect(front.locator('.nb-arrow')).toHaveCount(0)
 
   /* A NAME WITH NO COMMA RENDERS WHOLE. The seam splits on the first `, ` and refuses any other
      punctuation — the same refusal `PositionLabel` makes for a label it cannot parse — so every
      Pokemon name takes this branch and is drawn exactly as the server sent it. */
-  await expect(front.locator('.nb-name b')).toHaveText(['Conscription'])
+  await expect(front.locator('.nb-side b')).toHaveText(['Conscription'])
   await expect(front.locator('.nb-rest')).toHaveCount(0)
   /* Nothing toward the back: card 1 is at the far back, so this card sits behind its one
      neighbour and in front of nothing (UX-186). */
@@ -4693,9 +4692,9 @@ test('an unread neighbour is said in words, and counts as the neighbour (LOC-28)
      and one that dropped the unread side fails on the first. */
   const reached = page.locator('.card-locations-owner .nb').nth(2)
   await expect(reached).toBeVisible()
-  await expect(reached.locator('.nb-row[data-side="back"] .nb-unread')).toHaveText('2 unread cards')
-  await expect(reached.locator('.nb-name b')).toHaveText(['Conscription'])
-  await expect(reached.locator('.nb-row[data-side="back"]')).not.toContainText(/#\d/)
+  await expect(reached.locator('.nb-side[data-side="back"] .nb-unread')).toHaveText('2 unread cards')
+  await expect(reached.locator('.nb-side b')).toHaveText(['Conscription'])
+  await expect(reached.locator('.nb-side[data-side="back"]')).not.toContainText(/#\d/)
 
   /* AND IN `said`, WHICH IS THE HALF THE EYE CANNOT SEE HERE AND THE FULFILLER READS AT 20px. */
   await expect(reached).toHaveAttribute('aria-label', 'It sits in front of 2 unread cards and behind Conscription.')
@@ -4799,7 +4798,7 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
   /* Copy 5 counts from copy 3, which is about to be sold out from under it. */
   const behind = copyRow(page, 'Box 2, Section 1, Card 3')
   const ladder = page.locator('.card-locations-owner .nb').nth(2)
-  await expect(ladder.locator('.nb-name b')).toHaveText(['Bashful Bloom'])
+  await expect(ladder.locator('.nb-side b')).toHaveText(['Bashful Bloom'])
 
   const before = walkReads.length
 
@@ -4810,7 +4809,7 @@ test('selling a card moves the landmark on the rows beside it, with no reload', 
      block on the screen is recomputed by the server. The operator presses nothing else and
      reloads nothing: this is the question "does the ladder update, or do I refresh?" asserted
      rather than reasoned about. */
-  await expect(ladder.locator('.nb-name b')).toHaveText(['Mantine'])
+  await expect(ladder.locator('.nb-side b')).toHaveText(['Mantine'])
   await expect(() => expect(walkReads.length).toBeGreaterThan(before)).toPass({ timeout: 5000 })
 
   /* AND THE SOLD CARD IS NOT NAMED ANYWHERE IN THE LADDER — the whole complaint, at the site
@@ -5091,6 +5090,36 @@ test('the address is drawn without a separator, and the server string survives o
      finest thing said on the biggest step. */
   const num = page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity-num')
   await expect(num).toHaveText(/Card (\d+)$/.exec(String(label))?.[1] ?? '')
+})
+
+test('the box fact never grows past its own text, and the dot never floats away from it', async ({ page }) => {
+  /* A WIDE VIEWPORT, DELIBERATELY: the free width a `flex-grow` bug needs to be visible at all —
+     at the suite's narrower default this fact's own row happens to have none to spend, so the
+     mutation this case exists to catch would pass unnoticed there. */
+  await page.setViewportSize({ width: 1920, height: 900 })
+  await open(page)
+
+  /* A REAL BUG, FOUND BY THE OWNER'S OWN SCREENSHOT (Direction B, round two, 2026-09-25): the
+     box fact was `flex: 1 1 auto`, which GROWS to fill the row's free width — a short box name
+     pushed `Section 1 · Card 5 of 39` all the way to the header's far right edge, reading as a
+     stray leading dot with nothing before it. D41's rule only ever asked the box fact to
+     SHRINK under real width pressure; it never asked it to grow past its own content.
+
+     THE NEXT FACT'S OWN LEFT EDGE IS THE WRONG THING TO MEASURE: it sits at the end of the box
+     fact's CSS BOX regardless of that box's width, so it is adjacent by construction whether or
+     not the box grew. What actually floats away is the box fact's own PAINTED TEXT — so this
+     compares the fact's rendered width against its content's natural (`scrollWidth`) size. */
+  const box = page.locator('.card-locations-row.is-current .card-locations-identity-box')
+  await expect(box).toBeVisible()
+  /* `scrollWidth` is no good here: with room to spare it reports the ELEMENT's own box, not the
+     glyphs inside it, which is exactly the case a `flex-grow` bug produces. A `Range` around the
+     text itself measures the glyphs regardless of how wide the box around them grew. */
+  const widths = await box.evaluate((el) => {
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    return { rendered: el.getBoundingClientRect().width, text: range.getBoundingClientRect().width }
+  })
+  expect(widths.rendered).toBeLessThan(widths.text + 4)
 })
 
 test('the address holds one line at both widths, including the longest label the store can emit', async ({
@@ -5879,12 +5908,14 @@ const BIG_CARDS: Cards = {
  * `--pos-slot-digits`, `CardLocations.tsx`'s own `slotDigits`, all retired in the same round (see
  * `CardLocations.css`'s note where that block stood). `RowIdentity` has no such column: the card
  * fact is `flex: none` in one line with the box and section facts, so a wider figure simply takes
- * more of the line rather than a column it could ever outgrow. What is still worth proving is
- * that a four-digit figure renders whole and the line does not wrap — kept below, much shorter,
- * because the mechanism it used to guard is gone rather than merely resized. */
-test('a four-digit card number renders whole, and the identity line does not wrap', async ({
-  page,
-}) => {
+ * more of the line rather than a column it could ever outgrow.
+ *
+ * THE LINE MAY WRAP NOW (the owner's own correction, 2026-09-25, round two of Direction B): the
+ * action icons share this line's own grid row, so a long box name or a wide figure can push past
+ * one line at the panel's real width, and D41's fix for THAT is a second line, never an ellipsis
+ * on a fact that must render whole. What is still worth proving is the fact D41 actually
+ * protects: a four-digit figure renders WHOLE, never clipped mid-digit, wrapped or not. */
+test('a four-digit card number renders whole, never clipped mid-digit', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await open(page, BIG_BOX, { cards: BIG_CARDS, search: (query) => searchAnswer(query, BIG_CARDS) })
   await settleFonts(page)
@@ -5893,17 +5924,20 @@ test('a four-digit card number renders whole, and the identity line does not wra
   await expect(page.locator('.card-locations-rows .card-locations-identity').first()).toBeVisible()
 
   const rows = await page.evaluate(() =>
-    [...document.querySelectorAll('.card-locations-rows .card-locations-identity')].map((el) => ({
-      figure: el.querySelector('.card-locations-identity-num')?.textContent ?? null,
-      height: +el.getBoundingClientRect().height.toFixed(2),
-    })),
+    [...document.querySelectorAll('.card-locations-rows .card-locations-identity')].map((el) => {
+      const num = el.querySelector('.card-locations-identity-num') as HTMLElement | null
+      return {
+        figure: num?.textContent ?? null,
+        clipped: num !== null && num.scrollWidth > num.clientWidth + 1,
+      }
+    }),
   )
 
-  /* The fixture reached the screen. Without this the height assertion below is vacuously true
-     of a list that happens to hold no long number. */
+  /* The fixture reached the screen. Without this the assertion below is vacuously true of a
+     list that happens to hold no long number. */
   expect(rows.map((row) => row.figure)).toContain('1345')
-  /* NOTHING WRAPPED, on any row, the four-digit one included. */
-  for (const row of rows) expect(row.height).toBeLessThanOrEqual(20)
+  /* NOTHING IS CLIPPED — the card fact never ellipsizes (D41), whichever line it wraps to. */
+  for (const row of rows) expect(row.clipped).toBe(false)
 })
 
 /* ------------------------------------------------------------ the hash's box, on a slow read

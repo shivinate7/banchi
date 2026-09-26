@@ -274,16 +274,15 @@ for (const size of SIZES) {
       await expect(bar.locator('.position-bar-segment-num')).toHaveText(['1', '2', '3'])
       await expect(bar.locator('.position-bar-here .position-bar-segment-num')).toHaveText('2')
 
-      /* NEIGHBOURS FROM BACK TO FRONT, this card between them, and the sentence says which is
-         which (UX-186): index 5 is toward the back, index 8 toward the front. */
+      /* NEIGHBOURS FROM BACK TO FRONT, one line, and the sentence says which is which
+         (UX-186): index 5 is toward the back, index 8 toward the front. */
       await expect(current.locator('.nb')).toHaveAttribute(
         'aria-label',
         'It sits in front of Towering Combatant and behind Relentless Pursuit.',
       )
-      await expect(current.locator('.nb-row')).toHaveCount(3)
-      expect(await current.locator('.nb-row').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-side')))).toEqual([
+      await expect(current.locator('.nb-side')).toHaveCount(2)
+      expect(await current.locator('.nb-side').evaluateAll((els) => els.map((el) => el.getAttribute('data-side')))).toEqual([
         'back',
-        'this',
         'front',
       ])
 
@@ -397,7 +396,7 @@ test('an unread neighbour is said in words on the ladder, never as a figure (LOC
   await settleFonts(page)
 
   const current = page.locator('.card-locations-row.is-current')
-  await expect(current.locator('.nb-row[data-side="front"] .nb-unread')).toHaveText('2 unread cards')
+  await expect(current.locator('.nb-side[data-side="front"] .nb-unread')).toHaveText('2 unread cards')
   await expect(current.locator('.nb')).toHaveAttribute(
     'aria-label',
     'It sits in front of Towering Combatant and behind 2 unread cards.',

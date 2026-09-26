@@ -1,4 +1,13 @@
-/* D30's neighbours, RANKED rather than joined — D41's move one line down.
+/* D30's neighbours, RANKED rather than joined, drawn as ONE LINE (Direction B, the owner's
+ * pick, 2026-09-25, corrected the same day: "THIS #5 repeats Card 5. Remove it." —
+ * `CardLocations.tsx:RowIdentity` already states the card's own figure once, so this line
+ * names only what is beside it, `Name → Name`). This collapsed a three-row `back`/`this`/
+ * `front` ladder that stood here from 2026-09-11 to 2026-09-25; the substance every rule below
+ * argued for is unchanged, only the shape is. D260's own protection — card 1 at the far back
+ * — is not carried by this component any more: it is carried by the two RULERS
+ * (`PositionBar`'s own `BACK`/`FRONT` words), which is what the owner's correction scoped
+ * "keep it on each ruler" to. `data-side="back"`/`"front"` still marks which name is which, so
+ * a test can still read the orientation with no visible word for it.
  *
  * `Card 19` is the nineteenth card in the box and the neighbours are what let a hand count to
  * it. The sentence that used to say so was "between Galio, Indefaticable and Evelynn,
@@ -14,25 +23,26 @@
  *
  * SO THE CONNECTIVES ARE DELETED RATHER THAN RESTYLED. That is exactly D41's ruling for
  * `Box 2 · Section 1 · Card 14` — the owner rejected painting the interpuncts muted and chose
- * removing them — applied to the sentence beneath it: a muted key column says which side, the
- * names start at one x, and finding the second is a vertical saccade rather than a hunt for a
- * word. Bolding the champions in place was the alternative and it is the move D41 already
+ * removing them — applied to the sentence beneath it: an arrow marks the seam, the names start
+ * at one x on either side of it, and finding the second is a short saccade rather than a hunt
+ * for a word. Bolding the champions in place was the alternative and it is the move D41 already
  * declined: it adds a cue on top of the parse instead of deleting the parse, and having
  * landed on `Galio` the reader must still read the grammar to learn which side he is on.
  *
- * THE KEYS WERE `after` AND `before` UNTIL 2026-09-23, and LOC-07 found them read backwards: a
- * bare `AFTER Piercing Light` beside a name reads as "the next card is Piercing Light". They are
- * now `back` and `front`, a SIDE of this card in the owner's own orientation (card 1 at the far
- * back), with this card drawn between them. See `PlaceNeighbors` below.
- *
- * ONE DELIBERATE DEPARTURE FROM D41: its payload got SIZE and this one gets POSITION. Two
- * thirty-character strings cannot take a 44px treatment, and D41's own amendment measured
- * what that costs a list — 44px in the copies row is +86px and drops a copy below the fold.
+ * THE ORIENTATION WAS `after`/`before` UNTIL 2026-09-23, and LOC-07 found them read backwards: a
+ * bare `AFTER Piercing Light` beside a name reads as "the next card is Piercing Light". The
+ * sides are ordered `back` then `front` now, the owner's own orientation (card 1 at the far
+ * back), never the reverse.
  *
  * AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending D116). D116
  * walked past an unnamed on-hand card to a named one, because the bare `#270` it drew read as a
  * sold card. The owner ruled the unread card is the neighbour, said in words: "an unread card",
  * or "3 unread cards" for a run of them (`server.ts:neighborWords`). Never a bare figure.
+ *
+ * A DEPARTED CARD SPEAKS IN THE PAST TENSE (LOC-09), on `aria-label` alone: `placeParts`
+ * conjugates `sits`/`was` off the `departed` flag this component still takes, so a screen
+ * reader hears the right tense even though nothing about the two neighbour names changes on
+ * screen when the card between them leaves.
  *
  * THE FULFILLER NEVER IMPORTS THIS. `CardLocations.tsx:FulfillerCard` draws the joined
  * sentence at `.card-locations-say`, 20px body, which `app/tests/fulfillment.spec.ts` floors
@@ -73,70 +83,41 @@ function Name({ side }: { side: PlaceNeighbor }): ReactNode {
   )
 }
 
-/** The card and its two neighbours, drawn from the BACK of the box to the FRONT, or nothing.
+/** The card's two neighbours, back then front (D260's orientation, card 1 at the far back), as
+ *  one line: `Name → Name`, or the one side that exists at a box's own edge, or nothing.
  *
- * THE OWNER'S ORIENTATION, 2026-09-23 (D260): card 1 is at the far
- * back and the highest number nearest the body. So the ladder is a picture of the box standing up:
- * the neighbour toward the back (`prev`, the lower number) on the first row, this card on the
- * middle row, and the neighbour toward the front (`next`) on the last. The keys name a SIDE of
- * this card, `back` and `front`, which is what LOC-07 found `after`/`before` could not do: as a
- * bare label beside a name, `AFTER Piercing Light` read as "the next card is Piercing Light".
- *
- * A DEPARTED CARD SPEAKS IN THE PAST TENSE (LOC-09). Its middle row reads `was here`, and the
- * accessible name says where it was ("It was in front of ... and behind ..."). It never says the
- * card IS there. The accessible name is `placeParts`'s own sentence, the one the Fulfiller reads,
- * so the two personas hear one wording.
- *
- * `placeParts` answers null (and this renders nothing, never a guess) for a pooled card (D24), an
- * older server, a decoration the server degraded, and the card whose box holds nothing else. */
+ *  `placeParts` answers null (and this renders nothing, never a guess) for a pooled card (D24), an
+ *  older server, a decoration the server degraded, and the card whose box holds nothing else. */
 export function PlaceNeighbors({
   place,
-  flow = 'ladder',
   departed = false,
 }: {
   place: Place | undefined
-  flow?: 'ladder' | 'stack'
-  /** The card has left its box. Callers read it off `isDeparted(place)`. */
+  /** The card has left its box. Callers read it off `isDeparted(place)`. Reaches only
+   *  `placeParts`, for `aria-label`'s tense (LOC-09) — nothing about the neighbour names
+   *  themselves changes when this card, drawn nowhere in this component any more, departs. */
   departed?: boolean
 }): ReactNode {
   const parts = placeParts(place, departed)
   if (parts === null) return null
 
-  const said = parts.said
-  const here = place?.card ?? null
-
   return (
-    /* The sentence rides on `aria-label`, so a screen reader hears one sentence where the eye is
-       given three rows, and `role="group"` is what makes that name apply to the block. */
-    <div className="nb" data-flow={flow} data-departed={departed ? 'true' : undefined} role="group" aria-label={said}>
+    /* The sentence rides on `aria-label`, so a screen reader hears one full sentence
+       (`placeParts`'s own composition, the one the Fulfiller reads too — one composer, one
+       wording) where the eye is given two names and an arrow. `role="group"` is what makes
+       that name apply to the whole line rather than to either name alone. */
+    <p className="nb" role="group" aria-label={parts.said}>
       {parts.prev === null ? null : (
-        <p className="nb-row" data-side="back">
-          <span className="nb-key">back</span>
-          <span className="nb-name">
-            <span className="nb-name-line">
-              <Name side={parts.prev} />
-            </span>
-          </span>
-        </p>
-      )}
-      <p className="nb-row nb-this" data-side="this">
-        <span className="nb-key">{departed ? 'was' : 'this'}</span>
-        <span className="nb-name">
-          <span className="nb-name-line">
-            {departed ? 'here' : here === null ? 'this card' : `#${here}`}
-          </span>
+        <span className="nb-side" data-side="back">
+          <Name side={parts.prev} />
         </span>
-      </p>
-      {parts.next === null ? null : (
-        <p className="nb-row" data-side="front">
-          <span className="nb-key">front</span>
-          <span className="nb-name">
-            <span className="nb-name-line">
-              <Name side={parts.next} />
-            </span>
-          </span>
-        </p>
       )}
-    </div>
+      {parts.prev !== null && parts.next !== null ? <span className="nb-arrow" aria-hidden="true" /> : null}
+      {parts.next === null ? null : (
+        <span className="nb-side" data-side="front">
+          <Name side={parts.next} />
+        </span>
+      )}
+    </p>
   )
 }

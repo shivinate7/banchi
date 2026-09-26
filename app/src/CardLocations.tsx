@@ -608,10 +608,11 @@ function OwnerRows({
                         </button>
                       )}
                     </span>
-                    <PlaceNeighbors place={copy.place} departed={departed} />
                   </>
                 )}
               </span>
+
+              {pooled ? null : <PlaceNeighbors place={copy.place} departed={departed} />}
 
               {noBar ? null : (
                 <PositionBar

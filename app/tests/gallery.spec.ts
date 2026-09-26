@@ -170,20 +170,22 @@ test('a label with no figure re-ranks its path, and a live one does not (D71)', 
 
 /* THE SPECIMEN IS DRAWN IN THE LAYOUT THE PRODUCT DRAWS, AND UNTIL 2026-09-05 IT WAS NOT.
  *
- * `CardLocations.css` answers to `@container copies` in four places, and the widest of them is
- * not the interesting one: `(max-width: 619px)` is the whole narrow layout — the address on its
- * own line with the state and the action beneath it — which that file's comment calls "most of
- * the time, because the pane is one column of a three-column screen".
+ * `CardLocations.css` answers to `@container copies` in one place: `(max-width: 619px)` is the
+ * narrow layout — the neighbours line and the state pills each take their own full-width row,
+ * where the base (wide) grid packs them beside each other instead — which that file's comment
+ * calls "most of the time, because the pane is one column of a three-column screen". The
+ * identity and the action icons share one row at every width (Direction B, 2026-09-25): that
+ * half of the grid does not change under the query.
  *
  * `container-name: copies` was established in exactly ONE place in this app, `Inventory.css`'s
- * `.inventory-detail`. This sheet is not inside it. So every one of those four rules was dead
+ * `.inventory-detail`. This sheet is not inside it. So every one of those rules was dead
  * here and the specimen drew the base grid at every width — measured at 390, where the address
  * collapsed to one word a line and `ME01 commons` clipped to `M…`. The row was on the page and
  * it was the wrong row, which is the failure this whole file exists to catch one level up.
  *
  * OBSERVED RED BEFORE IT WAS KEPT. Mutation: drop `container-name: copies` from `.kit-copies` in
  * `Gallery.css`. The query stops matching, the computed areas fall back to the base
- * `"place state action" / "bar bar bar"`, and this reports that string instead.
+ * `"place action" / "neighbors state" / "bar bar"`, and this reports that string instead.
  *
  * The viewport is set here rather than in the config because it is the thing under test: this
  * case is about what happens to the specimen when its container is narrow, and every other case
@@ -199,7 +201,7 @@ test('the copies specimen answers to its own width, as the screen does', async (
      asserting a class is what makes this a statement about the CASCADE — a class can be present
      while the rule that reads it never matches, and that is precisely the defect. */
   const areas = await row.evaluate((el) => getComputedStyle(el).gridTemplateAreas)
-  expect(areas).toBe('"place place" "state action" "bar bar"')
+  expect(areas).toBe('"place action" "neighbors neighbors" "state state" "bar bar"')
 })
 
 /* THE SHEET'S IMAGERY IS THE SHEET'S, AND UNTIL 2026-09-06 IT WAS THE OWNER'S STORE'S.

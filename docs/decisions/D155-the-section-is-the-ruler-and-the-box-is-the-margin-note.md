@@ -148,3 +148,67 @@ that round. No new pixel value was invented. `xl` is a size the kit already defi
 `scaffold.spec.ts` and `gallery.spec.ts` all pass after this amendment. Screenshots at 1440 and
 390, in light and dark, sit in `scratchpad/report/after-b/` for this round's own review. They
 were not committed.
+
+### Amendment, 2026-09-25 (round two): five gaps against the mockup, closed
+
+**The first build was not Direction B.** It kept the old three-row `back`/`this`/`front`
+ladder. It kept small bare icons with a gap above them. It carried a real layout bug, a thin
+card ruler, and a header in the wrong order. The coordinator named five gaps against
+`direction-b-1440-dark.png`. Each is closed below.
+
+**One: the ladder collapses into one line.** `PlaceNeighbors` no longer draws three rows with
+`back`/`this`/`front` words. It draws `Name → Name`, an arrow between the two, on one line.
+`RowIdentity` already states the card's own figure once, so `THIS #5` was a plain repeat of
+`Card 5`. `data-side="back"/"front"` still marks the order. No visible word carries it now.
+
+**D260 stays satisfied, and only by the two rulers.** The rulers `PositionBar` draws already
+show `BACK`/`FRONT` in words, on both the box strip and the card-level ruler. That is what "keep
+it on each ruler" scopes the protection to. `PlaceNeighbors` never carried this protection on
+its own. It only ever duplicated it.
+
+**Two: the icons are boxed, at the kit's own 40px ceiling.** `CardLocations.css` gives the
+header's own `IconButton`s a border and a surface fill, scoped to this one cell. Every other
+icon-only control in the product keeps the kit's ghost look untouched.
+
+**Three: a real bug, not a stray dot.** `.card-locations-identity-box` read `flex: 1 1 auto`.
+That GROWS the box name to fill the row's free width. A short name then pushed the rest of the
+line to the far right edge, reading as a separator with nothing before it. D41's own rule only
+ever asked this fact to shrink under pressure. The fix is `flex: 0 1 auto`: shrink only, never
+grow. A new test proves it: `"the box fact never grows past its own text..."`. It measures the
+fact's own rendered width against a `Range` around its text. The viewport is wide, on purpose,
+so there is free space to grow into. Reverting the fix turns this test red.
+
+**Four: the action icons now share the address's own grid row.** `CardLocations.css`'s row
+grid changes from `'place state action' / 'bar bar bar'` to `'place action' / 'neighbors state'
+/ 'bar bar'`. Narrow, each row runs full width instead. The neighbours line moves out from
+under the address into its own grid row. That is what lets the icons sit level with the
+address text itself, by ordinary `align-items: center`, with no override.
+
+**Two real D118 regressions turned up while building this, and both are fixed at the cause.**
+The ruler's caption toggled visibility across a sale, because the departed state still carried
+a tail fact the live state's tail had gone empty for. The Undo button stayed a smaller size
+while its siblings grew to the kit's `xl`. `inventory.spec.ts`'s `"every copy row draws the
+same bar height, located or not"` caught both. Each was reverted to a `.bak` copy in turn.
+The test went red at 200px and 221px against a real 212px. It went green again on restore.
+
+**The net cost against D119's own fold budget is negative.** Collapsing the ladder and moving
+the icons removed roughly 90 to 100 pixels of row height. Nothing here added any back.
+`#/inventory`'s `toBeInViewport({ ratio: 1 })` on `.card-locations-row.is-current` passed with
+no ruler dial-back needed this round. That is the opposite of round one, which had to trade
+ruler size back from `26px`/`48px` to stay inside the same budget.
+
+**Five: the header states one line, box then section then card, icons on the right.**
+`RowIdentity` was already built this way in the first pass. What changed is what sits beside
+it. The neighbours line moved to its own row beneath. The icons moved to sit level with the
+address, never below a gap.
+
+**A phone-width defect turned up along the way, and is fixed too.** `.card-locations-identity`
+had `white-space: nowrap` on the whole line. At 390px the icons now share its row. That forced
+the box name toward zero width, instead of letting the line wrap. It is the same shape of bug
+as the flex-grow one, on the opposite axis. The line now wraps between facts, never inside one.
+That matches the 390 mockup's own two-line header.
+
+**Proof, this round.** `app/tests/inventory.spec.ts`, `locating.spec.ts`, `gallery.spec.ts`,
+`section-ruler.spec.ts` and `scaffold.spec.ts` all pass. `gallery.spec.ts`'s own container-query
+proof is updated to the new area strings rather than deleted. Screenshots at 1440 and 390, in
+light and dark, sit in `scratchpad/report/after-b2/`. They were not committed.
