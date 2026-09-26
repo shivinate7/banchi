@@ -316,17 +316,22 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
+  /* VARIANT A — surface separation only. accent/status untouched.
+     --bn-surface lifts from 3.70 ΔL* off bg to 8.26 ΔL* (its old headroom was mostly unused —
+     light's surface is capped at white, dark's had 90+ L* points spare). --bn-surface-2 sinks
+     below bg instead of sitting 0.96 ΔL* above it, so a well now reads as sunken rather than
+     nearly invisible. --bn-surface-3 and --bn-btn-bg-hover move up in step. */
   --bn-bg: #0c0e12;
-  --bn-surface: #14171c;
-  --bn-surface-2: #090b0e;
-  --bn-surface-3: #1b1f26;
-  --bn-surface-glass: rgba(20, 23, 28, 0.72);
+  --bn-surface: #1b1e23;
+  --bn-surface-2: #030405;
+  --bn-surface-3: #23272f;
+  --bn-surface-glass: rgba(27, 30, 35, 0.72);
   --bn-hover: rgba(255, 255, 255, 0.04);
 
   --bn-ink: #eef0f4;
   --bn-ink-2: #b9bfc9;
   --bn-ink-3: #838b98;
-  --bn-ink-4: #707886;           /* not for text: 4.34:1 on the dark page, 3.71:1 on --bn-surface-3 */
+  --bn-ink-4: #707886;
 
   --bn-line: rgba(255, 255, 255, 0.08);
   --bn-line-strong: rgba(255, 255, 255, 0.16);
@@ -350,16 +355,9 @@
   --bn-danger-tint: rgba(255, 92, 92, 0.14);
   --bn-money: #eef0f4;
 
-  --bn-pill-ink-accent: var(--bn-accent-hover);  /* a pill on an accent-tinted row is two tints deep */
+  --bn-pill-ink-accent: var(--bn-accent-hover);
   --bn-pill-ink-ok: var(--bn-ok);
   --bn-pill-ink-warn: var(--bn-warn);
-  /* live is a light orange-vermilion and danger a deeper crimson-rose: apart in hue and in
-     lightness, each over 4.5:1 on its tint on every dark ground, INCLUDING a selected
-     (accent-tinted) row (kit-frame-2, 2026-09-24): a danger pill drawn on a selected row is a
-     second tint over a first one, and the review found it at 4.08:1 there against this token's
-     former #f7608a — lighter than the plain-row floor needed, so nobody had reason to raise it
-     until a row could tint under it. gallery.spec.ts now composites the row's own tint into the
-     ground it checks every pill against. */
   --bn-pill-ink-danger: #f6799c;
   --bn-pill-ink-live: #ffab70;
 
@@ -371,7 +369,7 @@
   --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
 
   --bn-btn-bg: var(--bn-surface-3);
-  --bn-btn-bg-hover: #262b34;
+  --bn-btn-bg-hover: #2f3541;
   --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
