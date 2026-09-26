@@ -2051,6 +2051,38 @@ test('a hold writes a reason and a watch, and never a price', async ({ page }) =
   })
 })
 
+test('UN-13 finding #9 — the hold toast\'s own Undo clears the ship bar, at 390', async ({ page }) => {
+  /* THE OPUS REVIEW ROUND: "at 390 on Pricing, the hold toast's Undo is still 50 px above
+   * 'Send N copies to TCGplayer'." `Pricing.css` already reads `--pricing-ship-h` here
+   * (`body:has(.pricing-ship) .bn-toasts`), but its own extra clearance (`--bn-2`, 8px) was
+   * not enough above the ship bar's real measured height to keep the toast's own Undo clear
+   * of it by a real 40px thumb-target gap — `--bn-4` (16px) in its place. */
+  await page.setViewportSize({ width: 390, height: 844 })
+  /* `manySkus()`, NOT THE DEFAULT ONE-ROW FIXTURE: `.pricing-ship` is `position: sticky`, so
+     it only settles at the true viewport bottom once the page's own content is taller than
+     the viewport — the shape the review's own repro was actually looking at. */
+  await open(page, { skus: manySkus() })
+
+  await page.locator('.pricing-hold').first().click()
+  await expect(page.locator('.pricing-holdpanel')).toBeVisible()
+  await page.getByRole('button', { name: /Bullish/ }).click()
+  await page.getByRole('button', { name: 'Hold it' }).click()
+
+  const undo = page.locator('.bn-toast').getByRole('button', { name: 'Undo' })
+  await expect(undo).toBeVisible()
+  const ship = page.locator('.pricing-ship')
+  await expect(ship).toBeVisible()
+
+  const undoBox = await undo.boundingBox()
+  const shipBox = await ship.boundingBox()
+  expect(undoBox).not.toBeNull()
+  expect(shipBox).not.toBeNull()
+  /* A REAL GAP, NEVER JUST "ABOVE": the review's own repro measured 50px and called it too
+     close — a real thumb target's own floor (40px) is the bar this asks for. */
+  const gap = (shipBox?.y ?? 0) - ((undoBox?.y ?? 0) + (undoBox?.height ?? 0))
+  expect(gap).toBeGreaterThanOrEqual(40)
+})
+
 test('a held row says so, in both registers, and has no price field', async ({ page }) => {
   await open(page, {
     decisions: {

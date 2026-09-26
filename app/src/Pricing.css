@@ -1442,7 +1442,11 @@ body:has(.pricing-ship) .bn-toasts { bottom: calc(var(--pricing-ship-h, 0px) + v
   }
   .pricing-run { min-height: 44px; }
   .pricing-toolbar-right { margin-left: 0; width: 100%; }
-  body:has(.pricing-ship) .bn-toasts { bottom: calc(64px + env(safe-area-inset-bottom) + var(--bn-2) + var(--pricing-ship-h, 0px) + var(--bn-3)); }
+  /* FINDING #9 (the Opus review round): "the hold toast's Undo is still 50px above 'Send N
+     copies to TCGplayer'." `var(--bn-2)` (8px) was not enough clearance above the ship
+     bar's own measured height to keep a toast's own Undo control clear of it by a real
+     40px thumb-target gap. `var(--bn-4)` (16px) in its place. */
+  body:has(.pricing-ship) .bn-toasts { bottom: calc(64px + env(safe-area-inset-bottom) + var(--bn-4) + var(--pricing-ship-h, 0px) + var(--bn-3)); }
 
   /* a thumb presses these: 40px is the floor (28 is a mouse size). The kit's buttons already read the
      phone control heights from tokens.css; the segments and tabs carry a fixed 28px there, so they are
