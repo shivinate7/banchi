@@ -2249,6 +2249,193 @@ test('the filters, the search and the sort survive a reload through the URL', as
   await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('Ready to Ship')
 })
 
+/* ---- FOUR MORE SORTS (`D-orders-sorts`, the owner's pick, 2026-09-25) -------------------------
+ *
+ * Dollar value, Card count, Buyer name, Fewest drawers to open. Three buyers, none Ready to
+ * Ship (that bucket is already asserted above and stays orthogonal to every key here): Abel
+ * owes 1 copy at $20 (one $20 card), Mona owes 3 at $1.67 each ($5.01), Zeta owes 2 at $25
+ * each ($50) — three DIFFERENT orderings for value, cards and name, so a comparator that reads
+ * the wrong field is caught rather than accidentally agreeing with the right one. */
+
+function sortBuyer(over: { number: string; buyer: string; wanted: number; price: string; placedAt: string }) {
+  const key = `TCGplayer:${over.number}`
+  const sku = `SKU-${over.number}`
+  const wire = { sku, quantity: over.wanted, name: over.buyer, number: null, printing: null, condition: null, rarity: null, unit_price: over.price, kind: 'single' }
+  const resolvedLine = line({
+    order: over.number,
+    order_key: key,
+    sku,
+    reason: 'resolved' as const,
+    wanted: over.wanted,
+    owed: over.wanted,
+    fulfilled: 0,
+    outstanding: over.wanted,
+    on_hand: over.wanted,
+    picks: [],
+    line: wire,
+  })
+  const row = order({
+    key,
+    number: over.number,
+    buyer: over.buyer,
+    status: 'Processing',
+    placed_at: over.placedAt,
+    wanted: over.wanted,
+    recorded: 0,
+    lines: [wire],
+    progress: [
+      { sku, wanted: over.wanted, recorded: 0, outstanding: over.wanted, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
+    ],
+  })
+  const resolved: ResolvedOrder = { key, number: over.number, complete: false, outstanding: over.wanted, lines: [resolvedLine] }
+  return { row, resolved }
+}
+
+const ABEL = sortBuyer({ number: 'ABEL1', buyer: 'Abel', wanted: 1, price: '20.00', placedAt: '2026-08-01T00:00:00+00:00' })
+const MONA = sortBuyer({ number: 'MONA1', buyer: 'Mona', wanted: 3, price: '1.67', placedAt: '2026-08-15T00:00:00+00:00' })
+const ZETA = sortBuyer({ number: 'ZETA1', buyer: 'Zeta', wanted: 2, price: '25.00', placedAt: '2026-08-20T00:00:00+00:00' })
+
+function sortFixturePayload(): OrdersPayload {
+  return payloadOf([ABEL.row, MONA.row, ZETA.row], [ABEL.resolved, MONA.resolved, ZETA.resolved])
+}
+
+/** The walk plan `#/orders/walk-plan` answers for the three buyers above: Abel's one card
+ *  spans two boxes, Zeta's spans one, and Mona's is a store-wide shortfall — 0 copies
+ *  anywhere. Reused as-is for BOTH the walk's own fetch (whichever buyer lands first) and the
+ *  drawers sort's own fetch — the same plan answers every `/orders/walk-plan` call. */
+function sortWalkPlan(): WalkPlan {
+  const refOf = (b: { row: OrderRow }): WalkPlanRef => ({ key: b.row.key, number: b.row.number, buyer: b.row.buyer })
+  return walkPlanOf(
+    [
+      walkPlanStop({
+        key: 'box/1/section/1',
+        box: 1,
+        box_name: 'Box 1',
+        section: 1,
+        span: { start: 1, end: 10 },
+        takes: [walkPlanTake({ sku: 'SKU-ABEL1', name: 'Abel card', for: [refOf(ABEL)], wanted: 1, copies: [walkPlanCopy({ box: 1, index: 1 })] })],
+      }),
+      walkPlanStop({
+        key: 'box/2/section/1',
+        box: 2,
+        box_name: 'Box 2',
+        section: 1,
+        span: { start: 1, end: 10 },
+        takes: [walkPlanTake({ sku: 'SKU-ABEL1', name: 'Abel card', for: [refOf(ABEL)], wanted: 1, copies: [walkPlanCopy({ box: 2, index: 5 })] })],
+      }),
+      walkPlanStop({
+        key: 'box/3/section/1',
+        box: 3,
+        box_name: 'Box 3',
+        section: 1,
+        span: { start: 1, end: 10 },
+        takes: [walkPlanTake({ sku: 'SKU-ZETA1', name: 'Zeta card', for: [refOf(ZETA)], wanted: 2, copies: [walkPlanCopy({ box: 3, index: 9 })] })],
+      }),
+    ],
+    [{ sku: 'SKU-MONA1', name: 'Mona card', wanted: 3, on_hand: 0, short: 3, for: [refOf(MONA)] }],
+  )
+}
+
+/** Buyer names in the index pane, top to bottom — this fixture's own three. */
+async function sortBuyerOrder(page: Page): Promise<string[]> {
+  return page.locator('.orders-index-row').allTextContents().then((rows) =>
+    rows.map((text) => (text.includes('Abel') ? 'Abel' : text.includes('Mona') ? 'Mona' : text.includes('Zeta') ? 'Zeta' : text)),
+  )
+}
+
+async function pickSort(page: Page, label: RegExp): Promise<void> {
+  await pickFacet(page, 'Sort', label)
+}
+
+async function reverseSort(page: Page): Promise<void> {
+  await (await openFilters(page)).getByRole('button', { name: /^Order: /, exact: false }).click()
+  await closeFilters(page)
+}
+
+test('Dollar value sorts buyers by their order total, high to low then low to high', async ({ page }) => {
+  await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
+  await pickSort(page, /^Dollar value/)
+  await expect.poll(() => sortBuyerOrder(page)).toEqual(['Zeta', 'Abel', 'Mona'])
+  await reverseSort(page)
+  await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Abel', 'Zeta'])
+})
+
+test('Card count sorts buyers by copies still owed, most first then fewest first', async ({ page }) => {
+  await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
+  await pickSort(page, /^Card count/)
+  await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Zeta', 'Abel'])
+  await reverseSort(page)
+  await expect.poll(() => sortBuyerOrder(page)).toEqual(['Abel', 'Zeta', 'Mona'])
+})
+
+test('Buyer name sorts A to Z, then Z to A', async ({ page }) => {
+  await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
+  await pickSort(page, /^Buyer name/)
+  await expect.poll(() => sortBuyerOrder(page)).toEqual(['Abel', 'Mona', 'Zeta'])
+  await reverseSort(page)
+  await expect.poll(() => sortBuyerOrder(page)).toEqual(['Zeta', 'Mona', 'Abel'])
+})
+
+/* FEWEST DRAWERS REUSES THE WALK PLANNER'S OWN SOLVE (the brief's own instruction): Mona's copy
+ * is a store-wide shortfall (no box anywhere) so she ranks at 0, Zeta's one card sits in one
+ * box, Abel's sits in two — 0, 1, 2 ascending, and unplaced never means "last". */
+test('Fewest drawers to open reuses the walk plan: unplaced buyers rank first, ascending', async ({ page }) => {
+  await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
+  await pickSort(page, /^Fewest drawers to open/)
+  await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Zeta', 'Abel'])
+  await reverseSort(page)
+  await expect.poll(() => sortBuyerOrder(page)).toEqual(['Abel', 'Zeta', 'Mona'])
+})
+
+test('a new sort key survives a reload through the URL', async ({ page }) => {
+  await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
+  await pickSort(page, /^Buyer name/)
+  await expect(page).toHaveURL(/sort=buyer/)
+  await page.reload()
+  await expect(page.locator(VIEW)).toBeVisible()
+  await expect.poll(() => sortBuyerOrder(page)).toEqual(['Abel', 'Mona', 'Zeta'])
+})
+
+/* A PULL DOES NOT RE-RANK THE LIST UNDER THE HAND (D181, D118). Card count is the sort most
+ * exposed to this: `recorded` is exactly the field a real Mark Sold changes. Picking the sort
+ * takes a position snapshot; pressing Mark Sold on Zeta — which drops her own owed count from
+ * 2 to 0 — must not move her, even though a FRESH sort of the post-pull numbers would read
+ * Mona (3), Abel (1), Zeta (0). */
+test('Mark sold does not re-rank the Card count sort under the hand', async ({ page }) => {
+  /* `pulled` FLIPS FROM THE PULL ROUTE ITSELF, never from a read count — `GET /orders` can
+     legitimately answer more than once before any press (a re-read this screen makes on its
+     own), and counting reads would make the case flaky on exactly that. The one read that must
+     answer "Zeta is filled" is the one the PULL's own `reread()` makes, so this reads whether
+     the pull happened, not how many times the list was read. */
+  let pulled = false
+  await open(page, {
+    orders: () => {
+      if (!pulled) return sortFixturePayload()
+      const after = sortFixturePayload()
+      after.orders.find((one) => one.key === ZETA.row.key)!.recorded = 2
+      return after
+    },
+    walkPlan: sortWalkPlan(),
+    pull: () => {
+      pulled = true
+      return { undone: false, order_key: ZETA.row.key, sku: 'SKU-ZETA1', newly: 2, recorded: 2, outstanding: 0, places: [place({ box: 3, index: 9 })], sales: [] }
+    },
+  })
+  await pickSort(page, /^Card count/)
+  await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Zeta', 'Abel'])
+
+  await page.locator('.orders-index-row', { hasText: 'Zeta' }).click()
+  await page.locator('.orders-card-pane').getByRole('button', { name: 'Mark sold' }).click()
+  await expect.poll(() => pulled).toBe(true)
+  /* THE POST-PULL READ HAS TO ACTUALLY LAND before the freeze can be asserted against it —
+     otherwise a case whose re-read never arrived would pass by doing nothing. The panel's own
+     `sold` stat is `group.recorded`, off the re-read `GET /orders` answers, not the walk's
+     local tally, so it only reads 2 once the mutated payload above has actually landed. */
+  await expect(page.locator('.orders-panel-figures .bn-stat').nth(1).locator('.bn-stat-value')).toHaveText('2')
+
+  expect(await sortBuyerOrder(page)).toEqual(['Mona', 'Zeta', 'Abel'])
+})
+
 /* ============================================== D203 ==== */
 
 /* THE PANEL COMPUTES ITS OWN CANDIDATES FROM `GET /orders`'S OWN ANSWER — `open`, `recorded`
