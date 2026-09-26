@@ -2516,6 +2516,35 @@ test('a second sale does not take the first sale undo away', async ({ page }) =>
   await expect(second.getByRole('button', { name: 'Undo' })).toBeVisible()
 })
 
+test('finding #1 (the delta review round, low item 7) — the sheet holds exactly one receipt, and it can be dismissed', async ({
+  page,
+}) => {
+  /* NO CASE GUARDED THIS DIRECTLY BEFORE — the reviewer read it live instead ("the sheet now
+   * holds one receipt, 315px tall, and it can be closed"). Two sales in a row, and the sheet
+   * itself (`.ff-receipt`, never the "Pulled today" rail) still holds exactly one panel. */
+  const wire: Wire[] = []
+  await openList(page, wire)
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await expect(view(page).locator('.ff-receipt')).toHaveCount(1)
+
+  await openCard(page, 'Iono')
+  await sellOpenCard(page)
+  await expect(view(page).locator('.ff-receipt')).toHaveCount(1)
+
+  /* AND IT CAN BE CLOSED (the reviewer's own live read). Dismissing the newest receipt
+   * reveals the next one in line if there is one — 'sales' loses only the dismissed entry,
+   * so Charizard's own (older) receipt takes the sheet's one slot next, never zero while a
+   * second sale still stands. */
+  await expect(view(page).locator('.ff-receipt-name')).toHaveText('Iono')
+  await page.getByRole('button', { name: 'Dismiss this receipt' }).click()
+  await expect(view(page).locator('.ff-receipt')).toHaveCount(1)
+  await expect(view(page).locator('.ff-receipt-name')).toHaveText('Charizard ex')
+  await page.getByRole('button', { name: 'Dismiss this receipt' }).click()
+  await expect(view(page).locator('.ff-receipt')).toHaveCount(0)
+})
+
 test('the undo is still there after walking into another card', async ({ page }) => {
   const wire: Wire[] = []
   await openList(page, wire)
