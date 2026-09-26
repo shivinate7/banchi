@@ -99,6 +99,49 @@ box therefore sits inert beneath a live one rather than being cleaned up — the
 D36's `refuse_reallocated` already treats as a hazard worth refusing a run over, not worth
 silently repairing.
 
+### Amendment, 2026-09-23: Move Moved out of Graveyard
+
+**The owner's report on the preview review, verbatim:** *"in graveyard, when i clikc moved
+or buried i see the same list."* Measured on a copy of the owner's real store: 1,358
+departed rows. 264 were `moved`, every one of them out of box 5, later deleted. So all 264
+were also `buried`. Not one `moved` row was ever also sold or retired.
+**"Buried" is not a way a card left. It means that its old box is gone. A moved card is alive in another box.**
+
+**The owner's ruling, verbatim choice:** *"Move Moved out of Graveyard."*
+
+This narrows what point 4 above calls a departure. `MOVED` still joins
+`master.TERMINAL_STATES` (D83, unchanged). A box may still be deleted with a moved
+tombstone in it, and that tombstone is still buried the same way point 2 describes. But it
+is no longer one of the states `GET /graveyard` answers with. A moved record was never a
+card that left the store. It is a tombstone at its old key. The card itself is alive at
+`moved_to`, exactly as sellable as before. Burial still happens to the tombstone when its
+box goes. Nothing about writing the `buried` line changes. The amendment is which
+departures `do_graveyard` (`server/capture_server.py`) reads back, not which lines the
+store writes.
+
+**What changed:**
+
+1. **`GET /graveyard` filters `moved` out of both its sources.** The in-box half reads
+   `master.TERMINAL_STATES` minus `MOVED`. The buried half skips any `buried` event whose
+   `state` is `moved`. A moved record, standing or buried, no longer reaches this route.
+2. **`#/graveyard`'s filter row drops from five tabs to three: All, Sold, Retired.** No
+   Moved tab and no Buried tab. `buried` is a fact about the box, not a third way a card
+   left. It now draws as a small quiet tag on the Where cell. The words are plain: "Its box
+   was deleted." The screen never types the pipeline noun "buried" itself (D196).
+3. **A moved card is found from the card ITSELF, on `#/inventory`.** `Card.moved_from`
+   (`store/master.py`) was already on the wire, unread by any screen. `CardHero.tsx`'s
+   `CardDetailsSection` (shared by `BoxBrowse.tsx`'s card pane) grows one Provenance fact,
+   "Moved from". It names the old box by name (D259), or "another box" when that box is
+   gone. That is the same honest fallback `Graveyard.tsx`'s own `movedToName` already used
+   for `moved_to`.
+4. **`docs/specs/` and this entry are the record of the narrowing.**
+   `docs/reviews/ux-2026-09-23/RULINGS.md` quotes the owner's own words verbatim.
+
+**What is unchanged:** a moved tombstone is still buried. It still keeps its digest and
+still loses its photograph — points 2 and 3 above are untouched. The only door D134 no
+longer counts as "a departure the graveyard shows" is the one that was never a departure
+at all.
+
 ---
 
 

@@ -6508,8 +6508,8 @@ COMPONENTS = [
                                              "D104", "D113", "D114", "D115", "D116", "D118", "D132",
                                              "D134", "D142", "D145", "D147", "D156", "D159", "D165",
                                              "D166", "D168", "D172", "D174", "D180", "D183", "D193",
-                                             "D212", "D213", "D225", "D227", "D236", "D252", "D264",
-                                             "D265", "D273", "D-sealed-boxes-removed"]},
+                                             "D196", "D212", "D213", "D225", "D227", "D236", "D252",
+                                             "D264", "D265", "D273", "D-sealed-boxes-removed"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -7141,22 +7141,29 @@ COMPONENTS = [
                 "governed_by": ["D5", "D20", "D22", "D31", "D38", "D40", "D41", "D50", "D83", "D132"],
             },
             "src/Graveyard.tsx": {
-                "does": "`#/graveyard` (D134): every departed card the store still knows "
-                        "about, newest departure first. TWO SOURCES, ONE TABLE — a "
-                        "sold/retired/moved record still standing in a box nobody has "
-                        "deleted, the same records `#/inventory` already draws as departed, "
-                        "and a `buried` history line for one whose box WAS deleted by "
-                        "`do_delete_box`. `GET /graveyard` merges both server-side; this "
-                        "screen reads one shape and a `buried` pill says which door a row "
-                        "came from. A Segmented filter (All/Sold/Retired/Moved/Buried) and a "
-                        "text search over name, number, SKU and box name; no photograph, no "
-                        "price, no control that writes anything — a ledger for looking, not "
-                        "a screen that spends. ITS `#` IS ALWAYS A KEY, NEVER A COUNT (D92): "
-                        "a departed record has no slot to count to, so `positionOf` and the "
-                        "Where column both go through `storeKey.ts:storeKeyText` — `B9 #3`, "
-                        "D68's own spelling — rather than composing `#{index}` by hand.",
-                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134", "D218",
-                                "D259"],
+                "does": "`#/graveyard` (D134, amended by the UX review's graveyard ruling, "
+                        "2026-09-23, verbatim \"Move Moved out of Graveyard\"): every card "
+                        "that TRULY LEFT — sold or retired, never moved — newest departure "
+                        "first. TWO SOURCES, ONE TABLE — a sold/retired record still "
+                        "standing in a box nobody has deleted, the same records "
+                        "`#/inventory` already draws as departed, and a `buried` history "
+                        "line for one whose box WAS deleted by `do_delete_box`. "
+                        "`GET /graveyard` merges both server-side and filters `moved` out of "
+                        "both (`do_graveyard`) — a moved card is alive in another box, and "
+                        "`#/inventory`'s own card details say where it moved in from "
+                        "(`CardHero.tsx:movedFromFact`), not a tombstone here. A Segmented "
+                        "filter of three tabs (All/Sold/Retired) and a text search over "
+                        "name, number, SKU and box name; `buried` draws as a small quiet tag "
+                        "on the Where cell ('Its box was deleted'), a fact about the box "
+                        "rather than a fourth tab (D196: no pipeline noun on screen); no "
+                        "photograph, no price, no control that writes anything — a ledger "
+                        "for looking, not a screen that spends. ITS `#` IS ALWAYS A KEY, "
+                        "NEVER A COUNT (D92): a departed record has no slot to count to, so "
+                        "`positionOf` and the Where column both go through "
+                        "`storeKey.ts:storeKeyText` — `B9 #3`, D68's own spelling — rather "
+                        "than composing `#{index}` by hand.",
+                "governed_by": ["D26", "D58", "D68", "D83", "D92", "D134", "D196",
+                                "D218", "D259"],
             },
             "src/Graveyard.css": {
                 "does": "a smaller sheet than a working screen's, because this one has no "
@@ -7324,10 +7331,21 @@ COMPONENTS = [
                                          "open/closed state itself instead of reading it off the "
                                          "caller. `Row` also moved here; `BoxBrowse.tsx` "
                                          "re-exports it so `Inventory.tsx`'s own import keeps "
-                                         "working.",
+                                         "working. `movedFromFact` (the UX review's graveyard "
+                                         "ruling, 2026-09-23, \"Move Moved out of Graveyard\"): "
+                                         "a moved card must still be findable from ITSELF, so "
+                                         "`factGroupsOf`'s Provenance group grows one fact, "
+                                         "\"Moved from\", off `card.moved_from` — the wire "
+                                         "field `_card_row`/`do_inventory` already sent whole "
+                                         "(`asdict(card)`) and this file is the first reader "
+                                         "of. The box half is named by `boxes`, an optional "
+                                         "prop `BoxBrowse.tsx` passes its own `boxRecords`, "
+                                         "falling back to \"another box\" the same honest way "
+                                         "`Graveyard.tsx`'s own `movedToName` does when the old "
+                                         "box is gone (D259).",
                                  "governed_by": ["D6", "D26", "D28", "D31", "D34", "D46", "D52",
-                                                 "D67", "D89", "D96", "D118", "D172", "D195",
-                                                 "D218", "D252"]},
+                                                 "D67", "D89", "D96", "D118", "D134", "D172",
+                                                 "D195", "D218", "D252", "D259"]},
             "src/CardHero.css": {"does": "the listing-correction control's own spacing. Everything "
                                          "else it draws with is reused rather than restyled: "
                                          "`kit.css`'s `.bn-panel*` for the panel chrome, "
@@ -8878,7 +8896,7 @@ COMPONENTS = [
                         "floor. The roster comes off the drawer's own nav links rather than a "
                         "typed list of hashes, plus `#/gallery`, which the nav deliberately does "
                         "not hold.",
-                "governed_by": ["D50", "D95", "D117", "D204", "D266", "D288",
+                "governed_by": ["D50", "D95", "D117", "D134", "D204", "D266", "D288",
                                 "D291"],
                 "note": "THE OWNER-SIDE SHELL HAD NO TEST AT ANY WIDTH. `nav.spec.ts` scopes "
                         "itself to `.bn-side` on purpose; `cursor.spec.ts` harvests its routes "

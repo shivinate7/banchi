@@ -49,7 +49,7 @@ import {
   undoConfirmIdentity,
   undoCorrectAnswer,
 } from './server'
-import type { CandidateRow, CatalogLookup, InventoryCard, Listing, PricingPayload } from './types'
+import type { BoxRecord, CandidateRow, CatalogLookup, InventoryCard, Listing, PricingPayload } from './types'
 import './CardHero.css'
 
 /** One inventory row: the store key plus the card it names. `BoxBrowse.tsx` re-exports this
@@ -213,6 +213,26 @@ function listingFact(card: InventoryCard, listings: Readonly<Record<string, List
   }
 }
 
+/** Where a transplant came from, in plain words — the UX review's graveyard ruling: "Move
+ *  Moved out of Graveyard", so a moved card must still be findable from ITSELF on
+ *  `#/inventory` rather than only from the tombstone `#/graveyard` reads. `card.moved_from`
+ *  is `"box/index"` (`store/master.py:Card.moved_from`); only the box half is said, by name
+ *  (D259), never the number. The old box can be gone by the time anyone looks — that is
+ *  the graveyard review's own example, box 5 deleted after 264 cards moved out of it — so a
+ *  name that does not resolve falls back to "another box" rather than the digits, the same
+ *  honest answer `Graveyard.tsx:movedToName` gives for the matching case in `moved_to`. */
+function movedFromFact(card: InventoryCard, boxes: readonly BoxRecord[]): Detail | null {
+  // `== null` catches BOTH a stored `null` and a plain-JS fixture that never set the field
+  // at all — `undefined`, the shape a route mock or an older server row actually carries,
+  // where `.split` would throw and take the whole panel down with it (the crash this
+  // guard exists to have already prevented, found by inventory.spec.ts's own real-server
+  // fixture, `card()`, which never sets this new field on purpose).
+  if (card.moved_from == null) return null
+  const boxN = Number(card.moved_from.split('/')[0])
+  const name = Number.isFinite(boxN) ? boxes.find((b) => b.box === boxN)?.name : undefined
+  return { label: 'Moved from', value: typeof name === 'string' && name.trim() !== '' ? name : 'another box' }
+}
+
 /** When this card was photographed, as a person says it. THE TWO SANCTIONED FORMATS
  *  (`dates.ts`, "a screen picks one of the two, it never builds a third") — `relativeDate`
  *  is the fit here: a fact about WHEN something happened, which is exactly what it is for,
@@ -231,9 +251,11 @@ export function factGroupsOf(
   card: InventoryCard,
   market: MarketRead | undefined,
   listings: Readonly<Record<string, Listing>>,
+  boxes: readonly BoxRecord[] = [],
 ): FactGroup[] {
   const listedAs = listedAsFact(card)
   const readAs = readAsFact(card)
+  const movedFrom = movedFromFact(card, boxes)
   return [
     {
       title: 'Identity',
@@ -261,6 +283,7 @@ export function factGroupsOf(
         { label: 'Captured', value: capturedText(card.captured_at) },
         { label: 'Run', value: card.run ?? 'not identified yet', kind: 'mono' },
         { label: 'Confidence', value: card.confidence === null ? 'none recorded' : titleCase(card.confidence) },
+        ...(movedFrom !== null ? [movedFrom] : []),
         marketFact(card, market),
         listingFact(card, listings),
       ],
@@ -434,12 +457,14 @@ export function CardDetailsSection({
   market,
   listings,
   phone,
+  boxes = [],
   correctable = false,
 }: {
   readonly card: InventoryCard
   readonly market: MarketRead | undefined
   readonly listings: Readonly<Record<string, Listing>>
   readonly phone: boolean
+  readonly boxes?: readonly BoxRecord[]
   readonly correctable?: boolean
 }) {
   const [openState, setOpenState] = useState<boolean | null>(null)
@@ -454,7 +479,7 @@ export function CardDetailsSection({
         </span>
       </summary>
       <div className="browse-about">
-        {factGroupsOf(card, market, listings).map((group) => (
+        {factGroupsOf(card, market, listings, boxes).map((group) => (
           <div className="browse-factgroup" key={group.title}>
             <span className="bn-label">{group.title}</span>
             <dl className="browse-facts">
