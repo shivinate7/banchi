@@ -1192,6 +1192,64 @@ def case_do_search_number_widening_mirrors_canonical_number() -> None:
     check("8804" in found, "do_search('004') finds the digit word 'spent 4' in name text")
 
 
+def case_do_search_comma_and_edge_punctuation_terms_widen() -> None:
+    """N1, BLOCKING, round-10 Opus delta review, 2026-09-25, on fdc84825 — the SAME CLASS
+    OF BUG as F1, one level up. F1 (round 9) fixed `_number_candidate_forms` to agree
+    with `match._number_match`'s own NUMBER comparison. This closes the gap one step
+    earlier: `_deduped_capped_terms` split on bare whitespace, but `match.query_tokens`
+    (what `match_query`, the decisive step, has always tokenized with) ALSO turns a
+    comma into a space and strips edge punctuation per token. `rengar,24a/219` was ONE
+    whitespace token the widening step never split, so it could never widen `24a/219`
+    out of it — however correct `_number_candidate_forms`'s own comparison already was,
+    it was never handed the term.
+
+    MEASURED ON THE REAL STORE (the reviewer's own count, reproduced here with a fixed
+    fixture): `rengar,24a/219` and `repel,126/132` missed 60 of 60 sampled; `/221,`
+    missed 60 of 60; `/166,` missed all 193 real matches; `004,`, `(004)`, `004.` and
+    `unseen,rengar` all missed too. Fixed: `_deduped_capped_terms` (and the rank loop's
+    own `token_count`) now tokenize via `match.query_tokens`, the ONE tokenizer the
+    decisive step itself uses.
+
+    `_fts_query` (the base FTS5 query) was CHECKED and does NOT need the same change —
+    the widening step's own candidates are UNIONED with the base FTS hits before
+    `match.match_query` (already correctly tokenized) runs, so a candidate the widening
+    step now supplies correctly reaches the decisive check regardless of what the base
+    FTS query itself found for a malformed comma-joined string.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        inv = snapshot.inventory
+        inv.cards["1/1"] = master.Card(box=1, index=1, name="Rengar, Unseen", number="024a/219", sku="8901")
+        inv.cards["1/2"] = master.Card(box=1, index=2, name="Hand Hammer", number="027/166", sku="8902")
+
+    found = [g["sku"] for g in cs.do_search("rengar,24a/219")["groups"]]
+    check("8901" in found, "do_search('rengar,24a/219') finds Rengar, Unseen through the comma-split terms")
+
+    found = [g["sku"] for g in cs.do_search("/166,")["groups"]]
+    check("8902" in found, "do_search('/166,') finds Hand Hammer through the trailing-comma stripped term")
+
+
+def case_do_search_hyphen_fold_finds_a_composed_number() -> None:
+    """N2, MEDIUM, round-10 Opus delta review, 2026-09-25, on fdc84825. Nothing guarded
+    `_number_candidate_forms`'s own hyphen fold (`match._hyphen_to_slash(bare)`, in its
+    `forms` set) — removing that one term from the set keeps 192 of 192 `match-selftest`
+    cases green, yet `0027-166` (a hyphen standing for the collector-number slash) then
+    misses Hand Hammer `027/166`. This case makes that term load-bearing.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        snapshot.inventory.cards["1/1"] = master.Card(box=1, index=1, name="Hand Hammer", number="027/166", sku="8903")
+
+    found = [g["sku"] for g in cs.do_search("0027-166")["groups"]]
+    check("8903" in found, "do_search('0027-166') finds Hand Hammer through the hyphen-to-slash fold")
+
+
 def case_do_search_fold_deletion_narrowed_bf_to_the_accepted_floor() -> None:
     """F4, round-9 Opus delta review, 2026-09-25, on 28d233b2. Round 8 (item 7) claimed
     the deleted fold-prefix rule's own job was a "strict SUPERSET" of the SUBSTRING
@@ -1314,11 +1372,18 @@ def _generate_fuzz_queries() -> List[str]:
         out.append(bare)
         out.append(padded)
         out.append(f"/{padded}")
+        # COMMA AND EDGE-PUNCTUATION SHAPES (N1, round-10 Opus delta review, 2026-09-25) —
+        # `match.query_tokens` strips these, so the widening step must see the same
+        # shape the decisive step would.
+        out.append(f"{bare},")
+        out.append(f"({padded})")
+        out.append(f"{padded}.")
 
     fragments = [name.lower()[:4] for name in _POKEMON_NAMES]
     extras = ["ex", "v", "vmax", "vstar", "100", "013", "050"]
     for _ in range(20):
         out.append(f"{rng.choice(fragments)} {rng.choice(extras)}")
+        out.append(f"{rng.choice(fragments)},{rng.choice(extras)}")
 
     return out
 
@@ -1338,7 +1403,10 @@ _FUZZ_QUERIES = _generate_fuzz_queries()
 # lower), a name substring or prefix, a SKU prefix, a repeated-token stress shape, a
 # set-hint-plus-number combination, and a case-scrambled name — so a shape unique to one
 # seeded card is queried by number, not by name.
-_CUT_POINTS = [.10, .18, .24, .28, .33, .37, .40, .43, .47, .50, .58, .63, .68, .74, .78, .82, .86, .90, .94]
+_CUT_POINTS = [
+    .10, .17, .22, .26, .30, .33, .36, .39, .42, .45, .52, .56, .60, .65, .68, .71, .74,
+    .77, .80, .84, .88, .92, .95,
+]
 
 
 def _generate_card_sampled_queries(cards: list, k: int, seed: int) -> List[str]:
@@ -1364,7 +1432,7 @@ def _generate_card_sampled_queries(cards: list, k: int, seed: int) -> List[str]:
         bare = match._drop_leading_zeros(first) or "0"
         nm = match.compact_text(card.name or "x") or "x"
         kind = bisect.bisect(_CUT_POINTS, rng.random())
-        if kind in (4, 5, 6, 7) and not second:
+        if kind in (4, 5, 6, 7, 20, 21, 22) and not second:
             kind = 0
         i3 = rng.randrange(max(1, len(nm) - 2))
         i1 = rng.randrange(max(1, len(nm) - 1))
@@ -1383,6 +1451,13 @@ def _generate_card_sampled_queries(cards: list, k: int, seed: int) -> List[str]:
                 rng.choice(["/" + str(rng.randint(1, 300)), str(rng.randint(1, 300)), "ex", nm[1:5]])
                 for _ in range(rng.randint(2, 11))
             ),
+            # COMMA AND EDGE-PUNCTUATION SHAPES (N1, round-10 Opus delta review,
+            # 2026-09-25) — `match.query_tokens` splits a comma into a space and strips
+            # edge punctuation per token; the widening step must agree.
+            nm[i3:i3 + rng.randint(3, 6)] + "," + bare + "/" + second,
+            "/" + second + ",",
+            bare + "-" + second,
+            "(" + first + ")",
         ][kind].strip()
         if shapes:
             out.append(shapes)
@@ -1516,6 +1591,8 @@ CASES = [
     case_do_search_zero_pad_widens_a_digit_plus_letter_term,
     case_do_search_substring_widens_a_two_char_digit_term,
     case_do_search_number_widening_mirrors_canonical_number,
+    case_do_search_comma_and_edge_punctuation_terms_widen,
+    case_do_search_hyphen_fold_finds_a_composed_number,
     case_do_search_fold_deletion_narrowed_bf_to_the_accepted_floor,
     case_do_search_widening_dedupes_case_variants,
     case_do_search_permanent_fuzz_agrees_with_match_query,

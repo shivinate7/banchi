@@ -433,7 +433,15 @@ only ever checked the NUMBER columns, never `name`/`set_hint`/`note`. Fixed by
 `_text_digit_word_matches`, mirroring `match._digit_word_match` against the same three
 text fields the substring rule already reads. Re-verified at scale on a fresh real-store
 copy: 0 of 52 bare-letter composed queries missed. 0 of 52 extra-zero letter composed
-queries missed. 0 of 300 extra-zero plain composed queries missed. Case-table row:
+queries missed. 0 of 300 extra-zero plain composed queries missed.
+**52 IS CARD RECORDS, NEVER DISTINCT QUERIES** (round 10's own check, 2026-09-25, after
+the reviewer counted 22 on the same store). 52 letter-composed card records share only
+22 distinct numbers.
+Several boxes hold more than one physical copy of the same printing. A sweep built per
+CARD queries the same number twice. A sweep built per distinct number or SKU queries
+it once. Both counts are correct readings of the same store, on different units. This
+entry's own rule (item 6, below) already settled the unit for every other figure here
+as card records, never SKUs, so 52 stays. Case-table row:
 `case_do_search_number_widening_mirrors_canonical_number`. It replaces round 8's own
 `case_do_search_known_gap_hash_prefixed_composed_letter_number`. The `#`-prefixed
 composed shape that case disclosed as a gap closes as a side effect of the same fix.
@@ -533,3 +541,65 @@ Documented at the dict's own definition: tests must read it single-threaded, one
 
 Every mutation here was chosen because round 9's own review named it directly.
 
+
+**ROUND 10, OPUS DELTA REVIEW, 2026-09-25, ON fdc84825.** One blocking item, one medium,
+two doc-only disclosures, one figure check.
+
+**N1: THE SAME CLASS AS F1, ONE LEVEL UP — THE TOKENIZER, NOT THE COMPARISON.** F1
+(round 9) fixed `_number_candidate_forms`'s own NUMBER comparison to agree with
+`match._number_match`. It never touched what fed a TERM into that comparison in the
+first place. `_deduped_capped_terms` split a query on bare whitespace
+(`text.split()`). `match.query_tokens` — the ONE tokenizer `match_query` (the decisive
+step) has always used — also turns a comma into a space and strips edge punctuation
+per token. `rengar,24a/219` is one whitespace token. It is two real tokens, `rengar`
+and `24a/219`. `/166,` strips to `/166`. Measured on a real-store copy:
+`rengar,24a/219` and `repel,126/132` missed 60 of 60 sampled. `/221,` missed 60 of 60.
+`/166,` missed all 193 real matches. `004,`, `(004)`, `004.` and `unseen,rengar` all
+missed too. Fixed: `_deduped_capped_terms` and the rank loop's own `token_count` now
+tokenize through `match.query_tokens`. `_fts_query` was checked and needs no change.
+The widening step's candidates are UNIONED with the base FTS hits before the decisive
+`match.match_query` check runs. That check is already correctly tokenized. A candidate
+the fixed widening step now supplies reaches the decisive check either way. What the
+base FTS query found for a malformed string does not matter. Verified at the SAME
+scale the reviewer
+measured, on a fresh real-store copy, with only the `_deduped_capped_terms` fix:
+name-plus-comma-plus-composed-number, 52 of 52 sampled, 0 missed. Trailing-comma
+second-half slash, 60 of 60 sampled, 0 missed, and 8 of 8 on every distinct second
+half. Case-table row: `case_do_search_comma_and_edge_punctuation_terms_widen`. The
+permanent fuzz (`_generate_fuzz_queries` and `_generate_card_sampled_queries`) both
+gained comma-joined and edge-punctuation shapes, so a future regression here fails the
+fuzz too, never only the two hand-written cases.
+
+**N2: THE HYPHEN FOLD WAS UNGUARDED.** `_number_candidate_forms` already folds a
+hyphen standing for the collector-number slash (`match._hyphen_to_slash(bare)`, inside
+its own `forms` set) — that line shipped in round 9, but no case ever exercised it.
+Removing it kept all 192 round-9 cases green. `0027-166` then misses Hand Hammer
+(`027/166`). A new case, `case_do_search_hyphen_fold_finds_a_composed_number`, makes
+that term load-bearing.
+
+**N3, DEFERRED, DOC ONLY, NO BEHAVIOUR CHANGE.** `002-64` also matches `264` through
+`compact_text` in the shared matcher — `match.py` and `match.ts` alike, not a
+server-only quirk. `compact_text` strips every non-alphanumeric character before comparing. A hyphen and
+a hyphen-free digit run collapse to the same string on purpose, for names like
+"B.F. Sword". A collector number is not exempt from that same fold. This is a known
+gap, not a defect this round fixes.
+
+**N4, DEFERRED, DOC ONLY, NO BEHAVIOUR CHANGE.** `_is_floor_query` measures the RAW
+token, before edge-punctuation stripping. `B.F` (with its own trailing period, unlike
+the bare `bf` case above) counts as OUTSIDE the accepted 1-2 character floor, where
+`bf` counts as inside it. The two spellings of the same short fragment disagree on
+whether the floor applies. This is a known gap, not a defect this round fixes.
+
+**THE "0 OF 52" FIGURE IS CORRECT — CARD RECORDS, NOT DISTINCT QUERIES.** Explained
+in place at item 5, above. 52 counts card records. 22 counts the distinct numbers
+those 52 records share, several boxes holding more than one copy of the same
+printing.
+
+**MUTATION RESULTS, ROUND 10, EACH CONFIRMED RED THEN RESTORED, AGAINST THE FINAL 195-CASE TABLE:**
+
+| Mutation | Reverts | Result |
+|---|---|---|
+| `_deduped_capped_terms` back to `text.split()` | N1's own fix | 3 cases fail |
+| The hyphen-fold term removed from `_number_candidate_forms`'s `forms` set | N2's own fix | 1 case fails |
+
+Both mutations were chosen because round 10's own review named them directly.

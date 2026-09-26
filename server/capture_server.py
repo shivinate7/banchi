@@ -10250,8 +10250,22 @@ def _deduped_capped_terms(text: str, *, lower: bool = False) -> List[str]:
     own `f"Bench Card {i}"` tests never matched enough candidates to notice this loop's
     own cost). A single shared function, called from both places, is what keeps the two
     from drifting apart again — the widening step already had this fix; the rank loop
-    just never got it."""
-    terms = text.split()
+    just never got it.
+
+    TOKENIZED BY `match.query_tokens`, NEVER A BARE `text.split()` (N1, round-10 Opus
+    delta review, 2026-09-25, on fdc84825 — the SAME CLASS OF BUG as F1, one level up:
+    F1 fixed the widening step's own NUMBER comparison to agree with `match._number_
+    match`; this fixes the TOKENIZER feeding it to agree with `match.query_tokens`,
+    which `match_query` (the decisive step) has always used). A bare `text.split()`
+    only ever splits on whitespace — `match.query_tokens` ALSO turns a comma into a
+    space and strips edge punctuation per token (`rengar,24a/219` is ONE whitespace
+    token, `"rengar,24a/219"`, but TWO real tokens, `rengar` and `24a/219`; `/166,`
+    strips to `/166`). Measured on the real store: `rengar,24a/219` and `repel,126/132`
+    missed 60 of 60 sampled; `/221,` missed 60 of 60; `/166,` missed all 193 real
+    matches; `004,`, `(004)`, `004.` and `unseen,rengar` all missed too — the widening
+    step was handed a token the matcher itself would never see, so it could never widen
+    correctly for it, however good the comparison inside each rule already was."""
+    terms = match.query_tokens(text)
     if lower:
         terms = [term.lower() for term in terms]
     return list(dict.fromkeys(terms))[:_SUPPLEMENTAL_TERM_CAP]
@@ -10277,7 +10291,15 @@ def _number_candidate_forms(term: str) -> set:
     standing for the slash via `_hyphen_to_slash`, then validates the WHOLE form with
     `match._is_number_shape` (which DOES split on `/`). This function computes the
     IDENTICAL candidate forms, so the widening step accepts exactly what the decisive
-    step would — no second, slightly different shape rule to keep in step."""
+    step would — no second, slightly different shape rule to keep in step.
+
+    THIS IS TRUE PER TERM, NEVER A PROMISE ABOUT A WHOLE QUERY ON ITS OWN (N1, round-10
+    Opus delta review, 2026-09-25). A term only ever reaches this function once
+    `_deduped_capped_terms` has already split the query the SAME WAY `match.query_
+    tokens` would — `rengar,24a/219` is one comma-joined string, and this function was
+    never asked to notice that. It agrees with the decisive step exactly because the
+    CALLER hands it the same tokens the decisive step would see, not because it does any
+    splitting of its own beyond the one `/` inside a single term."""
     bare = term[1:] if term.startswith("#") else term
     if not match._has_digit(bare):
         return set()
@@ -10681,8 +10703,12 @@ def do_search(query: str) -> dict:
         # 3,000 cards and 19.9s at 10,000, because every candidate paid for 100 calls to
         # `_match_rank` instead of 1. `token_count` keeps the RAW (pre-dedupe) token count
         # for the single-term fallback below — "how many words did the operator type",
-        # never "how many distinct ones".
-        token_count = len(text.split())
+        # never "how many distinct ones". TOKENIZED BY `match.query_tokens`, NEVER a bare
+        # whitespace split (N1, round-10 Opus delta review, 2026-09-25) — the same reason
+        # `_deduped_capped_terms` itself changed: `a,b` is ONE whitespace-split token but
+        # TWO real ones, so a bare `text.split()` count would have disagreed with what
+        # `match_query` itself considers "a single-term query".
+        token_count = len(match.query_tokens(text))
         terms = _deduped_capped_terms(text, lower=True)
         for key, sku in hits.items():
             card = inventory.cards.get(key)
