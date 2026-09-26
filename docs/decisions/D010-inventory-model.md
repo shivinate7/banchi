@@ -42,11 +42,14 @@ every write the divider proof named. Before this, a write that lowered the box's
 reorder, a section-move undo or a move undo) left the divider above the next card's key. The next card then went into the section
 in front of it (the proof's F1).
 
-**The effect on a hand-typed divider past the last card.** The dividers editor takes `[1, 51]`
-on a five-card box. That is the same layout, so the next capture now goes into section 2, at
-the divider's key. `S` then refuses with `section_empty`, and `SectionAhead` is deleted,
-because no layout can reach it now. Whether any real box holds such a divider is unmeasured.
-The divider proof found two boxes (4 and 6) that end with an empty section now.
+**A divider typed ahead of the fill is gone** (the owner's word, 2026-09-26). A section is
+where captures go once it exists, so `[1, 51]` on a five-card box takes the next capture into
+section 2. `S` then refuses with `section_empty`, and `SectionAhead` is deleted. The owner,
+verbatim: "if i am in section 1, and i am capturing away, then section 1 is continuing to
+expand, if i am selecting section 2, then i am capturing that fills in section 2, kinda like a
+subbox". The real store held no such layout. Only boxes 4 and 6 end with an empty section,
+one S each. Picking a middle section to capture into is planned in the same pull request, by a
+separate lane, and it is not built yet.
 
 `harness/tests/t7_box_map.py:check_divider_anchor` guards it (D265, the divider anchor).
 
