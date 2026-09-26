@@ -232,5 +232,11 @@
     "query": "002-64",
     "fields": { "numbers": ["002/064"] },
     "match": true
+  },
+  {
+    "note": "a set code's own printed hyphen still finds its card (the PR 3 integration): letters, so the hyphen is part of the code",
+    "query": "OP01-001",
+    "fields": { "numbers": ["OP01-001"] },
+    "match": true
   }
 ]

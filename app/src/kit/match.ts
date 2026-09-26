@@ -176,10 +176,13 @@ function numberMatch(raw: string, row: Prepared): boolean {
   // `bare` itself must NEVER also be read as one plain joined number —
   // `canonicalNumber` does not split on `-`, so `002-64` canonicalized whole was
   // `264`, joining two digit runs a hyphen deliberately kept apart. Only when there is
-  // NO such hyphen (`hyphenForm === bare`) does the plain form apply at all.
+  // NO such hyphen (`hyphenForm === bare`) does the plain form apply at all, OR when the
+  // token carries a letter (the PR 3 integration): a set code such as `OP01-001` prints
+  // its hyphen as part of the card's own identifier, which canonicalizes whole (`op1001`),
+  // so the typed code must still find its card. `002-64`, all digits, still never joins.
   const hyphenForm = bare.replace(/(\d)-(?=\d)/gu, '$1/')
   const forms = new Set([canonicalNumber(hyphenForm)])
-  if (hyphenForm === bare) forms.add(canonicalNumber(bare))
+  if (hyphenForm === bare || HAS_LETTER.test(bare)) forms.add(canonicalNumber(bare))
   for (const form of forms) {
     if (!NUMBER_SHAPE.test(form)) continue
     const whole = form.includes('/')

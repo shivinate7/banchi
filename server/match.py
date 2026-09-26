@@ -255,10 +255,14 @@ def _number_match(raw: str, numbers: Sequence[_NumberParts]) -> bool:
     # itself must NEVER also be read as one plain joined number — `canonical_number`
     # does not split on `-`, so `002-64` canonicalized whole was `264`, joining two
     # digit runs a hyphen deliberately kept apart. Only when there is NO such hyphen
-    # (`hyphen_form == bare`) does the plain form apply at all.
+    # (`hyphen_form == bare`) does the plain form apply at all, OR when the token carries a
+    # letter (the PR 3 integration): a set code such as `OP01-001` prints its hyphen as part
+    # of the card's own identifier, which canonicalizes whole (`op1001`), so the typed code
+    # must still find its card. `002-64`, all digits, still never joins. Same rule as
+    # `app/src/kit/match.ts:numberMatch`.
     hyphen_form = _hyphen_to_slash(bare)
     forms = {canonical_number(hyphen_form)}
-    if hyphen_form == bare:
+    if hyphen_form == bare or any(ch.isalpha() for ch in bare):
         forms.add(canonical_number(bare))
     for form in forms:
         if not _is_number_shape(form):
