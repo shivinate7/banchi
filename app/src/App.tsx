@@ -94,6 +94,7 @@ const CAPTURE_KEYS: ScreenKeys = {
     { keys: ['Space'], does: 'Pause motion, or resume it', when: 'not while typing' },
     { keys: ['S'], does: 'Put a divider in, at the card you are about to shoot' },
     { keys: ['U'], does: 'Undo the newest capture' },
+    { keys: ['[', ']'], does: 'Pick the section toward the back, or toward the front', when: 'not while typing' },
     { keys: ['B'], does: 'Open or close the Box field' },
     { keys: ['H'], does: 'Open or close the Set hint field' },
     { keys: ['G'], does: 'Open or close the Game field' },

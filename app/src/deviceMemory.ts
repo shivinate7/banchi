@@ -480,6 +480,77 @@ export function forgetCaptureSetup(): void {
   }
 }
 
+/* ---------------------------------------------------------- the capture screen's section pick */
+
+/**
+ * WHICH SECTION EACH BOX WAS LAST CAPTURING INTO — sub-box capture's own device memory
+ * (`docs/specs/subbox-capture.md` §5, the owner's Q2 ruling, 2026-09-26).
+ *
+ * A SEPARATE KEY FROM `CAPTURE_SETUP_KEY` ON PURPOSE, because it is not one fact but a MAP: a
+ * pick per box, keyed by `bid` (D145/D153) so a reused box number cannot inherit a stale pick.
+ * `CaptureSetup` is one document restored once at mount; this one is read again every time the
+ * box changes.
+ *
+ * "UNTIL THE SITTING ENDS" (the owner, verbatim) REPLACES A PER-DEVICE-FOREVER DEFAULT — this
+ * is an amendment to what the plan proposed, not to D142 or D27. Each entry carries `at`, the
+ * moment it was picked, and `CaptureScreen.tsx` reads a pick older than `GAP_MINUTES`
+ * (`storeHistory.ts`'s own 30-minute sitting gap, D164) as gone. This file does not know that
+ * rule — it holds the shape, exactly as `storedCaptureSetup`'s own note argues, and the reader
+ * decides freshness.
+ */
+const CAPTURE_SECTIONS_KEY = 'banchi.capture.sections'
+
+export type SectionPick = { readonly div: string; readonly at: number }
+
+function isSectionPick(value: unknown): value is SectionPick {
+  if (typeof value !== 'object' || value === null) return false
+  const held = value as Record<string, unknown>
+  return typeof held.div === 'string' && held.div !== '' && typeof held.at === 'number'
+}
+
+/** Every box's own pick, keyed by the string this screen builds from `bid` (or `box`, where
+ *  no `bid` exists) — `keyFor` in `CaptureScreen.tsx`. Malformed entries are dropped rather
+ *  than failing the whole map, the same salvage `readList` applies to a claim above. */
+export function storedSectionPicks(): Readonly<Record<string, SectionPick>> {
+  try {
+    const raw = localStorage.getItem(CAPTURE_SECTIONS_KEY)
+    if (raw === null) return {}
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) return {}
+    const out: Record<string, SectionPick> = {}
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (isSectionPick(value)) out[key] = { div: value.div, at: value.at }
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+export function rememberSectionPick(key: string, pick: SectionPick): void {
+  try {
+    localStorage.setItem(
+      CAPTURE_SECTIONS_KEY,
+      JSON.stringify({ ...storedSectionPicks(), [key]: pick }),
+    )
+  } catch {
+    /* Quota or a blocked origin — the pick still holds for this box, this render, and the
+       next restore starts from nothing, same as every device that never wrote this key. */
+  }
+}
+
+/** A stored key the box no longer has, or a pick past the sitting: dropped rather than left
+ *  to answer for a section that is gone or no longer meant. */
+export function forgetSectionPick(key: string): void {
+  try {
+    const rest = { ...storedSectionPicks() }
+    delete rest[key]
+    localStorage.setItem(CAPTURE_SECTIONS_KEY, JSON.stringify(rest))
+  } catch {
+    /* storage unavailable — nothing was held to begin with. */
+  }
+}
+
 /* ------------------------------------------------------- how loud the spend confirm gets */
 
 /**

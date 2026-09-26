@@ -277,6 +277,12 @@ export type CardSummary = {
    *  capture's own response already carries the count, so nothing needs to compute it
    *  again. */
   place: Place
+
+  /** THE DIVIDER KEY OF THE SECTION THIS CARD LANDED IN, read after the write
+   *  (`docs/specs/subbox-capture.md` 1.2) — correct after a re-space too. Null for a pooled
+   *  card, which has no section, and absent from an older server, which reads the same way:
+   *  the capture screen's section pick falls back to the last section. */
+  section_div?: string | null
 }
 
 /** `GET /status`. Counts, the next index per box, and whether the store is healthy. */
@@ -1741,6 +1747,14 @@ export type SectionDetail = {
   last_name?: string | null
   first_cid?: string | null
   last_cid?: string | null
+  /** THE DIVIDER KEY OF THIS SECTION (`docs/specs/subbox-capture.md` 1.1) — the handle a
+   *  capture, an S, a U or a Move-to-box aims at. Section 1 of an undeclared box (no stored
+   *  dividers) still gets one — `"1"`, the box's own front (`store/master.py:front_of_box`)
+   *  — so this is real for every section a current server draws. Null or absent only for an
+   *  older server that predates the field: nothing on this side may parse or compose one
+   *  (subbox-capture.md 1, "Never parse one and never compose one") — a screen with no `div`
+   *  falls back to the box's own default, the last section. */
+  div?: string | null
 }
 
 /** What `POST /boxes/<box>/sections/move` answers (D264): the move's id for Undo, the

@@ -11,6 +11,7 @@ import type {
   GameEntry,
   GameRegistry,
   RemoveResult,
+  SectionDetail,
 } from './types'
 import {
   getTcgSets,
@@ -40,9 +41,12 @@ import { DEFAULT_PARAMS } from './motion'
 import { useCamera, PIPELINE_LONG_EDGE, ROTATIONS } from './useCamera'
 import {
   forgetCaptureSetup,
+  forgetSectionPick,
   rememberCaptureSetup,
+  rememberSectionPick,
   storedBoxRecency,
   storedCaptureSetup,
+  storedSectionPicks,
   touchBox,
 } from './deviceMemory'
 import type { CaptureSetup } from './deviceMemory'
@@ -77,6 +81,15 @@ const SETTLE_MS = Math.round((DEFAULT_PARAMS.stillWindow * 1000) / 30)
 const CAPTURE_KEY_LABEL = 'C'
 const UNDO_KEY_LABEL = 'U'
 const SECTION_KEY_LABEL = 'S'
+
+/** THE SECTION PICK'S OWN KEYS — sub-box capture (docs/specs/subbox-capture.md §5). Brackets
+ *  are not letters, so they need no place in `RESERVED_KEYS`/`OPTION_KEYS`: they never
+ *  collide with an option keycap or a field letter, exactly the way the plan argued. `[`
+ *  steps the pick toward the back (a lower section number) and `]` steps it toward the front
+ *  (a higher one, toward the last). */
+const SECTION_BACK_KEY = '['
+const SECTION_FRONT_KEY = ']'
+const SECTION_STEP_LABEL = '[ ]'
 
 // Finish strings are rendered VERBATIM rather than as friendly labels: D3 rung 1 treats the
 // claim as trusted, and the string on screen is the string written into the sidecar and
@@ -587,6 +600,7 @@ function blurActive(): void {
  *  the type rather than by bookkeeping. */
 type FieldId =
   | 'box'
+  | 'section'
   | 'set'
   | 'rarity'
   | 'finish'
@@ -1046,6 +1060,24 @@ export function CaptureScreen() {
     )
   }, [])
 
+  /* THE SAME PATCH, ONE LEVEL DOWN — a captured-into section's own `count`, so the Section
+   * row's "next card N" moves with every capture the way the Box row's "next card N" already
+   * does off `patchOnHand`. `sections_detail` is otherwise only refreshed by `GET /boxes`
+   * (mount, a field open/close, a box creation, a divider), never by a capture. */
+  const patchSectionCount = useCallback((forBox: number, div: string, delta: number) => {
+    setBoxRecords((prev) =>
+      prev.map((record) => {
+        if (record.box !== forBox) return record
+        return {
+          ...record,
+          sections_detail: record.sections_detail.map((span) =>
+            span.div === div ? { ...span, count: span.count + delta } : span,
+          ),
+        }
+      }),
+    )
+  }, [])
+
   /* WHETHER `GET /boxes` HAS ACTUALLY ANSWERED, which `boxRecords` cannot say: `[]` is both
      the starting value and what a store with no boxes returns. Only the restored-box check
      reads it, and only because judging a restore against a list that has not arrived would
@@ -1142,19 +1174,32 @@ export function CaptureScreen() {
 
   
   const [sectionNote, setSectionNote] = useState<
-    (Note & { done: boolean; place: { section: number; fromCard: number } | null }) | null
+    (Note & {
+      done: boolean
+      place: { section: number; fromCard: number } | null
+      /** THE OWNER'S HAND IS ON A MIDDLE SECTION'S DIVIDER, NOT THE END OF THE BOX (Q1, D-
+       *  sections-are-sub-boxes). Every later section moved up one ordinal, and no card
+       *  number in any of them changed — the sentence names the range that shifted. Null
+       *  for the ordinary S at the back, which renumbers nothing. */
+      renumbered: { from: number; to: number } | null
+    }) | null
   >(null)
   const [sectionBusy, setSectionBusy] = useState(false)
 
-  /* UN-15: A DIVIDER'S OWN UNDO, "WHILE NO CARD IS BEHIND IT". `closeSection` takes the
-   * empty last divider back out in the store, so the screen holds only which box it went into
-   * (`box`). `at` is when the divider was opened, compared against the newest shot's own `at`
-   * (`sitting`, D164's stack) so `U` reaches whichever write is actually the newest — a capture
-   * into ANOTHER box after this one opened does not touch it, because a divider is a fact about
-   * ONE box (D10) and `doCapture` clears this only when the capture lands in the SAME box, which
-   * is "built on" in the plan's own words (11.1). */
+  /* UN-15: A DIVIDER'S OWN UNDO, "WHILE NO CARD IS BEHIND IT". `closeSection` takes that one
+   * divider back out BY ITS OWN KEY (`div`, `ux/divider-fix`'s keyed route) — never only the
+   * box's last one, because an S in the middle no longer puts its divider there. `div` is
+   * `null` only when the response carried no `sections_detail[].div` at all — an older server
+   * or a fixture that predates the field — and `undoDivider` then falls back to the box-only
+   * form, which removes the last divider exactly as it always has. `at` is when the divider
+   * was opened, compared against the newest shot's own `at` (`sitting`, D164's stack) so `U`
+   * reaches whichever write is actually the newest — a capture into ANOTHER box after this one
+   * opened does not touch it, because a divider is a fact about ONE box (D10) and `doCapture`
+   * clears this only when the capture lands in the SAME box, which is "built on" in the plan's
+   * own words (11.1). */
   const [pendingDivider, setPendingDivider] = useState<{
     box: number
+    div: string | null
     at: number
   } | null>(null)
 
@@ -1546,6 +1591,128 @@ export function CaptureScreen() {
   // nothing is dismissed. It is also the earlier of the two chances to catch a typed 33 for
   // 3 — the server's own `new_box` flag arrives after a photo has already been written.
   const boxIsEmpty = box !== null && (nextForBox === undefined || nextForBox <= 1)
+
+  /* ---- the picked section: a picked section fills like a sub-box (docs/specs/subbox-capture.md) ---- */
+
+  /** The current box's own sections, rendered — `[]` for a box `GET /boxes` has not answered
+   *  for yet, which reads exactly like an undeclared single section: nothing to pick past the
+   *  default. */
+  const currentBoxRecord = box === null ? null : (boxRecords.find((r) => r.box === box) ?? null)
+  const sectionsDetail: readonly SectionDetail[] = useMemo(
+    () => currentBoxRecord?.sections_detail ?? [],
+    [currentBoxRecord],
+  )
+  const lastSection = sectionsDetail.length === 0 ? null : sectionsDetail[sectionsDetail.length - 1]!
+
+  /** THE DEVICE-MEMORY KEY FOR THIS BOX'S PICK — `bid` where the store gave one (D145/D153),
+   *  because a box NUMBER is reused and a `bid` never is; the box number itself where it did
+   *  not, which is the same fallback `CaptureSetup.bid` already reads as "no id to give". */
+  const sectionPickKey = useCallback(
+    (forBox: number, bid: number | null) => (bid !== null ? `bid:${bid}` : `box:${forBox}`),
+    [],
+  )
+
+  /** null MEANS "THE LAST SECTION" — the default, and the one value that sends no `section`
+   *  field at all (I1: byte-identical to a capture before this feature existed). A picked
+   *  section is named by its OWN divider key, never by ordinal — the wire's own rule
+   *  (subbox-capture.md 1). */
+  const [selectedDiv, setSelectedDiv] = useState<string | null>(null)
+  const [sectionPickNote, setSectionPickNote] = useState<string | null>(null)
+
+  /** THE PICK RESTORE, ONCE PER BOX (Q2, "until the sitting ends"). Runs when the box changes
+   *  or `sections_detail` first arrives for it — not on every `boxRecords` refresh mid-sitting,
+   *  which would put a manual pick back to whatever this box's stored entry says the moment a
+   *  divider or an on-hand patch touches `boxRecords`. `resolvedFor` is the box this effect has
+   *  already answered for, `null` counting as its own box needing no resolution. */
+  const resolvedSectionFor = useRef<number | null | 'none'>('none')
+  useEffect(() => {
+    if (box === null) {
+      resolvedSectionFor.current = 'none'
+      setSelectedDiv(null)
+      setSectionPickNote(null)
+      return
+    }
+    if (resolvedSectionFor.current === box) return
+    // Sections have not answered for this box yet — wait for the fetch rather than resolve
+    // against an empty list and read a real middle pick as gone.
+    if (!boxesSeen) return
+    resolvedSectionFor.current = box
+    setSectionPickNote(null)
+    const key = sectionPickKey(box, boxBid)
+    const stored = storedSectionPicks()[key]
+    if (stored === undefined) {
+      setSelectedDiv(null)
+      return
+    }
+    const fresh = Date.now() - stored.at <= GAP_MINUTES * 60_000
+    const known = sectionsDetail.some((span) => span.div === stored.div)
+    if (fresh && known) {
+      setSelectedDiv(stored.div)
+      return
+    }
+    // A STORED KEY THAT IS GONE ALSO FALLS BACK TO THE LAST SECTION, WITH ONE PLAIN SENTENCE
+    // (the owner's Q2 ruling) — whether the sitting simply ended or the divider it named was
+    // taken back out from under it, the remedy is the same and the sentence does not need to
+    // tell them apart.
+    forgetSectionPick(key)
+    setSelectedDiv(null)
+    setSectionPickNote('The section you had picked is gone. Back to the last section.')
+  }, [box, boxBid, boxesSeen, sectionPickKey, sectionsDetail])
+
+  /** WHICH SECTION THE PICK NAMES, RIGHT NOW — `null` (the default) resolves to the last
+   *  section for every read below, so a screen that has never picked anything still draws a
+   *  real section rather than a blank. */
+  const pickedSection: SectionDetail | null =
+    selectedDiv === null
+      ? lastSection
+      : (sectionsDetail.find((span) => span.div === selectedDiv) ?? lastSection)
+
+  const pickedIsLast = pickedSection !== null && lastSection !== null && pickedSection.section === lastSection.section
+
+  /** THE NEXT CARD NUMBER WITHIN THE PICKED SECTION — `start` is the section's own first card
+   *  number (D260) and `count` is how many it holds now, patched per capture by
+   *  `patchSectionCount` the same way `newCardNumber` is patched by `patchOnHand`. */
+  const nextCardInSection = pickedSection === null ? undefined : pickedSection.start + pickedSection.count
+
+  /** WHERE A CARD CAPTURED HERE PHYSICALLY GOES, when the pick is not the last section — "the
+   *  gap on the back side of" the NEXT section's divider (the physical model, subbox-capture.md
+   *  §2). Null when the pick already is the last section, or there is no next section to name. */
+  const behindSection: number | null =
+    pickedSection !== null && !pickedIsLast
+      ? (sectionsDetail.find((span) => span.section === pickedSection.section + 1)?.section ?? null)
+      : null
+
+  const pickSection = useCallback(
+    (div: string | null) => {
+      setSelectedDiv(div)
+      setSectionPickNote(null)
+      if (box === null) return
+      if (div === null) {
+        // The default is never itself remembered as a stale pick to fall back FROM — a
+        // browser that picks the last section on purpose forgets the entry outright, same
+        // as it never wrote one.
+        forgetSectionPick(sectionPickKey(box, boxBid))
+        return
+      }
+      rememberSectionPick(sectionPickKey(box, boxBid), { div, at: Date.now() })
+    },
+    [box, boxBid, sectionPickKey],
+  )
+
+  /** `[` toward the back (a lower ordinal), `]` toward the front (a higher one, toward the
+   *  last) — the picked-list order IS the physical order (D260), so stepping the array is
+   *  stepping the drawer. A box with one section or fewer has nothing to step between. */
+  const stepSection = useCallback(
+    (toward: 'back' | 'front') => {
+      if (sectionsDetail.length < 2) return
+      const at = pickedSection === null ? sectionsDetail.length - 1 : pickedSection.section - 1
+      const next = toward === 'back' ? Math.max(0, at - 1) : Math.min(sectionsDetail.length - 1, at + 1)
+      const span = sectionsDetail[next]
+      if (span === undefined) return
+      pickSection(span.section === sectionsDetail.length ? null : (span.div ?? null))
+    },
+    [pickSection, pickedSection, sectionsDetail],
+  )
 
   /* ---- the open field's machinery: who is open, what its filter shows, where focus goes ---- */
 
@@ -2005,6 +2172,12 @@ export function CaptureScreen() {
       if (openField === 'rarity') {
         const name = visibleRarities[nth]
         if (name !== undefined) toggleRarity(name)
+      } else if (openField === 'section') {
+        const span = sectionsDetail[nth]
+        if (span !== undefined) {
+          pickSection(span.section === sectionsDetail.length ? null : (span.div ?? null))
+          closeField()
+        }
       } else if (openField === 'game') {
         const entry = (registry?.games ?? [])[nth]
         if (entry !== undefined) {
@@ -2072,6 +2245,8 @@ export function CaptureScreen() {
       offeredFinishes,
       toggleFinish,
       switchTrigger,
+      pickSection,
+      sectionsDetail,
     ],
   )
 
@@ -2124,6 +2299,16 @@ export function CaptureScreen() {
         return
       }
 
+      /* THE SECTION PICK'S OWN STEP KEYS (docs/specs/subbox-capture.md §5) — brackets, never
+       * letters, so they cannot collide with a field letter or an option keycap. `[` toward
+       * the back (a lower section number), `]` toward the front. A box with fewer than two
+       * sections has nothing to step between and `stepSection` no-ops. */
+      if (event.key === SECTION_BACK_KEY || event.key === SECTION_FRONT_KEY) {
+        event.preventDefault()
+        stepSection(event.key === SECTION_BACK_KEY ? 'back' : 'front')
+        return
+      }
+
       const key = event.key.toLowerCase()
       const field = FIELD_KEYS[key]
       if (field !== undefined) {
@@ -2150,7 +2335,7 @@ export function CaptureScreen() {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [openField, gameEntry, toggleField, fieldPick, triggerMode, switchTrigger])
+  }, [openField, gameEntry, toggleField, fieldPick, triggerMode, switchTrigger, stepSection])
 
   /* What the video track actually negotiated — CameraPicker carried this readout and the
    * camera field inherits it whole, because it is the one number that makes the screen
@@ -2440,6 +2625,10 @@ export function CaptureScreen() {
           // here would be the quiet one.
           product: product ?? undefined,
           captureId,
+          // THE PICKED SECTION, BY ITS DIVIDER KEY (subbox-capture.md 1.2) — `null` (the
+          // default, the last section) omits the field, so a browser that never picks stays
+          // byte-identical to a capture before this feature existed (I1).
+          section: selectedDiv ?? undefined,
         })
         // Answered, so the next photograph gets its own id. Cleared on a replay too: the
         // ambiguity that id existed to resolve is now resolved. Through `rememberCaptureId`,
@@ -2468,6 +2657,13 @@ export function CaptureScreen() {
         // A POOLED OR UNLABELED PLACE CARRIES `box_total: 0` (the server's own degraded
         // block): that is "no count", not "an empty box", so it never overwrites the row.
         if (card.place.located !== false && card.place.label !== null) patchOnHand(card.box, card.place.box_total)
+        // THE SECTION THE CARD ACTUALLY LANDED IN, READ AFTER THE WRITE
+        // (subbox-capture.md 1.2) — correct after a re-space too, and null only for a pooled
+        // card. `patchSectionCount` moves the Section row's own "next card N" the same way
+        // `patchOnHand` moves the Box row's, off the same response rather than a re-fetch.
+        if (card.section_div !== undefined && card.section_div !== null) {
+          patchSectionCount(card.box, card.section_div, 1)
+        }
         setRevision((prev) => prev + 1)
         setFlash((prev) => prev + 1)
         setUndoNote(null)
@@ -2475,6 +2671,16 @@ export function CaptureScreen() {
         // the SAME box as the pending divider, so its own undo takes over.
         setPendingDivider((prev) => (prev !== null && prev.box === card.box ? null : prev))
       } catch (err) {
+        // 409 `section_gone` (subbox-capture.md 1.2): the picked section is not there any
+        // more — a divider taken back out from another device, most likely. Nothing was
+        // written (the wire contract's own promise), so the id stays in the ref for a real
+        // retry, and the pick falls back to the last section so the NEXT press lands rather
+        // than refusing again on the same stale key.
+        if (err instanceof ServerError && err.code === 'section_gone') {
+          if (box !== null) forgetSectionPick(sectionPickKey(box, boxBid))
+          setSelectedDiv(null)
+          setSectionPickNote('That section is gone. Back to the last section.')
+        }
         // The id stays in the ref. This is the case it exists for: the request may have
         // committed, and only resending the same id can tell the difference without costing
         // a position.
@@ -2504,14 +2710,18 @@ export function CaptureScreen() {
     // render. The seam re-arms on a keypress the operator made and not on a paint.
   }, [
     box,
+    boxBid,
     camera,
     finish,
     gameEntry,
     halt,
     patchOnHand,
+    patchSectionCount,
     product,
     rarityClaim,
     rememberCaptureId,
+    sectionPickKey,
+    selectedDiv,
     setHint,
   ])
 
@@ -2603,19 +2813,20 @@ export function CaptureScreen() {
     [patchOnHand, undoStack],
   )
 
-  /** UN-15: takes the divider back out through `closeSection`, which removes only the empty
-   *  last divider, by its own key in the store. Not `updateBox({ sections })`: that route
-   *  reads card counts, and the box record's `sections` are order keys, so re-sending them
-   *  moved every other divider whose key was not its count. Shares `busyRef`/`busy` and
-   *  `undoNote` with the capture undo above — one strip, reporting on itself either way. */
+  /** UN-15: takes the divider back out through `closeSection`, by its own key — the keyed
+   *  route `ux/divider-fix` built, which reaches a middle divider and not only the box's
+   *  last one. Not `updateBox({ sections })`: that route reads card counts, and the box
+   *  record's `sections` are order keys, so re-sending them moved every other divider whose
+   *  key was not its count. Shares `busyRef`/`busy` and `undoNote` with the capture undo
+   *  above — one strip, reporting on itself either way. */
   const undoDivider = useCallback(
-    async (target: { box: number }) => {
+    async (target: { box: number; div: string | null }) => {
       if (busyRef.current) return
       busyRef.current = true
       setBusy(true)
       setUndoNote(null)
       try {
-        const record = await closeSection(target.box)
+        const record = await closeSection(target.box, target.div ?? undefined)
         setBoxRecords((prev) => {
           const rest = prev.filter((entry) => entry.box !== record.box)
           return [...rest, record].sort((left, right) => left.box - right.box)
@@ -2727,31 +2938,74 @@ export function CaptureScreen() {
   )
 
 
+  /** THE STRIP'S OWN LABELS, RE-READ off the sitting a mid-box S just renumbered (D58's
+   *  labels are rendered at read time, so a later section's stored string goes stale the
+   *  moment the divider ahead of it moves — subbox-capture.md §6, "Queue labels"). Patches
+   *  `label`/`section`/`card`/`section_div` by key and leaves everything else a shot carries
+   *  (its claims, its thumbnail) untouched — never a wholesale replace, which would drop a
+   *  card this browser captured moments ago and the server has not answered about yet. */
+  const refreshShotLabels = useCallback(async () => {
+    try {
+      const fresh = await getCaptureSitting()
+      const byKey = new Map(fresh.cards.map((entry) => [entry.key, entry] as const))
+      setShots((prev) =>
+        prev.map((shot) => {
+          const updated = byKey.get(shot.card.key)
+          if (updated === undefined) return shot
+          return {
+            ...shot,
+            card: {
+              ...shot.card,
+              label: updated.label,
+              section: updated.section,
+              card: updated.card,
+              section_div: updated.section_div,
+            },
+          }
+        }),
+      )
+    } catch {
+      // The strip keeps its own labels — stale until the next thing that reads `GET /boxes`,
+      // no worse than every S before this feature existed.
+    }
+  }, [])
+
   const sectionBusyRef = useRef(false)
   const doSection = useCallback(async () => {
     if (box === null || sectionBusyRef.current) return
     sectionBusyRef.current = true
     setSectionBusy(true)
     setSectionNote(null)
+    // READ BEFORE THE AWAIT: the section the pick names and the box's own last section, as
+    // this render already has them — a `boxRecords` update from the response below must
+    // never move which section this S was ASKED to go after.
+    const priorPicked = pickedSection
+    const priorLast = lastSection
     try {
-      const record = await openSection(box)
+      const record = await openSection(box, selectedDiv ?? undefined)
       setBoxRecords((prev) => {
         const rest = prev.filter((entry) => entry.box !== record.box)
         return [...rest, record].sort((left, right) => left.box - right.box)
       })
       /* UX-024: `sections_detail` itself can be MISSING from the answer, not only empty —
        * measured against the demo server, whose `openSection` reply carries no such field at
-       * all. `spans[spans.length - 1]` on `undefined` is `Cannot read properties of
-       * undefined (reading 'length')`, a raw exception on screen instead of the receipt this
-       * whole function exists to produce. `?? []` first, so a box the server could not
-       * render a layout for falls through to the same "no detail" receipt as an EMPTY array
-       * already did, rather than crashing before it gets there. */
+       * all. `?? []` first, so a box the server could not render a layout for falls through
+       * to the same "no detail" receipt as an EMPTY array already did, rather than crashing
+       * before it gets there. */
       const spans = record.sections_detail ?? []
-      /* `?? null` because `noUncheckedIndexedAccess` is on and is right to be: a record
-       * that came back with no spans at all is a box the server could not render a layout
-       * for, and the receipt then says the act's name with no detail rather than
-       * `Section undefined`. */
-      const opened = spans[spans.length - 1] ?? null
+      /* THE NEW SECTION IS THE ONE DIRECTLY AFTER THE PICK, never the array's last entry any
+       * more (subbox-capture.md 1.3) — that was only ever true because every S used to go at
+       * the back. `?? null` because `noUncheckedIndexedAccess` is on and is right to be. */
+      const opened =
+        priorPicked === null
+          ? (spans[spans.length - 1] ?? null)
+          : (spans.find((span) => span.section === priorPicked.section + 1) ?? null)
+      // THE OWNER'S HAND WAS ON A MIDDLE SECTION, NOT THE BACK OF THE BOX (Q1) — every
+      // section after it moved up one ordinal, and no card number in any of them changed.
+      const renumbered =
+        priorPicked !== null && priorLast !== null && priorPicked.section < priorLast.section
+          ? { from: priorPicked.section + 1, to: priorLast.section }
+          : null
       setSectionNote({
         done: true,
         // The act's own name, kept through the flow (docs/DESIGN.md's copy rule), with what
@@ -2759,17 +3013,26 @@ export function CaptureScreen() {
         // section STARTS, and the next card is the first one in it.
         text: 'New section',
         place: opened === null ? null : { section: opened.section, fromCard: opened.start },
+        renumbered,
         code: null,
       })
-      // UN-15: which box `U` takes this divider back out of, and when it went in.
-      setPendingDivider({ box, at: Date.now() })
+      // THE SCREEN PICKS THE NEW SECTION, exactly as it always has — only now that is not
+      // always the last one.
+      if (opened !== null) pickSection(opened.div ?? null)
+      // UN-15: which divider `U` takes back out, and when it went in — its OWN key, never
+      // the box's last one: an S in the middle puts its divider somewhere past the front,
+      // and the keyed route (`ux/divider-fix`) is what `undoDivider` needs to reach it.
+      if (opened !== null) setPendingDivider({ box, div: opened.div ?? null, at: Date.now() })
+      // A mid-box S renumbers every later section, and a shot's label was rendered against
+      // the layout before it (D58) — reload the sitting and patch the strip by key.
+      if (renumbered !== null) void refreshShotLabels()
     } catch (err) {
-      setSectionNote({ done: false, place: null, ...describe(err) })
+      setSectionNote({ done: false, place: null, renumbered: null, ...describe(err) })
     } finally {
       sectionBusyRef.current = false
       setSectionBusy(false)
     }
-  }, [box])
+  }, [box, lastSection, pickSection, pickedSection, refreshShotLabels, selectedDiv])
 
   /* The seam, with both implementations behind it now. The key trigger is Gate B's; the
    * motion trigger is Gate C's, and the screen still does not know which one is armed —
@@ -3853,6 +4116,97 @@ export function CaptureScreen() {
           )}
           </div>
 
+          {/* THE SECTION ROW — a picked section fills like a sub-box
+              (docs/specs/subbox-capture.md). ALWAYS DRAWN (D118), the same reason the Box row
+              above it is: a pick, an S or the list opening must never move the shutter below
+              it. `capture-section-slot` mirrors `capture-box-slot`'s own trick — the closed
+              Row stays in flow and sizes the slot, the open field overlays it. */}
+          <div className="capture-section-slot">
+          <Row
+            k={SECTION_STEP_LABEL}
+            label="Section"
+            icon="divider"
+            className={openField === 'section' ? 'capture-row-covered' : undefined}
+            right={
+              box === null ? (
+                <span className="capture-section-val is-empty">
+                  <strong>Pick a box first</strong>
+                </span>
+              ) : pickedSection === null ? (
+                <span className="capture-section-val is-default">
+                  <strong>Section 1</strong>
+                </span>
+              ) : (
+                <span className="capture-section-val">
+                  <strong>
+                    <span className="capture-list-part">
+                      {`Section ${pickedSection.section} of ${sectionsDetail.length}`}
+                    </span>
+                    {pickedSection.name === null ? null : (
+                      <span className="capture-list-part">{pickedSection.name}</span>
+                    )}
+                  </strong>
+                  <span>
+                    <span className="capture-list-part">{`next card ${nextCardInSection ?? '?'}`}</span>
+                    {behindSection === null ? null : (
+                      // WHERE THE CARD PHYSICALLY GOES, when the pick is not the last
+                      // section — the physical model's own sentence (subbox-capture.md §2).
+                      <span className="capture-list-part">{`behind the section ${behindSection} divider`}</span>
+                    )}
+                  </span>
+                </span>
+              )
+            }
+            onToggle={() => {
+              if (box !== null) toggleField('section')
+            }}
+          />
+          {openField !== 'section' ? null : (
+            <OpenField k={SECTION_STEP_LABEL} label="Section" icon="divider" meta="Pick one" pin onClose={closeField}>
+              <div className="capture-opts">
+                {sectionsDetail.map((span, position) => {
+                  const isLast = span.section === sectionsDetail.length
+                  const isFirst = span.section === 1
+                  return (
+                    <Opt
+                      key={span.section}
+                      k={OPTION_KEYS[position]}
+                      on={pickedSection !== null && pickedSection.section === span.section}
+                      name={`Section ${span.section} of ${sectionsDetail.length}`}
+                      sfx={span.name === null ? null : ` ${span.name}`}
+                      // MARK BACK AND FRONT PER D260: section 1 is the far back of the box,
+                      // the last section is the near front — the physical ends a hand
+                      // reaches for. A middle section's own count stands in their place.
+                      trail={
+                        isFirst && isLast
+                          ? undefined
+                          : isFirst
+                            ? 'back'
+                            : isLast
+                              ? 'front'
+                              : `${span.count} ${span.count === 1 ? 'card' : 'cards'}`
+                      }
+                      trailWord={isFirst || isLast}
+                      onPick={() => {
+                        pickSection(isLast ? null : (span.div ?? null))
+                        closeField()
+                      }}
+                    />
+                  )
+                })}
+                {sectionsDetail.length === 0 ? (
+                  <p className="capture-quiet">This box has no sections yet.</p>
+                ) : null}
+              </div>
+            </OpenField>
+          )}
+          {sectionPickNote === null ? null : (
+            <p className="capture-refused">
+              <Icon name="alert" size={13} /> {sectionPickNote}
+            </p>
+          )}
+          </div>
+
           <div className="capture-controls">
             <Button
               variant="primary"
@@ -3937,6 +4291,24 @@ export function CaptureScreen() {
                 )}
                 {sectionNote.code === null ? null : (
                   <span className="capture-halt-code"> {sectionNote.code}</span>
+                )}
+              </p>
+            )}
+            {/* THE OWNER'S HAND WAS ON A MIDDLE SECTION (Q1) — every later section moved up
+                one ordinal, and no card number in any of them changed. Told once, here, since
+                every stored label those sections' own shots carry is stale the instant this
+                answer lands (`refreshShotLabels` is what fixes the strip itself). */}
+            {sectionNote === null || sectionNote.renumbered === null ? null : (
+              <p className="capture-quiet">
+                {sectionNote.renumbered.from === sectionNote.renumbered.to ? (
+                  <>
+                    Section {sectionNote.renumbered.from} is now {sectionNote.renumbered.from + 1}.
+                  </>
+                ) : (
+                  <>
+                    Sections {sectionNote.renumbered.from} to {sectionNote.renumbered.to} are now{' '}
+                    {sectionNote.renumbered.from + 1} to {sectionNote.renumbered.to + 1}.
+                  </>
                 )}
               </p>
             )}

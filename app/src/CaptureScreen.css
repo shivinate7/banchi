@@ -276,6 +276,16 @@
 }
 .capture-box-val span { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .capture-box-val.is-empty strong { color: var(--bn-accent); }
+/* THE SECTION ROW'S OWN TWO-LINE STACK — a separate class from `.capture-box-val`, never a
+   shared one, because `capture-claims.spec.ts`'s clear-the-setup case reads
+   `.capture-box-val` with no scope beyond the class and would hit both rows' empty state at
+   once (subbox-capture.md §5). Same shape, at the regular row's own scale rather than the
+   Box row's large one — this is not the screen's headline field. */
+.capture-section-val { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; align-items: flex-end; text-align: right; }
+.capture-section-val strong { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.capture-section-val span { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.capture-section-val.is-empty strong,
+.capture-section-val.is-default strong { color: var(--bn-ink-3); font-weight: 400; }
 .capture-row-lg:has(.is-empty) { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1.5px var(--bn-accent); }
 .capture-row-lg:has(.is-empty) .capture-row-icon { color: var(--bn-accent); }
 /* UX-137: declared AFTER `:has(.is-empty)` so an empty box still gets a visible hover
@@ -299,6 +309,10 @@
    `.capture-row-covered`), so the slot is exactly as tall as the row's own content needs,
    whether that is one line (empty) or two (a box picked). */
 .capture-box-slot { position: relative; min-height: 54px; }
+/* THE SECTION ROW'S OWN SLOT (D118), the same trick one row down: the closed Row stays in
+   flow and sizes it, and its own open field overlays it without moving the shutter or the
+   blocker list below (docs/specs/subbox-capture.md §5). */
+.capture-section-slot { position: relative; min-height: 40px; }
 /* The closed row while the field is open: still in flow (it is what sizes the slot), but
    invisible and out of the tab order — the pinned overlay above it is what the operator
    sees and reaches. `visibility`, not `display: none`, is the whole trick: a hidden element

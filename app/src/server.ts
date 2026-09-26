@@ -919,6 +919,12 @@ export async function capture(input: {
    * the game named by `GameRegistry.product_game` uses it; sending it for another game is
    * refused by the server as `product_invalid` rather than ignored. */
   product?: string
+  /** THE SECTION TO FILE INTO, by its divider key (`docs/specs/subbox-capture.md` 1.2) — the
+   *  Capture screen's own picked section (UX-190, sub-box capture). Omitted, exactly like the
+   *  three claims above, is a real and different request: the store fills at the back of the
+   *  box, as every capture did before this field existed. Never an index — the store still
+   *  picks the position; this only says which section it picks it in. */
+  section?: string
 }): Promise<CardSummary> {
   const payload: Record<string, string | number | readonly string[]> = {
     box: input.box,
@@ -926,6 +932,7 @@ export async function capture(input: {
     capture_id: input.captureId,
     game: input.game,
   }
+  if (input.section !== undefined) payload.section = input.section
 
   /* Omitted rather than sent empty, matching `sidecar_payload`'s rule on the other side:
    * the file stays a record of claims the operator actually made (D3 rung 1). The server
@@ -1769,23 +1776,37 @@ export async function updateBox(
  * section that was opened off the LAST entry of that array rather than off `sections.length`
  * — same reason `BoxOps.tsx` gives at `renderedSections`: the server renders spans and the
  * app does not do section arithmetic.
+ *
+ * `after` IS THE PICKED SECTION'S OWN DIVIDER KEY, and omitted is a real and different
+ * request (`docs/specs/subbox-capture.md` 1.3): the new divider goes at the back, as every S
+ * did before a middle pick existed. With `after` naming a section that is not the last, the
+ * new divider goes directly behind that section's last card — the owner's Q1 ruling — and is
+ * the section directly after `after` in the answer's own `sections_detail`, never the last
+ * entry any more.
  */
-export async function openSection(box: number): Promise<BoxRecord> {
+export async function openSection(box: number, after?: string): Promise<BoxRecord> {
+  const payload: Record<string, string> = {}
+  if (after !== undefined) payload.after = after
   return (await request(`/boxes/${box}/sections`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     /* `{}` and not an empty body: every write in the capture server reads its body the same
      * way and refuses an absent one as `body_required`, which `markSold` documents as the
      * convention rather than an oversight. Two characters. */
-    body: JSON.stringify({}),
+    body: JSON.stringify(payload),
   })) as BoxRecord
 }
 
-/** `DELETE /boxes/<box>/sections`: take out the box's empty last divider, the capture
- * screen's `U` after `S` (UN-15). The store removes that one divider by its own key and moves
- * no other. It refuses when a card stands behind the divider. */
-export async function closeSection(box: number): Promise<BoxRecord> {
-  return (await request(`/boxes/${box}/sections`, { method: 'DELETE' })) as BoxRecord
+/** `DELETE /boxes/<box>/sections`: take out one empty divider by its own key, the capture
+ * screen's `U` after `S` (UN-15). The store removes that one divider and moves no other. It
+ * refuses when a card stands behind the divider, and refuses the first divider.
+ *
+ * `div` NAMES THE DIVIDER — omitted, it works as before and removes the empty last one
+ * (`ux/divider-fix`'s own keyed form of this route). Sent, it removes that one and no other,
+ * which is what an `S` in the middle needs its own undo to reach (subbox-capture.md 1.4). */
+export async function closeSection(box: number, div?: string): Promise<BoxRecord> {
+  const query = div === undefined ? '' : `?div=${encodeURIComponent(div)}`
+  return (await request(`/boxes/${box}/sections${query}`, { method: 'DELETE' })) as BoxRecord
 }
 
 // --------------------------------------------------------------------------- capture ids

@@ -531,7 +531,7 @@ both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
 157<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
-280<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
+281<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before
@@ -751,17 +751,20 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   D261).
 - **Real CSV libraries only** — PapaParse (JS), `csv` (Python). Never `split(",")`.
 - **Not a Claude artifact.** No `window.storage`, no `facingMode: "environment"`, nothing
-  about a card in `localStorage`. **Ten keys are stored on the device**, each a fact about
+  about a card in `localStorage`. **Eleven keys are stored on the device**, each a fact about
   THIS MACHINE and not a card. `banchi.capture.deviceId` and `banchi.capture.rotation` live
   in `app/src/useCamera.ts`. `banchi.theme`, `banchi.rail`, `banchi.orders.fetch-filter`,
   `banchi.inventory.hide-sold`, `banchi.box-recency`, `banchi.capture.setup`,
-  and `banchi.runs.spend-notice` live in `app/src/deviceMemory.ts`.
+  `banchi.capture.sections` and `banchi.runs.spend-notice` live in `app/src/deviceMemory.ts`.
   `banchi.orders.last-check` lives in `app/src/Orders.tsx`. `banchi.runs.spend-notice` is a
   NOTICE and never a cap. Owner's ruling, 2026-09-12: *"if I want to run everything, then I
   get to run everything."* `banchi.capture.setup` bundles six values as one document (D142),
-  including `bid` (D153), the box's true index, drawn on no screen. Every browser-storage key
-  is `banchi.*` since 2026-09-06 (D27, amended), with no migration. The ten `pkmnscan.*` keys
-  it replaced are abandoned in place. `app/eslint.config.js`'s `no-restricted-syntax` bans
+  including `bid` (D153), the box's true index, drawn on no screen. `banchi.capture.sections`
+  is sub-box capture's own map (docs/specs/subbox-capture.md §5). It holds which section each
+  box was last capturing into, keyed by `bid`. It is kept only until the sitting ends (D164) —
+  the owner's Q2 ruling, replacing a per-device-forever default. Every browser-storage key is
+  `banchi.*` since 2026-09-06 (D27, amended), with no migration. The ten `pkmnscan.*` keys it
+  replaced are abandoned in place. `app/eslint.config.js`'s `no-restricted-syntax` bans
   `localStorage` outside `useCamera.ts` and `deviceMemory.ts`, plus a few named, argued
   exemptions. The lint rule matches the STORE, not the key. `make docs-audit`'s
   `storage keys` row reconciles the roster.

@@ -6515,9 +6515,9 @@ COMPONENTS = [
                                             "`#/pricing` worklist sections this browser has "
                                             "asked Compare on for (D208) "
                                             "— and nothing else",
-                                    "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114", "D132",
-                                                    "D142", "D145",
-                                                    "D153", "D193", "D208"],
+                                    "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114",
+                                                    "D132", "D142", "D145", "D153", "D164", "D193",
+                                                    "D208"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "
@@ -6708,7 +6708,7 @@ COMPONENTS = [
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D36", "D41", "D52", "D56", "D58", "D65", "D67", "D81", "D92",
                             "D117", "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145",
-                            "D153", "D164", "D170", "D172", "D196", "D218", "D286",
+                            "D153", "D164", "D170", "D172", "D196", "D218", "D260", "D286",
                             "D-sealed-boxes-removed"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
@@ -8576,6 +8576,20 @@ COMPONENTS = [
                         "(N+1)th is legal only because the Nth succeeded, and a Promise.all "
                         "would type-check, pass, and delete one card of three. Observed "
                         "failing against exactly that mutation before it was kept.",
+            },
+            "tests/capture-section.spec.ts": {
+                "does": "sub-box capture's Section row (docs/specs/subbox-capture.md): the row "
+                        "names the pick, its count and where it physically goes; `[`/`]` step "
+                        "it; S sent with `after` in the middle renumbers later sections and "
+                        "picks the new one; a stale pick falls back to the last section with "
+                        "one sentence, proved with a real fake clock past `GAP_MINUTES`; and a "
+                        "pick or an S never moves the shutter (D118, a rect diff). Run by "
+                        "`make design-check`.",
+                "governed_by": ["D13", "D58", "D117", "D118", "D145", "D153", "D164", "D218",
+                                "D260"],
+                "note": "The camera is a canvas behind a stubbed getUserMedia, exactly as "
+                        "capture-undo.spec.ts's is — this file captures too, so nothing here "
+                        "reaches a real device or a real store.",
             },
             "tests/routes.ts": {
                 "does": "one helper, `routesFromNav`, which harvests the owner's route roster "

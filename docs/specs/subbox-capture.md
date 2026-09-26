@@ -1,7 +1,7 @@
 # Sub-box capture: a picked section fills like a sub-box
 
-**Status: SPECIFIED. Lane A (store, server, harness, records) is BUILT on
-`ux/subbox-store`. Lane B (the Capture screen) and Lane C (the Move-to-box section choice) are
+**Status: Lane A (store, server, harness, records) is BUILT on `ux/subbox-store`. Lane B (the
+Capture screen) is BUILT on `ux/subbox-capture`. Lane C (the Move-to-box section choice) is
 NOT BUILT.** Written 2026-09-26 from the plan the owner ruled on the same day. The decision
 entry has the slug `sections-are-sub-boxes`.
 
@@ -193,13 +193,66 @@ One mutation stayed green, and it is not a defect. Resolving the section after t
 registered leaves I6 true. The write that raises `SectionGone` discards the new box entry
 with everything else.
 
-## 5. The screen (Lane B, not built here)
+## 5. The screen (Lane B, BUILT on `ux/subbox-capture`)
 
-`app/src/CaptureScreen.tsx` gets a Section row under the Box row. It names the picked section,
-its count and its name. `[` and `]` pick the section toward the back or the front. The default
-is the last section. The pick lasts until the sitting ends (the owner's Q2 ruling). S sends
-`after`, and the screen then picks the new section. U after S sends the divider's key. The
-server keeps no pick. Each request carries its own aim.
+`app/src/CaptureScreen.tsx` carries a Section row under the Box row, in its own slot
+(`.capture-section-slot`). It follows the Box row's own trick: the closed Row stays in flow
+and sizes the slot. Its open field overlays that slot, pinned like the Box field's own. So a
+pick or an S never moves the shutter or the blocker list (D118).
+
+The row names the picked section, its ordinal, and its own name if it has one. It also names
+the next card number within it. That number is `SectionDetail.start + count`.
+`patchSectionCount` moves it per capture, the way `patchOnHand` already moves the Box row's
+own count. When the pick is not the last section, the row also says where the card physically
+goes. It reads "behind the section N divider" (the physical model in §2). Tap or Enter opens a list of
+every section. Each row shows its own count. Per D260, the list marks "back" for section 1 and
+"front" for the last one.
+
+**`[` and `]`** step the pick toward the back or the front (`stepSection`). Both are added to
+`CAPTURE_KEYS` in `App.tsx`. Neither is a letter. So neither reaches `RESERVED_KEYS` or
+`OPTION_KEYS`, and no option keycap moves. `capture-claims.spec.ts`'s pinned first thirteen
+keys stay untouched.
+
+**The default is the last section.** It is the one value (`selectedDiv === null`) that sends
+no `section` field at all. A browser that never picks stays byte-identical to a capture before
+this feature existed (I1).
+
+**What is remembered, and for how long (Q2, "until the sitting ends").** The pick is kept per
+box. It is keyed by `bid` where the store gave one, or by the box number otherwise
+(D145/D153). A reused box number cannot inherit a stale pick this way. The key lives in
+`app/src/deviceMemory.ts`'s `banchi.capture.sections`, a map from that key to `{div, at}`. On a
+box's first read after `GET /boxes` answers, the screen checks `at` against `GAP_MINUTES`
+(`storeHistory.ts`'s own 30-minute sitting gap, D164). It checks the div too, against the
+box's current `sections_detail`. Fresh and known: the pick restores. Stale, or naming a
+divider the box no longer has: the entry is forgotten. The pick falls back to the last
+section, and one plain sentence says so. **The server keeps no pick at all.** Every request
+carries its own aim, so two devices (D13) cannot disagree.
+
+**S sends `after: selectedDiv`**, omitted for the default. `sections_detail`'s own rule reads
+the new section off the response, as the one directly after the picked ordinal. It is never
+the array's last entry — that was only ever true because every S went at the back until now.
+The screen then picks the new section. When the pick was not already the last section, the
+note also names which later sections renumbered. It reads "Sections 3 to 5 are now 4 to 6." The strip
+re-reads `GET /capture/sitting` and patches each shot's own `label`/`section`/`card` by key
+(`refreshShotLabels`). A mid-box S renumbers every later section. A stored label is rendered
+at read time (D58), so it goes stale the instant the divider ahead of it moves.
+
+**U after S** carries the divider's own key now, `pendingDivider.div`, sent through
+`closeSection(box, div)`. That is `ux/divider-fix`'s keyed route. It is needed the moment S
+can put a divider anywhere but the back. `div` is `null` only when a response carried no
+`sections_detail[].div` at all — an older server, or a fixture that predates the field. The
+undo then falls back to the box-only form, which removes the last divider as it always has.
+
+**A 409 `section_gone` on a capture** falls back the same way a stale restore does. The
+picked section vanished from under the pick — almost certainly another device's U or S. The
+stored entry is forgotten, the pick returns to the last section, and one sentence says so. The
+capture itself still halts, because nothing was written. The operator's next press is the one
+that lands.
+
+**`demoServer.ts`** refuses `after` on `POST /boxes/<box>/sections`, with the demo's own
+refusal sentence. The frozen store carries no order keys to re-space, and its fixtures predate
+`sections_detail[].div`. A real middle pick is not modelled there. `/capture` was already
+refused unconditionally, which covers `section` for the same reason.
 
 ## 6. Ripple effects
 
@@ -262,5 +315,5 @@ Measured 2026-09-26 on a `.backup` copy of the owner's store, never the live one
 | Lane | Owns | State |
 |---|---|---|
 | A | `store/master.py`, `server/capture_server.py`, `harness/tests/t7_box_map.py`, the decision entry and the amendments to D10, D265, capture-app.md 5.6 and undo.md 11.1 | BUILT |
-| B | `CaptureScreen.tsx`, `deviceMemory.ts`, `server.ts`, `types.ts`, `App.tsx` `CAPTURE_KEYS`, `demoServer.ts`, the capture specs | NOT BUILT |
+| B | `CaptureScreen.tsx`, `deviceMemory.ts`, `server.ts`, `types.ts`, `App.tsx` `CAPTURE_KEYS`, `demoServer.ts`, the capture specs | BUILT on `ux/subbox-capture` |
 | C | The Move-to-box section choice on `#/inventory` | NOT BUILT |
