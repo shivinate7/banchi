@@ -316,46 +316,50 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* VARIANT C — A's surface ladder + B's accent/status, plus a warmer ground.
-     Neutrals move from a cool H~218-220 to a warm H~30 (a low-saturation warm graphite
-     instead of blue-black), on top of A's deeper surface steps. */
-  --bn-bg: #0c0b0a;
-  --bn-surface: #26221f;
-  --bn-surface-2: #050504;
-  --bn-surface-3: #322d28;
-  --bn-surface-glass: rgba(38, 34, 31, 0.72);
+  --bn-bg: #0c0e12;
+  --bn-surface: #14171c;
+  --bn-surface-2: #090b0e;
+  --bn-surface-3: #1b1f26;
+  --bn-surface-glass: rgba(20, 23, 28, 0.72);
   --bn-hover: rgba(255, 255, 255, 0.04);
 
   --bn-ink: #eef0f4;
   --bn-ink-2: #b9bfc9;
   --bn-ink-3: #838b98;
-  --bn-ink-4: #707886;
+  --bn-ink-4: #707886;           /* not for text: 4.34:1 on the dark page, 3.71:1 on --bn-surface-3 */
 
   --bn-line: rgba(255, 255, 255, 0.08);
   --bn-line-strong: rgba(255, 255, 255, 0.16);
-  --bn-line-focus: rgba(97, 118, 255, 0.6);
+  --bn-line-focus: rgba(129, 146, 255, 0.6);
 
-  --bn-accent: #6176ff;
-  --bn-accent-hover: #8a99ff;
-  --bn-accent-press: #2945ff;
-  --bn-accent-tint: rgba(97, 118, 255, 0.14);
-  --bn-accent-tint-2: rgba(97, 118, 255, 0.24);
+  --bn-accent: #7f90ff;
+  --bn-accent-hover: #93a2ff;
+  --bn-accent-press: #6b7dfa;
+  --bn-accent-tint: rgba(127, 144, 255, 0.14);
+  --bn-accent-tint-2: rgba(127, 144, 255, 0.24);
   --bn-on-accent: #0c0e12;
 
-  --bn-live: #ff351f;
-  --bn-live-tint: rgba(255, 53, 31, 0.16);
+  --bn-live: #ff6a58;
+  --bn-live-tint: rgba(255, 106, 88, 0.16);
 
-  --bn-ok: #11d067;
-  --bn-ok-tint: rgba(17, 208, 103, 0.14);
-  --bn-warn: #db8906;
-  --bn-warn-tint: rgba(219, 137, 6, 0.14);
-  --bn-danger: #ff1f1f;
-  --bn-danger-tint: rgba(255, 31, 31, 0.14);
+  --bn-ok: #3ddc84;
+  --bn-ok-tint: rgba(61, 220, 132, 0.14);
+  --bn-warn: #f5a524;
+  --bn-warn-tint: rgba(245, 165, 36, 0.14);
+  --bn-danger: #ff5c5c;
+  --bn-danger-tint: rgba(255, 92, 92, 0.14);
   --bn-money: #eef0f4;
 
-  --bn-pill-ink-accent: var(--bn-accent-hover);
+  --bn-pill-ink-accent: var(--bn-accent-hover);  /* a pill on an accent-tinted row is two tints deep */
   --bn-pill-ink-ok: var(--bn-ok);
   --bn-pill-ink-warn: var(--bn-warn);
+  /* live is a light orange-vermilion and danger a deeper crimson-rose: apart in hue and in
+     lightness, each over 4.5:1 on its tint on every dark ground, INCLUDING a selected
+     (accent-tinted) row (kit-frame-2, 2026-09-24): a danger pill drawn on a selected row is a
+     second tint over a first one, and the review found it at 4.08:1 there against this token's
+     former #f7608a — lighter than the plain-row floor needed, so nobody had reason to raise it
+     until a row could tint under it. gallery.spec.ts now composites the row's own tint into the
+     ground it checks every pill against. */
   --bn-pill-ink-danger: #f6799c;
   --bn-pill-ink-live: #ffab70;
 
@@ -364,12 +368,15 @@
     0 0 0 1px rgba(255, 255, 255, 0.07);
   --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(0, 0, 0, 0.75),
     0 0 0 1px rgba(255, 255, 255, 0.08);
-  --bn-shadow-accent: 0 8px 28px -8px rgba(97, 118, 255, 0.55);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(127, 144, 255, 0.55);
 
   --bn-btn-bg: var(--bn-surface-3);
-  --bn-btn-bg-hover: #443c34;
+  --bn-btn-bg-hover: #262b34;
   --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
 }
+
+/* A thumb needs 40px. Every kit control reads these, so the floor is raised once — and it
+   follows the POINTER, not the width: an iPad in portrait is 820px wide and all thumb. */
 /* The gap above a page's title follows the page's own side inset: 16px on a phone. */
 @media (max-width: 767px) {
   :root { --bn-page-top: var(--bn-4); }
