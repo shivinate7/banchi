@@ -1276,7 +1276,28 @@ test('Space is the same toggle, and does nothing while typing', async ({ page })
 })
 
 test('pressing the pause button moves nothing else on the screen (D118)', async ({ page }) => {
+  /* THE FLAKE'S REAL CAUSE, measured: the fixture's camera is one frame that never changes,
+   * so armed motion reads it as a settled empty stand — motion.ts's own settle math runs
+   * off `performance.now()`, on the video's real decode clock, not this test's. Given enough
+   * REAL elapsed time, `noCardRun` crosses 3 and `.capture-stage-warn` renders above the
+   * shutter — ON ITS OWN CLOCK, unrelated to this button — which shifts the shutter exactly
+   * as this assertion reads it. The warning is gated on `triggerMode !== 'manual'`, so the
+   * very act of pausing always hides it too, whether or not it had already appeared before
+   * the click — a second, confounding way the shutter can move that has nothing to do with
+   * the pause control's own layout. Freezing the clock only from the moment of the click
+   * still lost this race once in 240: `armMotion` itself spends real frame time, so the
+   * banner can already be up before there is any clock to freeze. D136's idiom (the fake
+   * clock is installed and only ever moved on purpose) goes on BEFORE arming instead, so
+   * `performance.now()` never advances at all and no settle can ever land — the only thing
+   * left that can move the shutter for the rest of this test is the click itself. */
   await open(page)
+  /* Frozen AFTER the page has mounted on real timers (freezing before navigation broke
+   * something else — a smaller, unrelated shift — and is not needed: nothing before this
+   * line reads the video). Frozen BEFORE `armMotion`, not just before the click: arming
+   * itself spends real frame time opening the Rig and the Trigger field, which is enough
+   * for the banner to already be up before there is any clock left to freeze. */
+  await page.clock.install()
+  await page.clock.pauseAt(Date.now())
   await armMotion(page)
   const before = await shutter(page).boundingBox()
   await pauseplay(page).click()

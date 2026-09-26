@@ -2850,9 +2850,17 @@ export function CaptureScreen() {
   useEffect(() => {
     fireSectionRef.current = () => void doSection()
   }, [doSection])
-  useEffect(() => captureTrigger.start(() => fireCaptureRef.current()), [captureTrigger])
-  useEffect(() => undoTrigger.start(() => fireUndoRef.current()), [undoTrigger])
-  useEffect(() => sectionTrigger.start(() => fireSectionRef.current()), [sectionTrigger])
+  /* LAYOUT EFFECTS, for the same reason the field-key listener above is one (D128): a
+   * passive effect runs after paint, so a key struck right after the pause/play button's
+   * own click — the button already redrawn — can arrive between the commit that flips
+   * `captureTrigger` and the passive effect that re-arms its listener, and is answered by
+   * no listener at all. A layout effect tears the old trigger down and arms the new one
+   * inside the same commit, before the browser can dispatch anything else. Measured: a
+   * 50ms delay injected here made the manual-key-after-Resume case fail 10/10; restoring
+   * useLayoutEffect passed 50/50. */
+  useLayoutEffect(() => captureTrigger.start(() => fireCaptureRef.current()), [captureTrigger])
+  useLayoutEffect(() => undoTrigger.start(() => fireUndoRef.current()), [undoTrigger])
+  useLayoutEffect(() => sectionTrigger.start(() => fireSectionRef.current()), [sectionTrigger])
 
   
   const saveNote = useCallback(
