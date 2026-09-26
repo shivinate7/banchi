@@ -89,3 +89,11 @@ A lane review caught two defects and asked for one more case.
    the grouping rungs, one row per blank card, and the natural sort. Two sort cases: the
    `089a` one, and a digit-width one, `9` before `10`. It also proves a captured, a sold,
    a retired and a moved card are all excluded. Each rung is mutation-proved.
+
+### The switch labels, 2026-09-25
+
+The owner's ruling, verbatim: "List / Map / Sets". The PR 3 integration merged this view's
+switch with the box map's (D264) into one kit `Segmented` control, `BoxShelf.tsx:ShelfSwitch`.
+The box walk is "List", the box map is "Map", and this view is "Sets". The first build's
+`.bn-tabs` switch, which called the walk "Shelf", is gone. The URL values stay `view=walk`,
+`view=shelf` and `view=sets`, so every deep link and spec keeps working with no alias.

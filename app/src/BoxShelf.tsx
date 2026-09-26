@@ -42,8 +42,10 @@ type Dest = number | 'new'
 type GapId = string
 
 /** One view of Inventory: the walk or the shelf. The switch lives in both headers. */
-/** `#/inventory`'s three views, one `view` URL key (D285): the walk, the Shelf (D264) and
- *  the owner's "by set" view (D-set-view). */
+/** `#/inventory`'s three views, one `view` URL key (D285): the walk, the box map (D264) and
+ *  the owner's "by set" view (D-set-view). THE LABELS ARE THE OWNER'S, 2026-09-25: "List /
+ *  Map / Sets". The URL values stay `walk`, `shelf` and `sets`: they are machine keys that
+ *  specs and deep links already carry, and a label is free to change without them. */
 export type InventoryView = 'walk' | 'shelf' | 'sets'
 
 export function ShelfSwitch({ view, onView }: { readonly view: InventoryView; readonly onView: (next: InventoryView) => void }) {
@@ -53,8 +55,8 @@ export function ShelfSwitch({ view, onView }: { readonly view: InventoryView; re
       label="View"
       size="sm"
       options={[
-        { value: 'walk', label: 'Walk' },
-        { value: 'shelf', label: 'Shelf' },
+        { value: 'walk', label: 'List' },
+        { value: 'shelf', label: 'Map' },
         { value: 'sets', label: 'Sets' },
       ]}
       onChange={onView}

@@ -199,9 +199,10 @@ test.describe('the set view', () => {
     await expect(page).toHaveURL(/#\/inventory\?box=2&card=cid-thievul/)
 
     // THE VIEW SWITCH FOLLOWED THE URL, because it reads the same `view` param. One switch
-    // serves the walk, the Shelf (D264) and Sets since the PR 3 integration.
+    // serves the walk, the box map (D264) and Sets since the PR 3 integration. Its labels are
+    // the owner's, 2026-09-25: "List / Map / Sets".
     const views = page.getByRole('group', { name: 'View' })
-    await expect(views.getByRole('button', { name: 'Walk' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(views.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true')
     await expect(views.getByRole('button', { name: 'Sets' })).toHaveAttribute('aria-pressed', 'false')
 
     // THE WALK LANDED ON THE NAMED CARD, never merely on the box — `BoxBrowse.tsx`'s own

@@ -698,8 +698,8 @@ function InventoryWalk({
       icon="box"
       /* SILENT WITH NO BOX: the empty state says "No boxes yet" once, not the lede too. */
       lede={boxRecords.length === 0 ? undefined : 'Sell, retire or move any card.'}
-      /* THE ONE VIEW SWITCH (D264, D-set-view): Walk, Shelf and Sets. In the header's
-         actions slot, beside the h1, so a switch moves nothing else on screen (D118). */
+      /* THE ONE VIEW SWITCH (D264, D-set-view): List, Map and Sets, the owner's labels. In
+         the header's actions slot, beside the h1, so a switch moves nothing else (D118). */
       actions={<ShelfSwitch view={view} onView={onView} />}
       className="inventory"
     >
