@@ -70,7 +70,7 @@ The response is the box row, as before. The new section is the one directly afte
 
 ### 1.4 `DELETE /boxes/<box>/sections?div=<div>` (U after S)
 
-`ux/divider-fix` owns this route and its refusal shapes (merged at `20392e87`). `div` is
+`ux/divider-fix` owns this route and its refusal shapes (merged at `edba48ee`). `div` is
 required. The route removes that one divider and moves no other. This lane widens it only as
 far as I9 needs.
 
@@ -80,6 +80,12 @@ far as I9 needs.
   works. A divider that an editor save put another one behind is not S's own any more, and it
   stays (the stale U).
 - The first divider, a key the box does not have, and every other case refuse.
+- **The undo writes the layout from before S.** S on a box with no declared dividers wrote
+  `[1, at]` from `[]`, so U writes `[]` back, not `[1]`.
+
+`store/master.py:layout_before_s` is the one reader of the `resectioned` line for both
+rules. The route passes it the box's newest line. It answers the layout from before S. It
+answers nothing when the line does not prove that S added `div`.
 
 A departed record in the section does not hold the divider in.
 
@@ -222,6 +228,7 @@ stays in the mix. The divider proof's own fuzz (seeds 0 to 5) replays as before.
 | U takes out the last divider, not the named one | I9, the fuzz |
 | U takes out a middle divider without reading the log | the stale U case |
 | The log never proves that S added the divider | I9, the fuzz |
+| An undeclared box keeps `[1]` after S and then U | the undeclared-box case |
 | The re-space is skipped | I7, the fuzz |
 | The move undo guard refuses every divider behind the transplant | I13 |
 | A SKU's copies sort by index | the copy-order case |

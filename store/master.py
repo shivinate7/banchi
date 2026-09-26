@@ -917,6 +917,32 @@ def check_sections(sections) -> Tuple[int, ...]:
     return out
 
 
+def layout_before_s(made: Optional[dict], layout, div) -> Optional[List]:
+    """The layout from before the S that added divider `div`, or None when `made` does not
+    prove that S wrote `layout`. THE ONE READER OF A `resectioned` LINE for the capture
+    screen's U (UN-15, and D-sections-are-sub-boxes' I9).
+
+    `made` is the box's newest `resectioned` event. It proves S added `div` when its
+    `sections_to` is `layout` and its `sections_from` is `layout` less `div`. S on an
+    undeclared box writes `[1, at]` from `[]`, so `[]` also counts where `layout` less `div`
+    is `[1]`, and the undo writes `[]` back. An event this cannot read proves nothing."""
+    if not isinstance(made, dict):
+        return None
+    try:
+        to = [float(v) for v in made.get("sections_to") or []]
+        was = [float(v) for v in made.get("sections_from") or []]
+    except (TypeError, ValueError):
+        return None
+    now = [float(v) for v in layout]
+    less = list(now)
+    if float(div) not in less or to != now:
+        return None
+    less.remove(float(div))
+    if was == less or (not was and less == [1.0]):
+        return [as_order(v) for v in was]
+    return None
+
+
 def divider_key(value) -> str:
     """The string a section name is keyed by: the divider's order key. An integer-valued key
     reads `31`, as every divider stored before the order key did, so no name is re-keyed."""
@@ -3634,7 +3660,7 @@ class Inventory:
             )
         return self.set_sections(entry.box, layout + [at])
 
-    def close_section(self, number, div, *, after_s: bool = False) -> Tuple[int, ...]:
+    def close_section(self, number, div, made: Optional[dict] = None) -> Tuple[int, ...]:
         """Take out the divider `div` (its order key) while it is the box's last divider and
         no card stands behind it. The capture screen's `U` after `S` (UN-15).
 
@@ -3649,19 +3675,28 @@ class Inventory:
         `DividerBuiltOn` when `div` is not the last divider, or when a card on hand stands
         behind it. A departed record there (moved out, sold or retired) is not in the box, so
         it does not hold the divider in.
+
+        THE LAYOUT GOES BACK TO WHAT IT WAS BEFORE S. `made` is the `resectioned` event that
+        wrote the current layout, when the caller has it. S on an undeclared box writes
+        `[1, at]` from `[]`, so without it U would leave `[1]`, and Manage box would read
+        "1 section" where it read "not declared". The event is used only when its
+        `sections_to` is the current layout and its `sections_from` is that layout less
+        `div`, or `[]` where that is `[1]`. Otherwise the layout less `div` is written.
         """
         entry = self.ensure_box(number)
         layout = list(entry.layout())
         title = self.box_title(entry.box)
-        # U AFTER A MID-BOX S (D-sections-are-sub-boxes, I9): S with `after` puts its divider
-        # in front of a later one, so S's own divider may not be the last. It goes when the
-        # caller read that the box's newest layout change is that S (`after_s`), it is a
-        # stored divider past the first, and no card on hand stands in its section. A divider
-        # that an editor save put a later one behind is not S's to undo, so it keeps
-        # `DividerBuiltOn`, below (the stale U).
+        # WHAT S WROTE, if `made` proves S added `div` (`layout_before_s`, the one reader of
+        # the `resectioned` line). None when it does not.
         want = as_order(div)
+        before = layout_before_s(made, layout, want)
+        # U AFTER A MID-BOX S (D-sections-are-sub-boxes, I9): S with `after` puts its divider
+        # in front of a later one, so S's own divider may not be the last. It goes when
+        # `made` proves that S added it, it is a stored divider past the first, and no card
+        # on hand stands in its section. A divider that an editor save put a later one
+        # behind is not S's to undo, so it keeps `DividerBuiltOn`, below (the stale U).
         middle = [n for n, d in enumerate(layout[1:-1], 1) if float(d) == float(want)]
-        if middle and after_s:
+        if middle and before is not None:
             n = middle[0]
             sections = self.layout_of(entry.box)
             held = len(sections) != len(layout) or any(
@@ -3672,7 +3707,7 @@ class Inventory:
                     f"A card is already behind the divider you added in {title}, so it stays. "
                     f"Edit the dividers instead."
                 )
-            return self.set_sections(entry.box, layout[:n] + layout[n + 1:])
+            return self.set_sections(entry.box, before)
         if len(layout) < 2 or float(layout[-1]) != float(want):
             raise DividerBuiltOn(
                 f"The divider you added is no longer the last one in {title}, so it stays. "
@@ -3684,7 +3719,7 @@ class Inventory:
                 f"A card is already behind the divider you added in {title}, so it stays. "
                 f"Edit the dividers instead."
             )
-        return self.set_sections(entry.box, layout[:-1])
+        return self.set_sections(entry.box, before if before is not None else layout[:-1])
 
     def box_fill(self, number) -> int:
         """The highest index this box holds. `next_index` minus one, and DISPLAY ONLY."""
