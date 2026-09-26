@@ -660,6 +660,16 @@ def check_card_move_refusals(checks: Checks) -> None:
         capture_server.do_create_box({"box": 3, "name": "Empty"})
         capture_server.do_move_range(1, {"indices": [2], "to_box": 3})
         checks.equal(_walk(3), ["o2"], "item 9: a card moves into an empty box")
+        # NO AUTO DEFAULT (D-sections-are-sub-boxes): a box that holds a card has more than
+        # one place, so a drag that names no gap into it is refused and moves nothing.
+        walks = (_walk(1), _walk(2))
+        refusal(
+            checks,
+            lambda: capture_server.do_move_range(1, {"indices": [3], "to_box": 2}),
+            "section_required",
+            "a drag that names no gap into a box that holds cards is refused",
+        )
+        checks.equal((_walk(1), _walk(2)), walks, "and no card moved")
 
 
 def check_divider_editor_keys(checks: Checks) -> None:

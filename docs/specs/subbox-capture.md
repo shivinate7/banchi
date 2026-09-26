@@ -113,14 +113,31 @@ above. No other caller starts to fail.
 | Move to box, ticked cards or a whole box (`BoxOps.tsx`, `server.ts:moveCards`) | `do_move_cards` | Yes. Lane C sends `section`. |
 | Move undo (`{"undo": true}`) | `do_move_card`, then `_unmove_one` | No. It returns before the rule. |
 | The Map's section move | `do_move_sections`, then `_cross`, then `_move_one` with its own slot | No. It names its gap. |
-| The Map's card or range move | `do_move_range`, then `_cross`, then `Inventory.place` | No. It names its gap. |
+| The Map's card or range move | `do_move_range`, then `_cross`, then `Inventory.place` | Its own rule, section 1.6. |
 | `Inventory.move_card`, `Inventory.move_cards` | the store, not a route | No. The rule is on the route. |
 | The CLI, orders, fulfillment | none of them moves a card | No. |
 | The demo server (`demoServer.ts`) | no move route | No. |
 | `scripts/cid-selftest.py` and the T7 cases | the two routes | They now send `section`. The T7 cases that meant the back of the box send the last section's key (`t7_store_and_seams.back_of`). |
 
-The Map's drag (`POST /boxes/<box>/cards/move`) does not change. It already names an exact
-gap.
+### 1.6 The Map's drag (`POST /boxes/<box>/cards/move`)
+
+The drag names an exact gap: `before_card` or `section_end`, as before. A body with no gap
+used to go to the near end of the box. It is refused now, unless the destination box is
+empty. An empty box has one place, so a drop there is exact.
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `section_required` | No `before_card` and no `section_end`, and `to_box` holds a record or a declared divider. Nothing moves. |
+
+**The callers checked (2026-09-26).** No caller sends a body with no gap into a box that
+holds cards.
+
+| Caller | What it sends |
+|---|---|
+| `app/src/BoxShelf.tsx` `dropAt`, card mode | A `c:` gap sends `before_card`. An `e:` gap sends `section_end`. The `end` gap sends neither, and the Map draws it in card mode only for a box with no sections, which is an empty box. |
+| `app/tests/boxmap.spec.ts` | Every recorded body carries `before_card` or `section_end`. |
+| `app/src/demoServer.ts` | No move route. |
+| `harness/tests/t7_box_map.py` | Every call names a gap, except "item 9", a move into an empty box, which stays legal. The fuzz's `range` kind always names a gap. |
 
 ## 2. The physical model
 
@@ -205,6 +222,7 @@ stays in the mix. The divider proof's own fuzz (seeds 0 to 5) replays as before.
 | An empty section's first card takes a key between the dividers | I4, I10 |
 | `sections_detail[].div` is off by one | I2, I3 |
 | A Move to box with no section is not refused | I12 |
+| A drag with no gap into a box that holds cards is not refused | the drag refusal case beside item 9 |
 
 One mutation stayed green, and it is not a defect. Resolving the section after the box is
 registered leaves I6 true. The write that raises `SectionGone` discards the new box entry

@@ -5879,7 +5879,8 @@ def do_move_range(box: int, payload: dict) -> dict:
     `indices` are the stored indices of the cards, in the order they stand, all in one
     section. The gap is `before_card` (a card's index in `to_box`: the cards go on its far
     side, into its section) or `section_end` (an ordinal of `to_box`: after that section's
-    last card). No divider moves. `aim` is the screen's `{"count", "first", "last"}`.
+    last card). No gap is refused unless `to_box` is empty (400 `section_required`). No divider
+    moves. `aim` is the screen's `{"count", "first", "last"}`.
     """
     _reject_unknown(payload, MOVE_RANGE_FIELDS)
     raw = payload.get("indices")
@@ -5893,7 +5894,7 @@ def do_move_range(box: int, payload: dict) -> dict:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST, "range_invalid",
             "Send the cards to move, and at most one gap: a card to go in front of, or a "
-            "section's end. No gap is the end of the box nearest you.",
+            "section's end. Send no gap only for an empty box.",
         )
     if payload.get("to_box") is None:
         raise BadRequest(HTTPStatus.BAD_REQUEST, "to_box_required", "Send a box to move them into.")
@@ -5926,9 +5927,16 @@ def do_move_range(box: int, payload: dict) -> dict:
         dst_title = inventory.box_title(to_box)
         dst_sections = sections if same else inventory.layout_of(to_box)
         dst_names = inventory.section_names_for(to_box)
-        # NO GAP IS THE NEAR END: the end of the last section, or an empty box.
+        # NO GAP IS REFUSED, unless the box is empty (the owner's ruling, 2026-09-26: "i need
+        # to specify where it goes there no auto default"). An empty box has one place, so a
+        # drop there is exact. Anywhere else a body with no gap is a client bug, and it must
+        # fail loudly, not file the cards at the near end.
         if before_card is None and section_end is None and dst_sections:
-            section_end = len(dst_sections)
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST, "section_required",
+                f"Choose where in {dst_title} the cards go: in front of a card, or at the end "
+                f"of a section. A move has no default place.",
+            )
         if before_card is not None:
             # A CARD ON HAND ONLY: a sold card or a tombstone is not where a hand can put
             # anything in front of (the R3 review).
