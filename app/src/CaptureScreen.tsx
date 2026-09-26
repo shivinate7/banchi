@@ -4112,7 +4112,8 @@ export function CaptureScreen() {
           )}
           {/* UN-2's fix-after (undo.md 11.1's table row for Capture): once the sitting is
               built on, the strip cannot reach the card any more, so the way back is the
-              other route that already reaches it. */}
+              other route that already reaches it. words="word-only-control" (rule 5): this
+              is a link to another screen, not a mutating action here. */}
           {undoNote?.builtOnBox == null ? null : (
             <Button
               variant="ghost"
@@ -4120,6 +4121,7 @@ export function CaptureScreen() {
               icon="box"
               iconRight="arrowRight"
               onClick={() => (window.location.hash = `#/inventory?box=${undoNote.builtOnBox}`)}
+              words="word-only-control"
             >
               Manage box
             </Button>
