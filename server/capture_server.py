@@ -294,6 +294,7 @@ import time
 import uuid
 from bisect import bisect_left, bisect_right
 from dataclasses import asdict, replace
+from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -866,7 +867,7 @@ CONFIRM_FIELDS = ("undo",)
 # second `/unsold` path, because the two are one control on screen with one undo window
 # (docs/DESIGN.md: undo present on every mark-sold, at least 10 seconds), and splitting them
 # would let a client reach the reversal without ever having been told what it reverses.
-SOLD_FIELDS = ("undo",)
+SOLD_FIELDS = ("undo", "still_here")
 
 # The retirement's whole body (D26). The recording direction carries `reason` — required,
 # one of `master.RETIRE_REASONS` — and `{"undo": true}` reverses. One route rather than a
@@ -897,6 +898,9 @@ REMOVE_FIELDS = ("capture_id",)
 # successful move is nothing at all (the key is a tombstone). `to_box` is the one thing this
 # body adds that a delete does not need: a destination.
 MOVE_FIELDS = ("capture_id", "to_box")
+# A move's undo (UN-14) names only the tombstone in the path. It carries no aim check,
+# because a tombstone's key is never reused, and no destination, because it goes back home.
+MOVE_UNDO_FIELDS = ("undo",)
 
 # The batched move (D83): a list of indices IN THIS BOX, or `null` for every on-hand one —
 # the shape that makes a whole-box move (merge, from the caller's side) the same request as
@@ -5012,6 +5016,107 @@ def _move_one(
     }
 
 
+def _move_built_on(store: Store, key: str, new_key: str) -> Optional[str]:
+    """Why a move can no longer be undone, or None (UN-14, `docs/specs/undo.md` 11.1).
+
+    A MOVE IS BUILT ON ONCE EITHER BOX CHANGES: a capture, a sale, a retire, an answer or a
+    move in either box, after the move. History is the record, so this reads the two boxes'
+    own lines. In the old box that is every line after the card's last `moved` line. In the
+    new box it is every line after the card's arrival line. A box-level line has no position,
+    so it is never in these reads, and a new divider does not build on a move.
+    An unreadable history is a refusal too: the undo is lost, never guessed.
+    """
+    try:
+        home = store.history_at(key)
+        away = store.history_at(new_key)
+    except (files.StoreError, OSError, ValueError):
+        return "the store's history could not be read"
+
+    def after(events, is_mark) -> List[dict]:
+        marks = [at for at, event in enumerate(events) if is_mark(event)]
+        return list(events[marks[-1] + 1:]) if marks else []
+
+    if not any(e.get("position") == new_key and e.get("moved_from") == key for e in away):
+        return "the store's history has no record of the card arriving there"
+    left = after(home, lambda e: e.get("position") == key and e.get("event") == master.MOVED)
+    arrived = after(
+        away, lambda e: e.get("position") == new_key and e.get("moved_from") == key
+    )
+    changed = [
+        e for e in left + arrived
+        if not (e.get("position") == new_key and e.get("moved_from") == key)
+    ]
+    if changed:
+        return f"{len(changed)} later change(s) in one of the two boxes"
+    return None
+
+
+def _unmove_one(snapshot, store: Store, box: int, index: int) -> dict:
+    """Undo one move (UN-14): the card goes back to its own index, and the transplant goes.
+
+    `move_card`'s mirror. The review, parked and cache entries that followed the card to
+    its new key follow it home again, for `_move_one`'s reason. The photo is re-derived off
+    the card's own name, as `_move_one` derives it.
+    """
+    inventory = snapshot.inventory
+    key = master.position_key(box, index)
+    card = inventory.cards.get(key)
+    if card is None:
+        raise BadRequest(
+            HTTPStatus.NOT_FOUND,
+            "card_not_found",
+            f"No card at that place in {join.said_place(inventory, box)}.",
+        )
+    if card.state != master.MOVED or not card.moved_to:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "not_moved",
+            f"{join.said_place(inventory, box, index)} was not moved, so there is no move to "
+            f"undo. It may already have been undone on the other device.",
+        )
+    new_key = str(card.moved_to)
+    why = _move_built_on(store, key, new_key)
+    if why is None and new_key in inventory.cards:
+        transplant = inventory.cards[new_key]
+        if int(transplant.index) != inventory.next_index(transplant.box) - 1:
+            why = "a card was added to the box it went to"
+    if why is not None:
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "move_built_on",
+            f"This move can no longer be undone: {why}. Move the card back instead.",
+        )
+    try:
+        restored, new_key = inventory.unmove_card(key)
+    except (master.CardNotFound, master.CardDeparted) as exc:
+        raise BadRequest(HTTPStatus.CONFLICT, "move_built_on", f"This move can no longer be undone: {exc}. Move the card back instead.") from None
+
+    found = photo_for(inventory, restored)
+    restored.photo = str(found) if found is not None else None
+    for queue in (snapshot.review, snapshot.parked):
+        entry = queue.entries.pop(new_key, None)
+        if entry is None:
+            continue
+        entry.position = key
+        entry.box = int(restored.box)
+        entry.index = int(restored.index)
+        if entry.photo and found is not None:
+            entry.photo = restored.photo
+        queue.entries[key] = entry
+    cached = snapshot.cache.entries.pop(new_key, None)
+    if cached is not None:
+        snapshot.cache.entries[key] = cached
+
+    return {
+        "moved": new_key,
+        "to": key,
+        "box": int(box),
+        "index": int(index),
+        "undone": True,
+        "card": _card_row(inventory, box, index, restored, snapshot.skus),
+    }
+
+
 def do_move_card(box: int, index: int, payload: dict) -> dict:
     """Move one card to a fresh index in another box. D83 — the third door, addressed.
 
@@ -5028,12 +5133,18 @@ def do_move_card(box: int, index: int, payload: dict) -> dict:
     listing hold is free to change boxes; the hold travels with the transplant's `sku`
     untouched, and nothing about `_release_plan`/`_listing_hold` reads a card's box.
 
-    UNDO IS THIS SAME ROUTE, RUN AGAIN. The transplant is not terminal, so moving it back
-    is an ordinary second move — it lands at a fresh index in the original box, and the
-    first tombstoned key is never reclaimed, same as any other permanent gap.
+    THE UNDO IS `{"undo": true}` ON THE TOMBSTONE'S KEY (UN-14, `_unmove_one`). It holds
+    until either box changes. After that, the fix is an ordinary second move, which lands
+    at a fresh index in the original box and never reclaims the tombstoned key.
 
     See `_move_one` for the state checks, the file-move ordering and its one named risk.
     """
+    if _optional_flag(payload, "undo", "undo_invalid"):
+        # THE MOVE'S UNDO (UN-14), on the tombstone's own key. Until either box changes.
+        _reject_unknown(payload, MOVE_UNDO_FIELDS)
+        store = Store()
+        with store.write() as snapshot:
+            return _unmove_one(snapshot, store, box, index)
     _reject_unknown(payload, MOVE_FIELDS)
     if "capture_id" not in payload:
         raise BadRequest(
@@ -5992,6 +6103,51 @@ def _queue_row(
     return row
 
 
+# THE SITTING'S GAP (UN-2): `app/src/storeHistory.ts:GAP_MINUTES`, the 30 minutes D121 and
+# D164 cluster a sitting by. A copy in a second language, so T7's
+# `check_undo_until_built_on` reads the TypeScript constant and fails when they differ.
+SITTING_GAP_MINUTES = 30
+
+
+def do_capture_sitting() -> dict:
+    """`GET /capture/sitting`: the newest sitting, rebuilt from the store (UN-2).
+
+    The capture strip held the sitting in page memory, so a reload ended it. This read is
+    the store's answer instead. `open` is false once the newest capture is more than the
+    gap old: that sitting has ended, and its undo with it (section 11.1). The server says
+    so, and the screen never measures the gap itself. `cards` is then empty.
+
+    Each row is `_card_summary`'s shape, plus the claims the strip draws under a shot and
+    the card's `state`. A card a run has identified is still listed, and its undo refuses
+    `undo_too_late`, as it always has.
+    """
+    snapshot = Store().read()
+    inventory = snapshot.inventory
+    keys = inventory.newest_sitting(SITTING_GAP_MINUTES * 60)
+    cards = [inventory.cards[key] for key in keys if key in inventory.cards]
+    newest = None
+    if cards:
+        try:
+            newest = datetime.fromisoformat(str(cards[-1].captured_at))
+        except (TypeError, ValueError):
+            newest = None
+    open_ = newest is not None and (
+        datetime.now(timezone.utc) - newest
+    ).total_seconds() <= SITTING_GAP_MINUTES * 60
+    rows = []
+    for card in cards if open_ else []:
+        row = _card_summary(inventory, card, created=False)
+        row.update(
+            captured_at=card.captured_at,
+            set_hint=card.set_hint,
+            metadata_finish=card.metadata_finish,
+            game=card.game,
+            state=card.state,
+        )
+        rows.append(row)
+    return {"open": open_, "gap_minutes": SITTING_GAP_MINUTES, "cards": rows}
+
+
 def do_queues() -> dict:
     """Both standing queues, in the order they are meant to be worked.
 
@@ -6023,8 +6179,17 @@ def do_queues() -> dict:
     # the inventory screen are the same string by construction rather than by care.
     places = _Places(snapshot.inventory)
     return {
-        "review": [_queue_row(entry, places) for entry in snapshot.review.open_entries],
-        "parked": [_queue_row(entry, places) for entry in snapshot.parked.open_entries],
+        # A DEPARTED CARD OWES NO ANSWER (UN-8). A card retired from Review kept its
+        # open entry, so it came back on reload. The entry stays in the file, so the
+        # retire undo brings the card back here with no second write.
+        "review": [
+            _queue_row(entry, places)
+            for entry in snapshot.review.owed_entries(snapshot.inventory.cards)
+        ],
+        "parked": [
+            _queue_row(entry, places)
+            for entry in snapshot.parked.owed_entries(snapshot.inventory.cards)
+        ],
     }
 
 
@@ -9264,7 +9429,23 @@ def _origin(store: Store, key: str, reader) -> Tuple[Optional[str], Optional[str
     return state, None
 
 
-def _sell(snapshot, box: int, index: int, undo: bool) -> dict:
+def _order_built_on(snapshot, held_key: str) -> Optional[str]:
+    """The sentence refusing a sale's undo because its order has moved on, or None.
+
+    UN-7 (`docs/specs/undo.md` section 11.1): a sale on an order is built on once the
+    order ships or closes. The feed's own word decides it, through
+    `order_store.is_terminal_status`, and nothing here guesses a status it does not know.
+    """
+    record = snapshot.ledger.get(held_key)
+    if record is None or not order_store.is_terminal_status(record.status):
+        return None
+    return (
+        f"Its order now reads {record.status!r}, so the sale can no longer be undone. "
+        f"If the card is still in the box, use \"This card is still here\"."
+    )
+
+
+def _sell(snapshot, box: int, index: int, undo: bool, still_here: bool = False) -> dict:
     """`do_mark_sold`'s whole body against an ALREADY-OPEN snapshot.
 
     Writes nothing to disk: the caller's `Store.write()` commits, so a refusal raised here
@@ -9308,6 +9489,17 @@ def _sell(snapshot, box: int, index: int, undo: bool) -> dict:
                 "not_sold",
                 f"{join.said_place(snapshot.inventory, box, index)} is {was}, not sold, so there is no sale to "
                 f"reverse. It may already have been reversed on the other device.",
+            )
+        # BUILT ON (UN-7): the photograph of a sold card is reclaimed on purpose (D89),
+        # so a plain undo would put a card back with no picture. `still_here` is the
+        # ordinary action after that step, and it is the one door past this refusal.
+        if card.photo_reclaimed_at and not still_here:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "sale_built_on",
+                f"The photo of {join.said_place(snapshot.inventory, box, index)} was cleared "
+                f"after the sale, so the sale can no longer be undone. If the card is still "
+                f"in the box, use \"This card is still here\".",
             )
         if previous is None:
             raise BadRequest(
@@ -9523,6 +9715,11 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
     """
     _reject_unknown(payload, SOLD_FIELDS)
     undo = _optional_flag(payload, "undo", "undo_invalid")
+    # "THIS CARD IS STILL HERE" (UN-7). The fix after a sale is built on: the card goes
+    # back to its earlier state even though its photo was cleared or its order shipped.
+    # It is a reversal, so it implies `undo`.
+    still_here = _optional_flag(payload, "still_here", "still_here_invalid")
+    undo = undo or still_here
     key = master.position_key(box, index)
     with Store().write() as snapshot:
         holder = None
@@ -9531,15 +9728,31 @@ def do_mark_sold(box: int, index: int, payload: dict) -> dict:
             capture_id = card.capture_id if card is not None else None
             if capture_id:
                 holder = snapshot.ledger.holder_of(str(capture_id))
+        shipped = holder is not None and _order_built_on(snapshot, holder[0]) is not None
+        if shipped and not still_here:
+            raise BadRequest(
+                HTTPStatus.CONFLICT, "sale_built_on", _order_built_on(snapshot, holder[0])
+            )
 
-        body = _sell(snapshot, box, index, undo)
+        body = _sell(snapshot, box, index, undo, still_here)
 
         released = None
         if undo and holder is not None:
             held_key, held_sku = holder
             snapshot.ledger.forget_pull(held_key, held_sku, [str(card.capture_id)])
-            released = {"key": held_key, "sku": held_sku}
+            if shipped:
+                # THE SHIPPED ORDER KEEPS ITS COUNT (D212). A copy did leave for that
+                # buyer, and every copy is fungible, so the line stays filled. Only this
+                # card's id comes off it, as a hand-fill, so a later pull of this card is
+                # not refused as a second shipment of one physical card. An OPEN order is
+                # released instead, as a plain undo does (section 4): its copy did not go.
+                snapshot.ledger.record_fill(
+                    held_key, held_sku, 1, order_store.FILL_SOLD_SEPARATELY
+                )
+            else:
+                released = {"key": held_key, "sku": held_sku}
         body["order_released"] = released
+        body["still_here"] = bool(still_here)
         return body
 
 
@@ -12720,6 +12933,9 @@ def _ledger_pull(
                     f"order, so this route did not do what is being undone. If it was "
                     f"marked sold on #/inventory, reverse it there.",
                 )
+            built_on = _order_built_on(snapshot, holder[0])
+            if built_on is not None:
+                raise BadRequest(HTTPStatus.CONFLICT, "sale_built_on", built_on)
             holders.append(holder)
         spanned = sorted(set(holders))
         if len(spanned) > 1:
@@ -13970,6 +14186,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_inventory_recent(limit))
             if path == "/queues":
                 return self._json(HTTPStatus.OK, do_queues())
+            if path == "/capture/sitting":
+                return self._json(HTTPStatus.OK, do_capture_sitting())
             if path == "/boxes":
                 # D213's filter. `keep_blank_values=True` is what lets `?set=` mean
                 # "filter for no set" rather than "no set param at all" — the same
