@@ -947,13 +947,23 @@
 .capture-undo-depth { margin-left: 6px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-3); }
 .capture-film-empty { display: flex; align-items: flex-start; gap: var(--bn-2); padding: 6px 4px 4px; font-size: var(--bn-fs-sm); }
 .capture-film-empty .bn-icon { color: var(--bn-ink-4); }
+/* UN-1: THE WHOLE SITTING SCROLLS INSIDE THE STRIP RATHER THAN GROWING THE PAGE (D164's cap
+   is gone). Fixed at a round number of grid rows rather than a viewport fraction, so the strip's
+   own height does not shift as the viewfinder above it resizes across breakpoints — `40vh`
+   measured taller than the whole footer at 820 and would have made an eleven-card sitting look
+   identical to a two-card one. */
 .capture-undo-list {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-rows: min-content;
   gap: 6px 8px;
   list-style: none;
   margin: 0;
   padding: 8px 2px 2px;
+  max-height: 360px;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
 }
 .capture-undo-list > li { min-width: 0; animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) both; }
 .capture-undo-row {
@@ -1095,8 +1105,21 @@
 .capture-undo-drop:hover:not(:disabled),
 .capture-undo-drop:focus-visible { background: var(--bn-danger); color: var(--bn-on-accent); }
 .capture-undo-drop:disabled { opacity: 0.5; cursor: not-allowed; }
+/* THE 40PX FLOOR ON A COARSE POINTER (D117), MEASURED RATHER THAN ASSUMED: this rule already
+   read `var(--bn-control-h-sm)` (40px here), and never won — `IconButton` sizes its own face
+   with an inline `style` (`kit/index.tsx`'s `FACE_PX` table), and no external rule beats an
+   inline one without `!important`. Measured at 24x24 on a real phone-width run before this
+   line existed. Flush at the corner (`top: 0; right: 0`) instead of hanging over it, so the
+   real 40px box stays inside its own cell rather than reaching into the next one — the
+   corner overhang worked at 24px beside a 12px gap; it does not at 40px, whatever the gap.
+   `top`/`right` need no `!important`: only the SIZE is inline. */
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
-  .capture-undo-drop { width: var(--bn-control-h-sm); height: var(--bn-control-h-sm); top: -8px; right: -8px; }
+  .capture-undo-drop {
+    width: var(--bn-control-h-sm) !important;
+    height: var(--bn-control-h-sm) !important;
+    top: 0;
+    right: 0;
+  }
 }
 
 /* ---- the halt (spec 5.5): two lines and one button; the figures sit behind the disclosure ----
@@ -1274,9 +1297,23 @@
   .capture-box-val span { white-space: normal; }
   .capture-undo-list {
     display: flex;
-    gap: var(--bn-3);
-    padding: 8px 4px 4px;
+    /* WIDE ENOUGH THAT TWO CORNER BADGES NEVER TOUCH (the coordinator's review, 2026-09-25):
+       `.capture-undo-drop`'s 40px thumb floor (D117) reaches 13px past its own cell on a
+       coarse pointer (its 24px face plus the kit's `::before` half-reach), and at the old
+       12px gap that overran the next cell's own `.capture-key` by 1px — a coarse press at
+       the drop's own edge could fire the WRONG card's row instead. 16px clears it. */
+    gap: var(--bn-4);
+    /* 16px, not 8px, for the same reason on the vertical axis: `overflow-x: auto` below
+       forces `overflow-y` to `auto` too (the CSS spec's own promotion rule, not a bug this
+       screen can opt out of), so the same `::before` reaching 8px above the FIRST row's
+       drop button needs that much clearance from the list's own top edge or it is clipped
+       exactly as if it were real scrolled-past content. */
+    padding: 16px 4px 4px;
+    /* One scrolling row, not a scrolling grid — the desktop rule's `max-height` and vertical
+       scroll would clip this row's own thumbnails, which are taller than it. */
+    max-height: none;
     overflow-x: auto;
+    overflow-y: visible;
     overscroll-behavior-x: contain;
     scrollbar-width: thin;
   }

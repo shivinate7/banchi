@@ -457,3 +457,31 @@ proves each one. Three choices the table left open are recorded here.
 
   The behavior above stands. The card goes back. On a shipped order, the line keeps its
   count and becomes a `sold_separately` hand-fill. The SKU's `sold_here` falls by one.
+
+### 11.9 Lane C, as built (2026-09-25)
+
+Built on branch `ux/undo-capture`, `app/tests/capture-undo.spec.ts`.
+
+- **UN-1.** `CaptureScreen.tsx:undoStack` no longer slices to `UNDO_DEPTH` (D164's cap, gone
+  on the owner's Q1). The whole sitting is the strip, newest first. `.capture-undo-list`
+  scrolls inside its own footer, a fixed `max-height` at desktop. The tablet breakpoint
+  keeps its own horizontal scroll instead. Neither grows the page.
+- **UN-15.** A divider gets its own undo. `doSection` remembers the box's dividers as they
+  stood before the one it just added (`pendingDivider`). `U` puts them back through
+  `updateBox({ sections })`, Manage box's own route. It fires only while `pendingDivider` is
+  still the newer of the two reversible writes here, by `at` against the sitting's own
+  newest shot. A capture into the SAME box clears it. The divider is built on.
+- **UN-3 (Q2, "keep the confirm here only").** The mechanism is unchanged. `do_remove_card`
+  still consumes the photograph and slides the later cards down, with no undo. Only the
+  words changed. The dialog now says "This permanently deletes the record and its
+  photograph" in place of the old "There is no undo."
+- **UN-2's screen half.** `getCaptureSitting()` runs once. It waits for the game registry,
+  which is the one thing that can resolve a hydrated card's `game` key into a `GameEntry`.
+  A second read never fires. It would duplicate every row `shots` already holds. `undoNote`
+  reads `capture_built_on` the same way it reads every other refusal, the server's own
+  sentence and code, verbatim. It also offers a "Manage box" button, named for the refused
+  card's own box, per 11.1's table row for Capture.
+- **The pre-existing flake.** `pressing the pause button moves nothing else on the screen
+  (D118)` fails at roughly 1 in 2 to 1 in 8 runs, `--workers=1` included, on the tree before
+  this lane's own commits too. Checked by running the prior commit's `CaptureScreen.tsx`
+  against the same spec. Not this lane's defect. Not investigated further here.
