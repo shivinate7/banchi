@@ -396,6 +396,20 @@ function usePhone(): boolean {
   return phone
 }
 
+/** THE NUMBER READS AS ITS OWN TOKEN AT THE END OF THE NAME, never a stray digit inside a
+ *  longer word (the coordinator's review, 2026-09-26, catching a defect in the first cut of
+ *  this same lane: a plain `name.includes(number)` hid the chip on any name that happened to
+ *  CONTAIN the number's characters anywhere, with nothing marking it as the same fact). The two
+ *  real forms this repo's names take are parenthesised ("Calm Rune (R02a)") and a trailing
+ *  "- " ("Garganacl - 084/132"), both anchored at the end of the string — never a bare
+ *  substring match. */
+function nameRepeatsNumber(name: string, number: string): boolean {
+  const trimmed = number.trim()
+  if (trimmed === '') return false
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(\\(${escaped}\\)|-\\s*${escaped})\\s*$`).test(name)
+}
+
 /* ------------------------------------------------------------------- the needs-you flags */
 
 /** WHY A ROW NEEDS THE OWNER (D277, Q2): no market price, worth $5 or more, or a typed price
@@ -2631,8 +2645,10 @@ function PricingRow({
           <span>{sku.set_name}</span>
           {/* THE NUMBER DOES NOT REPEAT WHAT THE NAME ALREADY SAYS (the owner's review,
               2026-09-26): a variant name like "Calm Rune (R02a)" already carries its own
-              number, and drawing "R02a" again beside it stated the one fact twice. */}
-          {sku.row['Number'] && !sku.name.includes(sku.row['Number']) ? (
+              number, and drawing "R02a" again beside it stated the one fact twice. Suppressed
+              only when the name holds it as its own token (`nameRepeatsNumber`), never on a
+              bare substring — a stray digit inside a longer name is not the same fact. */}
+          {sku.row['Number'] && !nameRepeatsNumber(sku.name, sku.row['Number']) ? (
             <span className="pricing-number">{sku.row['Number']}</span>
           ) : null}
           {sku.row['Rarity'] ? <span className="pricing-rarity">{sku.row['Rarity']}</span> : null}

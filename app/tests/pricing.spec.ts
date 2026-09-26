@@ -3710,6 +3710,29 @@ test('the focus ring on a TYPED price field is --bn-accent, not the halo alone (
   expect(border, `the typed field's focused border is ${border}, not the accent ${accent}`).toBe(accent)
 })
 
+/* THE NUMBER CHIP IS HIDDEN ONLY WHEN THE NAME CARRIES IT AS ITS OWN TOKEN, NEVER A STRAY DIGIT
+ * (the coordinator's review, 2026-09-26, catching a defect in the first cut of this same lane).
+ * The first cut suppressed the chip on `sku.name.includes(sku.row['Number'])`, a plain substring
+ * test — so a name that happens to CONTAIN the number's digits anywhere, with no parenthesis and
+ * no "- " before it, would lose its chip wrongly. The row must ask whether the number reads as
+ * its own token: in parentheses, or after a trailing "- ", at the end of the name. */
+test('the card number chip hides only for its own token in the name, never a stray digit', async ({ page }) => {
+  await open(page, {
+    skus: [
+      sku({ sku: '1', name: 'Metal Chapter 1', row: { ...sku().row, Number: '1' } }),
+      sku({ sku: '2', name: 'Calm Rune (R02a)', row: { ...sku().row, Number: 'R02a' } }),
+      sku({ sku: '3', name: 'Garganacl - 084/132', row: { ...sku().row, Number: '084/132' } }),
+    ],
+  })
+  /* A STRAY DIGIT: "Metal Chapter 1" contains "1" as a substring, with no parenthesis and no
+     "- " before it — the number is not repeated here and the chip must stay. */
+  await expect(page.locator('.pricing-row', { hasText: 'Metal Chapter 1' }).locator('.pricing-number')).toHaveText('1')
+  /* THE TWO REAL FORMS: parenthesised, and trailing "- <number>". Both repeat the number as its
+     own token, so the chip is redundant and stays hidden. */
+  await expect(page.locator('.pricing-row', { hasText: 'Calm Rune' }).locator('.pricing-number')).toHaveCount(0)
+  await expect(page.locator('.pricing-row', { hasText: 'Garganacl' }).locator('.pricing-number')).toHaveCount(0)
+})
+
 /* ============================================================================================
    THE RE-INTERVIEW (D277): one list with the rows that need the owner on top, one slim bar,
    the rule on one line, the drawer folded into the product view. The cases above keep the send,
