@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { Place, SectionDetail } from './types'
 import {
@@ -98,6 +98,52 @@ export function PositionBar({
   const boxAt = marker ?? lastBox.current
   const sectionAt = depth?.marker ?? lastSection.current
 
+  /* THE SECTION RULER NEVER PASSES ITS CONTAINER (the owner's report, 2026-09-25, box WB1 R2:
+   * "sections can pass the width of their container ... only 11 show"). `PositionBar.css`
+   * gives every chip a readable floor and lets the strip scroll past it rather than overflow
+   * the card; what is left for here is making sure the CURRENT section is the one already in
+   * view, and that a reader can tell there is more to either side.
+   *
+   * MEASURED, NOT ASSUMED: `data-fade-back`/`data-fade-front` are set from the track's own
+   * `scrollLeft`/`scrollWidth`, so a box that fits needs no fade and one that does not gets a
+   * fade only on the side that still has sections hidden past it. Re-measured on every resize
+   * (a rail collapsing widens this panel) and on every place the walk lands on, since a new
+   * card can change both which section is current and how many chips there are. */
+  const trackRef = useRef<HTMLDivElement>(null)
+  const [fade, setFade] = useState<{ back: boolean; front: boolean }>({ back: false, front: false })
+  useEffect(() => {
+    const el = trackRef.current
+    if (el === null) return
+    const measure = () => {
+      const back = el.scrollLeft > 1
+      const front = el.scrollLeft < el.scrollWidth - el.clientWidth - 1
+      setFade((prev) => (prev.back === back && prev.front === front ? prev : { back, front }))
+    }
+    /* THE CURRENT CHIP SCROLLS INTO VIEW, never the track's own start — a box the owner just
+       walked to at section 30 of 40 must not open scrolled to section 1. Set directly on THIS
+       element's `scrollLeft` rather than `Element.scrollIntoView`, which walks every scrollable
+       ANCESTOR looking for one to move — on this page that reached `.card-locations-rows`
+       (harmless, it already had the row in view) and the whole document (not harmless: it
+       moved `window.scrollY`, which broke `inventory.spec.ts`'s "a walk-to scrolls the walk and
+       never the page"). Centering only this track's own `scrollLeft` cannot touch anything
+       outside it. */
+    const here = el.querySelector<HTMLElement>('.position-bar-here')
+    if (here !== null) {
+      const target = here.offsetLeft + here.offsetWidth / 2 - el.clientWidth / 2
+      el.scrollLeft = Math.max(0, Math.min(target, el.scrollWidth - el.clientWidth))
+    }
+    measure()
+    el.addEventListener('scroll', measure, { passive: true })
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener('scroll', measure)
+      ro.disconnect()
+    }
+    // Re-run whenever the walk lands on a different card or a different section count.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [place.label, place.section, sections?.length])
+
   return (
     <div
       className={`position-bar position-bar-${persona}`}
@@ -126,7 +172,12 @@ export function PositionBar({
           {boxDetail === null ? null : <span className="position-bar-text-detail">{boxDetail}</span>}
         </p>
       )}
-      <div className="position-bar-track">
+      <div
+        className="position-bar-track"
+        ref={sectionDepth ? trackRef : undefined}
+        data-fade-back={sectionDepth && fade.back ? 'true' : undefined}
+        data-fade-front={sectionDepth && fade.front ? 'true' : undefined}
+      >
         {spans.length === 0 ? (
           <span className="position-bar-segment position-bar-segment-blank" />
         ) : (

@@ -8673,6 +8673,19 @@ COMPONENTS = [
                 "governed_by": ["D58", "D116", "D155", "D218", "D259",
                                 "D260"],
             },
+            "tests/section-ruler.spec.ts": {
+                "does": "the section ruler never passes its card (the owner's report, "
+                        "2026-09-25, box WB1 R2): at 12 and 30 sections, at 1440 and 390, the "
+                        "box strip's `scrollWidth` never exceeds its own `clientWidth` by more "
+                        "than the OR the brief allows — a scroll track with the current section "
+                        "fully in view — and the page itself never gains a horizontal scroll "
+                        "either way; past the strip's shrink floor (60 sections) it proves the "
+                        "scroll-track path is what is carrying it, not a shrink that happened to "
+                        "fit; and the section ruler is drawn above the card ruler. Stubs its own "
+                        "minimal one-copy fixture rather than `inventory.spec.ts`'s fixed box, "
+                        "so a section count is a parameter. Run by `make design-check`.",
+                "governed_by": ["D118", "D155", "D260"],
+            },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
                         "`margin: 0 auto` centered a screen with a lower `--bn-page-max` "

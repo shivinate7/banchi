@@ -1042,12 +1042,16 @@ function Action({
           Mark sold
         </Button>
       ) : (
-        <IconButton size="sm" icon="sold" label="Mark sold" busy={busy} disabled={busyKey !== null && !busy} onClick={() => onSell(copy)} />
+        /* THE ROW FORM'S OWN FLOOR RAISED FROM `sm` TO `md` (the owner's ruling, 2026-09-25:
+           "the icons are small"). `md` reads `--bn-control-h`, already 42px under 767px or a
+           coarse pointer (tokens.css) — this only raises the desktop size to match, since `sm`
+           was already the phone floor's own number and the owner's complaint was not phone-only. */
+        <IconButton size="md" icon="sold" label="Mark sold" busy={busy} disabled={busyKey !== null && !busy} onClick={() => onSell(copy)} />
       )}
       {/* ICON IN BOTH SECTORS (ICONOGRAPHY): Retire is reversible (Undo), so it never spends
           words. `archive` — a lidded box — reads as "put away" rather than "delete". */}
       <IconButton
-        size={primary ? 'xl' : 'sm'}
+        size={primary ? 'xl' : 'md'}
         icon="archive"
         label="Retire"
         disabled={busyKey !== null}
@@ -1058,7 +1062,7 @@ function Action({
           ICON IN BOTH SECTORS, the same vocabulary as Retire beside it. */}
       {copy.place.located === false ? null : (
         <IconButton
-          size={primary ? 'xl' : 'sm'}
+          size={primary ? 'xl' : 'md'}
           icon="moveTo"
           label="Move to another box"
           disabled={busyKey !== null}

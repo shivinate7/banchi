@@ -356,6 +356,13 @@
 .card-locations-owner .card-locations-action {
   grid-area: action;
   justify-self: end;
+  /* PULLED TO THE TOP OF ITS CELL (the owner's report, 2026-09-25: "a large empty gap above
+     them"). The row's own `align-items: center` centred this cell against `.card-locations-place`,
+     which is the tallest thing beside it and top-heavy (the big slot numeral, then the
+     back/this/front ladder) — centring left most of the air above the icons and little below.
+     Top-aligning instead puts the icons on the numeral's own line, where a hand expects the
+     controls for what it is looking at. */
+  align-self: start;
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
