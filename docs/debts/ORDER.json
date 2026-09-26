@@ -38,6 +38,6 @@
     "033-an-answered-queue-entry-can-never-resurface-even-when-wrong.md",
     "034-the-catalogue-cache-never-expires-on-a-membership-claim.md",
     "035-emit-exits-differently-on-one-run-and-several-runs.md",
-    "036-under-cap-a-pending-copy-and-an-unseen-live-copy-can-both-be-out.md"
+    "037-under-cap-a-pending-copy-and-an-unseen-live-copy-can-both-be-out.md"
   ]
 }

@@ -484,7 +484,7 @@ def _apply_guard(guard, matches_by_sku, inventory):
             # copies LIVE"). The cap is spent against `copies_out`, which read the store and
             # the join's export. A guard file that shows more live copies than either raised no
             # bound, so `--cap 1` over one live copy sent one more. `SkuMatch.guard_live` takes
-            # the larger of the readings, and DEBT36 says what that
+            # the larger of the readings, and DEBT37 says what that
             # costs. It is its own field, so `_would` still measures the send without the guard.
             match.guard_live = live.get(sku, 0)
             if match.asked is None or match.asked > rooms[sku]:

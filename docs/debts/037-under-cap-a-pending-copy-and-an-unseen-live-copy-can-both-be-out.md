@@ -1,4 +1,4 @@
-## 36 — under `--cap`, a pending copy and an unseen live copy can both be out
+## 37 — under `--cap`, a pending copy and an unseen live copy can both be out
 
 **The limit.** `emit --cap N --live-guard F` spends the cap against the larger of two readings.
 One is `copies_out`, the store's count of copies live and pending. The other is the live count
@@ -18,9 +18,23 @@ The overshoot can be as large as the pending count, not only one copy.
 **Why the larger reading stays: the owner's ruling, 2026-09-25.** *"Take the larger
 (Recommended)"*. For the cap, the sum is the safe direction. But a pending copy that has landed
 is in both readings. So the sum counts it twice, and it under-sends on each ordinary re-send
-after an import. The larger reading never under-sends, and it accepts the overshoot above.
+after an import. The larger reading never counts a landed copy twice, so it never sends less
+than the sum would. It accepts the overshoot above.
+
+**It can still under-send, on a stale store reading.** A store reading above the guard's count
+still closes the cap, because the larger reading wins. The delta review's probe: run
+`emit --cap 1`. Then `reconcile --live` sets Dunsparce live at 1. Then run
+`emit --cap 1 --live-guard` with a guard file that shows 0. Nothing is sent, but TCGplayer holds
+no copy.
 
 **What closes it.** One reading that knows which pending copies have landed.
+
+**A second known wording gap: "asked for none" under the store's own cap.** Assume that the
+store's own reading closes the cap, and that the guard also trims the card to 0. Then emit names
+the card "this send asked for none of this card". `SkuMatch.nothing_to_add` checks `asked == 0`
+before the cap, and the guard writes its trim to `asked`. The delta review's probe: run
+`emit --cap 1`. Then run `emit --cap 1 --live-guard` with Dunsparce at 2. Main does the same, and
+only the CLI reaches it.
 
 **A known wording gap beside it, left on the orchestrator's word (2026-09-25).** An empty send's
 headline has no clause for a card that the cap closes. Emit names that card on its own line,
