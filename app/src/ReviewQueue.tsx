@@ -574,11 +574,10 @@ const GROUP_KEY = 'g'
 const GROUP_KEY_LABEL = 'G'
 
 /* Ten answers deep and no clock on the REVERSAL (D28, rebased to a count): the last ten
- * answers stay reversible until ten more push them out. What the twenty seconds governs now
- * is only how long the newest receipt stands beside the rows before it settles into the
- * session list, where its undo is still live. */
+ * answers stay reversible until ten more push them out. NO CLOCK ON THE TRAY EITHER (UN-5,
+ * finding #14, the Opus review round): the newest receipt stands beside the rows until a
+ * newer one replaces it, never for a counted twenty seconds. */
 const UNDO_DEPTH = 10
-const RECEIPT_TRAY_MS = 20000
 
 type CloseChoice =
   | { kind: 'stand_down'; reason: StandDownReason }
@@ -1378,17 +1377,13 @@ export function ReviewQueue() {
     }
   }, [rows])
 
-  /* The newest receipt stands beside the rows for twenty seconds, then settles into the
-   * session list. The receipt itself is not expiring — only its place on screen is. */
-  const newestKey = receipts[0]?.key ?? null
-  const [trayKey, setTrayKey] = useState<string | null>(null)
-  useEffect(() => {
-    if (newestKey === null) return
-    setTrayKey(newestKey)
-    const timer = window.setTimeout(() => setTrayKey((held) => (held === newestKey ? null : held)), RECEIPT_TRAY_MS)
-    return () => window.clearTimeout(timer)
-  }, [newestKey])
-  const trayReceipt = trayKey === null ? null : (receipts.find((receipt) => receipt.key === trayKey) ?? null)
+  /* NO CLOCK (UN-5, `docs/specs/undo.md` §11.1 — the Opus review round, finding #14): the
+   * tray used to drain the newest receipt off screen after twenty seconds, with a draining
+   * bar drawn for the wait — the one remaining clock on this screen, and a confusing one
+   * once `PageUndo` above the rows already stands with no clock of its own. The newest
+   * receipt now stays exactly the way `Inventory.tsx` and `Orders.tsx` already keep theirs:
+   * until a NEWER one replaces it, by rank, never by a timer. */
+  const trayReceipt = receipts[0] ?? null
 
   /* The reason lens, in a FIXED order: by label, so a chip the operator reaches for by
    * position stays where it was after every answer. Only the count badge moves. */
@@ -1649,7 +1644,7 @@ function Tray({
         </Notice>
       )}
       {receipt === null ? null : (
-        <div className="bn-receipt review-note review-receipt" role="status" key={receipt.key} style={{ ['--receipt-ms' as string]: `${RECEIPT_TRAY_MS}ms` }}>
+        <div className="bn-receipt review-note review-receipt" role="status" key={receipt.key}>
           <Icon name="check" size={16} className="review-receipt-icon" />
           <span className="review-receipt-text">
             <span className="review-receipt-said">{receipt.said}</span>
@@ -1658,7 +1653,8 @@ function Tray({
                 second verb competing with "Closed". */}
             {receipt.outcome === undefined ? null : <span className="review-receipt-outcome">{receipt.outcome}</span>}
           </span>
-          <span className="bn-receipt-bar" aria-hidden="true" />
+          {/* NO CLOCK (UN-5): the drain bar is gone, because this row does not fade with a
+              toast and there is no window left for it to count down. */}
           {!receipt.undoable ? null : (
             <IconButton icon="undo" label="Undo" size="sm" kbd={UNDO_KEY_LABEL} onClick={() => onUndo(receipt)} disabled={disabled} />
           )}

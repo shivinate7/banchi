@@ -629,6 +629,26 @@ test('only the newest answer keeps a tray, and the rest are a rail three deep', 
   ).toBeVisible()
 })
 
+test('finding #14 (the Opus review round) — the tray has no clock: a faked minute later, the newest receipt still stands, no drain bar', async ({
+  page,
+}) => {
+  /* THE OLD BUILD DRAINED THE TRAY OFF SCREEN AFTER TWENTY SECONDS, with a bar counting down
+   * the wait — the one remaining clock on this screen, confusing beside `PageUndo`'s own
+   * clockless door above the rows. `docs/specs/undo.md` §11.1 (UN-5): rank replaces the
+   * clock everywhere else on this product; this proves it here too. */
+  await page.clock.install()
+  await open(page)
+
+  await page.locator('.review-candidate').first().click()
+  await expect(page.locator('.review-receipt')).toHaveCount(1)
+  await expect(page.locator('.review-receipt .bn-receipt-bar')).toHaveCount(0)
+
+  /* PAST THE OLD TWENTY-SECOND WINDOW, WHICH IS NO LONGER A DEADLINE. */
+  await page.clock.runFor(60_000)
+  await expect(page.locator('.review-receipt')).toHaveCount(1)
+  await expect(page.locator('.review-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
+})
+
 /* ------------------------------------------------------------------------- the phone */
 
 test('below 900px the screen is the single column it shipped with', async ({ page }) => {

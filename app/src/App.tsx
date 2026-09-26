@@ -141,7 +141,7 @@ const PRICING_KEYS: ScreenKeys = {
     { keys: ['N'], does: 'Snap the price to what it is now', when: 'when the card is already listed' },
     { keys: ['H'], does: 'Hold this card back instead of pricing it' },
     { keys: ['P'], does: 'Show the photograph of this card' },
-    { keys: ['U'], does: 'Undo the last answer' },
+    { keys: ['U'], does: 'Undo the last answer, hold, or cut-off change' },
     { keys: ['↵'], does: 'Write this price and drop to the next card' },
     { keys: ['⇧↵'], does: 'Write this price and go back up one' },
     { keys: ['↑', '↓'], does: 'Write this price and move' },
@@ -155,7 +155,7 @@ const PRICING_KEYS: ScreenKeys = {
 }
 
 const ORDERS_KEYS: ScreenKeys = {
-  where: 'Only while Orders is open, on a wide window.',
+  where: 'Only while Orders is open.',
   rows: [
     { keys: ['/'], does: 'Jump into the search field' },
     { keys: ['↓'], does: 'Select the next buyer' },
@@ -178,7 +178,7 @@ const INVENTORY_KEYS: ScreenKeys = {
     { keys: ['Home', 'End'], does: 'Go to the first or last card', when: 'with the card list focused' },
     { keys: ['X'], does: 'Tick the selected card', when: 'with the card list focused' },
     { keys: ['Esc'], does: 'Close the open sheet or panel' },
-    { keys: ['U'], does: 'Undo the newest sale or retirement' },
+    { keys: ['U'], does: 'Undo the newest sale, retirement, or move' },
   ],
 }
 
