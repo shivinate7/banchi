@@ -1,4 +1,10 @@
-## 36 — The rail collapses a task after a resize, and a layout read taken inside that window is wrong
+## 36 — A layout read taken while the page still moves is wrong
+
+Two PR 2 CI reds on 2026-09-25 had this one shape. A spec read a layout, the page moved for a
+reason that was not the thing under test, and a second read saw the move. Neither was a product
+defect. Each trace shows what moved.
+
+### The first: the rail collapses a task after a resize
 
 **What the PR 2 CI trace showed.** On 2026-09-25, `capture-claims.spec.ts`'s "a set hint that
 names no set never clips its sub-line" case went red once on the Ubuntu runner (run
@@ -25,3 +31,19 @@ designed motion. A CSS-only default for the rail would remove the one-task gap. 
 split the rail's state between CSS and `storedRail()`, which is the thing `readRail`'s comment
 argues against. Any other spec that resizes across 1280px and then reads layout in more than one
 call can still see this window. Such a spec should read in one frame, after the layout holds still.
+
+### The second: a click's own scroll moves a sticky rail
+
+**What the trace showed.** Run 36201987991, shard 3: `inventory.spec.ts`'s "UX-190 — a sale says
+which card took its number, and the rows hold still" read every walk row 77px higher after the
+sale. The screencast frames show the whole page scrolled between the two reads, the "Inventory"
+header gone off the top. The sale did not move the page. On the Ubuntu runner the copies panel
+put the current copy's Mark sold below the 720px fold. So Playwright scrolled the page to reach
+the button before it pressed. The walk rail is sticky, so it slid up until it stuck, 77px.
+
+**What was done.** The case now brings Mark sold into view first, and only then reads the rows. So
+only the sale lies between the two reads. It went red locally at a 480px-tall window with the old
+order, and it passes there with the new one.
+
+**The rule for any spec that asserts D118.** Read "before" after every scroll the test itself will
+cause, never before it. A press that Playwright has to scroll to reach moves the page by itself.

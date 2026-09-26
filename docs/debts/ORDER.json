@@ -38,6 +38,6 @@
     "033-an-answered-queue-entry-can-never-resurface-even-when-wrong.md",
     "034-the-catalogue-cache-never-expires-on-a-membership-claim.md",
     "035-emit-exits-differently-on-one-run-and-several-runs.md",
-    "036-the-rail-collapses-a-task-after-a-resize-and-animates.md"
+    "036-a-layout-read-taken-while-the-page-still-moves-is-wrong.md"
   ]
 }
