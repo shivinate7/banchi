@@ -4045,6 +4045,62 @@ test('typing a cut-off moves rows across the sections, at the figure emit will u
   await expect(page.locator('.pricing-cheap-count')).toContainText('1 under 2 above')
 })
 
+test('UN-13 finding #6 — Enter commits the cut-off once, never twice, and a re-typed same figure posts no receipt', async ({
+  page,
+}) => {
+  /* THE OPUS REVIEW ROUND: "commit once, on Enter or blur, and only when the value changed."
+   * `BigMoney`'s Enter handler committed, then blurred the field, and the blur handler's OWN
+   * commit fired again over the identical text — one press, two receipts, two undo entries.
+   * Proof: Enter gave two identical receipts and the first U restored the old figure while
+   * the second did nothing. */
+  await open(page, { skus: [sku({ bucket: 'sub_threshold' })] })
+  const cut = page.getByLabel('Store default')
+  await expect(cut).toHaveValue('0.40')
+
+  await cut.fill('0.99')
+  await cut.press('Enter')
+  /* ONE RECEIPT, NEVER TWO, for one press. */
+  await expect(page.locator('.bn-toast', { hasText: 'Cut-off set to $0.99' })).toHaveCount(1)
+
+  /* `U` YIELDS TO AN EDITABLE TARGET, so it is pressed off the field, the same as an
+     operator's own hand would leave it once Enter has already blurred the input. */
+  await page.keyboard.press('u')
+  await expect(cut).toHaveValue('0.40')
+  /* AND THE SECOND, PHANTOM COMMIT LEFT NOTHING BEHIND TO UNDO A SECOND TIME: pressing U again
+     changes nothing, because there was only ever one entry to begin with. */
+  await page.keyboard.press('u')
+  await expect(cut).toHaveValue('0.40')
+})
+
+test('UN-13 finding #2 — the cut-off toast\'s own Undo reverses the cut-off, never whatever is newest by the time it is pressed', async ({
+  page,
+}) => {
+  /* THE OPUS REVIEW ROUND: "a toast's Undo reverses whatever is on top of the undo stack, not
+   * the change the toast names." Proof: set the cut-off to $0.79, type 7.77 on the one SKU,
+   * then press the CUT-OFF TOAST's own Undo — the old build reverted the PRICE, the newest
+   * entry, and left the cut-off at $0.79. */
+  await open(page, { skus: [sku({ bucket: 'sub_threshold' })] })
+  const cut = page.getByLabel('Store default')
+  await expect(cut).toHaveValue('0.40')
+
+  await cut.fill('0.79')
+  await cut.press('Enter')
+  const cutToast = page.locator('.bn-toast', { hasText: 'Cut-off set to $0.79' })
+  await expect(cutToast).toBeVisible()
+
+  const price = field(page)
+  await price.focus()
+  await page.keyboard.type('7.77')
+  await page.keyboard.press('Enter')
+
+  /* THE CUT-OFF TOAST'S OWN UNDO — pressed after a NEWER press stands on top of the stack. */
+  await cutToast.getByRole('button', { name: 'Undo' }).click()
+
+  await expect(cut).toHaveValue('0.40')
+  /* THE PRICE STANDS UNTOUCHED: this toast named the cut-off, and only the cut-off reverted. */
+  await expect(price).toHaveValue('7.77')
+})
+
 test('the cut-off panel is drawn even when nothing is under the line', async ({ page }) => {
   await open(page, {
     skus: [
