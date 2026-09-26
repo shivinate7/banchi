@@ -1243,6 +1243,41 @@ test('U undoes the newest pull, on the Pull stage', async ({ page }) => {
   await expect(page.locator('.bn-toast', { hasText: 'Put Volcanion back' })).toBeVisible()
 })
 
+test('finding #11 (the Opus review round) — `U` still undoes the newest pull a faked minute later', async ({
+  page,
+}) => {
+  /* `useUndoHotkey` reads no clock (`kit/undo.ts`) — proof on Orders too, pressing the key
+   * itself rather than only checking the toast's own button stayed on screen. */
+  await page.clock.install()
+  const wire = await open(page, {
+    pull: {
+      undone: false,
+      order_key: `TCGplayer:${ORDER_NUMBER}`,
+      sku: SKU,
+      newly: 1,
+      recorded: 1,
+      outstanding: 0,
+      places: [place()],
+      sales: [{ card: { place: place({ label: 'Box 3 · departed', slot: null, section: null, card: null }) } }],
+    },
+    walkPlan: walkPlanOf([walkPlanStop()]),
+  })
+
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
+    .toBe(1)
+  await expect(page.locator('.bn-toast-receipt')).toBeVisible()
+
+  await page.clock.runFor(60_000)
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
+    .toBe(2)
+})
+
 test('finding #8 (the Opus review round) — a pull already reversed elsewhere reads as done, never a failure to retry', async ({
   page,
 }) => {

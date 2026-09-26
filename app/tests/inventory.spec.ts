@@ -4376,7 +4376,7 @@ test('S1 — bringing a card back names the box, never its number', async ({ pag
   await expect(bring).toBeVisible()
   await bring.click()
 
-  const toast = page.locator('.bn-toast', { hasText: 'Card brought back' })
+  const toast = page.locator('.bn-toast', { hasText: 'Sale undone' })
   await expect(toast).toContainText('ME01 commons #4 is back in its box')
   await expect(toast).not.toContainText('B2 #4')
 
@@ -4721,7 +4721,7 @@ test('UN-14 — a move built on is refused, and "Move back" is an ordinary move 
 
   /* THE REMEDY, NEVER A SECOND ROUTE: the same POST, aimed at where the card reads now
      (box 7, index 41), back to box 2 — the receipt's own origin. */
-  const backToast = page.locator('.bn-toast', { hasText: 'Card moved back' })
+  const backToast = page.locator('.bn-toast', { hasText: 'Move undone' })
   await expect(backToast).toBeVisible()
   /* FINDING #5: the toast names where the remedy actually put it — the fresh index the
      server's own answer carries — never the receipt's stale pre-move place. */

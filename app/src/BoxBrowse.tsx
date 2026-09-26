@@ -2885,12 +2885,15 @@ function CardOps({
       // sigil-ok: a store key, `storeKeyText`'s own shape (D92) with the box respelled from
       // its number to its name — this card is not in a slot to count, same as that one.
       const label = `${row.card.place?.box_name ?? UNNAMED_BOX} #${row.card.index}`
+      /* ONE VOCABULARY (UN-5, finding #15, the Opus review round, `docs/specs/undo.md`
+       * §11.9): a true reversal is always "<what it undid> undone", the same words
+       * `Inventory.tsx` uses for the identical write reached from its own screen. */
       if (row.card.state === 'sold') {
         const result: SaleResult = await undoSale(row.card.box, row.card.index)
         toast({
           kind: 'ok',
           icon: 'undo',
-          title: 'Card brought back',
+          title: 'Sale undone',
           body: result.order_released
             ? `${label} is back in its box. The order it was pulled for no longer counts it shipped.`
             : `${label} is back in its box.`,
@@ -2901,7 +2904,7 @@ function CardOps({
         toast({
           kind: 'ok',
           icon: 'undo',
-          title: 'Card brought back',
+          title: 'Retirement undone',
           body: `${label} is back in its box.`,
           ttlMs: 12000,
         })

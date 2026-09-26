@@ -637,7 +637,7 @@ test('finding #14 (the Opus review round) — the tray has no clock: a faked min
    * clockless door above the rows. `docs/specs/undo.md` §11.1 (UN-5): rank replaces the
    * clock everywhere else on this product; this proves it here too. */
   await page.clock.install()
-  await open(page)
+  const sent = await open(page)
 
   await page.locator('.review-candidate').first().click()
   await expect(page.locator('.review-receipt')).toHaveCount(1)
@@ -647,6 +647,13 @@ test('finding #14 (the Opus review round) — the tray has no clock: a faked min
   await page.clock.runFor(60_000)
   await expect(page.locator('.review-receipt')).toHaveCount(1)
   await expect(page.locator('.review-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
+
+  /* FINDING #11 (the Opus review round) — not only the visible control: `U` itself still
+   * fires a minute later, because `useUndoHotkey` reads nothing off a clock either. */
+  await page.keyboard.press('u')
+  await expect
+    .poll(() => sent.filter((s) => s.method === 'POST' && (s.body as { undo?: boolean } | null)?.undo === true).length)
+    .toBe(1)
 })
 
 /* ------------------------------------------------------------------------- the phone */

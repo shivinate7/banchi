@@ -499,3 +499,62 @@ The screen halves are built on branch `ux/undo-screens`, over lane S's `ux/undo-
   answer carries no per-SKU values, so this reads the corpus fresh afterward. It takes each
   restored SKU's answer off THAT read — the same "the response decides which rows come back"
   rule `withRestored` already follows for the toast's own path.
+
+### 11.10 One vocabulary (the Opus review round, finding #15)
+
+The review found the same outcome named differently on different screens. "Sale undone".
+"Move undone". "Card moved back". "Card brought back". "Put X back". "N prices restored".
+"Not restored". "The card was not put back". A person reading two of these gets no signal
+that they name the same kind of event.
+
+Two categories, not one word:
+
+- **A true reversal.** The write is undone. The store returns to what it was before the
+  write. Its toast title is always `"<what it undid> undone"`: "Sale undone", "Retirement
+  undone", "Move undone". `BoxBrowse.tsx:CardOps.resurrect` used to say "Card brought back".
+  `Inventory.tsx` already named the identical write "Sale undone" or "Retirement undone".
+  Same event, two names, two screens. Fixed: `resurrect` now uses the same two words. A
+  refusal to reverse reads `"Not undone"`. The reason goes in the body, never the raw code
+  (finding #7).
+- **A different write that only looks like an undo.** The card ends up back on the shelf.
+  The request is not a reversal of the original one. `BoxBrowse.tsx:CardOps.stillHere`
+  (UN-7's `saleStillHere`, reached only after a reversal refuses `sale_built_on`) and Orders'
+  `pull_not_recorded` case (finding #8: the pull was already reversed elsewhere) are both
+  this kind. Each keeps its own honest phrase: `"Card brought back"`, `"Already put back"`.
+  Calling either one "undone" would claim a reversal that never happened.
+  `Pricing.tsx`'s cut-off restore (`"N prices restored"` / `"Not restored"`) is a third,
+  narrower case. It restores a prior VALUE, not a deleted write. "Restored" stays its own
+  word here, in neither bucket above.
+
+The rule for a new screen: name the result of an Undo press `"<subject> undone"`. Name a
+write that is not provably a reversal for what it plainly did instead. Never borrow
+"undone" for it.
+
+### 11.11 Finding #10, surfaced rather than fixed (the Opus review round)
+
+The review asked that Review's receipt row reserve its own space. Then nothing else moves
+when it mounts (D118). §11.9's own UN-9/UN-10 entry already records the opposite ruling,
+from the same round. `PageUndo` does NOT reserve space on Review. Reserving it cost the
+no-scrolling floor 54px it had no slack for.
+
+Measured again for this finding: Review renders the SAME receipt twice. `.review-tray`'s own
+row, in the body, already reserves its height and moves nothing (proven by the finding #14
+test). `PageUndo`, in the page header, is the redundant second copy. It is the one that is
+not reserved. Its mount pushes `.review-filters` and everything below it down 56px on the
+first answer of a session.
+
+Two real fixes exist, and neither one is free:
+
+1. **Drop the header's `PageUndo` on Review.** The in-body Tray already offers the same
+   Undo. Nothing is lost on a screen wide enough to see it. `kit/undo.ts`'s own comment says
+   `PageUndo` exists so a phone reaches Undo "without hunting the in-page receipt, which
+   sits below the fold on a phone". Dropping it may cost that phone-only reach. Not measured
+   here.
+2. **Make `.bn-page-undo` an overlay instead of a flow element**
+   (`position: absolute` or `fixed`). It can then appear and disappear without moving
+   anything below it, on every screen that uses it (Pricing included). This spends no
+   permanent space, and it reaches the phone case option 1 gives up. It is a
+   `kit/Page.tsx`-level change. This round did not scope or test it.
+
+Not built this round. Filed for the owner's word: which of the two, or whether the D118
+exception UN-9/UN-10 already recorded stands as written.

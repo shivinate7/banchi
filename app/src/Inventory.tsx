@@ -603,14 +603,16 @@ export function Inventory() {
       toast({
         kind: 'ok',
         icon: 'undo',
+        /* ONE VOCABULARY (UN-5, finding #15, the Opus review round, `docs/specs/undo.md`
+         * §11.9): every reversal reads "<what it undid> undone", whether the write went
+         * through the ordinary reversal route or, for a move, back through `moveCard`
+         * itself (`movedBack`) — a distinction the operator has no reason to see. */
         title:
           receipt.kind === 'sale'
             ? 'Sale undone'
             : receipt.kind === 'retirement'
               ? 'Retirement undone'
-              : movedBack
-                ? 'Card moved back'
-                : 'Move undone',
+              : 'Move undone',
         body: movedBack ? (movedBackTo ?? receipt.place) : receipt.place,
         ttlMs: 4000,
       })

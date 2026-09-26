@@ -2938,6 +2938,24 @@ test('the failed-undo message and its Undo live and die together, and neither le
   await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
 })
 
+test('finding #11 (the Opus review round) — `U` itself still undoes the newest sale a minute later, not only the button', async ({
+  page,
+}) => {
+  /* `useUndoHotkey` reads no clock (`kit/undo.ts`) — this is the shared hook's own proof on
+   * this screen, pressing the key rather than only checking the button stayed visible. */
+  await page.clock.install()
+  const wire: Wire[] = []
+  await openList(page, wire)
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await expect(receiptFor(page, 'Box 3, Section 1, Card 7').getByRole('button', { name: 'Undo' })).toBeVisible()
+
+  await page.clock.runFor(60_000)
+  await page.keyboard.press('u')
+  await expect.poll(() => wire.filter((w) => w.undo).length).toBe(1)
+})
+
 /* ------------------------------------------------------------------ finding a card by name
  *
  * THE TABLE BINDS THIS PATH EXACTLY AS HARD AS THE WALK. The row that says "every text node in
