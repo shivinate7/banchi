@@ -100,4 +100,5 @@ DEBT39 the public demo refuses every box map move
 DEBT40 a divider save can move a divider past departed records
 DEBT41 Pricing never offers "Make this the rule"
 DEBT42 ~~A row with no market price hides a typed price that the send still lists~~ — CLOSED 2026-09-26, on the owner's word
+DEBT43 the merge-speed guard counts SQLite ticks only, and a pure-Python loop is invisible to it
 ```
