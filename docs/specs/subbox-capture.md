@@ -204,6 +204,7 @@ stays in the mix. The divider proof's own fuzz (seeds 0 to 5) replays as before.
 | A SKU's copies sort by index | the copy-order case |
 | An empty section's first card takes a key between the dividers | I4, I10 |
 | `sections_detail[].div` is off by one | I2, I3 |
+| A Move to box with no section is not refused | I12 |
 
 One mutation stayed green, and it is not a defect. Resolving the section after the box is
 registered leaves I6 true. The write that raises `SectionGone` discards the new box entry
