@@ -24,6 +24,7 @@ import {
   sendMarkdown,
   getPricingCorpus,
   getPricingWorklist,
+  restoreLastClear,
   putPricingCorpus,
   restorePricingAnswers,
   getRun,
@@ -333,8 +334,12 @@ function groupOf(sku: PricingSku): string | null {
  * reverse THE CHANGE IT NAMES, never whatever the stack's front holds by the time the
  * button is actually pressed — a hold set on one row and then another must not let the
  * second row's toast undo the first's write. */
+/** UN-12 (the delta review round): `writes` is an ARRAY, never one bare sku/before/channel —
+ *  `setHold` on a SKU with no market price writes two fields (`listable` AND the bucket
+ *  itself), and both have to be ONE stack entry so `U` reverses the whole hold in one press,
+ *  never just the second write it happened to push last. */
 type Undo = { id: number } & (
-  | { kind: 'answer'; sku: string; before: CorpusAnswer | undefined; channel: 'price' | 'unknown' }
+  | { kind: 'answer'; writes: readonly { sku: string; before: CorpusAnswer | undefined; channel: 'price' | 'unknown' }[] }
   | { kind: 'cutoff'; before: { threshold: string | undefined; sub_threshold: PricingCorpus['policy']['sub_threshold'] | undefined } }
 )
 
@@ -812,6 +817,7 @@ export function Pricing() {
       setSheet(table)
       setBook(held.corpus)
       setClearable(held.clearable ?? null)
+      setLastClear(held.last_clear ?? null)
       revision.current = held.revision
       savedBook.current = held.corpus
       failedBook.current = null
@@ -907,6 +913,17 @@ export function Pricing() {
    *  UN-13 (finding #15, `docs/specs/undo.md` §11.10): a cut-off change is a reversal too, so
    *  it gets the same "<subject> undone" toast every other write on this screen gets. */
   const setCut = useCallback((figure: string) => {
+    /* FINDING #6 (the delta review round): a no-op guard, only when the STORED policy already
+     * reads this figure — never when the field simply shows a default nobody has written yet.
+     * The prior guard sat in `BigMoney` and compared its own `value` prop, which is the
+     * suggestion for an unwritten policy — a store that has never set one reads $0.40 from
+     * the constant, and the field shows it too, so typing that same default in was wrongly
+     * read as a no-op and its write silently swallowed. `book?.policy` is the actual stored
+     * answer, undefined until a PUT has landed, so an unwritten policy never matches here. */
+    const storedThreshold = book?.policy?.threshold
+    const storedFlat = book?.policy?.sub_threshold
+    const storedFlatValue = typeof storedFlat === 'string' ? storedFlat : storedFlat !== null && storedFlat !== undefined ? storedFlat[FLAT_KEY] : undefined
+    if (storedThreshold === figure && storedFlatValue === figure) return
     const id = nextUndoId.current++
     setUndo((stack) =>
       [
@@ -952,24 +969,41 @@ export function Pricing() {
     reload()
   }, [clearAsked, reload])
 
-  /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo stack.
-   *  Returns the entry's own id (finding #2), so a toast can reverse THIS write and never
-   *  whatever the stack's front holds by the time the button is pressed. */
-  const write = useCallback(
-    (sku: string, bucket: PricingSku['bucket'], value: unknown): number => {
-      const channel: 'price' | 'unknown' = targetOf(bucket) === 'no_market_data' ? 'unknown' : 'price'
-      setBook((current) => (current === null ? current : setAnswer(current, sku, value, channel)))
+  /** Write one or more answers as ONE undo entry (UN-12), pushing each one's previous value —
+   *  including its ABSENCE — onto the undo stack together. Returns the entry's own id
+   *  (finding #2), so a toast can reverse THIS write and never whatever the stack's front
+   *  holds by the time the button is pressed. `before` is read off the SAME `book` for every
+   *  op in the batch — the state before any of them landed, never a later op's own write. */
+  const writeMany = useCallback(
+    (ops: readonly { sku: string; bucket: PricingSku['bucket']; value: unknown }[]): number => {
+      const writes = ops.map(({ sku, bucket }) => ({
+        sku,
+        before: book?.skus?.[sku],
+        channel: (targetOf(bucket) === 'no_market_data' ? 'unknown' : 'price') as 'price' | 'unknown',
+      }))
+      setBook((current) => {
+        if (current === null) return current
+        let next = current
+        for (let i = 0; i < ops.length; i += 1) next = setAnswer(next, ops[i]!.sku, ops[i]!.value, writes[i]!.channel)
+        return next
+      })
       const id = nextUndoId.current++
-      setUndo((stack) => [{ id, kind: 'answer' as const, sku, before: book?.skus?.[sku], channel }, ...stack].slice(0, UNDO_DEPTH))
+      setUndo((stack) => [{ id, kind: 'answer' as const, writes }, ...stack].slice(0, UNDO_DEPTH))
       setTypedHere((held) => {
         const next = new Set(held)
-        if (typeof value === 'string' && value !== 'unlisted' && source.kind === 'run') next.add(sku)
-        else next.delete(sku)
+        for (const { sku, value } of ops) {
+          if (typeof value === 'string' && value !== 'unlisted' && source.kind === 'run') next.add(sku)
+          else next.delete(sku)
+        }
         return next
       })
       return id
     },
     [book, source.kind],
+  )
+  const write = useCallback(
+    (sku: string, bucket: PricingSku['bucket'], value: unknown): number => writeMany([{ sku, bucket, value }]),
+    [writeMany],
   )
 
   const table = source.rows.length > 0 || stamp !== null ? source.rows : null
@@ -1424,27 +1458,34 @@ export function Pricing() {
         )
         return
       }
+      /* UN-12: every op in the batch reverses together — a hold on a no-market-price SKU
+       * wrote two fields, and both come back in the SAME setBook call so neither can land
+       * ahead of a re-render that reads only one of them. */
       setBook((current) => {
         if (current === null) return current
         const skus = { ...(current.skus ?? {}) }
-        if (top.before === undefined) delete skus[top.sku]
-        else skus[top.sku] = top.before
+        for (const w of top.writes) {
+          if (w.before === undefined) delete skus[w.sku]
+          else skus[w.sku] = w.before
+        }
         return { ...current, skus }
       })
-      /* AN UNDONE ANSWER WAS NOT TYPED THIS VISIT (round 7, R6-2). */
       setTypedHere((held) => {
+        /* AN UNDONE ANSWER WAS NOT TYPED THIS VISIT (round 7, R6-2). */
         const next = new Set(held)
-        next.delete(top.sku)
+        for (const w of top.writes) next.delete(w.sku)
         return next
       })
-      const row = rows.find((one) => one.sku === top.sku)
-      const input = inputs.current.get(top.sku)
-      if (row !== undefined && input) {
-        const before = top.before?.value
-        input.value = typeof before === 'string' ? before : suggestionFor(row)
-        flash(input)
+      for (const w of top.writes) {
+        const row = rows.find((one) => one.sku === w.sku)
+        const input = inputs.current.get(w.sku)
+        if (row !== undefined && input) {
+          const before = w.before?.value
+          input.value = typeof before === 'string' ? before : suggestionFor(row)
+          flash(input)
+        }
+        touched.current.delete(w.sku)
       }
-      touched.current.delete(top.sku)
     },
     [rows, suggestionFor],
   )
@@ -1527,29 +1568,25 @@ export function Pricing() {
       const record: WithheldRecord = { withheld: reason }
       if (watch.trim() !== '') record.watch_above = watch.trim()
       if (text.trim() !== '') record.note = text.trim()
-      const id = write(sku.sku, 'listable', record)
-      /* UN-12: `setHold` may push a SECOND entry (the bucket write below), so one `U` has to
-       * undo both — the toast reverses each id it pushed, oldest first, so the second call's
-       * `.find` still sees the first entry that has not yet been filtered out. */
-      const id2 = sku.bucket === 'no_market_data' ? write(sku.sku, sku.bucket, 'unlisted') : null
+      /* UN-12 (the delta review round): a SKU with no market price writes TWO fields
+       * (`listable` and the bucket itself, since holding it also has to pull it out of
+       * `no_market_data`). ONE `writeMany` call, so both land as ONE stack entry — `U`
+       * reverses the whole hold in one press, never leaving the second write behind as an
+       * orphan entry a later, unrelated `U` would wrongly reach. */
+      const ops: { sku: string; bucket: PricingSku['bucket']; value: unknown }[] = [{ sku: sku.sku, bucket: 'listable', value: record }]
+      if (sku.bucket === 'no_market_data') ops.push({ sku: sku.sku, bucket: sku.bucket, value: 'unlisted' })
+      const id = writeMany(ops)
       setHoldFor(null)
       toast({
         kind: 'receipt',
         title: `Held ${sku.name}`,
         body: WITHHOLD_LABELS[reason],
         ttlMs: 8000,
-        action: {
-          label: 'Undo',
-          kbd: 'U',
-          onPress: () => {
-            if (id2 !== null) undoByIdRef.current(id2)
-            undoByIdRef.current(id)
-          },
-        },
+        action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) },
       })
       inputs.current.get(sku.sku)?.focus()
     },
-    [write],
+    [writeMany],
   )
 
   /** Read the shape of every row still waiting — one press, chunked, sequential. EACH ROW ASKS
@@ -1727,6 +1764,12 @@ export function Pricing() {
      no way to mass clear". The server says which answers may go; absent disables the control. */
   const [clearOpen, setClearOpen] = useState(false)
   const [clearable, setClearable] = useState<PricingClearable | null>(null)
+  /** UN-11 (`docs/specs/undo.md` SS11.3): the newest clear that can still be undone, read off
+   *  the server rather than kept only in a toast's own closure — this is what still offers
+   *  "Restore N cleared" after the toast has faded, or after a reload. Null once a send has
+   *  carried a cleared SKU (`clear_built_on`), the same "built on" limit every other undo
+   *  answers to. */
+  const [lastClear, setLastClear] = useState<{ count: number; at: number } | null>(null)
   const clearableTotal = Object.keys(clearable?.days ?? {}).length
   /** THE SCOPE IS THE WORKLIST AS LOADED, never the filtered rows: a destructive press whose
    *  radius depends on a chip is a press nobody can predict. */
@@ -1745,7 +1788,44 @@ export function Pricing() {
   const refreshCorpus = useCallback(async () => {
     const answer = await getPricingCorpus()
     setClearable(answer.clearable ?? null)
+    setLastClear(answer.last_clear ?? null)
     revision.current = answer.revision
+  }, [])
+
+  /** UN-11: put back the newest clear, off the server's own memory of it rather than a
+   *  toast's closure. Unlike the toast's own Undo, this answer carries no SKU-keyed values
+   *  to walk into the fields, only which SKUs came back — so this reads the corpus fresh and
+   *  takes each restored SKU's answer off IT, the same "the response decides which rows come
+   *  back" rule `withRestored` already follows for the toast's own path. */
+  const doRestoreLastClear = useCallback(async () => {
+    try {
+      const back = await restoreLastClear(revision.current)
+      setLastClear(null)
+      const held = await getPricingCorpus()
+      revision.current = held.revision
+      savedBook.current = held.corpus
+      setBook(held.corpus)
+      setClearable(held.clearable ?? null)
+      for (const sku of back.restored) {
+        const input = inputs.current.get(sku)
+        const was = held.corpus.skus?.[sku]
+        if (input === undefined || was === undefined) continue
+        input.value = typeof was.value === 'string' ? was.value : String(was.value ?? '')
+        flash(input)
+        touched.current.delete(sku)
+      }
+      toast({
+        kind: 'ok',
+        title: `${back.restored.length} price${back.restored.length === 1 ? '' : 's'} undone`,
+        body:
+          back.skipped.length === 0
+            ? 'Each one carries the date it was first typed on.'
+            : `${back.skipped.length} had been answered again since, and those answers were kept.`,
+      })
+    } catch (err) {
+      const trouble = describeFailure(err)
+      toast({ kind: 'refusal', title: 'Not undone', body: `${trouble.message} (${trouble.code})` })
+    }
   }, [])
 
   /** A clear landed: drop those answers, clear the fields, re-read, and offer the way back. */
@@ -2020,10 +2100,21 @@ export function Pricing() {
   const measureBar = useCallback((node: HTMLElement | null) => {
     barObserver.current?.disconnect()
     barObserver.current = null
-    if (node === null) return
+    if (node === null) {
+      document.body.style.removeProperty('--pricing-bar-h')
+      return
+    }
     const host = node.closest<HTMLElement>('.pricing')
     if (host === null) return
-    const publish = () => host.style.setProperty('--pricing-bar-h', `${node.offsetHeight}px`)
+    /* ALSO ON `document.body` (finding #9, the delta review round): the toast stack
+       (`kit/toast.tsx`'s `Toaster`) mounts as a sibling of `.pricing`, not a descendant of it,
+       so a variable set only on `host` never reaches it — a CSS custom property inherits
+       down the tree, never sideways. Setting it on `body` too is what lets
+       `body:has(.pricing-bar) .bn-toasts` in Pricing.css read the bar's real height. */
+    const publish = () => {
+      host.style.setProperty('--pricing-bar-h', `${node.offsetHeight}px`)
+      document.body.style.setProperty('--pricing-bar-h', `${node.offsetHeight}px`)
+    }
     publish()
     const observer = new ResizeObserver(publish)
     observer.observe(node)
@@ -2217,6 +2308,16 @@ export function Pricing() {
       <div className="pricing-body" data-live={liveTab ? 'true' : undefined}>
         {bar}
         {ruleLine}
+        {/* UN-11: outlives the toast, and a reload. Gone once a send has carried a cleared
+            SKU (`clear_built_on`) — the next read finds no `last_clear`. */}
+        {lastClear === null ? null : (
+          <Notice tone="info" className="pricing-restore-clear">
+            {lastClear.count} typed price{lastClear.count === 1 ? '' : 's'} cleared.{' '}
+            <Button size="sm" variant="quiet" icon="undo" onClick={() => void doRestoreLastClear()} words="word-only-control">
+              Restore {lastClear.count} cleared
+            </Button>
+          </Notice>
+        )}
         {liveTab ? null : <UnreachableLine at={work?.unreachable ?? null} />}
 
         {table !== null && table.length === 0 && liveTab ? (
