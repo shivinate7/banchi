@@ -1,4 +1,11 @@
-## 42 — A row with no market price hides a typed price that the send still lists
+## 42 — ~~A row with no market price hides a typed price that the send still lists~~ — CLOSED 2026-09-26, on the owner's word
+
+**Closed on the owner's ruling, "Screen shows $5.16"** (`docs/reviews/ux-2026-09-23/RULINGS.md`).
+The screen side was fixed and the send was not changed. `app/src/standing.ts:corpusAnswer` and
+`Pricing.tsx`'s `answerFor` read a `price` answer on every row, the same as `join` reads it. The
+row shows the typed price and a quiet "No market price" mark. Home counts the copy as ready. One
+case in `app/tests/pricing.spec.ts` and one in `app/tests/home.spec.ts` were red on the old code.
+
 
 **The gap.** A SKU can hold a typed price on the `price` channel and then lose its market
 price in a later export. `#/pricing` reads a row with no market price from the `unknown`

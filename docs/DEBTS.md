@@ -99,5 +99,5 @@ DEBT38 a section move's receipt names no owed cards and no next capture
 DEBT39 the public demo refuses every box map move
 DEBT40 a divider save can move a divider past departed records
 DEBT41 Pricing never offers "Make this the rule"
-DEBT42 A row with no market price hides a typed price that the send still lists
+DEBT42 ~~A row with no market price hides a typed price that the send still lists~~ — CLOSED 2026-09-26, on the owner's word
 ```

@@ -650,3 +650,8 @@ On expiry: "Yes, until it's built on (Recommended)".
   is "List", the box map is "Map", and the by-set view is "Sets", on one switch. The URL
   values stay `walk`, `shelf` and `sets` (the integration builder's call, process-only: a
   label changes, a machine key does not). D264 and D-set-view record the build.
+- A typed price on a card whose market went blank (owner, 2026-09-26, the owner's chosen
+  option, verbatim): "Screen shows $5.16 (Recommended)". Pricing shows the typed price in
+  the field, with a short "No market price" mark, and never "Needs a price". Home counts
+  that copy as ready. The screen follows what the send already lists. The send, the files
+  it writes and the stored prices do not change. DEBT42 records the gap and its close.

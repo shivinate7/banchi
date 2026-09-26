@@ -2060,6 +2060,23 @@ test('UN-12 (the delta review round) — a hold on a no-market-price SKU is ONE 
   await expect.poll(() => sent()).toMatchObject({ value: '5.16', channel: 'unknown' })
 })
 
+test('DEBT42 — a typed price on a row whose market went blank is shown, because the send lists at it', async ({
+  page,
+}) => {
+  /* THE OWNER'S RULING, "Screen shows $5.16". The price sits on the `price` channel and the
+   * market went blank in a later export. `join` reads the `price` channel before it asks for a
+   * market price, so the send lists this card at $5.16. The screen once read only the `unknown`
+   * channel on this row and said "Needs a price". */
+  await open(page, {
+    skus: [sku({ sku: '5', name: 'Void Assault', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
+    decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: { '5': '5.16' } },
+  })
+  const row = page.locator('.pricing-row')
+  await expect(field(page)).toHaveValue('5.16')
+  await expect(row).toContainText('No market price')
+  await expect(row).not.toContainText('Needs a price')
+})
+
 test('a held row says so, in both registers, and has no price field', async ({ page }) => {
   await open(page, {
     decisions: {

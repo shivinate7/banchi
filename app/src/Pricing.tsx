@@ -1035,10 +1035,11 @@ export function Pricing() {
 
 
   const answerFor = useCallback(
-    /* A HOLD ON THE `price` CHANNEL IS READ ON EVERY ROW, since `join` honours it before the
-     * bucket (`setHold`). Anything else on a no-market row reads the `unknown` channel. */
+    /* `standing.ts:corpusAnswer`'s rule: an answer on the `price` channel is read on every
+     * row, a hold or a typed price (DEBT42's ruling). A no-market row reads the `unknown`
+     * channel only when nothing sits on the `price` one. One SKU holds one answer. */
     (sku: PricingSku): unknown =>
-      targetOf(sku.bucket) === 'overrides' || isWithheld(answers[sku.sku]) ? answers[sku.sku] : unpriced[sku.sku],
+      targetOf(sku.bucket) === 'overrides' ? answers[sku.sku] : (answers[sku.sku] ?? unpriced[sku.sku]),
     [answers, unpriced],
   )
 
@@ -2499,7 +2500,11 @@ function fieldState(
       }
     }
   }
-  if (sku.bucket === 'no_market_data' && typeof standing !== 'string') return { text: 'Needs a price', tone: 'warn' }
+  /* A TYPED PRICE ON A ROW WITH NO MARKET PRICE IS WHAT THE SEND LISTS AT (DEBT42's ruling), so
+     the row says only that there is no market to compare it with. */
+  if (sku.bucket === 'no_market_data') {
+    return typeof standing === 'string' ? { text: 'No market price', tone: 'quiet' } : { text: 'Needs a price', tone: 'warn' }
+  }
   return null
 }
 
