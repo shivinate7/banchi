@@ -96,6 +96,7 @@ import type {
   ReconcileBacklogResult,
   ValueTable,
   ValueCopy,
+  SetsReport,
   SubmissionClaims,
   ClaimRelease,
   HoldingsRange,
@@ -2978,6 +2979,13 @@ export async function getHoldingsValue(range: HoldingsRange = 'month'): Promise<
     `/pipeline/holdings-value?range=${encodeURIComponent(range)}`,
     NO_CACHE,
   )) as HoldingsValuePayload
+}
+
+/** Every on-hand card, grouped by set, one row per distinct card with its quantity — the
+ *  owner's "by set order" view (`#/inventory?view=sets`). A read; costs nothing, holds
+ *  nothing, aggregates server-side. */
+export async function getInventorySets(): Promise<SetsReport> {
+  return (await request('/pipeline/sets', NO_CACHE)) as SetsReport
 }
 
 /** Every run, newest first. A read; costs nothing and holds nothing, so a run started from

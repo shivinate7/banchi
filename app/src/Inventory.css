@@ -118,3 +118,7 @@
 .inventory-retire-text { display: flex; flex-direction: column; gap: 2px; }
 .inventory-retire-label { font-size: var(--bn-fs-base); font-weight: 700; }
 .inventory-retire-said { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+
+/* THE OWNER'S "BY SET" VIEW SWITCH (D-set-view) — `.bn-tabs`/`.bn-tab` is the kit's own
+ * pattern (`Codes.tsx`, `Gallery.tsx`); this file only adds the gap below it. */
+.inventory-view-tabs { margin-bottom: var(--bn-4); }

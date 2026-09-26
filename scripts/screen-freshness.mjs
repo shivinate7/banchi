@@ -226,6 +226,9 @@ const RECORDED = {
     // price-history archive, one range at a time. A plain read, same shape as
     // `getSoldPrices` above and never merged with it.
     'getHoldingsValue',
+    // The owner's "by set" view (D-set-view): every on-hand card, grouped by set,
+    // aggregated server-side. A plain read, same shape as every other entry here.
+    'getInventorySets',
   ],
   writes: [
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',

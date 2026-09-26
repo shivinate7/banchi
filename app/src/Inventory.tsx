@@ -27,6 +27,8 @@ import {
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxRuns } from './BoxRuns'
 import { CardLocations } from './CardLocations'
+import { InventorySets } from './InventorySets'
+import { useViewParam } from './kit/viewState'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
 import { sayPlace } from './position'
@@ -250,6 +252,10 @@ function report(failure: Failure): void {
 }
 
 export function Inventory() {
+  /* THE OWNER'S "BY SET" VIEW (D-set-view): a second way of walking this same screen, in
+   * the URL (D285) rather than component state — `#/inventory?view=sets`. D264's own
+   * precedent is a map INSIDE Inventory rather than a fourth screen (D31). */
+  const [view, setView] = useViewParam('view')
   const [selected, setSelected] = useState<Row | null>(null)
   const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
   const [listings, setListings] = useState<Readonly<Record<string, Listing>>>(NO_LISTINGS)
@@ -678,6 +684,21 @@ export function Inventory() {
       lede={boxRecords.length === 0 ? undefined : 'Sell, retire or move any card.'}
       className="inventory"
     >
+      {/* THE OWNER'S "BY SET" VIEW (D-set-view), one more way of walking this same screen —
+       * D264's own precedent (the box map lives inside Inventory too). `.bn-tabs`/`.bn-tab`
+       * is the pattern `Codes.tsx`'s ledger and `Gallery.tsx`'s queue already draw the same
+       * two-way switch with, never a hand-rolled control this kit does not already own. */}
+      <div className="bn-tabs inventory-view-tabs" role="tablist" aria-label="Inventory view">
+        <button type="button" role="tab" className="bn-tab" aria-selected={view !== 'sets'} onClick={() => setView('')}>
+          <Icon name="box" size={14} /> Shelf
+        </button>
+        <button type="button" role="tab" className="bn-tab" aria-selected={view === 'sets'} onClick={() => setView('sets')}>
+          <Icon name="layers" size={14} /> Sets
+        </button>
+      </div>
+      {view === 'sets' ? (
+        <InventorySets reloadToken={reloads} />
+      ) : (
       <BoxBrowse
         detail={detail}
         onSelect={setSelected}
@@ -693,6 +714,7 @@ export function Inventory() {
         boxPanel={<BoxRuns box={runScope.box} indices={runScope.indices} />}
         actionBar={currentCopy === null || selected === null || currentCopy.key !== selected.key ? null : actionFor(currentCopy, true)}
       />
+      )}
 
       {retiring === null ? null : (
         <RetirePanel
