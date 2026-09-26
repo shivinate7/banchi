@@ -1305,6 +1305,56 @@ test('pressing the pause button moves nothing else on the screen (D118)', async 
   expect(after).toEqual(before)
 })
 
+/* THE RACE ITSELF, WITH NO `await expect` BETWEEN THE CLICK AND THE KEY. The cases above
+ * all put at least one polling `expect` between `pauseplay(page).click()` and the keyboard
+ * press that follows it — `toHaveClass`, `toHaveAccessibleName`, `toHaveAttribute` — and each
+ * of those polls for real time, which is exactly enough for a passive `useEffect` to flush
+ * before the key ever reaches the page. That is why they passed even against a mutated
+ * `useEffect` with a 50ms artificial delay on the re-arm: the poll ate the delay. These three
+ * press the key on the very next line after the click, the way a fast human or a feeder
+ * would, and prove the fix (`useLayoutEffect` on the three trigger-arming effects,
+ * `CaptureScreen.tsx`) rather than the click's own render. `armMotion` already flips the
+ * `captureTrigger` identity once at arm; the click flips it back, which is the transition
+ * this file measured losing a press over. */
+test('the manual key fires on the very next line after Resume — no wait in between', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await armMotion(page)
+  await pauseplay(page).click() // motion -> manual: the capture key goes live right here
+  await page.keyboard.press('c') // no awaited expect between the click and this press
+  await expect.poll(() => wire.captures).toBe(1)
+})
+
+/* `U` and `S` are on `manualTrigger`s built with `useMemo(() => ..., [])` — a stable identity
+ * across every render, so `switchTrigger` never changes what they are armed on and the
+ * layout-effect fix above touches them only for consistency with the field-key listener's
+ * own idiom, not because they shared the race. These two are the negative control: if they
+ * DID share it, one of them would fail here exactly like the capture key did before the fix.
+ * They pass under the ORIGINAL `useEffect` too — mutation-tested below, alongside the
+ * capture-key case above. */
+test('U fires on the very next line after Resume — no wait in between', async ({ page }) => {
+  const wire = await open(page)
+  await shoot(page, 1)
+  await armMotion(page)
+  await pauseplay(page).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => wire.deletes.length).toBe(1)
+})
+
+test('S fires on the very next line after Resume — no wait in between', async ({ page }) => {
+  await open(page)
+  await armMotion(page)
+  await pauseplay(page).click()
+  await page.keyboard.press('s')
+  // `openSection`'s own POST never touches `wire.sections` — that field is the UNDO route's
+  // (`updateBox({ sections })`), a different call entirely. The receipt on screen is what a
+  // fresh divider actually proves, the same reader `capture-claims.spec.ts` uses for it.
+  await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
+    'New section',
+  )
+})
+
 /* ------------------------------------------------------------------------------------------
  * UX-076 (owner, 2026-09-24): "do we have that data? if so name the reason." `halt.code`
  * already carried the server's own code; `CaptureScreen.tsx`'s `HALT_CODE_INFO` now maps
