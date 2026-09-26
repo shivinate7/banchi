@@ -44,7 +44,7 @@ import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
 import { RunsContent, boxInHash, perCardRate, runInHash, stateInHash } from './Runs'
 import { openingSelection, sendOfKeys } from './RunsComposer'
-import { carriedScope } from './runHandoff'
+import { carriedScope, type CarriedScope } from './runHandoff'
 import { roundsToNothing } from './money'
 import './ReviewQueue.css'
 import { isRetiredReason, reasonLabel } from './reasons'
@@ -773,8 +773,16 @@ export function ReviewQueue() {
       live = false
     }
   }, [reloads])
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `reloads` re-reads the handoff on purpose
-  const carried = useMemo(() => carriedScope(), [reloads])
+  /* THE HANDOFF IS READ AGAIN EVERY TIME THE STRIP COULD HAVE GONE STALE, not only on a reload:
+     `sessionStorage` fires no event inside its own tab, and the Runs sheet is where the handoff
+     changes (picking another start drops it). So it is read on each reload, and again whenever
+     the sheet opens or closes. Keyed by its keys, so an unchanged handoff asks nothing twice. */
+  const handoffKey = useMemo(
+    () => JSON.stringify(carriedScope()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the deps are WHEN to re-read storage
+    [reloads, runsOpen],
+  )
+  const carried = useMemo(() => JSON.parse(handoffKey) as CarriedScope | null, [handoffKey])
   const ask = carried !== null || (status?.states.captured ?? 0) > 0
   useEffect(() => {
     if (!ask) {
