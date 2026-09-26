@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 
 import { describeFailure, rescueRun, type Failure } from './server'
 import type { RescueResult } from './types'
-import { Button, IconButton, Notice, Stat } from './kit'
+import { Button, Notice, Sheet, Stat } from './kit'
 import { toast } from './kit/toast'
-import { useOverlayFocus } from './runsOverlay'
 import './RunRescue.css'
 
 /* D165's repair, offered from the run it strands (D210). A rescue re-addresses
@@ -54,8 +52,6 @@ export function RunRescue({
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<RescueResult | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
-  const sheet = useRef<HTMLElement | null>(null)
-  const scrim = useRef<HTMLDivElement | null>(null)
 
   const send = useCallback(
     async (write: boolean) => {
@@ -96,39 +92,30 @@ export function RunRescue({
     void send(false)
   }, [open, send])
 
-  useOverlayFocus(sheet, open, onClose, busy, scrim)
-
   const applyable = result !== null && result.ok && !result.wrote && result.already_rescued === null && result.counts.rebound > 0
 
-  return createPortal(
-    <>
-      {open ? <div ref={scrim} className="bn-scrim" onClick={onClose} /> : null}
-      <aside
-        ref={sheet}
-        className="bn-sheet rescue-sheet"
-        hidden={!open}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="rescue-sheet-head"
-        tabIndex={-1}
-      >
-        <header className="rescue-sheet-top">
-          <div className="rescue-sheet-heading">
-            <span className="bn-eyebrow">
-              <span>This run</span>
-              <span>free</span>
-            </span>
-            <h2 className="rescue-sheet-head" id="rescue-sheet-head">
-              Rebind this run
-            </h2>
-          </div>
-          <IconButton icon="x" label="Close" onClick={onClose} />
-        </header>
-
+  /* THE KIT'S OWN SHEET (D275). Nothing closes it while the preview or the rebind is in
+     flight, so a write is never hidden. */
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      dismissible={!busy}
+      title="Rebind this run"
+      icon="moveTo"
+      className="rescue-sheet"
+      footer={
+        applyable ? (
+          <Button variant="primary" icon="check" busy={busy} onClick={() => void send(true)}>
+            Rebind these cards
+          </Button>
+        ) : null
+      }
+    >
         <div className="rescue-sheet-body">
           <p className="rescue-sheet-says">
             This run’s box was deleted. If its cards are now in another box, they can be found
-            there as a new run. <strong>This run is never changed.</strong>
+            there as a new run. This check is free. <strong>This run is never changed.</strong>
           </p>
 
           {!busy ? null : (
@@ -187,16 +174,6 @@ export function RunRescue({
             </>
           )}
         </div>
-
-        <footer className="rescue-sheet-foot">
-          {applyable ? (
-            <Button variant="primary" icon="check" busy={busy} onClick={() => void send(true)}>
-              Rebind these cards
-            </Button>
-          ) : null}
-        </footer>
-      </aside>
-    </>,
-    document.body,
+    </Sheet>
   )
 }

@@ -149,7 +149,7 @@ const ts = (await import(pathToFileURL(TYPESCRIPT).href)).default
  * adding a line here, only by adding a line here AND making the source say why. */
 const NON_MUTATING = new Set([
   'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
-  'getInventoryCopies', 'fetchOrderPicks', 'walkPlan',
+  'getInventoryCopies', 'fetchOrderPicks', 'walkPlan', 'waitingCards',
 ])
 const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates nothing/i
 
@@ -289,9 +289,11 @@ const RECORDED = {
   // `walkPlan` (docs/specs/order-walk-plan.md §7) is the same shape a third time:
   // `do_order_walk_plan` reads one snapshot and calls `pipeline/walkplan.py:plan`, which
   // touches no wire and no store of its own.
+  // `waitingCards` (D291, Review's Identify strip) is a POST because a selection's `keys` term
+  // can be a long tick list; `do_pipeline_waiting` scans sidecars and reads the store only.
   nonMutating: [
     'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
-    'getInventoryCopies', 'fetchOrderPicks', 'walkPlan',
+    'getInventoryCopies', 'fetchOrderPicks', 'walkPlan', 'waitingCards',
   ],
   nonRequests: [
     'describeFailure', 'photoUrl', 'positionLabel', 'isDeparted', 'placeParts', 'placeSentence',

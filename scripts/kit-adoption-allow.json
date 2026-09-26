@@ -4,29 +4,12 @@
     "app/src/Codes.tsx": {
       "R2-filter-row": "library"
     },
-    "app/src/LiveReconcile.tsx": {
-      "R2-dialog": "review",
-      "R2-class": "review"
-    },
     "app/src/ReviewQueue.tsx": {
       "R2-dialog": "review",
       "R2-search": "review",
       "R2-class": "review",
       "R2-date": "review",
       "R2-money": "review"
-    },
-    "app/src/RunPanel.tsx": {
-      "R2-select": "review",
-      "R2-class": "review"
-    },
-    "app/src/RunRescue.tsx": {
-      "R2-dialog": "review",
-      "R2-class": "review"
-    },
-    "app/src/RunsComposer.tsx": {
-      "R2-dialog": "review",
-      "R2-select": "review",
-      "R2-class": "review"
     }
   },
   "runtime": {

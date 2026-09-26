@@ -22,7 +22,10 @@ import {
   answerReviewGroup,
   describeFailure,
   getQueues,
+  getRuns,
   getStatus,
+  startRun,
+  waitingCards,
   isDeparted,
   neighborWords,
   placeParts,
@@ -39,7 +42,10 @@ import { Button, EmptyState, Icon, IconButton, Kbd, Money, Notice, Page, Pill, R
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
-import { RunsContent, boxInHash, runInHash, stateInHash } from './Runs'
+import { RunsContent, boxInHash, perCardRate, runInHash, stateInHash } from './Runs'
+import { openingSelection, sendOfKeys } from './RunsComposer'
+import { carriedScope, type CarriedScope } from './runHandoff'
+import { roundsToNothing } from './money'
 import './ReviewQueue.css'
 import { isRetiredReason, reasonLabel } from './reasons'
 import { collectorNumber as sharedCollectorNumber } from './cardNumber'
@@ -733,11 +739,29 @@ export function ReviewQueue() {
     return stateInHash() || runInHash() !== null || boxInHash() !== null || new URLSearchParams(query).get('runs') === '1'
   })
 
-  /* THE STRIP: "Identify N cards", drawn only when the pipeline has cards waiting
-   * (`status.states.captured`, the same figure Home's own standing sentence reads). A
-   * light-weight read, not the composer's own preflight — opening the sheet runs that, with
-   * the real estimate, the way it always has. */
+  /** True when the sheet was opened by the Identify strip, so it opens on the composer. */
+  const [runsCompose, setRunsCompose] = useState(false)
+  /** The run "Identify now" just started, opened in the sheet so its progress shows. */
+  const [runsRun, setRunsRun] = useState<string | null>(null)
+  const openRuns = useCallback((compose: boolean, run: string | null = null) => {
+    setRunsCompose(compose)
+    setRunsRun(run)
+    setRunsOpen(true)
+  }, [])
+  const closeRuns = useCallback(() => setRunsOpen(false), [])
+
+  /* THE STRIP: "Identify N cards, ~$X" (D291). N IS ONE LIST, AND EVERY HALF READS IT: the
+   * count, the estimate, the "Identify now" spend. The list is `POST /pipeline/waiting` over the
+   * composer's own opening selection (`openingSelection`): the ticked cards `#/inventory` handed
+   * over, when there are any, and otherwise every card photographed and not identified. The
+   * server answers the cards a spend would buy, with a photograph and held by no live claim, so
+   * the strip never offers a card the press would be refused, and after a spend it stops
+   * offering the cards that run claimed. `/status`'s `captured` is only the cheap gate on
+   * whether to ask at all. Nothing here is the composer's preflight, which decodes every
+   * waiting photograph and takes about a minute over five hundred cards. */
   const [status, setStatus] = useState<ServerStatus | null>(null)
+  const [pending, setPending] = useState<readonly string[]>([])
+  const [rate, setRate] = useState<number | null>(null)
   useEffect(() => {
     let live = true
     void getStatus()
@@ -749,7 +773,88 @@ export function ReviewQueue() {
       live = false
     }
   }, [reloads])
-  const captured = status?.states.captured ?? 0
+  /* THE HANDOFF IS READ AGAIN EVERY TIME THE STRIP COULD HAVE GONE STALE, not only on a reload:
+     `sessionStorage` fires no event inside its own tab, and the Runs sheet is where the handoff
+     changes (picking another start drops it). So it is read on each reload, and again whenever
+     the sheet opens or closes. Keyed by its keys, so an unchanged handoff asks nothing twice. */
+  const handoffKey = useMemo(
+    () => JSON.stringify(carriedScope()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the deps are WHEN to re-read storage
+    [reloads, runsOpen],
+  )
+  const carried = useMemo(() => JSON.parse(handoffKey) as CarriedScope | null, [handoffKey])
+  const ask = carried !== null || (status?.states.captured ?? 0) > 0
+  useEffect(() => {
+    if (!ask) {
+      setPending([])
+      return
+    }
+    let live = true
+    void waitingCards(openingSelection(carried))
+      .then((answer) => {
+        if (live) setPending(answer.keys)
+      })
+      .catch(() => {
+        if (live) setPending([])
+      })
+    return () => {
+      live = false
+    }
+  }, [ask, carried, reloads])
+  const captured = pending.length
+
+  /* "IDENTIFY NOW" (the owner's ruling, 2026-09-25): the paid run at once, with no pre-check and
+   * no confirm screen, over EXACTLY `pending`, sent as a `keys` selection (`sendOfKeys`, D180).
+   * A card captured in another tab after the strip read its list is not in it, so it cannot grow
+   * the spend. The server's one spend route still takes `confirm: true` (D33), and D174's claim
+   * is still written by the command inside the transaction that decides which cards it buys, so
+   * a second tab can never buy the same cards twice. THIS REF IS THE DOUBLE-PRESS GUARD ON THE
+   * SCREEN: a second press before the first answers sends nothing. The receipt's count is the
+   * server's own `started[0].cards`, never the strip's N. A refusal is a toast, so it moves
+   * nothing on the screen (D118). */
+  const spending = useRef(false)
+  const [spendBusy, setSpendBusy] = useState(false)
+  const identifyNow = useCallback(async () => {
+    if (spending.current || pending.length === 0) return
+    spending.current = true
+    setSpendBusy(true)
+    try {
+      const answer = await startRun(sendOfKeys(pending))
+      const first = answer.started[0]
+      if (first !== undefined) {
+        /* The same receipt a composer-started run gets: a toast, then the run open in the
+           sheet, where its own progress reads itself while it is live. */
+        toast({ kind: 'ok', title: 'Identify started', body: `${first.cards} ${first.cards === 1 ? 'card' : 'cards'} sent to be read.` })
+        openRuns(false, first.run)
+      } else {
+        const failed = answer.failed[0]
+        toast({ kind: 'refusal', title: 'Nothing was paid for', body: failed?.sentence ?? failed?.message ?? 'The run did not start.' })
+      }
+      setReloads((n) => n + 1)
+    } catch (err) {
+      toast({ kind: 'refusal', title: 'Nothing was paid for', body: describeFailure(err).message })
+    } finally {
+      spending.current = false
+      setSpendBusy(false)
+    }
+  }, [pending, openRuns])
+
+  /* The run list is read only when there is a strip to price: a store with nothing waiting
+     pays for no second read. */
+  const waiting = captured > 0
+  useEffect(() => {
+    if (!waiting) return
+    let live = true
+    void getRuns()
+      .then((runs) => {
+        if (live) setRate(perCardRate(runs))
+      })
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [waiting, reloads])
+  const about = rate === null ? null : rate * captured
 
   useEffect(() => {
     let live = true
@@ -1446,8 +1551,8 @@ export function ReviewQueue() {
               OFF: this screen wires RELOAD_KEY into the same switch every other key rides,
               because a second listener would fire the read twice. */}
           <ReloadButton onReload={reload} busy={disabled} label="Reload the queue" hotkey={false} className="review-reload" />
-          {/* D291: every Runs capability, one press away. */}
-          <IconButton icon="play" label="Past runs" onClick={() => setRunsOpen(true)} className="review-runs-open" />
+          {/* D291: past runs, and every other Runs capability, behind one link. */}
+          <IconButton icon="history" label="Past runs" onClick={() => openRuns(false)} className="review-runs-open" />
           {everyone.length === 0 ? null : (
             <IconButton
               icon="list"
@@ -1465,15 +1570,36 @@ export function ReviewQueue() {
         </>
       }
     >
-      {/* THE STRIP (D291): drawn only when the pipeline has cards
-          waiting. Opens the same sheet, on the composer's own default "needed" start — the
-          real cost estimate is the composer's preflight, not a second one guessed here. */}
+      {/* THE STRIP (D291): drawn only when the pipeline has cards waiting. The owner picks
+          at the press (2026-09-25): wait for the free pre-check, or go straight to the bill.
+          Both presses keep their words, because both are about money. "Identify now" takes
+          the one solid fill, because it is the press that spends and must read as the loud
+          one. "Check first" is ghost beside it. */}
       {captured === 0 ? null : (
-        <button type="button" className="review-identify-strip" onClick={() => setRunsOpen(true)}>
-          <Icon name="play" size={16} />
-          {`Identify ${captured} ${captured === 1 ? 'card' : 'cards'}`}
-          <Icon name="arrowRight" size={14} className="review-identify-strip-arrow" />
-        </button>
+        <div className="review-identify-strip">
+          <span className="review-identify-strip-said">
+            <Icon name="zap" size={16} />
+            <span>
+              Identify {captured} {captured === 1 ? 'card' : 'cards'}
+              {about === null ? null : (
+                /* AN ESTIMATE, SAID AS ONE at every size: the `~` and the title both, "under a
+                   cent" included. It is this store's own past cost per card, never a quote. */
+                <span className="review-identify-estimate" title="An estimate from this store's past runs, not a quote">
+                  , ~{roundsToNothing(about) ? 'under a cent' : <Money value={about} />}
+                  <span className="bn-sr"> (estimate)</span>
+                </span>
+              )}
+            </span>
+          </span>
+          <span className="review-identify-strip-presses">
+            <Button variant="ghost" icon="eye" onClick={() => openRuns(true)} disabled={spendBusy} className="review-identify-open">
+              Check first
+            </Button>
+            <Button variant="primary" icon="zap" busy={spendBusy} disabled={spendBusy} onClick={() => void identifyNow()} className="review-identify-now">
+              Identify now
+            </Button>
+          </span>
+        </div>
       )}
 
       {!lens ? null : (
@@ -1511,7 +1637,7 @@ export function ReviewQueue() {
 
       {rows !== null && worklist.length === 0 ? (
         everyone.length === 0 ? (
-          <Done tally={tally} startedAt={startedAt.current} receipts={receipts} onUndo={undo} disabled={disabled} onOpenRuns={() => setRunsOpen(true)} />
+          <Done tally={tally} startedAt={startedAt.current} receipts={receipts} onUndo={undo} disabled={disabled} onOpenRuns={() => openRuns(false)} />
         ) : (
           <section className="review-lone bn-panel">
             <EmptyState
@@ -1580,8 +1706,8 @@ export function ReviewQueue() {
       {/* D291: every Runs capability, reachable from here. Mounted only
           while open (`Sheet`'s own `useLeave`), so its GET /boxes and GET /pipeline/runs
           reads happen only when the operator is looking at it. */}
-      <Sheet open={runsOpen} onClose={() => setRunsOpen(false)} title="Runs" icon="play" className="review-runs-sheet">
-        <RunsContent />
+      <Sheet open={runsOpen} onClose={closeRuns} title="Runs" icon="history" className="review-runs-sheet">
+        <RunsContent compose={runsCompose} run={runsRun} onLeave={closeRuns} />
       </Sheet>
     </Page>
   )

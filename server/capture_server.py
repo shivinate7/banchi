@@ -58,6 +58,8 @@
                                            moment the real one goes in (D10, the capture
                                            screen's `S`). Takes no index: the store reads it
     POST   /pipeline/preflight             what a run would cost. FREE, creates no run
+    POST   /pipeline/waiting               the photographed, unclaimed cards a spend over a
+                                           selection would buy. FREE, decodes nothing
     POST   /pipeline/crop-preview          what the reading sends: the cut, and the digits
     POST   /pipeline/identify              START A RUN. THE ONE THAT SPENDS MONEY
     GET    /tcg/sets                       D65's real set names for a game, for the hint field
@@ -16108,6 +16110,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/pipeline/preflight":
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_preflight(self._body())
+                )
+            if path == "/pipeline/waiting":
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_waiting(self._body())
                 )
             # The crop preview, and it sits BEFORE the one that spends for the reason the
             # money gate itself gives: what the reading does to the bytes has to be legible

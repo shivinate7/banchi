@@ -452,19 +452,22 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 ### The screens
 
 **The app has fourteen screens and fourteen routes — thirteen the owner's, one the Fulfiller's.**
-Three routes are off-nav (the `aside` group — Kit, Cards to pull, and the per-product view
-D227 added), so the nav itself draws eleven rows. `app/src/App.tsx`'s
+Four routes are off-nav (the `aside` group — Kit, Cards to pull, the per-product view D227
+added, and Runs since D291), so the nav itself draws ten rows. `app/src/App.tsx`'s
 `ROUTES` table is the count. Recount from the table, never a sentence (see "the census"
 below).
 
 ```
 #/             Home           one ranked sentence of what the store is waiting on (D121),
-                              one action, the library as a picture, then the six-stage spine
+                              one action, the library as a picture, then the five-stage spine
 #/capture      Capture        live camera; box/game/set-hint/finish/rarity; undo; motion
                               trigger. Setup is remembered ON THE DEVICE (D142)
-#/runs         Runs           pipeline: free preflight, two-step money gate, join/emit/
-                              reconcile, run log, CSVs as downloads
-#/review       Review         one card at a time, photo first
+#/review       Review         one card at a time, photo first. Runs folds in here (D291): an
+                              "Identify N cards, ~$X" strip when cards wait, with "Check first"
+                              (the composer) and "Identify now" (spends at once). Past runs
+                              sit behind a link, in a sheet that holds the whole pipeline
+#/runs         Runs           off-nav since D291. Opens Review's runs sheet, so a deep link
+                              (`?run=`, `?state=captured`, `?box=`) still lands
 #/pricing      Pricing        every unsent copy, one row per SKU, the rows that need the owner
                               on top, one Send bar, holds (D49, D277). A Live tab prices the
                               live book (D103), and the value list is an Inventory sort now
@@ -508,10 +511,10 @@ stages, not two unrelated views.
 **`#/inventory` is the one owner-side view of stored cards** (D31). `#/boxes` and `#/pull` are
 not routes. Box operations live in its Manage box sheet.
 
-**Three routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
-kit, and `#/product`, the per-product view (D227). It is a deep link reached
-by SKU, never a destination anyone browses to cold. All three stay registered routes,
-reachable from elsewhere.
+**Four routes are deliberately off-nav** (`OFF_NAV` in App.tsx): the Fulfiller's screen, the
+kit, `#/product`, the per-product view (D227), and `#/runs` (D291). `#/product` is a deep link
+reached by SKU, never a destination anyone browses to cold. `#/runs` is a link target only: its
+content is Review's runs sheet. All four stay registered routes, reachable from elsewhere.
 
 **The census.** Every route or screen count in this file, README.md and docs/map.py is
 reconciled against `ROUTES` by `make docs-audit`'s `route census` row. Every spec's pinned
@@ -528,7 +531,7 @@ both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
 155<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
-278<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
+279<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before
@@ -772,7 +775,8 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   card (`emit --quantity SKU=N`, D7 amended). `policy.live_cap` is DELETED. A stored key is
   refused by name. What the cap never did is stop a copy being sent twice —
   `uncommitted_positions` does that, untouched.
-- **The pipeline is reachable from a screen** (D33) and lives on `#/runs` (D39). A run's
+- **The pipeline is reachable from a screen** (D33). It lives in Review's runs sheet since
+  D291, and `#/runs` (D39) opens that sheet. A run's
   scope is a SELECTION (D180, supersedes D48): every card still owed a reading, one or more
   drawers, or ticked cards. One grammar (`pipeline/selection.py`) is shared by the screen, the
   route and the CLI.

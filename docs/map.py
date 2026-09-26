@@ -3548,7 +3548,7 @@ COMPONENTS = [
                                 "D86", "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
                                 "D134", "D159", "D165", "D167", "D168", "D174", "D189", "D192",
                                 "D193", "D203", "D210", "D225", "D227", "D236", "D252", "D264",
-                                "D273", "D-sales-rows-by-sku"],
+                                "D273", "D291", "D-sales-rows-by-sku"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -5547,7 +5547,7 @@ COMPONENTS = [
                                 "D89", "D100", "D103", "D104", "D105", "D134", "D137", "D145",
                                 "D147", "D156", "D159", "D163", "D165", "D166", "D168", "D170",
                                 "D172", "D174", "D180", "D188", "D189", "D212", "D216", "D219",
-                                "D225", "D227", "D236", "D277"],
+                                "D225", "D227", "D236", "D277", "D291"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -6128,7 +6128,7 @@ COMPONENTS = [
                                             "`open` state is true rather than taking one, and on "
                                             "the same `useOverlayLayer` stack every other layer "
                                             "here joins — which the file it replaced never did.",
-                                    "governed_by": ["D94", "D95", "D118", "D128", "D288"]},
+                                    "governed_by": ["D94", "D95", "D118", "D128", "D288", "D291"]},
             "src/kit/dialog.css": {"does": "`Dialog`'s own inner rhythm — the sheet's width, the "
                                            "head padding, the lightbox's 44px circular Close and "
                                            "its backdrop blur. The panels themselves are the "
@@ -6359,7 +6359,8 @@ COMPONENTS = [
                                      "loads on its own, so no figure waits on another.",
                              "governed_by": ["D5", "D6", "D10", "D13", "D32", "D33", "D52", "D56",
                                              "D63", "D69", "D86", "D89", "D94", "D95", "D125",
-                                             "D142", "D145", "D156", "D172", "D192", "D202", "D218"]},
+                                             "D142", "D145", "D156", "D172", "D192", "D196", "D202",
+                                             "D218"]},
             "src/Home.css": {"does": "the home screen's look: the hero and its deck, the stage "
                                      "spine, the box and run cards. The one screen in the app "
                                      "that draws a display figure above 36px — "
@@ -6398,7 +6399,7 @@ COMPONENTS = [
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
                                               "D225", "D227", "D236", "D252", "D264", "D268",
-                                              "D273", "D-sealed-boxes-removed",
+                                              "D273", "D291", "D-sealed-boxes-removed",
                                               "D-sales-rows-by-sku"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
@@ -6923,10 +6924,10 @@ COMPONENTS = [
                         "else on this screen; the mid-box delete is deliberately not on it. "
                         "The re-check sheet owns it the same way, and for the same reason.",
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
-                                "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77",
-                                "D87", "D118", "D137", "D162", "D164", "D167", "D172", "D194",
-                                "D218", "D221", "D252", "D253", "D259", "D288",
-                                "D291"],
+                                "D28", "D29", "D32", "D33", "D35", "D37", "D46", "D55", "D67",
+                                "D77", "D87", "D118", "D137", "D162", "D164", "D167", "D172",
+                                "D174", "D180", "D194", "D218", "D221", "D252", "D253", "D259",
+                                "D288", "D291"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -7354,7 +7355,7 @@ COMPONENTS = [
                                               "until a preview has answered (D33's gate pointed "
                                               "at the ledger), and the same bytes are sent twice "
                                               "rather than re-picked.",
-                                      "governed_by": ["D7", "D13", "D33", "D87", "D104", "D118"],
+                                      "governed_by": ["D7", "D13", "D33", "D87", "D104", "D118", "D275"],
                                       # `app/tests/live-reconcile.spec.ts` is the check the hard
                                       # rule says does not otherwise exist — it runs under
                                       # `make design-check`, not at turn end, so it is named
@@ -7375,12 +7376,12 @@ COMPONENTS = [
                                           "the way back to the run it wrote (D118: a press, "
                                           "never a route change), and the source run is never "
                                           "edited.",
-                                  "governed_by": ["D20", "D33", "D36", "D118", "D145",
-                                                  "D165", "D210"]},
+                                  "governed_by": ["D20", "D33", "D36", "D118", "D145", "D165",
+                                                  "D210", "D275"]},
             "src/RunRescue.css": {"does": "the rescue sheet's own layout, `LiveReconcile.css`'s "
                                           "shape — width, padding, the thumb floor on a coarse "
                                           "pointer (D117).",
-                                  "governed_by": ["D117", "D165", "D210"]},
+                                  "governed_by": ["D117", "D165", "D210", "D275"]},
             "src/SubmissionClaims.tsx": {"does": "the panel on #/runs saying what a live send "
                                                  "is holding, and the ONE way out of a stuck "
                                                  "claim (D174). It draws "
@@ -7429,7 +7430,7 @@ COMPONENTS = [
                                              "and the stdout block is `white-space: pre` with "
                                              "its own overflow because the report draws "
                                              "fixed-width columns a wrap would break.",
-                                     "governed_by": ["D50", "D87", "D117"]},
+                                     "governed_by": ["D50", "D87", "D117", "D275"]},
             "src/Runs.tsx": {"does": "#/runs: the page chrome, the box picker, the composer, the "
                                      "store-wide reconcile and the stale-listing markdown, with "
                                      "RunPanel beneath them. Owns the SCOPE and nothing else — a strip of "
@@ -7521,8 +7522,8 @@ COMPONENTS = [
                                              "wire's own `keys` term.",
                                      "governed_by": ["D13", "D27", "D32", "D33", "D39", "D48",
                                                      "D52", "D56", "D58", "D65", "D76", "D78",
-                                                     "D94", "D114", "D118", "D145", "D172",
-                                                     "D174", "D180", "D291"]},
+                                                     "D94", "D114", "D118", "D145", "D172", "D174",
+                                                     "D180", "D196", "D269", "D275", "D291"]},
             "src/RunsLog.tsx": {"does": "a command's stdout, verbatim, in a well that follows its "
                                         "tail, counts its lines, folds and copies. NOTHING HERE "
                                         "SUMMARISES WHAT A COMMAND SAID — D33 puts every "
@@ -9368,7 +9369,7 @@ COMPONENTS = [
                 "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D36", "D39",
                                 "D43", "D48", "D49", "D54", "D56", "D57", "D64", "D65", "D76",
                                 "D78", "D117", "D118", "D136", "D145", "D165", "D166", "D174",
-                                "D180", "D196", "D207", "D210", "D218", "D291"],
+                                "D180", "D196", "D207", "D210", "D218", "D275", "D291"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "
@@ -9536,7 +9537,8 @@ COMPONENTS = [
                 # an all-or-nothing worklist — two entries out of a hundred and one used to
                 # suppress it for the other ninety-nine.
                 "governed_by": ["D4", "D13", "D16", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
-                                "D41", "D46", "D77", "D118", "D136", "D146", "D194", "D218"],
+                                "D41", "D46", "D76", "D77", "D118", "D136", "D146", "D174", "D194",
+                                "D218", "D221", "D291"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "
