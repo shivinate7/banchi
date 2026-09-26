@@ -600,21 +600,58 @@ const isIntlNumberFormat = (callee) =>
 
 const isEqualityOp = (kind) => kind === ts.SyntaxKind.EqualsEqualsEqualsToken || kind === ts.SyntaxKind.EqualsEqualsToken
 
+/** A local `const NAME = 'u'` (or `'U'`) declared anywhere in the same file — the shape a
+ *  screen takes to name its own key literal instead of writing it inline. Returns that
+ *  literal node, so `undoKeyCompare` can read its text same as an inline literal. */
+function constAssignedULiteral(name, sf) {
+  let found
+  const visit = (node) => {
+    if (found) return
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name && node.initializer) {
+      const init = node.initializer
+      if (ts.isStringLiteral(init) && (init.text === 'u' || init.text === 'U')) found = init
+    }
+    if (!found) ts.forEachChild(node, visit)
+  }
+  visit(sf)
+  return found
+}
+
 /** R2-undo-key: a `key.toLowerCase() === 'u'` / `event.key === 'U'` shape — a screen reading a
- *  keyboard event's own key and comparing it to the literal 'u' or 'U', case either way. This
+ *  keyboard event's own key and comparing it to the literal 'u' or 'U', case either way, or to
+ *  a same-file constant bound to that same literal (`const UNDO_KEY = 'u'`). This
  *  is `kit/undo.ts`'s own `useUndoHotkey` reimplemented by hand: repeat/modifier/editable-
  *  target guards, a window listener, all over again, one copy per screen (the comment on
  *  `UNDO_KEY_LABEL` in that file: "a screen that still binds `U` itself is what `make
  *  kit-adoption` fails"). Scoped to the two shapes every real instance in this repo took
  *  (`event.key === 'u'`, and a normalized `lower`/`key` variable built from
- *  `.toLowerCase()`), never a bare identifier alone — a generic single-letter comparison
- *  unrelated to a keyboard event (a SKU suffix, a game code) reads the same as a key check to
- *  an AST with no type information, and this rule cannot tell those apart without one. */
+ *  `.toLowerCase()`), never a bare identifier alone on the KEY side — a generic single-letter
+ *  comparison unrelated to a keyboard event (a SKU suffix, a game code) reads the same as a
+ *  key check to an AST with no type information, and this rule cannot tell those apart
+ *  without one. */
 function undoKeyCompare(n, sf) {
   const isULiteral = (e) => ts.isStringLiteral(e) && (e.text === 'u' || e.text === 'U')
-  const literal = isULiteral(n.left) ? n.left : isULiteral(n.right) ? n.right : null
-  if (literal === null) return null
-  const other = literal === n.left ? n.right : n.left
+  const uConstant = (e) => (ts.isIdentifier(e) ? constAssignedULiteral(e.text, sf) : undefined)
+  let literalText
+  let other
+  if (isULiteral(n.left)) {
+    literalText = n.left.text
+    other = n.right
+  } else if (isULiteral(n.right)) {
+    literalText = n.right.text
+    other = n.left
+  } else {
+    const leftConst = uConstant(n.left)
+    const rightConst = uConstant(n.right)
+    if (leftConst !== undefined) {
+      literalText = leftConst.text
+      other = n.right
+    } else if (rightConst !== undefined) {
+      literalText = rightConst.text
+      other = n.left
+    }
+  }
+  if (literalText === undefined) return null
   const e = unwrap(other)
   if (e === undefined) return null
   const looksLikeKey = (x) => {
@@ -626,7 +663,7 @@ function undoKeyCompare(n, sf) {
     }
     return false
   }
-  return looksLikeKey(e) ? `\`${e.getText(sf)} === '${literal.text}'\`` : null
+  return looksLikeKey(e) ? `\`${e.getText(sf)} === '${literalText}'\`` : null
 }
 
 function attr(element, name) {
@@ -1360,6 +1397,15 @@ function selfTest() {
     ))
   add("the SAME comparison inside kit/undo.ts, the primitive itself, is green", () =>
     green(outcome(tree({ 'app/src/kit/undo.ts': "export const s = (e) => { if (e.key === 'u') go() }\n" }))))
+  add("event.key === UNDO_KEY is red too, where UNDO_KEY is a same-file const bound to 'u' (the delta review round)", () =>
+    has(
+      outcome(tree({ 'app/src/S.tsx': "const UNDO_KEY = 'u'\nexport const s = (e) => { if (e.key === UNDO_KEY) go() }\n" }))
+        .unlisted,
+      'app/src/S.tsx',
+      'R2-undo-key',
+    ))
+  add("a bare identifier compared to another identifier, no 'u' constant in the file, stays green", () =>
+    green(outcome(tree({ 'app/src/S.tsx': "export const s = (a, b) => { if (a.key === b.other) go() }\n" }))))
   add("a bare identifier equal to 'u' with no key/lower/toLowerCase shape is green (this rule cannot see intent, only shape)", () =>
     green(outcome(tree({ 'app/src/S.tsx': "export const s = (suffix) => suffix === 'u'\n" }))))
   add("comparing to a DIFFERENT letter ('h', 'p') is green — only 'u'/'U' is the undo key", () =>

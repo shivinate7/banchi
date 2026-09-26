@@ -514,14 +514,17 @@ The screen halves are built on branch `ux/undo-screens`, over lane S's `ux/undo-
   Fulfillment's own row-per-card list never removed a copy the way Orders' did. Its defect was
   the `.ff-sheet`, and it needed no row-freeze.
 - **UN-9, UN-10.** `kit/undo.ts`'s `useUndoHotkey` is the one `U` primitive. It is armed once
-  per screen instead of five near-identical listeners. `kit/index.tsx`'s `PageUndo`, passed
-  through `Page`'s new `undo` prop, is Review's own door onto its below-the-fold receipt.
-  It is measured NOT to reserve space: doing so on every load cost `#/review`'s no-scrolling
-  floor 54px it had no slack for (`answering a card costs no scrolling`). Inventory and
-  Orders keep their own row-level `Undo` (D57) and do not pass one.
-  **AMENDED, §11.12: Review no longer passes `undo` to `Page` at all.** The finding #10
+  per screen instead of five near-identical listeners. `kit/index.tsx`'s `PageUndo` was
+  Review's own door onto its below-the-fold receipt, first reached through a prop `Page`
+  carried for it. It is measured NOT to reserve space: doing so on every load cost
+  `#/review`'s no-scrolling floor 54px it had no slack for (`answering a card costs no
+  scrolling`). Inventory and Orders keep their own row-level `Undo` (D57) and never drew one.
+  **AMENDED, §11.12: Review no longer draws that header door at all.** The finding #10
   conflict this created is resolved there. The reserved in-body row wins over the
-  unreserved header door.
+  unreserved header door. **AMENDED AGAIN, the delta review round, low item 7: `Page`'s
+  `undo` prop is deleted.** With Review gone, no screen passed it. `Gallery.tsx`'s specimen
+  now draws `PageUndo` and its `.bn-page-undo` wrapper directly, the pattern any screen
+  reaching for this door again would repeat.
 - **UN-12.** `Pricing.tsx`'s `Undo` type is now `{ entries: readonly UndoEntry[] }`. `write`
   is `writeMany`'s one-op case. `setHold` pushes both fields it touches as one entry. One `U`
   now undoes a hold completely.
@@ -606,9 +609,17 @@ exists so a phone reaches Undo "without hunting the in-page receipt, which sits 
 fold on a phone". Review's own Tray sits inside `.review-body`, on screen with the card at
 every width this product ships. That reach was never actually lost here. This removes the
 duplicate. It keeps both floors, D118 and the no-scrolling floor, intact at once. `PageUndo`
-itself is untouched. Pricing's own use of it is unaffected.
+itself is untouched.
+
+**AMENDED, the delta review round, low item 7.** Review was the one screen passing `undo`
+to `Page`. With that call site gone, `Page`'s own `undo` prop reached no screen at all.
+`Page.tsx` dropped the prop and its `<div className="bn-page-undo">` wrapper. `PageUndo`
+the component, and the `.bn-page-undo` class, are UNTOUCHED — `Gallery.tsx`'s specimen
+sheet renders both directly, its own `<div className="bn-page-undo">` around its own
+`<PageUndo>`, never through `Page`. A screen that wants the header door back writes that
+same pair itself, the way the gallery does.
 
 The second option this section once offered stays open. A screen may genuinely need both
 a header door and zero reserved space. An overlay `.bn-page-undo` never moves layout. It
-spends no permanent space on any screen that uses `PageUndo`. Review does not need it. Its
+spends no permanent space on any screen that draws `PageUndo`. Review does not need it. Its
 Tray already does the job.
