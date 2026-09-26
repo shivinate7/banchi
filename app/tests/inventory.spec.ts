@@ -2677,11 +2677,11 @@ test('a copy row draws how far into the box AND how far into the section', async
   await expect(first.nth(0)).toHaveText('Section 1 of 2')
   /* SETTLED SECTION, SO THE DENOMINATOR IS SLOTS. Section 1 runs 1..3 and the box holds 5, so
      its far bound is a divider with cards behind it: three slots today and three next week. */
-  await expect(first.nth(1)).toHaveText('Section 1card 1 of 3')
+  await expect(first.nth(1)).toHaveText('3 cards')
 
   const second = bars.nth(1).locator('.position-bar-text')
   await expect(second.nth(0)).toHaveText('Section 1 of 2')
-  await expect(second.nth(1)).toHaveText('Section 1card 3 of 3')
+  await expect(second.nth(1)).toHaveText('3 cards')
 
   /* The section track carries no dividers of its own — a section is not divided by anything,
      and that absence is one of the three cues telling the two scales apart at a glance. */
@@ -2711,11 +2711,14 @@ test('the last section of an open box counts what is in it, and the box line dro
    * growing section reads `card 2 of 2`, a settled one `card 2 of 2 slots`. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Section 2 of 2')
-  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 2card 2 of 2')
+  /* THE BARE SECTION NUMBER IS DROPPED FROM THIS CAPTION (the owner's report, 2026-09-25):
+     `PositionLabel`'s header already draws `SECTION 2` beside this bar, so the ruler's own
+     head is empty here (no name on this section) and only the size is said. */
+  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('2 cards')
 
   /* One accessible name carrying both, because `role="img"` hides every descendant — a screen
      reader is told the second scale here or not at all. */
-  await expect(bar).toHaveAttribute('aria-label', 'Card 2 of 2, Section 2 · card 2 of 2')
+  await expect(bar).toHaveAttribute('aria-label', 'Card 2 of 2, 2 cards')
 })
 
 test('the card with no group gets both depths too', async ({ page }) => {
@@ -2738,7 +2741,7 @@ test('the card with no group gets both depths too', async ({ page }) => {
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar).toHaveCount(1)
   await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Section 1 of 2')
-  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('Section 1card 2 of 3')
+  await expect(bar.locator('.position-bar-text').nth(1)).toHaveText('3 cards')
 
   /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D71). This test reaches
    * the lone-copy branch and asserted only the two bars, so the label beside them went on being
@@ -2763,17 +2766,22 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
    * every fixture that reaches the lone panel had a live card in it, and every fixture with a
    * departed card had a name and a SKU and so drew a group instead. The two conditions had never
    * been in one record. This case is that record. */
-  const shared: Cards = {
+  /* SECTION 1 CARRIES A NAME HERE, WHICH IT DID NOT BEFORE (the owner's report, 2026-09-25):
+     the bare section number this test used to pin is dropped from the ruler's own caption, so
+     a case with no name would leave the head empty and unable to prove the flex rule below.
+     The name is what stays, and it is the fact this fixture now needs to carry it. */
+  const departedNamed = card({
+    index: 4,
+    state: 'sold',
+    name: null,
+    sku: null,
+    section: 1,
+    sectionStart: 1,
+    sectionEnd: 3,
+  })
+  const shared = {
     ...CARDS,
-    '2/4': card({
-      index: 4,
-      state: 'sold',
-      name: null,
-      sku: null,
-      section: 1,
-      sectionStart: 1,
-      sectionEnd: 3,
-    }),
+    '2/4': { ...departedNamed, place: { ...departedNamed.place, section_name: 'Rares' } },
   }
   await open(page, BOXES, { cards: shared, search: (query) => searchAnswer(query, shared) })
   await expandAll(page)
@@ -2794,7 +2802,7 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
      end of this file, same string). The location card drew it as a separate element beside the
      `LOCATION` label; D119 did not lose it, it moved into the address — and since D132 the name
      LEADS and the index is the note beside it, on every row alike. */
-  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-path')).toHaveText('BOX ME01 commonsSECTION 1')
+  await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-path')).toHaveText('BOX ME01 commonsSECTION 1Rares')
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-num')).toHaveText('4')
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-parts')).toHaveAttribute('data-departed', 'true')
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .position-plain')).toHaveCount(0)
@@ -2821,7 +2829,10 @@ test('a sold card with no group is ranked too, and its lens keeps the box but lo
      `sectionDepthOf` has no sold/retired distinction to read off a bare `Place` — shorter than
      what it replaces (D194). */
   const sectionText = lens.locator('.position-bar-text-section')
-  await expect(sectionText.locator('.position-bar-cap-head')).toHaveText('Section 1')
+  /* THE BARE SECTION NUMBER IS DROPPED (the owner's report, 2026-09-25): the header beside this
+     bar already draws `SECTION 1`, so the name — the one fact the header does not carry — is
+     what the ruler's own head states now. */
+  await expect(sectionText.locator('.position-bar-cap-head')).toHaveText('Rares')
   await expect(sectionText.locator('.position-bar-cap-tail')).toHaveText('was card 4')
 
   /* AND THE TAIL IS THE PART THAT MAY CLIP, NEVER THE HEAD. `PositionBar.css` had this
@@ -6487,7 +6498,12 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
      number read as out of range). */
   await expect(page.locator('.browse-secttitle').first()).toHaveText('Section 1: Rares, 3 cards')
   await page.locator('.browse-row').nth(0).click()
-  await expect(page.locator('.card-locations-row.is-current .position-bar-text').nth(1)).toHaveText('Section 1Rarescard 1 of 3')
+  /* THE NAME IS THE ONLY NEW FACT HERE (the owner's report, 2026-09-25): the bare `Section 1`
+     is dropped from the ruler's own caption — the header beside it already says so — and the
+     card's own number is dropped from the tail too, since `PlaceNeighbors` and the header both
+     already carry it. What is left, `Rares` and the section's size, is what this caption alone
+     still tells the hand. */
+  await expect(page.locator('.card-locations-row.is-current .position-bar-text').nth(1)).toHaveText('Rares3 cards')
   await expect(page.locator('.card-locations-row.is-current .position-path')).toHaveText('BOX ME01 commonsSECTION 1Rares')
 
   /* AND THE NAME IS WRITTEN FROM THE MANAGE SHEET, keyed by the section's number. */

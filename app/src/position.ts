@@ -361,11 +361,13 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
   const { card: slot, section } = place
   const gone = isDeparted(place)
   if (section === null) return null
-  /* THE SECTION'S NAME IS SAID WITH ITS NUMBER (D132) — `Section 6`, `Rares`, `card 54 of 153`.
-     The number is what a hand counts to and the name is what the owner calls it. Two facts, not
-     one string: `head` carries both so a caller draws the separator in CSS instead of typing it
-     into the name (D218). */
-  const head: readonly string[] = place.section_name ? [`Section ${section}`, place.section_name] : [`Section ${section}`]
+  /* THE BARE NUMBER IS DROPPED, THE NAME STAYS (the owner's report, 2026-09-25: "Section 1"
+     said twice on one panel — here and again on `PositionLabel`'s big header beside this bar,
+     which draws the section number on every row this ruler is ever shown next to. Only the
+     NAME is new information at this spot (D132 named the section; nothing else on the row
+     says it), so `head` carries the name alone when the owner gave one, and nothing at all
+     when he did not — never the bare `Section N` this was pinned to before. */
+  const head: readonly string[] = place.section_name ? [place.section_name] : []
   /* A DEPARTED COPY KEEPS THE SECOND SCALE AND LOSES ONLY ITS MARK (D118). `card` is null the
      moment it leaves, and returning null here used to take the whole zoom block with it — 40 of
      the 85px the lens was worth, and the reason the panel changed size on the press that sold
@@ -418,8 +420,13 @@ export function sectionDepthOf(place: Place): SectionDepth | null {
   }
 
   /* "CARDS", NEVER "SLOTS", HERE (LOC-22; the owner's final ruling keeps "slots" for the box's
-     capacity in Inventory's header and strip only). */
-  const tail: readonly string[] = [`card ${slot} of ${of}`]
+     capacity in Inventory's header and strip only). THE SLOT NUMBER ITSELF IS DROPPED (the
+     owner's report, 2026-09-25): `slot` is drawn twice more on this same panel already —
+     `PlaceNeighbors`' "this" row and `PositionLabel`'s big numeral — and the mark's own cell,
+     filled on the ruler right under this caption, draws it a third time as a picture. What
+     this caption alone still says is the section's SIZE, which nothing else on the row
+     states. */
+  const tail: readonly string[] = [`${of} card${of === 1 ? '' : 's'}`]
   return {
     slot,
     of,

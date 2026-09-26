@@ -7,6 +7,9 @@
   --pb-rule: 26px;             /* the section ruler */
   --pb-marker: 2px;
   --pb-gap: 3px;
+  /* BOTH RULERS ARE TALLER UNDER `[data-depth]` (the owner's ruling, 2026-09-25: "larger/more
+     intuitive"), spent from the height the dedup below freed rather than added on top of it —
+     `make design-check`'s fold assertions are what proved the budget, not a count taken here. */
   /* PINNED LINE BOXES, AND THE UNITS ARE LOAD-BEARING. The component's height is arithmetic
      rather than a function of font metrics, which is what lets every state land on the same
      number; a unitless value here silently kills both the `line-height` and any `calc` that
@@ -29,7 +32,7 @@
 /* THE STRIP UNDER THE RULER IS THE BOX'S SECTIONS, NUMBERED (the owner's ruling, 2026-09-23,
    amending D155: the ruler shows the sections before and after). 14px holds a section number in
    `--bn-fs-2xs`; a chip too narrow for its digits clips them and still marks its run. */
-.position-bar-owner[data-depth] { --pb-track: 14px; }
+.position-bar-owner[data-depth] { --pb-track: 18px; --pb-rule: 32px; --pb-cap-sect: 18px; }
 
 /* ---- the box track ---- */
 .position-bar-track {
@@ -363,6 +366,14 @@
   content: '·';
   margin: 0 6px;
   color: var(--bn-ink-4);
+}
+/* NO DOT WITH NOTHING BEFORE IT. `.position-bar-cap-head` is omitted, not drawn empty, when the
+   owner named no section (`position.ts:sectionDepthOf`) — an owner-side dedup, 2026-09-25. The
+   rule above still fires on `.position-bar-cap-tail`'s OWN first-child selector regardless of
+   what precedes the tail in the DOM, so `:first-child` on the tail ITSELF (no head sibling
+   before it) is what says there is nothing to separate from. */
+.position-bar-cap-tail:first-child > .position-bar-cap-fact:first-child::before {
+  content: none;
 }
 
 /* ---- the Fulfiller's density: every floor in the constraints table ---- */

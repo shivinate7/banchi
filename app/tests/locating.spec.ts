@@ -239,7 +239,11 @@ for (const size of SIZES) {
       const bar = current.locator('.position-bar')
       await expect(bar.locator('.position-bar-edge-start')).toHaveText('1')
       await expect(bar.locator('.position-bar-edge-end')).toHaveText('3')
-      await expect(bar.locator('.position-bar-cap-tail')).toHaveText('card 2 of 3')
+      /* THE CARD'S OWN NUMBER IS DROPPED FROM THIS CAPTION (the owner's report, 2026-09-25):
+         `PlaceNeighbors`' own row and the header beside this bar both already carry it, so
+         only the section's size — the one fact neither of them states — is said here. The
+         pin above still marks the exact card. */
+      await expect(bar.locator('.position-bar-cap-tail')).toHaveText('3 cards')
 
       /* CARD 1 IS AT THE BACK: `back` is at the ruler's start and `front` at its end. */
       const back = await bar.locator('.position-bar-end-back').boundingBox()

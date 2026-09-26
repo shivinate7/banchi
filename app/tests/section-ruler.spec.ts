@@ -275,3 +275,4 @@ test('the section ruler is drawn above the card ruler', async ({ page }) => {
   const cardTop = (await cardRuler.boundingBox())?.y ?? -Infinity
   expect(sectionTop, 'the section ruler sits above the card ruler').toBeLessThan(cardTop)
 })
+

@@ -254,13 +254,21 @@ export function PositionBar({
               sectionSentence
             ) : (
               <>
-                <span className="position-bar-cap-head">
-                  {depth.head.map((fact, i) => (
-                    <span key={i} className="position-bar-cap-fact">
-                      {fact}
-                    </span>
-                  ))}
-                </span>
+                {/* OMITTED, NOT DRAWN EMPTY, WHEN THE OWNER NAMED NO SECTION (the owner's
+                    report, 2026-09-25): the bare `Section N` this used to hold is dropped —
+                    `PositionLabel`'s header states the number already — and an empty head
+                    span left a dangling `·` in front of the tail with nothing before it.
+                    `PositionBar.css`'s `.position-bar-cap-tail:first-child` rule cancels that
+                    dot exactly when this span is absent. */}
+                {depth.head.length === 0 ? null : (
+                  <span className="position-bar-cap-head">
+                    {depth.head.map((fact, i) => (
+                      <span key={i} className="position-bar-cap-fact">
+                        {fact}
+                      </span>
+                    ))}
+                  </span>
+                )}
                 <span className="position-bar-cap-tail">
                   {depth.tail.map((fact, i) => (
                     <span key={i} className="position-bar-cap-fact">
