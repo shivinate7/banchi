@@ -62,7 +62,8 @@ S with `after` puts one new divider directly behind the last record of that sect
 key changes. The later sections move up one number, and their card numbers stay the same.
 This is the one number that moves. A section that holds no record refuses with
 `section_empty`, as S on the last section does. U after such an S names the divider by its
-key (`DELETE /boxes/<box>/sections?div=`). It removes that divider only.
+key (`DELETE /boxes/<box>/sections?div=`). It removes that divider only, and only while the
+box's newest layout change is that S. After an editor save the divider stays.
 
 ### Move to box
 

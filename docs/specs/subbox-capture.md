@@ -70,20 +70,24 @@ The response is the box row, as before. The new section is the one directly afte
 
 ### 1.4 `DELETE /boxes/<box>/sections?div=<div>` (U after S)
 
-`ux/divider-fix` owns the keyed form of this route and its refusal shape. This lane widens it
-only as far as I9 needs: a named empty divider that is not the last. The table below changes
-to match `ux/divider-fix` when that branch lands.
+`ux/divider-fix` owns this route and its refusal shapes (merged at `20392e87`). `div` is
+required. The route removes that one divider and moves no other. This lane widens it only as
+far as I9 needs.
 
-- With no `div`, it works as before. It removes the last divider if no card on hand stands
-  behind it.
-- With `div`, it removes that one divider and no other. It refuses the first divider. It
-  refuses a section that holds a card on hand. A departed record in the section does not hold
-  it.
+- **The last divider** (`ux/divider-fix`): it goes while no card on hand stands behind it.
+- **A middle divider** (this lane, I9): it goes only when the box's newest `resectioned` line
+  is the S that added it, and no card on hand stands in its section. So U after a mid-box S
+  works. A divider that an editor save put another one behind is not S's own any more, and it
+  stays (the stale U).
+- The first divider, a key the box does not have, and every other case refuse.
+
+A departed record in the section does not hold the divider in.
 
 | Status | Code | When |
 |---|---|---|
-| 400 | `sections_invalid` | The first section, or a section with a card on hand (as before). |
-| 409 | `section_gone` | The box has no section with that divider key. |
+| 400 | `div_required` | `div` is missing or is not a number. |
+| 404 | `box_not_found` | The box does not exist. |
+| 409 | `divider_built_on` | `div` is not S's own to undo, as above, or a card on hand stands behind it. Nothing is written. |
 
 ### 1.5 The two Move-to-box routes
 
@@ -190,7 +194,7 @@ a capture calls them inside the store lock. They read the `idx` and `ord` column
 | stale aim | new | I6. A refusal writes nothing. `next_index` does not change, and no photograph is stored. |
 | re-space | reused | I7. Order and section membership stay. `section_div` names the new key. |
 | S after section j | new | I8. One divider goes between j's last card and the next divider. No card key changes. Later sections move up one number. Their card numbers stay. |
-| U after S, by key | new | I9. Only that divider goes. It refuses the first divider, a section with a card, and a key the box does not have. |
+| U after S, by key | new | I9. Only that divider goes. It refuses the first divider, a section with a card, a key the box does not have, and a divider an editor save came after. |
 | capture undo | none | I10. It deletes the newest index even when that card is mid-box. The next capture into the emptied section takes the divider's key. |
 | remove | none | I11. Indices slide and keys do not. The fuzz holds it. |
 | move, range move, section move | Move to box requires `section` | I12. A move with `section` goes to that section's tail, in the order sent. A move with a key the box does not have, or with no section, moves nothing. |
@@ -216,6 +220,8 @@ stays in the mix. The divider proof's own fuzz (seeds 0 to 5) replays as before.
 | The fractional step without whole numbers first | I5 |
 | S ignores `after` | I4, I8 |
 | U takes out the last divider, not the named one | I9, the fuzz |
+| U takes out a middle divider without reading the log | the stale U case |
+| The log never proves that S added the divider | I9, the fuzz |
 | The re-space is skipped | I7, the fuzz |
 | The move undo guard refuses every divider behind the transplant | I13 |
 | A SKU's copies sort by index | the copy-order case |
