@@ -1741,6 +1741,10 @@ export type SectionDetail = {
   last_name?: string | null
   first_cid?: string | null
   last_cid?: string | null
+  /** The divider key of this section (`docs/specs/subbox-capture.md` 1.1) — a capture, an S,
+   *  a U and a Move-to-box all name a section by this string, never by its ordinal or an
+   *  index. Compare as a string; never parse it or compose one. Absent from an older server. */
+  div?: string
 }
 
 /** What `POST /boxes/<box>/sections/move` answers (D264): the move's id for Undo, the

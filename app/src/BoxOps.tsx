@@ -32,7 +32,7 @@ import {
 import { spansOf } from './position'
 import { ReadingAge } from './CardLocations'
 import { readingAgo } from './cardState'
-import { Button, Icon, IconButton, Notice, Pill, Select, Stat, boxesMostRecentFirst, type IconName } from './kit'
+import { Button, Icon, IconButton, Notice, Pill, Select, SectionPicker, Stat, boxesMostRecentFirst, type IconName } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { toast } from './kit/toast'
 import { Dialog as Overlay } from './kit/overlay'
@@ -413,6 +413,9 @@ export function BoxOps({
   const [refused, setRefused] = useState<string | null>(null)
   const [claimed, setClaimed] = useState<BoxClaimResult | null>(null)
   const [moveTo, setMoveTo] = useState('')
+  /* The owner's own pick, no auto default (D-sections-are-sub-boxes): a divider key of
+   * `moveTo`, cleared whenever `moveTo` changes. */
+  const [sectionDiv, setSectionDiv] = useState<string | null>(null)
   const [moved, setMoved] = useState<MoveCardsResult | null>(null)
   const [proposed, setProposed] = useState<number[] | null>(null)
   const moveId = useId()
@@ -438,22 +441,38 @@ export function BoxOps({
     }
   }
 
-  /* D83. `indices: null` moves every on-hand card. The server's own refusals are the ones
-     with something true to say about a destination this component cannot check. */
+  /* D83, amended by D-sections-are-sub-boxes: `indices: null` moves every on-hand card,
+   * and there is NO AUTO DEFAULT for where in the box it lands — the owner's own ruling —
+   * so a section pick is required beside the box. The server's own refusals are the ones
+   * with something true to say about a destination this component cannot check. */
   const doMove = async () => {
     const toBox = Number.parseInt(moveTo.trim(), 10)
     if (!Number.isInteger(toBox) || toBox < 1) {
       setRefused('Choose a destination box.')
       return
     }
+    if (sectionDiv === null) {
+      setRefused('Choose a section — there is no default place inside the box.')
+      return
+    }
+    setRefused(null)
     const result = await write(() =>
-      moveCards(record.box, selection.length > 0 ? [...selection] : null, toBox),
+      moveCards(record.box, selection.length > 0 ? [...selection] : null, toBox, sectionDiv),
     )
     if (result !== null) {
       setMoved(result)
       setEditing(null)
     }
   }
+
+  /* A stale section — closed, filled, or an old caller's silence refused outright
+   * (`section_gone`, `section_required`) — clears the pick rather than letting a second
+   * press retry the same dead key. The generic `Trouble` panel already shows the sentence. */
+  useEffect(() => {
+    if (trouble !== null && (trouble.code === 'section_gone' || trouble.code === 'section_required')) {
+      setSectionDiv(null)
+    }
+  }, [trouble])
 
 
   const startEdit = (which: Exclude<Editing, null>) => {
@@ -462,6 +481,7 @@ export function BoxOps({
     setClaimed(null)
     setMoved(null)
     setMoveTo('')
+    setSectionDiv(null)
     setEditing(which)
     setDraft(which === 'name' ? (record.name ?? '') : writeIndices(record))
     setSectionNames(
@@ -508,6 +528,21 @@ export function BoxOps({
      `boxes` arrives in the server's own order (box number), which said nothing about which
      box the hand was likeliest to reach for. */
   const others = boxesMostRecentFirst(boxes.filter((candidate) => candidate.box !== record.box))
+
+  /* The chosen destination's own sections, for the picker beside it. `moveTo` is free text
+   * (the no-registry fallback above), so this looks it up by number rather than reading
+   * `others`'s own list directly. */
+  const moveToNumber = moveTo.trim() === '' ? null : Number.parseInt(moveTo.trim(), 10)
+  const moveTarget =
+    moveToNumber === null || !Number.isInteger(moveToNumber)
+      ? null
+      : (boxes.find((candidate) => candidate.box === moveToNumber) ?? null)
+  const moveTargetSections = (moveTarget?.sections_detail ?? []).filter(
+    (detail): detail is SectionDetail & { div: string } => typeof detail.div === 'string',
+  )
+  /* The section a completed move landed in, for the receipt below — read while `moveTo` and
+   * `sectionDiv` still name it, before the next `startEdit` clears either. */
+  const movedSection = moveTargetSections.find((detail) => detail.div === sectionDiv)
 
   return (
     <Overlay kind="sheet" label={`Manage ${record.name ?? UNNAMED_BOX}`} onClose={onClose} className="boxops-sheet">
@@ -644,7 +679,11 @@ export function BoxOps({
             {moved === null ? null : (
               <Notice
                 tone="ok"
-                title={`Moved ${count(moved.moved, 'card', 'cards')} from ${record.name ?? UNNAMED_BOX} to ${boxName(boxes, moved.to_box)}.`}
+                title={`Moved ${count(moved.moved, 'card', 'cards')} from ${record.name ?? UNNAMED_BOX} to ${boxName(boxes, moved.to_box)}${
+                  movedSection === undefined
+                    ? ''
+                    : `, Section ${movedSection.section}${movedSection.name ? ` (${movedSection.name})` : ''}`
+                }.`}
               >
                 The {count(moved.moved, 'position', 'positions')} left behind
                 {moved.moved === 1 ? ' stays' : ' stay'} permanently empty — the same gap a sale
@@ -706,7 +745,10 @@ export function BoxOps({
                     value: String(candidate.box),
                     label: candidate.name ?? UNNAMED_BOX,
                   }))}
-                  onChange={setMoveTo}
+                  onChange={(next) => {
+                    setMoveTo(next)
+                    setSectionDiv(null)
+                  }}
                 />
               ) : (
                 <input
@@ -717,7 +759,10 @@ export function BoxOps({
                   placeholder="e.g. 7"
                   autoComplete="off"
                   value={moveTo}
-                  onChange={(event) => setMoveTo(event.target.value)}
+                  onChange={(event) => {
+                    setMoveTo(event.target.value)
+                    setSectionDiv(null)
+                  }}
                 />
               )}
               <p className="bn-field-hint">
@@ -726,6 +771,15 @@ export function BoxOps({
                   : `Moves all ${count(record.on_hand ?? 0, 'card', 'cards')} on hand in ${record.name ?? UNNAMED_BOX} — the same operation a merge is, from this side.`}
               </p>
             </div>
+            {/* NO AUTO DEFAULT (D-sections-are-sub-boxes, the owner's own ruling): once a box
+                is picked, the owner picks its section too — a box with one section still
+                shows that single choice, so the owner confirms it rather than a screen
+                deciding quietly. */}
+            {moveTarget === null ? null : moveTargetSections.length === 0 ? (
+              <Notice tone="warn" title="Its sections could not be drawn. Read the box again and choose a section." />
+            ) : (
+              <SectionPicker sections={moveTargetSections} value={sectionDiv} onChange={setSectionDiv} />
+            )}
             {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
             <Trouble failure={trouble} />
             <div className="boxops-actions">
@@ -735,7 +789,12 @@ export function BoxOps({
               <Button variant="ghost" onClick={closeEdit} data-autofocus="">
                 Cancel
               </Button>
-              <Button variant="primary" busy={busy} onClick={() => void doMove()}>
+              <Button
+                variant="primary"
+                busy={busy}
+                disabled={moveTo.trim() === '' || sectionDiv === null}
+                onClick={() => void doMove()}
+              >
                 Move
               </Button>
             </div>

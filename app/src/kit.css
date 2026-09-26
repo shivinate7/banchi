@@ -765,6 +765,39 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-seg-sm { padding: 2px; gap: 2px; }
 .bn-seg-item-sm { height: 24px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); }
 
+/* ---- section pick (D-sections-are-sub-boxes: no auto default, the owner picks) ---------- */
+.bn-section-pick { display: flex; flex-direction: column; gap: var(--bn-2); }
+.bn-section-pick-item {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  min-height: 48px;
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  text-align: left;
+  color: var(--bn-ink);
+}
+.bn-section-pick-item:hover { background: var(--bn-hover); }
+.bn-section-pick-item[aria-checked='true'] { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1px var(--bn-accent); }
+.bn-section-pick-main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.bn-section-pick-num { font-size: var(--bn-fs-sm); font-weight: 700; }
+.bn-section-pick-name { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.bn-section-pick-meta { display: flex; align-items: center; gap: var(--bn-2); flex: 0 0 auto; }
+.bn-section-pick-tag {
+  padding: 1px var(--bn-2);
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-3);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  color: var(--bn-ink-3);
+}
+.bn-section-pick-count { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
+.bn-section-pick-spacer { width: 16px; flex: 0 0 auto; }
+.bn-section-pick-item .bn-icon { flex: 0 0 auto; color: var(--bn-accent); }
+
 /* ---- tabs (underline) -------------------------------------------------------- */
 .bn-tabs { display: flex; gap: var(--bn-1); border-bottom: 1px solid var(--bn-line); }
 .bn-tab {

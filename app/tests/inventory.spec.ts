@@ -2298,7 +2298,7 @@ const TWO_BOXES = {
       retired: 0,
       listed: 0,
       moved: 0,
-      sections_detail: [{ section: 1, start: 1, end: 40, count: 40 }],
+      sections_detail: [{ section: 1, start: 1, end: 40, count: 40, div: '1' }],
     },
   ],
 }
@@ -4408,7 +4408,7 @@ test('S3 — with Hide sold on, a search count excludes what the fold already hi
   await expect(page.locator('.browse-filterbar .bn-filtercount-figure')).toHaveText('0 of 3 boxes')
 })
 
-test('UX-244 — one copy moves to another box from its own row, and the receipt names the box', async ({ page }) => {
+test('UX-244 — one copy moves to another box from its own row, and the receipt names the section (D-sections-are-sub-boxes)', async ({ page }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
   const sent: { path: string; body: unknown }[] = []
   await page.route(/\/inventory\/\d+\/\d+\/move$/, async (route) => {
@@ -4417,20 +4417,75 @@ test('UX-244 — one copy moves to another box from its own row, and the receipt
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ moved: '2/1', to: '7/41', box: 2, index: 1, new_box: 7, new_index: 41 }),
+      body: JSON.stringify({
+        moved: '2/1',
+        to: '7/41',
+        box: 2,
+        index: 1,
+        new_box: 7,
+        new_index: 41,
+        card: { box: 7, index: 41, place: { label: 'ME01 spares, Section 1, Card 40' } },
+      }),
     })
   })
   const row = page.locator('.card-locations-row.is-current')
   await row.getByRole('button', { name: 'Move to another box' }).click()
   const dialog = page.getByRole('dialog', { name: /^Move/ })
   await expect(dialog).toBeVisible()
+
+  /* NO AUTO DEFAULT (the owner's ruling): the press stays disabled until a section is
+     picked too, even though this box has exactly one. */
+  const move = dialog.getByRole('button', { name: 'Move', exact: true })
   await dialog.locator('.bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
-  await dialog.getByRole('button', { name: 'Move', exact: true }).click()
-  await expect(page.locator('.bn-toast')).toContainText('Moved to ME01 spares')
+  await expect(move).toBeDisabled()
+
+  /* D118 — PICKING A SECTION MOVES NOTHING OUTSIDE THE DIALOG. The scrim behind it is
+     `position: fixed` and already excluded; this is the walk underneath it. */
+  const before = await settled(page)
+  await dialog.locator('.bn-section-pick-item').click()
+  await expect(move).toBeEnabled()
+  const after = await settled(page)
+  const moved = whatMoved(before, after)
+  expect(moved, `${moved.length} elements outside the dialog moved on the pick:\n${moved.slice(0, 12).join('\n')}`).toEqual([])
+
+  await move.click()
+
+  await expect(page.locator('.bn-toast')).toContainText('ME01 spares, Section 1')
   expect(sent).toHaveLength(1)
   expect(sent[0]?.path).toBe('/inventory/2/1/move')
-  expect(sent[0]?.body).toMatchObject({ to_box: 7 })
+  expect(sent[0]?.body).toMatchObject({ to_box: 7, section: '1' })
+})
+
+test('UX-244 — a stale section on Move re-opens the pick with one plain sentence (D-sections-are-sub-boxes)', async ({
+  page,
+}) => {
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+  await page.route(/\/inventory\/\d+\/\d+\/move$/, async (route) => {
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'section_gone',
+          message: 'ME01 spares has no section at divider 1 now. Read the box again and choose a section.',
+        },
+      }),
+    })
+  })
+  const row = page.locator('.card-locations-row.is-current')
+  await row.getByRole('button', { name: 'Move to another box' }).click()
+  const dialog = page.getByRole('dialog', { name: /^Move/ })
+  await dialog.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  await dialog.locator('.bn-section-pick-item').click()
+  await dialog.getByRole('button', { name: 'Move', exact: true }).click()
+
+  /* THE DIALOG STAYS OPEN, on the same box, with the server's own sentence and a fresh
+     section list rather than a toast the owner has to reopen the whole flow to answer. */
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText('Read the box again and choose a section.')
+  await expect(dialog.getByRole('button', { name: 'Move', exact: true })).toBeDisabled()
 })
 
 test('the header holds one worded primary and the filter bar one line, at 390 and 720', async ({
@@ -4570,6 +4625,66 @@ test('S4 — the BoxOps "Move to box" select offers boxes most recent first, nev
   await page.getByRole('button', { name: 'Move to box' }).click()
   await page.locator('.bn-field .bn-pick').click()
   await expect(page.locator('.bn-pick-opt')).toHaveText(['Extra shelf', 'ME01 spares'])
+})
+
+test('D-sections-are-sub-boxes — BoxOps "Move to box" (the whole box or a range) also requires a section, sends it, and names it in the receipt', async ({
+  page,
+}) => {
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+  const sent: { path: string; body: unknown }[] = []
+  await page.route(/\/inventory\/\d+\/move$/, async (route) => {
+    const url = new URL(route.request().url())
+    sent.push({ path: url.pathname, body: route.request().postDataJSON() })
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ box: 2, to_box: 7, moved: 1, cards: [{ moved: '2/1', to: '7/41', box: 2, index: 1, new_box: 7, new_index: 41 }] }),
+    })
+  })
+
+  await openBoxOps(page)
+  await page.getByRole('button', { name: 'Move to box' }).click()
+  const move = page.getByRole('button', { name: 'Move', exact: true })
+
+  await page.locator('.bn-field .bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+
+  /* NO AUTO DEFAULT: the box is picked, the section is not, so the press stays refused. */
+  await expect(move).toBeDisabled()
+  await page.locator('.bn-section-pick-item').click()
+  await expect(move).toBeEnabled()
+  await move.click()
+
+  await expect(page.locator('.boxops-sheet')).toContainText('Section 1')
+  expect(sent).toHaveLength(1)
+  expect(sent[0]?.path).toBe('/inventory/2/move')
+  expect(sent[0]?.body).toMatchObject({ to_box: 7, section: '1' })
+})
+
+test('D-sections-are-sub-boxes — a stale section on BoxOps Move re-opens the pick with one plain sentence', async ({
+  page,
+}) => {
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+  await page.route(/\/inventory\/\d+\/move$/, async (route) => {
+    await route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'section_required', message: 'Send a section — there is no default place inside the box.' },
+      }),
+    })
+  })
+
+  await openBoxOps(page)
+  await page.getByRole('button', { name: 'Move to box' }).click()
+  await page.locator('.bn-field .bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  await page.locator('.bn-section-pick-item').click()
+  const move = page.getByRole('button', { name: 'Move', exact: true })
+  await move.click()
+
+  await expect(page.locator('.boxops-sheet')).toContainText('there is no default place inside the box')
+  await expect(move).toBeDisabled()
 })
 
 test('the neighbours are ranked, not joined — the names are the only thing drawn at ink', async ({

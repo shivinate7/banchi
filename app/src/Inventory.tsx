@@ -36,7 +36,7 @@ import { sayPlace } from './position'
 import { RETIRE_REASONS, reasonWord } from './cardState'
 import { useSearch } from './useSearch'
 import { isEditableTarget } from './keys'
-import { Button, Icon, IconButton, Loading, Notice, Page, Pill, Select, boxesMostRecentFirst } from './kit'
+import { Button, Icon, IconButton, Loading, Notice, Page, Pill, Select, SectionPicker, boxesMostRecentFirst } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { dismissToast, toast } from './kit/toast'
 import { rememberHideSold, storedHideSold } from './deviceMemory'
@@ -311,6 +311,10 @@ function InventoryWalk({
   const [retiring, setRetiring] = useState<SearchCopy | null>(null)
   /* The copy waiting on the move panel, or null (UX-244). */
   const [moving, setMoving] = useState<SearchCopy | null>(null)
+  /* A stale-section refusal's own sentence — `section_gone` or `section_required`
+   * (D-sections-are-sub-boxes) — kept on the dialog rather than tossed as a toast, so the
+   * owner re-picks in place. Cleared whenever the panel opens or closes. */
+  const [moveRefused, setMoveRefused] = useState<string | null>(null)
 
   /* One write in flight at a time, by copy key. */
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -521,24 +525,38 @@ function InventoryWalk({
     [busyKey, remember, holdRank],
   )
 
-  /* D83's third door, for one copy (UX-244). No undo here: undo is its own later session. */
+  /* D83's third door, for one copy (UX-244). No undo here: undo is its own later session.
+   *
+   * THE OWNER'S RULING, NO AUTO DEFAULT (D-sections-are-sub-boxes): the section is the
+   * caller's own pick, never omitted. A stale pick — the section closed, filled, or the
+   * server refusing an old caller's silence outright with `section_required` — is not a
+   * generic failure: the dialog stays open, on the same box, with one plain sentence and a
+   * fresh section list rather than a toast the owner has to reopen the whole flow to answer. */
   const doMove = useCallback(
-    async (copy: SearchCopy, toBox: number) => {
+    async (copy: SearchCopy, toBox: number, section: string) => {
       if (busyKey !== null) return
       setBusyKey(copy.key)
+      setMoveRefused(null)
       try {
-        await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox)
+        const result = await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox, section)
         setMoving(null)
         holdRank(copy.key)
         const where = boxRecords.find((record) => record.box === toBox)?.name ?? UNNAMED_BOX
+        const landed = result.card.place?.label ?? null
         toast({
           kind: 'ok',
           icon: 'package',
           title: `Moved to ${where}`,
-          body: receiptBody(sayPlace(copy.place.label ?? copy.key), renumberNote(copy.place)),
+          body: receiptBody(sayPlace(landed ?? copy.place.label ?? copy.key), renumberNote(copy.place)),
         })
         setReloads((n) => n + 1)
       } catch (err) {
+        const code = refusalCode(err)
+        if (code === 'section_gone' || code === 'section_required') {
+          setMoveRefused(describeFailure(err).message)
+          setReloads((n) => n + 1)
+          return
+        }
         report(describeFailure(err))
       } finally {
         setBusyKey(null)
@@ -654,6 +672,11 @@ function InventoryWalk({
     setRetiring(copy)
   }, [])
 
+  const openMove = useCallback((copy: SearchCopy) => {
+    setMoveRefused(null)
+    setMoving(copy)
+  }, [])
+
   const actionFor = (copy: SearchCopy, primary: boolean): ReactNode => (
     <Action
       copy={copy}
@@ -666,7 +689,7 @@ function InventoryWalk({
       onSell={sell}
       onUndo={undo}
       onRetire={openRetire}
-      onMove={setMoving}
+      onMove={openMove}
     />
   )
 
@@ -737,8 +760,12 @@ function InventoryWalk({
           copy={moving}
           boxes={boxRecords}
           busy={busyKey !== null}
-          onMove={(toBox) => void doMove(moving, toBox)}
-          onCancel={() => setMoving(null)}
+          refused={moveRefused}
+          onMove={(toBox, section) => void doMove(moving, toBox, section)}
+          onCancel={() => {
+            setMoving(null)
+            setMoveRefused(null)
+          }}
         />
       )}
     </Page>
@@ -1073,36 +1100,53 @@ function Action({
   )
 }
 
-/* THE MOVE PANEL (UX-244, D83): one copy, one destination, one press. The other boxes by name,
- * most recent first as everywhere (the owner's box-order ruling). */
+/* THE MOVE PANEL (UX-244, D83, amended by D-sections-are-sub-boxes): one copy, one
+ * destination box, one destination SECTION, one press. NO AUTO DEFAULT — the owner's own
+ * ruling, "i need to specify where it goes there no auto default" — so Move stays disabled
+ * until both are picked, and picking a new box clears whatever section was picked for the
+ * last one. The other boxes are named most recent first, the same primitive the rail sorts
+ * by. */
 function MovePanel({
   copy,
   boxes,
   busy,
+  refused,
   onMove,
   onCancel,
 }: {
   copy: SearchCopy
   boxes: readonly BoxRecord[]
   busy: boolean
-  onMove: (toBox: number) => void
+  /** A stale-section refusal's plain sentence (`section_gone`, `section_required`), or null. */
+  refused: string | null
+  onMove: (toBox: number, section: string) => void
   onCancel: () => void
 }) {
   const [to, setTo] = useState<string | null>(null)
+  const [section, setSection] = useState<string | null>(null)
+  /* A stale-section refusal clears the pick, so the disabled Move press cannot be pressed a
+   * second time against the same dead key — the box stays chosen, the section does not. */
+  useEffect(() => {
+    if (refused !== null) setSection(null)
+  }, [refused])
   /* S4: MOST RECENT FIRST, the same primitive the rail sorts by — `others` used to be the
      server's own `GET /boxes` order (box number), which said nothing about which box the hand
      was likeliest to reach for. */
   const others = boxesMostRecentFirst(
     boxes.filter((record) => record.box !== copy.place.box),
   )
+  const target = to === null ? null : (others.find((record) => String(record.box) === to) ?? null)
+  const targetSections = (target?.sections_detail ?? []).filter(
+    (detail): detail is SectionDetail & { div: string } => typeof detail.div === 'string',
+  )
   return (
     <Overlay kind="dialog" label={`Move: ${sayPlace(copy.place.label ?? copy.key)}`} onClose={onCancel} className="inventory-confirm">
       <div className="inv-dialog-head">
         <span className="bn-eyebrow">Move</span>
-        <h2 className="inv-dialog-title">Which box does this copy go to?</h2>
+        <h2 className="inv-dialog-title">Which box, and which section, does this copy go to?</h2>
       </div>
       <div className="inv-dialog-body">
-        <p className="bn-muted">It goes to the front of that box. No other card changes box.</p>
+        <p className="bn-muted">It goes to the end of the section you pick. No other card changes box.</p>
         {others.length === 0 ? (
           <Notice tone="info" title="There is no other open box." />
         ) : (
@@ -1111,15 +1155,30 @@ function MovePanel({
             value={to}
             placeholder="Choose a box"
             options={others.map((record) => ({ value: String(record.box), label: record.name ?? UNNAMED_BOX }))}
-            onChange={setTo}
+            onChange={(next) => {
+              setTo(next)
+              setSection(null)
+            }}
           />
         )}
+        {target === null ? null : targetSections.length === 0 ? (
+          <Notice tone="warn" title="Its sections could not be drawn. Read the box again and choose a section." />
+        ) : (
+          <SectionPicker sections={targetSections} value={section} onChange={setSection} />
+        )}
+        {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
       </div>
       <div className="inv-dialog-foot">
         <Button variant="ghost" onClick={onCancel} data-autofocus="">
           Cancel
         </Button>
-        <Button variant="primary" icon="package" busy={busy} disabled={to === null} onClick={() => to !== null && onMove(Number(to))}>
+        <Button
+          variant="primary"
+          icon="package"
+          busy={busy}
+          disabled={to === null || section === null}
+          onClick={() => to !== null && section !== null && onMove(Number(to), section)}
+        >
           Move
         </Button>
       </div>

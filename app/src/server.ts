@@ -1928,16 +1928,24 @@ export async function removeCardInPlace(
  * that, the fix is this same call again, aimed at the transplant, in the other direction.
  * It lands at a fresh index in the original box rather than reclaiming the tombstoned one.
  */
+/**
+ * `section` is a destination-box divider key (`sections_detail[].div`,
+ * D-sections-are-sub-boxes): the card lands at that section's tail. The owner ruled "no
+ * auto default" — a screen never omits this field on a Move-to-box press. It stays
+ * optional here only so an older caller (and a Map drag, which names an exact gap through
+ * a different route entirely) keeps compiling.
+ */
 export async function moveCard(
   box: number,
   index: number,
   captureId: string | null,
   toBox: number,
+  section?: string,
 ): Promise<MoveResult> {
   return (await request(`/inventory/${box}/${index}/move`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ capture_id: captureId, to_box: toBox }),
+    body: JSON.stringify({ capture_id: captureId, to_box: toBox, ...(section === undefined ? {} : { section }) }),
   })) as MoveResult
 }
 
@@ -1975,15 +1983,18 @@ export async function undoMove(box: number, index: number): Promise<MoveUndoResu
  * rather than leaving it half migrated. Order is preserved at the destination: cards
  * arrive in the order their indices were sent, landing contiguously.
  */
+/** `section` — same rule as `moveCard`'s: a destination divider key, the owner's own pick,
+ *  no auto default. */
 export async function moveCards(
   box: number,
   indices: number[] | null,
   toBox: number,
+  section?: string,
 ): Promise<MoveCardsResult> {
   return (await request(`/inventory/${box}/move`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ indices, to_box: toBox }),
+    body: JSON.stringify({ indices, to_box: toBox, ...(section === undefined ? {} : { section }) }),
   })) as MoveCardsResult
 }
 
