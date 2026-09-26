@@ -304,6 +304,17 @@ class UnknownRetireReason(ValueError):
     """A retire reason outside `RETIRE_REASONS`. Never coerced, never defaulted."""
 
 
+def parse_stamp(stamp) -> Optional[datetime]:
+    """An ISO stamp as an aware datetime, or None. A stamp with no zone is read as UTC,
+    which is what every writer in this store stamps, so a naive one never raises when it is
+    compared with an aware one."""
+    try:
+        at = datetime.fromisoformat(str(stamp))
+    except (TypeError, ValueError):
+        return None
+    return at if at.tzinfo is not None else at.replace(tzinfo=timezone.utc)
+
+
 class CardNotFound(ValueError):
     """`move_card` was asked to move a position holding no record."""
 
@@ -674,12 +685,17 @@ class Card:
     # by `identify` or `emit` must neither resurrect nor clear it (D26).
     retire_reason: Optional[str] = None
     # The key this card was transplanted TO, set only when `state == MOVED` — `retire_reason`'s
-    # sibling for the third door (D83). Cleared by nothing: unlike a retirement, a move has no
-    # reversal route that restores the tombstone, because the transplant is a normal, live
-    # record a caller can move again in either direction. NOT a capture claim, for the same
+    # sibling for the third door (D83). Cleared only by `unmove_card`, the move's undo
+    # (UN-14), which puts the card back on this key. NOT a capture claim, for the same
     # reason `retire_reason` is not: a re-record by `identify`/`emit` must neither invent this
     # nor clear it.
     moved_to: Optional[str] = None
+    # THE KEY A TRANSPLANT CAME FROM (UN-14 review round), set by `move_card` on the card it
+    # records in the new box. It is what tells a transplant from a capture: a move copies
+    # `captured_at`, so without it a transplant reads as a capture of the open sitting, and
+    # the capture undo would delete a moved card and its photograph. NOT a capture claim,
+    # for `moved_to`'s reason. None on a card that was captured where it stands.
+    moved_from: Optional[str] = None
     run: Optional[str] = None
     # THE PHOTOGRAPH'S DIGEST, KEPT AFTER THE PHOTOGRAPH IS GONE (D89). Set by
     # `record_photo_reclaimed` and by nothing else; None on every card whose photograph is
@@ -1831,9 +1847,8 @@ class Inventory:
             keys: List[str] = []
             previous: Optional[datetime] = None
             for key, (stamp,) in rows:
-                try:
-                    at = datetime.fromisoformat(str(stamp))
-                except (TypeError, ValueError):
+                at = parse_stamp(stamp)
+                if at is None:
                     continue
                 if previous is not None and (previous - at).total_seconds() > gap_seconds:
                     return list(reversed(keys))
@@ -2580,7 +2595,7 @@ class Inventory:
                 "was mutated outside the lock."
             )
 
-        transplant = replace(card, box=to_box, index=new_index, photo=None)
+        transplant = replace(card, box=to_box, index=new_index, photo=None, moved_from=key)
         self.cards[new_key] = transplant
 
         card.state = MOVED
@@ -2604,7 +2619,14 @@ class Inventory:
         # into the destination box's directory, because the filename WAS the address; the
         # photograph is filed under the card's name now, so a move is this field update and
         # nothing else.
-        card.cid = f"{MOVED_CID_PREFIX}{card.cid}" if card.cid else None
+        #
+        # THE TOMBSTONE'S NAME ALSO CARRIES ITS OWN KEY, `moved:<name>@<key>` (UN-14 review
+        # round). A card moved twice leaves two tombstones, and a bare `moved:<name>` on both
+        # put one value on two rows under the UNIQUE index: moving a card back, or on to a
+        # third box, raised IntegrityError. The key is unique to the slot, so every tombstone
+        # in a chain is distinct. The card's own name is untouched (D172). Tombstones written
+        # before this carry the bare form, and `unmove_card` reads both.
+        card.cid = f"{MOVED_CID_PREFIX}{card.cid}@{key}" if card.cid else None
 
         self._log(MOVED, key, moved_to=new_key, run=card.run, cid=transplant.cid)
         self._log(str(transplant.state), new_key, moved_from=key, run=transplant.run)
@@ -2639,12 +2661,24 @@ class Inventory:
         # key, and a key can hold another card: the demo seed's tombstone names a slot
         # another card holds. `move_card` put `moved:<name>` on the tombstone, so the two
         # names must agree, or this would delete a card that never moved.
-        if not transplant.cid or card.cid != f"{MOVED_CID_PREFIX}{transplant.cid}":
+        names = {f"{MOVED_CID_PREFIX}{transplant.cid}@{key}", f"{MOVED_CID_PREFIX}{transplant.cid}"}
+        if not transplant.cid or card.cid not in names:
             raise CardNotFound(f"the card at {new_key} is not the one moved from {key}")
         if int(transplant.index) != self.next_index(transplant.box) - 1:
             raise CardDeparted(f"{new_key} is no longer the newest card in its box")
+        # A DIVIDER PUT IN BEHIND THE TRANSPLANT builds on the move too. Deleting the
+        # transplant would leave a section that starts past the box's next index, so the
+        # next capture would land in the wrong section.
+        registered = self.boxes.get(str(transplant.box))
+        if registered is not None and any(
+            int(start) > int(transplant.index) for start in registered.sections
+        ):
+            raise CardDeparted(f"a divider was put in after {new_key}")
 
-        restored = replace(transplant, box=card.box, index=card.index, moved_to=None)
+        restored = replace(
+            transplant, box=card.box, index=card.index, moved_to=None,
+            moved_from=card.moved_from,
+        )
         del self.cards[new_key]
         self.cards[key] = restored
         self._log(MOVE_UNDONE, new_key, moved_back_to=key, run=restored.run)

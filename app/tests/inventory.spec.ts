@@ -4508,7 +4508,15 @@ test('UX-244 — one copy moves to another box from its own row, and the receipt
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ moved: '2/1', to: '7/41', box: 2, index: 1, new_box: 7, new_index: 41 }),
+      body: JSON.stringify({
+        moved: '2/1',
+        to: '7/41',
+        box: 2,
+        index: 1,
+        new_box: 7,
+        new_index: 41,
+        card: { capture_id: 'cap-244' },
+      }),
     })
   })
   const row = page.locator('.card-locations-row.is-current')
@@ -4547,7 +4555,15 @@ test('UN-14 — a move gets an undo, the same fast path a sale gets, and it neve
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ moved: '2/1', to: '7/41', box: 2, index: 1, new_box: 7, new_index: 41 }),
+      body: JSON.stringify({
+        moved: '2/1',
+        to: '7/41',
+        box: 2,
+        index: 1,
+        new_box: 7,
+        new_index: 41,
+        card: { capture_id: 'cap-14' },
+      }),
     })
   })
   const row = page.locator('.card-locations-row.is-current')
@@ -4568,6 +4584,85 @@ test('UN-14 — a move gets an undo, the same fast path a sale gets, and it neve
   expect(sent[0]?.body).toMatchObject({ to_box: 7 })
   expect(sent[1]?.path).toBe('/inventory/2/1/move')
   expect(sent[1]?.body).toEqual({ undo: true })
+})
+
+test('UN-14 — a move built on is refused, and "Move back" is an ordinary move in the other direction', async ({
+  page,
+}) => {
+  /* `server.ts:moveCard`'s own doc comment: once either box has changed again since a move,
+   * `undoMove` refuses `move_built_on`, and the fix is an ORDINARY `moveCard` again, aimed at
+   * the transplant's CURRENT position, back to the box the receipt started from. No second
+   * route — unlike UN-7's `saleStillHere`, this reuses the same write the first move made. */
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+  const sent: { path: string; body: unknown }[] = []
+  await page.route(/\/inventory\/\d+\/\d+\/move$/, async (route) => {
+    const url = new URL(route.request().url())
+    const body = route.request().postDataJSON() as { undo?: boolean; to_box?: number } | null
+    sent.push({ path: url.pathname, body })
+    if (body?.undo === true) {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'move_built_on',
+            message: 'This move can no longer be undone. Move the card back instead.',
+          },
+        }),
+      })
+      return
+    }
+    if (url.pathname === '/inventory/7/41/move') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          moved: '7/41',
+          to: '2/9',
+          box: 7,
+          index: 41,
+          new_box: 2,
+          new_index: 9,
+          card: { capture_id: 'cap-14' },
+        }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        moved: '2/1',
+        to: '7/41',
+        box: 2,
+        index: 1,
+        new_box: 7,
+        new_index: 41,
+        card: { capture_id: 'cap-14' },
+      }),
+    })
+  })
+  const row = page.locator('.card-locations-row.is-current')
+  await row.getByRole('button', { name: 'Move to another box' }).click()
+  const dialog = page.getByRole('dialog', { name: /^Move/ })
+  await expect(dialog).toBeVisible()
+  await dialog.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  await dialog.getByRole('button', { name: 'Move', exact: true }).click()
+
+  const toast = page.locator('.bn-toast', { hasText: 'Moved to ME01 spares' })
+  const undo = toast.getByRole('button', { name: 'Undo' })
+  await expect(undo).toBeVisible()
+  await undo.click()
+
+  /* THE REMEDY, NEVER A SECOND ROUTE: the same POST, aimed at where the card reads now
+     (box 7, index 41), back to box 2 — the receipt's own origin. */
+  await expect(page.locator('.bn-toast', { hasText: 'Card moved back' })).toBeVisible()
+  expect(sent).toHaveLength(3)
+  expect(sent[1]?.path).toBe('/inventory/2/1/move')
+  expect(sent[1]?.body).toEqual({ undo: true })
+  expect(sent[2]?.path).toBe('/inventory/7/41/move')
+  expect(sent[2]?.body).toMatchObject({ to_box: 2 })
 })
 
 test('the header holds one worded primary and the filter bar one line, at 390 and 720', async ({

@@ -260,7 +260,14 @@ type Receipt = {
   said: string
   canUndo: boolean
   note: string | null
+  /** MOVE ONLY: where the transplant reads now, and its capture id. `undoMove` aims at the
+   *  tombstone (`box`/`index` above) and refuses `move_built_on` once either box has changed
+   *  again. The remedy then is an ordinary `moveCard`, aimed at THIS location, back to `box`
+   *  (`server.ts:moveCard`'s own doc comment). */
+  current?: { box: number; index: number; captureId: string | null }
 }
+
+const MOVE_BUILT_ON = 'move_built_on'
 
 function report(failure: Failure): void {
   toast({ kind: 'refusal', title: failure.message, body: failure.code })
@@ -512,7 +519,7 @@ export function Inventory() {
       setBusyKey(copy.key)
       const seat = { key: copy.key, box: copy.place.box, index: copy.place.index }
       try {
-        await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox)
+        const result = await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox)
         setMoving(null)
         holdRank(copy.key)
         const where = boxRecords.find((record) => record.box === toBox)?.name ?? UNNAMED_BOX
@@ -523,6 +530,7 @@ export function Inventory() {
           said: `Moved to ${where}`,
           canUndo: true,
           note: renumberNote(copy.place),
+          current: { box: result.new_box, index: result.new_index, captureId: result.card.capture_id },
         })
         setReloads((n) => n + 1)
       } catch (err) {
@@ -534,23 +542,49 @@ export function Inventory() {
     [busyKey, holdRank, boxRecords, remember],
   )
 
+  /* THE "MOVE BACK" REMEDY for `move_built_on` (UN-14): the ordinary reversal aims at the
+   * tombstone and refuses once either box has changed again since — same reason `undoSale`
+   * refuses `sale_built_on`. There is no separate route for the fix-after here, unlike a
+   * sale's `saleStillHere`: `server.ts:moveCard`'s own doc comment names the remedy as an
+   * ORDINARY `moveCard` again, aimed at the transplant's CURRENT position, back to the box
+   * the receipt started from. It lands at a fresh index there, never the tombstoned one. */
+  const moveBack = useCallback(
+    async (receipt: Receipt) => {
+      if (receipt.current === undefined) return false
+      await moveCard(receipt.current.box, receipt.current.index, receipt.current.captureId, receipt.box)
+      return true
+    },
+    [],
+  )
+
   const doUndo = useCallback(
     async (receipt: Receipt) => {
       if (busyKey !== null) return
       setBusyKey(receipt.key)
+      let movedBack = false
       try {
         if (receipt.kind === 'sale') await undoSale(receipt.box, receipt.index)
         else if (receipt.kind === 'retirement') await undoRetire(receipt.box, receipt.index)
         else await undoMove(receipt.box, receipt.index)
       } catch (err) {
         /* `not_sold` / `not_retired` / `not_moved` is success — the copy is not in the state
-         * the press asked to leave. Anything else (including `move_built_on`, UN-14: either
-         * box has changed again since) keeps the receipt standing. */
-        const settled = receipt.kind === 'sale' ? NOT_SOLD : receipt.kind === 'retirement' ? NOT_RETIRED : NOT_MOVED
-        if (refusalCode(err) !== settled) {
-          report(describeFailure(err))
-          setBusyKey(null)
-          return
+         * the press asked to leave. `move_built_on` gets its own remedy above. Anything else
+         * keeps the receipt standing. */
+        if (receipt.kind === 'move' && refusalCode(err) === MOVE_BUILT_ON) {
+          try {
+            movedBack = await moveBack(receipt)
+          } catch (remedyErr) {
+            report(describeFailure(remedyErr))
+            setBusyKey(null)
+            return
+          }
+        } else {
+          const settled = receipt.kind === 'sale' ? NOT_SOLD : receipt.kind === 'retirement' ? NOT_RETIRED : NOT_MOVED
+          if (refusalCode(err) !== settled) {
+            report(describeFailure(err))
+            setBusyKey(null)
+            return
+          }
         }
       }
       setReceipts((held) => held.filter((standing) => standing.key !== receipt.key))
@@ -568,14 +602,21 @@ export function Inventory() {
       toast({
         kind: 'ok',
         icon: 'undo',
-        title: receipt.kind === 'sale' ? 'Sale undone' : receipt.kind === 'retirement' ? 'Retirement undone' : 'Move undone',
+        title:
+          receipt.kind === 'sale'
+            ? 'Sale undone'
+            : receipt.kind === 'retirement'
+              ? 'Retirement undone'
+              : movedBack
+                ? 'Card moved back'
+                : 'Move undone',
         body: receipt.place,
         ttlMs: 4000,
       })
       setReloads((n) => n + 1)
       setBusyKey(null)
     },
-    [busyKey, releaseRank],
+    [busyKey, releaseRank, moveBack],
   )
   doUndoRef.current = doUndo
 
