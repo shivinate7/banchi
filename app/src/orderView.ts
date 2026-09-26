@@ -30,20 +30,6 @@ import type { OrderRow, ResolvedOrder, WalkPlan } from './types'
 import type { BuyerGroup } from './orderBuyers'
 import type { SortValue } from './kit'
 
-export type OrderSort = 'newest' | 'oldest'
-
-/** The operator's whole standing view of the buyer list: which status narrows it, which way
- *  `placed_at` runs within a group, and whether a group with an unresolved SKU is folded out.
- *  Every field defaults to "show everything" — `status: null` is All, `hideUnknown: false` is
- *  off — so a device that has never touched these controls sees every row. */
-export type OrderView = {
-  readonly status: string | null
-  readonly sort: OrderSort
-  readonly hideUnknown: boolean
-}
-
-export const DEFAULT_ORDER_VIEW: OrderView = { status: null, sort: 'newest', hideUnknown: false }
-
 export type StatusOption = { readonly status: string; readonly count: number }
 
 /** The distinct `status` strings the FEED itself sent, with how many orders carry each —

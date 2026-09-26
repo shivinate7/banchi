@@ -136,8 +136,8 @@ const ORDER_FILTER_KEY = 'banchi.orders.fetch-filter'
 /** The buyer list's own standing view — status, sort, whether an unresolved SKU is folded
  *  out — added to this SAME document rather than a new key. The owner's ruling for the six
  *  capture values above is the same habit here: "the view I work the list in" is one fact a
- *  person sets and clears together, and `app/src/orderView.ts:DEFAULT_ORDER_VIEW` is what a
- *  device that has never touched these controls gets — every row shown, newest first. */
+ *  person sets and clears together, and `DEFAULT_VIEW` below is what a device that has never
+ *  touched these controls gets — every row shown, newest first. */
 export type OrderView = {
   readonly status: string | null
   readonly sort: 'newest' | 'oldest'
