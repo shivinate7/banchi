@@ -99,6 +99,9 @@ export function isWithheld(value: unknown): value is WithheldRecord | 'unlisted'
 export function corpusAnswer(book: PricingCorpus, row: Pick<PricingSku, 'sku' | 'bucket'>): unknown {
   const answer = (book.skus ?? {})[row.sku]
   if (answer === null || answer === undefined) return undefined
+  /* A HOLD ON THE `price` CHANNEL COUNTS ON EVERY ROW: `join` skips a held SKU before it reads
+   * the row's bucket. `#/pricing` writes a no-market hold there (`setHold`). */
+  if (answer.channel !== 'unknown' && isWithheld(answer.value)) return answer.value
   return (answer.channel === 'unknown') === (row.bucket === 'no_market_data') ? answer.value : undefined
 }
 

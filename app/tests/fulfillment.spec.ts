@@ -1259,6 +1259,18 @@ async function noThinContrast(page: Page, where: string): Promise<void> {
  *  the size and spacing assertions below run either way, and defaulting to true keeps a
  *  screen that has quietly lost its controls failing. */
 async function fatTargets(page: Page, where: string, hasControls = true): Promise<void> {
+  /* EVERY FINITE ANIMATION ENDS BEFORE THE RULER. A receipt that is still in its entry
+     animation (`bn-pop` scales it) read its 44px dismiss button at 43.99997 under load. The
+     floor does not move. Only the moment of the read does. A looping shimmer never ends, so
+     it is left out. */
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  )
   const found = await targets(page)
   if (hasControls) expect(found.length, `${where}: no control on screen`).toBeGreaterThan(0)
 

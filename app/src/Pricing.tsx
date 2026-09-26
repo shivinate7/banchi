@@ -334,10 +334,8 @@ function groupOf(sku: PricingSku): string | null {
  * reverse THE CHANGE IT NAMES, never whatever the stack's front holds by the time the
  * button is actually pressed — a hold set on one row and then another must not let the
  * second row's toast undo the first's write. */
-/** UN-12 (the delta review round): `writes` is an ARRAY, never one bare sku/before/channel —
- *  `setHold` on a SKU with no market price writes two fields (`listable` AND the bucket
- *  itself), and both have to be ONE stack entry so `U` reverses the whole hold in one press,
- *  never just the second write it happened to push last. */
+/** UN-12 (the delta review round): `writes` is an ARRAY, so a batch of writes is ONE stack
+ *  entry and `U` reverses all of it in one press. Every caller today writes one answer. */
 type Undo = { id: number } & (
   | { kind: 'answer'; writes: readonly { sku: string; before: CorpusAnswer | undefined; channel: 'price' | 'unknown' }[] }
   | { kind: 'cutoff'; before: { threshold: string | undefined; sub_threshold: PricingCorpus['policy']['sub_threshold'] | undefined } }
@@ -1037,7 +1035,10 @@ export function Pricing() {
 
 
   const answerFor = useCallback(
-    (sku: PricingSku): unknown => (targetOf(sku.bucket) === 'overrides' ? answers[sku.sku] : unpriced[sku.sku]),
+    /* A HOLD ON THE `price` CHANNEL IS READ ON EVERY ROW, since `join` honours it before the
+     * bucket (`setHold`). Anything else on a no-market row reads the `unknown` channel. */
+    (sku: PricingSku): unknown =>
+      targetOf(sku.bucket) === 'overrides' || isWithheld(answers[sku.sku]) ? answers[sku.sku] : unpriced[sku.sku],
     [answers, unpriced],
   )
 
@@ -1458,9 +1459,7 @@ export function Pricing() {
         )
         return
       }
-      /* UN-12: every op in the batch reverses together — a hold on a no-market-price SKU
-       * wrote two fields, and both come back in the SAME setBook call so neither can land
-       * ahead of a re-render that reads only one of them. */
+      /* UN-12: every op in the batch reverses together, in the SAME setBook call. */
       setBook((current) => {
         if (current === null) return current
         const skus = { ...(current.skus ?? {}) }
@@ -1568,14 +1567,14 @@ export function Pricing() {
       const record: WithheldRecord = { withheld: reason }
       if (watch.trim() !== '') record.watch_above = watch.trim()
       if (text.trim() !== '') record.note = text.trim()
-      /* UN-12 (the delta review round): a SKU with no market price writes TWO fields
-       * (`listable` and the bucket itself, since holding it also has to pull it out of
-       * `no_market_data`). ONE `writeMany` call, so both land as ONE stack entry — `U`
-       * reverses the whole hold in one press, never leaving the second write behind as an
-       * orphan entry a later, unrelated `U` would wrongly reach. */
-      const ops: { sku: string; bucket: PricingSku['bucket']; value: unknown }[] = [{ sku: sku.sku, bucket: 'listable', value: record }]
-      if (sku.bucket === 'no_market_data') ops.push({ sku: sku.sku, bucket: sku.bucket, value: 'unlisted' })
-      const id = writeMany(ops)
+      /* ONE ANSWER, ON THE `price` CHANNEL, FOR EVERY ROW (the final Pricing review, HIGH).
+       * `book.skus[sku]` holds ONE answer per SKU, so the old second write ('unlisted' on the
+       * `unknown` channel) replaced this record and lost the reason, watch and note. A hold
+       * cannot ride the `unknown` channel: `decisions.parse` refuses a record under
+       * `no_market_data` as "not a price". On the `price` channel it lands in `withheld()`,
+       * and `join.prices_for` skips a held SKU before it reads `no_market_data`, so a no-market
+       * row is left out exactly as 'unlisted' left it out. `answerFor` reads it back. */
+      const id = write(sku.sku, 'listable', record)
       setHoldFor(null)
       toast({
         kind: 'receipt',
@@ -1586,7 +1585,7 @@ export function Pricing() {
       })
       inputs.current.get(sku.sku)?.focus()
     },
-    [writeMany],
+    [write],
   )
 
   /** Read the shape of every row still waiting — one press, chunked, sequential. EACH ROW ASKS
@@ -1879,10 +1878,10 @@ export function Pricing() {
                 }
                 toast({
                   kind: 'ok',
-                  title: `${back.restored.length} price${back.restored.length === 1 ? '' : 's'} restored`,
+                  title: `${back.restored.length} price${back.restored.length === 1 ? '' : 's'} undone`,
                   body:
                     back.skipped.length === 0
-                      ? 'Each one keeps the date it was first typed.'
+                      ? 'Each one carries the date it was first typed on.'
                       : `${back.skipped.length} had been answered again since, and those answers were kept.`,
                 })
               } catch (err) {

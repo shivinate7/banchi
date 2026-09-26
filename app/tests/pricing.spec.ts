@@ -2023,40 +2023,41 @@ test('finding #6 (the delta review round) — focusing an ALREADY-WRITTEN cut-of
   await expect(page.locator('.bn-toast')).toHaveCount(0)
 })
 
-test('UN-12 (the delta review round) — a hold on a no-market-price SKU writes two fields as ONE undo entry', async ({
+test('UN-12 (the delta review round) — a hold on a no-market-price SKU is ONE answer that keeps its reason, watch and note', async ({
   page,
 }) => {
-  /* THE REVIEWER'S OWN FINDING, FROM READING THE CODE: `setHold` calls `write` twice for a
-   * SKU with no market price (`listable`, and pulling it out of `no_market_data`), so there
-   * were two stack entries for one hold. The toast's own Undo reversed both (it holds both
-   * ids), but `U` (`undoLast`) only popped the front of the stack — the second write stayed
-   * behind as an orphan a later, unrelated `U` would wrongly reach. One `writeMany` call now
-   * makes it ONE entry, so `U` reverses the whole hold in a single press. */
+  /* THE FINAL PRICING REVIEW'S HIGH FINDING. `book.skus[sku]` holds ONE answer per SKU, and
+   * `setHold` once wrote two for a no-market SKU: the hold record, then 'unlisted' on the
+   * `unknown` channel. The second replaced the first, so the reason, the watch and the note
+   * never reached the store. A hold is now ONE answer on the `price` channel, where `join`
+   * honours it before the bucket. The stack half is kept: one `U` puts the typed price back
+   * and leaves the stack empty. */
   const wire = await open(page, {
     skus: [sku({ sku: '5', name: 'Unpriced', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
-    decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {} },
+    decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {}, no_market_data: { '5': '5.16' } },
   })
+  const sent = () =>
+    (wire.filter((row) => row.method === 'PUT').pop()?.body as { corpus?: { skus?: Record<string, { value: unknown; channel?: string }> } } | undefined)
+      ?.corpus?.skus?.['5']
 
   await page.locator('.pricing-hold').first().click()
   await expect(page.locator('.pricing-holdpanel')).toBeVisible()
   await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByLabel('Tell me when market is above').fill('9.50')
+  await page.getByLabel('Note', { exact: true }).fill('waiting on a reprint')
   await page.getByRole('button', { name: 'Hold it' }).click()
 
-  await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
-  expect(sentAnswers(wire)['5']).toBeDefined()
+  await expect.poll(() => sent()?.value).toMatchObject({ withheld: expect.any(String), watch_above: '9.50', note: 'waiting on a reprint' })
+  expect(sent()?.channel ?? 'price').toBe('price')
+  await expect(page.locator('.pricing-row')).toHaveAttribute('data-answer', 'held')
 
-  /* ONE HOLD, ONE `U` PRESS, AND THE STACK IS EMPTY — the fixed toolbar Undo (`disabled={undo
-   * .length === 0}`) is what makes the stack DEPTH observable, which is the real difference:
-   * both writes' own `before` happen to read the SAME pre-hold state (captured from the same
-   * closure within one synchronous handler), so the WIRE looks fully undone after one press
-   * either way — the bug this finding names is a GHOST STACK ENTRY, invisible on the wire,
-   * that only a stack-depth read (the toolbar button's own disabled state) can catch. Before
-   * the fix, one press left the second write's own entry stranded, and Undo stayed enabled
-   * for a press that reaches nothing. */
+  /* ONE HOLD, ONE `U` PRESS, AND THE STACK IS EMPTY — the toolbar Undo's disabled state is
+   * the stack depth. The typed price comes back on its own channel. */
   await page.locator(`${VIEW} h1`).click()
   const toolbarUndo = page.getByRole('button', { name: 'Undo', exact: true })
   await page.keyboard.press('u')
   await expect(toolbarUndo).toBeDisabled()
+  await expect.poll(() => sent()).toMatchObject({ value: '5.16', channel: 'unknown' })
 })
 
 test('a held row says so, in both registers, and has no price field', async ({ page }) => {
