@@ -935,7 +935,7 @@ async function undoFromToast(target: PullTarget, place: string, name: string): P
   setHub({ busy: `undo/${target.capture_id}` })
   try {
     await undoPull([target])
-    toast({ kind: 'ok', icon: 'undo', title: `Put ${name} back`, body: `${place} holds it again.` })
+    toast({ kind: 'ok', icon: 'undo', title: 'Pull undone', body: `${place} holds ${name} again.` })
     /* `undoneTarget`/`undoneAt` are how a MOUNTED walk's own tally hears about this — this
        write never goes through `useOrderWalk` at all, so without this the walk kept believing
        the copy this pull put back was still recorded (the review round's finding 2, D171).
@@ -948,7 +948,7 @@ async function undoFromToast(target: PullTarget, place: string, name: string): P
      * names #/inventory as one) — never a failure this press could retry its way out of.
      * The old "not put back" refusal was actively wrong here: the card WAS already back. */
     if (describeFailure(err).code === PULL_NOT_RECORDED) {
-      toast({ kind: 'ok', icon: 'undo', title: 'Already put back', body: `${place} holds it, from somewhere else.` })
+      toast({ kind: 'ok', icon: 'undo', title: 'Already undone', body: `${place} holds it, from somewhere else.` })
     } else {
       const trouble = describeFailure(err)
       toast({ kind: 'refusal', title: 'The card was not put back', body: trouble.message })
@@ -1858,13 +1858,13 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       /* The copy goes back in the drawer, so the rows still ahead of it take their old
          numbers back too — the same `refresh` list the pull sent, answered the other way. */
       const done = await undoPull([target], refresh)
-      toast({ kind: 'ok', icon: 'undo', title: `Put ${name} back`, body: `${place} holds it again.` })
+      toast({ kind: 'ok', icon: 'undo', title: 'Pull undone', body: `${place} holds ${name} again.` })
       await Promise.all([reread(), rereadStore()])
       return { ok: true, refreshed: done.refreshed ?? [] }
     } catch (err) {
       /* FINDING #8: the same "already reversed elsewhere" case `undoFromToast` reads. */
       if (describeFailure(err).code === PULL_NOT_RECORDED) {
-        toast({ kind: 'ok', icon: 'undo', title: 'Already put back', body: `${place} holds it, from somewhere else.` })
+        toast({ kind: 'ok', icon: 'undo', title: 'Already undone', body: `${place} holds it, from somewhere else.` })
         await Promise.all([reread(), rereadStore()])
         return { ok: true, refreshed: [] }
       }

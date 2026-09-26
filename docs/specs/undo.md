@@ -540,33 +540,44 @@ The screen halves are built on branch `ux/undo-screens`, over lane S's `ux/undo-
 
 ### 11.11 One vocabulary (the Opus review round, finding #15)
 
+Converged by the orchestrator in the delta review round.
+
 The review found the same outcome named differently on different screens. "Sale undone".
 "Move undone". "Card moved back". "Card brought back". "Put X back". "N prices restored".
-"Not restored". "The card was not put back". A person reading two of these gets no signal
-that they name the same kind of event.
+"Not restored". "The card was not put back". "Already put back". A person reading two of
+these got no signal that they name the same kind of event.
 
-Two categories, not one word:
+This section first drew a line between a true reversal and a write that only looks like
+one, and kept each its own phrase. The orchestrator's own delta-review ruling folds that
+line away. Every write an Undo press or a toast's own Undo reaches reads `"<what it undid>
+undone"`, whichever of the two kinds it is. A REFUSAL is the one thing that stays its own
+plain sentence, never forced into the pattern. A refusal is not an outcome to name. It is
+a reason to give.
 
-- **A true reversal.** The write is undone. The store returns to what it was before the
-  write. Its toast title is always `"<what it undid> undone"`: "Sale undone", "Retirement
-  undone", "Move undone". `BoxBrowse.tsx:CardOps.resurrect` used to say "Card brought back".
-  `Inventory.tsx` already named the identical write "Sale undone" or "Retirement undone".
-  Same event, two names, two screens. Fixed: `resurrect` now uses the same two words. A
-  refusal to reverse reads `"Not undone"`. The reason goes in the body, never the raw code
-  (finding #7).
-- **A different write that only looks like an undo.** The card ends up back on the shelf.
-  The request is not a reversal of the original one. `BoxBrowse.tsx:CardOps.stillHere`
-  (UN-7's `saleStillHere`, reached only after a reversal refuses `sale_built_on`) and Orders'
-  `pull_not_recorded` case (finding #8: the pull was already reversed elsewhere) are both
-  this kind. Each keeps its own honest phrase: `"Card brought back"`, `"Already put back"`.
-  Calling either one "undone" would claim a reversal that never happened.
-  `Pricing.tsx`'s cut-off restore (`"N prices restored"` / `"Not restored"`) is a third,
-  narrower case. It restores a prior VALUE, not a deleted write. "Restored" stays its own
-  word here, in neither bucket above.
+The vocabulary, as built:
 
-The rule for a new screen: name the result of an Undo press `"<subject> undone"`. Name a
-write that is not provably a reversal for what it plainly did instead. Never borrow
-"undone" for it.
+- **Sale, retirement, move, hold, cut-off.** `"Sale undone"`, `"Retirement undone"`, `"Move
+  undone"`, and Pricing's own hold/cut-off writes all already read this way.
+- **`BoxBrowse.tsx:CardOps.resurrect`** (a true reversal of a sale or retirement) reads
+  `"Sale undone"` / `"Retirement undone"`. Same words `Inventory.tsx` already uses for the
+  identical write.
+- **`BoxBrowse.tsx:CardOps.stillHere`** (UN-7's `saleStillHere`, a DIFFERENT write reached
+  only after an ordinary reversal refuses `sale_built_on`) reads `"Card undone"` now,
+  in place of the old `"Card brought back"`.
+- **Orders' pull undo** (a true reversal) reads `"Pull undone"`, in place of the old
+  `"Put X back"`.
+- **Orders' `pull_not_recorded` case** (finding #8: the pull was already reversed
+  elsewhere, a DIFFERENT write from the ordinary undo) reads `"Already undone"`, in place
+  of the old `"Already put back"`.
+- **Pricing's cut-off/mass-clear restore** reads `"N prices undone"`, in place of the old
+  `"N prices restored"`.
+- **Every refusal stays plain**, never forced into "<subject> undone": `"Not undone"`,
+  `"The card was not put back"`, `"Not undone"` (Pricing's own restore refusal). The reason
+  goes in the body, never the raw code (finding #7).
+
+The rule for a new screen: name the result of ANY press an Undo control reaches
+`"<subject> undone"`. This holds whether the write is a provable reversal, or a different
+write with the same visible effect. Name a refusal plainly. Never borrow "undone" for it.
 
 ### 11.12 Finding #10, decided by the orchestrator (the Opus review round)
 

@@ -1277,7 +1277,7 @@ test('U undoes the newest pull, on the Pull stage', async ({ page }) => {
     .toBe(2)
   const pulls = wire.filter((one) => one.path.endsWith('/orders/pull'))
   expect(pulls[1]?.body).toEqual({ undo: true, targets: [{ box: 3, index: 21, capture_id: 'cap-a' }] })
-  await expect(page.locator('.bn-toast', { hasText: 'Put Volcanion back' })).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: 'Pull undone' })).toBeVisible()
 })
 
 test('finding #11 (the Opus review round) — `U` still undoes the newest pull a faked minute later', async ({
@@ -1359,7 +1359,7 @@ test('finding #8 (the Opus review round) — a pull already reversed elsewhere r
 
   /* NEVER "THE CARD WAS NOT PUT BACK" — it reads as settled, the same register `not_sold`
      and `not_retired` already answer with elsewhere in this product. */
-  await expect(page.locator('.bn-toast', { hasText: 'Already put back' })).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: 'Already undone' })).toBeVisible()
   await expect(page.locator('.bn-toast', { hasText: 'The card was not put back' })).toHaveCount(0)
 
   /* AND THE TARGET IS GONE: a second `U` reaches nothing, because there is nothing left to
@@ -1392,7 +1392,7 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
   await page.keyboard.press('u')
 
   // No second `/orders/pull` call — the field ate the key.
-  await expect(page.locator('.bn-toast', { hasText: 'Put Volcanion back' })).toHaveCount(0)
+  await expect(page.locator('.bn-toast', { hasText: 'Pull undone' })).toHaveCount(0)
   expect(wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   await expect(page.getByRole('searchbox', { name: 'Search buyers' })).toHaveValue('u')
 })

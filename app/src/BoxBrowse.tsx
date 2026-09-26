@@ -2907,7 +2907,7 @@ function CardOps({
           icon: 'undo',
           title: 'Sale undone',
           body: result.order_released
-            ? `${label} is back in its box. The order it was pulled for no longer counts it shipped.`
+            ? `${label} is back in its box. The order it was pulled for no longer counts it.`
             : `${label} is back in its box.`,
           ttlMs: 12000,
         })
@@ -2961,12 +2961,12 @@ function CardOps({
         result.order_effect === 'filled_by_hand'
           ? ' The order it was pulled for is now marked filled by hand.'
           : result.order_effect === 'released'
-            ? ' The order it was pulled for no longer counts it shipped.'
+            ? ' The order it was pulled for no longer counts it.'
             : ''
       toast({
         kind: 'ok',
         icon: 'undo',
-        title: 'Card brought back',
+        title: 'Card undone',
         body: `${label} is back in stock.${orderNote}`,
         ttlMs: 12000,
       })

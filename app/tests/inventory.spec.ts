@@ -4402,7 +4402,7 @@ test('UN-7 — a sale built on is refused, and "This card is still here" is a di
   await stillHere.click()
 
   /* THE OWNER'S RULING, 2026-09-25: "Card back, order re-points." Plain, not neutral. */
-  const toast = page.locator('.bn-toast', { hasText: 'Card brought back' })
+  const toast = page.locator('.bn-toast', { hasText: 'Card undone' })
   await expect(toast).toContainText('ME01 commons #4 is back in stock')
   await expect(toast).toContainText('marked filled by hand')
 
@@ -4454,7 +4454,7 @@ test('UN-7 finding #4 — "still here" reads the server\'s own order_effect, nev
   await page.getByRole('button', { name: 'Card actions' }).click()
   await page.getByRole('menuitem', { name: 'Bring this card back' }).click()
   await page.getByRole('menuitem', { name: 'This card is still here' }).click()
-  const noneToast = page.locator('.bn-toast', { hasText: 'Card brought back' })
+  const noneToast = page.locator('.bn-toast', { hasText: 'Card undone' })
   /* order_effect: 'none' — no order sentence at all, and neither of the other two claims. */
   await expect(noneToast).toContainText('is back in stock')
   await expect(noneToast).not.toContainText('order')
@@ -4463,10 +4463,13 @@ test('UN-7 finding #4 — "still here" reads the server\'s own order_effect, nev
   await page.getByRole('button', { name: 'Card actions' }).click()
   await page.getByRole('menuitem', { name: 'Bring this card back' }).click()
   await page.getByRole('menuitem', { name: 'This card is still here' }).click()
-  const releasedToast = page.locator('.bn-toast', { hasText: 'Card brought back' }).last()
+  const releasedToast = page.locator('.bn-toast', { hasText: 'Card undone' }).last()
   /* order_effect: 'released' — the OPPOSITE claim from 'filled by hand': the order no longer
-     counts the copy shipped, because it was open and this reversal released its line. */
-  await expect(releasedToast).toContainText('no longer counts it shipped')
+     counts the copy, because it was open and this reversal released its line. Never
+     "shipped" — an open order's line was never shipped, so there is nothing to un-count as
+     shipped (a low finding of the delta review round). */
+  await expect(releasedToast).toContainText('no longer counts it')
+  await expect(releasedToast).not.toContainText('shipped')
   await expect(releasedToast).not.toContainText('filled by hand')
 })
 
