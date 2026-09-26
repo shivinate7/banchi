@@ -120,3 +120,33 @@ The figures are now computed server-side by `pipeline/pricing.py:preset_prices`,
 **AND A BLANK BOX KEEPS THE PRICE IT ALREADY HAS, SAID ON THE SCREEN** (the operator, 2026-09-07). It was stated only once typing had begun — "the rest are left exactly as they are listed" — which is the moment it is least needed. An operator looking at 387 fields ghosting a faint current price has to know that leaving one alone changes nothing at TCGplayer, or the ghost reads as a value about to be re-sent. It is also the true rule: `pushable` collects rows carrying a typed answer and `apply` receives only those.
 
 **THE FIELD'S GHOST IS THE LIVE PRICE.** D109 opened the lens field empty with the rule's figure behind it; the operator asked for the price they are actually asking now, *"in a faint gray… and it immediately gets rewritten once i type a new number."* `snap.now` is that cell, and because it is a placeholder rather than a value the first digit typed replaces it whole — no selecting and no backspace. It falls back to the rule only on a `no_asking_price` row, where there is no "now" to draw.
+
+### Amended 2026-09-26: Singles and Sealed, counts that add up, and a press for the rule
+
+The owner's words are in `docs/reviews/ux-2026-09-23/RULINGS.md`, 2026-09-26.
+
+- **Singles and Sealed.** The Live tab filters on its own by kind, in the URL (`?kind=singles`
+  or `?kind=sealed`, D285). A row is sealed when its condition is `Unopened`
+  (`pipeline/reprice.py:is_sealed`, `tcgcsv.SEALED_CONDITION`). No sales-lane rule existed to
+  reuse. A name rule misfiles singles such as Tinkatink and Pack of Wonders. The survey carries
+  the flag per row. The apply takes the filter as `kind` and refuses an edit of the other kind
+  (`kind_mismatch`), so a Singles view never sends a sealed price.
+- **The counts add up.** "Passed over" read the survey's `counts.refused`, which also counts
+  sold-out rows the tab never draws. On the owner's read that was 727 beside "All 408". Each lens
+  count is now the rows it shows, under the kind filter. All is Not selling plus Passed over.
+- **What the Live tab's heads mean.** "Needs you" on this tab counted every listing worth $5 or
+  more (236 of 408). A live listing already has a price somebody chose. So on this tab only a
+  row with no market price leads, under "No market price". The owner types its price, and the
+  rule never lowers it.
+- **What "N new prices" counts.** A typed price that is not the price the read showed. Before,
+  every stored answer on a surveyed row counted, most of them equal to the live price. That was
+  the "280".
+- **A press for the rule.** "A blank box keeps the price it already has" stands. So the rule's
+  price reaches a field only by a press: "Mark down N" on the rule line writes the server's
+  proposal (capped, never on a no-market row) onto the rule's picks on screen. It is one act
+  with one undo, the presets' own shape. A row the owner priced away from its live price keeps
+  the owner's price.
+- **Money to the cent.** A field shows two places. The export's `349.9900` is drawn `349.99`,
+  and what the field shows is what the press sends (D221, D267).
+
+Proof: `app/tests/pricing-markdown.spec.ts`, the 2026-09-26 cases.

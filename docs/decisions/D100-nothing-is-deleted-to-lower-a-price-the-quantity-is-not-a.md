@@ -85,3 +85,21 @@ The markdown is off the operator's own live price, which is `TCG Marketplace Pri
 **And the whole thing is scoped to what one export says.** A listing on a SKU this store never held is reported and never touched, which is right, and means a person selling through two channels gets no help here with the other one.
 
 **What would reopen this.** *The first upload*, whose answers belong in the spec's section 6. *A listing age this store can read* — populate `live_as_of` on a first sighting, or record a `first_listed_at` when `emit` pushes, and the third term stops being a proxy and the report's header paragraph goes away. *A reason column in the worklist*, at the cost named above. *An importer that rejects a zero-quantity row*, which would make the whole design unbuildable in this shape and is the one outcome the 649 rows argue hardest against.
+
+### Amended 2026-09-26: a dollar cap on the rule, and no mark-down without a market price
+
+The owner's words are in `docs/reviews/ux-2026-09-23/RULINGS.md`, 2026-09-26. Two rules change.
+
+- **A dollar cap.** A read can carry a cap (`reprice list --cap`, the Live tab's Change sheet).
+  The rule then takes P% off, but never more than the cap off one copy. `pipeline/reprice.py:plan`
+  proposes the rule's price or the asking price less the cap, whichever is higher. The cap lives
+  in the read's `asked`, beside the percentage. With no cap in the last read, the sheet offers
+  none. `reprice apply` reads the cap off the manifest, never off the request. It refuses a price
+  that takes more than the cap off one copy (`over_cap`), per row. A typed price is held to the
+  cap too, because the cap is the owner's limit on one press. The owner raises the cap for a
+  deeper cut.
+- **No market price, no mark-down.** `plan` refuses a row with no `TCG Market Price` as
+  `no_market`, before the rule prices it, on every basis. The asking-price basis could price it,
+  and that was the defect. A card nobody has priced is the owner's to price by hand (D49).
+
+Proof: T7 `check_live_markdown_guards`, each rule red under its own mutation.

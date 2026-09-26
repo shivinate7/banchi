@@ -2468,6 +2468,9 @@ export async function applyMarkdown(
      *  made. Omit to say "did not read one", which the command allows. */
     revision?: string
     write?: boolean
+    /** The Live tab's Singles / Sealed filter. The server refuses the whole request if an edit
+     *  is of the other kind (`kind_mismatch`), so the filter's word is kept. Omit for both. */
+    kind?: 'singles' | 'sealed'
   } = {},
 ): Promise<MarkdownAnswer> {
   return (await request(`/pipeline/markdowns/${encodeURIComponent(stamp)}/apply`, {
@@ -2477,6 +2480,7 @@ export async function applyMarkdown(
       worklist: options.worklist,
       edits: options.edits,
       revision: options.revision,
+      kind: options.kind,
       write: Boolean(options.write),
     }),
   })) as MarkdownAnswer

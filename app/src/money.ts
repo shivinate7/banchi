@@ -53,3 +53,14 @@ export function moneySigned(value: number | null | undefined): string {
 export function roundsToNothing(value: number | null | undefined): boolean {
   return typeof value === 'number' && value > 0 && value < 0.005
 }
+
+/** A money string as a price FIELD holds it: two places, no `$`, no grouping — `349.9900` from a
+ *  TCGplayer export becomes `349.99` (D221, D267: every dollar figure is drawn to the cent). Null
+ *  where the text is not money. The field draws its own `$`, and what the field shows is what a
+ *  press sends, so this is the one place an export's four places are cut to two. */
+export function moneyField(text: string | null | undefined): string | null {
+  if (typeof text !== 'string') return null
+  const trimmed = text.trim()
+  if (!/^\d+(\.\d+)?$/.test(trimmed) && !/^\.\d+$/.test(trimmed)) return null
+  return Number(trimmed).toFixed(2)
+}
