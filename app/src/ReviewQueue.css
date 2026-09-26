@@ -1070,7 +1070,7 @@
 
 /* ---- phone ----------------------------------------------------------------------- */
 @media (max-width: 767px) {
-  .review-pagehead .bn-head-actions .bn-btn:not(.bn-btn-icon) { padding-left: var(--bn-3); padding-right: var(--bn-3); }
+  .review-pagehead .bn-head-actions .bn-btn:not(.bn-btn-icon):not(.bn-icon-btn) { padding-left: var(--bn-3); padding-right: var(--bn-3); }
   .review-group-bar { bottom: calc(64px + var(--bn-3) + env(safe-area-inset-bottom)); }
   /* UX-204: the receipt is where the thumb is. Sticky rather than fixed, so it still scrolls
      with the card until its own reserved slot (`.review-tray`, above) would carry it off the
