@@ -3558,7 +3558,7 @@ test('UN-11 (the delta review round) — the newest clear survives a reload, and
 
   const restore = page.getByRole('button', { name: 'Restore 49 cleared' })
   await expect(restore).toBeVisible()
-  await expect(page.locator('.pricing-restore-clear')).toContainText('49 typed prices cleared')
+  await expect(page.locator('.pricing-restore-clear')).toContainText('Restore 49 cleared,')
 
   await restore.click()
 
@@ -3570,6 +3570,84 @@ test('UN-11 (the delta review round) — the newest clear survives a reload, and
 
   /* THE CONTROL IS GONE — the same read that answered the restore no longer names a clear. */
   await expect(page.getByRole('button', { name: /^Restore \d+ cleared/ })).toHaveCount(0)
+})
+
+test('every kept clear is offered after a reload, each with its own Restore, and the older one comes back', async ({
+  page,
+}) => {
+  /* THE OWNER'S STANDING UNDO RULING, "Anytime, from a history": a kept clear with no control
+   * on the screen is not reachable. Two clears, a reload, and both are offered, newest first.
+   * The older one's Restore names its own clear, and the newer one is still offered after. */
+  let clears = [
+    { id: 'newer', count: 3, at: 1758873600 },
+    { id: 'older', count: 49, at: 1758870000 },
+  ]
+  const wire: { body: unknown }[] = []
+  await open(page, { skus: CLEAR_ROWS })
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: {} },
+        path: '/tmp/prices.json',
+        revision: 'rev-1',
+        clearable: CLEARABLE,
+        last_clear: clears[0] ?? null,
+        clears,
+      }),
+    })
+  })
+  await page.route(/\/pricing\/restore$/, async (route) => {
+    const body = route.request().postDataJSON() as { clear?: string }
+    wire.push({ body })
+    clears = clears.filter((row) => row.id !== body.clear)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, restored: ['SKU0'], skipped: [], revision: 'rev-restored' }),
+    })
+  })
+  await page.reload()
+  await settleFonts(page)
+
+  const offered = page.locator('.pricing-restore-clear').getByRole('button', { name: /^Restore \d+ cleared, / })
+  await expect(offered).toHaveCount(2)
+  await expect(offered.first()).toContainText('Restore 3 cleared,')
+  await expect(offered.nth(1)).toContainText('Restore 49 cleared,')
+
+  await offered.nth(1).click()
+  expect(wire[0]?.body).toEqual({ clear: 'older', revision: 'rev-1' })
+  await expect(page.locator('.bn-toast', { hasText: 'undone' })).toBeVisible()
+  await expect(offered).toHaveCount(1)
+  await expect(offered.first()).toContainText('Restore 3 cleared,')
+})
+
+test('past three kept clears, the rest fold behind "and N more"', async ({ page }) => {
+  const clears = Array.from({ length: 5 }, (_, i) => ({ id: `c${i}`, count: i + 1, at: 1758870000 + i * 60 }))
+  await open(page, { skus: CLEAR_ROWS })
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: {} },
+        path: '/tmp/prices.json',
+        revision: 'rev-1',
+        clearable: CLEARABLE,
+        last_clear: clears[0],
+        clears,
+      }),
+    })
+  })
+  await page.reload()
+  await settleFonts(page)
+  const offered = page.locator('.pricing-restore-clear').getByRole('button', { name: /^Restore \d+ cleared, / })
+  await expect(offered).toHaveCount(3)
+  await page.getByRole('button', { name: 'and 2 more' }).click()
+  await expect(offered).toHaveCount(5)
 })
 
 test('the clear is refused while the screen has an unsaved answer', async ({ page }) => {

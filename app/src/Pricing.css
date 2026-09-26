@@ -473,3 +473,8 @@
   .pricing-bar .send-more-press { display: inline-flex; flex: none; }
   .pricing-bar .send-act:not([data-more='open']) .send-door { display: none; }
 }
+
+/* ONE LINE PER KEPT CLEAR (the owner's standing undo ruling, "Anytime, from a history"). */
+.pricing-restore-clear-row {
+  display: block;
+}

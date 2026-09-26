@@ -5117,6 +5117,7 @@ def do_pricing_corpus() -> dict:
         "revision": _corpus_revision(),
         "clearable": _clearable_block(book),
         "last_clear": _last_clear_block(),
+        "clears": _clears_block(),
     }
 
 
@@ -5132,6 +5133,18 @@ def _last_clear_block() -> Optional[dict]:
     if stored is None:
         return None
     return {"count": len(stored["cleared"]), "at": stored["at"], "id": stored["id"]}
+
+
+def _clears_block() -> List[dict]:
+    """EVERY kept clear a restore can still undo, newest first (the owner's standing undo
+    ruling, "Anytime, from a history"). A kept clear with no control on the screen is not
+    reachable, so the notice draws each one with its own Restore. A clear a send has built on
+    is left out."""
+    return [
+        {"count": len(stored["cleared"]), "at": stored["at"], "id": stored["id"]}
+        for stored in reversed(corpus.read_clears())
+        if not _clear_built_on(stored)
+    ]
 
 
 def _newest_restorable() -> Optional[dict]:
@@ -5504,6 +5517,20 @@ def do_pricing_restore(payload: dict) -> dict:
         stored = _newest_restorable()
         if stored is None:
             _refuse_built_on(kept[-1])
+        answers = stored["cleared"]
+    elif answers is None and payload.get("clear") is not None:
+        # ONE KEPT CLEAR, BY ITS ID, off the server's own copy: the notice's row for it.
+        stored = next(
+            (row for row in corpus.read_clears() if row["id"] == str(payload["clear"])), None
+        )
+        if stored is None:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "no_clear_to_restore",
+                "That clear is not kept any more, so there is nothing to put back.",
+            )
+        if _clear_built_on(stored):
+            _refuse_built_on(stored)
         answers = stored["cleared"]
     if not isinstance(answers, dict):
         raise PipelineRefusal(

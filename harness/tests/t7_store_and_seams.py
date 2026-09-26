@@ -6665,9 +6665,14 @@ def check_undo_until_built_on(checks: Checks) -> None:
             two["clear_id"],
             "the Restore notice offers the newest clear",
         )
+        checks.equal(
+            [row["id"] for row in pipeline_routes.do_pricing_corpus()["clears"]],
+            [two["clear_id"], one["clear_id"]],
+            "the Restore notice lists every kept clear, newest first (\"Anytime, from a history\")",
+        )
         older = answers(
             checks,
-            lambda: pipeline_routes.do_pricing_restore({"answers": one["cleared"], "clear": one["clear_id"]}),
+            lambda: pipeline_routes.do_pricing_restore({"clear": one["clear_id"]}),
             "the older clear's Undo answers after a newer clear",
         )
         checks.equal(field(older, "restored"), ["3000"], "the older clear's Undo still works after a newer clear")
@@ -6697,6 +6702,11 @@ def check_undo_until_built_on(checks: Checks) -> None:
         else:
             checks.ok(False, "a clear a send has built on refuses its Undo", "did not refuse")
         checks.ok("3100" not in corpus.Corpus.read().answers, "and writes nothing")
+        checks.equal(
+            [row["count"] for row in pipeline_routes.do_pricing_corpus()["clears"]],
+            [1],
+            "a clear a send has built on is not offered, and the other one is",
+        )
         checks.equal(
             sorted(pipeline_routes.do_pricing_restore({"last_clear": True})["restored"]),
             ["3101"],
