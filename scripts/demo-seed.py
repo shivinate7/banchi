@@ -499,6 +499,38 @@ def state_for(position: int, count: int, rng: random.Random) -> str:
     return "identified"
 
 
+def log_states(inventory, card: Card, bound_at: str) -> None:
+    """The state lines a real card's life writes, on the demo's own clock (UN-4).
+
+    The loop below puts cards into `inventory.cards` directly, so no `record_capture`,
+    `set_state` or `retire` ever logged a line for them. The sale and retire reversals read
+    the prior state out of the log (`_state_before_sale`), found none, and refused every
+    undo on the demo as `sold_origin_unknown`. These are the same lines those writers log,
+    in the same order. The stamps come from `stamp()`, never `now()`, so the rebuild stays
+    byte-identical.
+    """
+    key = card.key
+    captured = str(card.captured_at)
+    inventory.events.append(
+        {"at": captured, "event": "captured", "position": key, "photo": card.photo, "cid": card.cid}
+    )
+    if card.state == "captured":
+        return
+    later = max(captured, bound_at)
+    inventory.events.append(
+        {"at": later, "event": "identified", "position": key, "sku": card.sku, "run": card.run}
+    )
+    if card.state == "identified":
+        return
+    left = max(later, stamp(1.0))
+    line = {"at": left, "event": card.state, "position": key}
+    if card.state == "retired":
+        line["reason"] = card.retire_reason
+    if card.state == "moved":
+        line["moved_to"] = card.moved_to
+    inventory.events.append(line)
+
+
 def build_store(force: bool) -> dict:
     """Write the whole demo store. Returns a summary for the caller to print."""
     rng = random.Random(SEED)
@@ -630,6 +662,7 @@ def build_store(force: bool) -> dict:
                     card.retire_reason = "damaged"
                 if state == "moved":
                     card.moved_to = "4/%d" % (rng.randint(1, 18))
+                log_states(inventory, card, stamp(2.0))
 
                 placed.append((card, row))
                 counts["cards"] += 1
@@ -656,6 +689,10 @@ def build_store(force: bool) -> dict:
                     if card.cid and not card.cid.startswith(store_photos.MOVED_PREFIX):
                         card.cid = store_photos.MOVED_PREFIX + card.cid
                     inventory.cards[card.key] = card
+                    inventory.events.append(
+                        {"at": max(str(card.captured_at), stamp(1.0)), "event": "moved",
+                         "position": card.key, "moved_to": card.moved_to}
+                    )
                     counts["moved"] += 1
                     counts["identified"] = counts.get("identified", 0) - 1
                     break
