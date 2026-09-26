@@ -88,12 +88,12 @@ function pickOrderFor(
     if (order === undefined) continue
     const remaining = ref.owed - (recordedForSku.get(ref.key) ?? 0)
     if (remaining <= 0) continue
-    /* `￿` SORTS AFTER EVERY REAL TIMESTAMP, never before — `?? ''` was the review
+    /* `\uFFFF` SORTS AFTER EVERY REAL TIMESTAMP, never before — `?? ''` was the review
        round's finding 4's second half: an empty string sorts BEFORE any real date, so an
        order with no `placed_at` read as the oldest possible order and won every tie it was
        in, which is backwards from "placed longest ago" (an unknown age is not a claim of
        great age). An order with no `placed_at` now loses every tie to one with a real date. */
-    const placedAt = order.placed_at ?? '￿'
+    const placedAt = order.placed_at ?? '\uFFFF'
     if (
       best === null ||
       remaining < best.remaining ||
