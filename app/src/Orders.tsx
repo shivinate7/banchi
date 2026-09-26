@@ -905,6 +905,11 @@ function verdictOf(open: readonly OrderRow[]): ReactNode {
   )
 }
 
+/** The ledger has no record of this pull — it was already reversed some other way, never a
+ *  failure this press could retry (finding #8, the Opus review round). `Fulfillment.tsx`
+ *  carries the same constant for its own fallback. */
+const PULL_NOT_RECORDED = 'pull_not_recorded'
+
 /** The undo, pressed on a toast after the hub may have unmounted. It sends the target and
  *  nothing else — the server finds whoever holds the `capture_id` — and bumps the hub so any
  *  mounted screen re-reads. */
@@ -916,8 +921,16 @@ async function undoFromToast(target: PullTarget, place: string, name: string): P
     await undoPull([target])
     toast({ kind: 'ok', icon: 'undo', title: `Put ${name} back`, body: `${place} holds it again.` })
   } catch (err) {
-    const trouble = describeFailure(err)
-    toast({ kind: 'refusal', title: 'The card was not put back', body: trouble.message })
+    /* FINDING #8 (the Opus review round): `pull_not_recorded` means the ledger no longer
+     * holds this pull — it was already reversed some other way (the server's own message
+     * names #/inventory as one) — never a failure this press could retry its way out of.
+     * The old "not put back" refusal was actively wrong here: the card WAS already back. */
+    if (describeFailure(err).code === PULL_NOT_RECORDED) {
+      toast({ kind: 'ok', icon: 'undo', title: 'Already put back', body: `${place} holds it, from somewhere else.` })
+    } else {
+      const trouble = describeFailure(err)
+      toast({ kind: 'refusal', title: 'The card was not put back', body: trouble.message })
+    }
   } finally {
     /* Clear `lastPull` only if this is still the pull it names — a later pull may already
        have replaced it, and undoing THIS one must not erase THAT one's own way back. */
@@ -1827,6 +1840,12 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       await Promise.all([reread(), rereadStore()])
       return { ok: true, refreshed: done.refreshed ?? [] }
     } catch (err) {
+      /* FINDING #8: the same "already reversed elsewhere" case `undoFromToast` reads. */
+      if (describeFailure(err).code === PULL_NOT_RECORDED) {
+        toast({ kind: 'ok', icon: 'undo', title: 'Already put back', body: `${place} holds it, from somewhere else.` })
+        await Promise.all([reread(), rereadStore()])
+        return { ok: true, refreshed: [] }
+      }
       const trouble = describeFailure(err)
       toast({ kind: 'refusal', title: 'The card was not put back', body: trouble.message })
       return { ok: false }

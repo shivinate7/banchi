@@ -1243,6 +1243,59 @@ test('U undoes the newest pull, on the Pull stage', async ({ page }) => {
   await expect(page.locator('.bn-toast', { hasText: 'Put Volcanion back' })).toBeVisible()
 })
 
+test('finding #8 (the Opus review round) — a pull already reversed elsewhere reads as done, never a failure to retry', async ({
+  page,
+}) => {
+  /* THE REVIEW'S OWN REPRO: "I undid a sale directly on the server, then pressed U on
+   * Orders. It refused with the raw text... Also, after one U, U does nothing more, while
+   * the card pane's Undo moves to the next sale." `pull_not_recorded` is the server's own
+   * answer for exactly this — the ledger no longer holds the pull, because it was already
+   * reversed some other way. The old build showed a REFUSAL ("The card was not put back")
+   * for a card that was, in fact, already back. */
+  const wire = await open(page, {
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [{ card: { place: place({ label: 'Box 3 · departed', slot: null, section: null, card: null }) } }] },
+    walkPlan: walkPlanOf([walkPlanStop()]),
+  })
+  /* THE UNDO CALL ONLY: registered AFTER `open()`'s own stub, so Playwright tries this one
+     first and `route.fallback()` defers the ordinary pull to `open()`'s own handler. */
+  await page.route(/\/orders\/pull$/, async (route) => {
+    const body = route.request().postDataJSON() as { undo?: boolean } | null
+    if (body?.undo !== true) {
+      await route.fallback()
+      return
+    }
+    wire.push({ method: route.request().method(), path: new URL(route.request().url()).pathname, body })
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'pull_not_recorded',
+          message: 'The ledger has no record of this copy being pulled for an order. If it was marked sold on #/inventory, reverse it there.',
+        },
+      }),
+    })
+  })
+
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect
+    .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
+    .toBe(1)
+
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+
+  /* NEVER "THE CARD WAS NOT PUT BACK" — it reads as settled, the same register `not_sold`
+     and `not_retired` already answer with elsewhere in this product. */
+  await expect(page.locator('.bn-toast', { hasText: 'Already put back' })).toBeVisible()
+  await expect(page.locator('.bn-toast', { hasText: 'The card was not put back' })).toHaveCount(0)
+
+  /* AND THE TARGET IS GONE: a second `U` reaches nothing, because there is nothing left to
+     undo — not a stuck target repeating the same refused request forever. */
+  await page.keyboard.press('u')
+  expect(wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(2)
+})
+
 test('u typed into the buyer search field does not undo the pull', async ({ page }) => {
   const wire = await open(page, {
     pull: {
