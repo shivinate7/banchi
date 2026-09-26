@@ -2133,12 +2133,13 @@ test('a zoomed photo and the "?" sheet share one Escape and one order, and each 
  * OWN first column, and the two rows' sentences landed about 18px apart (612 vs 594 at
  * 1440px). `.ff-keys-key`'s fixed `width` is the fix; this is what proves it, at both a
  * width where the dialog is centered (1440) and one where it is a full-bleed bottom sheet
- * (390) — the two layouts this sheet actually draws. */
+ * (390) — the two layouts this sheet actually draws. THREE ROWS SINCE UN-10
+ * (`docs/specs/undo.md` §11.3): `U`, undo the newest sale, joined `Esc` and `?`. */
 async function keysSentenceXs(page: Page): Promise<number[]> {
   await page.keyboard.press('?')
   // Unscoped: the kit's `Modal` portals `.ff-keys` to `document.body`, not into `main.fulfillment`.
   const rows = page.locator('.ff-keys-list li .fulfillment-say')
-  await expect(rows).toHaveCount(2)
+  await expect(rows).toHaveCount(3)
   // The Modal's own entrance animation transforms the whole panel; an x read mid-scale is a
   // transient one, not the settled layout this test is about (see the comment beside the
   // other `settleMotion` call above).
@@ -2146,22 +2147,22 @@ async function keysSentenceXs(page: Page): Promise<number[]> {
   return rows.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().x))
 }
 
-test('the keyboard sheet\'s two rows start their sentences at the same x — 1440px', async ({
+test('the keyboard sheet\'s three rows start their sentences at the same x — 1440px', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await openList(page)
   const xs = await keysSentenceXs(page)
-  expect(Math.abs(xs[1]! - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
+  for (const x of xs.slice(1)) expect(Math.abs(x - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
 })
 
-test('the keyboard sheet\'s two rows start their sentences at the same x — 390px', async ({
+test('the keyboard sheet\'s three rows start their sentences at the same x — 390px', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await openList(page)
   const xs = await keysSentenceXs(page)
-  expect(Math.abs(xs[1]! - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
+  for (const x of xs.slice(1)) expect(Math.abs(x - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
 })
 
 test(`every text node is at least ${BODY_FLOOR}px, on the list and on the card`, async ({
@@ -2893,8 +2894,12 @@ test('a failed re-read keeps the cards he has and says the list may have moved',
   await expect(view(page)).not.toContainText('These cards may have changed')
 })
 
-test('the failed-undo message leaves with the undo it tells him to press', async ({ page }) => {
-  test.setTimeout(90_000)
+test('the failed-undo message and its Undo live and die together, and neither leaves on a clock (UN-5)', async ({ page }) => {
+  /* THE CLOCK IS FAKED AND ONLY ADVANCED (D136): there is no longer a timer here to wait out —
+   * that is the whole point — so a real sleep would buy nothing a jump does not, and D136's own
+   * rule against a sleep standing in for an assertion applies even more directly to proving an
+   * ABSENCE of a timer than to outlasting one. Installed before the first navigation. */
+  await page.clock.install()
   const wire: Wire[] = []
   const mood: Mood = {
     sold: (undo, key) =>
@@ -2909,16 +2914,22 @@ test('the failed-undo message leaves with the undo it tells him to press', async
   const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await receipt.getByRole('button', { name: 'Undo' }).click()
 
-  /* Held in screen-wide state, this sentence outlived the control it named: the window closed,
-   * the panel went, and the instruction stayed on screen pointing at a button that was no
-   * longer there. The structural half of the fix is asserted first — the sentence is INSIDE
-   * the panel that carries the Undo, so neither can outlive the other by construction. */
+  /* Held in screen-wide state, this sentence once outlived the control it named: a clock
+   * closed the panel out from under it, leaving the instruction on screen pointing at a button
+   * that was no longer there. The structural half of the fix is asserted first — the sentence
+   * is INSIDE the panel that carries the Undo, so neither can outlive the other by
+   * construction. */
   await expect(receipt).toContainText('The card did not come back. Press Undo again.')
   await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
 
-  // And then the window really closes, in real time, and they go together.
-  await expect(view(page).locator('.fulfillment-panel')).toHaveCount(0, { timeout: 60_000 })
-  await expect(view(page)).not.toContainText('The card did not come back')
+  /* NO CLOCK (UN-5, `docs/specs/undo.md` §11.1, D28/D57 amended 2026-09-25): a faked minute —
+   * well past the old twenty-second window this panel used to close on — passes and BOTH
+   * stand, together, exactly as before. What the prior draft of this case proved was the
+   * opposite: that a clock eventually took them. That premise is gone; this is its
+   * replacement. */
+  await page.clock.runFor(60_000)
+  await expect(receipt).toContainText('The card did not come back. Press Undo again.')
+  await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
 })
 
 /* ------------------------------------------------------------------ finding a card by name

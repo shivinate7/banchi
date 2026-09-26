@@ -6019,6 +6019,18 @@ COMPONENTS = [
                                           "server-restart notice went when `ServerReloaded` was "
                                           "deleted.",
                                   "governed_by": ["D5", "D28", "D53", "D57", "D94"]},
+            "src/kit/undo.ts": {"does": "THE ONE `U` PRIMITIVE (UN-10, `docs/specs/undo.md` §11.3): "
+                                        "`useUndoHotkey` arms `U` for the newest reversible write on "
+                                        "a screen, in place of five screens' own near-identical "
+                                        "listeners. `getUndo` is read through a ref on every "
+                                        "keypress, never a dependency list, the same reason "
+                                        "`ReviewQueue.tsx`'s own prior copy gave: an effect runs "
+                                        "after paint, and a key pressed in the gap between a write "
+                                        "and its effect would close over stale data. Yields to a "
+                                        "repeat, a modifier and typing. `PageUndo`, the button this "
+                                        "hook is usually paired with, lives in `kit/index.tsx` "
+                                        "instead, to avoid a circular import with `Button`.",
+                                "governed_by": []},
             "src/kit/Page.tsx": {"does": "the page scaffold every screen is built from: `Page` draws "
                                          "`<main class=\"bn-page\" data-bn-page>` with one h1 (the "
                                          "route's title by default, read from `PageRouteContext`), "
@@ -6027,7 +6039,7 @@ COMPONENTS = [
                                          "top gap, one left edge, and the page is the `bn-page` "
                                          "query container. `Section` draws an h2. A new screen is "
                                          "one ROUTES entry plus a view that returns `<Page>`.",
-                                 "governed_by": ["D94", "D118", "D197", "D272", "D288"]},
+                                 "governed_by": ["D57", "D94", "D118", "D197", "D272", "D288"]},
             "src/kit/overlay.tsx": {"does": "the kit's overlays: `Sheet`, `Modal`, `Popover` and "
                                             "`ConfirmSheet`, each with one header and one Close, "
                                             "focus kept inside and given back, Escape for the top "
@@ -6838,9 +6850,8 @@ COMPONENTS = [
                         "The re-check sheet owns it the same way, and for the same reason.",
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
                                 "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77",
-                                "D87", "D118", "D137", "D162", "D164", "D167", "D172", "D194",
-                                "D218", "D221", "D252", "D253", "D259", "D288",
-                                "D291"],
+                                "D87", "D117", "D118", "D137", "D162", "D164", "D167", "D172",
+                                "D194", "D218", "D221", "D252", "D253", "D259", "D288", "D291"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of
@@ -7053,9 +7064,9 @@ COMPONENTS = [
                         "order, photo-confirm before each pull, one-tap mark-sold with an undo "
                         "window. No machine string and no server message reaches this screen — "
                         "both are correct for the owner and neither is his.",
-                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D32", "D69",
-                                "D83", "D93", "D94", "D125", "D172", "D192", "D193", "D212", "D218",
-                                "D259"],
+                "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D28", "D31",
+                                "D32", "D57", "D69", "D83", "D93", "D94", "D125", "D172", "D192",
+                                "D193", "D212", "D218", "D259"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -8088,7 +8099,8 @@ COMPONENTS = [
                                               "long as the tab, which is the batch's own "
                                               "lifetime, and D27 permits persistence rather than "
                                               "requiring it.",
-                                      "governed_by": ["D27", "D61", "D63", "D66", "D69", "D73", "D94", "D96"]},
+                                      "governed_by": ["D27", "D28", "D57", "D61", "D63", "D66",
+                                                      "D69", "D73", "D94", "D96"]},
             "src/OrdersShipStage.tsx": {"does": "the SHIP stage of that hub: TCGplayer's Orders "
                                                 "-> Export Shipping read into D61's three "
                                                 "lanes, with the Pirate Ship import CSV as a "
@@ -9677,8 +9689,8 @@ COMPONENTS = [
                         "rendered view, with every contrast ratio computed from the colors "
                         "the page actually painted rather than from a number published in "
                         "docs/DESIGN.md. Run by `make design-check`.",
-                "governed_by": ["D5", "D10", "D13", "D21", "D24", "D31", "D41", "D93", "D115",
-                                "D118", "D125", "D136", "D193", "D212", "D218", "D259",
+                "governed_by": ["D5", "D10", "D13", "D21", "D24", "D28", "D31", "D41", "D57", "D93",
+                                "D115", "D118", "D125", "D136", "D193", "D212", "D218", "D259",
                                 "D288"],
                 "note": "NOT a harness test, same as its sibling above. It failed 16 of the 30 "
                         "assertions `make design-check` runs for the few hours between the view "

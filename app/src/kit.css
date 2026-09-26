@@ -183,6 +183,19 @@
   line-height: var(--bn-lh-base);
   color: var(--bn-ink);
 }
+/* THE ONE UNDO SLOT (`docs/specs/undo.md` §11.3, UN-10), its own row between the verdict and
+   the toolbar — never inside `.bn-head-actions`, so it can never land beside a screen's own
+   Send or Fetch. UNRESERVED, UNLIKE `StatusSlot`: measured on `#/review`, reserving this
+   slot's height on every load pushed the document 54px past a floor with no slack in it
+   (`answering a card costs no scrolling`) — a permanent cost paid on every visit for a control
+   that stands only after a write. It exists for a screen with no OTHER door onto the same
+   write (Review's below-the-fold receipt, UN-9); a screen with a row-level Undo already
+   (Inventory, Orders) has no need of it and does not pass one. */
+.bn-page-undo { display: flex; justify-content: flex-end; margin-bottom: var(--bn-4); }
+@container bn-page (max-width: 640px) {
+  .bn-page-undo { justify-content: stretch; }
+  .bn-page-undo > .bn-btn { width: 100%; }
+}
 /* THE TOOLBAR FOLDS AS ONE UNIT, at ONE CONTROL HEIGHT. A wide column draws one row: the field
    takes the room that is left, up to a reading width. A narrow column gives the field the whole
    first row and wraps the chips and sorts beneath it. Every control in it is `--bn-control-h`

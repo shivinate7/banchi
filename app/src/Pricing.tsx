@@ -70,7 +70,7 @@ import {
 } from './pricingSource'
 import { forSale, soldSince } from './cardState'
 import { useCardCropWhenSeen } from './cardCrop'
-import { Button, cropStyle, EmptyState, FailureNotice, Icon, Kbd, Notice, Segmented } from './kit'
+import { Button, cropStyle, EmptyState, FailureNotice, Icon, Kbd, Notice, Segmented, useUndoHotkey } from './kit'
 import { toast } from './kit/toast'
 import { ValueBands, type ValueEnd } from './ValueBands'
 import { rememberPricingCompare, storedPricingCompare } from './deviceMemory'
@@ -477,11 +477,21 @@ function heldOnArrival(rows: readonly PricingSku[], doc: DecisionsDocument): Rea
 
 type Drawn = { head: string; count: number } | { head: null; sku: MergedSku }
 
-type Undo = {
-  sku: string
-  before: CorpusAnswer | undefined
-  channel: 'price' | 'unknown'
-}
+/** One field this press changes back, if undone: a SKU's answer, or (UN-13) the store's own
+ *  cut-off, which is a policy figure and not a SKU at all. */
+type UndoEntry =
+  | { kind: 'sku'; sku: string; before: CorpusAnswer | undefined; channel: 'price' | 'unknown' }
+  | { kind: 'cutoff'; before: { threshold: PricingCorpus['policy']['threshold']; sub_threshold: PricingCorpus['policy']['sub_threshold'] } }
+
+/** ONE STACK ENTRY IS ONE PRESS (UN-12, `docs/specs/undo.md` §11.3): a hold sets a
+ *  `no_market_data` SKU's `unknown` channel AND its `overrides` channel in the same
+ *  `setHold` press, which used to push two `write` calls and so two stack entries — one `U`
+ *  undid only the second, leaving the SKU half-held. `entries` holds every field one press
+ *  touched, and `undoLast` reverts all of them in the one pop `write`/`writeMany` pushed. */
+type Undo = { entries: readonly UndoEntry[] }
+
+/** One field a press writes, for `writeMany` below. */
+type WriteOp = { sku: string; bucket: PricingSku['bucket']; value: unknown }
 
 /** The corpus as the document every reader on this screen understands. Read-only projection.
  *
@@ -1205,14 +1215,35 @@ export function Pricing() {
   /** Set the STORE-WIDE cut-off. BOTH KEYS, ALWAYS: `threshold` is the line the partition is
    *  drawn at and `sub_threshold` is what the half below it lists at, and the owner's ruling is
    *  that they are one figure. Writing one without the other is what let a cheap card price
-   *  above a listable one, so this screen has no way to do it. */
-  const setCut = useCallback((figure: string) => {
-    setBook((current) =>
-      current === null
-        ? current
-        : { ...current, policy: { ...current.policy, threshold: figure, sub_threshold: { [FLAT_KEY]: figure } } },
-    )
-  }, [])
+   *  above a listable one, so this screen has no way to do it.
+   *
+   *  A RECEIPT AND AN UNDO ENTRY (UN-13, `docs/specs/undo.md` §11.3): this write had neither —
+   *  "no toast" and "only by retyping the old value" per the audit — even though it changes
+   *  the whole store. `before` is a `'cutoff'` entry, the one kind `undoLast` above does not
+   *  touch a SKU for. */
+  const setCut = useCallback(
+    (figure: string) => {
+      if (book === null) return
+      const entry: UndoEntry = {
+        kind: 'cutoff',
+        before: { threshold: book.policy?.threshold, sub_threshold: book.policy?.sub_threshold },
+      }
+      setBook((current) =>
+        current === null
+          ? current
+          : { ...current, policy: { ...current.policy, threshold: figure, sub_threshold: { [FLAT_KEY]: figure } } },
+      )
+      setUndo((stack) => [{ entries: [entry] }, ...stack].slice(0, UNDO_DEPTH))
+      toast({
+        kind: 'receipt',
+        title: `Cut-off set to $${figure}`,
+        body: 'Everything under it lists at this price.',
+        ttlMs: 8000,
+        action: { label: 'Undo', kbd: 'U', onPress: () => undoRef.current() },
+      })
+    },
+    [book],
+  )
 
   /** Set THIS RUN's own cut-off, or clear it back to the store's. `undefined` is the clear, and
    *  it clears both keys — a run that follows the store follows it on both halves of the one
@@ -1247,12 +1278,8 @@ export function Pricing() {
      spent by a send. */
   const [typedHere, setTypedHere] = useState<ReadonlySet<string>>(() => new Set())
 
-  /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo stack. */
-  const write = useCallback(
-    (sku: string, bucket: PricingSku['bucket'], value: unknown) => {
-      const channel: 'price' | 'unknown' = targetOf(bucket) === 'no_market_data' ? 'unknown' : 'price'
-      setBook((current) => (current === null ? current : setAnswer(current, sku, value, channel)))
-      setUndo((stack) => [{ sku, before: book?.skus?.[sku], channel }, ...stack].slice(0, UNDO_DEPTH))
+  const markTypedHere = useCallback(
+    (sku: string, value: unknown) => {
       setTypedHere((held) => {
         const next = new Set(held)
         if (typeof value === 'string' && value !== 'unlisted' && source.kind === 'run') next.add(sku)
@@ -1260,7 +1287,44 @@ export function Pricing() {
         return next
       })
     },
-    [book, source.kind],
+    [source.kind],
+  )
+
+  /** ONE PRESS, ONE STACK ENTRY (UN-12), whether it touches one field or several. Every op's
+   *  `before` is read off the SAME snapshot the write applies to, in the order given, so a
+   *  press writing two channels for one SKU (`setHold`'s own case) reverts both together. */
+  const writeMany = useCallback(
+    (ops: readonly WriteOp[]) => {
+      /* `before` READS THE OUTER `book`, NOT THE UPDATER'S OWN `current` — the same choice
+         `write` made before this generalised it. Computing it inside `setBook`'s updater would
+         run this as a side effect of a function React may invoke more than once (Strict Mode's
+         own double-invoke check), which would push a duplicated `entries` array. */
+      const entries: UndoEntry[] = ops.map((op) => ({
+        kind: 'sku' as const,
+        sku: op.sku,
+        before: book?.skus?.[op.sku],
+        channel: targetOf(op.bucket) === 'no_market_data' ? 'unknown' : 'price',
+      }))
+      setBook((current) => {
+        if (current === null) return current
+        let next = current
+        for (const op of ops) {
+          const channel: 'price' | 'unknown' = targetOf(op.bucket) === 'no_market_data' ? 'unknown' : 'price'
+          next = setAnswer(next, op.sku, op.value, channel)
+        }
+        return next
+      })
+      setUndo((stack) => [{ entries }, ...stack].slice(0, UNDO_DEPTH))
+      for (const op of ops) markTypedHere(op.sku, op.value)
+    },
+    [book, markTypedHere],
+  )
+
+  /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo
+   *  stack, as `writeMany`'s one-op case. */
+  const write = useCallback(
+    (sku: string, bucket: PricingSku['bucket'], value: unknown) => writeMany([{ sku, bucket, value }]),
+    [writeMany],
   )
 
   const boxesLoaded = useMemo(
@@ -1895,35 +1959,54 @@ export function Pricing() {
   const undoLast = useCallback(() => {
     const [top, ...rest] = undo
     if (top === undefined) return
+    /* EVERY FIELD THE PRESS TOUCHED, IN ONE POP (UN-12): `top.entries` is one item for an
+       ordinary `write`, and every channel `setHold` touched for a hold — the same pop either
+       way, so `U` once always undoes the whole press. */
     setBook((current) => {
       if (current === null) return current
       const skus = { ...(current.skus ?? {}) }
-      if (top.before === undefined) delete skus[top.sku]
-      else skus[top.sku] = top.before
-      return { ...current, skus }
+      let policy = current.policy
+      for (const entry of top.entries) {
+        if (entry.kind === 'cutoff') {
+          policy = { ...policy, threshold: entry.before.threshold, sub_threshold: entry.before.sub_threshold }
+          continue
+        }
+        if (entry.before === undefined) delete skus[entry.sku]
+        else skus[entry.sku] = entry.before
+      }
+      return { ...current, skus, policy }
     })
     setUndo(rest)
     /* AN UNDONE ANSWER WAS NOT TYPED THIS VISIT (round 7, R6-2): the earlier answer may be a
        Live tab preset or a mark-down never sent, so it leaves the named prices. */
     setTypedHere((held) => {
       const next = new Set(held)
-      next.delete(top.sku)
+      for (const entry of top.entries) if (entry.kind === 'sku') next.delete(entry.sku)
       return next
     })
     // The field is uncontrolled, so its digits are corrected here the way Escape and a preset
     // already correct them: the restored answer, or the rule's suggestion where there was none.
-    const row = rows.find((one) => one.sku === top.sku)
-    const input = inputs.current.get(top.sku)
-    if (row !== undefined && input) {
-      const before = top.before?.value
-      input.value = typeof before === 'string' ? before : suggestionFor(row)
-      flash(input)
+    for (const entry of top.entries) {
+      if (entry.kind === 'cutoff') continue
+      const row = rows.find((one) => one.sku === entry.sku)
+      const input = inputs.current.get(entry.sku)
+      if (row !== undefined && input) {
+        const before = entry.before?.value
+        input.value = typeof before === 'string' ? before : suggestionFor(row)
+        flash(input)
+      }
     }
-    touched.current.delete(top.sku)
+    for (const entry of top.entries) if (entry.kind === 'sku') touched.current.delete(entry.sku)
   }, [undo, rows, suggestionFor])
   /* A toast's undo fires later than the closure it was made in; the ref always holds the latest. */
   const undoRef = useRef(undoLast)
   undoRef.current = undoLast
+
+  /* THE SHARED HOOK (UN-12, `docs/specs/undo.md` §11.3): `U` reached only a focused price
+   * field before this — a hold's own `U` did nothing, because setting one never leaves the
+   * cursor in a field. `useUndoHotkey` already yields to an editable target, so while a price
+   * field IS focused this changes nothing: that field's own `onKey` still gets there first. */
+  useUndoHotkey(() => (undo.length === 0 ? null : () => undoLast()))
 
   /* THE CHEAP ROWS FOLLOW THE ANSWER. The price fields are uncontrolled, so a policy pressed
      on the deck has to be walked into them — without this the column keeps whatever figure it
@@ -1980,8 +2063,13 @@ export function Pricing() {
       const record: WithheldRecord = { withheld: reason }
       if (watch.trim() !== '') record.watch_above = watch.trim()
       if (text.trim() !== '') record.note = text.trim()
-      write(sku.sku, 'listable', record)
-      if (sku.bucket === 'no_market_data') write(sku.sku, sku.bucket, 'unlisted')
+      /* ONE PRESS, ONE STACK ENTRY (UN-12): a `no_market_data` SKU needs both its `listable`
+         override AND its own bucket cleared to `'unlisted'` in the same write — two `write`
+         calls once pushed two stack entries, so one `U` undid only the second and left the
+         hold half-set. `writeMany` pushes the pair as one pop. */
+      const ops: { sku: string; bucket: PricingSku['bucket']; value: unknown }[] = [{ sku: sku.sku, bucket: 'listable', value: record }]
+      if (sku.bucket === 'no_market_data') ops.push({ sku: sku.sku, bucket: sku.bucket, value: 'unlisted' })
+      writeMany(ops)
       setHoldFor(null)
       toast({
         kind: 'receipt',
@@ -1992,7 +2080,7 @@ export function Pricing() {
       })
       inputs.current.get(sku.sku)?.focus()
     },
-    [write],
+    [writeMany],
   )
 
   /** Take the reading for one SKU, and ask nothing if this session already has it. */

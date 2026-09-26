@@ -7106,18 +7106,17 @@ test('and the re-rank is what moves it — the same sale, with the order taken a
   ])
 })
 
-test('and the row is still there when its receipt has run out, which is the half the optimism was hiding', async ({ page }) => {
-  /* THE TWENTY SECONDS ARE NOT THE FREEZE, AND A CASE INSIDE THEM CANNOT TELL THE TWO APART.
-     `stays` keeps a row for three reasons — it is the copy the walk stands on, this screen just
-     sold it and is holding a receipt (D132/D119), or the order is frozen by it. Every assertion
-     in the cases above lands inside the receipt window, so the SECOND reason answers them and
-     the third is never exercised: measured, deleting the freeze from that predicate leaves the
-     whole file green. What the owner is doing takes minutes, and the receipt takes twenty
-     seconds — so this is the case that is actually about them.
+test('the receipt has no clock (UN-5): a sale still offers Undo a faked minute later, and a newer sale is what takes it', async ({ page }) => {
+  /* D28 AND D57 ARE AMENDED, 2026-09-25 (`docs/specs/undo.md` §11.1): rank replaces the
+     clock. `UNDO_WINDOW_MS` still times the TOAST's own fade; it no longer prunes `receipts`,
+     so the row's `Undo` and `U` reach the newest sale or retirement for as long as it stays
+     the newest — never for a counted twenty seconds. This is that ruling's own case, where the
+     prior draft asserted the opposite: that the receipt "ran out" and only the freeze (D132)
+     held the row. Measured: `stays` still keeps a row for the freeze too, but that is no longer
+     the ONLY thing holding this one.
 
      THE CLOCK IS FAKED AND ONLY ADVANCED (D136), for the reason `brand.spec.ts` records at
-     length: a twenty-second sleep is the suite's longest case by a distance and buys nothing a
-     jump does not. Installed before the first navigation. */
+     length: a real sleep buys nothing a jump does not. Installed before the first navigation. */
   await page.clock.install()
   const { store, depart } = stackedStore()
   await open(page, STACKED_BOXES, store, () => PRICING, movesOnSale((undo) => { if (!undo) depart('7/38') }), {
@@ -7137,15 +7136,16 @@ test('and the row is still there when its receipt has run out, which is the half
     page.locator('.card-locations-row .position-parts[aria-label="Was at Box 7, Section 1, Card 38"]'),
   ).toHaveCount(1)
 
-  /* PAST THE WINDOW. `UNDO_WINDOW_MS` is 20s and the receipt's own timer is armed for it, so
-     this is the frame after the optimism lets go: `soldKeys` drops the copy, its Undo goes, and
-     the only thing left holding the row is the freeze. */
-  await page.clock.runFor(25_000)
-  await expect(page.locator('.inventory-receipt')).toHaveCount(0)
+  /* PAST THE OLD WINDOW, WHICH IS NO LONGER A DEADLINE. `UNDO_WINDOW_MS` (20s) once pruned
+     `receipts` here; a minute is well past it, and the row's own Undo is still there — the
+     opposite of what a clock-gated receipt would show. */
+  await page.clock.runFor(60_000)
+  await expect(page.locator('.inventory-receipt')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /^Undo the sale at/ })).toHaveCount(1)
 
-  /* STILL SIX ROWS, STILL IN THE SAME ORDER, AND THE SOLD ONE STILL AT THE TOP. Without the
-     freeze the row folds away here and the five beneath it come up one — the same jump the
-     owner reported, arriving twenty seconds late. */
+  /* STILL SIX ROWS, STILL IN THE SAME ORDER, AND THE SOLD ONE STILL AT THE TOP — the freeze
+     (D132) holds the row's place either way; what changed is that its Undo did not leave with
+     a clock that no longer exists. */
   await expect(labels).toHaveCount(6)
   expect(await copyOrder(page)).toEqual(['Was at Box 7, Section 1, Card 38', ...before.slice(1)])
   /* And the control is still offering the re-rank, because nothing has taken a new order. */

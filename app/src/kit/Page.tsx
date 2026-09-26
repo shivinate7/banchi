@@ -46,6 +46,14 @@ export type PageProps = {
   readonly verdict?: ReactNode
   /** The screen's one primary action, and at most a reload beside it (UX-066). */
   readonly actions?: ReactNode
+  /** The newest reversible write's Undo (`docs/specs/undo.md` §11.3, UN-10), from
+   *  `kit/index.tsx`'s `PageUndo`. Its own row, never inside `actions` — kept off a screen's
+   *  primary press on purpose. Drawn only where a screen has nothing ELSE already reaching the
+   *  same write (a row's own Undo, D57): a screen that already offers one has no need of a
+   *  second, and this slot does not reserve space the way `status` does, so it is for a
+   *  screen with room to spare and no existing door — Review's below-the-fold receipt (UN-9)
+   *  is the one this was built for. Null or omitted where nothing is reversible right now. */
+  readonly undo?: ReactNode
   /** Search, filters and sort. Folds as one unit on a narrow column. */
   readonly toolbar?: ReactNode
   /** Drawn in the list region instead of `children` when it is not null. */
@@ -69,6 +77,7 @@ export function Page({
   lede,
   verdict,
   actions,
+  undo,
   toolbar,
   empty,
   children,
@@ -103,6 +112,7 @@ export function Page({
         {actions ? <div className="bn-head-actions">{actions}</div> : null}
       </header>
       {verdict ? <Verdict>{verdict}</Verdict> : null}
+      {undo ? <div className="bn-page-undo">{undo}</div> : null}
       {toolbar ? <Toolbar label={toolbarLabel}>{toolbar}</Toolbar> : null}
       {status === undefined ? null : <StatusSlot>{status}</StatusSlot>}
       <div className="bn-page-body" aria-busy={loading ? 'true' : undefined}>

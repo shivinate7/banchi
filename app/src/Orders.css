@@ -737,6 +737,10 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
    to land before the list moves. */
 .orders-pick[data-pressing='true'] { opacity: 0.55; }
 .orders-pick-is-held { color: var(--bn-ink-3); }
+/* SOLD KEEPS ITS PLACE (UN-6): the same grid, the same row, dimmed like a held one — the fact
+   changed, the row's own geometry did not (D118). */
+.orders-pick-sold { color: var(--bn-ink-3); }
+.orders-pick-sold .orders-pick-name { text-decoration: line-through; }
 /* The map's leading box, carried down into the gutter of its own rows — a hairline, so the rows
    stay one list rather than becoming two groups. Only drawn where there is a ranking to express:
    a line whose copies are all in one drawer has no leader. Carried as a variable rather than as a

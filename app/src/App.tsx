@@ -188,7 +188,10 @@ const CODES_KEYS: ScreenKeys = {
 
 const FULFILLMENT_KEYS: ScreenKeys = {
   where: 'On that screen, where ? lists its own keys.',
-  rows: [{ keys: ['Esc'], does: 'Close the enlarged photograph' }],
+  rows: [
+    { keys: ['Esc'], does: 'Close the enlarged photograph' },
+    { keys: ['U'], does: 'Undo the newest sale' },
+  ],
 }
 
 /* THE ONE REGISTRATION POINT (D275). A new screen is one row here plus a view that

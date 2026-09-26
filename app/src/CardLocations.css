@@ -378,26 +378,19 @@
    the cell it grows the cell and shoves the address, and given a grid row of its own it grew
    this row from 175px to 213px on the press, which is the screen shake D118 was built to end.
 
-   SO WHAT THE ROW DRAWS IS THE CLOCK AND THE BUTTON, at the size the buttons already were. The
+   SO WHAT THE ROW DRAWS IS THE BUTTON, at the size the buttons already were. The
    sentence stays the phone bar's and the toast's — the state pill two cells left already reads
    `Sold`, so a row saying `Marked sold.` beside it was the register rule's own duplication. */
+/* NO DRAIN SINCE UN-5 (`docs/specs/undo.md` §11.1): there is no clock left to show draining, and one that finished and
+   stayed empty was the "it looks dead but it still works" shape this removed. `flex: 1 1 auto`
+   plus `justify-content: flex-end` fills the reserved cell the same way the drain once did,
+   so `Undo` still lands at the slot's own right edge and the slot's width still never moves
+   under the press (D118). */
 .card-locations-owner .card-locations-action > .inventory-receipt {
   flex: 1 1 auto;
   min-width: 0;
   gap: var(--bn-2);
-}
-/* THE DRAIN TAKES THE SLACK AND THE BUTTON KEEPS ITS WIDTH. `.bn-receipt-bar` is `flex: 0 0
-   64px` for the panel, where the sentence is the elastic term; here there is no sentence, so
-   the bar is what absorbs whatever the reserved slot leaves after the `Undo`. */
-.card-locations-owner .card-locations-action > .inventory-receipt > .bn-receipt-bar {
-  flex: 1 1 auto;
-  min-width: 40px;
-  /* THE TRACK IS A TOKEN HERE AND AN ALPHA THERE, and that is the whole difference between the
-     two sites. `kit.css` paints this on `--bn-ink`, so its track is white at 15% and its fill is
-     `currentColor` — correct on an inverted panel and INVISIBLE on this row, which sits on
-     `--bn-surface`. Both are named tokens; neither is a color. */
-  background: var(--bn-surface-3);
-  color: var(--bn-accent);
+  justify-content: flex-end;
 }
 
 

@@ -30,7 +30,7 @@ import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import { PositionBar } from './PositionBar'
 import { placePartsOf, placeWordsOf, sayPlace } from './position'
-import { Icon, Logo, Modal, useOverlayLayer } from './kit'
+import { Icon, Logo, Modal, useOverlayLayer, useUndoHotkey } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { isEditableTarget } from './keys'
 import { useSearch } from './useSearch'
@@ -83,9 +83,6 @@ const SHOWN_OWED = 6
 
 /** The same words CardLocations uses for the same card, so one route says it one way. */
 const NO_NAME = 'This card has no name yet'
-
-/** How long Undo stands after a sale. Shared with Inventory and Orders. */
-const UNDO_WINDOW_MS = 20_000
 
 const ALREADY_SOLD = 'already_sold'
 const NOT_SOLD = 'not_sold'
@@ -161,10 +158,14 @@ type Sellable = {
   order: OrderRef | null
 }
 
+/** A sale this session recorded, and what can still be done about it.
+ *
+ *  NO CLOCK (`docs/specs/undo.md` §11.1, UN-5, D28/D57 amended 2026-09-25): rank replaces it,
+ *  the newest sale keeps its `Undo` until a newer one replaces it. `remember` dedupes by
+ *  `card.key` and prepends, so `sales[0]` is always the newest — the same mechanism
+ *  `Inventory.tsx` and `Orders.tsx` carry out. */
 type Sale = {
   card: Sellable
-  /** When the undo window closes. */
-  until: number
   said: string
   canUndo: boolean
   note: string | null
@@ -542,7 +543,6 @@ export function Fulfillment() {
   const [openBoxes, setOpenBoxes] = useState<number[]>([])
   /** Search groups whose "more copies" disclosure he has opened, by group key. */
   const [openMore, setOpenMore] = useState<string[]>([])
-  const [now, setNow] = useState(() => Date.now())
   /** The photo he tapped, so focus comes back to it when the big photo closes. */
   const photoBtn = useRef<HTMLButtonElement>(null)
   /** The zoomed photo itself — on the kit's own layer stack (`kit/overlay.tsx`), so it and the
@@ -619,29 +619,6 @@ export function Fulfillment() {
       livePage = false
     }
   }, [reads])
-
-  /* Each receipt leaves when its own window closes. */
-  useEffect(() => {
-    if (sales.length === 0) return
-    const soonest = Math.min(...sales.map((sale) => sale.until))
-    const timer = window.setTimeout(
-      () =>
-        setSales((held) => {
-          const standing = held.filter((sale) => sale.until > Date.now())
-          return standing.length === held.length ? held : standing
-        }),
-      Math.max(0, soonest - Date.now()) + 25,
-    )
-    return () => window.clearTimeout(timer)
-  }, [sales])
-
-  /* The clock he can read, ticking while any receipt stands. */
-  useEffect(() => {
-    if (sales.length === 0) return
-    setNow(Date.now())
-    const timer = window.setInterval(() => setNow(Date.now()), 500)
-    return () => window.clearInterval(timer)
-  }, [sales.length])
 
   useEffect(() => {
     if (!zoom) return
@@ -810,11 +787,8 @@ export function Fulfillment() {
     return { total: results.groups.length, groups, pooledAway }
   }, [results, soldSet])
 
-  const remember = useCallback((sale: Omit<Sale, 'until'>) => {
-    setSales((held) => [
-      { ...sale, until: Date.now() + UNDO_WINDOW_MS },
-      ...held.filter((standing) => standing.card.key !== sale.card.key),
-    ])
+  const remember = useCallback((sale: Sale) => {
+    setSales((held) => [sale, ...held.filter((standing) => standing.card.key !== sale.card.key)])
   }, [])
 
   const openCard = useCallback((card: Sellable) => {
@@ -938,6 +912,16 @@ export function Fulfillment() {
     [doSell, claim],
   )
 
+  /* THE SHARED HOOK (`docs/specs/undo.md` §11.3, UN-10): the fast path, the one thing this
+   * screen keeps of D5's two-mechanism split (D31, D5) — he gets no page-shell and no slow
+   * path, only `U` and the receipt sheet, same as every other screen's newest reversible
+   * write. `sales[0]` is the newest (`remember` prepends), NO CLOCK (UN-5): it stands until a
+   * newer sale replaces it. */
+  useUndoHotkey(() => {
+    const newest = sales.find((sale) => sale.canUndo)
+    return newest === undefined ? null : () => void doUndo(newest.card)
+  })
+
   /* The two steps never share a spot: after "Pull" the button's footprint becomes a sentence
    * and "Mark it sold" arrives BELOW it, so the second tap of a double-tap lands on text. */
   const actionFor = useCallback(
@@ -990,18 +974,19 @@ export function Fulfillment() {
     reread()
   }
 
-  const secondsLeft = (sale: Sale): number => Math.max(0, Math.ceil((sale.until - now) / 1000))
-
   /* ---- the receipt sheet ------------------------------------------------------------- */
   const sheet =
     sales.length === 0 ? null : (
       <div className="ff-sheet" role="status" aria-live="polite">
-        {/* The newest receipt is drawn in full; the ones under it fold to a line each, so the
-            sheet cannot stack past the screen while a run of sales is still inside its window. */}
+        {/* THE NEWEST RECEIPT IS DRAWN IN FULL; the ones under it fold to a line each. NO CLOCK
+            (UN-5, `docs/specs/undo.md` §11.1): what kept the sheet from stacking past the
+            screen was never the window, it is `remember`'s own dedupe by `card.key` plus
+            `Done`'s own list carrying the rest once a sale is no longer the newest reversible
+            write, so the sheet does not grow without bound just because a clock is gone. */}
         {sales.map((sale, at) => (
           <div
             className={`fulfillment-panel ff-receipt${at === 0 ? '' : ' ff-receipt-compact'}`}
-            key={`${sale.card.key}:${sale.until}`}
+            key={sale.card.key}
           >
             <span className="ff-receipt-icon" data-tone={sale.canUndo ? 'ok' : 'note'}>
               {sale.canUndo ? <CheckMark /> : <Icon name="info" size={24} />}
@@ -1037,15 +1022,8 @@ export function Fulfillment() {
                 Undo
               </button>
             )}
-            {!sale.canUndo ? null : (
-              <div className="ff-receipt-clock" aria-hidden="true">
-                <span
-                  className="ff-receipt-bar"
-                  style={{ ['--ff-window' as string]: `${UNDO_WINDOW_MS}ms` }}
-                />
-                <span className="ff-receipt-secs">{secondsLeft(sale)} s</span>
-              </div>
-            )}
+            {/* NO CLOCK (UN-5): the drain and the countdown are gone, because the row does not
+                fade with the toast and there is no window left for either to count down. */}
           </div>
         ))}
       </div>
@@ -1653,6 +1631,10 @@ export function Fulfillment() {
         <li>
           <kbd className="ff-keys-key">?</kbd>
           <span className="fulfillment-say">Open or close this list</span>
+        </li>
+        <li>
+          <kbd className="ff-keys-key">U</kbd>
+          <span className="fulfillment-say">Undo the newest sale</span>
         </li>
       </ul>
     </Modal>

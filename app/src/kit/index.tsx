@@ -10,9 +10,11 @@ import {
   SHEEN_HEIGHT, SMALL_BRACKET, SMALL_STROKE, TILE,
 } from './markGeometry'
 import { DEFAULT_VARIANT, MARKS, SHEEN, type LogoVariant } from './markPalettes'
+import { UNDO_KEY_LABEL } from './undo'
 
 export { Icon }
 export type { IconName }
+export { UNDO_KEY, UNDO_KEY_LABEL, useUndoHotkey } from './undo'
 
 /* ---- Button ------------------------------------------------------------------ */
 export type ButtonVariant = 'default' | 'primary' | 'ghost' | 'quiet' | 'danger' | 'danger-solid' | 'ok'
@@ -370,6 +372,31 @@ export function IconButton({
     >
       {face}
     </button>
+  )
+}
+
+/* ---- PageUndo -------------------------------------------------------------------- */
+/** THE ONE UNDO CONTROL (`docs/specs/undo.md` §11.3, UN-10), passed to `Page`'s own `undo`
+ *  prop, never `actions` — `docs/specs/undo.md` keeps it off a screen's own primary press
+ *  (Send, Fetch), which is the whole reason `Page` gives it a separate slot rather than
+ *  folding it into the header. `size="lg"` is 40px or more once a thumb is the pointer
+ *  (`tokens.css`'s own media query, D117), so this is the door UN-9 counts on: reachable and
+ *  40px wide before any per-row control has to be. `label` names the write; `Undo` alone is
+ *  the READ ("What was undone" is the receipt's job, not this button's). Null where there is
+ *  nothing to undo — `Page` draws nothing for it either. */
+export function PageUndo({
+  label = 'Undo',
+  onPress,
+  busy,
+}: {
+  readonly label?: string
+  readonly onPress: () => void
+  readonly busy?: boolean
+}) {
+  return (
+    <Button size="lg" variant="ghost" icon="undo" kbd={UNDO_KEY_LABEL} onClick={onPress} disabled={busy}>
+      {label}
+    </Button>
   )
 }
 

@@ -35,7 +35,22 @@ import {
   undoRetire,
   undoStandDown,
 } from './server'
-import { Button, EmptyState, Icon, IconButton, Kbd, Money, Notice, Page, Pill, ReloadButton, Sheet } from './kit'
+import {
+  Button,
+  EmptyState,
+  Icon,
+  IconButton,
+  Kbd,
+  Money,
+  Notice,
+  Page,
+  PageUndo,
+  Pill,
+  ReloadButton,
+  Sheet,
+  UNDO_KEY_LABEL,
+  useUndoHotkey,
+} from './kit'
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
@@ -551,8 +566,6 @@ const CLEAR_KEY = 'c'
 const CLEAR_KEY_LABEL = 'C'
 const RELOAD_KEY = 'r'
 const RELOAD_KEY_LABEL = 'R'
-const UNDO_KEY = 'u'
-const UNDO_KEY_LABEL = 'U'
 const CLOSE_KEY = 'x'
 const CLOSE_KEY_LABEL = 'X'
 const LOOKUP_KEY = 'l'
@@ -1067,6 +1080,11 @@ export function ReviewQueue() {
     [putBack, count],
   )
 
+  /** UN-9/UN-10 (`docs/specs/undo.md` §11.3): the newest receipt that IS undoable, off the
+   *  page's own door — reachable without hunting the in-page receipt, which sits below the
+   *  fold on a phone. */
+  const newestUndoable = useMemo(() => receipts.find((receipt) => receipt.undoable) ?? null, [receipts])
+
   /* The group write: one route call, nothing dropped until the server answers. */
   const answerGroup = useCallback(() => {
     if (busyRef.current || loadingRef.current) return
@@ -1245,14 +1263,6 @@ export function ReviewQueue() {
       return
     }
 
-    if (key === UNDO_KEY) {
-      const newest = receipts[0]
-      if (newest === undefined) return
-      event.preventDefault()
-      undo(newest)
-      return
-    }
-
     if (grouping && groupOffer !== null) {
       if (key === 'enter') {
         event.preventDefault()
@@ -1337,6 +1347,18 @@ export function ReviewQueue() {
     return () => window.removeEventListener('keydown', fire)
   }, [])
 
+  /* THE SHARED HOOK (`docs/specs/undo.md` §11.3, UN-10) — the newest receipt that IS undoable,
+   * never merely the newest receipt (`receipts[0]` alone once let `U` try to reverse a receipt
+   * whose own row draws no `Undo`, which is the "why did U do nothing" gap `#/inventory` and
+   * `#/orders` already closed). Yields the same ground `onKeyDown` yields: the re-check sheet
+   * owns the keyboard while it is up, and a write in flight or a queue still loading takes `U`
+   * with it. */
+  useUndoHotkey(() => {
+    if (recheckOpen || busyRef.current || loadingRef.current) return null
+    const newest = receipts.find((receipt) => receipt.undoable)
+    return newest === undefined ? null : () => undo(newest)
+  })
+
   /* The queue drawer closes on Escape. Its own listener: it is chrome, not a state that
    * owns the keyboard, so every other Escape still does what it did. */
   useEffect(() => {
@@ -1401,6 +1423,10 @@ export function ReviewQueue() {
       className={['review', queueOpen ? 'is-queue-open' : '', lens ? 'review-pagehead has-lens' : 'review-pagehead'].filter(Boolean).join(' ')}
       icon="inbox"
       title="Review"
+      /* THE PAGE'S OWN DOOR (UN-9, UN-10): the in-page receipt sits below the fold at 390 and
+         its arrow is `size="sm"` — this door is always in view and 40px or more (D117),
+         through `--bn-control-h-lg`'s own phone floor. */
+      undo={newestUndoable === null ? null : <PageUndo busy={disabled} onPress={() => undo(newestUndoable)} />}
       lede={
         <span className="review-progress" aria-live="polite">
           <span className="review-progress-text bn-tnum">
