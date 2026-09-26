@@ -447,6 +447,8 @@ proves each one. Three choices the table left open are recorded here.
   changed. Its fix is an ordinary move back to A. Section 11.1's table stands as it is.
 - **The move undo restores the order key too (D265).** The card comes home at its own index
   and at its own place in the walk.
+- **A section reorder inside a box does not build on a move.** A reorder writes no card
+  history, so the move undo still returns the card to its own order key.
 - **"Still here" and the ledger: the owner's ruling, 2026-09-25, verbatim:**
 
   ```
