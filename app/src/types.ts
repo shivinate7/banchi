@@ -863,6 +863,25 @@ export type MoveResult = {
   card: InventoryCard
 }
 
+/** What `GET /capture/sitting` answers (UN-2): the newest sitting, rebuilt from the store, so
+ *  a reload does not end the capture strip. `open` is false once the newest capture is more
+ *  than `gap_minutes` old. That sitting has ended, and `cards` is empty. The server decides
+ *  this, and the screen never measures the gap itself. `cards` runs oldest first. Each row is
+ *  a `CardSummary` plus the claims the strip draws under a shot, and the card's `state`. */
+export type CaptureSitting = {
+  open: boolean
+  gap_minutes: number
+  cards: Array<
+    CardSummary & {
+      captured_at: string | null
+      set_hint: string | null
+      metadata_finish: string | string[] | null
+      game: string | null
+      state: string
+    }
+  >
+}
+
 /** What a move's undo answers (UN-14): `POST /inventory/<box>/<index>/move` with
  *  `{undo: true}`, aimed at the TOMBSTONE the move left. `moved` is the transplant's key,
  *  now deleted. `to` is the card's own key again, and `card` is the card as it now reads

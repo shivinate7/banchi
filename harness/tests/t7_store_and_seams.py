@@ -6573,6 +6573,42 @@ def check_undo_until_built_on(checks: Checks) -> None:
             "UN-14: a sale in the old box builds on the move, and its undo refuses",
         )
 
+    # ------------------------------------------------ UN-2: the sitting, off the store
+    ts_gap = re.search(
+        r"GAP_MINUTES = (\d+)",
+        (Path(__file__).resolve().parents[2] / "app" / "src" / "storeHistory.ts").read_text(),
+    )
+    checks.equal(
+        int(ts_gap.group(1)) if ts_gap else None,
+        capture_server.SITTING_GAP_MINUTES,
+        "UN-2: the server's sitting gap is the screen's own GAP_MINUTES",
+    )
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(9))
+        sitting = capture_server.do_capture_sitting()
+        checks.equal(
+            (sitting["open"], [row["key"] for row in sitting["cards"]]),
+            (True, ["9/1", "9/2", "9/3"]),
+            "UN-2: a reload reads the sitting back off the store, oldest first",
+        )
+        stale = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        with Store().write() as snapshot:
+            for key in ("9/1", "9/2"):
+                snapshot.inventory.cards[key].captured_at = stale
+        checks.equal(
+            [row["key"] for row in capture_server.do_capture_sitting()["cards"]],
+            ["9/3"],
+            "and a gap longer than the sitting's own ends the older sitting",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["9/3"].captured_at = stale
+        checks.equal(
+            (lambda body: (body["open"], body["cards"]))(capture_server.do_capture_sitting()),
+            (False, []),
+            "and once the newest capture is older than the gap, the sitting has ended",
+        )
+
     # ------------------------------------ UN-4, and every reversal, on a fresh demo seed
     with isolated_home():
         seed = _demo_seed_module()

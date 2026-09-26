@@ -36,6 +36,7 @@ import type {
   RemoveResult,
   MoveResult,
   MoveUndoResult,
+  CaptureSitting,
   MoveCardsResult,
   BoxDeleteResult,
   GraveyardPayload,
@@ -1931,6 +1932,14 @@ export async function moveCard(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ capture_id: captureId, to_box: toBox }),
   })) as MoveResult
+}
+
+/**
+ * The newest sitting, off the store (UN-2). The capture strip reads this on load, so a reload
+ * keeps the sitting and its undo. See `CaptureSitting` for what `open` means.
+ */
+export async function getCaptureSitting(): Promise<CaptureSitting> {
+  return (await request('/capture/sitting', NO_CACHE)) as CaptureSitting
 }
 
 /**

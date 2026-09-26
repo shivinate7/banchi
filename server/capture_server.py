@@ -294,6 +294,7 @@ import time
 import uuid
 from bisect import bisect_left, bisect_right
 from dataclasses import asdict, replace
+from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -6100,6 +6101,51 @@ def _queue_row(
         card = places._inventory.cards.get(master.position_key(int(entry.box), int(entry.index)))
         row["cid"] = getattr(card, "cid", None)
     return row
+
+
+# THE SITTING'S GAP (UN-2): `app/src/storeHistory.ts:GAP_MINUTES`, the 30 minutes D121 and
+# D164 cluster a sitting by. A copy in a second language, so T7's
+# `check_undo_until_built_on` reads the TypeScript constant and fails when they differ.
+SITTING_GAP_MINUTES = 30
+
+
+def do_capture_sitting() -> dict:
+    """`GET /capture/sitting`: the newest sitting, rebuilt from the store (UN-2).
+
+    The capture strip held the sitting in page memory, so a reload ended it. This read is
+    the store's answer instead. `open` is false once the newest capture is more than the
+    gap old: that sitting has ended, and its undo with it (section 11.1). The server says
+    so, and the screen never measures the gap itself. `cards` is then empty.
+
+    Each row is `_card_summary`'s shape, plus the claims the strip draws under a shot and
+    the card's `state`. A card a run has identified is still listed, and its undo refuses
+    `undo_too_late`, as it always has.
+    """
+    snapshot = Store().read()
+    inventory = snapshot.inventory
+    keys = inventory.newest_sitting(SITTING_GAP_MINUTES * 60)
+    cards = [inventory.cards[key] for key in keys if key in inventory.cards]
+    newest = None
+    if cards:
+        try:
+            newest = datetime.fromisoformat(str(cards[-1].captured_at))
+        except (TypeError, ValueError):
+            newest = None
+    open_ = newest is not None and (
+        datetime.now(timezone.utc) - newest
+    ).total_seconds() <= SITTING_GAP_MINUTES * 60
+    rows = []
+    for card in cards if open_ else []:
+        row = _card_summary(inventory, card, created=False)
+        row.update(
+            captured_at=card.captured_at,
+            set_hint=card.set_hint,
+            metadata_finish=card.metadata_finish,
+            game=card.game,
+            state=card.state,
+        )
+        rows.append(row)
+    return {"open": open_, "gap_minutes": SITTING_GAP_MINUTES, "cards": rows}
 
 
 def do_queues() -> dict:
@@ -14140,6 +14186,8 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_inventory_recent(limit))
             if path == "/queues":
                 return self._json(HTTPStatus.OK, do_queues())
+            if path == "/capture/sitting":
+                return self._json(HTTPStatus.OK, do_capture_sitting())
             if path == "/boxes":
                 # D213's filter. `keep_blank_values=True` is what lets `?set=` mean
                 # "filter for no set" rather than "no set param at all" — the same

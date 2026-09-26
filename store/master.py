@@ -1816,6 +1816,33 @@ class Inventory:
         rows = self.cards.top("captured_at", limit, ("box", "idx", "cid"))
         return [(key, int(box), int(idx), cid) for key, (box, idx, cid) in rows]
 
+    def newest_sitting(self, gap_seconds: float) -> List[str]:
+        """The keys of the newest sitting, oldest first (UN-2, D164).
+
+        A sitting is the run of captures with no gap longer than `gap_seconds` between two
+        of them, which is `app/src/storeHistory.ts:sittings`' rule. Read newest first off
+        the `captured_at` index, in pages, so a 555-card sitting costs one or two indexed
+        reads and never a walk of the store. A card with no `captured_at` has no place in
+        time, so it is never in a sitting.
+        """
+        page = 256
+        while True:
+            rows = self.cards.top("captured_at", page, ("captured_at",))
+            keys: List[str] = []
+            previous: Optional[datetime] = None
+            for key, (stamp,) in rows:
+                try:
+                    at = datetime.fromisoformat(str(stamp))
+                except (TypeError, ValueError):
+                    continue
+                if previous is not None and (previous - at).total_seconds() > gap_seconds:
+                    return list(reversed(keys))
+                keys.append(key)
+                previous = at
+            if len(rows) < page:
+                return list(reversed(keys))
+            page *= 2
+
     def allocate_capture(
         self,
         box,
