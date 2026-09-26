@@ -3512,7 +3512,7 @@ class Inventory:
             )
         return self.set_sections(entry.box, layout + [at])
 
-    def close_section(self, number, div) -> Tuple[int, ...]:
+    def close_section(self, number, div, made: Optional[dict] = None) -> Tuple[int, ...]:
         """Take out the divider `div` (its order key) while it is the box's last divider and
         no card stands behind it. The capture screen's `U` after `S` (UN-15).
 
@@ -3527,6 +3527,13 @@ class Inventory:
         `DividerBuiltOn` when `div` is not the last divider, or when a card on hand stands
         behind it. A departed record there (moved out, sold or retired) is not in the box, so
         it does not hold the divider in.
+
+        THE LAYOUT GOES BACK TO WHAT IT WAS BEFORE S. `made` is the `resectioned` event that
+        wrote the current layout, when the caller has it. S on an undeclared box writes
+        `[1, at]` from `[]`, so without it U would leave `[1]`, and Manage box would read
+        "1 section" where it read "not declared". The event is used only when its
+        `sections_to` is the current layout and its `sections_from` is that layout less
+        `div`, or `[]` where that is `[1]`. Otherwise the layout less `div` is written.
         """
         entry = self.ensure_box(number)
         layout = list(entry.layout())
@@ -3542,7 +3549,13 @@ class Inventory:
                 f"A card is already behind the divider you added in {title}, so it stays. "
                 f"Edit the dividers instead."
             )
-        return self.set_sections(entry.box, layout[:-1])
+        kept = layout[:-1]
+        if made is not None:
+            to = [float(v) for v in made.get("sections_to") or []]
+            was = [float(v) for v in made.get("sections_from") or []]
+            if to == [float(v) for v in layout] and not was and kept == [1]:
+                kept = []
+        return self.set_sections(entry.box, kept)
 
     def box_fill(self, number) -> int:
         """The highest index this box holds. `next_index` minus one, and DISPLAY ONLY."""

@@ -1088,15 +1088,25 @@ def check_divider_anchor(checks: Checks) -> None:
         )
 
     with isolated_home():
-        # AN UNDECLARED BOX KEEPS THE `[1]` S WROTE, and the route's other answers.
+        # "PRESS S, THEN U. THE SECTIONS ARE AS BEFORE" (UN-15), both ways: an undeclared box
+        # goes back to `[]`, and a box that stored `[1]` keeps `[1]`.
+        capture_server.do_create_box(dict(box=2, name="B"))
+        cap(2)
+        made = capture_server.do_open_section(2, dict())["sections"][-1]
+        capture_server.do_close_section(2, str(made))
+        checks.equal(
+            list(Store().read().inventory.box(2).sections), [],
+            "U after S on an undeclared box leaves it undeclared, `[]`, as before",
+        )
         capture_server.do_create_box(dict(box=1, name="A"))
         for _ in range(2):
             cap(1)
+        capture_server.do_put_box(1, dict(sections=[1]))
         made = capture_server.do_open_section(1, dict())["sections"][-1]
         capture_server.do_close_section(1, str(made))
         checks.equal(
             list(Store().read().inventory.box(1).sections), [1],
-            "U after S on an undeclared box keeps `[1]`: one section, as before",
+            "and U after S on a box that stored `[1]` keeps `[1]`",
         )
         made = capture_server.do_open_section(1, dict())["sections"][-1]
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)

@@ -12849,12 +12849,15 @@ def do_close_section(box: int, div: Optional[str]) -> dict:
             HTTPStatus.BAD_REQUEST, "div_required",
             "Name the divider to take out, as ?div=<its key> from the answer that added it.",
         ) from None
+    # THE EVENT THAT WROTE THE CURRENT LAYOUT, so an undeclared box goes back to `[]`
+    # (`Inventory.close_section` checks that it matches before it uses it).
+    made = next((e for e in Store().named_events(RESECTIONED) if e.get("box") == box), None)
     with Store().write() as snapshot:
         inventory = snapshot.inventory
         if inventory.box(box) is None:
             raise BadRequest(HTTPStatus.NOT_FOUND, "box_not_found", f"No box {box}.")
         try:
-            inventory.close_section(box, key)
+            inventory.close_section(box, key, made)
         except master.DividerBuiltOn as exc:
             raise BadRequest(HTTPStatus.CONFLICT, "divider_built_on", str(exc)) from None
         return _box_row(inventory, box)
