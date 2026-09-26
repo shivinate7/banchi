@@ -441,9 +441,6 @@ type BoxBrowseProps = {
    *  writes. Given as a node because the caller already knows which card is selected. */
   detail?: ReactNode
 
-  /** Rendered under the box header, for the BOX being walked rather than for a card in it. */
-  boxPanel?: ReactNode
-
   /** The one primary action for the selected copy, drawn in the phone's sticky action bar. */
   actionBar?: ReactNode
 
@@ -468,9 +465,6 @@ type BoxBrowseProps = {
    *  for the key the way it used to when `rows` held the whole store. Null for a pooled
    *  card, which has no box to switch to. */
   goTo?: { key: string; at: number; box: number | null } | null
-
-  /** What a run would be scoped to: the box being walked, and the ticked cards inside it. */
-  onScope?: (scope: { box: number | null; indices: readonly number[] }) => void
 
   /** FOLD DEPARTED ROWS AWAY (D132). The state is the route's, because the same answer reaches
    *  the copies list beside this walk; this component draws the control and applies it. Hidden,
@@ -709,12 +703,10 @@ function VariantChooser({
 
 export function BoxBrowse({
   detail,
-  boxPanel,
   actionBar,
   onSelect,
   onBoxes,
   onListings,
-  onScope,
   goTo,
   reloadToken = 0,
   hideSold = false,
@@ -1902,10 +1894,6 @@ export function BoxBrowse({
     }
   }, [pricedRun, reloads, reloadToken])
 
-  useEffect(() => {
-    onScope?.({ box: typeof shelf === 'number' ? shelf : null, indices: pickedIndices })
-  }, [shelf, pickedIndices, onScope])
-
   /* The phone's sheet closes once a card is chosen; the box picker keeps it open. */
   const pickRow = (key: string) => {
     setSelected(key)
@@ -2093,7 +2081,6 @@ export function BoxBrowse({
                 <p>These cards have no box or place the store can read.</p>
               </div>
             )}
-            {shelfBox === null ? null : boxPanel}
           </div>
 
           <div className="browse-status">

@@ -54,10 +54,10 @@ type Found = {
 /* `pointer-events: none` IS SKIPPED, AND IT IS A REAL CASE RATHER THAN A CONVENIENCE. When a
  * control carries it the pointer never lands on the element, so the browser resolves the cursor
  * from whatever is UNDERNEATH — the computed value on the element is unobservable, and asserting
- * it would be asserting something no user can see. `BoxRuns.css`'s disabled link is the live
- * instance: its rule computes `not-allowed` and the operator sees the parent's arrow. Fixing
- * that means changing how that control is guarded rather than how it is styled, which is a
- * behaviour change and not this file's business. */
+ * it would be asserting something no user can see. A disabled link with `aria-disabled` and
+ * `pointer-events: none` is the shape this covers: its own rule computes `not-allowed` and the
+ * operator sees the parent's arrow. Fixing that means changing how that control is guarded
+ * rather than how it is styled, which is a behaviour change and not this file's business. */
 async function sweep(page: import('@playwright/test').Page): Promise<Found[]> {
   return page.evaluate(() => {
     const CLICK_INPUT = ['checkbox', 'radio', 'file', 'button', 'submit', 'reset', 'image', 'color', 'range']

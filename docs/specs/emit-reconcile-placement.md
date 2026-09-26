@@ -218,8 +218,9 @@ Reconcile is a different act by input and by question — but the only complete 
 it **6m44s after emit, in the same sitting**. n=1 is not enough to build a split on.
 
 What it needs is to be *findable on re-entry*. `_phase` draws `reconcile` at 11px in `--muted`,
-the quietest register on the panel, while `.run-phase-identifying` gets ink at 600. And
-`BoxRuns.tsx:88` filters on `row.live`, so box 2 — parked five days short of emitting — renders
+the quietest register on the panel, while `.run-phase-identifying` gets ink at 600. And,
+before `BoxRuns.tsx` was deleted (2026-09-26, `docs/reviews/ux-2026-09-23/RULINGS.md`), it
+filtered on `row.live`, so box 2 — parked five days short of emitting — rendered
 **"Box 2 · nothing running"** on `#/inventory`.
 
 **`_phase` cannot say what a run owes.** Its seven values derive from four manifest booleans, so

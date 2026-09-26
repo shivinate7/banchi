@@ -194,7 +194,10 @@ SHIPPED = [
               "what it built. The .browse-boxrun row it left is not empty \u2014 src/BoxRuns.tsx holds a "
               "status line there and nothing that spends. What survived the move is the UNFOLDING, "
               "which was the owner's ruling; the route is what changed under it. "
-              "app/tests/run-panel.spec.ts is the check the hard rule says does not exist."},
+              "app/tests/run-panel.spec.ts is the check the hard rule says does not exist. "
+              "AMENDED 2026-09-26, ON THE OWNER'S WORD: src/BoxRuns.tsx IS DELETED. #/inventory "
+              "mentions no run at all now; a card is identified from Review's own identify strip "
+              "instead. docs/reviews/ux-2026-09-23/RULINGS.md records the ruling."},
     {"n": 16, "on": "2026-08-30", "title": "Hand pricing: the price a listing goes out at, set by a person",
      "note": "D49, D54, D59, D62, D78. #/pricing is a worklist of one row per SKU with the deliberate "
               "holds D49 rules on, the price history D62 puts beside the hold, D59's per-SKU live cap, "
@@ -8223,31 +8226,6 @@ COMPONENTS = [
                                          "block's height follows its count with a 44px floor; a "
                                          "gap is 40px, the thumb floor.",
                                  "governed_by": ["D117", "D264"]},
-            "src/BoxRuns.tsx": {"does": "what is left of the run panel on #/inventory: one status "
-                                        "line saying whether anything is running over this box, "
-                                        "and the control that hands the ticked selection to "
-                                        "#/runs. NO STEP, NO CONSOLE, NO FIGURES AND NOTHING THAT "
-                                        "SPENDS — D33's money gate is two presses that must both "
-                                        "happen where the estimate is on screen. Polls GET "
-                                        "/pipeline/runs on the panel's own 4s/20s cadence, "
-                                        "because a run started in a terminal begins live. THE "
-                                        "CADENCE IS THE SAME PAIR AND THE POLL IS `usePoll` NOW "
-                                        "(D207) — this file used to copy `RunPanel`'s "
-                                        "constants by comment alone, which is exactly the drift "
-                                        "the shared hook exists to close.",
-                                # D39 is why it exists at all; D33 is the gate it must not
-                                # become a second door to; D7 is the fungible-copy model the
-                                # ticked selection writes against; D13 is one truth on one Mac,
-                                # which is why a run this tab did not start still shows here.
-                                "governed_by": ["D5", "D7", "D13", "D33", "D39", "D56",
-                                                 "D207"]},
-            "src/BoxRuns.css": {"does": "one row, and the rule that it must stay one — the whole "
-                                        "argument for the panel leaving this screen was its "
-                                        "625-1143px height in a column whose question is 'where "
-                                        "is this card'. No fill; the control is drawn at "
-                                        "BoxOps' own 32px so the two panels in this screen agree "
-                                        "about how tall a control is.",
-                                "governed_by": ["D5", "D33", "D39", "D117"]},
             "src/setHint.ts": {
                 "does": "WHETHER A TYPED SET HINT NAMES A REAL SET, ANSWERED AT THE RIG "
                         "(D65, amended 2026-08-31). The field always had rules and never drew "

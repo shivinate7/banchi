@@ -26,7 +26,6 @@ import {
   undoSale,
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
-import { BoxRuns } from './BoxRuns'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
 import { useViewParam } from './kit/viewState'
 import { CardLocations } from './CardLocations'
@@ -302,10 +301,6 @@ function InventoryWalk({
   const [selected, setSelected] = useState<Row | null>(null)
   const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
   const [listings, setListings] = useState<Readonly<Record<string, Listing>>>(NO_LISTINGS)
-  const [runScope, setRunScope] = useState<{ box: number | null; indices: readonly number[] }>({
-    box: null,
-    indices: [],
-  })
   const layouts = useMemo(
     () => (boxRecords.length === 0 ? NO_LAYOUTS : layoutsOf(boxRecords)),
     [boxRecords],
@@ -757,14 +752,12 @@ function InventoryWalk({
         onSelect={setSelected}
         onBoxes={setBoxRecords}
         onListings={setListings}
-        onScope={setRunScope}
         goTo={goTo}
         reloadToken={reloads}
         hideSold={hideSold}
         onHideSold={toggleHideSold}
         frozen={frozen}
         onQuery={rerank}
-        boxPanel={<BoxRuns box={runScope.box} indices={runScope.indices} />}
         actionBar={currentCopy === null || selected === null || currentCopy.key !== selected.key ? null : actionFor(currentCopy, true)}
       />
       )}

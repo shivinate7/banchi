@@ -31,4 +31,6 @@
 
 **What would reopen this: the handoff going unused.** If runs are never started from a ticked selection, the mass-select coupling this entry spends most of its length preserving is decorative, and the honest simplification is to delete `BoxRuns`' handoff and leave the status line. The measurement is `scope.cards` being non-null on any run in `runs/`, and `docs/GATES.md` step 15 still records that no run has ever been started from the app at all.
 
+**AMENDED 2026-09-26, ON THE OWNER'S WORD** (`docs/reviews/ux-2026-09-23/RULINGS.md`: "yeah i do", over the ux-2026-09-23 review's proposal). The condition above is answered, and it went further than the honest simplification above. `BoxRuns.tsx`/`BoxRuns.css` are deleted whole, status line and handoff both. `#/inventory` mentions no run at all now. A card is identified from Review's own identify strip instead. `runHandoff.ts:carryScope`/`cardKey` are retired with the handoff, since neither has another caller. `carriedScope`/`carriedByBox`/`parseKey`/`clearCarriedScope` stay, read by `Runs.tsx`, `RunsComposer.tsx` and `ReviewQueue.tsx`. `docs/map.py`'s own `src/BoxRuns.tsx`/`src/BoxRuns.css` entries are removed.
+
 ---
