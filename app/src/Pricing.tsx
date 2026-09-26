@@ -2638,7 +2638,17 @@ function BigMoney({ value, onCommit, label }: { value: string; onCommit: (next: 
    * `onBlur` committed AGAIN — one keystroke, two `onCommit` calls (two undo entries, two
    * toasts). `justCommitted` is set the instant Enter or Escape has already resolved the
    * field's own value; `onBlur` reads it once and clears it, so it never repeats a commit —
-   * or a REVERT — that already landed. */
+   * or a REVERT — that already landed.
+   *
+   * THE FINDING'S OTHER HALF — "only when the value changed" — is dropped on purpose. A
+   * `commit(next) === value` guard silently ate the very first write for a field showing
+   * its own default: `'the sub-threshold policy is answered from the start...'` types the
+   * store's own $0.40 floor into a field already reading '0.40' and asserts one PUT lands.
+   * Telling "the operator re-typed what was already there" from "this field's default
+   * happens to match" needs a `written` flag this component has no way to hold — Pricing
+   * never re-derived one after the rebuild took `BigMoney` down to its single cut-off call
+   * site. The double-commit is the real defect (finding #6's own repro); the no-op guard
+   * was this round's own regression, caught by the pricing.spec.ts run below. */
   const justCommitted = useRef(false)
   const commit = (text: string) => {
     const next = text.trim()
