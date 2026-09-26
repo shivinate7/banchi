@@ -380,7 +380,15 @@ function withRestored(
 function setAnswer(book: PricingCorpus, sku: string, value: unknown, channel: 'price' | 'unknown'): PricingCorpus {
   const skus = { ...(book.skus ?? {}) }
   if (value === undefined) delete skus[sku]
-  else skus[sku] = { ...(skus[sku] ?? {}), value: value as never, channel }
+  else {
+    /* A NEW VALUE DROPS THE OLD DATE (the Opus review of the first-date ruling, HIGH). The
+     * server dates a new price, and this book never reads that date back. So a date kept here
+     * would be one the server has already replaced, and a hold would carry it forward. */
+    const old = skus[sku]
+    const same = old !== undefined && old !== null && JSON.stringify(old.value) === JSON.stringify(value)
+    const { at: _stale, ...rest } = old ?? {}
+    skus[sku] = { ...(same ? (old ?? {}) : rest), value: value as never, channel }
+  }
   return { ...book, skus }
 }
 

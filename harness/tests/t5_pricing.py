@@ -484,6 +484,35 @@ def run() -> Result:
     corpus.stamp_answers(corpus.Corpus(), fresh, now)
     c.equal(fresh.answers[ARTICUNO].at, now, "a price with no hold before it dates today, as it always has")
 
+    # THE SERVER SETS A HOLD'S `before.at`, NEVER THE CLIENT (the Opus review, HIGH). A screen
+    # can hold a stale date for a price typed this visit. A forged date must not be kept.
+    forged = "2026-01-01T00:00:00+00:00"
+
+    def _held_date(stored, sent_before):
+        prior = corpus.Corpus.parse({"version": 1, "skus": {ARTICUNO: stored}})
+        after = corpus.Corpus.parse({"version": 1, "skus": {ARTICUNO: {"value": {"withheld": "bullish", "before": sent_before}}}})
+        corpus.stamp_answers(prior, after, now)
+        return after.answers[ARTICUNO].value["before"].get("at")
+
+    c.equal(
+        _held_date({"value": "22.00", "at": first}, {"value": "22.00", "channel": "price", "at": forged}),
+        first,
+        "a hold takes `before.at` from the stored answer it replaces, and a forged date is dropped",
+    )
+    c.equal(
+        _held_date({"value": "23.00", "at": first}, {"value": "22.00", "channel": "price", "at": forged}),
+        None,
+        "a `before` that is not the stored answer keeps no date, so its release dates today",
+    )
+    c.equal(
+        _held_date(
+            {"value": {"withheld": "bullish", "before": {"value": "22.00", "channel": "price", "at": first}}},
+            {"value": "22.00", "channel": "price", "at": forged},
+        ),
+        first,
+        "a hold saved again keeps the date the server gave it the first time, never the client's",
+    )
+
     # --- withholding: an answer that is not a price (D49) ------------------------------------
     #
     # THE MIRROR OF THE `no_market_data` CASE ABOVE, ONE CHANNEL OVER. That field has accepted

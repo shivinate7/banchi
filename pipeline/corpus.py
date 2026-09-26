@@ -545,6 +545,13 @@ def stamp_answers(before: "Corpus", after: "Corpus", at: str) -> List[str]:
     to the migration and refuse the whole corpus as `priced_recently` on the next survey.
     """
     stamped: List[str] = []
+    # A HOLD'S `before.at` IS THE SERVER'S, NEVER THE CLIENT'S (the Opus review of the first-date
+    # ruling, HIGH). A screen can hold a stale date for a price it typed this visit, and the
+    # release below trusts `before.at`. So every hold's `before.at` is set here, from what the
+    # store holds now, before any release is judged against it.
+    for sku, answer in after.answers.items():
+        if answer.is_hold and isinstance(answer.value, dict) and isinstance(answer.value.get("before"), dict):
+            _seal_hold_date(answer.value["before"], before.answers.get(sku))
     for sku, answer in after.answers.items():
         if answer.channel != "price" or answer.is_hold:
             continue
@@ -578,6 +585,30 @@ def stamp_answers(before: "Corpus", after: "Corpus", at: str) -> List[str]:
         answer.at = at
         stamped.append(sku)
     return stamped
+
+
+def _seal_hold_date(kept: dict, previous: Optional["Answer"]) -> None:
+    """Set a hold's `before.at` from the stored answer the hold replaces, in place.
+
+    ANY DATE THE CLIENT SENT IS DROPPED FIRST. The date is kept only when the stored answer is
+    the one `before` names, by value and channel: a stored price gives its own `at`, and a
+    stored hold over the same answer gives the `before.at` this function set when that hold
+    was first stored. Anything else leaves no date, so a release dates today.
+    """
+    kept.pop("at", None)
+    if previous is None:
+        return
+    channel = str(kept.get("channel") or "price")
+    source = _hold_before(previous) if previous.is_hold else {
+        "value": previous.value, "channel": previous.channel, "at": previous.at,
+    }
+    if (
+        source is not None
+        and source.get("at")
+        and str(source.get("channel") or "price") == channel
+        and _token(source.get("value")) == _token(kept.get("value"))
+    ):
+        kept["at"] = source["at"]
 
 
 def _hold_before(previous: Optional["Answer"]) -> Optional[dict]:

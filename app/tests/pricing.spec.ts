@@ -2087,7 +2087,7 @@ test('DEBT42 — a typed price on a row whose market went blank is shown, becaus
  * with no earlier answer releases to none, as before. */
 const FIRST_DATE = '2026-09-01T10:00:00.000+00:00'
 const sentFor = (wire: Wire[], key: string) =>
-  (wire.filter((row) => row.method === 'PUT').pop()?.body as { corpus?: { skus?: Record<string, { value: unknown; channel?: string }> } } | undefined)
+  (wire.filter((row) => row.method === 'PUT').pop()?.body as { corpus?: { skus?: Record<string, { value: unknown; channel?: string; at?: string }> } } | undefined)
     ?.corpus?.skus?.[key]
 
 test('a release puts back the price the hold replaced, on its own channel', async ({ page }) => {
@@ -2107,6 +2107,32 @@ test('a release puts back the price the hold replaced, on its own channel', asyn
   await expect(page.locator('.bn-toast', { hasText: 'Released Void Assault' })).toBeVisible()
   await expect.poll(() => sentFor(wire, '5')).toMatchObject({ value: '5.16', channel: 'unknown', at: FIRST_DATE })
   await expect(field(page)).toHaveValue('5.16')
+})
+
+test('a price typed this visit, then held and released, is dated today, never with the old date', async ({ page }) => {
+  /* THE OPUS REVIEW'S HIGH FINDING. The book once kept the old `at` after a new typing, a hold
+   * copied it into `before.at`, and the release sent it back, so a price typed today read as
+   * months old. A new value drops the date on the screen, and the server sets `before.at`. */
+  const wire = await open(page, {
+    skus: [sku({ sku: '5', name: 'Void Assault', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
+    decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {}, no_market_data: { '5': '5.16' } },
+    answerAt: { '5': FIRST_DATE },
+  })
+  await field(page).fill('6.00')
+  await field(page).press('Enter')
+  await expect.poll(() => sentFor(wire, '5')?.value).toBe('6.00')
+  expect(sentFor(wire, '5')?.at).toBeUndefined()
+
+  await page.locator('.pricing-hold').first().click()
+  await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByRole('button', { name: 'Hold it' }).click()
+  await expect.poll(() => sentFor(wire, '5')?.value).toMatchObject({ before: { value: '6.00' } })
+  expect((sentFor(wire, '5')?.value as { before: { at?: string } }).before.at).toBeUndefined()
+
+  await page.locator('.pricing-hold').first().click()
+  await expect(page.locator('.bn-toast', { hasText: 'Released Void Assault' })).toBeVisible()
+  await expect.poll(() => sentFor(wire, '5')?.value).toBe('6.00')
+  expect(sentFor(wire, '5')?.at).toBeUndefined()
 })
 
 test('a hold with no earlier answer releases to no answer', async ({ page }) => {
