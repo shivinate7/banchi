@@ -8,7 +8,10 @@
 /* Add orders and Cards to pull: two small squares on the filter bar's line. */
 .orders-store-controls { display: inline-flex; align-items: center; gap: var(--bn-2); }
 .orders-card-market { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-.orders-card-market .bn-money { color: var(--bn-ink-2); }
+/* The mono face's own side-bearing sits tighter than Inter's, so the real space in the markup
+   between the figure and the word "market" read as none at 390 (review finding 8). A hair of
+   margin restores the gap without touching the text. */
+.orders-card-market .bn-money { color: var(--bn-ink-2); margin-right: 0.2em; }
 
 /* ---- the layout: buyers, the walk, the card (UX-169, UX-194, D274)
    THE WALK GETS THE HEIGHT. There is one scroll, the page's (UX-201): no column scrolls on its
@@ -357,6 +360,9 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-walk-press:hover { background: var(--bn-hover); }
 .orders-walk-press[aria-current='true'] { background: var(--bn-accent-tint); }
 .orders-walk-slot { grid-area: slot; min-width: 4ch; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-ink-2); }
+/* "(either)": more candidate copies stand here than this take wants (D212, review finding 2).
+   Quiet and unweighted on purpose — it names a fact about the copies, not a second number. */
+.orders-walk-slot-either { font-weight: 400; font-variant-numeric: normal; color: var(--bn-ink-3); }
 .orders-walk-name { grid-area: name; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orders-walk-name.is-unnamed { color: var(--bn-ink-3); font-style: italic; }
 .orders-walk-pick {

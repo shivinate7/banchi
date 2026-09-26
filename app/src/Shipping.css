@@ -18,7 +18,10 @@
 .shipping-pick:has(> input:disabled) { opacity: 0.45; pointer-events: none; }
 
 /* ---- before a file: the drop zone -------------------------------------------- */
-.shipping-empty { display: flex; flex-direction: column; gap: var(--bn-5); max-width: 880px; width: 100%; margin: 0 auto; }
+/* `margin: 0 auto` CENTRED this block under the page's own left-aligned heading (D197: one
+   left edge for every screen, and only WIDTH may vary by route — review finding 9, "Shipping
+   has two left edges"). The width cap stays for readability; only the centring is deleted. */
+.shipping-empty { display: flex; flex-direction: column; gap: var(--bn-5); max-width: 880px; width: 100%; margin: 0; }
 .shipping-drop {
   position: relative;
   display: flex;
