@@ -4488,6 +4488,51 @@ test('UX-244 — a stale section on Move re-opens the pick with one plain senten
   await expect(dialog.getByRole('button', { name: 'Move', exact: true })).toBeDisabled()
 })
 
+test('(a) — the one-card Move panel also reads the boxes again after a stale section, and Move never reads enabled with nothing checked', async ({
+  page,
+}) => {
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+
+  let moveAttempted = false
+  await page.route(/\/boxes(\?.*)?$/, async (route) => {
+    const spares = moveAttempted
+      ? { section: 1, start: 1, end: 41, count: 41, div: '50', name: null }
+      : { section: 1, start: 1, end: 40, count: 40, div: '1', name: null }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        boxes: TWO_BOXES.boxes.map((record) =>
+          record.box === 7 ? { ...record, sections_detail: [spares] } : record,
+        ),
+      }),
+    })
+  })
+  await page.route(/\/inventory\/\d+\/\d+\/move$/, async (route) => {
+    moveAttempted = true
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'section_gone', message: 'ME01 spares has no section at divider 1 now.' },
+      }),
+    })
+  })
+
+  const row = page.locator('.card-locations-row.is-current')
+  await row.getByRole('button', { name: 'Move to another box' }).click()
+  const dialog = page.getByRole('dialog', { name: /^Move/ })
+  await dialog.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  await expect(dialog.locator('.bn-section-pick-count')).toHaveText('40 cards')
+  await dialog.locator('.bn-section-pick-item').click()
+  await dialog.getByRole('button', { name: 'Move', exact: true }).click()
+
+  await expect(dialog.locator('.bn-section-pick-count')).toHaveText('41 cards')
+  await expect(dialog.locator('.bn-section-pick-item[aria-checked="true"]')).toHaveCount(0)
+  await expect(dialog.getByRole('button', { name: 'Move', exact: true })).toBeDisabled()
+})
+
 test('the header holds one worded primary and the filter bar one line, at 390 and 720', async ({
   page,
 }) => {
@@ -4685,6 +4730,152 @@ test('D-sections-are-sub-boxes — a stale section on BoxOps Move re-opens the p
 
   await expect(page.locator('.boxops-sheet')).toContainText('there is no default place inside the box')
   await expect(move).toBeDisabled()
+})
+
+test('UN-14 — Move to box gets a real Undo, wired into the receipt like every other undo', async ({
+  page,
+}) => {
+  /* UN-14's own Files column names `Inventory.tsx` (docs/specs/undo.md §11.3): the ruling
+   * covers the one-card move this screen makes, not BoxOps's batched move. The route and
+   * `undoMove` already existed; nothing on screen ever called it until now. */
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+  const sent: { path: string; body: unknown }[] = []
+  await page.route(/\/inventory\/\d+\/\d+\/move$/, async (route) => {
+    const body = route.request().postDataJSON() as { undo?: boolean } | null
+    sent.push({ path: new URL(route.request().url()).pathname, body })
+    if (body?.undo === true) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ moved: '2/1', to: '2/1', box: 2, index: 1, undone: true, card: { box: 2, index: 1 } }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        moved: '2/1',
+        to: '7/41',
+        box: 2,
+        index: 1,
+        new_box: 7,
+        new_index: 41,
+        card: { box: 7, index: 41, place: { label: 'ME01 spares, Section 1, Card 40' } },
+      }),
+    })
+  })
+
+  const row = page.locator('.card-locations-row.is-current')
+  await row.getByRole('button', { name: 'Move to another box' }).click()
+  const dialog = page.getByRole('dialog', { name: /^Move/ })
+  await dialog.locator('.bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  await dialog.locator('.bn-section-pick-item').click()
+  await dialog.getByRole('button', { name: 'Move', exact: true }).click()
+
+  const receiptUndo = receiptToast(page).getByRole('button', { name: 'Undo' })
+  await expect(receiptUndo).toBeVisible()
+  await expect(receiptToast(page)).toContainText('Moved to ME01 spares')
+
+  await receiptUndo.click()
+  await expect(page.locator('.bn-toast-ok')).toContainText('Move undone')
+  expect(sent.map((call) => call.body)).toEqual([
+    { to_box: 7, section: '1' },
+    { undo: true },
+  ])
+  expect(sent.map((call) => call.path)).toEqual(['/inventory/2/1/move', '/inventory/2/1/move'])
+})
+
+test('F2 — the visible sentence names the section, and a divider key sits behind What the server said', async ({
+  page,
+}) => {
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+  await page.route(/\/inventory\/\d+\/move$/, async (route) => {
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'section_gone', message: 'ME01 spares has no section at divider 33 now. Read the box again and choose a section.' },
+      }),
+    })
+  })
+
+  await openBoxOps(page)
+  await page.getByRole('button', { name: 'Move to box' }).click()
+  await page.locator('.bn-field .bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  await page.locator('.bn-section-pick-item').click()
+  await page.getByRole('button', { name: 'Move', exact: true }).click()
+
+  /* THE VISIBLE SENTENCE NAMES WHAT THE OWNER SAW, and a divider key never reaches it
+   * (D196): the row read "Section 1", so the sentence says "Section 1", never "divider 33". */
+  const notice = page.locator('.boxops-sheet .bn-notice-warn')
+  await expect(notice.locator('.bn-notice-title')).toHaveText('Section 1 is gone. Read the box again and choose a section.')
+  await expect(notice.locator('.bn-notice-title')).not.toContainText('divider')
+
+  /* THE SERVER'S OWN WORDS SIT BEHIND THE FOLD, closed by default. */
+  const fold = notice.locator('.bn-notice-said')
+  await expect(fold).toHaveCount(1)
+  await expect(fold.locator('.bn-notice-said-body')).not.toBeVisible()
+  await expect(fold.locator('summary')).toHaveText('What the server said')
+  await fold.locator('summary').click()
+  await expect(fold.locator('.bn-notice-said-body')).toContainText('divider 33')
+})
+
+test('F1 — a stale section on BoxOps Move reads the boxes again, so the re-pick offers the live section list', async ({
+  page,
+}) => {
+  await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
+
+  /* THE STUB CHANGES BETWEEN THE PICK AND THE PRESS: box 7's one section reads 40 cards at
+   * divider "1" until a move is attempted against it and refused, then 41 cards at a new
+   * divider "50" — the shape a re-space or another device's capture leaves behind. Without
+   * F1's re-read, the sheet never asks `GET /boxes` again and goes on showing "40 cards". */
+  let moveAttempted = false
+  await page.route(/\/boxes(\?.*)?$/, async (route) => {
+    const spares = moveAttempted
+      ? { section: 1, start: 1, end: 41, count: 41, div: '50', name: null }
+      : { section: 1, start: 1, end: 40, count: 40, div: '1', name: null }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        boxes: TWO_BOXES.boxes.map((record) =>
+          record.box === 7 ? { ...record, sections_detail: [spares] } : record,
+        ),
+      }),
+    })
+  })
+  await page.route(/\/inventory\/\d+\/move$/, async (route) => {
+    moveAttempted = true
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'section_gone', message: 'ME01 spares has no section at divider 1 now.' },
+      }),
+    })
+  })
+
+  await openBoxOps(page)
+  await page.getByRole('button', { name: 'Move to box' }).click()
+  await page.locator('.bn-field .bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  await expect(page.locator('.bn-section-pick-count')).toHaveText('40 cards')
+  await page.locator('.bn-section-pick-item').click()
+  await page.getByRole('button', { name: 'Move', exact: true }).click()
+
+  /* THE RE-PICK OFFERS THE LIVE LIST: the sheet asked `GET /boxes` again after the refusal,
+   * and the section now reads 41 cards — the answer a stale, un-refetched list could never
+   * show, because it never asked again. */
+  await expect(page.locator('.bn-section-pick-count')).toHaveText('41 cards')
+
+  /* (a) — THE OWNER'S RULING FORBIDS EXACTLY ONE STATE: Move enabled with nothing checked.
+   * The old divider is gone from the fresh list, so nothing may still read as picked, and
+   * Move must read disabled again until the owner picks from the LIVE row. */
+  await expect(page.locator('.bn-section-pick-item[aria-checked="true"]')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Move', exact: true })).toBeDisabled()
 })
 
 test('the neighbours are ranked, not joined — the names are the only thing drawn at ink', async ({

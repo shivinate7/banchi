@@ -347,6 +347,14 @@ Capture is 50%, a wrong sale 30%, a wrong Review answer 20%. Pricing and move fo
 | UN-14 | A move has no undo, and moving back puts the card at the front. | Section 4 excluded moves. `move_card` has no reversal. | Delete the transplant while it is the newest, and restore the tombstone. | Both | `store/master.py`, `server/capture_server.py`, `Inventory.tsx` | Yes. A new write. | Move, then undo. The card is back at its index, and nothing else moves. | Q1 |
 | UN-15 | A divider has no undo. | No reversal is built. | While no card is behind it, `U` drops it through `DELETE /boxes/<box>/sections?div=<key>`. | Fast | `CaptureScreen.tsx`, `closeSection`, `Inventory.close_section` | Low. A new route and store method. It removes only the divider named by `div`, and only while it is the last and empty. A stale `U` is refused as `divider_built_on`. | Press `S`, then `U`. The sections are as before. | no |
 
+**UN-14's `Inventory.tsx` half landed 2026-09-26**, from `ux/subbox-move`'s own review round.
+The store and server halves already existed (`move_card`, `{"undo": true}` on the tombstone),
+but no screen ever called `undoMove`. The Move-to-box receipt now carries Undo, the same
+`remember`/`doUndo` mechanism sale and retirement already use. It survives until the move is
+built on (`move_built_on`), never a fixed window. `BoxOps.tsx`'s batched move (a ticked
+selection or the whole box, D83) is NOT this item. UN-14's own Files column never named it,
+and it still has no undo.
+
 ### 11.4 Lanes
 
 Three lanes, with disjoint files. Lane S goes first. Lanes C and R start at once on the

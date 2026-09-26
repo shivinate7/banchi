@@ -8,7 +8,7 @@ import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import {
   Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Money, Notice, Page, Pill, Popover, Refusal, ReloadButton, Retry,
-  KeyHint, Section, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
+  KeyHint, Section, SectionPicker, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
   type ButtonSize, type ButtonVariant, type IconName, type PillTone,
 } from './kit'
 import { MARKS } from './kit/markPalettes'
@@ -228,6 +228,7 @@ const SECTIONS: readonly { id: string; label: string; group: string }[] = [
   { id: 'pills', label: 'Pills & dots', group: 'Primitives' },
   { id: 'fields', label: 'Fields', group: 'Primitives' },
   { id: 'segmented', label: 'Segmented & tabs', group: 'Primitives' },
+  { id: 'section-pick', label: 'Section pick', group: 'Primitives' },
   { id: 'notice', label: 'Notice', group: 'Primitives' },
   { id: 'failure', label: 'Refusal & retry', group: 'Primitives' },
   { id: 'overlays', label: 'Sheets & popovers', group: 'Primitives' },
@@ -341,6 +342,23 @@ const LONG_ANSWER =
   'The box you pressed is closed, so no divider can go into it now. Open it again from the ' +
   'capture screen first, then press here once more. Every card already in it stays exactly ' +
   'where it is, and nothing about its sections changes until you open it.'
+
+/* THE SECTION PICKER (D-sections-are-sub-boxes): a Move-to-box's own destination, one Tab
+ * stop and arrow keys between rows, "back"/"front" tags on either end of more than one. */
+function SectionPickSpecimen() {
+  const [value, setValue] = useState<string | null>(null)
+  return (
+    <SectionPicker
+      value={value}
+      onChange={setValue}
+      sections={[
+        { div: '1', section: 1, name: null, count: 22 },
+        { div: '20', section: 2, name: 'Rares', count: 9 },
+        { div: '31', section: 3, name: null, count: 3 },
+      ]}
+    />
+  )
+}
 
 /* THE KIT'S SELECT, never the operating system's menu: the owner's own gripe. */
 function SelectSpecimen() {
@@ -1155,6 +1173,20 @@ export function Gallery() {
                     <Icon name="check" size={14} /> Answered
                   </button>
                 </div>
+              </Spec>
+            </div>
+          </Section>
+
+          <Section
+            id="kit-section-pick"
+            data-kit-section="section-pick"
+            className="kit-section"
+            title="Section pick"
+            lede="No auto default (D-sections-are-sub-boxes): the owner picks a box's section. One Tab stop, arrow keys move and pick, and a box of one section carries no back/front tag."
+          >
+            <div className="kit-grid">
+              <Spec label="section pick">
+                <SectionPickSpecimen />
               </Spec>
             </div>
           </Section>

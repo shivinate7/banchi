@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 
 import type {
   BoxClaimResult,
@@ -401,6 +401,12 @@ export function BoxOps({
   onClose: () => void
 }) {
   const { busy, trouble, write } = useBoxWrite(onChanged)
+  /* F1 — a stale-section refusal reads the boxes again, the way the one-card Move panel
+   * already does, so the re-pick offers live sections rather than looping on a dead key. A
+   * ref, not a dependency, so the effect below fires once per NEW refusal and never merely
+   * because `onChanged` (an inline callback at the call site) changed identity. */
+  const onChangedRef = useRef(onChanged)
+  onChangedRef.current = onChanged
   const onWrite = (patch: {
     name?: string
     sections?: number[]
@@ -417,6 +423,30 @@ export function BoxOps({
    * `moveTo`, cleared whenever `moveTo` changes. */
   const [sectionDiv, setSectionDiv] = useState<string | null>(null)
   const [moved, setMoved] = useState<MoveCardsResult | null>(null)
+  /* S4: MOST RECENT FIRST — the same rule `Inventory.tsx:MovePanel` and the rail sort by.
+     `boxes` arrives in the server's own order (box number), which said nothing about which
+     box the hand was likeliest to reach for. */
+  const others = boxesMostRecentFirst(boxes.filter((candidate) => candidate.box !== record.box))
+
+  /* The chosen destination's own sections, for the picker beside it. `moveTo` is free text
+   * (the no-registry fallback above), so this looks it up by number rather than reading
+   * `others`'s own list directly. */
+  const moveToNumber = moveTo.trim() === '' ? null : Number.parseInt(moveTo.trim(), 10)
+  const moveTarget =
+    moveToNumber === null || !Number.isInteger(moveToNumber)
+      ? null
+      : (boxes.find((candidate) => candidate.box === moveToNumber) ?? null)
+  const moveTargetSections = (moveTarget?.sections_detail ?? []).filter(
+    (detail): detail is SectionDetail & { div: string } => typeof detail.div === 'string',
+  )
+  /* The section a completed move landed in, for the receipt below — read while `moveTo` and
+   * `sectionDiv` still name it, before the next `startEdit` clears either. */
+  const movedSection = moveTargetSections.find((detail) => detail.div === sectionDiv)
+  /* (a) THE ENABLEMENT NEVER TRUSTS A BARE non-null `sectionDiv`: `boxes` can refresh under an
+   * open sheet (another device's S or U, or this lane's own F1 retry), and a stale div that
+   * no longer names a real section must read as unpicked, not as a live choice nothing draws
+   * checked for. */
+  const sectionStillThere = sectionDiv !== null && moveTargetSections.some((detail) => detail.div === sectionDiv)
   const [proposed, setProposed] = useState<number[] | null>(null)
   const moveId = useId()
   const readAt = oldestReading(listings)
@@ -441,6 +471,10 @@ export function BoxOps({
     }
   }
 
+  /* F2 — the sentence names what the owner saw ("Section 2"), never a divider key (D196).
+   * The server's own words go behind "What the server said" instead (`sectionTrouble`). */
+  const [sectionTrouble, setSectionTrouble] = useState<Failure | null>(null)
+
   /* D83, amended by D-sections-are-sub-boxes: `indices: null` moves every on-hand card,
    * and there is NO AUTO DEFAULT for where in the box it lands — the owner's own ruling —
    * so a section pick is required beside the box. The server's own refusals are the ones
@@ -451,28 +485,57 @@ export function BoxOps({
       setRefused('Choose a destination box.')
       return
     }
-    if (sectionDiv === null) {
+    if (!sectionStillThere) {
       setRefused('Choose a section — there is no default place inside the box.')
       return
     }
     setRefused(null)
+    setSectionTrouble(null)
     const result = await write(() =>
-      moveCards(record.box, selection.length > 0 ? [...selection] : null, toBox, sectionDiv),
+      moveCards(record.box, selection.length > 0 ? [...selection] : null, toBox, sectionDiv as string),
     )
     if (result !== null) {
       setMoved(result)
       setEditing(null)
     }
+    /* A failure's own sentence is composed in the effect below, never read HERE: `trouble`
+     * is this RENDER's own snapshot, from before `write()` set it, and reading it in this
+     * same async continuation would see the value it held before the write ever ran. The
+     * effect fires off the state update itself, once it has actually landed. */
   }
 
-  /* A stale section — closed, filled, or an old caller's silence refused outright
-   * (`section_gone`, `section_required`) — clears the pick rather than letting a second
-   * press retry the same dead key. The generic `Trouble` panel already shows the sentence. */
+  /* F1 — a stale section (closed, filled, or an old caller's silence refused outright)
+   * reads the boxes again, the same as the one-card Move panel, so the re-pick offers live
+   * sections rather than looping on a dead key. F2's sentence names what the owner saw —
+   * `movedSection`, read from THIS render, before the clear below reaches the next one —
+   * never a divider key, and the server's own words go behind "What the server said"
+   * (`sectionTrouble`) rather than in the sentence itself. (a) The pick is cleared
+   * UNCONDITIONALLY on any section-code refusal — never left standing merely because its
+   * div still numerically exists in the last-read list, which is what let Move go on
+   * reading enabled with nothing checked. */
   useEffect(() => {
-    if (trouble !== null && (trouble.code === 'section_gone' || trouble.code === 'section_required')) {
-      setSectionDiv(null)
-    }
+    if (trouble === null || (trouble.code !== 'section_gone' && trouble.code !== 'section_required')) return
+    const label =
+      movedSection === undefined
+        ? 'That section'
+        : `Section ${movedSection.section}${movedSection.name ? ` (${movedSection.name})` : ''}`
+    setRefused(
+      trouble.code === 'section_gone'
+        ? `${label} is gone. Read the box again and choose a section.`
+        : 'Choose a section — there is no default place inside the box.',
+    )
+    setSectionTrouble(trouble)
+    setSectionDiv(null)
+    onChangedRef.current()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `movedSection` is read once,
+    // from the render this failure landed on, not tracked as a re-trigger of its own.
   }, [trouble])
+  /* (a) — THE SECOND, INDEPENDENT NET: a pick can also go stale with no refusal at all, from
+   * an ambient `boxes` refresh while the sheet sat open (another device's S or U). This
+   * clears it even when no move was ever attempted against it. */
+  useEffect(() => {
+    if (!sectionStillThere) setSectionDiv((held) => (held === null ? held : null))
+  }, [sectionStillThere])
 
 
   const startEdit = (which: Exclude<Editing, null>) => {
@@ -523,26 +586,6 @@ export function BoxOps({
   }
 
   if (!open) return null
-
-  /* S4: MOST RECENT FIRST — the same rule `Inventory.tsx:MovePanel` and the rail sort by.
-     `boxes` arrives in the server's own order (box number), which said nothing about which
-     box the hand was likeliest to reach for. */
-  const others = boxesMostRecentFirst(boxes.filter((candidate) => candidate.box !== record.box))
-
-  /* The chosen destination's own sections, for the picker beside it. `moveTo` is free text
-   * (the no-registry fallback above), so this looks it up by number rather than reading
-   * `others`'s own list directly. */
-  const moveToNumber = moveTo.trim() === '' ? null : Number.parseInt(moveTo.trim(), 10)
-  const moveTarget =
-    moveToNumber === null || !Number.isInteger(moveToNumber)
-      ? null
-      : (boxes.find((candidate) => candidate.box === moveToNumber) ?? null)
-  const moveTargetSections = (moveTarget?.sections_detail ?? []).filter(
-    (detail): detail is SectionDetail & { div: string } => typeof detail.div === 'string',
-  )
-  /* The section a completed move landed in, for the receipt below — read while `moveTo` and
-   * `sectionDiv` still name it, before the next `startEdit` clears either. */
-  const movedSection = moveTargetSections.find((detail) => detail.div === sectionDiv)
 
   return (
     <Overlay kind="sheet" label={`Manage ${record.name ?? UNNAMED_BOX}`} onClose={onClose} className="boxops-sheet">
@@ -771,6 +814,12 @@ export function BoxOps({
                   : `Moves all ${count(record.on_hand ?? 0, 'card', 'cards')} on hand in ${record.name ?? UNNAMED_BOX} — the same operation a merge is, from this side.`}
               </p>
             </div>
+            {/* F6 — SAY WHY MOVE IS DISABLED. With no other registered box, nothing below
+                this field will ever draw, so a box and a section have to come from
+                somewhere else on screen — this is the one sentence saying so. */}
+            {others.length > 0 ? null : (
+              <Notice tone="info" title="There is no other box in the registry yet. Type its number above, then choose a section." />
+            )}
             {/* NO AUTO DEFAULT (D-sections-are-sub-boxes, the owner's own ruling): once a box
                 is picked, the owner picks its section too — a box with one section still
                 shows that single choice, so the owner confirms it rather than a screen
@@ -780,8 +829,12 @@ export function BoxOps({
             ) : (
               <SectionPicker sections={moveTargetSections} value={sectionDiv} onChange={setSectionDiv} />
             )}
-            {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
-            <Trouble failure={trouble} />
+            {/* F2 — the sentence names the section the owner saw, never a divider key
+                (D196). The server's own words, if any, sit behind "What the server said". */}
+            {refused === null ? null : (
+              <Notice tone="warn" title={refused} detail={sectionTrouble?.message} code={sectionTrouble?.code} />
+            )}
+            {sectionTrouble === null ? <Trouble failure={trouble} /> : null}
             <div className="boxops-actions">
               {/* THE PANEL'S FOCUS LANDS HERE, not the kit Select (round 2's own convention,
                   Inventory.tsx's MovePanel): `Select` is a button of its own with no
@@ -792,7 +845,7 @@ export function BoxOps({
               <Button
                 variant="primary"
                 busy={busy}
-                disabled={moveTo.trim() === '' || sectionDiv === null}
+                disabled={moveTo.trim() === '' || !sectionStillThere}
                 onClick={() => void doMove()}
               >
                 Move

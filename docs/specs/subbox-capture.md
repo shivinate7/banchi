@@ -334,12 +334,17 @@ is untouched. It already names an exact gap and was never in scope.
   batched response carries no per-card place. `BoxOps.tsx` names the section from the pick
   it sent instead, the one fact the batch is guaranteed to have landed at. The underlying
   move's own undo (`{"undo": true}` on the tombstone, UN-14) ignores `section` — it returns
-  to the source index, not to a section — and was re-verified working, not rebuilt.
+  to the source index, not to a section. **UN-14's screen half was missing, and this round
+  built it**: no route on this branch or on main ever called `undoMove` before. The
+  single-card move's receipt now carries Undo (`docs/specs/undo.md` §11.3, its own note).
+  `BoxOps.tsx`'s batched move has no undo, and UN-14 never asked for one.
 - **The demo.** Neither Move-to-box route was ever matched in `demoServer.ts`'s routing
   table. Both already fell through to `demo_read_only`. Move already refused in the demo's
-  own way, so no change was needed there. The demo's own `GET /boxes` fixture predates `div`.
-  Its picker shows "Its sections could not be drawn" until the fixtures are re-recorded —
-  tracked under Lane B/§6's ripple effects, not this lane's to fix.
+  own way, so no change was needed there. Reviewed against a fresh `make demo` build
+  (2026-09-26): the recorded `GET /boxes` carries `div` for every section, because
+  `make demo-record` runs the live server code, never a frozen fixture. The demo picker
+  draws real sections. Pressing Move answers "Not in this demo." The earlier sentence
+  here — that the fixture predates `div` — was wrong, and is corrected.
 - **Verified.** `cd app && npx tsc --noEmit` is clean. `make design-check
   PW_ARGS="tests/inventory tests/boxmap"` passes: 162 of 164, 2 pre-existing skips, 0 failed.
   Screenshots were taken by hand at 1440, 820 and 390, both themes. No horizontal scroll.

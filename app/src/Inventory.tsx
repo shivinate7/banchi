@@ -21,6 +21,7 @@ import {
   moveCard,
   photoUrl,
   retireCard,
+  undoMove,
   undoRetire,
   undoSale,
 } from './server'
@@ -78,6 +79,8 @@ const ALREADY_SOLD = 'already_sold'
 const NOT_SOLD = 'not_sold'
 const ALREADY_RETIRED = 'already_retired'
 const NOT_RETIRED = 'not_retired'
+/* UN-14: "already undone" for a move, the same shape `not_sold`/`not_retired` answer. */
+const NOT_MOVED = 'not_moved'
 
 const NO_LAYOUTS: ReadonlyMap<number, readonly SectionDetail[]> = new Map()
 
@@ -237,7 +240,7 @@ function loneGroup(row: Row, copy: SearchCopy): SearchGroup {
  *  done about it. A list of these, each with its own deadline, holding its own copy of the
  *  position because the rows may move underneath it. */
 type Receipt = {
-  kind: 'sale' | 'retirement'
+  kind: 'sale' | 'retirement' | 'move'
   key: string
   box: number
   index: number
@@ -315,6 +318,9 @@ function InventoryWalk({
    * (D-sections-are-sub-boxes) — kept on the dialog rather than tossed as a toast, so the
    * owner re-picks in place. Cleared whenever the panel opens or closes. */
   const [moveRefused, setMoveRefused] = useState<string | null>(null)
+  /* F2 — the server's own words, behind "What the server said" rather than the sentence
+   * above, which never names a divider key (D196). */
+  const [moveTrouble, setMoveTrouble] = useState<Failure | null>(null)
 
   /* One write in flight at a time, by copy key. */
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -418,7 +424,7 @@ function InventoryWalk({
     if (previous !== undefined) dismissToast(previous)
     const id = toast({
       kind: full.canUndo ? 'receipt' : 'status',
-      icon: full.kind === 'sale' ? 'check' : 'archive',
+      icon: full.kind === 'sale' ? 'check' : full.kind === 'retirement' ? 'archive' : 'package',
       title: full.said,
       body: receiptBody(full.place, full.note),
       ttlMs: UNDO_WINDOW_MS,
@@ -533,27 +539,39 @@ function InventoryWalk({
    * generic failure: the dialog stays open, on the same box, with one plain sentence and a
    * fresh section list rather than a toast the owner has to reopen the whole flow to answer. */
   const doMove = useCallback(
-    async (copy: SearchCopy, toBox: number, section: string) => {
+    async (copy: SearchCopy, toBox: number, section: string, sectionLabel: string) => {
       if (busyKey !== null) return
       setBusyKey(copy.key)
       setMoveRefused(null)
+      setMoveTrouble(null)
       try {
         const result = await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox, section)
         setMoving(null)
         holdRank(copy.key)
         const where = boxRecords.find((record) => record.box === toBox)?.name ?? UNNAMED_BOX
         const landed = result.card.place?.label ?? null
-        toast({
-          kind: 'ok',
-          icon: 'package',
-          title: `Moved to ${where}`,
-          body: receiptBody(sayPlace(landed ?? copy.place.label ?? copy.key), renumberNote(copy.place)),
+        remember({
+          kind: 'move',
+          key: copy.key,
+          box: copy.place.box,
+          index: copy.place.index,
+          place: sayPlace(landed ?? copy.place.label ?? copy.key),
+          said: `Moved to ${where}`,
+          canUndo: true,
+          note: renumberNote(copy.place),
         })
         setReloads((n) => n + 1)
       } catch (err) {
         const code = refusalCode(err)
         if (code === 'section_gone' || code === 'section_required') {
-          setMoveRefused(describeFailure(err).message)
+          /* F2 — THE SENTENCE NAMES WHAT THE OWNER SAW, NEVER A DIVIDER KEY (D196). The
+           * server's own words go behind "What the server said" instead. */
+          setMoveRefused(
+            code === 'section_gone'
+              ? `${sectionLabel} is gone. Read the box again and choose a section.`
+              : 'Choose a section — there is no default place inside the box.',
+          )
+          setMoveTrouble(describeFailure(err))
           setReloads((n) => n + 1)
           return
         }
@@ -562,7 +580,7 @@ function InventoryWalk({
         setBusyKey(null)
       }
     },
-    [busyKey, holdRank, boxRecords],
+    [busyKey, holdRank, boxRecords, remember],
   )
 
   const doUndo = useCallback(
@@ -571,11 +589,14 @@ function InventoryWalk({
       setBusyKey(receipt.key)
       try {
         if (receipt.kind === 'sale') await undoSale(receipt.box, receipt.index)
-        else await undoRetire(receipt.box, receipt.index)
+        else if (receipt.kind === 'retirement') await undoRetire(receipt.box, receipt.index)
+        else await undoMove(receipt.box, receipt.index)
       } catch (err) {
-        /* `not_sold` / `not_retired` is success — the copy is not in the state the press asked
-         * to leave. Anything else keeps the receipt standing. */
-        const settled = receipt.kind === 'sale' ? NOT_SOLD : NOT_RETIRED
+        /* `not_sold` / `not_retired` / `not_moved` is success — the copy is not in the state
+         * the press asked to leave. Anything else — including a move's `move_built_on` once
+         * either box has changed since — keeps the receipt standing (docs/specs/undo.md
+         * §11.1: no clock, only "built on"). */
+        const settled = receipt.kind === 'sale' ? NOT_SOLD : receipt.kind === 'retirement' ? NOT_RETIRED : NOT_MOVED
         if (refusalCode(err) !== settled) {
           report(describeFailure(err))
           setBusyKey(null)
@@ -589,12 +610,18 @@ function InventoryWalk({
         toasts.current.delete(receipt.key)
       }
       if (receipt.kind === 'sale') setSold((held) => held.filter((key) => key !== receipt.key))
-      else setRetired((held) => held.filter((key) => key !== receipt.key))
+      else if (receipt.kind === 'retirement') setRetired((held) => held.filter((key) => key !== receipt.key))
       /* THE COPY IS BACK, SO THE ORDER IS NO LONGER STALE BY IT. Releasing rather than leaving
          it held is what keeps the staleness figure a count of what actually left: an undone sale
          that went on being counted would offer a re-rank for a store that never moved. */
       releaseRank(receipt.key)
-      toast({ kind: 'ok', icon: 'undo', title: receipt.kind === 'sale' ? 'Sale undone' : 'Retirement undone', body: receipt.place, ttlMs: 4000 })
+      toast({
+        kind: 'ok',
+        icon: 'undo',
+        title: receipt.kind === 'sale' ? 'Sale undone' : receipt.kind === 'retirement' ? 'Retirement undone' : 'Move undone',
+        body: receipt.place,
+        ttlMs: 4000,
+      })
       setReloads((n) => n + 1)
       setBusyKey(null)
     },
@@ -761,10 +788,12 @@ function InventoryWalk({
           boxes={boxRecords}
           busy={busyKey !== null}
           refused={moveRefused}
-          onMove={(toBox, section) => void doMove(moving, toBox, section)}
+          refusedDetail={moveTrouble}
+          onMove={(toBox, section, sectionLabel) => void doMove(moving, toBox, section, sectionLabel)}
           onCancel={() => {
             setMoving(null)
             setMoveRefused(null)
+            setMoveTrouble(null)
           }}
         />
       )}
@@ -1111,6 +1140,7 @@ function MovePanel({
   boxes,
   busy,
   refused,
+  refusedDetail,
   onMove,
   onCancel,
 }: {
@@ -1119,16 +1149,14 @@ function MovePanel({
   busy: boolean
   /** A stale-section refusal's plain sentence (`section_gone`, `section_required`), or null. */
   refused: string | null
-  onMove: (toBox: number, section: string) => void
+  /** F2 — the server's own words, behind "What the server said" rather than in the sentence
+   *  above (D196: no divider key on screen). */
+  refusedDetail: Failure | null
+  onMove: (toBox: number, section: string, sectionLabel: string) => void
   onCancel: () => void
 }) {
   const [to, setTo] = useState<string | null>(null)
   const [section, setSection] = useState<string | null>(null)
-  /* A stale-section refusal clears the pick, so the disabled Move press cannot be pressed a
-   * second time against the same dead key — the box stays chosen, the section does not. */
-  useEffect(() => {
-    if (refused !== null) setSection(null)
-  }, [refused])
   /* S4: MOST RECENT FIRST, the same primitive the rail sorts by — `others` used to be the
      server's own `GET /boxes` order (box number), which said nothing about which box the hand
      was likeliest to reach for. */
@@ -1139,6 +1167,19 @@ function MovePanel({
   const targetSections = (target?.sections_detail ?? []).filter(
     (detail): detail is SectionDetail & { div: string } => typeof detail.div === 'string',
   )
+  const pickedSection = section === null ? null : (targetSections.find((detail) => detail.div === section) ?? null)
+  /* (a) THE ENABLEMENT NEVER TRUSTS A BARE non-null `section`: a box's own sections can
+   * change under an open dialog (another device's S or U, or this box's own stale-section
+   * retry), and a picker that keeps its LAST div after the list moved on draws no row
+   * checked while the state is still non-null. Move must read as disabled exactly when
+   * nothing is visibly checked. */
+  const sectionStillThere = pickedSection !== null
+  /* A stale-section refusal, or the section it named no longer existing, clears the pick —
+   * the box stays chosen, the section does not, so the press cannot retry the same dead key
+   * and cannot go on reading as enabled with nothing checked. */
+  useEffect(() => {
+    if (refused !== null || !sectionStillThere) setSection((held) => (held === null ? held : null))
+  }, [refused, sectionStillThere])
   return (
     <Overlay kind="dialog" label={`Move: ${sayPlace(copy.place.label ?? copy.key)}`} onClose={onCancel} className="inventory-confirm">
       <div className="inv-dialog-head">
@@ -1166,7 +1207,9 @@ function MovePanel({
         ) : (
           <SectionPicker sections={targetSections} value={section} onChange={setSection} />
         )}
-        {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
+        {refused === null ? null : (
+          <Notice tone="warn" title={refused} detail={refusedDetail?.message} code={refusedDetail?.code} />
+        )}
       </div>
       <div className="inv-dialog-foot">
         <Button variant="ghost" onClick={onCancel} data-autofocus="">
@@ -1176,8 +1219,12 @@ function MovePanel({
           variant="primary"
           icon="package"
           busy={busy}
-          disabled={to === null || section === null}
-          onClick={() => to !== null && section !== null && onMove(Number(to), section)}
+          disabled={to === null || pickedSection === null}
+          onClick={() => {
+            if (to === null || pickedSection === null) return
+            const label = `Section ${pickedSection.section}${pickedSection.name ? ` (${pickedSection.name})` : ''}`
+            onMove(Number(to), pickedSection.div, label)
+          }}
         >
           Move
         </Button>
