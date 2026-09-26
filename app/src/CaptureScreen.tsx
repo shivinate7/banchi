@@ -3249,7 +3249,16 @@ export function CaptureScreen() {
                         <span className="capture-frame-glyph" aria-hidden="true">
                           <Icon name="camera" size={26} />
                         </span>
-                        <Button variant="primary" icon="camera" onClick={camera.retry}>
+                        <Button variant="primary" icon="camera" className="capture-frame-open-words" onClick={camera.retry}>
+                          Open the camera
+                        </Button>
+                        {/* A SHORT VIEWFINDER DRAWS ONLY THE ICON (the PR 3 integration). The
+                            frame is 9:16, so its width follows the stage's height, and on a
+                            phone it is narrower than the words (61px at 390x667, 155px at
+                            390x844, against a 166px press). CaptureScreen.css shows exactly one
+                            of these two presses by the viewport's own height; the other is
+                            `display: none`, so a screen reader meets one "Open the camera". */}
+                        <Button variant="primary" icon="camera" iconOnly className="capture-frame-open-icon" onClick={camera.retry}>
                           Open the camera
                         </Button>
                       </>

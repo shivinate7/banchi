@@ -495,6 +495,31 @@ test('the shutter clears the phone tab bar on first paint, with a real safe-area
         `${Math.round(shutterBottom - tabBarBox.y)}px into the tab bar, which starts at ${tabBarBox.y} — ` +
         'half under the bar on first paint',
     ).toBeLessThanOrEqual(tabBarBox.y)
+
+    /* THE FRAME'S "OPEN THE CAMERA" PRESS IS NEVER CLIPPED (the PR 3 integration, the
+       coordinator's call (a)). The viewfinder shrinks with the phone's height, and at 667 the
+       label read "pen the ca", cut by the frame's own clip. The press passes if its whole box
+       sits inside the nearest ancestor that clips, with no text past its own box, or if it is
+       icon-only (its words kept for a screen reader). */
+    const open = page.locator('.capture-frame-note .bn-btn:visible')
+    await expect(open, `${capture} at ${height}px drew no "Open the camera" press in the frame`).toBeVisible()
+    await expect(open).toHaveAccessibleName('Open the camera')
+    const clip = await open.evaluate((el) => {
+      if (el.classList.contains('bn-btn-icon')) return null
+      const b = el.getBoundingClientRect()
+      let p = el.parentElement
+      while (p !== null && getComputedStyle(p).overflow === 'visible') p = p.parentElement
+      const out: string[] = []
+      if (el.scrollWidth > el.clientWidth + 1) out.push(`its text is ${el.scrollWidth - el.clientWidth}px wider than its box`)
+      if (p !== null) {
+        const c = p.getBoundingClientRect()
+        if (b.left < c.left - 0.5 || b.right > c.right + 0.5 || b.top < c.top - 0.5 || b.bottom > c.bottom + 0.5) {
+          out.push(`its box (${Math.round(b.width)}px) runs past ${p.className.split(' ')[0]} (${Math.round(c.width)}px)`)
+        }
+      }
+      return out.length === 0 ? null : out.join(', ')
+    })
+    expect(clip, `at ${height}px with a 34px safe-area inset: the "Open the camera" label is clipped`).toBeNull()
   }
 })
 

@@ -789,6 +789,18 @@
 .capture-frame-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 700; color: var(--vf-ink); }
 .capture-frame-body { font-size: var(--bn-fs-md); max-width: 32ch; color: var(--vf-ink-2); }
 .capture-frame-note .bn-btn { margin-top: var(--bn-2); }
+/* ONE "OPEN THE CAMERA" PRESS AT A TIME (the PR 3 integration). The frame is 9:16 and fills
+   the viewport's height, so its width is 0.5625 of that height. The worded press is 166px and
+   the note pads 24px a side, so the words need a frame about 214px wide: a viewport about 380px
+   tall. Below 400px the icon-only press stands in, with the same accessible name, and the
+   glyph above it goes, because one camera is enough. `display: none` keeps the hidden press out
+   of the accessibility tree. */
+.capture-frame-open-icon { display: none; }
+@container (max-height: 400px) {
+  .capture-frame-note .capture-frame-open-words { display: none; }
+  .capture-frame-note .capture-frame-open-icon { display: inline-flex; }
+  .capture-frame-note:has(.capture-frame-open-icon) .capture-frame-glyph { display: none; }
+}
 .capture-frame-spinner {
   width: 24px;
   height: 24px;
