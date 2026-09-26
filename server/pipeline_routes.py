@@ -163,6 +163,7 @@ from store.pricearchive import RANGE_WIDTH_DAYS  # noqa: E402
 from identify import cost  # noqa: E402
 from identify import sidecar  # noqa: E402
 from store import Store, files, master  # noqa: E402
+from store import db as store_db  # noqa: E402
 from store import readings as store_readings  # noqa: E402
 from store import submissions as claims  # noqa: E402
 from store.session import Snapshot  # noqa: E402
@@ -3123,7 +3124,11 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             row["at_cap"] = False
 
     unreachable = (
-        _unreachable(snapshot.inventory, len(snapshot.review), root)
+        _unreachable(
+            snapshot.inventory,
+            len(snapshot.review.owed_entries(snapshot.inventory.cards)),
+            root,
+        )
         if snapshot is not None
         else {"captured": 0, "in_review": 0, "unjoined": []}
     )
@@ -5111,7 +5116,37 @@ def do_pricing_corpus() -> dict:
         "path": str(files.prices_path()),
         "revision": _corpus_revision(),
         "clearable": _clearable_block(book),
+        "last_clear": _last_clear_block(),
     }
+
+
+def _last_clear_block() -> Optional[dict]:
+    """The newest clear a restore can still undo, or None (UN-11).
+
+    None once a send has carried a cleared SKU: that send built on the clear, and the fix
+    after it is to type the prices again. The server decides this, never the screen.
+    """
+    stored = corpus.read_last_clear()
+    if stored is None or _clear_built_on(stored):
+        return None
+    return {"count": len(stored["cleared"]), "at": stored["at"]}
+
+
+def _clear_built_on(stored: dict) -> List[str]:
+    """The cleared SKUs a send has posted since the clear. Empty means the undo still holds.
+
+    `>=`, because a posting and a clear in the same second cannot be ordered, and a restore
+    over a price that may already have gone out is the wrong way to be wrong.
+    """
+    conn = store_db.connect(files.inventory_dir())
+    try:
+        return sorted(
+            sku
+            for sku in stored["cleared"]
+            if any(int(row["at"]) >= stored["at"] for row in store_db.postings_for_sku(conn, sku))
+        )
+    finally:
+        conn.close()
 
 
 def _clearable_block(book: corpus.Corpus) -> dict:
@@ -5400,6 +5435,9 @@ def do_pricing_clear(payload: dict) -> dict:
         for sku in plan.skus:
             del book.answers[sku]
         book.write()
+        # THE UNDO OUTLIVES THE TOAST (UN-11). The answers go to a side file, so a reload
+        # can still restore them. A clear that removes nothing leaves the older one alone.
+        corpus.write_last_clear(cleared, int(time.time()))
 
     return {
         "ok": True,
@@ -5436,6 +5474,26 @@ def do_pricing_restore(payload: dict) -> dict:
     """
     _clear_revision_guard(payload)
     answers = payload.get("answers")
+    stored = None
+    if payload.get("last_clear") is True and answers is None:
+        # THE NEWEST CLEAR, READ BACK OFF THE SERVER (UN-11), so a reload or an expired
+        # toast does not lose the way back. It holds until a send carries a cleared SKU.
+        stored = corpus.read_last_clear()
+        if stored is None:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "no_clear_to_restore",
+                "There is no cleared price to put back.",
+            )
+        sent = _clear_built_on(stored)
+        if sent:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "clear_built_on",
+                f"A send has gone out since the clear, carrying {len(sent)} of the cleared "
+                f"cards, so the clear can no longer be undone. Type those prices again.",
+            )
+        answers = stored["cleared"]
     if not isinstance(answers, dict):
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
@@ -5479,6 +5537,12 @@ def do_pricing_restore(payload: dict) -> dict:
 
     if restored:
         book.write()
+    # THE STORED CLEAR GOES ONCE EVERY ANSWER IT HOLDS IS BACK, whichever door restored
+    # them: the toast's own map, or the stored one. A price typed since counts as back.
+    if stored is None:
+        stored = corpus.read_last_clear()
+    if stored is not None and all(sku in book.answers for sku in stored["cleared"]):
+        corpus.drop_last_clear()
 
     return {
         "ok": True,

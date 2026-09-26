@@ -226,6 +226,8 @@ const RECORDED = {
     // price-history archive, one range at a time. A plain read, same shape as
     // `getSoldPrices` above and never merged with it.
     'getHoldingsValue',
+    // The capture strip's sitting, read back off the store (undo.md UN-2).
+    'getCaptureSitting',
     // `#/revenue`'s thumbnail lookup (D-sales-rows-by-sku): the first on-hand,
     // photographed copy of each named SKU. A plain read, called on arrival like
     // `getHoldingsValue` above rather than gated behind a press.
@@ -279,6 +281,7 @@ const RECORDED = {
                                                // pair, same shape: `ListingCorrection` folds
                                                // the response into `written` the identical
                                                // way `correctAnswer`/`undoCorrectAnswer` do
+    'saleStillHere', 'undoMove', 'restoreLastClear', // undo.md UN-7, UN-14 and UN-11
     'moveSections', 'undoSectionMove',        // D264, the box map's section move and its undo
     'moveRange',                              // D264, one card or a range, the next slice
   ],

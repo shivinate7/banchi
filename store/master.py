@@ -144,6 +144,10 @@ MOVED = "moved"
 # an event sharing a state's word would make a reversal restorable to it.
 PHOTO_RECLAIMED = "photo_reclaimed"
 
+# THE HISTORY EVENT A MOVE'S UNDO WRITES ON THE TRANSPLANT'S KEY (UN-14). An event and not a
+# state, for `PHOTO_RECLAIMED`'s reason. The card's own key logs its restored state instead.
+MOVE_UNDONE = "move_undone"
+
 # A POSITION'S STATE DESCRIBES ONE PHYSICAL CARD AND NOTHING ELSE (D7, amended).
 #
 # `pushed`, `staged` and `live` used to live in this tuple, and a card wore one of them the
@@ -300,6 +304,17 @@ class DuplicateCaptureId(ValueError):
 
 class UnknownRetireReason(ValueError):
     """A retire reason outside `RETIRE_REASONS`. Never coerced, never defaulted."""
+
+
+def parse_stamp(stamp) -> Optional[datetime]:
+    """An ISO stamp as an aware datetime, or None. A stamp with no zone is read as UTC,
+    which is what every writer in this store stamps, so a naive one never raises when it is
+    compared with an aware one."""
+    try:
+        at = datetime.fromisoformat(str(stamp))
+    except (TypeError, ValueError):
+        return None
+    return at if at.tzinfo is not None else at.replace(tzinfo=timezone.utc)
 
 
 class CardNotFound(ValueError):
@@ -672,12 +687,17 @@ class Card:
     # by `identify` or `emit` must neither resurrect nor clear it (D26).
     retire_reason: Optional[str] = None
     # The key this card was transplanted TO, set only when `state == MOVED` — `retire_reason`'s
-    # sibling for the third door (D83). Cleared by nothing: unlike a retirement, a move has no
-    # reversal route that restores the tombstone, because the transplant is a normal, live
-    # record a caller can move again in either direction. NOT a capture claim, for the same
+    # sibling for the third door (D83). Cleared only by `unmove_card`, the move's undo
+    # (UN-14), which puts the card back on this key. NOT a capture claim, for the same
     # reason `retire_reason` is not: a re-record by `identify`/`emit` must neither invent this
     # nor clear it.
     moved_to: Optional[str] = None
+    # THE KEY A TRANSPLANT CAME FROM (UN-14 review round), set by `move_card` on the card it
+    # records in the new box. It is what tells a transplant from a capture: a move copies
+    # `captured_at`, so without it a transplant reads as a capture of the open sitting, and
+    # the capture undo would delete a moved card and its photograph. NOT a capture claim,
+    # for `moved_to`'s reason. None on a card that was captured where it stands.
+    moved_from: Optional[str] = None
     run: Optional[str] = None
     # THE PHOTOGRAPH'S DIGEST, KEPT AFTER THE PHOTOGRAPH IS GONE (D89). Set by
     # `record_photo_reclaimed` and by nothing else; None on every card whose photograph is
@@ -2101,6 +2121,32 @@ class Inventory:
         rows = self.cards.top("captured_at", limit, ("box", "idx", "cid"))
         return [(key, int(box), int(idx), cid) for key, (box, idx, cid) in rows]
 
+    def newest_sitting(self, gap_seconds: float) -> List[str]:
+        """The keys of the newest sitting, oldest first (UN-2, D164).
+
+        A sitting is the run of captures with no gap longer than `gap_seconds` between two
+        of them, which is `app/src/storeHistory.ts:sittings`' rule. Read newest first off
+        the `captured_at` index, in pages, so a 555-card sitting costs one or two indexed
+        reads and never a walk of the store. A card with no `captured_at` has no place in
+        time, so it is never in a sitting.
+        """
+        page = 256
+        while True:
+            rows = self.cards.top("captured_at", page, ("captured_at",))
+            keys: List[str] = []
+            previous: Optional[datetime] = None
+            for key, (stamp,) in rows:
+                at = parse_stamp(stamp)
+                if at is None:
+                    continue
+                if previous is not None and (previous - at).total_seconds() > gap_seconds:
+                    return list(reversed(keys))
+                keys.append(key)
+                previous = at
+            if len(rows) < page:
+                return list(reversed(keys))
+            page *= 2
+
     def allocate_capture(
         self,
         box,
@@ -2797,10 +2843,9 @@ class Inventory:
         never receives `photo` as a claim — so the caller (the one place that also moves the
         file on disk) sets it after this returns, inside the same write lock.
 
-        UNDO IS NOT A SEPARATE OPERATION. The transplant is not itself terminal; moving it
-        back is calling this method again in the other direction. It lands at a NEW index in
-        the original box — the tombstoned key is never reclaimed, the same permanent-gap
-        behavior every other terminal state already has.
+        THE UNDO IS `unmove_card` (UN-14), until either box changes. After that, the fix is
+        an ordinary move back: this method again, in the other direction. That lands at a
+        NEW index in the original box, and the tombstoned key is never reclaimed.
 
         Refuses `CardNotFound` if `key` holds no record, `CardDeparted` if it is already
         sold, retired, or moved (a card that left through one door cannot leave again
@@ -2831,7 +2876,10 @@ class Inventory:
             )
 
         # AT THE BACK OF THE DESTINATION (D265): a later `place` gives it its real key.
-        transplant = replace(card, box=to_box, index=new_index, photo=None, order=new_order)
+        # `moved_from` tells a transplant from a capture (UN-14 review round).
+        transplant = replace(
+            card, box=to_box, index=new_index, photo=None, order=new_order, moved_from=key
+        )
         self.cards[new_key] = transplant
 
         card.state = MOVED
@@ -2863,11 +2911,69 @@ class Inventory:
         # other row can hold. A tombstone already on disk keeps its plain form and reads as
         # before. NO QUERY DECIDES THE FORM: a lookup per card re-checked every row the
         # session had touched, which made a 500-card merge quadratic (the R3 review).
+        # The move's undo (UN-14) reads both forms, so a card moved before this can
+        # still be put back.
         card.cid = f"{MOVED_CID_PREFIX}{card.cid}@{key}" if card.cid else None
 
         self._log(MOVED, key, moved_to=new_key, run=card.run, cid=transplant.cid)
         self._log(str(transplant.state), new_key, moved_from=key, run=transplant.run)
         return card, transplant
+
+    def unmove_card(self, key: str) -> Tuple[Card, str]:
+        """Undo `move_card`: the card goes back to `key`, and the transplant is deleted.
+
+        UN-14 (`docs/specs/undo.md` section 11.3). Returns `(card, transplant key)`. The
+        card at `key` becomes the transplant's record again, at its own index, so nothing
+        else in either box moves (D58, D118). What changed on the transplant since the move
+        comes back with it.
+
+        THE TRANSPLANT MUST STILL BE THE NEWEST CARD IN ITS BOX. Deleting it then releases
+        its index exactly as D10's undo releases the newest capture. The index belonged to
+        this same card, so no other card's number is ever reused. Whether either box was
+        built on since is the caller's question: it reads history, and this does not.
+
+        Refuses `CardNotFound` if `key` holds no record or its transplant is gone, and
+        `CardDeparted` if `key` is not a moved tombstone or the transplant is not the newest.
+        """
+        card = self.cards.get(key)
+        if card is None:
+            raise CardNotFound(f"no card at {key!r}")
+        if card.state != MOVED or not card.moved_to:
+            raise CardDeparted(f"{key} is {card.state}, not moved")
+        new_key = str(card.moved_to)
+        transplant = self.cards.get(new_key)
+        if transplant is None:
+            raise CardNotFound(f"the card moved from {key} is no longer at {new_key}")
+        # THE SAME CARD, BY ITS NAME (D172), before anything is deleted. `moved_to` is a
+        # key, and a key can hold another card: the demo seed's tombstone names a slot
+        # another card holds. `move_card` put `moved:<name>` on the tombstone, so the two
+        # names must agree, or this would delete a card that never moved.
+        names = {f"{MOVED_CID_PREFIX}{transplant.cid}@{key}", f"{MOVED_CID_PREFIX}{transplant.cid}"}
+        if not transplant.cid or card.cid not in names:
+            raise CardNotFound(f"the card at {new_key} is not the one moved from {key}")
+        if int(transplant.index) != self.next_index(transplant.box) - 1:
+            raise CardDeparted(f"{new_key} is no longer the newest card in its box")
+        # A DIVIDER PUT IN BEHIND THE TRANSPLANT builds on the move too. Deleting the
+        # transplant would leave a section that starts past the box's next index, so the
+        # next capture would land in the wrong section.
+        registered = self.boxes.get(str(transplant.box))
+        if registered is not None and any(
+            int(start) > int(transplant.index) for start in registered.sections
+        ):
+            raise CardDeparted(f"a divider was put in after {new_key}")
+
+        # THE ORDER KEY COMES BACK FROM THE TOMBSTONE TOO (D265). The transplant holds the
+        # new box's back position, and the old box sorts by `order`, so without this the card
+        # would come home at its own index but stand at the wrong place in the walk.
+        restored = replace(
+            transplant, box=card.box, index=card.index, moved_to=None,
+            moved_from=card.moved_from, order=card.order,
+        )
+        del self.cards[new_key]
+        self.cards[key] = restored
+        self._log(MOVE_UNDONE, new_key, moved_back_to=key, run=restored.run)
+        self._log(str(restored.state), key, moved_back_from=new_key, run=restored.run)
+        return restored, new_key
 
     def move_cards(self, keys: Sequence[str], to_box) -> List[Tuple[Card, Card]]:
         """Move several cards to fresh, contiguous indices in `to_box`, in the given order.

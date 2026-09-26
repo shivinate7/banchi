@@ -14,3 +14,7 @@ Pressing a digit writes a SKU and a condition onto a real card. `store/queues.py
 **This reopens `docs/DESIGN.md`'s no-acknowledgement rule for this one screen, and the grounds are in the rule itself.** That rule is justified by *undo covers the mistake* — and on this screen undo did not exist, so the rule leaned on something that was not there. Fixing the premise is the honest repair; adding a confirm dialog would have doubled the keystrokes on the screen the owner spends the most hours in, which is what the rule was written to prevent.
 
 **Rejected: requiring a modifier or an Enter to confirm.** Declined for the reason above — one key per card is the property worth keeping.
+
+### Amended 2026-09-25: the answer's undo has no clock
+
+The owner's ruling of 2026-09-25, verbatim: "Switch all five (Recommended)". The "twenty-second undo" no longer limits anything. The receipt may still fade. The undo lasts until the answer is built on. That is when its SKU is in a written listing file or holds a listing hold (`undo_too_late`). `docs/specs/undo.md` section 11 is the plan.

@@ -34,6 +34,8 @@ import type {
   BoxClaimResult,
   RemoveResult,
   MoveResult,
+  MoveUndoResult,
+  CaptureSitting,
   MoveCardsResult,
   SectionMoveResult,
   SectionMoveTarget,
@@ -1426,11 +1428,11 @@ export async function answerReviewGroup(
  * `restores_to` COMES BACK WITH THE ANSWER AND IS THE CALLER'S TO ACT ON. See `SaleResult` in
  * types.ts for what it means and for the two casts that used to discard it.
  */
-async function sale(box: number, index: number, undo: boolean): Promise<SaleResult> {
+async function sale(box: number, index: number, undo: boolean, stillHere = false): Promise<SaleResult> {
   return (await request(`/inventory/${box}/${index}/sold`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(undo ? { undo: true } : {}),
+    body: JSON.stringify(stillHere ? { still_here: true } : undo ? { undo: true } : {}),
   })) as SaleResult
 }
 
@@ -1468,6 +1470,16 @@ export function markSold(box: number, index: number): Promise<SaleResult> {
  */
 export function undoSale(box: number, index: number): Promise<SaleResult> {
   return sale(box, index, true)
+}
+
+/**
+ * "This card is still here" (`docs/specs/undo.md` UN-7). The fix after a sale is built on:
+ * `undoSale` refuses `sale_built_on` once the card's photo is cleared or its order has
+ * shipped or closed, and this puts the card back anyway. A shipped order keeps its count:
+ * the card's id comes off the line as a hand-fill, so `order_released` stays null.
+ */
+export function saleStillHere(box: number, index: number): Promise<SaleResult> {
+  return sale(box, index, true, true)
 }
 
 // ---------------------------------------------------------------------------- retire, both ways
@@ -1906,9 +1918,9 @@ export async function removeCardInPlace(
  *
  * No listing-hold guard: a card carrying an active listing stage is free to move (D7 —
  * which physical copy backs a stage is deliberately unrecorded, so a box change cannot
- * disagree with it). Undo is this same call again, aimed at the transplant, in the other
- * direction — it lands at a fresh index in the original box rather than reclaiming the
- * tombstoned one.
+ * disagree with it). The undo is `undoMove` (UN-14), until either box changes. After
+ * that, the fix is this same call again, aimed at the transplant, in the other direction.
+ * It lands at a fresh index in the original box rather than reclaiming the tombstoned one.
  */
 export async function moveCard(
   box: number,
@@ -1921,6 +1933,28 @@ export async function moveCard(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ capture_id: captureId, to_box: toBox }),
   })) as MoveResult
+}
+
+/**
+ * The newest sitting, off the store (UN-2). The capture strip reads this on load, so a reload
+ * keeps the sitting and its undo. See `CaptureSitting` for what `open` means.
+ */
+export async function getCaptureSitting(): Promise<CaptureSitting> {
+  return (await request('/capture/sitting', NO_CACHE)) as CaptureSitting
+}
+
+/**
+ * Undo a move (UN-14): the card goes back to its own index, and nothing else in either box
+ * moves. Aim it at the TOMBSTONE, the `moved` key of the `MoveResult`. It holds until either
+ * box changes. After that it refuses `move_built_on`, and the fix is an ordinary `moveCard`
+ * back. `not_moved` means it was already undone.
+ */
+export async function undoMove(box: number, index: number): Promise<MoveUndoResult> {
+  return (await request(`/inventory/${box}/${index}/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ undo: true }),
+  })) as MoveUndoResult
 }
 
 /**
@@ -2687,12 +2721,17 @@ export async function getPricingCorpus(): Promise<{
      here instead would be `pipeline/corpus.py:clearable` written a second time in TypeScript,
      against the one file in this product that holds money. */
   clearable?: PricingClearable
+  /* THE NEWEST CLEAR THAT CAN STILL BE UNDONE (UN-11), or null. The server keeps it beside
+     the corpus, so the undo outlives the toast and a reload. Null once a send has carried a
+     cleared SKU: the server decides that, and `restoreLastClear` is the press. */
+  last_clear?: { count: number; at: number } | null
 }> {
   return (await request('/pricing', NO_CACHE)) as {
     corpus: PricingCorpus
     path: string
     revision: string
     clearable?: PricingClearable
+    last_clear?: { count: number; at: number } | null
   }
 }
 
@@ -2753,6 +2792,22 @@ export async function restorePricingAnswers(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(revision === undefined ? { answers } : { answers, revision }),
+  })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
+}
+
+/**
+ * Put back the newest clear, read off the server rather than the toast (UN-11). It holds
+ * until a send carries a cleared SKU. After that it refuses `clear_built_on`, and the fix is
+ * to type the prices again. `no_clear_to_restore` means there is nothing kept. The answer has
+ * `restorePricingAnswers`'s shape, and a price typed since is kept and named in `skipped`.
+ */
+export async function restoreLastClear(
+  revision?: string,
+): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
+  return (await request('/pricing/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(revision === undefined ? { last_clear: true } : { last_clear: true, revision }),
   })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
 }
 

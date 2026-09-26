@@ -3970,7 +3970,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             checks,
             lambda: capture_server.do_remove_card(3, 2, {"capture_id": "r2"}),
             "capture_id_mismatch",
-            "replaying the remove refuses — the neighbour that slid in is not the card "
+            "replaying the remove refuses — the neighbor that slid in is not the card "
             "the request describes",
         )
 
@@ -6298,9 +6298,9 @@ def check_mark_sold(checks: Checks) -> None:
     )
     checks.equal(
         capture_server.SOLD_FIELDS,
-        ("undo",),
-        "and mark-sold's whole body is the undo flag: the position is in the path and the "
-        "state is a constant",
+        ("undo", "still_here"),
+        "and mark-sold's whole body is two flags, the undo and its \"still here\" form "
+        "(UN-7): the position is in the path and the state is a constant",
     )
 
     # ROUTING, and specifically that the sale does not shadow the two verbs already living
@@ -6422,6 +6422,426 @@ def check_mark_sold_releases_ledger(checks: Checks) -> None:
             "and reversing THAT sale releases nothing either — the ledger has already let "
             "this copy go, and a second release would be a fabricated write",
         )
+
+
+# ------------------------------------------------------------- undo, until it is built on
+
+
+def _demo_seed_module():
+    """`scripts/demo-seed.py`, loaded in this process. The filename carries a hyphen, so it
+    is loaded by path. In-process on purpose: no third child process for this harness."""
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[2] / "scripts" / "demo-seed.py"
+    spec = importlib.util.spec_from_file_location("demo_seed_for_t7", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def check_undo_until_built_on(checks: Checks) -> None:
+    """`docs/specs/undo.md` section 11, lane S: an undo has no clock and lasts until the
+    next step is built on it. The server decides "built on", and refuses with a sentence.
+
+    MUTATION-TESTED, one guard per block. Each block names the line whose removal turns it
+    red: UN-7's two `sale_built_on` refusals, UN-8's `owed_entries`, UN-11's side file and
+    its posting read, UN-14's history read, name check, newest check and divider check,
+    UN-2's gap, its end, its transplant refusal, and UN-4's `log_states`.
+
+    EVERY CALL AFTER A GUARD GOES THROUGH `answers` OR `refusal`, and every read of an answer
+    is guarded, for `last_event`'s reason: a mutation must turn a NAMED check red, never raise
+    a traceback that hides every check behind it.
+    """
+    checks.note("")
+    checks.note("UNDO UNTIL BUILT ON — docs/specs/undo.md section 11, lane S")
+    from dataclasses import asdict
+
+    def field(body, name):
+        return body.get(name) if isinstance(body, dict) else None
+
+    # ------------------------------------------------ UN-7: a sale whose photo is cleared
+    with isolated_home():
+        capture_server.do_capture(capture_payload(5, capture_id="un7-photo"))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("5/1", master.IDENTIFIED)
+            _bind(snapshot, "5/1", "9191486")
+        capture_server.do_mark_sold(5, 1, {})
+        capture_server.do_reclaim_box_photos(5, {"confirm": True})
+        refusal(
+            checks,
+            lambda: capture_server.do_mark_sold(5, 1, {"undo": True}),
+            "sale_built_on",
+            "UN-7: a sale whose photo was cleared is built on, and its undo refuses",
+        )
+        back = answers(
+            checks,
+            lambda: capture_server.do_mark_sold(5, 1, {"still_here": True}),
+            "\"This card is still here\" answers on a sale that is built on",
+        )
+        checks.equal(
+            (field(back, "state"), field(back, "still_here")),
+            (master.IDENTIFIED, True),
+            "and puts the card back to its earlier state anyway",
+        )
+
+    # ---------------------------------------- UN-7: a sale whose order has shipped
+    with isolated_home():
+        capture_server.do_capture(capture_payload(4, capture_id="un7-order"))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+            _bind(snapshot, "4/1", "9191486")
+            snapshot.ledger.ingest([
+                order_store.OrderRecord(
+                    source="TCGplayer",
+                    number="UN7-1",
+                    placed_at="2026-09-25T10:00:00.000+00:00",
+                    status="Ready to Ship",
+                    lines=[order_store.OrderLine(sku="9191486", quantity=1)],
+                )
+            ])
+        key = order_store.order_key("TCGplayer", "UN7-1")
+        target = [{"box": 4, "index": 1, "capture_id": "un7-order"}]
+        capture_server.do_order_pull(
+            {"source": "TCGplayer", "number": "UN7-1", "sku": "9191486", "targets": target}
+        )
+        with Store().write() as snapshot:
+            record = snapshot.ledger.get(key)
+            record.status = "Shipped - In Transit"
+        refusal(
+            checks,
+            lambda: capture_server.do_order_pull({"undo": True, "targets": target}),
+            "sale_built_on",
+            "UN-7: once the order ships, the pull's own undo refuses",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
+            "sale_built_on",
+            "and so does the card's own undo on #/inventory",
+        )
+        back = answers(
+            checks,
+            lambda: capture_server.do_mark_sold(4, 1, {"still_here": True}),
+            "\"still here\" answers on a shipped order's card",
+        )
+        line = Store().read().ledger.recorded(key, "9191486")
+        checks.equal(field(back, "state"), master.IDENTIFIED, "and puts the card back")
+        checks.equal(
+            (line.fulfilled, line.by_hand, "un7-order" in line.copies),
+            (1, 1, False),
+            "and the shipped order keeps its count (D212): the card's id comes off the line "
+            "as a hand-fill, so pulling this card again is not refused as a double shipment",
+        )
+
+    # ------------------------------------------------ UN-8: a retired card leaves Review
+    with isolated_home():
+        capture_server.do_capture(capture_payload(8))
+        with Store().write() as snapshot:
+            snapshot.review.entries["8/1"] = entry(8, 1)
+
+        def in_review() -> bool:
+            return any(row["position"] == "8/1" for row in capture_server.do_queues()["review"])
+
+        checks.ok(in_review(), "UN-8: a queued card is in Review")
+        capture_server.do_retire(8, 1, {"reason": master.RETIRE_REASONS[0]})
+        checks.ok(
+            not in_review(),
+            "UN-8: once retired, it leaves Review, and a reload does not bring it back",
+        )
+        capture_server.do_retire(8, 1, {"undo": True})
+        checks.ok(in_review(), "and the retire undo brings it back with no second write")
+
+    # ------------------------------------------------ UN-11: the clear outlives the toast
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers = {"2000": corpus.Answer(value="4.50"), "2001": corpus.Answer(value="1.25")}
+        book.write()
+        cleared = pipeline_routes.do_pricing_clear({})
+        checks.equal(cleared["count"], 2, "UN-11: a clear removes two typed prices")
+        checks.equal(
+            (pipeline_routes.do_pricing_corpus()["last_clear"] or {}).get("count"),
+            2,
+            "and the server keeps it, so a reload still offers the undo",
+        )
+        back = answers(
+            checks,
+            lambda: pipeline_routes.do_pricing_restore({"last_clear": True}),
+            "the stored clear answers a restore",
+        )
+        checks.equal(
+            sorted(field(back, "restored") or []), ["2000", "2001"], "and restores both"
+        )
+        checks.equal(
+            pipeline_routes.do_pricing_corpus()["last_clear"],
+            None,
+            "and once restored there is nothing left to undo",
+        )
+        pipeline_routes.do_pricing_clear({})
+        with Store().write() as snapshot:
+            snapshot.postings.record(sku="2000", price="0.49", source="emit")
+        checks.equal(
+            pipeline_routes.do_pricing_corpus()["last_clear"],
+            None,
+            "UN-11: a send that carried a cleared SKU builds on the clear",
+        )
+        try:
+            pipeline_routes.do_pricing_restore({"last_clear": True})
+        except pipeline_routes.PipelineRefusal as caught:
+            checks.equal(caught.code, "clear_built_on", "and the restore refuses it")
+        else:
+            checks.ok(False, "and the restore refuses it", "did not refuse")
+
+    # ------------------------------------------------ UN-14: a move, until either box changes
+    with isolated_home():
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        before = Store().read().inventory
+        mover = before.cards["6/1"]
+        neighbor = asdict(before.cards["6/2"])
+        stayer = asdict(before.cards["7/1"])
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        undone = answers(
+            checks,
+            lambda: capture_server.do_move_card(6, 1, {"undo": True}),
+            "UN-14: the move's undo answers",
+        )
+        after = Store().read().inventory
+        home = after.cards.get("6/1")
+        checks.equal(
+            (field(undone, "to"), field(undone, "moved"), getattr(home, "state", None),
+             getattr(home, "capture_id", None)),
+            ("6/1", "7/2", mover.state, mover.capture_id),
+            "and puts the card back at its own index",
+        )
+        checks.ok(
+            "7/2" not in after.cards
+            and asdict(after.cards["6/2"]) == neighbor
+            and asdict(after.cards["7/1"]) == stayer,
+            "and the transplant is gone, and nothing else in either box moved (D118)",
+        )
+        checks.equal(
+            (getattr(home, "order", None), getattr(home, "order_key", None) is not None),
+            (mover.order, True),
+            "and the card's order key comes back too (D265), so it stands where it stood",
+        )
+        checks.equal(
+            (getattr(home, "cid", None), getattr(home, "moved_from", "unset")),
+            (mover.cid, None),
+            "the card wears its own name again, and is no transplant",
+        )
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        capture_server.do_mark_sold(6, 2, {})
+        refusal(
+            checks,
+            lambda: capture_server.do_move_card(6, 1, {"undo": True}),
+            "move_built_on",
+            "UN-14: a sale in the old box builds on the move, and its undo refuses",
+        )
+
+    # ---------------------- UN-14: the store's own guards, under the route's history read
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        capture_server.do_capture(capture_payload(7))
+        with Store().write() as snapshot:
+            checks.raises(
+                master.CardDeparted,
+                lambda: snapshot.inventory.unmove_card("6/1"),
+                "UN-14: the store refuses a move undo once the transplant is not the newest",
+            )
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        capture_server.do_open_section(7, {})
+        refusal(
+            checks,
+            lambda: capture_server.do_move_card(6, 1, {"undo": True}),
+            "move_built_on",
+            "UN-14: a divider put in behind the transplant builds on the move",
+        )
+
+    # ---------------- UN-14: a tombstone written before the key suffix still undoes
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["6/1"].cid = f"{master.MOVED_CID_PREFIX}{mover.cid}"
+        undone = answers(
+            checks,
+            lambda: capture_server.do_move_card(6, 1, {"undo": True}),
+            "UN-14: a tombstone in the older `moved:<name>` form still undoes",
+        )
+        checks.equal(field(undone, "to"), "6/1", "and the card is back home")
+
+    # ------------------ D83's chain: a move back, and a move on, write distinct tombstones
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        back = answers(
+            checks,
+            lambda: capture_server.do_move_card(7, 2, {"capture_id": mover.capture_id, "to_box": 6}),
+            "a transplant moves back to its first box without a UNIQUE clash on its name",
+        )
+        onward = answers(
+            checks,
+            lambda: capture_server.do_move_card(
+                6, 2, {"capture_id": mover.capture_id, "to_box": 8}
+            ),
+            "and on to a third box",
+        )
+        cards = Store().read().inventory.cards
+        tombstones = [cards[key].cid for key in ("6/1", "7/2", "6/2") if key in cards]
+        checks.equal(
+            (field(back, "to"), field(onward, "to"), getattr(cards.get("8/1"), "cid", None),
+             len(set(tombstones))),
+            ("6/2", "8/1", mover.cid, 3),
+            "and the card keeps its own name (D172) while three tombstones stay distinct",
+        )
+
+    # ------------------------------------------------ UN-2: the sitting, off the store
+    ts_gap = re.search(
+        r"GAP_MINUTES = (\d+)",
+        (Path(__file__).resolve().parents[2] / "app" / "src" / "storeHistory.ts").read_text(),
+    )
+    checks.equal(
+        int(ts_gap.group(1)) if ts_gap else None,
+        capture_server.SITTING_GAP_MINUTES,
+        "UN-2: the server's sitting gap is the screen's own GAP_MINUTES",
+    )
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(9))
+        sitting = capture_server.do_capture_sitting()
+        checks.equal(
+            (sitting["open"], [row["key"] for row in sitting["cards"]]),
+            (True, ["9/1", "9/2", "9/3"]),
+            "UN-2: a reload reads the sitting back off the store, oldest first",
+        )
+        stale = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        with Store().write() as snapshot:
+            for key in ("9/1", "9/2"):
+                snapshot.inventory.cards[key].captured_at = stale
+        checks.equal(
+            [row["key"] for row in capture_server.do_capture_sitting()["cards"]],
+            ["9/3"],
+            "and a gap longer than the sitting's own ends the older sitting",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["9/3"].captured_at = stale
+        checks.equal(
+            (lambda body: (body["open"], body["cards"]))(capture_server.do_capture_sitting()),
+            (False, []),
+            "and once the newest capture is older than the gap, the sitting has ended",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_delete_card(9, 3),
+            "capture_built_on",
+            "UN-2: once its sitting has ended, the capture undo refuses, by the same rule",
+        )
+        checks.ok(
+            "9/3" in Store().read().inventory.cards,
+            "and the refused undo deleted nothing",
+        )
+        naive = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+        with Store().write() as snapshot:
+            card = snapshot.inventory.cards.get("9/3")
+            if card is not None:
+                card.captured_at = naive
+        sitting = answers(
+            checks,
+            capture_server.do_capture_sitting,
+            "UN-2: a captured_at with no zone reads as UTC and never raises",
+        )
+        checks.equal(field(sitting, "open"), True, "and it counts as the open sitting")
+
+    # ---------------- UN-2: a moved card is not a capture, in the strip or in the undo
+    with isolated_home():
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(6))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        checks.equal(
+            [row["key"] for row in capture_server.do_capture_sitting()["cards"]],
+            ["6/2"],
+            "UN-2: the sitting leaves out the tombstone and the transplant",
+        )
+        said = _refusal_text(lambda: capture_server.do_delete_card(7, 1))
+        checks.ok(
+            said is not None and said[0] == "capture_built_on" and "moved here" in said[1],
+            "and the capture undo refuses the transplant AS A MOVED CARD, rather than delete "
+            "it: its own guard, not only the sitting's",
+            f"refusal was: {said}",
+        )
+        checks.ok(
+            "7/1" in Store().read().inventory.cards
+            and photos.path(mover.cid, files.home()).is_file(),
+            "and the moved card and its photograph are both still there",
+        )
+
+    # ------------------------------------ UN-4, and every reversal, on a fresh demo seed
+    with isolated_home():
+        seed = _demo_seed_module()
+        with quiet():
+            seed.build_store(force=True)
+        cards = sorted(Store().read().inventory.cards.values(), key=lambda c: c.key)
+        sold = [c for c in cards if c.state == master.SOLD]
+        retired = [c for c in cards if c.state == master.RETIRED]
+        moved = [c for c in cards if c.state == master.MOVED]
+        trips = 0
+        for card in sold:
+            back = answers(
+                checks,
+                lambda card=card: capture_server.do_mark_sold(card.box, card.index, {"undo": True}),
+                f"UN-4: the demo's sold {card.key} undoes",
+            )
+            capture_server.do_mark_sold(card.box, card.index, {}) if back else None
+            trips += field(back, "state") == master.IDENTIFIED
+        for card in retired:
+            back = answers(
+                checks,
+                lambda card=card: capture_server.do_retire(card.box, card.index, {"undo": True}),
+                f"UN-4: the demo's retired {card.key} undoes",
+            )
+            if back:
+                capture_server.do_retire(card.box, card.index, {"reason": card.retire_reason})
+            trips += field(back, "state") == master.IDENTIFIED
+        checks.equal(
+            (trips, len(sold) > 0, len(retired) > 0),
+            (len(sold) + len(retired), True, True),
+            "UN-4: every sold and retired card on a fresh demo seed undoes and redoes, "
+            "because the seed logs the state lines a real card logs",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_move_card(moved[0].box, moved[0].index, {"undo": True}),
+            "move_built_on",
+            "the demo's moved card has no real transplant, so its undo refuses and deletes "
+            "no other card",
+        )
+        with Store().write() as snapshot:
+            checks.raises(
+                master.CardNotFound,
+                lambda: snapshot.inventory.unmove_card(moved[0].key),
+                "and the store's own name check refuses it too, under the route's history read",
+            )
+        live = next(c for c in cards if c.state == master.IDENTIFIED and c.box == 1)
+        capture_server.do_move_card(1, live.index, {"capture_id": live.capture_id, "to_box": 2})
+        undone = answers(
+            checks,
+            lambda: capture_server.do_move_card(1, live.index, {"undo": True}),
+            "a fresh move on the demo undoes",
+        )
+        checks.equal(field(undone, "to"), live.key, "and the card is back at its own key")
 
 
 # ---------------------------------------------------------------------------------- history
@@ -9934,12 +10354,12 @@ def check_place_neighbors(checks: Checks) -> None:
     THE DEGRADE CASE IS THE ONE THAT MATTERS, and it is this section's half of the
     corrupt-record case `check_server_routes` arms. "Between Mantine and Thievul" is a
     position claim somebody counts slots against, so a walk that skipped an unreadable
-    record would keep the sentence rendering while possibly naming the wrong neighbour —
+    record would keep the sentence rendering while possibly naming the wrong neighbor —
     the exact failure a position label may never cause, one hop removed. The decoration
     therefore degrades WHOLE and STORE-WIDE, and costs nobody their label.
     """
     checks.note("")
-    checks.note("PLACE BLOCK — neighbours and section gaps (D30), server/capture_server.py")
+    checks.note("PLACE BLOCK — neighbors and section gaps (D30), server/capture_server.py")
 
     with isolated_home():
         # --- a gapped box tells the truth ------------------------------------------------
@@ -9967,7 +10387,7 @@ def check_place_neighbors(checks: Checks) -> None:
             "be the thing you count from (D30) — and each side carries BOTH numbers (D92): "
             "the store key and D58's count, which this box has already pulled apart. `next` "
             "IS THE UNREAD CARD AT 5, `unread: 1`: the owner's ruling of 2026-09-24 (LOC-28, "
-            "amending D116) counts an unread card as a neighbour, where D116 answered null",
+            "amending D116) counts an unread card as a neighbor, where D116 answered null",
         )
         checks.equal(
             rows["4/3"]["place"]["section_gaps"],
@@ -9992,7 +10412,7 @@ def check_place_neighbors(checks: Checks) -> None:
             "AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending "
             "D116). D116 walked past the unread card at 3 to name Mantine, and the screen "
             "said `with 1 unidentified card in between`; the owner's word is that the card "
-            "next to this one is the neighbour, read or not, said as `an unread card`. THE "
+            "next to this one is the neighbor, read or not, said as `an unread card`. THE "
             "TWO NUMBERS STILL DIVERGE AND ARE STILL PINNED TOGETHER (D92): the card at "
             "index 3 is the SECOND card in this box",
         )
@@ -10014,7 +10434,7 @@ def check_place_neighbors(checks: Checks) -> None:
         # card that had leaked in. It had not: the ladder had never named one, and the
         # figure was an unnamed LIVE card, which is what D116 above is about. This case is
         # the claim they could not see, made in the one place it can be seen: a card is
-        # named as a landmark, then SOLD through its own route, and the neighbour that used
+        # named as a landmark, then SOLD through its own route, and the neighbor that used
         # to name it must move to the next named card rather than keep pointing at it.
         capture_server.do_capture(capture_payload(6))
         capture_server.do_capture(capture_payload(6))
@@ -10040,10 +10460,10 @@ def check_place_neighbors(checks: Checks) -> None:
             "between nothing at all",
         )
 
-        # --- a run of unread cards is one neighbour, with its count ----------------------
+        # --- a run of unread cards is one neighbor, with its count ----------------------
         # Box 8: Mantine, then three cards nothing has named, then this card, then Thievul.
         # The owner's words for the run are "N unread cards", so `unread` is the length of the
-        # run, counted from the neighbour outward to the next named card.
+        # run, counted from the neighbor outward to the next named card.
         for _ in range(6):
             capture_server.do_capture(capture_payload(8))
         with Store().write() as snapshot:
@@ -10063,7 +10483,7 @@ def check_place_neighbors(checks: Checks) -> None:
         checks.equal(
             capture_server.do_inventory()["cards"]["8/2"]["place"]["neighbors"]["next"],
             {"index": 3, "slot": 3, "name": None, "unread": 2},
-            "and the run is counted from the neighbour outward, not from the box's start: "
+            "and the run is counted from the neighbor outward, not from the box's start: "
             "card 2's front side holds two unread cards before Charizard",
         )
 
@@ -10128,7 +10548,7 @@ def check_place_neighbors(checks: Checks) -> None:
         checks.equal(
             rows["4/5"]["place"]["neighbors"]["next"],
             None,
-            "a pooled record is never named as anyone's neighbour — card 5's `next` is "
+            "a pooled record is never named as anyone's neighbor — card 5's `next` is "
             "still the box's edge, not the code card whose index happens to be 6",
         )
         checks.equal(
@@ -10153,7 +10573,7 @@ def check_place_neighbors(checks: Checks) -> None:
             [None, None],
             "one record whose box will not coerce nulls the decoration for a card in a "
             "DIFFERENT box: skipping the unreadable record would keep the sentence "
-            "rendering while possibly naming the wrong neighbour, and 'between X and Y' "
+            "rendering while possibly naming the wrong neighbor, and 'between X and Y' "
             "is a position claim somebody counts slots against",
         )
         checks.equal(
@@ -10161,7 +10581,7 @@ def check_place_neighbors(checks: Checks) -> None:
             [None, None],
             "and the degrade is STORE-WIDE, not per-box — box 5 loses its sentences to "
             "box 7's record too, because a walk that cannot read one record cannot vouch "
-            "for any neighbour it names anywhere",
+            "for any neighbor it names anywhere",
         )
         # THE LABEL NOW DEGRADES WITH THE DECORATION AND IT USED NOT TO, which is the one
         # place D58 is visible in this file's degrade story and the reversal of what this
@@ -12300,7 +12720,7 @@ def check_code_ledger(checks: Checks) -> None:
                 and place.get("neighbors") is None
                 and place.get("section_gaps") is None,
                 "and a POOLED place — D24's ruling: a code card is a count, not a slot, "
-                "so no label, no neighbours, no gaps, and null rather than zero for the "
+                "so no label, no neighbors, no gaps, and null rather than zero for the "
                 "gap count because `no section at all` is a different fact from `a "
                 "countable section with no holes`",
                 f"place: {place!r}",
@@ -37701,6 +38121,7 @@ def run() -> Result:
     check_shipping_stamps(checks)
     check_value_table(checks)
     check_value_page(checks)
+    check_undo_until_built_on(checks)
     check_pipeline_sets(checks)
     # The box map's cases live in a sibling file (D264). Imported here, not at the top,
     # because that file imports its fixtures from this one.
