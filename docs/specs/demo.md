@@ -352,3 +352,58 @@ of older code has nothing to offer once newer code is already on `main`, so the 
 the only result anybody wants. The job reads the repo and writes to GitHub Pages; it has no
 permission to write to the repository itself, so it cannot move `main` and is not a second way
 around D42.
+
+## 12. A second, small, real box — opt-in, additive, and off by default
+
+**Built 2026-09-25, on the owner's ruling: "copy paste some data that we already have so it
+is not empty in demo... touch / break nothing."** `make demo-seed` on its own stays
+byte-identical to before this section existed. Nothing above §11 changed.
+
+`PKMNSCAN_DEMO_EXTRA_REAL=1` is a target-specific Make variable on `demo-static` and
+`demo-record`. It reaches `demo-seed` only through that chain. When set, it makes
+`scripts/demo-seed.py:add_extra_real_boxes()` run. That function runs in its own
+`store.write()`. It runs after the deterministic base store is already committed. It can
+only add: one more box, its cards, and a listing row per SKU. No order is written. Buyers
+and orders stay invented, on the owner's own ruling.
+
+**Two scripts, run once by hand, against a READ-ONLY COPY of the owner's store, never the
+owner's own checkout:**
+
+- `scripts/extract_real_facts.py` writes `demo-assets/real-facts.json`. It holds a typed
+  price per SKU, from `prices.json`. It keeps a price only for a SKU a vendored fixture also
+  prices, so a mismatch is checkable against the demo's own real arithmetic. It holds a
+  short list of real sale lines per SKU: `unit_price` and the order's `placed_at`, never a
+  buyer, an order number, or an address. It holds a `pin_skus` list naming specific real
+  cards worth surfacing — a $5+ card, a 25%+ typed-price mismatch, a real foil/normal pair.
+- `scripts/demo-extra-real.py` curates a second manifest and photograph set:
+  `demo-assets/extra/cards.json` and `demo-assets/extra/photos/`. It reuses
+  `demo-photos.py`'s QR clearance and crop, loaded by path rather than copied. The same
+  positive decode test runs on every candidate. It never picks a SKU the default 132-card
+  `demo-assets/cards.json` already curated. `cards.cid` is UNIQUE on the photograph's own
+  digest (D172), and the two manifests draw from the same real store.
+
+**Measured on the first real run:** 60 photographs, 1.6 MB, 0 QR refusals. 18 real typed
+prices reached the corpus. 26 cards were marked `sold` with a real sale date. This stays
+well under the ~20 MB budget. `make demo-determinism-selftest` and a bare `make demo-seed`
+are unaffected. The diff against the file before this section is purely additive: two new
+functions, roughly 70 lines, plus eight lines wired into `main()`.
+
+**The box carries a neutral name, and so does the section.** Review round 2026-09-25: the
+box was first named after the owner directly, and the owner renamed it. It is `Demo Box`
+now. Its one section carries no name at all. `Section 1` reads with nothing after it,
+exactly how an undeclared section reads everywhere else in this product (D10). No screen,
+tooltip, or title in the built demo may say whose cards these are.
+`grep -rio owner app/demo/bundle.json dist-demo/` finds nothing about this box. The only
+hits anywhere in the built JS and CSS are React's own `ownerDocument` DOM property and an
+unrelated `search-field-owner` class name.
+
+**The curator's own QR clearance is not the gate. The commit is.** Review round
+2026-09-25: a reviewer committed a synthetic, decodable QR JPEG into
+`demo-assets/extra/photos/`. The pre-commit hook let it through. The hook matched the
+PATH and never opened the file. It trusted the two curator scripts to be the only
+writers, rather than checking. `scripts/qr-clear-check.py` closes that gap.
+`scripts/githooks/pre-commit` now re-decodes every STAGED image under
+`demo-assets/photos/` and `demo-assets/extra/photos/` with `codes/qr.py`. It reads the
+staged blob, never the working-tree file, and refuses on the first decode it finds, naming
+the file. `PKMNSCAN_QR=off` is the bypass, in the shape every other opsec rule in this hook
+already uses.

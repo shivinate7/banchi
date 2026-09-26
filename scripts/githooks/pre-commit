@@ -195,6 +195,7 @@ if [ "${PKMNSCAN_LINKS:-}" != "off" ]; then
   done <<< "$(git diff --cached --name-only --diff-filter=ACMR -z | tr '\0' '\n' | while IFS= read -r p; do [ -z "$p" ] && continue; mode="$(git ls-files --stage -- "$p" | awk '{print $1}')"; [ "$mode" = "120000" ] && printf '%s\n' "$p"; done)"
 fi
 
+demo_photo_paths=()
 while IFS= read -r path; do
   [ -z "$path" ] && continue
 
@@ -204,26 +205,56 @@ while IFS= read -r path; do
     # demo shows the owner's real card photographs, on their instruction, and CI rebuilds
     # everything else from source — so these have to be committed or the demo has no pictures.
     #
-    # WHAT MAKES THE EXCEPTION SAFE IS NOT THIS LINE. `scripts/demo-photos.py` is the only
-    # thing that writes here, and it runs `codes/qr.py` over every candidate at FULL
-    # resolution and refuses any photograph a QR decodes out of — a positive test on the
-    # image itself, rather than a promise about which cards the store thinks it holds. A code
-    # card's whole identity IS its QR (D70), so a clean decode is a real answer. It refuses
-    # outright if the decoder cannot be loaded, because unavailable is not absent.
+    # WHAT MAKES THE EXCEPTION SAFE IS NOT THIS LINE ALONE. `scripts/demo-photos.py` and
+    # `scripts/demo-extra-real.py` are the only things that write here, and each already runs
+    # `codes/qr.py` over every candidate at FULL resolution before it ever reaches disk — a
+    # positive test on the image itself, rather than a promise about which cards the store
+    # thinks it holds. A code card's whole identity IS its QR (D70), so a clean decode is a
+    # real answer. BUT A CURATOR'S OWN DISCIPLINE IS NOT A GATE: nothing stopped a photograph
+    # staged by any OTHER route — an edit, a hand-run `git add`, a reviewer's own mutation —
+    # from reaching this path uninspected. That is exactly the gap a synthetic, decodable QR
+    # JPEG found here, review round 2026-09-25. THE BLOCK BELOW RE-DECODES EVERY STAGED IMAGE
+    # IN BOTH DIRECTORIES, so the curator's clearance is checked rather than trusted, and a
+    # decode-in-front-of-the-hook photograph is refused just as loudly as a random one.
     #
-    # The rule below still stands over every other path in the repo, and this exception is
-    # exactly one directory. Widening it is a decision to argue, not a convenience to reach
-    # for: the reason the blanket rule exists is that a live code is a bearer instrument and
-    # a tracked one cannot be recalled.
-    demo-assets/photos/*) continue ;;
+    # The rule below still stands over every other path in the repo, and these two exceptions
+    # are exactly the directories named. Widening either is a decision to argue, not a
+    # convenience to reach for: the reason the blanket rule exists is that a live code is a
+    # bearer instrument and a tracked one cannot be recalled.
+    demo-assets/photos/*|demo-assets/extra/photos/*)
+      demo_photo_paths+=("$path")
+      continue
+      ;;
     *.png|*.jpg|*.jpeg|*.webp|*.heic|*.PNG|*.JPG|*.JPEG)
       fail "image staged outside captures/ ($path).
   Code-card photos are bearer instruments and must never reach a tracked path.
-  The one exception is demo-assets/photos/, written only by scripts/demo-photos.py,
-  which refuses any photograph a QR decodes out of."
+  The exceptions are demo-assets/photos/ and demo-assets/extra/photos/, written only by
+  scripts/demo-photos.py and scripts/demo-extra-real.py, which refuse any photograph a QR
+  decodes out of."
       ;;
   esac
 done <<< "$staged"
+
+# EVERY STAGED IMAGE IN THE TWO EXEMPT DIRECTORIES IS RE-DECODED, NOT TRUSTED ON THE
+# CURATOR'S SAY-SO. `scripts/qr-clear-check.py` reads the STAGED BLOB (`git show :<path>`),
+# never the working-tree file, and refuses on the first decode it finds, naming the file.
+# Bypass:  PKMNSCAN_QR=off git commit ...
+if [ "${#demo_photo_paths[@]}" -gt 0 ] && [ "${PKMNSCAN_QR:-}" != "off" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    qr_out="$(python3 scripts/qr-clear-check.py "${demo_photo_paths[@]}" </dev/null 2>&1)"
+    qr_status=$?
+    if [ "$qr_status" -ne 0 ]; then
+      echo "$qr_out" >&2
+      fail "a staged demo photograph carries a decodable QR, or could not be checked.
+  Code-card photos are bearer instruments and must never reach a tracked path — a live
+  code is a bearer instrument whether the curator's own clearance missed it or the file
+  never went through the curator at all.
+  Bypass once with:  PKMNSCAN_QR=off git commit ..."
+    fi
+  else
+    echo "WARNING: python3 unavailable — staged demo photographs were NOT re-checked for a QR." >&2
+  fi
+fi
 
 # Printed code layout: four hyphen-separated alphanumeric groups, of length 3, 4, 3, 3.
 g3="[A-Z0-9]{3}"

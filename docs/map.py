@@ -5039,6 +5039,53 @@ COMPONENTS = [
                         "(D18: that target is a press, run by hand).",
                 "governed_by": ["D16", "D18"],
             },
+            "extract_real_facts.py": {
+                "does": "reads a READ-ONLY COPY of the owner's store (never the owner's own "
+                        "checkout) and writes demo-assets/real-facts.json: a typed price per "
+                        "SKU (from prices.json, only for SKUs a vendored fixture also prices, "
+                        "so a mismatch is checkable against the demo's own real arithmetic), "
+                        "a short list of real sale lines per SKU (unit_price and the order's "
+                        "placed_at date only — never a buyer, an order number or an address), "
+                        "and a pinned-SKU list naming the specific real cards "
+                        "demo-extra-real.py must include so the extra, opt-in box's cases "
+                        "($5+, a 25%+ typed-price mismatch, a foil/normal pair, an unsent "
+                        "no-market card) are real rather than invented. Run once, by hand, "
+                        "against a snapshot; its output is committed and demo-seed.py never "
+                        "re-reads the owner's store.",
+                # D18: a generator that writes a tracked file; not on any hook or gate.
+                # D43 isolates the read to a copy, never the owner's own checkout or port 8000.
+                "governed_by": ["D18", "D43"],
+            },
+            "demo-extra-real.py": {
+                "does": "curates a SECOND, small, real card set — its own manifest and "
+                        "photographs under demo-assets/extra/, never touching the default "
+                        "132-card demo-assets/cards.json or its photos. QR-clears every "
+                        "candidate exactly as demo-photos.py does (loaded by path and reused, "
+                        "not copied). Reads demo-assets/real-facts.json for pinned SKUs, real "
+                        "typed prices and real sale facts. Read by demo-seed.py's "
+                        "`add_extra_real_boxes()` ONLY when PKMNSCAN_DEMO_EXTRA_REAL=1 — the "
+                        "default `make demo-seed` never reads this output, so the base build "
+                        "stays byte-identical.",
+                # D18: a generator that writes tracked files; not on any hook or gate.
+                # D43 isolates the read to a copy, never the owner's own checkout or port 8000.
+                # D172: never picks a SKU the base manifest already curated, because
+                # `cards.cid` is unique on the photograph's own digest.
+                "governed_by": ["D18", "D43", "D172"],
+            },
+            "qr-clear-check.py": {
+                "does": "re-decodes every STAGED image under demo-assets/photos/ and "
+                        "demo-assets/extra/photos/ with codes/qr.py, reading the STAGED BLOB "
+                        "(`git show :<path>`) rather than the working-tree file. Refuses and "
+                        "names the file on the first decode it finds. ON THE COMMIT PATH — "
+                        "scripts/githooks/pre-commit runs it over both directories, because "
+                        "the curator scripts' own QR clearance proves the curator was honest, "
+                        "never that everything staged into either path went through it. "
+                        "Review round 2026-09-25: a synthetic, decodable QR JPEG staged "
+                        "outside either curator passed the old hook, which only matched the "
+                        "path and never opened the file.",
+                # D70: a live code's whole identity is its QR, decoded rather than assumed.
+                "governed_by": ["D70"],
+            },
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
