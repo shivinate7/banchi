@@ -569,3 +569,38 @@
   2. DEBT35 records it (emit exits differently on one run and several runs).
 - Demo box name (owner, 2026-09-25, verbatim): "Demo Box". No "owner" wording about these
   cards appears anywhere on the public page.
+
+## Undo session (owner, 2026-09-25)
+
+The plan that applies these rulings is `docs/specs/undo.md` section 11. The owner's process
+ask and the interview answers, verbatim:
+
+```
+The process: "send an opus agent at first blindly just through our screens with no context
+of our upbringing/decisions/building-process, and have it basically analyze all the
+mechanisms we have of undo from an end user perspective. then have another agent with our
+context distill those findings and create action items. Interview me for my perspective too
+as maybe what's been written down for undo isn't how i feel about it anymore too."
+How long: "Anytime, from a history".
+A press that cannot be undone: "Never ask".
+Where undo lives: "hmm how would i for example, undo the 24th capture in my capturing run
+when i'm on capture 36? currently i'd have to undo 12 captures, i imagine there's a way to
+yes undo all the way to 24, but also to just undo 24 -- does that make
+sense in what im
+trying to have u think about? marking something sold on inventory though is much more
+straight forward.. etc.."
+What hurts: "capture mistakes 50%, marking the wrong card sold 30%, wrong review answer 20%".
+Refinement: "I do imagine that at a certain point inventory needs to lose its undo (or more
+like i would never use it), it's not that I relaly need undo forever, it's just a couple
+seconds isn't enough, and that a day feels arbitrary."
+On expiry: "Yes, until it's built on (Recommended)".
+```
+
+- "Never ask" means no confirms. Every press is made undoable instead.
+- Capture needs two acts: undo back to a card, and undo just that card.
+- RULING: an undo has no clock. It lasts until the next step depends on the action. After
+  that step, the fix is an ordinary action, not an undo. This refines "Anytime, from a
+  history". The plan defines that step for each action.
+- Measured for the plan, not a ruling: `sold_origin_unknown` (HOR-07) is seed-only. The
+  owner's store has 0 sold or retired cards with no earlier state. So the owner need not
+  test HOR-07 on the real store.
