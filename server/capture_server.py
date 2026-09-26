@@ -909,7 +909,7 @@ REMOVE_FIELDS = ("capture_id",)
 # response must not move whatever card now happens to sit at this key, which after a first
 # successful move is nothing at all (the key is a tombstone). `to_box` is the one thing this
 # body adds that a delete does not need: a destination.
-MOVE_FIELDS = ("capture_id", "to_box")
+MOVE_FIELDS = ("capture_id", "to_box", "section")
 # A move's undo (UN-14) names only the tombstone in the path. It carries no aim check,
 # because a tombstone's key is never reused, and no destination, because it goes back home.
 MOVE_UNDO_FIELDS = ("undo",)
@@ -918,7 +918,32 @@ MOVE_UNDO_FIELDS = ("undo",)
 # the shape that makes a whole-box move (merge, from the caller's side) the same request as
 # a ticked selection, with no second field to mean "everything". `to_box` is required either
 # way; there is no such thing as moving nowhere.
-MOVE_CARDS_FIELDS = ("indices", "to_box")
+MOVE_CARDS_FIELDS = ("indices", "to_box", "section")
+# `section` ON BOTH MOVES is a divider key of `to_box` (`docs/specs/subbox-capture.md` 1.5):
+# each card goes to the tail of that section. Absent, the card goes to the back of the box.
+
+
+def _optional_section(payload: dict, field: str) -> Optional[str]:
+    """A divider key the body names, or None. A key is a string (`sections_detail[].div`)."""
+    value = payload.get(field)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "section_invalid",
+            f"{field} was {value!r}. Send a section's `div` from GET /boxes, as a string.",
+        )
+    return value.strip()
+
+
+def _section_slot(inventory: master.Inventory, to_box: int, section: Optional[str]):
+    """Where a card moved into `section` of `to_box` lands: `(index, key)`, or None for the
+    back of the box. The same tail rule a capture uses (`Inventory.section_tail_key`)."""
+    if section is None:
+        return None
+    key, _ordinal, _last = inventory.section_tail_key(to_box, section)
+    return inventory.next_index(to_box), key
 
 # What `POST /boxes/<box>/listings/release` accepts. `confirm` is required and must be
 # exactly `true` — D33's field, reused rather than reinvented, and required for its reason:
@@ -2863,6 +2888,9 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
     """
     box = _require_box(payload)
     capture_id = _optional_text(payload, "capture_id")
+    # THE SECTION TO FILE INTO, by its divider key (`docs/specs/subbox-capture.md` 1.2). The
+    # store picks the position, so this body still carries no index (capture-app.md 5.6).
+    section = _optional_section(payload, "section")
     # THE CLAIMS THIS BODY CARRIES, KEYED BY RECORD FIELD NAME so they pass straight through
     # `allocate_capture` and `sidecar_payload`, both of which speak that vocabulary.
     #
@@ -2918,7 +2946,7 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
 
     with Store().write() as snapshot:
         card, created = snapshot.inventory.allocate_capture(
-            box, capture_id=capture_id, cid=cid, **claims
+            box, capture_id=capture_id, cid=cid, section=section, **claims
         )
         if created:
             # THE PATH IS KNOWABLE BEFORE THE INDEX NOW, and that is the change. It used to
@@ -2932,6 +2960,13 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
             )
             card.photo = str(path)
         body = _card_summary(snapshot.inventory, card, created=created)
+        # READ AFTER THE WRITE, so it is the key of the section the card is in now, after a
+        # re-space too. Null for a pooled card, which has no section.
+        body["section_div"] = (
+            snapshot.inventory.section_div_of(card.box, card.order_key)
+            if body["place"]["located"]
+            else None
+        )
 
     return (HTTPStatus.CREATED if created else HTTPStatus.OK), body
 
@@ -5312,6 +5347,7 @@ def do_move_card(box: int, index: int, payload: dict) -> dict:
         )
     aimed_at = _optional_text(payload, "capture_id")
     to_box = _require_to_box(payload)
+    section = _optional_section(payload, "section")
 
     key = master.position_key(box, index)
 
@@ -5327,7 +5363,10 @@ def do_move_card(box: int, index: int, payload: dict) -> dict:
                 f"The box has probably shifted since it was read. Re-read the inventory "
                 f"and aim again; nothing was moved.",
             )
-        result = _move_one(snapshot, inventory, key, box, index, to_box)
+        result = _move_one(
+            snapshot, inventory, key, box, index, to_box,
+            slot=_section_slot(inventory, to_box, section),
+        )
         result["card"] = _card_row(
             inventory, result["new_box"], result["new_index"],
             inventory.cards[result["to"]], snapshot.skus,
@@ -5381,6 +5420,7 @@ def do_move_cards(box: int, payload: dict) -> dict:
     """
     _reject_unknown(payload, MOVE_CARDS_FIELDS)
     to_box = _require_to_box(payload)
+    section = _optional_section(payload, "section")
     raw_indices = payload.get("indices")
     if raw_indices is not None:
         if not isinstance(raw_indices, list) or not raw_indices:
@@ -5422,7 +5462,11 @@ def do_move_cards(box: int, payload: dict) -> dict:
         results = []
         for at in wanted:
             key = master.position_key(box, at)
-            results.append(_move_one(snapshot, inventory, key, box, at, to_box))
+            # EACH CARD READS THE TAIL AFRESH, so they land in the order sent.
+            results.append(_move_one(
+                snapshot, inventory, key, box, at, to_box,
+                slot=_section_slot(inventory, to_box, section),
+            ))
 
     return {
         "box": int(box),
@@ -12435,6 +12479,13 @@ def _box_row(
         if layout is not None and occupied is not None
         else []
     )
+    # EACH SECTION'S DIVIDER KEY (`docs/specs/subbox-capture.md` 1.1), the handle a capture,
+    # an S, a U and a Move-to-box aim at. Ordinal n is the n-th divider as the store draws it.
+    if detail:
+        divs = inventory.dividers_of(box)
+        for span in detail:
+            at = int(span["section"]) - 1
+            span["div"] = master.divider_key(divs[at]) if 0 <= at < len(divs) else None
 
     return {
         "box": int(box),
@@ -12807,13 +12858,17 @@ def do_open_section(box: int, payload: dict) -> dict:
     # `_reject_unknown` with nothing allowed would render "Settable: ." — the one caller
     # for which its message does not compose. Same code, same first-thing-checked order,
     # and a sentence that says what to do instead of naming an empty list.
-    if payload:
+    # `after` IS THE ONE FIELD (the owner's Q1 ruling): a divider key. The new divider goes
+    # right after that section, and still at an index the store reads, never one sent.
+    after = _optional_section(payload, "after")
+    extra = sorted(set(payload) - {"after"})
+    if extra:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "field_not_settable",
-            f"Cannot set {', '.join(sorted(payload))} here — this route takes an empty "
-            f"body. The divider goes in front of the card the store's own next index "
-            f"names, and nothing in a request can move it. To place one somewhere else, "
+            f"Cannot set {', '.join(extra)} here — this route takes an empty "
+            f"body, or `after`, a section's divider key. The store picks the divider's "
+            f"place, and nothing else in a request can move it. To place one somewhere else, "
             f"send the whole layout to PUT /boxes/{box}.",
         )
 
@@ -12826,13 +12881,13 @@ def do_open_section(box: int, payload: dict) -> dict:
                 f"No box {box}. Create it with POST /boxes, or capture into it — a box "
                 f"registers itself the first time a card lands in it.",
             )
-        inventory.open_section(box)
+        inventory.open_section(box, after=after)
         body = _box_row(inventory, box)
 
     return body
 
 
-def do_close_section(box: int) -> dict:
+def do_close_section(box: int, div: Optional[str] = None) -> dict:
     """`DELETE /boxes/<box>/sections`: take out the box's empty last divider (UN-15).
 
     The capture screen's `U` after `S`. `Inventory.close_section` removes that one divider by
@@ -12842,7 +12897,8 @@ def do_close_section(box: int) -> dict:
         inventory = snapshot.inventory
         if inventory.box(box) is None:
             raise BadRequest(HTTPStatus.NOT_FOUND, "box_not_found", f"No box {box}.")
-        inventory.close_section(box)
+        # `?div=` names the divider to take out, for U after a mid-box S.
+        inventory.close_section(box, div=div)
         return _box_row(inventory, box)
 
 
@@ -15729,6 +15785,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # section, the owner's ruling of 2026-09-25, D10.)
         except master.SectionEmpty as exc:
             self._fail(HTTPStatus.CONFLICT, "section_empty", str(exc))
+        # A section named by a divider key the box does not have now: another write changed
+        # the box after the screen read it. Filing elsewhere would be a silent misfile.
+        except master.SectionGone as exc:
+            self._fail(HTTPStatus.CONFLICT, "section_gone", str(exc))
         except master.UnknownBox as exc:
             self._fail(HTTPStatus.NOT_FOUND, "box_not_found", str(exc))
         # D83's move primitive, caught here as a backstop rather than the whole story: the
@@ -16750,7 +16810,11 @@ class CaptureHandler(BaseHTTPRequestHandler):
             # UN-15: the capture screen's divider undo. Only the empty last one.
             match = _BOX_SECTIONS_RE.match(path)
             if match:
-                return self._json(HTTPStatus.OK, do_close_section(int(match.group(1))))
+                div = parse_qs(urlparse(self.path).query, keep_blank_values=True).get("div")
+                return self._json(
+                    HTTPStatus.OK,
+                    do_close_section(int(match.group(1)), div[0] if div else None),
+                )
             # D61's way back. It drops a held batch — and the buyer addresses in it — now
             # rather than in half an hour, which is what CLAUDE.md's hard rule asks of
             # anything that makes this process hold one. Answers a body rather than a 204,
