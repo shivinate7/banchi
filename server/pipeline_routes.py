@@ -5468,9 +5468,13 @@ def do_pricing_restore(payload: dict) -> dict:
     re-pricing on the next markdown survey, refusing every restored SKU `priced_recently` —
     D103's ratchet, inverted by the one press whose entire job is to change nothing.
 
-    IT IS NOT A GENERAL WRITE PATH. A hold cannot arrive through it — `Corpus.parse` is not
-    reached and the shape is `{value, at?, from_run?}` — and a SKU the corpus already answers
-    is refused per row. The general write is `PUT /pricing` and it is unchanged.
+    IT IS NOT A GENERAL WRITE PATH, AND THE STORED CLEAR IS WHAT MAKES THAT TRUE. Every row
+    it is sent must be a row the server's own stored last clear holds, with the same value,
+    date and run: the toast's map is only a copy of that file. Anything else (a SKU the clear
+    did not take, a forged date, a hold, which a clear never takes) refuses the whole press
+    with `restore_not_cleared` and writes nothing. A client could otherwise store any value
+    and date here, a hold with a forged `before.at` among them. A SKU the corpus already
+    answers is still refused per row. The general write is `PUT /pricing` and it is unchanged.
     """
     _clear_revision_guard(payload)
     answers = payload.get("answers")
@@ -5508,6 +5512,26 @@ def do_pricing_restore(payload: dict) -> dict:
             f"{len(answers)} answers is more than one press can restore ({MAX_CLEAR_SKUS}).",
         )
 
+    # ONLY WHAT THE SERVER CLEARED COMES BACK, verbatim, before anything is read or written.
+    if stored is None:
+        stored = corpus.read_last_clear()
+    held = (stored or {}).get("cleared") or {}
+    forged = sorted(
+        str(sku)
+        for sku, row in answers.items()
+        if not isinstance(row, dict)
+        or str(sku) not in held
+        or {k: row.get(k) for k in ("value", "at", "from_run")}
+        != {k: held[str(sku)].get(k) for k in ("value", "at", "from_run")}
+    )
+    if forged:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "restore_not_cleared",
+            f"{len(forged)} of these prices are not the ones the last clear took, so nothing "
+            f"was put back.",
+        )
+
     try:
         book = corpus.Corpus.read()
     except (decisions.MalformedDecisions, ValueError) as exc:
@@ -5539,8 +5563,6 @@ def do_pricing_restore(payload: dict) -> dict:
         book.write()
     # THE STORED CLEAR GOES ONCE EVERY ANSWER IT HOLDS IS BACK, whichever door restored
     # them: the toast's own map, or the stored one. A price typed since counts as back.
-    if stored is None:
-        stored = corpus.read_last_clear()
     if stored is not None and all(sku in book.answers for sku in stored["cleared"]):
         corpus.drop_last_clear()
 
