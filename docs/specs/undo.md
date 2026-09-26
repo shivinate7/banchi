@@ -433,3 +433,43 @@ proves each one. Three choices the table left open are recorded here.
 - **UN-2 says when the sitting ended.** `GET /capture/sitting` answers `open: false` and no
   cards once the newest capture is more than 30 minutes old. The capture undo route itself
   does not yet refuse on a sitting that has ended. It refuses only on state, as before.
+
+### 11.9 Lane R, as built (2026-09-25)
+
+The screen halves are built on branch `ux/undo-screens`, over lane S's `ux/undo-store`.
+
+- **UN-5.** `Inventory.tsx`, `Orders.tsx` and `Fulfillment.tsx` no longer prune their receipt
+  lists on `UNDO_WINDOW_MS`. Rank replaces the clock. `remember` still prepends and dedupes
+  by key. The newest sale or retirement keeps `Undo`, in the row and on the toast, until a
+  newer write replaces it. The drain bars this made misleading are removed.
+- **UN-6.** Orders' `OrderLineRow` freezes a just-pulled copy's `LineCopy` at its own array
+  index (`pressed`, keyed by copy). It re-splices the copy into the render list. `PickLine`
+  draws `Undo` in the row a pull was pressed from. The next copy no longer slides into it.
+  Fulfillment's own row-per-card list never removed a copy the way Orders' did. Its defect was
+  the `.ff-sheet`, and it needed no row-freeze.
+- **UN-9, UN-10.** `kit/undo.ts`'s `useUndoHotkey` is the one `U` primitive. It is armed once
+  per screen instead of five near-identical listeners. `kit/index.tsx`'s `PageUndo`, passed
+  through `Page`'s new `undo` prop, is Review's own door onto its below-the-fold receipt.
+  It is measured NOT to reserve space: doing so on every load cost `#/review`'s no-scrolling
+  floor 54px it had no slack for (`answering a card costs no scrolling`). Inventory and
+  Orders keep their own row-level `Undo` (D57) and do not pass one.
+- **UN-12.** `Pricing.tsx`'s `Undo` type is now `{ entries: readonly UndoEntry[] }`. `write`
+  is `writeMany`'s one-op case. `setHold` pushes both fields it touches as one entry. One `U`
+  now undoes a hold completely.
+- **UN-13.** The store-wide cut-off (`setCut`) gets a receipt and a `'cutoff'`-kind
+  `UndoEntry` holding the prior `threshold`/`sub_threshold`. It reverts on the same pop
+  other entries do.
+- **UN-7 (screen half).** `BoxBrowse.tsx:CardOps` offers "This card is still here"
+  (`saleStillHere`) once the ordinary reversal refuses `sale_built_on`. It is never a retry of
+  the same request. **Screen text is deliberately neutral about the order ledger**
+  (coordinator's note, 2026-09-25). The owner is re-ruling what this does to it.
+- **UN-14 (screen half).** `Inventory.tsx`'s `Receipt.kind` gains `'move'`. `doMove` folds a
+  move into the same `remember`/`receipts` list a sale or retirement uses. `U` and the
+  toast's own Undo reach it, ranked the same way. **No "Move back" remedy is drawn for
+  `move_built_on`** (coordinator's note, 2026-09-25). Lane S found "Move the card back"
+  crashes on a sqlite UNIQUE error, and is fixing it.
+- **UN-11 (screen half).** `Pricing.tsx` reads `GET /pricing`'s `last_clear`. It offers
+  "Restore N cleared" once the toast that named the clear is gone. `restoreLastClear`'s own
+  answer carries no per-SKU values, so this reads the corpus fresh afterward. It takes each
+  restored SKU's answer off THAT read — the same "the response decides which rows come back"
+  rule `withRestored` already follows for the toast's own path.
