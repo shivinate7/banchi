@@ -727,7 +727,6 @@
 .browse-details-summary:hover { background: var(--bn-hover); }
 .browse-details-chev { color: var(--bn-ink-4); transition: transform var(--bn-t) var(--bn-ease); }
 .browse-details[open] .browse-details-chev { transform: rotate(90deg); }
-.browse-details-hint { margin-left: auto; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .browse-about {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

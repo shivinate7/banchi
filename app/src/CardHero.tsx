@@ -449,9 +449,6 @@ export function CardDetailsSection({
       <summary className="browse-details-summary">
         <Icon name="chevronRight" size={14} className="browse-details-chev" />
         <span className="bn-section-title">Details</span>
-        <span className="browse-details-hint bn-facts">
-          <span>identity</span> <span>claims</span> <span>provenance</span>
-        </span>
       </summary>
       <div className="browse-about">
         {factGroupsOf(card, market, listings).map((group) => (
