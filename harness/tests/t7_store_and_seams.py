@@ -36574,6 +36574,186 @@ def check_value_page(checks: Checks) -> None:
         )
 
 
+def check_pipeline_sets(checks: Checks) -> None:
+    """`GET /pipeline/sets` — the owner's "by set order" view (D-set-view).
+
+    ON HAND MEANS `identified`, NARROWER THAN `do_pipeline_value`'s "not a terminal state":
+    a captured-and-not-yet-identified card, a sold one, a retired one and a moved one are
+    all excluded, and the fixture below plants one of each so a card wrongly included is a
+    row this test can point at.
+
+    THE GROUPING RUNGS: a SKU groups every physical copy of it into one row with a summed
+    `qty`; a `sku_unknown` card with a name and a number groups on those; a card with none
+    of the three (no SKU, no name, no number) is its own row, because nothing here can tell
+    it apart from another blank card, and merging on a shared blank key would silently
+    collapse two distinct physical cards into one.
+
+    THE ORDER IS A NATURAL SORT OVER THE RAW `number` COLUMN, never a per-game rule:
+    `087/298` < `089a/298` < `090/298`, because the digit run before the letter is compared
+    as an integer (87 < 89 < 90) rather than as text, where `'089a' < '090'` would be false.
+    """
+    checks.note("")
+    checks.note("PIPELINE SETS — grouped by set, natural-sorted, on hand only")
+
+    RICH = "9027460"
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="Spiritforged box")
+
+            minted = 0
+
+            def put(sku, name, number, printed_total, set_name, game="riftbound", state=master.IDENTIFIED):
+                nonlocal minted
+                minted += 1
+                card, _ = inventory.allocate_capture(1, cid=fake_cid(f"sets-{minted}"))
+                card.sku = sku
+                card.name = name
+                card.number = number
+                card.printed_total = printed_total
+                card.set_name = set_name
+                card.game = game
+                card.state = state
+                return card
+
+            # THE NATURAL-SORT CASE, three rows of one set, planted out of printed order so
+            # a route that merely echoed insertion order would pass by accident.
+            put(RICH, "Towering Combatant", "090", "298", "Spiritforged")
+            put("8925668", "Ancient Henge", "087", "298", "Spiritforged")
+            put("8925669", "Corina Veraza", "089a", "298", "Spiritforged")
+
+            # TWO PHYSICAL COPIES OF ONE SKU — one row, `qty: 2`.
+            put(RICH, "Towering Combatant", "090", "298", "Spiritforged")
+
+            # A SECOND SET, SAME GAME — proves grouping is per (game, set), not per game
+            # alone. TWO MORE ROWS HERE, "9" and "10", are the digit-WIDTH case a plain
+            # lexicographic sort cannot pass: as text "10" < "9" (`'1' < '9'`), so a mutation
+            # that dropped the natural sort for `str.lower()` alone would still pass the
+            # 087/089a/090 case above (same digit width, so text order and numeric order
+            # coincide there) and only goes red on this one.
+            put("8611100", "Progress Day", "114", "298", "Origins")
+            put("8611101", "Ninth", "9", "298", "Origins")
+            put("8611102", "Tenth", "10", "298", "Origins")
+
+            # A SKU_UNKNOWN CARD WITH A NAME AND A NUMBER — groups on those, not dropped for
+            # having no SKU.
+            put(None, "Read Off The Photo", "200", "298", "Spiritforged")
+
+            # TWO BLANK CARDS — no SKU, no name, no number. Each is its own row: merging them
+            # on a shared blank key would report one card where two physical ones are on hand.
+            put(None, None, None, None, "Spiritforged")
+            put(None, None, None, None, "Spiritforged")
+
+            # NO SET ON FILE — its own group, at the end, never a silent drop.
+            put("7000001", "No Set On File", "1", "1", "")
+
+            # THE THREE EXCLUSIONS: not `identified`, so none of these may appear anywhere
+            # in the payload.
+            put("7100000", None, None, None, None, state=master.CAPTURED)
+            put("7100001", "Sold Already", "1", "1", "Spiritforged", state=master.SOLD)
+            put("7100002", "Retired Already", "2", "1", "Spiritforged", state=master.RETIRED)
+            put("7100003", "Moved Already", "3", "1", "Spiritforged", state=master.MOVED)
+
+        payload = pipeline_routes.do_pipeline_sets()
+
+    groups = {(g["game"], g["set_name"]): g for g in payload["groups"]}
+
+    checks.equal(
+        len(payload["groups"]),
+        2,
+        "two named sets (Spiritforged, Origins) — the excluded states and the no-set "
+        "card are not among them",
+    )
+
+    spiritforged = groups.get(("riftbound", "Spiritforged"))
+    checks.ok(spiritforged is not None, "the Spiritforged group exists")
+    if spiritforged is not None:
+        # THE TWO BLANK CARDS SHARE THIS SET TOO (checked further down) and their number
+        # sorts first — `('',)`, a prefix of every numbered card's own `('', N, '')` — so
+        # this order check reads only the rows that have a number at all.
+        numbers = [c["number_display"] for c in spiritforged["cards"] if c["number_display"] is not None]
+        checks.equal(
+            numbers,
+            ["087/298", "089a/298", "090/298", "200/298"],
+            "NATURAL SORT: 089a sits between 087 and 090 — the digit run compares as an "
+            "integer (87 < 89 < 90), not as text, where '089a' < '090' would be false",
+        )
+        by_number = {c["number_display"]: c for c in spiritforged["cards"]}
+        checks.equal(
+            by_number["090/298"]["qty"],
+            2,
+            "two physical copies of one SKU are one row with qty 2, not two rows",
+        )
+        checks.equal(
+            by_number["200/298"]["sku"],
+            None,
+            "a sku_unknown card groups on its name and number, and is not dropped for "
+            "having no SKU",
+        )
+
+    origins = groups.get(("riftbound", "Origins"))
+    checks.ok(
+        origins is not None and len(origins["cards"]) == 3,
+        "a second set groups on its own, never folded into the first",
+    )
+    if origins is not None:
+        checks.equal(
+            [c["number_display"] for c in origins["cards"]],
+            ["9/298", "10/298", "114/298"],
+            "DIGIT WIDTH: '9' sorts before '10' numerically, though '10' < '9' as text — "
+            "the case a plain string sort passes on 087/089a/090 (same width) and fails "
+            "here",
+        )
+
+    checks.equal(
+        len(payload["no_set"]),
+        1,
+        "a card with no set on file is one more group, at the end, never a silent drop",
+    )
+    checks.equal(
+        payload["no_set"][0]["name"],
+        "No Set On File",
+        "and it is the right card",
+    )
+
+    blanks = [c for c in spiritforged["cards"] if c["name"] is None] if spiritforged else []
+    checks.equal(
+        len(blanks),
+        2,
+        "TWO BLANK CARDS ARE TWO ROWS, not one merged on a shared blank key — the defect "
+        "caught against the owner's own store, where four such cards would otherwise have "
+        "collapsed into a single row a tap could reach only one of",
+    )
+    checks.equal(
+        len({c["cid"] for c in blanks}),
+        2,
+        "and each blank row's `cid` names a DIFFERENT physical card",
+    )
+
+    all_cards = [c for g in payload["groups"] for c in g["cards"]] + payload["no_set"]
+    excluded_names = {"Sold Already", "Retired Already", "Moved Already"}
+    checks.ok(
+        all(c["name"] not in excluded_names for c in all_cards),
+        "a sold, a retired and a moved card are all excluded from every group",
+    )
+    checks.equal(
+        sum(1 for c in all_cards if c["sku"] == "7100000"),
+        0,
+        "a captured-and-not-yet-identified card carries no set or number to group by, "
+        "and is excluded too",
+    )
+    total_qty = sum(c["qty"] for g in payload["groups"] for c in g["cards"]) + sum(
+        c["qty"] for c in payload["no_set"]
+    )
+    checks.equal(
+        total_qty,
+        11,
+        "on-hand qty sums to exactly the identified cards planted: 3 Spiritforged SKUs + "
+        "1 extra RICH copy + 3 Origins + 1 sku_unknown + 2 blanks + 1 no-set = 11",
+    )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -36718,6 +36898,7 @@ def run() -> Result:
     check_shipping_stamps(checks)
     check_value_table(checks)
     check_value_page(checks)
+    check_pipeline_sets(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )

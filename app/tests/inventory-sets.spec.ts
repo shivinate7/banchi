@@ -49,6 +49,10 @@ const SETS_PAYLOAD = {
       set_name: 'Origins',
       cards: [
         { sku: '8811100', cid: 'cid-darius', box: 5, name: 'Darius, Blade of Origin', number_display: '001/298', qty: 3 },
+        // A REAL ROW WITH NO BOX (D-set-view): a record whose position will not coerce.
+        // `box=<n>&card=<cid>` cannot aim the walk at it, so a tap here falls back to the
+        // OTHER existing deep link, `?q=<name>`.
+        { sku: '8811101', cid: 'cid-unplaced', box: null, name: 'Unplaced Card', number_display: '005/298', qty: 1 },
       ] as SetCard[],
     },
   ],
@@ -201,5 +205,21 @@ test.describe('the set view', () => {
     // THE WALK LANDED ON THE NAMED CARD, never merely on the box — `BoxBrowse.tsx`'s own
     // `.browse-row[aria-current]`, the walk's one "this is where you are" mark.
     await expect(page.locator('.browse-row[aria-current="true"]', { hasText: 'Thievul' })).toBeVisible()
+  })
+
+  test('a card with no resolvable box is searched by name, never left with nothing to open', async ({ page }) => {
+    await page.goto(VIEW_ROUTE)
+    await page.locator('.sets-card-row', { hasText: 'Unplaced Card' }).click()
+
+    // NO box/card PAIR — there is no row this row's own `box: null` could aim the walk at
+    // (D-set-view). `q=<name>` is the OTHER existing deep link, D285's own key for a
+    // screen's search text, so the tap still lands somewhere useful.
+    await expect(page).toHaveURL(/#\/inventory\?q=Unplaced(\+|%20)Card/)
+    await expect(page).not.toHaveURL(/[?&]box=/)
+    await expect(page).not.toHaveURL(/[?&]card=/)
+
+    // AND THE SEARCH FIELD CARRIES THAT TEXT — `BoxBrowse.tsx:qParam`, seeded once on
+    // mount, the same store-wide search a person typing the name would have run.
+    await expect(page.locator('.search-field-input')).toHaveValue('Unplaced Card')
   })
 })

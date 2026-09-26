@@ -683,19 +683,27 @@ export function Inventory() {
       /* SILENT WITH NO BOX: the empty state says "No boxes yet" once, not the lede too. */
       lede={boxRecords.length === 0 ? undefined : 'Sell, retire or move any card.'}
       className="inventory"
+      /* THE OWNER'S "BY SET" VIEW (D-set-view), one more way of walking this same screen —
+       * D264's own precedent (the box map lives inside Inventory too). IN THE HEADER'S
+       * ACTIONS SLOT, beside the h1, NEVER A ROW OF ITS OWN ABOVE THE WALK: a lane review
+       * caught the first build adding ~55px ahead of the box walk on the Shelf view too,
+       * which pushed the walk's current row under D119's "answer above the fold" floor
+       * (`inventory.spec.ts`'s own `.card-locations-row.is-current` viewport check). The
+       * actions slot sits in the SAME row as the title (`bn-head`'s own flex row), so
+       * switching views moves nothing else on screen (D118). `.bn-tabs`/`.bn-tab` is the
+       * pattern `Codes.tsx`'s ledger and `Gallery.tsx`'s queue already draw the same
+       * two-way switch with, never a hand-rolled control this kit does not already own. */
+      actions={
+        <div className="bn-tabs inventory-view-tabs" role="tablist" aria-label="Inventory view">
+          <button type="button" role="tab" className="bn-tab" aria-selected={view !== 'sets'} onClick={() => setView('')}>
+            <Icon name="box" size={14} /> Shelf
+          </button>
+          <button type="button" role="tab" className="bn-tab" aria-selected={view === 'sets'} onClick={() => setView('sets')}>
+            <Icon name="layers" size={14} /> Sets
+          </button>
+        </div>
+      }
     >
-      {/* THE OWNER'S "BY SET" VIEW (D-set-view), one more way of walking this same screen —
-       * D264's own precedent (the box map lives inside Inventory too). `.bn-tabs`/`.bn-tab`
-       * is the pattern `Codes.tsx`'s ledger and `Gallery.tsx`'s queue already draw the same
-       * two-way switch with, never a hand-rolled control this kit does not already own. */}
-      <div className="bn-tabs inventory-view-tabs" role="tablist" aria-label="Inventory view">
-        <button type="button" role="tab" className="bn-tab" aria-selected={view !== 'sets'} onClick={() => setView('')}>
-          <Icon name="box" size={14} /> Shelf
-        </button>
-        <button type="button" role="tab" className="bn-tab" aria-selected={view === 'sets'} onClick={() => setView('sets')}>
-          <Icon name="layers" size={14} /> Sets
-        </button>
-      </div>
       {view === 'sets' ? (
         <InventorySets reloadToken={reloads} />
       ) : (

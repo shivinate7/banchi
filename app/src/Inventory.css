@@ -120,5 +120,8 @@
 .inventory-retire-said { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
 /* THE OWNER'S "BY SET" VIEW SWITCH (D-set-view) — `.bn-tabs`/`.bn-tab` is the kit's own
- * pattern (`Codes.tsx`, `Gallery.tsx`); this file only adds the gap below it. */
-.inventory-view-tabs { margin-bottom: var(--bn-4); }
+ * pattern (`Codes.tsx`, `Gallery.tsx`), in `<Page>`'s own `actions` slot beside the h1
+ * (D118/D119: it must add no row of its own above the walk). `border-bottom` is the tab
+ * strip's own underline rule and reads as a stray line under a lone header action, so it
+ * is muted here rather than left to draw a rule under nothing. */
+.inventory-view-tabs { border-bottom: none; }

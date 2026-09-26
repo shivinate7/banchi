@@ -68,3 +68,24 @@ No write. No search or filter inside the set view itself. The box walk already c
 search, and a card of interest is one tap away from it. No price: the owner's ask was
 quantity. D264's ruling on the sibling box-map feature already argued the case for holding
 money back from a v1 count view.
+
+### The fix round, 2026-09-25
+
+A lane review caught two defects and asked for one more case.
+
+1. **The Shelf/Sets switch moved into `<Page>`'s own `actions` slot**, beside the h1. The
+   first build drew it as a row above the walk. That row added about 55px ahead of the box
+   walk on the Shelf view too. It broke D119's own floor: `inventory.spec.ts`'s
+   `.card-locations-row.is-current` viewport check. The actions slot sits in the header's
+   own row. Switching views moves nothing else on screen now (D118).
+2. **A row whose `box` is `null` is real, never a fault.** `do_pipeline_sets` still ships
+   it, for a record whose position will not coerce. `box=<n>&card=<cid>` cannot aim the
+   walk at a row with no box to switch to. A tap on one of these now writes `q=<name>`
+   instead — D285's own key for a screen's search text. `BoxBrowse.tsx:qParam` seeds
+   `useSearch()` with it once, on mount. That is the same store-wide search a person
+   typing the name would run. The fallback order is name, then SKU, then the composed
+   number. The name is what a person reads at the drawer first.
+3. **Harness coverage.** `harness/tests/t7_store_and_seams.py:check_pipeline_sets` covers
+   the grouping rungs, one row per blank card, and the natural sort. Two sort cases: the
+   `089a` one, and a digit-width one, `9` before `10`. It also proves a captured, a sold,
+   a retired and a moved card are all excluded. Each rung is mutation-proved.

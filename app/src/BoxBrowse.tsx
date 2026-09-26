@@ -595,6 +595,19 @@ function cardParam(): string | null {
   return value === null || value.trim() === '' ? null : value.trim()
 }
 
+/** `#/inventory?q=<text>` — a store-wide search text, seeded once (D-set-view: the set
+ *  view's own tap, for a card whose `box` will not coerce, and so cannot be aimed at a
+ *  row the way `card=<cid>` aims one — see `cardParam` above). `q` is D285's own key for
+ *  a screen's search text (`kit/viewState.ts`'s comment), so a link built this way reads
+ *  the same as if the operator had typed it. */
+function qParam(): string | null {
+  const hash = window.location.hash
+  const at = hash.indexOf('?')
+  if (at === -1) return null
+  const value = new URLSearchParams(hash.slice(at + 1)).get('q')
+  return value === null || value.trim() === '' ? null : value.trim()
+}
+
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
   useEffect(() => {
@@ -1781,6 +1794,18 @@ export function BoxBrowse({
     jumpBox.current = typeof row.card.box === 'number' ? row.card.box : null
     setJump(row.key)
   }, [rows, wantedCard, shelf, shelves])
+  /* `#/inventory?q=<text>`, SEEDED ONCE (D-set-view): the set view's own tap, for a card
+   *  whose `box` will not coerce — `qParam` above says why `card=<cid>` cannot aim a row
+   *  for it. Read once, on mount, never again: a second link pressed while this screen is
+   *  already open would otherwise overwrite whatever the operator has since typed. */
+  const seededQuery = useRef(false)
+  useEffect(() => {
+    if (seededQuery.current) return
+    seededQuery.current = true
+    const text = qParam()
+    if (text !== null) setQuery(text)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   useEffect(() => {
     if (goTo === undefined || goTo === null) return
     if (askedAt.current === goTo.at) return

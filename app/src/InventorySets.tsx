@@ -38,14 +38,23 @@ function qtyOf(cards: readonly SetGroupCard[]): number {
 }
 
 /** Walk to this card, the way Review's place pill already does — no new mechanism.
- *  `box: null` (a record whose position will not coerce) still clears `view`, so the tap
- *  never does nothing; it just cannot aim the walk at a row. */
+ *
+ *  `box: null` IS A REAL ROW, not a fault: `do_pipeline_sets` still ships it (never a
+ *  silent drop) for a record whose position will not coerce, and `box=<n>&card=<cid>`
+ *  cannot aim the walk at a row with no box to switch to. The fallback is the OTHER
+ *  existing deep link, `?q=<text>` (D285's own key for a screen's search text) — the
+ *  store-wide search `useSearch()` already runs, seeded once by `BoxBrowse.tsx`'s own
+ *  `qParam` — which lands on whichever box the search finds a match in, exactly as
+ *  typing the name would. The card's own name is what a person reads at the drawer, so
+ *  it is the first choice; the SKU and the composed number are what is left when even
+ *  that is blank. */
 function openInWalk(card: SetGroupCard): void {
-  patchViewQuery({
-    view: null,
-    box: card.box === null ? null : String(card.box),
-    card: card.cid,
-  })
+  if (card.box !== null) {
+    patchViewQuery({ view: null, box: String(card.box), card: card.cid })
+    return
+  }
+  const text = card.name ?? card.sku ?? card.number_display
+  patchViewQuery({ view: null, box: null, card: null, q: text })
 }
 
 function SetCardRow({ card }: { readonly card: SetGroupCard }) {
