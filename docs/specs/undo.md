@@ -430,6 +430,7 @@ proves each one. Three choices the table left open are recorded here.
 - **UN-8 is a read, not a write.** `do_retire` still touches no queue entry. Every
   open-entry read skips a departed card (`Queue.owed_entries`), so the retire undo brings
   the card back into Review with no second write.
-- **UN-2 says when the sitting ended.** `GET /capture/sitting` answers `open: false` and no
-  cards once the newest capture is more than 30 minutes old. The capture undo route itself
-  does not yet refuse on a sitting that has ended. It refuses only on state, as before.
+- **UN-2: the server decides when the sitting ended.** `GET /capture/sitting` answers
+  `open: false` and no cards once the newest capture is more than 30 minutes old. The
+  capture undo route reads the same rule, and refuses `capture_built_on` for a card outside
+  the open sitting (the coordinator's word, 2026-09-25). The fix after that is Manage box.

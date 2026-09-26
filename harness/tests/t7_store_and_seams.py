@@ -6608,6 +6608,16 @@ def check_undo_until_built_on(checks: Checks) -> None:
             (False, []),
             "and once the newest capture is older than the gap, the sitting has ended",
         )
+        refusal(
+            checks,
+            lambda: capture_server.do_delete_card(9, 3),
+            "capture_built_on",
+            "UN-2: once its sitting has ended, the capture undo refuses, by the same rule",
+        )
+        checks.ok(
+            "9/3" in Store().read().inventory.cards,
+            "and the refused undo deleted nothing",
+        )
 
     # ------------------------------------ UN-4, and every reversal, on a fresh demo seed
     with isolated_home():
