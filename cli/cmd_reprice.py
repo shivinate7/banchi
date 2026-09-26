@@ -282,6 +282,8 @@ def _say_plan(plan, say, source, export, live_rows) -> None:
         f"{str(asked['cut_off'])[:19]}")
     say(f"rule             {asked['rule']} off the {asked['basis']} price, "
         f"floored at {_money(Decimal(str(asked['floor'])))}")
+    if asked.get("cap") is not None:
+        say(f"                 and never more than {_money(Decimal(asked['cap']))} off one copy")
     if asked["above_market"] is not None:
         say(f"                 and only where the asking price is more than "
             f"{Decimal(asked['above_market']).normalize()}% above TCG Market Price")
@@ -397,6 +399,9 @@ def _surveyed(row, standing: str) -> dict:
         "last_sold": row.last_sold,
         "priced_at": row.priced_at,
         "row": row.row,
+        # SEALED OR A SINGLE, by the one rule (`reprice.is_sealed`), so the Live tab can filter
+        # sealed product on its own (the owner's ruling, 2026-09-26).
+        "sealed": reprice.is_sealed(row.row),
     }
 
 
@@ -502,6 +507,11 @@ def _list(args, say) -> int:
     except InvalidOperation:
         say(f"--above-market is {args.above_market!r}, which is not a number")
         return 1
+    try:
+        cap = reprice.check_cap(getattr(args, "cap", None))
+    except reprice.InvalidCap as exc:
+        say(f"--cap: {exc}")
+        return 1
 
     export = tcgcsv.read_export(path)
     source = runs.describe_source(path)
@@ -561,6 +571,7 @@ def _list(args, say) -> int:
         above_market=above,
         limit=args.limit,
         floor=floor,
+        cap=cap,
     )
     live_rows = sum(
         1
@@ -710,6 +721,14 @@ def _apply(args, say) -> int:
         say(f"{corpus.FILENAME} is unusable: {exc}")
         return 1
 
+    # THE READ'S OWN CAP, OFF THE MANIFEST, never off the request: the cap is a setting of the
+    # read this worklist is judged against, like its percentage.
+    try:
+        cap = reprice.check_cap((manifest.get("asked") or {}).get("cap"))
+    except reprice.InvalidCap as exc:
+        say(f"{manifest_path} is unusable: {exc}")
+        return 1
+
     edited = tcgcsv.read_export(path)
     application = reprice.read_back(
         edited.rows,
@@ -723,6 +742,7 @@ def _apply(args, say) -> int:
         offered=list(entries),
         unpriceable=unpriceable,
         floor=floor,
+        cap=cap,
     )
 
     say("")
@@ -761,7 +781,7 @@ def _apply(args, say) -> int:
         say("")
         say("not uploading")
         for code in (
-            reprice.UNCHANGED, reprice.BELOW_FLOOR, reprice.UNREADABLE,
+            reprice.UNCHANGED, reprice.BELOW_FLOOR, reprice.OVER_CAP, reprice.UNREADABLE,
             reprice.NOT_IN_WORKLIST, *reprice.UNPRICEABLE_CODES,
             reprice.RAISED, reprice.DUPLICATE,
         ):
@@ -804,6 +824,16 @@ def _apply(args, say) -> int:
     # AND IT REFUSES THE WHOLE FILE. The corpus is what `prices_for` will list this card at
     # from now on; an `import.csv` built against a corpus the operator cannot see is a file
     # that moves money on a decision nobody made.
+    # A STALE READ WRITES NOTHING (the owner's ruling, 2026-09-26: "require a fresh read"). The
+    # file this writes is judged against the read's prices, so a read older than
+    # `reprice.READ_FRESH_S` would put prices worked out from it in front of TCGplayer — by the
+    # send press, or by hand from "Download the file instead". Read again first.
+    if not reprice.read_is_fresh(manifest.get("at")):
+        say("")
+        say(f"REFUSED — this read was taken {manifest.get('at')}, more than a day ago. Prices")
+        say("and sales may have moved since. Read what is live again, then price from that read.")
+        return 1
+
     offered_revision = getattr(args, "corpus_revision", None)
     if offered_revision:
         current = corpus.revision()

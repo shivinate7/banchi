@@ -694,6 +694,10 @@ def build_parser() -> argparse.ArgumentParser:
         "one term here that says WHY a card is not selling rather than only that it has not.",
     )
     listing.add_argument(
+        "--cap",
+        help="the most the rule takes off one copy, in dollars (e.g. 5.00). No cap without it.",
+    )
+    listing.add_argument(
         "--limit",
         type=int,
         help="take only the N rows carrying the most asking value. The rest are named.",

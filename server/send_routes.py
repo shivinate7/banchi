@@ -80,7 +80,7 @@ from typing import Dict, Iterator, List, NoReturn, Optional, Sequence, Tuple
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from cli import cmd_reprice  # noqa: E402
-from pipeline import merge, tcgcsv  # noqa: E402
+from pipeline import merge, reprice, sendguard, tcgcsv  # noqa: E402
 from server import pipeline_routes  # noqa: E402
 from server import tcg_export  # noqa: E402
 from server import tcg_import  # noqa: E402
@@ -1042,7 +1042,11 @@ _PRICE_REFUSALS = {
 def _price_refusal(console: str, step: str) -> Optional[PipelineRefusal]:
     """`emit`'s refusal of a named price, as the route's, or None. Names every card."""
     said = _json_line(console, "send_prices") or {}
-    refused = said.get("refused") or []
+    return _price_refused(said.get("refused") or [], step)
+
+
+def _price_refused(refused: Sequence[dict], step: str) -> Optional[PipelineRefusal]:
+    """Refused price notes (`sendguard.PriceNote.as_dict`) as the route's refusal, or None."""
     if not refused:
         return None
     parts = []
@@ -1986,6 +1990,8 @@ def _markdown_send(stamp: str, directory: Path, progress: Dict[str, bool]) -> di
         )
     if record is not None and (record.get("unknown") or {}).get("resolved"):
         record = None  # A RESOLVED, NOT-LIVE UPLOAD: this press starts a fresh one.
+    if record is None:
+        _markdown_fresh(directory)
     skus = _markdown_skus(directory)
     with Store().write() as writable:
         conflicts = writable.send_claims.overlap(skus, excluding=claim)
@@ -2020,7 +2026,22 @@ def _markdown_send(stamp: str, directory: Path, progress: Dict[str, bool]) -> di
     except PipelineRefusal:
         _release(claim, "failed")
         raise
+    left: List[dict] = []
     if record is None:
+        try:
+            keep, left = _markdown_judge(directory, live_path)
+        except PipelineRefusal:
+            _release(claim, "failed")
+            raise
+        if left:
+            # THE FILE IS WHAT IS PUSHED (`tcg_import.rows_from_csv`), so a row left out leaves
+            # the file too. The check past the wait then compares only what went.
+            current = tcgcsv.read_export(directory / cmd_reprice.IMPORT)
+            tcgcsv.write_csv(
+                directory / cmd_reprice.IMPORT,
+                current.header,
+                [row for row in current.rows if str(row.get(tcgcsv.SKU_COLUMN) or "").strip() in keep],
+            )
         rows = tcg_import.rows_from_csv(
             (directory / cmd_reprice.IMPORT).read_text(encoding="utf-8")
         )
@@ -2057,7 +2078,69 @@ def _markdown_send(stamp: str, directory: Path, progress: Dict[str, bool]) -> di
     record["result"] = answer
     pipeline_routes._write_push(directory, record)
     _release(claim, "published")
-    return {"published": record, "stamp": stamp}
+    return {"published": record, "stamp": stamp, "left": left}
+
+
+def _markdown_fresh(directory: Path) -> None:
+    """Refuse a mark-down whose read is older than `reprice.READ_FRESH_S` (the owner's ruling,
+    2026-09-26: "require a fresh read"). Its prices were worked out from what TCGplayer held
+    then, so the screen reads again and the owner prices from that read."""
+    at = (pipeline_routes._survey_envelope(directory) or {}).get("at")
+    if not reprice.read_is_fresh(at):
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "read_stale",
+            "These prices come from a read more than a day old. Read what is live again, then "
+            "send from that read. Nothing was sent.",
+        )
+
+
+def _markdown_judge(directory: Path, live_path: Path) -> Tuple[set, List[dict]]:
+    """`(the SKUs that go, the notes of the rows left out)`, each price checked against the
+    fresh read (D273, "Each named price, checked against the fresh read").
+
+    `pipeline/sendguard.py:price_changes`, the listing send's own rule, over the mark-down's
+    file. The price the screen drew is the read's asking price (`survey.json`). TCGplayer's
+    price is not that one: the press refuses and names it. Under the store's floor: refused.
+    TCGplayer holds no copy, or already shows the new price: the row is left out and named,
+    and the press goes on. A file with nothing left to send refuses: there is nothing to push.
+    """
+    survey = pipeline_routes._survey(directory)
+    try:
+        fresh = tcgcsv.read_export(live_path)
+        live = sendguard.live_by_sku(fresh.rows, fresh.header)
+        prices = sendguard.live_prices(fresh.rows)
+    except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_GATEWAY,
+            "live_check_failed",
+            f"Banchi could not read what is live at TCGplayer, so nothing was sent. {exc}",
+        ) from None
+    named: Dict[str, tuple] = {}
+    candidates: Dict[str, tuple] = {}
+    for row in tcgcsv.read_export(directory / cmd_reprice.IMPORT).rows:
+        sku = str(row.get(tcgcsv.SKU_COLUMN) or "").strip()
+        if not sku:
+            continue
+        price = str(row.get(tcgcsv.PRICE_COLUMN) or "")
+        entry = survey.get(sku) or {}
+        named[sku] = (price, entry.get("asking"))
+        candidates[sku] = (entry.get("name") or row.get(tcgcsv.NAME_COLUMN) or "", price)
+    changes, left, refused = sendguard.price_changes(
+        named, candidates, live, prices, pipeline_routes._markdown_floor()
+    )
+    refusal = _price_refused([note.as_dict() for note in refused], "sent")
+    if refusal is not None:
+        raise refusal
+    if not changes:
+        raise PipelineRefusal(
+            HTTPStatus.CONFLICT,
+            "nothing_to_send",
+            "TCGplayer already shows every one of these prices, or holds no copy of the card. "
+            "Nothing was sent.",
+            data={"left": [note.as_dict() for note in left]},
+        )
+    return {change.sku for change in changes}, [note.as_dict() for note in left]
 
 
 def markdown_rolled_back_note(directory: Path, upload_id: str, cause: str) -> str:

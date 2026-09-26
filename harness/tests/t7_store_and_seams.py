@@ -20381,14 +20381,7 @@ def check_send_press(checks: Checks) -> None:
     # ------------------------------------------------------------ the mark-down's one press
     for failing in (None, "movetolive"):
         with send_portal() as portal, isolated_home() as home:
-            directory = home / "inventory" / "markdowns" / "20260923-130000"
-            directory.mkdir(parents=True)
-            source = tcgcsv.read_export(FIXTURE_EXPORT)
-            row = dict(
-                source.by_sku()[ARTICUNO_SKU],
-                **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: "19.99"},
-            )
-            tcgcsv.write_csv(directory / cmd_reprice.IMPORT, source.header, [row])
+            directory = _markdown_dir(home, "20260923-130000")
             portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
             if failing:
                 # A CLEAR REFUSAL (400): rolled back, nothing left. The unclear 500 is
@@ -20901,15 +20894,7 @@ def check_send_hazards(checks: Checks) -> None:
     # ------------------------------------------- the mark-down: two presses at once
     with _case(checks, "the mark-down: two presses at once"):
         def markdown(home):
-            directory = home / "inventory" / "markdowns" / "20260924-130000"
-            directory.mkdir(parents=True)
-            source = tcgcsv.read_export(FIXTURE_EXPORT)
-            row = dict(
-                source.by_sku()[ARTICUNO_SKU],
-                **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: "19.99"},
-            )
-            tcgcsv.write_csv(directory / cmd_reprice.IMPORT, source.header, [row])
-            return directory
+            return _markdown_dir(home, "20260924-130000")
 
         with send_portal() as portal, isolated_home() as home:
             directory = markdown(home)
@@ -20972,16 +20957,40 @@ class _Died(BaseException):
     and no `except Exception` catches it."""
 
 
-def _markdown_dir(home: Path, stamp: str, price: str = "19.99") -> Path:
-    """A mark-down directory holding one price row for Articuno, as `reprice list` writes it."""
+def _markdown_dir(home: Path, stamp: str, price: str = "19.99", *, at: Optional[str] = None) -> Path:
+    """A mark-down directory holding one price row for Articuno, as `reprice list` writes it.
+
+    WITH ITS SURVEY, which the send reads twice (the owner's ruling, 2026-09-26): its `at` says
+    whether the read is fresh enough to send from, and its asking price is the price the screen
+    drew, which the fresh read must still show. The asking price is the fixture's market price,
+    the same figure `_live_export_bytes` puts live. `at` defaults to now."""
     directory = home / "inventory" / "markdowns" / stamp
     directory.mkdir(parents=True)
     source = tcgcsv.read_export(FIXTURE_EXPORT)
-    row = dict(
-        source.by_sku()[ARTICUNO_SKU],
-        **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: price},
-    )
+    original = source.by_sku()[ARTICUNO_SKU]
+    row = dict(original, **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: price})
     tcgcsv.write_csv(directory / cmd_reprice.IMPORT, source.header, [row])
+    files.write_json(
+        directory / cmd_reprice.SURVEY,
+        {
+            "kind": "survey",
+            "at": at or master.now(),
+            "asked": {},
+            "counts": {},
+            "skus": [
+                {
+                    "sku": ARTICUNO_SKU,
+                    "standing": "offered",
+                    "skip": None,
+                    "name": original.get(tcgcsv.NAME_COLUMN, ""),
+                    "asking": str(original.get(tcgcsv.MARKET_PRICE_COLUMN) or ""),
+                    "live": 1,
+                    "sealed": False,
+                    "row": dict(original),
+                }
+            ],
+        },
+    )
     return directory
 
 
@@ -22577,6 +22586,172 @@ def _refusal_code_transport(rows, *, listing: bool) -> Optional[str]:
     except tcg_import.FetchRefusal as refusal:
         return refusal.code
     return None
+
+
+def check_live_markdown_guards(checks: Checks) -> None:
+    """The Live tab's four rules (the owner's rulings, 2026-09-26), each red under its own
+    mutation: a fresh read before any send, no mark-down for a card with no market price, a
+    dollar cap on top of the percentage, and a Singles / Sealed filter the apply holds the
+    screen to. And the mark-down send checks each price against the fresh read (D273)."""
+    checks.note("")
+    checks.note("LIVE TAB — fresh read, no-market skip, dollar cap, sealed filter")
+
+    now = datetime(2026, 9, 26, 12, 0, 0, tzinfo=timezone.utc)
+    long_ago = (now - timedelta(days=30)).isoformat()
+
+    def listing(sku, asking, market, condition="Near Mint"):
+        return {
+            tcgcsv.SKU_COLUMN: sku,
+            tcgcsv.NAME_COLUMN: sku,
+            tcgcsv.CONDITION_COLUMN: condition,
+            tcgcsv.LIVE_QUANTITY_COLUMN: "1",
+            tcgcsv.PRICE_COLUMN: asking,
+            tcgcsv.MARKET_PRICE_COLUMN: market,
+        }
+
+    rows = [
+        listing("SINGLE", "100.0000", "80.00"),
+        listing("NO-MARKET", "6000.0000", ""),
+        listing("SEALED", "349.9900", "300.00", tcgcsv.SEALED_CONDITION),
+    ]
+
+    def plan(cap=None):
+        return reprice.plan(
+            rows,
+            owned_since={row[tcgcsv.SKU_COLUMN]: long_ago for row in rows},
+            now=now,
+            days=7,
+            rule="undercut:10",
+            basis=reprice.BASIS_ASKING,
+            floor=Decimal("0.25"),
+            cap=cap,
+        )
+
+    # ------------------------------------------------------------- no market, no mark-down
+    uncapped = plan()
+    skipped = {c.sku: c.skip for group in uncapped.skipped.values() for c in group}
+    checks.equal(
+        skipped.get("NO-MARKET"),
+        reprice.NO_MARKET,
+        "SKIP NO-MARKET CARDS: a card with no market price is refused `no_market`, even on the "
+        "asking-price basis that could price it",
+    )
+    checks.ok(
+        "NO-MARKET" not in {c.sku for c in uncapped.rows},
+        "and it is not in the mark-down set, so no rule lowers it",
+    )
+
+    # -------------------------------------------------------------------- the dollar cap
+    proposed = {c.sku: c.proposed for c in uncapped.rows}
+    checks.equal(proposed.get("SINGLE"), Decimal("90.00"), "with no cap, 10% off $100 is $90")
+    capped = {c.sku: c.proposed for c in plan(Decimal("5.00")).rows}
+    checks.equal(
+        capped.get("SINGLE"),
+        Decimal("95.00"),
+        "A $5 CAP CLAMPS THE RULE: 10% off $100 would take $10, so the proposal is $95",
+    )
+    checks.equal(plan(Decimal("5.00")).asked.get("cap"), "5.00", "and the read records its cap")
+    back = reprice.read_back(
+        [
+            {tcgcsv.SKU_COLUMN: "SINGLE", tcgcsv.PRICE_COLUMN: "80.00"},
+            {tcgcsv.SKU_COLUMN: "SEALED", tcgcsv.PRICE_COLUMN: "345.00"},
+        ],
+        {"SINGLE": "100.0000", "SEALED": "349.9900"},
+        floor=Decimal("0.25"),
+        cap=Decimal("5.00"),
+    )
+    checks.equal(
+        ({e.sku: e.refusal for e in back.refused}, [e.sku for e in back.edits]),
+        ({"SINGLE": reprice.OVER_CAP}, ["SEALED"]),
+        "THE APPLY REFUSES A PRICE THAT TAKES MORE THAN THE CAP OFF ONE COPY, and lets one "
+        "inside it through",
+    )
+    checks.raises(reprice.InvalidCap, lambda: reprice.check_cap("0"), "a cap of $0 is refused")
+
+    # ------------------------------------------------------------------ the sealed rule
+    checks.equal(
+        [reprice.is_sealed(row) for row in rows],
+        [False, False, True],
+        "SEALED IS THE `Unopened` CONDITION, and nothing else",
+    )
+
+    # ------------------------------------------------------------------ a fresh read
+    checks.equal(
+        [
+            reprice.read_is_fresh((now - timedelta(hours=23)).isoformat(), now),
+            reprice.read_is_fresh((now - timedelta(hours=25)).isoformat(), now),
+            reprice.read_is_fresh(None, now),
+        ],
+        [True, False, False],
+        "A READ IS FRESH FOR A DAY, and one nothing can date is not fresh",
+    )
+    with send_portal() as portal, isolated_home() as home:
+        stale = _markdown_dir(home, "20260926-100000", at=long_ago)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_markdown_send(stale.name, {"confirm": True})),
+            "read_stale",
+            "REQUIRE A FRESH READ: a mark-down from a read a month old refuses",
+        )
+        checks.equal(portal["calls"], [], "and it refuses before TCGplayer is asked anything")
+
+        # THE APPLY REFUSES A STALE READ TOO, so "Download the file instead" cannot write one.
+        manual = _markdown_dir(home, "20260926-100100", at=long_ago)
+        (manual / cmd_reprice.IMPORT).unlink()
+        files.write_json(manual / cmd_reprice.MANIFEST, {"at": long_ago, "asked": {}, "skus": {}})
+        worklist = pipeline_routes._write_edits(manual, [{"sku": ARTICUNO_SKU, "price": "19.99"}])
+        said = command(checks, "reprice", "apply", str(worklist), "--write", exits=1)
+        checks.ok(
+            "more than a day ago" in said and not (manual / cmd_reprice.IMPORT).exists(),
+            "and `reprice apply --write` over a stale read writes no file",
+            said,
+        )
+
+    # ------------------------------------------- each price, checked against the fresh read
+    for label, live, code in (
+        ("TCGplayer moved the price", _live_export_priced({ARTICUNO_SKU: 1}, {ARTICUNO_SKU: "30.00"}), "price_refused"),
+        ("TCGplayer already shows it", _live_export_priced({ARTICUNO_SKU: 1}, {ARTICUNO_SKU: "19.99"}), "nothing_to_send"),
+        ("TCGplayer holds no copy", _live_export_bytes({ARTICUNO_SKU: 0}), "nothing_to_send"),
+    ):
+        with send_portal() as portal, isolated_home() as home:
+            directory = _markdown_dir(home, "20260926-110000")
+            portal["live"] = live
+            checks.equal(
+                _route_refusal(
+                    lambda directory=directory: send_routes.do_markdown_send(directory.name, {"confirm": True})
+                ),
+                code,
+                f"THE FRESH READ JUDGES EACH PRICE: {label}, so the mark-down refuses ({code})",
+            )
+            checks.equal(
+                [name for kind, name in portal["calls"] if kind == "POST"],
+                [],
+                f"{label}: and nothing is pushed",
+            )
+            checks.equal(
+                [claim.stamp for claim in Store().read().send_claims.live()],
+                [],
+                f"{label}: and its claim is released",
+            )
+
+    # --------------------------------------------------------------- the sealed filter
+    with isolated_home() as home:
+        directory = _markdown_dir(home, "20260926-120000")
+        edits = [{"sku": ARTICUNO_SKU, "price": "19.99"}]
+        checks.equal(
+            _route_refusal(
+                lambda: pipeline_routes.do_markdown_apply(directory.name, {"edits": edits, "kind": "sealed"})
+            ),
+            "kind_mismatch",
+            "THE SEALED FILTER HOLDS: a list filtered to Sealed may not carry a single's price",
+        )
+        checks.equal(
+            _route_refusal(
+                lambda: pipeline_routes.do_markdown_apply(directory.name, {"edits": edits, "kind": "singles"})
+            ),
+            None,
+            "and a list filtered to Singles carries it",
+        )
 
 
 def check_publish_lag(checks: Checks) -> None:
@@ -38085,6 +38260,7 @@ def run() -> Result:
     check_send_review_r6(checks)
     check_send_review_r7(checks)
     check_send_review_r8(checks)
+    check_live_markdown_guards(checks)
     check_schema_eleven_then_twelve(checks)
     check_run_match(checks)
     check_publish_lag(checks)

@@ -4383,6 +4383,12 @@ def _markdown_flags(payload: dict) -> List[str]:
     limit = payload.get("limit")
     if limit is not None:
         argv += ["--limit", str(_positive(limit, "limit"))]
+    cap = payload.get("cap")
+    if cap is not None and str(cap).strip() != "":
+        try:
+            argv += ["--cap", str(reprice.check_cap(cap))]
+        except reprice.InvalidCap as exc:
+            raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "cap_invalid", str(exc)) from None
     if payload.get("again"):
         argv.append("--again")
     return argv
@@ -4661,6 +4667,7 @@ def do_markdown_apply(stamp: str, payload: dict) -> dict:
     if isinstance(upload, dict):
         worklist = _store_upload(directory, upload, "edited-")
     elif edits is not None:
+        _check_kind(directory, edits, payload.get("kind"))
         worklist = _write_edits(directory, edits)
     if not worklist.is_file():
         raise PipelineRefusal(
@@ -4695,6 +4702,41 @@ def do_markdown_apply(stamp: str, payload: dict) -> dict:
         # very next keystroke is refused `corpus_moved` for a write they just made themselves.
         "revision": corpus.revision(),
     }
+
+
+#: The Live tab's Singles / Sealed filter (the owner's ruling, 2026-09-26), as the apply reads it.
+KINDS = ("singles", "sealed")
+
+
+def _check_kind(directory: Path, edits: object, kind: object) -> None:
+    """Refuse the whole request when the screen was filtered to one kind and an edit is the other.
+
+    THE FILTER IS THE SCREEN'S, AND THIS IS WHAT HOLDS IT TO ITS WORD. The Live tab sends the
+    prices of the rows it shows, so a filter to Singles must never carry a sealed price. `kind`
+    absent is "both", which is the unfiltered tab. The survey's own `sealed` flag decides, and
+    a SKU the survey never saw is left to `read_back`'s `not_in_worklist`.
+    """
+    if kind is None:
+        return
+    if kind not in KINDS:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST, "kind_invalid", f"{kind!r} is not one of {', '.join(KINDS)}."
+        )
+    survey = _survey(directory)
+    wrong = sorted(
+        str(entry.get("sku"))
+        for entry in (edits if isinstance(edits, list) else [])
+        if isinstance(entry, dict)
+        and str(entry.get("sku") or "") in survey
+        and bool(survey[str(entry.get("sku"))].get("sealed")) != (kind == "sealed")
+    )
+    if wrong:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "kind_mismatch",
+            f"The list shows {kind} only, and {len(wrong)} of these prices are for the other "
+            f"kind ({', '.join(wrong[:5])}). Nothing was written.",
+        )
 
 
 def _write_edits(directory: Path, edits: object) -> Path:
@@ -4770,6 +4812,14 @@ def _survey(directory: Path) -> Dict[str, dict]:
     }
 
 
+def _survey_envelope(directory: Path) -> Optional[dict]:
+    """`survey.json` whole, or None where it is absent or unreadable. The send reads its `at`."""
+    try:
+        return json.loads((directory / cmd_reprice.SURVEY).read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def _markdown_floor() -> str:
     """The store's cut-off, which is the floor a markdown may not price below.
 
@@ -4838,6 +4888,10 @@ def do_markdown_table(stamp: str) -> dict:
         # against $0.40 on a store set to $0.29, so the sheet drew the wrong figure and the
         # receipt named it.
         "floor": _markdown_floor(),
+        # HOW OLD THIS READ MAY BE AND STILL BE SENT FROM, the constant itself (the owner's
+        # ruling, 2026-09-26: "require a fresh read"). The screen offers "Read again" in place
+        # of Send past it, and the apply and the send refuse past it.
+        "stale_after_s": reprice.READ_FRESH_S,
     }
 
 
