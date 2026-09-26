@@ -326,13 +326,18 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 }
 .orders-walk-sectcount { margin-left: auto; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
 .orders-walk-rows { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+/* FINDING #16 (the Opus review round): a done line carrying the newest undoable copy draws
+   its own Undo as a SIBLING of the press, never nested inside it — a native <button> cannot
+   hold a second one. */
+.orders-walk-line { display: flex; align-items: center; gap: var(--bn-1); }
 .orders-walk-press {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas: 'slot name pick' '. for for';
   align-items: center;
   gap: 2px var(--bn-3);
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: var(--bn-control-h-lg);
   padding: var(--bn-2) var(--bn-3);
   border-radius: var(--bn-r);
@@ -341,6 +346,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   background: transparent;
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
+.orders-walk-line-undo { flex: none; }
 .orders-walk-press:hover { background: var(--bn-hover); }
 .orders-walk-press[aria-current='true'] { background: var(--bn-accent-tint); }
 .orders-walk-slot { grid-area: slot; min-width: 4ch; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-ink-2); }

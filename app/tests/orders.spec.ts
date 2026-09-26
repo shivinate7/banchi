@@ -1158,6 +1158,36 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
   expect(after).toEqual(before)
 })
 
+test('finding #16 (the Opus review round) — the struck-out row in the walk list, at 390, carries its own Undo', async ({
+  page,
+}) => {
+  /* THE REVIEW'S OWN REPRO: reaching Undo for a sale meant re-opening the card pane — the
+   * walk list's own row, once struck through, offered nothing back. `newestUndoKey` already
+   * names the one reversible copy; this proves the list itself now draws it, never only the
+   * pane above. */
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, { walkPlan: walkPlanOf([walkPlanStop()]) })
+
+  /* HIDE SOLD DEFAULTS ON (D132), so a done line leaves `.orders-walk-list` entirely unless
+   * turned off — the same thing `UN-6`'s own D118 case above turns off for the same reason:
+   * this case is about the row's OWN control, not about what stays visible once it is done. */
+  await page.getByRole('button', { name: /^Hide picked/ }).click()
+
+  const walkLine = page.locator('.orders-walk-line', { hasText: 'Volcanion' })
+  await expect(walkLine).not.toHaveClass(/is-done/)
+  await expect(walkLine.getByRole('button', { name: /^Undo/ })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect(walkLine).toHaveClass(/is-done/)
+
+  const undo = walkLine.getByRole('button', { name: /^Undo/ })
+  await expect(undo).toBeVisible()
+  await undo.click()
+
+  await expect(walkLine).not.toHaveClass(/is-done/)
+  await expect(page.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+})
+
 /* -------------------------------------------------------------------------------------- 5 */
 
 test('the receipt names where the card just was, never the departed label the sale answers with', async ({

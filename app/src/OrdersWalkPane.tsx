@@ -557,6 +557,13 @@ export function WalkList({
                   const current = line.rows.some((row) => row.rowKey === walk.current)
                   const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
                   const next = line.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? line.rows[0]
+                  /* FINDING #16 (the Opus review round): the struck-out row is reached only
+                   * through the card pane before this — the operator had to re-select the take
+                   * to find its own copy's Undo. `newestUndoKey` names the one reversible copy
+                   * store-wide (no clock, see above), so a line carrying it draws its own Undo
+                   * beside the row instead of nesting a second button inside `orders-walk-press`
+                   * (D57: the row's own control becomes Undo). */
+                  const undoRow = line.rows.find((row) => row.copy.key === walk.newestUndoKey)
                   return (
                     <li className={done ? 'orders-walk-line is-done' : 'orders-walk-line'} key={line.takeKey}>
                       <button
@@ -575,6 +582,17 @@ export function WalkList({
                         </span>
                         {showBuyers ? <span className="orders-walk-for">{takeBuyers(line.take)}</span> : null}
                       </button>
+                      {undoRow === undefined ? null : (
+                        <IconButton
+                          icon="undo"
+                          label="Undo"
+                          name={`Undo: ${undoRow.copy.place.label === null ? undoRow.copy.key : sayPlace(undoRow.copy.place.label)}`}
+                          className="orders-walk-line-undo"
+                          busy={walk.busyCopy === undoRow.copy.key}
+                          disabled={walk.busyCopy !== null && walk.busyCopy !== undoRow.copy.key}
+                          onClick={() => walk.undoCopy(undoRow.copy.key)}
+                        />
+                      )}
                     </li>
                   )
                 })}
