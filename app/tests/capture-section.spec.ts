@@ -409,3 +409,116 @@ test('at 390, the row stacks, every target is 40px or more, and nothing scrolls 
     expect(optBox?.height ?? 0).toBeGreaterThanOrEqual(40)
   }
 })
+
+/* THE ONE REAL CLIENT THAT CAN STILL HIT A DIV-LESS RESPONSE: an older capture server —
+ * `sections_detail[].div` is a field this feature's server-side patch added, so a browser
+ * tab whose bundle is current while the Python process behind it has not yet restarted onto
+ * that patch (a deploy in flight, `capture_server.py` not yet reloaded) reads exactly this
+ * shape. `GET /status`'s `boot_id`/`started_at` fields exist for the same class of skew. This
+ * is the fallback's own case — `doSection`'s `record.sections` read — and every other test in
+ * this file and in capture-undo.spec.ts now carries `div`, so this is the ONLY one exercising
+ * it. */
+test('an older server with no sections_detail[].div still lets U reach the divider', async ({
+  page,
+}) => {
+  const wire = { closes: [] as { div: string | null }[] }
+  await page.addInitScript(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 640
+    canvas.height = 360
+    const context = canvas.getContext('2d')
+    if (context !== null) {
+      context.fillStyle = 'rgb(180,180,180)'
+      context.fillRect(0, 0, 640, 360)
+    }
+    const stream = canvas.captureStream(30)
+    const media = navigator.mediaDevices as unknown as {
+      enumerateDevices: () => Promise<unknown[]>
+      getUserMedia: () => Promise<MediaStream>
+    }
+    media.enumerateDevices = async () => [
+      { deviceId: 'canvas', kind: 'videoinput', label: 'Canvas Cam Link', groupId: 'g' },
+    ]
+    media.getUserMedia = async () => stream
+  })
+  await page.route(/\/games$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(GAMES) }),
+  )
+  await page.route(/\/status$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ cards: 0, next_index: { '9': 4 } }),
+    }),
+  )
+  // An undeclared box, on an older server: `sections` (the raw list) is the ONLY thing that
+  // has ever been on this wire — `sections_detail` itself, and its own `div`, are both this
+  // feature's additions. `sections: []` is deliberate: it is what an undeclared box always
+  // sent, on every server this repo has shipped.
+  let sections: number[] = []
+  const boxRow = () => ({
+    box: 9,
+    bid: 19,
+    name: 'Legacy box',
+    sections,
+    fill: 3,
+    next_index: 4,
+    cards: 3,
+    sold: 0,
+    retired: 0,
+    listed: 0,
+    on_hand: 3,
+    sections_detail: [{ section: 1, start: 1, end: null, count: 3, name: null }],
+  })
+  await page.route(/\/boxes$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ boxes: [boxRow()] }),
+    }),
+  )
+  await page.route(/\/boxes\/9\/sections/, (route) => {
+    const method = route.request().method()
+    if (method === 'DELETE') {
+      const div = new URL(route.request().url()).searchParams.get('div')
+      wire.closes.push({ div })
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(boxRow()) })
+    }
+    if (method !== 'POST') return route.fallback()
+    sections = [4]
+    // THE OLDER SERVER'S OWN SHAPE: `sections_detail` still answers (it existed for D264's
+    // box map before this feature), but neither of its two entries carries `div`.
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...boxRow(),
+        sections_detail: [
+          { section: 1, start: 1, end: 3, count: 3, name: null },
+          { section: 2, start: 4, end: null, count: 0, name: null },
+        ],
+      }),
+    })
+  })
+  await page.route(/\/photo\/\d+\/\d+/, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAAAAACw=', 'base64') }),
+  )
+
+  await page.goto('/#/capture')
+  await expect(page.locator('.capture-row').filter({ hasText: /Finish/ })).toBeVisible()
+  await expect(async () => {
+    await page.keyboard.press('b')
+    await expect(page.locator('.capture-opt').filter({ hasText: /Legacy box/ })).toBeVisible({ timeout: 1_000 })
+  }).toPass({ timeout: 15_000 })
+  await page.keyboard.type('9')
+  await page.keyboard.press('Enter')
+
+  await page.keyboard.press('s')
+  await expect(page.locator('.capture-refused, .capture-note-ok').first()).toContainText('New section')
+
+  await page.keyboard.press('u')
+
+  // The fallback read `record.sections`' own last entry — "4" — and named it, exactly as a
+  // current server's own `div` would have.
+  await expect.poll(() => wire.closes).toEqual([{ div: '4' }])
+})

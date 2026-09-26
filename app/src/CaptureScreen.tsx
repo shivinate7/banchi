@@ -3021,15 +3021,32 @@ export function CaptureScreen() {
         code: null,
       })
       /* THE NEW DIVIDER'S OWN KEY, for `pickSection` and for `U`'s own aim. `opened.div` is
-       * what a current server always sends (subbox-capture.md 1.1) and is read first. The
-       * fallback — `record.sections`' own last entry, the RAW divider list `BoxRecord.sections`
-       * carries — is ONLY a safe stand-in when `after` was omitted (S at the back, the one
-       * case that list's tail is guaranteed to name); it predates this lane and stays for a
-       * fixture or an older server that has not grown `sections_detail[].div` yet. A middle
-       * S with no `div` in the response has no reachable key at all — `U` then falls through
-       * to the ordinary capture undo, same as a truly divider-less answer. */
+       * what a current server always sends (subbox-capture.md 1.1) and is read first.
+       *
+       * THE FALLBACK'S ONE REAL CLIENT: an older capture server. `sections_detail[].div` is
+       * this feature's own addition to a route that already existed for D264's box map, so a
+       * tab whose bundle has already reloaded onto this build while the Python process behind
+       * it has not yet restarted onto the matching server patch reads a `sections_detail` with
+       * every other field but this one — the same version-skew window `GET /status`'s
+       * `boot_id`/`started_at` exist to name elsewhere in this app. `record.sections`, the RAW
+       * divider list `BoxRecord.sections` has carried since D10, is the one thing every server
+       * this repo has ever shipped answers, so its own last entry is a safe stand-in — ONLY
+       * when `after` was omitted (S at the back), the one case that list's tail is guaranteed
+       * to name. A middle S against such a server has no reachable key at all — `U` then falls
+       * through to the ordinary capture undo, same as a truly divider-less answer.
+       *
+       * THE GUARD IS `selectedDiv === null`, NOT `priorPicked === null`. `priorPicked` resolves
+       * to the box's own last section (an ordinary S) even when nothing was ever explicitly
+       * picked, the moment `sectionsDetail` is non-empty — so testing it for `null` only ever
+       * caught the narrower case of a box whose sections had not loaded at all yet. What
+       * decides whether `after` was sent is `selectedDiv`, so that is what decides whether the
+       * tail of `record.sections` is a safe read of the divider `after`'s omission put at the
+       * back.
+       *
+       * `app/tests/capture-section.spec.ts` proves this exact case; every other fixture in
+       * this app now carries `div`, so the real path (`opened.div`) is what they exercise. */
       const backDiv = record.sections[record.sections.length - 1]
-      const newDiv = opened?.div ?? (priorPicked === null && backDiv !== undefined ? String(backDiv) : null)
+      const newDiv = opened?.div ?? (selectedDiv === null && backDiv !== undefined ? String(backDiv) : null)
       // THE SCREEN PICKS THE NEW SECTION, exactly as it always has — only now that is not
       // always the last one.
       if (opened !== null) pickSection(newDiv)
