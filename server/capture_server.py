@@ -2371,6 +2371,12 @@ class _Places:
         # caches the CARD, which is the layer `view()` cannot see. Safe for the same reason
         # every other cache on this class is: the instance never outlives one request.
         self._of_cache: Dict[Tuple[int, int], dict] = {}
+        # PER-BOX MEMO FOR `Inventory.box_order` (D265), THE PR 3 INTEGRATION. `box_order`
+        # selects the whole box every call, and `.of()` reached it three times per card
+        # (`_company`, the neighbour walk and the block's own `order`). Search's mid-word
+        # widening answers hundreds of rows, so 'ex' on a 3,000-card store spent 17s here.
+        # One request, one snapshot: the order cannot move under this instance.
+        self._order_cache: Dict[int, "master.BoxOrder"] = {}
 
     @classmethod
     def for_keys(
@@ -2422,6 +2428,15 @@ class _Places:
             total = len(occupied) if occupied is not None else 0
             self._cache[number] = (entry, layout, int(total), occupied)
         return self
+
+    def _order(self, box) -> "master.BoxOrder":
+        """`Inventory.box_order`, once per box for this instance's life (one request)."""
+        number = int(box)
+        order = self._order_cache.get(number)
+        if order is None:
+            order = self._inventory.box_order(number)
+            self._order_cache[number] = order
+        return order
 
     def view(self, box) -> Tuple[Optional[master.Box], Tuple[int, ...], int, Optional[Tuple[int, ...]]]:
         """`(registry entry or None, validated layout, denominator, on-hand indices)`.
@@ -2539,7 +2554,7 @@ class _Places:
             self._boxmates = {}
             return None
         # IN THE BOX'S ORDER (D265): a neighbour is the card physically next to this one.
-        order = self._inventory.box_order(number)
+        order = self._order(number)
         rows.sort(key=lambda row: order.of(row[0]))
         occupants = tuple((i, name) for i, name, gone in rows if not gone)
         cached = (
@@ -2612,7 +2627,7 @@ class _Places:
 
         # IN ORDER SPACE (D265). `gaps` is already orders; `at`, `start` and `end` are
         # indices, mapped here. With no order, each map is the identity.
-        order = self._inventory.box_order(box)
+        order = self._order(box)
         indices = [order.of(i) for i, _ in occupants]
         at = order.of(at)
         start = order.of(start)
@@ -2731,7 +2746,7 @@ class _Places:
 
         # THE NAME RIDES THE POSITION, so the label says it (D259).
         position = _positioner(
-            number, layout, occupied, self._inventory.box_order(number),
+            number, layout, occupied, self._order(number),
             box_name=entry.name if entry is not None else None,
         )(at)
         slot = position.slot
@@ -2780,7 +2795,7 @@ class _Places:
             "index": at,
             # WHERE THE CARD STANDS IN ITS BOX, 1 AT THE FAR BACK (D265): the sort key a walk
             # orders by. It equals `index` until something is placed into the box. Never drawn.
-            "order": self._inventory.box_order(number).of(at),
+            "order": self._order(number).of(at),
             # D58 — this card's number among the cards in the box, which is what every
             # rendered number on the screen counts in. `index` above it is the STORE KEY:
             # the route path, the photo filename and what every write aims by. They differ
