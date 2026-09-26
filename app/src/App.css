@@ -697,8 +697,13 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
   transform: translateX(-50%);
   padding: var(--bn-3) var(--bn-4) var(--bn-4);
   border-radius: var(--bn-r-xl);
-  background: var(--bn-ink);
-  color: var(--bn-bg);
+  /* A LIGHT RAISED SURFACE, NOT AN INVERTED ONE (the owner's ruling, 2026-09-26: "yeah i
+     do" — the kit's own popover/palette treatment, `.bn-menu` in kit.css: `--bn-surface`
+     with a shadow, no border). It reads correctly in dark mode for free: `--bn-surface`
+     and `--bn-ink` already flip in `tokens.css`'s dark block, so this one rule is both
+     themes and the dark-only override that used to sit below it is gone. */
+  background: var(--bn-surface);
+  color: var(--bn-ink);
   box-shadow: var(--bn-shadow-3);
   overflow: hidden;
   max-width: calc(100vw - 32px);
@@ -713,7 +718,6 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
   from { opacity: 0; transform: translateX(-50%) translateY(-4px) scale(0.98); }
   to { opacity: 1; transform: translateX(-50%); }
 }
-:root[data-theme='dark'] .bn-whichkey { background: var(--bn-surface); color: var(--bn-ink); }
 .bn-whichkey-title { font-size: var(--bn-fs-sm); opacity: 0.7; margin-bottom: var(--bn-2); display: flex; align-items: center; gap: 6px; }
 .bn-whichkey-grid { display: grid; grid-template-columns: repeat(5, auto); gap: var(--bn-2) var(--bn-4); }
 .bn-whichkey-item { display: inline-flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-md); font-weight: 500; white-space: nowrap; }
