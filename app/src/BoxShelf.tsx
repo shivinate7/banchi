@@ -235,13 +235,17 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
         const first = chosen[0]
         const last = chosen[chosen.length - 1]
         const aim = { count: chosen.length, first: first?.cid ?? null, last: last?.cid ?? null }
-        void run(() => moveRange(source.box, chosen.map((c) => c.index), { toBox: dest, beforeCard, sectionEnd }, aim))
+        /* THE TOKEN OF THE BOX THE MAP DREW, so a drop onto sections that changed since (an S on
+           the rig renumbers them) is refused and the map is read again. */
+        const layoutToken = byBox.get(dest)?.layout_token
+        void run(() => moveRange(source.box, chosen.map((c) => c.index), { toBox: dest, beforeCard, sectionEnd, layoutToken }, aim))
         return
       }
       const before = gap === 'end' ? null : Number(gap.slice(2))
-      void run(() => moveSections(source.box, range.first, range.last, { toBox: dest, before }, aimOf(source, range.first, range.last)))
+      const layoutToken = dest === 'new' ? undefined : byBox.get(dest)?.layout_token
+      void run(() => moveSections(source.box, range.first, range.last, { toBox: dest, before, layoutToken }, aimOf(source, range.first, range.last)))
     },
-    [source, range, dest, cardMode, chosen, run],
+    [source, range, dest, cardMode, chosen, run, byBox],
   )
 
   const undo = useCallback(async () => {

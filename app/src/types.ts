@@ -1766,6 +1766,9 @@ export type SectionMoveResult = {
 export type SectionMoveTarget = {
   toBox: number | 'new'
   before: number | null
+  /** `toBox`'s `layout_token` as the map drew it: the server refuses a drop onto sections that
+   *  changed since (409 `section_gone`). Omitted for a new box. */
+  layoutToken?: string
 }
 
 /** Where a card or a range lands (D264): in front of a card of `toBox` (its stored index),
@@ -1774,6 +1777,8 @@ export type CardMoveTarget = {
   toBox: number
   beforeCard: number | null
   sectionEnd: number | null
+  /** `toBox`'s `layout_token` as the map drew it (see `SectionMoveTarget`). */
+  layoutToken?: string
 }
 
 /** What `POST /boxes/sections/undo` answers. */
@@ -1790,6 +1795,11 @@ export type SectionUndoResult = {
  *  — see `BoxState`. This value comes off disk. */
 export type BoxRecord = {
   box: number
+
+  /** A short hash of the box's divider keys. Every aim at a section of this box sends it, and
+   *  the server refuses an aim whose token is not the box's now (409 `section_gone`): the
+   *  sections changed after this record was read. Absent from an older server. */
+  layout_token?: string
 
   /** THE TRUE INDEX OF THIS DRAWER — allocated once at its creation, never reused, and never
    *  rendered (D145). The owner said the last part twice: *"a box needs an index # not visible

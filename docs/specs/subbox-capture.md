@@ -160,15 +160,33 @@ above. No other caller starts to fail.
 | The demo server (`demoServer.ts`) | no move route | No. |
 | `scripts/cid-selftest.py` and the T7 cases | the two routes | They now send `section`. The T7 cases that meant the back of the box send the last section's key (`t7_store_and_seams.back_of`). |
 
-### 1.6 The Map's drag (`POST /boxes/<box>/cards/move`)
+### 1.6 The Map's drag (`POST /boxes/<box>/cards/move`) and section move (`POST /boxes/<box>/sections/move`)
 
 The drag names an exact gap: `before_card` or `section_end`, as before. A body with no gap
 used to go to the near end of the box. It is refused now, unless the destination box is
 empty. An empty box has one place, so a drop there is exact.
 
+**Both Map routes carry `layout_token` too** (the re-review's finding, round 2). The Map names
+its gap by a section NUMBER of `to_box` (`section_end`, `before`). An S after a middle section
+on the rig renumbers the later sections. A Map open on another device would then drop the
+cards into the new, empty section without a word. So each Map drop sends the `layout_token`
+of the box the Map drew, and the server compares it with `to_box`'s token now. An empty box,
+and a new box, need no token, as their drop needs no gap.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `layout_token` | string | `to_box`'s token from the `GET /boxes` the Map drew. Required when `to_box` has a section. |
+
 | Status | Code | When |
 |---|---|---|
 | 400 | `section_required` | No `before_card` and no `section_end`, and `to_box` holds a record or a declared divider. Nothing moves. |
+| 400 | `layout_token_required` | `to_box` has a section, and the body has no `layout_token`. Nothing moves. |
+| 409 | `section_gone` | The token is not `to_box`'s token now. Nothing moves. The Map shows the server's sentence and reads the boxes again. |
+
+`app/src/BoxShelf.tsx` sends the token of the box it drew (`byBox`), through `moveRange` and
+`moveSections` in `app/src/server.ts`. `app/tests/boxmap.spec.ts` asserts the token in each
+sent body. A new case there answers 409 and checks that the Map shows the sentence and reads
+the boxes again.
 
 **The callers checked (2026-09-26).** No caller sends a body with no gap into a box that
 holds cards.
@@ -274,6 +292,7 @@ stays in the mix. The divider proof's own fuzz (seeds 0 to 5) replays as before.
 | `sections_detail[].div` is off by one | I2, I3 |
 | A Move to box with no section is not refused | I12 |
 | A drag with no gap into a box that holds cards is not refused | the drag refusal case beside item 9 |
+| The Map drop checks no token | the S-then-drag case |
 
 One mutation stayed green, and it is not a defect. Resolving the section after the box is
 registered leaves I6 true. The write that raises `SectionGone` discards the new box entry

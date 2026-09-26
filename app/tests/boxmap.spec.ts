@@ -40,6 +40,7 @@ function box(n: number, name: string, sections: SectionDetail[]): BoxRecord {
     moved: 0,
     listed: 0,
     sections_detail: sections,
+    layout_token: `tok-${n}`,
   } as BoxRecord
 }
 
@@ -110,7 +111,7 @@ test('pick up, pick the box, press a gap: the write names the gap and aims at wh
   await expect(page.locator('.shelf-receipt')).toContainText('Move 10 cards from RB Origins to Mixed Singles.')
   expect(sent[0]).toEqual({
     path: '/boxes/1/sections/move',
-    body: { first: 2, last: 2, to_box: 2, before: 2, aim: { count: 10, first: 'u-a', last: 'u-z' } },
+    body: { first: 2, last: 2, to_box: 2, before: 2, layout_token: 'tok-2', aim: { count: 10, first: 'u-a', last: 'u-z' } },
   })
   await page.keyboard.press('u')
   await expect(page.locator('.shelf-receipt')).toContainText('Put back.')
@@ -218,7 +219,7 @@ test('a lifted section shows its cards; a range drops in front of a card of the 
   await expect(page.locator('.shelf-receipt')).toContainText('Move 2 cards from RB Origins to Mixed Singles.')
   expect(sent[0]).toEqual({
     path: '/boxes/1/cards/move',
-    body: { indices: [13, 14], to_box: 2, before_card: 2, section_end: null, aim: { count: 2, first: '1-13', last: '1-14' } },
+    body: { indices: [13, 14], to_box: 2, before_card: 2, section_end: null, layout_token: 'tok-2', aim: { count: 2, first: '1-13', last: '1-14' } },
   })
 })
 
@@ -235,5 +236,32 @@ test('one card drops at the end of a section, and the keyboard alone can do it',
   await gap.focus()
   await page.keyboard.press('Enter')
   await expect.poll(() => sent.length).toBe(1)
-  expect(sent[0]?.body).toMatchObject({ indices: [12], to_box: 2, before_card: null, section_end: 2 })
+  expect(sent[0]?.body).toMatchObject({ indices: [12], to_box: 2, before_card: null, section_end: 2, layout_token: 'tok-2' })
+})
+
+/* A drop onto sections that changed since the map was drawn (an S on the rig renumbers them):
+   the server refuses with `section_gone`, the map says so in one sentence and reads the boxes
+   again. */
+test('a drop onto sections that changed since the map was drawn is refused, and the map reads again', async ({ page }) => {
+  await stubCards(page)
+  let reads = 0
+  await page.route(/\/boxes(\?.*)?$/, (route) => {
+    reads += 1
+    return route.fulfill({ json: { boxes: BOXES, facets: { games: [], sets: {}, rarities: {} } } })
+  })
+  const sentence = 'The sections of Mixed Singles changed since the map was drawn. The map shows them as they are now, so drop the cards again.'
+  await page.route(/\/boxes\/\d+\/cards\/move$/, (route) =>
+    route.fulfill({ status: 409, json: { error: { code: 'section_gone', message: sentence } } }),
+  )
+  await page.goto(ROUTE)
+  await settleFonts(page)
+  await expect(page.locator('.shelf-box')).toHaveCount(3)
+  await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
+  await page.getByRole('button', { name: 'Some cards' }).click()
+  await page.getByRole('list', { name: 'The cards in this section' }).getByRole('button', { name: /u1/ }).click()
+  await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
+  const before = reads
+  await page.getByRole('button', { name: /Put u1 at the end of Promos, in Mixed Singles/ }).click()
+  await expect(page.getByText(sentence)).toBeVisible()
+  await expect.poll(() => reads).toBeGreaterThan(before)
 })
