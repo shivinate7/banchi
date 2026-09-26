@@ -7436,8 +7436,8 @@ COMPONENTS = [
                                              "wire's own `keys` term.",
                                      "governed_by": ["D13", "D27", "D32", "D33", "D39", "D48",
                                                      "D52", "D56", "D58", "D65", "D76", "D78",
-                                                     "D94", "D114", "D118", "D145", "D172",
-                                                     "D174", "D180", "D291"]},
+                                                     "D94", "D114", "D118", "D145", "D172", "D174",
+                                                     "D180", "D196", "D269", "D275", "D291"]},
             "src/RunsLog.tsx": {"does": "a command's stdout, verbatim, in a well that follows its "
                                         "tail, counts its lines, folds and copies. NOTHING HERE "
                                         "SUMMARISES WHAT A COMMAND SAID — D33 puts every "

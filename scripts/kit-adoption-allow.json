@@ -49,11 +49,6 @@
       "R2-date": "review",
       "R2-money": "review"
     },
-    "app/src/RunsComposer.tsx": {
-      "R2-dialog": "review",
-      "R2-select": "review",
-      "R2-class": "review"
-    },
     "app/src/SendCard.tsx": {
       "R2-icon-only-button": "icons"
     },

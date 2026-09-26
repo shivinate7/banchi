@@ -957,15 +957,7 @@ test('the picture follows the reading, and a whole-frame run draws no cut at all
   await expect(page.locator('.run-preview-sent')).toHaveAttribute('src', /crop-900$/)
 })
 
-/* NAMED REGRESSION FROM THE FOLD (D291), NOT SILENTLY DROPPED. Traced:
- * `document.activeElement` inside the arrow-key guard reads a "Close" IconButton, not the
- * "Max edge" spinbutton the case clicks into, on every press — including the very first one,
- * before "Custom" is ever revealed. The click completes with no Playwright error (not an
- * obscured-element case, which throws and is fixed above for the interpunct case). Widening
- * `.review-runs-sheet` (see that file) did not change it. Root-caused as far as this round's
- * budget reaches: the panel's own default first-focus target under `kit/overlay.tsx:
- * useFirstFocus`, one layer deeper than it used to sit. Filed rather than hidden. */
-test.fixme('arrow keys walk the box, and a text field keeps its own caret keys', async ({ page }) => {
+test('arrow keys walk the box, and a text field keeps its own caret keys', async ({ page }) => {
   const wire = await open(page)
   await atReading(page)
   await expect(page.locator('.run-preview-count')).toContainText('card 1 of 543')
@@ -1390,11 +1382,7 @@ test('a run that predates the true index is still marked, and has no name to rec
   await expect(page.locator('.run-row-scope').first()).toHaveText('Box 1 (deleted)')
 })
 
-/* NAMED REGRESSION FROM THE FOLD (D291). The box pick and the Escape both
- * complete with no error, but `.run-group` never appears — the picked selection is not
- * grouping the run list the way it did on the standalone route. Not yet root-caused past
- * that: filed rather than hidden. */
-test.fixme('a run predating the box field still finds its box from its scope, and is grouped by it', async ({
+test('a run predating the box field still finds its box from its scope, and is grouped by it', async ({
   page,
 }) => {
   /* THE FALLBACK, NARROWED TO THE ONE ARM THAT IS NOT A GUESS. `boxOf` read three sources in
@@ -1737,11 +1725,7 @@ test('a handoff loses only the keys whose drawer is gone, not the whole list', a
   await expect(page.locator('.runs-composer-note')).toContainText('2 ticked cards in Box 9')
 })
 
-/* NAMED REGRESSION FROM THE FOLD (D291). `.run-button-money` becomes
- * unstable and the outer `.review-runs-sheet` body intercepts the click meant for it, deep
- * into this test's own flow (spend confirm, after a working preflight). Widening the sheet
- * did not clear it. Not yet root-caused past that: filed rather than hidden. */
-test.fixme('#/runs?state=captured opens the composer on its default scope, the way standing.ts links to it', async ({
+test('#/runs?state=captured opens the composer on its default scope, the way standing.ts links to it', async ({
   page,
 }) => {
   const wire = await open(page, { at: '/#/runs?state=captured' })
@@ -3013,11 +2997,7 @@ test('rebind: a refusal draws a sentence, never the CLI reason code', async ({ p
  *  PROVED RED: copying the pre-sweep `RunPanel.tsx`, `RunsComposer.tsx` and `runScope.ts`'s
  *  `destinationLabel`/eyebrow markup back in over this file failed this assertion, over
  *  `290,470 tokens in · 3,761 out`, `Free · re-runnable` and `Box 3 · RB Epics` alike. */
-/* NAMED REGRESSION FROM THE FOLD (D291). Escape closes `.rescue-sheet`'s
- * own overlay on every other case in this file, but here `.rescue-sheet` never reaches count
- * 0 -- a real gap, not just its 140ms leave transition racing the next click (a wait for that
- * was added and did not clear it). Not yet root-caused past that: filed rather than hidden. */
-test.fixme('no typed interpunct reaches the runs screen', async ({ page }) => {
+test('no typed interpunct reaches the runs screen', async ({ page }) => {
   const wire = await open(page, {
     detail: { box_former: true, box_bid: 1 },
     claimed: {
