@@ -90,6 +90,7 @@ import {
   Segmented,
   Sheet,
   openSheet,
+  useUndoHotkey,
 } from './kit'
 import { toast } from './kit/toast'
 import './Pricing.css'
@@ -327,11 +328,15 @@ function groupOf(sku: PricingSku): string | null {
   return sku.at_cap ? (sku.nothing_to_add ?? 'nothing to add this run') : null
 }
 
-type Undo = {
-  sku: string
-  before: CorpusAnswer | undefined
-  channel: 'price' | 'unknown'
-}
+/* ONE VOCABULARY (UN-5, finding #15, the Opus review round): a reversal reads "<what it
+ * undid> undone" (`docs/specs/undo.md` §11.10). `id` (finding #2) lets a toast's own Undo
+ * reverse THE CHANGE IT NAMES, never whatever the stack's front holds by the time the
+ * button is actually pressed — a hold set on one row and then another must not let the
+ * second row's toast undo the first's write. */
+type Undo = { id: number } & (
+  | { kind: 'answer'; sku: string; before: CorpusAnswer | undefined; channel: 'price' | 'unknown' }
+  | { kind: 'cutoff'; before: { threshold: string | undefined; sub_threshold: PricingCorpus['policy']['sub_threshold'] | undefined } }
+)
 
 /** The corpus as the document every reader on this screen understands, with one run's policy
  *  override folded over the store's in `corpus.py:policy_for`'s own order. */
@@ -694,6 +699,7 @@ export function Pricing() {
   const clearPicked = useCallback(() => setPicked(new Set()), [])
   const [saving, setSaving] = useState(false)
   const [undo, setUndo] = useState<Undo[]>([])
+  const nextUndoId = useRef(1)
   const [holdFor, setHoldFor] = useState<string | null>(null)
   const holdAnchor = useRef<HTMLElement | null>(null)
   const holdButtons = useRef(new Map<string, HTMLButtonElement>())
@@ -897,14 +903,30 @@ export function Pricing() {
   const queued = runs.find((row) => row.run === run)?.counts?.queued_main ?? 0
 
   /** Set the STORE-WIDE cut-off. BOTH KEYS, ALWAYS: the line and what the half below it lists at
-   *  are one figure (the owner, 2026-09-03), so this screen has no way to write one alone. */
+   *  are one figure (the owner, 2026-09-03), so this screen has no way to write one alone.
+   *  UN-13 (finding #15, `docs/specs/undo.md` §11.10): a cut-off change is a reversal too, so
+   *  it gets the same "<subject> undone" toast every other write on this screen gets. */
   const setCut = useCallback((figure: string) => {
+    const id = nextUndoId.current++
+    setUndo((stack) =>
+      [
+        { id, kind: 'cutoff' as const, before: { threshold: book?.policy?.threshold, sub_threshold: book?.policy?.sub_threshold } },
+        ...stack,
+      ].slice(0, UNDO_DEPTH),
+    )
+    toast({
+      kind: 'receipt',
+      title: 'Cut-off changed',
+      body: `The store-wide rule now reads ${figure}.`,
+      ttlMs: 8000,
+      action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) },
+    })
     setBook((current) =>
       current === null
         ? current
         : { ...current, policy: { ...current.policy, threshold: figure, sub_threshold: { [FLAT_KEY]: figure } } },
     )
-  }, [])
+  }, [book])
 
   const setRunCut = useCallback(
     (figure: string | undefined) => {
@@ -930,18 +952,22 @@ export function Pricing() {
     reload()
   }, [clearAsked, reload])
 
-  /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo stack. */
+  /** Write one answer, pushing the previous value — including its ABSENCE — onto the undo stack.
+   *  Returns the entry's own id (finding #2), so a toast can reverse THIS write and never
+   *  whatever the stack's front holds by the time the button is pressed. */
   const write = useCallback(
-    (sku: string, bucket: PricingSku['bucket'], value: unknown) => {
+    (sku: string, bucket: PricingSku['bucket'], value: unknown): number => {
       const channel: 'price' | 'unknown' = targetOf(bucket) === 'no_market_data' ? 'unknown' : 'price'
       setBook((current) => (current === null ? current : setAnswer(current, sku, value, channel)))
-      setUndo((stack) => [{ sku, before: book?.skus?.[sku], channel }, ...stack].slice(0, UNDO_DEPTH))
+      const id = nextUndoId.current++
+      setUndo((stack) => [{ id, kind: 'answer' as const, sku, before: book?.skus?.[sku], channel }, ...stack].slice(0, UNDO_DEPTH))
       setTypedHere((held) => {
         const next = new Set(held)
         if (typeof value === 'string' && value !== 'unlisted' && source.kind === 'run') next.add(sku)
         else next.delete(sku)
         return next
       })
+      return id
     },
     [book, source.kind],
   )
@@ -1386,34 +1412,70 @@ export function Pricing() {
     [doc, rows, answerFor],
   )
 
+  /** Reverses one entry, whichever kind it is — shared by `undoLast` (`U`, the toolbar) and
+   *  `undoById` (a toast's own Undo, finding #2). */
+  const applyReversal = useCallback(
+    (top: Undo) => {
+      if (top.kind === 'cutoff') {
+        setBook((current) =>
+          current === null
+            ? current
+            : { ...current, policy: { ...current.policy, threshold: top.before.threshold, sub_threshold: top.before.sub_threshold } },
+        )
+        return
+      }
+      setBook((current) => {
+        if (current === null) return current
+        const skus = { ...(current.skus ?? {}) }
+        if (top.before === undefined) delete skus[top.sku]
+        else skus[top.sku] = top.before
+        return { ...current, skus }
+      })
+      /* AN UNDONE ANSWER WAS NOT TYPED THIS VISIT (round 7, R6-2). */
+      setTypedHere((held) => {
+        const next = new Set(held)
+        next.delete(top.sku)
+        return next
+      })
+      const row = rows.find((one) => one.sku === top.sku)
+      const input = inputs.current.get(top.sku)
+      if (row !== undefined && input) {
+        const before = top.before?.value
+        input.value = typeof before === 'string' ? before : suggestionFor(row)
+        flash(input)
+      }
+      touched.current.delete(top.sku)
+    },
+    [rows, suggestionFor],
+  )
+
+  /* THE NEWEST, AND ONLY THE NEWEST (`U` and the toolbar's own Undo): `docs/specs/undo.md`
+   * §11.1's own rank rule. */
   const undoLast = useCallback(() => {
     const [top, ...rest] = undo
     if (top === undefined) return
-    setBook((current) => {
-      if (current === null) return current
-      const skus = { ...(current.skus ?? {}) }
-      if (top.before === undefined) delete skus[top.sku]
-      else skus[top.sku] = top.before
-      return { ...current, skus }
-    })
+    applyReversal(top)
     setUndo(rest)
-    /* AN UNDONE ANSWER WAS NOT TYPED THIS VISIT (round 7, R6-2). */
-    setTypedHere((held) => {
-      const next = new Set(held)
-      next.delete(top.sku)
-      return next
-    })
-    const row = rows.find((one) => one.sku === top.sku)
-    const input = inputs.current.get(top.sku)
-    if (row !== undefined && input) {
-      const before = top.before?.value
-      input.value = typeof before === 'string' ? before : suggestionFor(row)
-      flash(input)
-    }
-    touched.current.delete(top.sku)
-  }, [undo, rows, suggestionFor])
-  const undoRef = useRef(undoLast)
-  undoRef.current = undoLast
+  }, [undo, applyReversal])
+
+  /** A SPECIFIC PRESS, BY ID (finding #2): a toast's own Undo calls this with the id it was
+   *  given at push time, so it reverses THE CHANGE IT NAMES — never whatever the stack's
+   *  front holds by the time the button is actually pressed. A newer press standing on top
+   *  is untouched; an id no longer in the stack (already undone, or the depth cap dropped
+   *  it) does nothing, silently — the toast itself is long gone by then. */
+  const undoById = useCallback(
+    (id: number) => {
+      const top = undo.find((entry) => entry.id === id)
+      if (top === undefined) return
+      applyReversal(top)
+      setUndo((stack) => stack.filter((entry) => entry.id !== id))
+    },
+    [undo, applyReversal],
+  )
+  /* A toast's undo fires later than the closure it was made in; the ref always holds the
+   * latest. */
+  const undoByIdRef = useRef(undoById)
+  undoByIdRef.current = undoById
 
   /* THE CHEAP ROWS FOLLOW THE CUT-OFF on a run: the field shows what the send will write. */
   useEffect(() => {
@@ -1438,14 +1500,14 @@ export function Pricing() {
   const toggleHold = useCallback(
     (sku: PricingSku) => {
       if (isWithheld(answers[sku.sku])) {
-        write(sku.sku, sku.bucket, undefined)
+        const id = write(sku.sku, sku.bucket, undefined)
         setHoldFor(null)
         toast({
           kind: 'receipt',
           title: `Released ${sku.name}`,
           body: 'It goes out with the next send.',
           ttlMs: 8000,
-          action: { label: 'Undo', kbd: 'U', onPress: () => undoRef.current() },
+          action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) },
         })
         return
       }
@@ -1465,15 +1527,25 @@ export function Pricing() {
       const record: WithheldRecord = { withheld: reason }
       if (watch.trim() !== '') record.watch_above = watch.trim()
       if (text.trim() !== '') record.note = text.trim()
-      write(sku.sku, 'listable', record)
-      if (sku.bucket === 'no_market_data') write(sku.sku, sku.bucket, 'unlisted')
+      const id = write(sku.sku, 'listable', record)
+      /* UN-12: `setHold` may push a SECOND entry (the bucket write below), so one `U` has to
+       * undo both — the toast reverses each id it pushed, oldest first, so the second call's
+       * `.find` still sees the first entry that has not yet been filtered out. */
+      const id2 = sku.bucket === 'no_market_data' ? write(sku.sku, sku.bucket, 'unlisted') : null
       setHoldFor(null)
       toast({
         kind: 'receipt',
         title: `Held ${sku.name}`,
         body: WITHHOLD_LABELS[reason],
         ttlMs: 8000,
-        action: { label: 'Undo', kbd: 'U', onPress: () => undoRef.current() },
+        action: {
+          label: 'Undo',
+          kbd: 'U',
+          onPress: () => {
+            if (id2 !== null) undoByIdRef.current(id2)
+            undoByIdRef.current(id)
+          },
+        },
       })
       inputs.current.get(sku.sku)?.focus()
     },
@@ -1558,32 +1630,36 @@ export function Pricing() {
     setPhotoFor((current) => (current !== null && current.sku === sku.sku ? null : { sku: sku.sku, at: 0 }))
   }, [])
 
-  /* THE SCREEN'S KEYS, FROM ANYWHERE THAT IS NOT A FIELD (UX-075): `U` undoes, and `T` opens the
-     product view for the row under the pointer or the focused one. A price field takes its own
-     letters in `onKey` below. An open overlay owns the keyboard. */
+  /* `T` OPENS THE PRODUCT VIEW for the row under the pointer or the focused one, from anywhere
+     that is not a field (UX-075). An open overlay owns the keyboard. */
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey || event.repeat || event.defaultPrevented) return
       if (holdFor !== null || ruleOpen || runsOpen || photoFor !== null) return
       if (document.querySelector('[aria-modal="true"]') !== null) return
       if (isEditableTarget(event.target)) return
-      const key = event.key.toLowerCase()
-      if (key === 'u') {
-        event.preventDefault()
-        undoRef.current()
-        return
-      }
-      if (key === 't') {
-        const aim = hovered.current ?? focusedSku()
-        const row = aim === null ? undefined : rows.find((one) => one.sku === aim)
-        if (row === undefined) return
-        event.preventDefault()
-        openProduct(row)
-      }
+      if (event.key.toLowerCase() !== 't') return
+      const aim = hovered.current ?? focusedSku()
+      const row = aim === null ? undefined : rows.find((one) => one.sku === aim)
+      if (row === undefined) return
+      event.preventDefault()
+      openProduct(row)
     }
     window.addEventListener('keydown', down)
     return () => window.removeEventListener('keydown', down)
   }, [focusedSku, holdFor, ruleOpen, runsOpen, photoFor, rows, openProduct])
+
+  /* FINDING #11 (the Opus review round): `U` used to be a second, hand-rolled copy of the
+   * shared hotkey (`kit/undo.ts`'s own comment: "a screen that still binds `U` itself is
+   * what `make kit-adoption` fails"). `useUndoHotkey` is the one `U` primitive now — it
+   * already yields to a repeat, a modifier and an editable target on its own; the panels
+   * this screen owns (`holdFor`/`ruleOpen`/`runsOpen`/`photoFor`, any open dialog) are what
+   * only this screen knows about, so they gate the callback it is given. */
+  useUndoHotkey(() => {
+    if (holdFor !== null || ruleOpen || runsOpen || photoFor !== null) return null
+    if (document.querySelector('[aria-modal="true"]') !== null) return null
+    return undo.length === 0 ? null : () => undoLast()
+  })
 
   const onKey = useCallback(
     (event: ReactKeyboardEvent<HTMLInputElement>, sku: PricingSku) => {
@@ -2558,6 +2634,12 @@ function BigMoney({ value, onCommit, label }: { value: string; onCommit: (next: 
   useEffect(() => {
     setDraft(value)
   }, [value])
+  /* FINDING #6 (the Opus review round): Enter used to commit, then blur the field, whose own
+   * `onBlur` committed AGAIN — one keystroke, two `onCommit` calls (two undo entries, two
+   * toasts). `justCommitted` is set the instant Enter or Escape has already resolved the
+   * field's own value; `onBlur` reads it once and clears it, so it never repeats a commit —
+   * or a REVERT — that already landed. */
+  const justCommitted = useRef(false)
   const commit = (text: string) => {
     const next = text.trim()
     if (!priceable(next)) {
@@ -2580,17 +2662,25 @@ function BigMoney({ value, onCommit, label }: { value: string; onCommit: (next: 
         size={Math.max(4, draft.length + 1)}
         onChange={(event) => setDraft(event.currentTarget.value.replace(/[^0-9.]/g, ''))}
         onFocus={(event) => event.currentTarget.select()}
-        onBlur={(event) => commit(event.currentTarget.value)}
+        onBlur={(event) => {
+          if (justCommitted.current) {
+            justCommitted.current = false
+            return
+          }
+          commit(event.currentTarget.value)
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
             event.preventDefault()
             event.stopPropagation()
+            justCommitted.current = true
             setDraft(value)
             event.currentTarget.blur()
             return
           }
           if (event.key !== 'Enter') return
           event.preventDefault()
+          justCommitted.current = true
           commit(event.currentTarget.value)
           event.currentTarget.blur()
         }}

@@ -3617,6 +3617,85 @@ test('Undo has a fixed place, and U undoes from anywhere on the screen', async (
   await expect.poll(() => sentAnswers(wire)).toEqual({})
 })
 
+test('finding #2 (the Opus review round) — a hold toast\'s own Undo reverses that hold, never whatever a newer answer put on top', async ({
+  page,
+}) => {
+  const skus = [
+    sku({ sku: '1', name: 'Articuno', snap: { market: '3.00', direct_low: null, low: '2.80', low_with_shipping: '3.80', now: null } }),
+    sku({ sku: '2', name: 'Dunsparce', snap: { market: '2.00', direct_low: null, low: '1.80', low_with_shipping: '2.80', now: null } }),
+  ]
+  const wire = await open(page, { skus })
+
+  await page.getByRole('button', { name: 'Hold back Dunsparce' }).click()
+  await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByRole('button', { name: 'Hold it' }).click()
+  const holdToast = page.locator('.bn-toast', { hasText: 'Held Dunsparce' })
+  await expect(holdToast).toBeVisible()
+
+  /* A NEWER WRITE LANDS ON TOP OF THE STACK — the old code's toast called whatever `undoLast`
+   * held by press time, which by then would be THIS one, not the hold it named. */
+  await page.getByLabel('Price for Articuno').fill('9.00')
+  await page.getByLabel('Price for Articuno').press('Enter')
+  await expect.poll(() => sentAnswers(wire)['1']).toBe('9.00')
+
+  await holdToast.getByRole('button', { name: 'Undo' }).click()
+
+  /* THE HOLD IS GONE. THE NEWER ANSWER STANDS. */
+  await expect(page.locator('.pricing-row', { hasText: 'Dunsparce' }).locator('.pricing-state')).toHaveCount(0)
+  await expect.poll(() => sentAnswers(wire)['1']).toBe('9.00')
+})
+
+test('finding #6 (the Opus review round) — Enter commits once, not twice on the blur it triggers', async ({
+  page,
+}) => {
+  /* THE PUT ITSELF DEBOUNCES, so two `onCommit` calls in one tick would coalesce into one
+   * network write regardless — the visible symptom is the TOAST, which does not debounce:
+   * the old code fired `onCommit` from Enter, then again from the blur Enter itself
+   * triggers, stacking two "Cut-off changed" toasts for one keystroke. */
+  await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const cut = page.getByLabel('Cut-off', { exact: true })
+  await cut.fill('0.45')
+  await cut.press('Enter')
+  await expect(page.locator('.bn-toast', { hasText: 'Cut-off changed' })).toHaveCount(1)
+})
+
+test('finding #9/#15 (the Opus review round) — a cut-off change gets its own "Cut-off changed" toast, with Undo', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await page.getByRole('button', { name: 'Change' }).click()
+  const cut = page.getByLabel('Cut-off', { exact: true })
+  await cut.fill('0.45')
+  await cut.press('Enter')
+  await expect.poll(() => sentPolicy(wire).threshold).toBe('0.45')
+
+  const cutToast = page.locator('.bn-toast', { hasText: 'Cut-off changed' })
+  await expect(cutToast).toBeVisible()
+  await cutToast.getByRole('button', { name: 'Undo' }).click()
+  await expect(cut).toHaveValue('0.40')
+})
+
+test('finding #11 (the Opus review round) — `U` still undoes a minute later, off the shared hook rather than a second copy', async ({
+  page,
+}) => {
+  /* Pricing used to reimplement the whole window listener itself (`kit/undo.ts`'s own
+   * comment: "a screen that still binds `U` itself is what `make kit-adoption` fails").
+   * `useUndoHotkey` reads no clock, so this is the same proof `review.spec.ts`,
+   * `fulfillment.spec.ts` and `orders.spec.ts` already carry, here too. */
+  await page.clock.install()
+  const wire = await open(page)
+  await field(page).focus()
+  await page.keyboard.type('12.00')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => sentAnswers(wire)['8608859']).toBe('12.00')
+
+  await page.clock.runFor(60_000)
+  await page.locator(`${VIEW} h1`).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => sentAnswers(wire)).toEqual({})
+})
+
 test('the rule sheet writes the cut-off to both keys, and says how many cards it splits', async ({ page }) => {
   const wire = await open(page, {
     skus: [
