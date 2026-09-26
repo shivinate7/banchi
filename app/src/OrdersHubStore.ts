@@ -44,6 +44,16 @@ export type HubState = {
    *  re-armed by a clock — `until` is read at the moment `U` is pressed, the same "no window,
    *  no clock" ruling every other undo in this store answers to. */
   readonly lastPull: { readonly target: PullTarget; readonly place: string; readonly name: string; readonly until: number } | null
+  /** THE MOST RECENT SUCCESSFUL UNDO MADE FROM A TOAST OR `U` — `undoFromToast` in
+   *  `Orders.tsx` sets this beside clearing `lastPull`, and `PullStage` watches `undoneAt` to
+   *  tell its own mounted walk (`useOrderWalk`'s `noteExternalUndo`) that this copy is no
+   *  longer recorded. Neither of those undo paths goes through the walk's own `undoCopy`, so
+   *  before this existed the walk's tally never moved for them (the review round's finding
+   *  2). `undoneAt` is a COUNTER, never a boolean or a timestamp compared to `Date.now()`: two
+   *  undos of the same copy in one session must both be seen, and a stale one must never be
+   *  read as fresh by a clock that moved. */
+  readonly undoneTarget: PullTarget | null
+  readonly undoneAt: number
   /** WALK MODE'S ONE LINE (the owner's ruling, 2026-09-24): who is walked, how many cards to
    *  pick, what is next. The Orders screen writes it and the page header draws it. Null when
    *  nothing is walked. */
@@ -62,6 +72,8 @@ let state: HubState = {
   busy: null,
   version: 0,
   lastPull: null,
+  undoneTarget: null,
+  undoneAt: 0,
   walkLine: null,
   buyersOpen: false,
 }

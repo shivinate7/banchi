@@ -21,6 +21,7 @@ import { marketTable, PhotoPanel, type MarketRead, type Row } from './CardHero'
 import { forSale } from './cardState'
 import { Dialog as Overlay } from './kit/overlay'
 import { Icon, IconButton, Loading, Location, Money, Notice, Pill, ProductLink } from './kit'
+import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
@@ -67,24 +68,61 @@ export type WalkUndoFn = (
   refresh: readonly PullRefresh[],
 ) => Promise<WalkUndoOutcome>
 
-/** A take's `for` names every order sharing it but not how this stop's `wanted` splits between
- *  them. NEVER THE LIVE LEDGER: the first ref this pass has not yet recorded a copy against, by
- *  this pass's own tally alone, and once every ref has at least one, the first resolvable ref
- *  again. `record_pull` is the actual refusal if a specific order's line turns out full. */
+/** A take's `for` names every order sharing it, and `ref.owed` (from the plan's own snapshot,
+ *  never re-read live) is what it still wants BEFORE this pass. The press goes to the ref
+ *  whose remaining (`owed` minus what this pass has already recorded against it) is smallest
+ *  and still positive — the fewest-remaining-first rule (owner's ruling 2026-09-25: "if we
+ *  were to give it to someone, whoever it completes") — because the order closest to done is
+ *  the one a single short copy is most likely to finish. Ties go to the order placed longest
+ *  ago. AN ORDER WITH NOTHING LEFT OWED IS NEVER PICKED — no `for[0]` fallback
+ *  (`docs/specs/order-walk-plan.md` §8, amended): the caller who used to fall through to a
+ *  full order now gets `null` and refuses the press before the server has to. */
 function pickOrderFor(
   take: WalkPlanTake,
   ordersByKey: ReadonlyMap<string, OrderRow>,
   recordedForSku: ReadonlyMap<string, number>,
 ): OrderRow | null {
+  let best: { order: OrderRow; remaining: number; placedAt: string } | null = null
   for (const ref of take.for) {
     const order = ordersByKey.get(ref.key)
-    if (order !== undefined && (recordedForSku.get(ref.key) ?? 0) === 0) return order
+    if (order === undefined) continue
+    const remaining = ref.owed - (recordedForSku.get(ref.key) ?? 0)
+    if (remaining <= 0) continue
+    /* `\uFFFF` SORTS AFTER EVERY REAL TIMESTAMP, never before — `?? ''` was the review
+       round's finding 4's second half: an empty string sorts BEFORE any real date, so an
+       order with no `placed_at` read as the oldest possible order and won every tie it was
+       in, which is backwards from "placed longest ago" (an unknown age is not a claim of
+       great age). An order with no `placed_at` now loses every tie to one with a real date. */
+    const placedAt = order.placed_at ?? '\uFFFF'
+    if (
+      best === null ||
+      remaining < best.remaining ||
+      (remaining === best.remaining && placedAt < best.placedAt)
+    ) {
+      best = { order, remaining, placedAt }
+    }
   }
-  for (const ref of take.for) {
-    const order = ordersByKey.get(ref.key)
-    if (order !== undefined) return order
-  }
-  return null
+  return best === null ? null : best.order
+}
+
+/** What a row's "Pick X of Y" (or "Pick X" plus a short flag) should say.
+ *
+ *  `onHand` IS THE STORE-WIDE ON-HAND COUNT FOR THE SKU — `take.copies` already lists every
+ *  on-hand copy, not only this stop's reach (D212/D93/D97), so its length is the true
+ *  denominator. `owed` is the walked set's own demand (`owedBySku`, which excludes a
+ *  stood-down line the same way the planner does). `Y` MUST NEVER COUNT A COPY THE STORE DOES
+ *  NOT HAVE — the diagnosed defect (`docs/specs/order-walk-plan.md` §8, amended): Rengar's "of
+ *  8" implied 7 more copies waited elsewhere, and none did. Where `owed` outruns `onHand`,
+ *  `of` is capped at what is really here and `short` carries the gap, so the row can say "7
+ *  short" instead of a wrong count (the owner's wording ruling, 2026-09-25: "say what's short
+ *  but it's not intuitive to use so much verbiage"). */
+function pickFigureOf(
+  take: WalkPlanTake,
+  owedBySku: ReadonlyMap<string, number>,
+): { readonly of: number; readonly short: number } {
+  const onHand = take.copies.length
+  const owed = Math.max(take.wanted, owedBySku.get(take.sku) ?? take.wanted)
+  return { of: Math.min(owed, onHand), short: Math.max(0, owed - onHand) }
 }
 
 /* ---------------------------------------------------------------------- the walk list's rows */
@@ -166,7 +204,7 @@ function sectionsOf(plan: WalkPlan | null, rows: readonly WalkRow[]): WalkSectio
  *  copy's `Undo` would reverse, and `at` orders receipts against each other, never against a
  *  deadline. What ends a copy's OWN reversal is not this record aging out; it is a newer pull
  *  taking the "newest" rank away from it (below), or the walk itself resetting. */
-type Receipt = { readonly at: number; readonly target: PullTarget; readonly place: string; readonly orderKey: string }
+type Receipt = { readonly at: number; readonly target: PullTarget; readonly place: string; readonly orderKey: string; readonly sku: string }
 
 /* ------------------------------------------------------------------------ the walk, as a hook */
 
@@ -328,12 +366,6 @@ export function useOrderWalk({
     return rawCards.get(`${place.box}/${place.index}`) ?? null
   }, [currentRow, facts, rawCards])
 
-  const totalRecorded = (sku: string): number => {
-    let sum = 0
-    for (const n of (recorded.get(sku) ?? new Map()).values()) sum += n
-    return sum
-  }
-
   /** Every copy in the plan sitting in `box`, minus the one being pressed and minus a copy
    *  already recorded here — `OrdersWalk.tsx`'s own `staleAfter`, restated over the flat
    *  `rows` this file keeps instead of a `RowState` map per take. */
@@ -393,11 +425,29 @@ export function useOrderWalk({
 
   const onSell = (copy: SearchCopy) => {
     if (busyCopy !== null) return
-    const row = rows.find((candidate) => candidate.copy.key === copy.key)
-    if (row === undefined) return
-    const { take, stopKey } = row
+    /* THE CARD PANE OFFERS MARK SOLD ON EVERY COPY OF THE TAKE, D212's own copies list — not
+       only the ones physically AT this stop (`here: true`). `rows` flattens only the `here`
+       copies, one per physical reach, so looking THIS press up in `rows` by the pressed
+       copy's own key silently dropped a press on any other copy (the review round's finding
+       5, D171 again): no request, no toast, nothing. `currentRow` is the take the pane is
+       standing on regardless of which of its copies was pressed, and every copy the pane
+       draws a button for belongs to that one take (`currentGroup.copies` is `take.copies`
+       whole) — so it is the right anchor for every press this function makes. */
+    if (currentRow === null) return
+    const { take } = currentRow
     const order = pickOrderFor(take, ordersByKey, recorded.get(take.sku) ?? new Map())
-    if (order === null) return
+    if (order === null) {
+      /* D171: a refusal that reaches nobody did not happen. This pass's own tally may be
+         stale (an undo made elsewhere, not yet synced here) or the plan may simply be behind
+         a snapshot the store has already moved past — either way the operator pressed
+         something and nothing may silently happen in response. */
+      toast({
+        kind: 'refusal',
+        title: 'Nobody here still owes a copy',
+        body: `${take.name ?? take.sku}: no order in this walk needs another one. Reload the walk to check.`,
+      })
+      return
+    }
     const target: PullTarget | null = copy.capture_id === null ? null : { box: copy.place.box, index: copy.place.index, capture_id: copy.capture_id }
     if (target === null) return
     setBusyCopy(copy.key)
@@ -425,15 +475,43 @@ export function useOrderWalk({
           return next
         })
         const justSold = new Set([...soldKeys, copy.key])
-        setReceipts((prev) => new Map(prev).set(copy.key, { at: Date.now(), target, place: outcome.place, orderKey: order.key }))
-        const satisfied = totalRecorded(take.sku) + 1 >= take.wanted
-        /* `stopKey` names which stop this row belongs to, kept for a future refinement that
-           needs it; the advance itself only reads `rows`. */
-        void stopKey
-        advanceAfter(row.rowKey, satisfied, justSold)
+        setReceipts((prev) => new Map(prev).set(copy.key, { at: Date.now(), target, place: outcome.place, orderKey: order.key, sku: take.sku }))
+        /* PER-STOP, NEVER PER-SKU (the review round's finding 4): `take` is THIS STOP's own
+           take instance — a SKU split across two stops (D212's own case, e.g. Mirror Image at
+           two sections) gets one `WalkPlanTake` per stop, each with its own `wanted` share.
+           `totalRecorded(take.sku)` summed every order's tally for the sku STORE-WIDE, so the
+           second stop read as satisfied after only 2 of its own 3 picks — the first stop's
+           already-recorded copy was still being counted here. The right count is how many of
+           THIS TAKE's own "here" copies (this stop's physical reach) are now sold. */
+        const hereCount = take.copies.filter((c) => c.here && justSold.has(c.key)).length
+        const satisfied = hereCount >= take.wanted
+        advanceAfter(currentRow.rowKey, satisfied, justSold)
       }
       setBusyCopy(null)
     })()
+  }
+
+  /** Lower this pass's own tally by one copy against `orderKey`/`sku` — the state half of an
+   *  undo, shared by the row's own inline Undo (`undoCopy`, below) and an undo that happened
+   *  OUTSIDE this hook (`noteExternalUndo`): a toast's own Undo or the `U` key, which write
+   *  through `Orders.tsx:undoFromToast` and never touch this hook at all. Before this shared
+   *  helper existed, only `undoCopy` lowered the tally, so a toast/`U` undo mid-walk left this
+   *  pass believing a copy was still recorded that the ledger no longer held — `pickOrderFor`
+   *  then returned `null` for an order that still owed one, and the next press did nothing
+   *  and said nothing (the review round's finding 2, D171). */
+  const lowerTally = (sku: string, orderKey: string) => {
+    setRecorded((prev) => {
+      const bySku = prev.get(sku)
+      if (bySku === undefined) return prev
+      const count = bySku.get(orderKey)
+      if (count === undefined) return prev
+      const nextBySku = new Map(bySku)
+      if (count <= 1) nextBySku.delete(orderKey)
+      else nextBySku.set(orderKey, count - 1)
+      const next = new Map(prev)
+      next.set(sku, nextBySku)
+      return next
+    })
   }
 
   const undoCopy = (copyKey: string) => {
@@ -456,21 +534,29 @@ export function useOrderWalk({
           next.delete(copyKey)
           return next
         })
-        setRecorded((prev) => {
-          const bySku = prev.get(row.take.sku)
-          if (bySku === undefined) return prev
-          const count = bySku.get(receipt.orderKey)
-          if (count === undefined) return prev
-          const nextBySku = new Map(bySku)
-          if (count <= 1) nextBySku.delete(receipt.orderKey)
-          else nextBySku.set(receipt.orderKey, count - 1)
-          const next = new Map(prev)
-          next.set(row.take.sku, nextBySku)
-          return next
-        })
+        lowerTally(receipt.sku, receipt.orderKey)
       }
       setBusyCopy(null)
     })()
+  }
+
+  /** THE OTHER UNDO PATH — a toast's own Undo (`docs/specs/undo.md` §3) or the `U` key,
+   *  neither of which goes through `undoCopy` above. Both write through
+   *  `Orders.tsx:undoFromToast`, which calls the server directly and has no reason to know
+   *  this hook exists. `Orders.tsx` calls this instead, once that write succeeds, keyed off
+   *  the SAME `PullTarget` the toast already carries — never off `rows`, which may already be
+   *  behind a re-plan. A copy this pass never recorded (an undo of a pull made outside the
+   *  walk entirely) is a no-op: `receipts` holds nothing for it. */
+  const noteExternalUndo = (target: PullTarget) => {
+    const copyKey = `${target.box}/${target.index}`
+    const receipt = receipts.get(copyKey)
+    if (receipt === undefined) return
+    setReceipts((prev) => {
+      const next = new Map(prev)
+      next.delete(copyKey)
+      return next
+    })
+    lowerTally(receipt.sku, receipt.orderKey)
   }
 
   return {
@@ -487,6 +573,7 @@ export function useOrderWalk({
     step,
     onSell,
     undoCopy,
+    noteExternalUndo,
     busyCopy,
     receipts,
     soldKeys,
@@ -575,7 +662,7 @@ export function WalkList({
                 {shown.map((line) => {
                   const picked = line.rows.filter((row) => walk.soldKeys.has(row.copy.key)).length
                   const done = picked >= line.take.wanted
-                  const of = Math.max(line.take.wanted, owedBySku.get(line.take.sku) ?? line.take.wanted)
+                  const figure = pickFigureOf(line.take, owedBySku)
                   const current = line.rows.some((row) => row.rowKey === walk.current)
                   const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
                   const next = line.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? line.rows[0]
@@ -593,7 +680,14 @@ export function WalkList({
                         </span>
                         <span className="orders-walk-pick">
                           {done ? <Icon name="check" size={14} /> : null}
-                          {done ? 'Picked' : 'Pick'} {line.take.wanted} of {of}
+                          {done ? 'Picked' : 'Pick'} {line.take.wanted}
+                          {figure.short > 0 ? null : ` of ${figure.of}`}
+                          {figure.short > 0 ? (
+                            <>
+                              {' '}
+                              <Pill tone="warn">{figure.short} short</Pill>
+                            </>
+                          ) : null}
                         </span>
                         {showBuyers ? <span className="orders-walk-for">{takeBuyers(line.take)}</span> : null}
                       </button>
@@ -679,7 +773,7 @@ export function WalkCardPane({
   /* NEVER A PHOTOGRAPH OF A POOLED CARD: a code card's photo is a live code (D24, opsec). */
   const row: Row | null =
     currentCard === null || currentRow.copy.place.located === false ? null : { key: currentRow.copy.key, card: currentCard }
-  const of =Math.max(take.wanted, owedBySku.get(take.sku) ?? take.wanted)
+  const figure = pickFigureOf(take, owedBySku)
   const sub = [take.number_display, take.set].filter((part): part is string => Boolean(part))
 
   const here = currentGroup.copies.find((copy) => copy.key === currentRow.copy.key) ?? null
@@ -709,8 +803,17 @@ export function WalkCardPane({
           <span className={take.name === null ? 'orders-card-thin-name is-unnamed' : 'orders-card-thin-name'}>
             {take.name ?? 'Not identified yet'}
           </span>
-          <span className="orders-card-thin-place">
-            {hereWords === null ? `Pick ${take.wanted} of ${of}` : `${hereWords}, pick ${take.wanted} of ${of}`}
+          <span className="orders-card-thin-meta">
+            <span className="orders-card-thin-place">
+              {hereWords === null ? `Pick ${take.wanted}` : `${hereWords}, pick ${take.wanted}`}
+              {figure.short > 0 ? '' : ` of ${figure.of}`}
+            </span>
+            {figure.short > 0 ? (
+              <>
+                {' '}
+                <Pill tone="warn">{figure.short} short</Pill>
+              </>
+            ) : null}
           </span>
         </span>
         {here === null ? null : (
@@ -747,7 +850,14 @@ export function WalkCardPane({
             </p>
           )}
           <p className="orders-card-pick">
-            Pick <strong>{take.wanted}</strong> of {of}
+            Pick <strong>{take.wanted}</strong>
+            {figure.short > 0 ? null : <> of {figure.of}</>}
+            {figure.short > 0 ? (
+              <>
+                {' '}
+                <Pill tone="warn">{figure.short} short</Pill>
+              </>
+            ) : null}
           </p>
           {showBuyers ? <p className="orders-card-for">For {takeBuyers(take)}</p> : null}
           <p className="orders-card-market">
