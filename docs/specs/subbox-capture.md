@@ -23,34 +23,52 @@ A divider key is the string that `store/master.py:divider_key` writes. A whole-n
 reads `"31"`. A fractional key reads as Python's `repr`, such as `"5.0009765625"`. Compare
 keys as strings. Never parse one and never compose one.
 
+**Every aim carries the box's layout token** (the Opus review's first finding, 2026-09-26).
+A re-space gives every divider a new key. An old key can then equal the new key of another
+section, so a key alone can name the wrong section with no error. The token is a short hash
+of the box's divider keys, in order. `GET /boxes` serves it. A request that names a section
+sends the token it read beside the key. The server compares it with the box's token under
+the store lock. A different token is 409 `section_gone`, and nothing is written. The client
+then reads `GET /boxes` again and aims again.
+
+**The token is airtight for this reason.** Two equal tokens mean two equal divider lists. In
+an equal list, every key names the same ordinal and the same key interval. A re-space keeps
+each card in its section, so an equal interval holds the same cards. So a key that passes the
+token check names the section the screen drew. Keys that stay the same through a re-space are
+not possible: a re-space exists to give the keys new values.
+
 ### 1.1 `GET /boxes`
 
-Each `sections_detail[]` item gets one new field.
+The box row gets one new field, and each `sections_detail[]` item gets one.
 
-| Field | Type | Meaning |
-|---|---|---|
-| `div` | string | The divider key of this section. Section 1 of a box with no declared dividers has `"1"`, or the lowest card key when a card was placed in front of card 1. |
+| Field | Where | Type | Meaning |
+|---|---|---|---|
+| `layout_token` | box row | string | The box's layout token. Send it with every aim at this box. |
+| `div` | `sections_detail[]` | string | The divider key of this section. Section 1 of a box with no declared dividers has `"1"`, or the lowest card key when a card was placed in front of card 1. |
 
 ### 1.2 `POST /capture`
 
 | Field | Where | Type | Meaning |
 |---|---|---|---|
 | `section` | body, optional | string | The divider key of the section to capture into. Missing or `null`: the capture works as before, at the back of the box. |
+| `layout_token` | body, required with `section` | string | The box's token from `GET /boxes`. |
 | `section_div` | response | string or null | The divider key of the section the card went into, read after the write. It is correct after a re-space. It is null only for a pooled card, which has no section. |
+| `layout_token` | response | string or null | The box's token after the write. It changes when this capture caused a re-space. Null for a pooled card. |
 
 Each refusal writes nothing, uses no index and stores no photograph.
 
 | Status | Code | When |
 |---|---|---|
-| 409 | `section_gone` | The box has no section with that divider key. Read `GET /boxes` again. |
+| 409 | `section_gone` | The token is not the box's token now, or the box has no section with that divider key. Read `GET /boxes` again. |
 | 400 | `section_invalid` | `section` is not a string. |
+| 400 | `layout_token_required` | `section` is sent without `layout_token`. |
 
 A replay of a `capture_id` that is already recorded answers 200 with the first card. It
 ignores `section`.
 
 ### 1.3 `POST /boxes/<box>/sections` (S)
 
-The body is `{}` or `{"after": "<div>"}`.
+The body is `{}` or `{"after": "<div>", "layout_token": "<token>"}`.
 
 - With no `after`, or with `after` naming the last section, S works as before. The divider
   goes in front of the next card at the back of the box.
@@ -65,14 +83,20 @@ The response is the box row, as before. The new section is the one directly afte
 | Status | Code | When |
 |---|---|---|
 | 409 | `section_empty` | The named section has no card record in it yet (as before, for the last section). |
-| 409 | `section_gone` | The box has no section with that divider key. |
+| 409 | `section_gone` | The token is not the box's token now, or the box has no section with that divider key. |
 | 400 | `section_invalid` | `after` is not a string. |
+| 400 | `layout_token_required` | `after` is sent without `layout_token`. |
 
 ### 1.4 `DELETE /boxes/<box>/sections?div=<div>` (U after S)
 
 `ux/divider-fix` owns this route and its refusal shapes (merged at `edba48ee`). `div` is
 required. The route removes that one divider and moves no other. This lane widens it only as
 far as I9 needs.
+
+**U takes no layout token.** Its `div` is safe after a re-space for another reason. U goes
+only when the box's newest `resectioned` line added `div` and wrote the layout as it stands
+now. A re-space rewrites the layout and writes no `resectioned` line, so after one the proof
+fails and U refuses. A named case proves it (spec section 4).
 
 - **The last divider** (`ux/divider-fix`): it goes while no card on hand stands behind it.
 - **A middle divider** (this lane, I9): it goes only when the box's newest `resectioned` line
@@ -98,17 +122,24 @@ A departed record in the section does not hold the divider in.
 ### 1.5 The two Move-to-box routes
 
 `POST /inventory/<box>/<index>/move` (one card) and `POST /inventory/<box>/move` (ticked cards,
-or a whole box) take one more field, and it is REQUIRED.
+or a whole box) take two more fields, and both are REQUIRED.
 
 | Field | Type | Meaning |
 |---|---|---|
 | `section` | string | A divider key of `to_box`. Each moved card goes to the tail of that section, in the order sent. It uses the same key rule as a capture. For the back of the box, send the last section's `div`. |
+| `layout_token` | string | `to_box`'s token from `GET /boxes`. |
 
 | Status | Code | When |
 |---|---|---|
 | 400 | `section_required` | The body has no `section`. Nothing moves. |
-| 409 | `section_gone` | `to_box` has no section with that divider key. Nothing moves. |
+| 400 | `layout_token_required` | The body has `section` and no `layout_token`. Nothing moves. |
+| 409 | `section_gone` | The token is not `to_box`'s token now, or `to_box` has no section with that divider key. Nothing moves. |
 | 400 | `section_invalid` | `section` is not a string. |
+
+**Lanes A, B and C merge together, never Lane A alone** (the coordinator's ruling,
+2026-09-26, on the review's second finding). Today's Move to box in `app/src/server.ts` sends
+no `section`, so this lane alone would break it. The three lanes land in one integration
+branch.
 
 The owner ruled that a move has no default destination: "i need to specify where it goes there
 no auto default". So the server refuses a Move to box that names no section. The undo of a
