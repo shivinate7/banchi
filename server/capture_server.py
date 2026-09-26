@@ -10026,6 +10026,32 @@ def _fts_quote(term: str) -> str:
     return '"' + term.replace('"', '""') + '"*'
 
 
+def _fts_letter_pair_alternative(term: str) -> Optional[str]:
+    """A DOTTED-INITIAL PATH FOR A BARE 2-LETTER TERM (the owner's ruling, 2026-09-25,
+    round-11 gaps review, "Bring it back"): `bf` and `B.F` must behave the same and
+    both find "B.F. Sword". `B.F` (its own period kept — `query_tokens` only strips
+    edge punctuation, never an internal character) is already 3 characters wide and
+    clears the existing `len(term) >= 3` substring floor unconditionally; the folded
+    fallback in `match._text_match` then finds it. Bare `bf` (2 characters, no
+    punctuation at all) never did — the SAME accepted 1-2 character TEXT floor that
+    excuses `ex`/`hi`/`on` from `_fts_supplemental_candidates`'s own ROW WALK also
+    excused `bf`, and there is no way to tell `bf` apart from `ex` by the term alone —
+    reopening the WALK for every 2-letter term was the R3 floor this repo has stood
+    behind since round 4, and stays closed.
+
+    THIS NEVER TOUCHES THE WALK. It is a second FTS5 clause, ORed with the term's own
+    prefix match inside `_fts_query` — an INDEXED intersection of two single-letter
+    prefixes (`"b"* AND "f"*`), which costs what any indexed AND costs and never grows
+    with how common the term is, unlike a per-row Python scan. Offered for every bare
+    2-letter alpha term, because nothing about the term alone says which ones are real
+    initials — the decisive `match.match_query` (unchanged) still requires its own
+    compact-fold fallback (rule 7) before accepting a row this admits as a candidate,
+    so a term with no true dotted-initial match anywhere is filtered out for free."""
+    if len(term) != 2 or not term.isalpha():
+        return None
+    return "(" + " AND ".join(_fts_quote(ch) for ch in term) + ")"
+
+
 def _fts_term_alternatives(term: str) -> List[str]:
     """Every standalone FTS5 clause `term` should try, ORed together (UX-173): each single
     token from `_fts_query_variants`, quoted, PLUS — where `term` carries a hyphen AS A
@@ -10045,6 +10071,9 @@ def _fts_term_alternatives(term: str) -> List[str]:
     words = [w for w in term.split("-") if w]
     if len(words) > 1 and not any(w.isdigit() for w in words):
         clauses.append("(" + " ".join(_fts_quote(w) for w in words) + ")")
+    letter_pair = _fts_letter_pair_alternative(term)
+    if letter_pair:
+        clauses.append(letter_pair)
     seen: Dict[str, None] = {}
     for clause in clauses:
         seen.setdefault(clause, None)
@@ -10299,11 +10328,22 @@ def _number_candidate_forms(term: str) -> set:
     tokens` would — `rengar,24a/219` is one comma-joined string, and this function was
     never asked to notice that. It agrees with the decisive step exactly because the
     CALLER hands it the same tokens the decisive step would see, not because it does any
-    splitting of its own beyond the one `/` inside a single term."""
+    splitting of its own beyond the one `/` inside a single term.
+
+    THE HYPHEN SPLITS THE NUMBER, IT NEVER JOINS IT (the owner's ruling, 2026-09-25,
+    round-11 gaps review, quoted verbatim in D271: "No, a hyphen splits"). This now
+    MIRRORS `match._number_match`'s own round-11 fix exactly: `hyphen_form` only
+    differs from `bare` when a hyphen stood BETWEEN TWO DIGITS, and in that case only
+    the composed (`/`-converted) form is a candidate — never `bare` read whole, which
+    would join two digit runs the hyphen deliberately kept apart (`002-64` must never
+    read as `264`)."""
     bare = term[1:] if term.startswith("#") else term
     if not match._has_digit(bare):
         return set()
-    forms = {match.canonical_number(bare), match.canonical_number(match._hyphen_to_slash(bare))}
+    hyphen_form = match._hyphen_to_slash(bare)
+    forms = {match.canonical_number(hyphen_form)}
+    if hyphen_form == bare:
+        forms.add(match.canonical_number(bare))
     return {f for f in forms if match._is_number_shape(f)}
 
 
