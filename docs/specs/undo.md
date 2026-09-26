@@ -416,3 +416,20 @@ is in.
 
 "Undo just N" keeps its confirm and stays permanent. It is the one exception to "Never ask".
 UN-3 makes the confirm's words say that the removal is permanent and deletes the photo.
+
+### 11.8 Lane S, as built (2026-09-25)
+
+The server halves are built on branch `ux/undo-store`. T7's `check_undo_until_built_on`
+proves each one. Three choices the table left open are recorded here.
+
+- **UN-7, "This card is still here", on a shipped order.** It is `{"still_here": true}` on
+  the sold route. The card goes back. The order keeps its count (D212), but the card's
+  capture id comes off the line as a `sold_separately` hand-fill. With the id left on the
+  line, a later pull of the same card would refuse as a second shipment. On an open order,
+  "still here" releases the line, as a plain undo does (section 4).
+- **UN-8 is a read, not a write.** `do_retire` still touches no queue entry. Every
+  open-entry read skips a departed card (`Queue.owed_entries`), so the retire undo brings
+  the card back into Review with no second write.
+- **UN-2 says when the sitting ended.** `GET /capture/sitting` answers `open: false` and no
+  cards once the newest capture is more than 30 minutes old. The capture undo route itself
+  does not yet refuse on a sitting that has ended. It refuses only on state, as before.

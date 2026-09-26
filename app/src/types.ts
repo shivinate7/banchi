@@ -846,8 +846,8 @@ export type RemoveResult = {
  *  becomes a permanent tombstone (same shape as a sale or a retirement) and the card is
  *  recorded fresh at `new_box`/`new_index`. `card` is the transplant as it now reads —
  *  the same shape `GET /inventory` rows carry — so the screen can redraw it without a
- *  second read. Undo is not a separate result shape: moving the transplant back is this
- *  same call again, in the other direction. */
+ *  second read. The undo is `MoveUndoResult` (UN-14), until either box changes. After
+ *  that, moving the transplant back is this same call again, in the other direction. */
 export type MoveResult = {
   moved: string
   to: string
@@ -860,6 +860,38 @@ export type MoveResult = {
   review_moved: boolean
   parked_moved: boolean
   cache_moved: boolean
+  card: InventoryCard
+}
+
+/** What `GET /capture/sitting` answers (UN-2): the newest sitting, rebuilt from the store, so
+ *  a reload does not end the capture strip. `open` is false once the newest capture is more
+ *  than `gap_minutes` old. That sitting has ended, and `cards` is empty. The server decides
+ *  this, and the screen never measures the gap itself. `cards` runs oldest first. Each row is
+ *  a `CardSummary` plus the claims the strip draws under a shot, and the card's `state`. */
+export type CaptureSitting = {
+  open: boolean
+  gap_minutes: number
+  cards: Array<
+    CardSummary & {
+      captured_at: string | null
+      set_hint: string | null
+      metadata_finish: string | string[] | null
+      game: string | null
+      state: string
+    }
+  >
+}
+
+/** What a move's undo answers (UN-14): `POST /inventory/<box>/<index>/move` with
+ *  `{undo: true}`, aimed at the TOMBSTONE the move left. `moved` is the transplant's key,
+ *  now deleted. `to` is the card's own key again, and `card` is the card as it now reads
+ *  there. Nothing else in either box moves. */
+export type MoveUndoResult = {
+  moved: string
+  to: string
+  box: number
+  index: number
+  undone: true
   card: InventoryCard
 }
 
@@ -1075,6 +1107,10 @@ export type SaleResult = {
    *  and null on a reversal that held no order line. Additive: every field above this one is
    *  unmoved. */
   order_released: { key: string; sku: string } | null
+
+  /** True when this call was "This card is still here" (UN-7): a reversal past a sale that
+   *  was built on. A shipped order keeps its count, so `order_released` stays null. */
+  still_here?: boolean
 }
 
 /** Why a retired card left (D26). The send-side union — the four words the server's

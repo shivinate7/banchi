@@ -44,6 +44,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
+from store.master import TERMINAL_STATES
 from store.rows import Rows, TableSpec, int_or_none
 
 MAIN = "review"
@@ -226,6 +227,20 @@ class Queue:
             (e for e in self.entries.values() if not e.cleared_by_human),
             key=lambda e: e.sort_key,
         )
+
+    def owed_entries(self, cards) -> List[QueueEntry]:
+        """`open_entries` less every card that has left its box (UN-8).
+
+        A sold, retired or moved card owes no answer. The entry is not dropped: it stays in
+        the file, so the retire undo brings the card back into the queue with no second
+        write. `cards` is `Inventory.cards`. A position with no card is kept, because this
+        read says only what departed, and it never guesses about a card it cannot see.
+        """
+        return [
+            entry
+            for entry in self.open_entries
+            if getattr(cards.get(entry.position), "state", None) not in TERMINAL_STATES
+        ]
 
     @property
     def oldest_days(self) -> Optional[int]:
