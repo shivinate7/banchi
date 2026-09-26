@@ -289,7 +289,7 @@ ruling.
 | Review close, retire | As for Retire. | As for Retire. |
 | Typed price | The next send carries it. | Type the price again and send. |
 | Clear typed | The next send carries any cleared SKU. A SKU typed since is kept (built). | Type the prices again. |
-| Hold | Never. A hold withholds, and nothing reads past it. | Release is the hold's own control. |
+| Hold | Never. A hold withholds, and nothing reads past it. | Release is the hold's own control. It puts back the answer the hold replaced, value and channel, kept in the hold's `before` field. A hold with no earlier answer releases to none (the owner's ruling, "Bring back $5.16 (Recommended)", RULINGS). |
 | Cut-off change | The next send prices by it. | Set the cut-off again. |
 | Divider | A card is captured behind it. | Manage box edits the sections (`Inventory.set_sections`). |
 
