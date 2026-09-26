@@ -9054,8 +9054,8 @@ COMPONENTS = [
                         "caret, and a screen outside the ring keeps the browser's key. Not a "
                         "harness test; `make design-check` runs it.",
                 "governed_by": ["D5", "D20", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D95",
-                                "D100", "D105", "D109", "D134", "D174", "D192", "D275",
-                                "D276", "D-runs-folds-into-review"],
+                                "D100", "D105", "D109", "D134", "D174", "D192", "D275", "D276",
+                                "D-runs-folds-into-review", "D-sales-rows-by-sku"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "

@@ -397,8 +397,8 @@ function ScaffoldSpecimens() {
         </div>
         <StatusSlot>
           {said === 'short' ? (
-            <Refusal title="This section holds nothing yet." code="section_empty" detail="POST /boxes/3/sections">
-              Capture a card into it first.
+            <Refusal title="That section is empty." code="section_empty" detail="POST /boxes/3/sections">
+              Fill it first.
             </Refusal>
           ) : said === 'long' ? (
             <Refusal title="This section holds nothing yet." code="section_empty" detail="POST /boxes/3/sections refused: the section is empty">

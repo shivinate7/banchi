@@ -173,6 +173,22 @@ async function stub(page: Page, cards: unknown[] = []) {
      is `#/pricing` since D105 — this stub is global and so did not move, but the sentence
      naming a screen had to. */
   await page.route(/\/pipeline\/markdowns$/, (route) => json(route, { markdowns: [] }))
+  /* `#/revenue` reads "On the shelf" and its thumbnails on arrival since D-sales-rows-by-sku,
+     so a walk that lands there reads both. Empty answers, the shape `shell.ts:stubStore` uses. */
+  await page.route(/\/skus\/photos\?/, (route) => json(route, { photos: {} }))
+  await page.route(/\/pipeline\/holdings-value(\?|$)/, (route) =>
+    json(route, {
+      range: 'month',
+      width_days: 30,
+      history_begins: null,
+      at: '2026-09-19T00:00:00+00:00',
+      on_hand_names: 0,
+      series: [],
+      totals: [],
+      unmarked: { names: 0 },
+      sealed_excluded: { names: 0, reason: 'sealed product has no card record' },
+    }),
+  )
   /* `GET /status` IN THE SHAPE `ServerStatus` ACTUALLY HAS, which it was not: this stub
      answered `{boxes, next}` — a shape no version of that route has sent — and the shell reads
      `status.cards` off it into the sidebar's card count. `undefined.toLocaleString()` throws
