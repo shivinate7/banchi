@@ -329,7 +329,8 @@ test('a re-space under the pick offers to keep the section by ordinal, and a Kee
 
   await page.keyboard.press('c')
 
-  // The refusal itself writes nothing and offers the confirm, never a halt.
+  // The refusal writes nothing, and still halts the run like any other server refusal
+  // (subbox-capture.md §5, "the capture itself still halts") — it also offers the confirm.
   await expect(page.locator('.bn-toast')).toContainText('Keep Rares?')
   await page.locator('.bn-toast').getByRole('button', { name: 'Keep' }).click()
 
@@ -338,7 +339,8 @@ test('a re-space under the pick offers to keep the section by ordinal, and a Kee
   await expect(sectionRow(page)).toContainText('Section 2 of 3')
   await expect(sectionRow(page)).toContainText('Rares')
 
-  // And it captures cleanly next press, with the fresh token.
+  // Resume the halted run, and it captures cleanly next press, with the fresh token.
+  await page.getByRole('button', { name: 'Resume captures' }).click()
   await page.keyboard.press('c')
   await expect(page.locator('.capture-undo-row').first()).toHaveAttribute(
     'aria-label',
@@ -592,6 +594,11 @@ test('an older server with no sections_detail[].div still lets U reach the divid
 
   await page.keyboard.press('s')
   await expect(page.locator('.capture-refused, .capture-note-ok').first()).toContainText('New section')
+  // THE SECTION ROW'S OWN RE-RENDER, waited on before `U` — `pendingDivider` and the trigger
+  // seam's own ref both move in the same commit as this text, so this is what makes the
+  // press land on the ref the S just re-armed rather than a passive effect still in flight
+  // (the same category of gap D128 names for the field-key listener elsewhere in this file).
+  await expect(sectionRow(page)).toContainText('Section 2 of 2')
 
   await page.keyboard.press('u')
 

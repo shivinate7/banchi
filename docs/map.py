@@ -8585,8 +8585,8 @@ COMPONENTS = [
                         "one sentence, proved with a real fake clock past `GAP_MINUTES`; and a "
                         "pick or an S never moves the shutter (D118, a rect diff). Run by "
                         "`make design-check`.",
-                "governed_by": ["D13", "D58", "D117", "D118", "D145", "D153", "D164", "D218",
-                                "D260", "D264"],
+                "governed_by": ["D13", "D58", "D117", "D118", "D128", "D145", "D153", "D164",
+                                "D218", "D260", "D264"],
                 "note": "The camera is a canvas behind a stubbed getUserMedia, exactly as "
                         "capture-undo.spec.ts's is — this file captures too, so nothing here "
                         "reaches a real device or a real store.",
