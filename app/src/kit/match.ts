@@ -169,7 +169,17 @@ function numberMatch(raw: string, row: Prepared): boolean {
   }
   const bare = raw.replace(/^#/u, '')
   if (!HAS_DIGIT.test(bare)) return false
-  const forms = new Set([canonicalNumber(bare), canonicalNumber(bare.replace(/(\d)-(?=\d)/gu, '$1/'))])
+  // THE HYPHEN SPLITS THE NUMBER, IT NEVER JOINS IT (the owner's ruling, 2026-09-25,
+  // round-11 gaps review, quoted verbatim in D271: "No, a hyphen splits"). The second
+  // replace below folds a hyphen BETWEEN TWO DIGITS into the composed `/` it stands
+  // for. When it changes `bare` at all, that hyphen was doing exactly that job, and
+  // `bare` itself must NEVER also be read as one plain joined number —
+  // `canonicalNumber` does not split on `-`, so `002-64` canonicalized whole was
+  // `264`, joining two digit runs a hyphen deliberately kept apart. Only when there is
+  // NO such hyphen (`hyphenForm === bare`) does the plain form apply at all.
+  const hyphenForm = bare.replace(/(\d)-(?=\d)/gu, '$1/')
+  const forms = new Set([canonicalNumber(hyphenForm)])
+  if (hyphenForm === bare) forms.add(canonicalNumber(bare))
   for (const form of forms) {
     if (!NUMBER_SHAPE.test(form)) continue
     const whole = form.includes('/')

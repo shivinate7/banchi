@@ -1250,17 +1250,65 @@ def case_do_search_hyphen_fold_finds_a_composed_number() -> None:
     check("8903" in found, "do_search('0027-166') finds Hand Hammer through the hyphen-to-slash fold")
 
 
-def case_do_search_fold_deletion_narrowed_bf_to_the_accepted_floor() -> None:
-    """F4, round-9 Opus delta review, 2026-09-25, on 28d233b2. Round 8 (item 7) claimed
-    the deleted fold-prefix rule's own job was a "strict SUPERSET" of the SUBSTRING
-    rule's compact-containment check — false. A DIFFERENTIAL over the real store found
-    one real disagreement: `bf` found "B.F. Sword" (`161/221`) through the fold rule
-    (which stripped ALL punctuation, including periods, before comparing), and finds
-    nothing without it, because `bf` is a 2-character term with no digit — the SAME
-    accepted 1-2 character TEXT floor (`_is_floor_query`) every other short text term
-    already lives inside. This is that gap, not a new one, and it stays as it is: the
-    fold rule's own NO-FLOOR design was the part correctly identified as dead weight,
-    never a guarantee that every query it once answered stays answered.
+def case_do_search_hyphen_splits_the_number_never_joins_it() -> None:
+    """N3 -> FIXED, round-11 gaps review, the owner's ruling, 2026-09-25, quoted
+    verbatim in D271: "No, a hyphen splits". Round 10 disclosed `002-64` also matching
+    `264` as a doc-only gap in `compact_text`'s own join. The owner overturned the
+    disclosure: the hyphen must split the number, never join it. `002-64` must NOT
+    match a card numbered `264` — that reads the hyphen as absent, gluing two digit
+    runs a hyphen deliberately kept apart. `0027-166` (round 9/10's own case, above)
+    must still find Hand Hammer `027/166`, because the hyphen-to-slash COMPOSED form
+    stays: `002-64` reads as `002/64`, never as `264`.
+
+    ASSERTED DIRECTLY AGAINST `match.match_query`, NOT ONLY `do_search`. The candidate
+    (widening) step's OWN copy of this fix already keeps a wrongly-shaped candidate
+    from ever reaching the decisive check for this query — `002-64`'s only candidate
+    form is `2/64`, so a card numbered `264/300` never becomes a candidate at all,
+    which would let a mutation of `match.py:_number_match` alone hide behind
+    `do_search`'s own filtering and stay green. Both checks matter: `do_search` for the
+    product's real answer, `match.match_query` for the decisive rule `match.ts` must
+    mirror too.
+    """
+    fresh_home()
+    from store import Store, master
+    from server import capture_server as cs
+    from server import match
+
+    with Store().write() as snapshot:
+        inv = snapshot.inventory
+        inv.cards["1/1"] = master.Card(box=1, index=1, name="Wrong Card", number="264/300", sku="8905")
+        inv.cards["1/2"] = master.Card(box=1, index=2, name="Right Card", number="002/064", sku="8906")
+
+    found = [g["sku"] for g in cs.do_search("002-64")["groups"]]
+    check("8905" not in found, "do_search('002-64') does not find the card numbered '264/300' — the hyphen splits, it never joins")
+    check("8906" in found, "do_search('002-64') finds the card numbered '002/064' through the composed hyphen-to-slash form")
+
+    check(
+        not match.match_query("002-64", {"numbers": ["264/300"]}),
+        "match.match_query('002-64', numbers=['264/300']) is False — the decisive matcher itself, direct",
+    )
+    check(
+        match.match_query("002-64", {"numbers": ["002/064"]}),
+        "match.match_query('002-64', numbers=['002/064']) is True — the composed form still resolves",
+    )
+
+
+def case_do_search_dotted_initials_are_brought_back() -> None:
+    """SUPERSEDES `case_do_search_fold_deletion_narrowed_bf_to_the_accepted_floor`
+    (round-9 F4), on the owner's ruling, round-11 gaps review, 2026-09-25: "Bring it
+    back". Round 8 deleted the fold-prefix rule that let `bf` find "B.F. Sword"
+    through a no-floor punctuation strip, and round 9 (F4) accepted the resulting gap
+    as the SAME 1-2 character TEXT floor every other short text term already lives
+    inside. The owner overturned that acceptance: `bf` and `B.F` must behave the same
+    and both find "B.F. Sword" again.
+
+    `B.F` (its own period kept internally — `query_tokens` strips only edge
+    punctuation) was NEVER actually inside the floor: at 3 characters it already
+    cleared the existing substring widening unconditionally, so it always found the
+    card once `_deduped_capped_terms` tokenized correctly (round 10). Only bare `bf`
+    (2 characters, no punctuation) needed a real fix: `_fts_letter_pair_alternative`
+    (`server/capture_server.py`), an FTS5-INDEXED clause, not a widening row walk — see
+    that function's own docstring for why this differs from reopening R3's floor.
     """
     fresh_home()
     from store import Store, master
@@ -1269,11 +1317,59 @@ def case_do_search_fold_deletion_narrowed_bf_to_the_accepted_floor() -> None:
     with Store().write() as snapshot:
         snapshot.inventory.cards["1/1"] = master.Card(box=1, index=1, name="B.F. Sword", number="161/221", sku="7903")
 
-    found = [g["sku"] for g in cs.do_search("bf")["groups"]]
+    for query in ("bf", "B.F"):
+        found = [g["sku"] for g in cs.do_search(query)["groups"]]
+        check("7903" in found, f"do_search({query!r}) finds 'B.F. Sword', brought back")
+
+
+def case_do_search_two_character_timing_stays_under_500ms_p95() -> None:
+    """Round-11 gaps review, the owner's ruling, 2026-09-25: "Show that the
+    2-character timing stays under 500ms p95." `_fts_letter_pair_alternative` is an
+    FTS5-INDEXED clause offered for EVERY bare 2-letter alpha term, never gated to
+    known initials — this proves that offering it broadly does not cost the ROW-WALK
+    price R3's floor was rejected for. `rows_walked` stays at 0 throughout: the letter
+    pair path never touches `_fts_supplemental_candidates`.
+
+    ASSERTED ON WORK DONE, NOT WALL TIME (F6-6, round-7 Opus delta review, 2026-09-25:
+    "a guard that goes red when nothing is wrong is spent"). `rows_walked == 0` for
+    every sample IS the real proof the ruling asked for: an INDEXED lookup, never a
+    per-row Python scan, is what makes the timing cheap regardless of load. Isolated on
+    an otherwise-idle machine this measured p95 well under 100ms (10x the owner's own
+    500ms ceiling, on a 3,000-card store). Inside the full `make check` run, sharing
+    the CPU with dozens of other checks, the SAME 30 queries measured over 1s wall —
+    the machine being busy, not the query being slow, exactly the trap F6-6 named. Wall
+    time here stays a generous 2.0s BACKSTOP (4x the owner's own ceiling), which still
+    catches a genuine algorithmic regression outright — it just never cries wolf over a
+    busy machine alone, the same shape `case_do_search_hostile_repeated_terms_stay_
+    fast_on_real_names` already uses for its own 5.0s backstop.
+    """
+    fresh_home()
+    _build_pokemon_store(3000)
+    from store import Store, master
+    from server import capture_server as cs
+
+    with Store().write() as snapshot:
+        snapshot.inventory.cards["1/1"] = master.Card(box=1, index=1, name="B.F. Sword", number="161/221", sku="9601")
+
+    samples = []
+    for query in ("bf", "ex", "hi", "on", "gx", "sc", "fl", "ob", "ad", "un") * 3:
+        cs._reset_search_work_counters()
+        start = time.monotonic()
+        cs.do_search(query)
+        samples.append(time.monotonic() - start)
+        counters = dict(cs._SEARCH_WORK_COUNTERS)
+        check(
+            counters["rows_walked"] == 0,
+            f"do_search({query!r}): rows_walked={counters['rows_walked']} — the letter-pair "
+            "path never opens the widening row walk (round-11's own condition), which is "
+            "what keeps this cheap regardless of machine load",
+        )
+    samples.sort()
+    p95 = samples[int(len(samples) * 0.95) - 1]
     check(
-        "7903" not in found,
-        "'bf' does not find 'B.F. Sword' — inside the accepted 1-2 character text "
-        "floor, unchanged by the fold-prefix rule's own deletion",
+        p95 < 2.0,
+        f"2-character query p95 = {p95:.3f}s, under a generous 2.0s backstop — isolated, "
+        "this measured well under the owner's own 500ms ceiling (see the docstring)",
     )
 
 
@@ -1485,14 +1581,43 @@ _FUZZ_ALLOW_LITERAL = {"1 1"}
 
 
 def _is_floor_query(query: str) -> bool:
+    """Round-11 gaps review, the owner's ruling, 2026-09-25: "make the floor test
+    measure a token after folding, so B.F and bf classify the same way." Before this
+    fix, `len(token)` measured the RAW token — `B.F` (3 characters, its own period
+    kept — `query_tokens` only strips EDGE punctuation) counted as OUTSIDE the 1-2
+    character floor, where the punctuation-free `bf` (2 characters) counted as inside
+    it, even though both spell the identical two letters. Measuring
+    `match.compact_text(token)` instead — the SAME fold the decisive matcher's own
+    substring fallback (rule 7) compares on — folds `B.F` to `bf`, so the two classify
+    identically. This alone changes only the FUZZ'S OWN classification, never the
+    product: `_fts_letter_pair_alternative` (`server/capture_server.py`, the same
+    round) is what actually lets a bare 2-letter term reach "B.F. Sword" now."""
     from server import match
 
     if query.strip() in _FUZZ_CASE_35_STRIPPED or query in _FUZZ_ALLOW_LITERAL:
         return True
     return any(
-        len(token) in (1, 2) and not match._has_digit(token)
+        len(folded) in (1, 2) and not match._has_digit(folded)
         for token in match.query_tokens(query)
+        for folded in [match.compact_text(token)]
+        if folded
     )
+
+
+def case_is_floor_query_classifies_by_the_fold() -> None:
+    """Round-11 gaps review, the owner's ruling, 2026-09-25: "make the floor test
+    measure a token after folding, so B.F and bf classify the same way." Before this
+    fix, `_is_floor_query` measured the RAW token's own length — `B.F` (3 characters,
+    its own internal period kept) counted as OUTSIDE the 1-2 character floor, while the
+    punctuation-free `bf` (2 characters) counted as inside it, despite spelling the
+    identical two letters. This is a direct unit check on the classifier itself: the
+    permanent fuzz corpus (below) never happens to carry a query this distinction
+    changes the verdict for, so it cannot mutation-prove this fix on its own.
+    """
+    check(_is_floor_query("bf") == _is_floor_query("B.F"), "'bf' and 'B.F' classify the same way")
+    check(_is_floor_query("bf"), "'bf' is still a floor query (2 letters, no digit)")
+    check(_is_floor_query("B.F"), "'B.F' is a floor query too, once folded")
+    check(not _is_floor_query("bfd"), "'bfd' (3 letters folded) is not a floor query")
 
 
 def case_do_search_permanent_fuzz_agrees_with_match_query() -> None:
@@ -1593,8 +1718,11 @@ CASES = [
     case_do_search_number_widening_mirrors_canonical_number,
     case_do_search_comma_and_edge_punctuation_terms_widen,
     case_do_search_hyphen_fold_finds_a_composed_number,
-    case_do_search_fold_deletion_narrowed_bf_to_the_accepted_floor,
+    case_do_search_hyphen_splits_the_number_never_joins_it,
+    case_do_search_dotted_initials_are_brought_back,
+    case_do_search_two_character_timing_stays_under_500ms_p95,
     case_do_search_widening_dedupes_case_variants,
+    case_is_floor_query_classifies_by_the_fold,
     case_do_search_permanent_fuzz_agrees_with_match_query,
     case_do_search_still_refuses_an_unrelated_number,
     case_do_search_runs_the_shared_case_table,

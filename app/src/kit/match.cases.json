@@ -220,5 +220,17 @@
     "query": "akali zed",
     "fields": { "text": ["Akali, Deadly Duelist"] },
     "match": false
+  },
+  {
+    "note": "the hyphen splits the number, it never joins it (the owner's ruling, 2026-09-25)",
+    "query": "002-64",
+    "fields": { "numbers": ["264/300"] },
+    "match": false
+  },
+  {
+    "note": "the same hyphen, read as the composed slash form it stands for, still resolves",
+    "query": "002-64",
+    "fields": { "numbers": ["002/064"] },
+    "match": true
   }
 ]

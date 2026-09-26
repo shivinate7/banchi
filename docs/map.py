@@ -4044,7 +4044,7 @@ COMPONENTS = [
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
                 "governed_by": ["D15", "D16", "D23", "D90", "D96", "D105", "D194", "D218", "D226",
-                                "D229", "D245", "D248", "D277", "D280", "D284"],
+                                "D229", "D245", "D248", "D271", "D277", "D280", "D284"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "
@@ -6090,7 +6090,7 @@ COMPONENTS = [
                                          "its start. The rules are stated in its header, so "
                                          "another search can be checked against them. The "
                                          "server's own search does not use it.",
-                                 "governed_by": ["D5"]},
+                                 "governed_by": ["D5", "D271"]},
             "src/kit/toast.tsx": {"does": "one toast stack for the product: any screen calls "
                                           "`toast()`, the shell renders `<Toaster/>` once. FOUR "
                                           "KINDS AND THE DIFFERENCE IS THE RULE — a `receipt` "

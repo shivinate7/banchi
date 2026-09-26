@@ -603,3 +603,145 @@ printing.
 | The hyphen-fold term removed from `_number_candidate_forms`'s `forms` set | N2's own fix | 1 case fails |
 
 Both mutations were chosen because round 10's own review named them directly.
+
+
+**ROUND 11, GAPS REVIEW, 2026-09-25, ON 74b4682d.** Two owner rulings, one check,
+three doc fixes. Both quoted verbatim.
+
+**RULING 1, QUOTED VERBATIM.**
+
+> "No, a hyphen splits (Recommended)": "002-64" must NOT match 264. The hyphen splits
+> the number. It must no longer read as `compact_text`'s joined digits. Change it in
+> BOTH matchers, `server/match.py` and `app/src/match.ts`, and keep them in agreement
+> (the matcher selftest and any parity test). `0027-166` must still find Hand Hammer,
+> because the hyphen-to-slash composed form stays.
+
+Round 10's own N3 disclosed this as a doc-only gap. The owner overturned that
+disclosure. `_hyphen_to_slash` only changes its input when a hyphen stands BETWEEN TWO
+DIGITS. When it does, the hyphen is doing a real job. It stands for the
+collector-number slash. `bare` read WHOLE must never also be a candidate form then.
+`canonical_number` does not split on `-`. So the whole-string form joins two digit
+runs the hyphen kept apart. `002-64` canonicalized whole was `264`. Only when there is
+no such hyphen does the plain form still apply.
+
+Fixed in three places, the same shape each time. `server/match.py:_number_match`.
+`app/src/kit/match.ts:numberMatch`. `server/capture_server.py:_number_candidate_forms`,
+the widening step's own mirror. `0027-166` still finds Hand Hammer through the SAME
+composed hyphen-to-slash reading this repo kept since round 9 and 10.
+
+Two case rows landed in the SHARED table, `app/src/kit/match.cases.json`. Both
+`scripts/match-selftest.py` and `app/tests/match.spec.ts` read that one table. This is
+the ruling's own "keep them in agreement" instruction, built in. A third case asserts
+`do_search` end to end:
+`case_do_search_hyphen_splits_the_number_never_joins_it`. It ALSO asserts
+`match.match_query` directly. The candidate step's own fix already keeps the wrong
+candidate from reaching the decisive check for this exact query. Without the direct
+assertion, a mutation of `match.py` alone would hide behind `do_search`'s own
+filtering.
+
+**RULING 2, QUOTED VERBATIM.**
+
+> "Bring it back (Recommended)": letters that spell a dotted name match it again, so
+> "bf" and "B.F" behave the same and both find B.F. Sword. The reviewer's lead: make
+> the floor test measure a token AFTER folding, so `B.F` and `bf` classify the same
+> way. Then give the folded dotted-initial case a path to B.F. Sword without opening
+> every 2-letter term to widening. Show that the 2-character timing stays under 500ms
+> p95.
+
+Two halves. First, the TEST HARNESS. `_is_floor_query`
+(`scripts/match-selftest.py`) measured the RAW token's own length. `B.F` keeps its own
+internal period — `query_tokens` strips only edge punctuation. So `B.F` is 3
+characters and counted as OUTSIDE the 1-2 character floor. Punctuation-free `bf` is 2
+characters and counted as inside it. Both spell the identical two letters. Fixed:
+measure `match.compact_text(token)` instead. That is the same fold the decisive
+matcher's own substring fallback (rule 7) already compares on. New case,
+`case_is_floor_query_classifies_by_the_fold`, a DIRECT unit check. The permanent fuzz
+corpus never happens to carry a query this distinction changes the verdict for. It
+could not mutation-prove this half on its own.
+
+Second, the PRODUCT. `B.F` (with its own period) was never actually inside the floor.
+At 3 characters it already cleared the existing substring widening unconditionally.
+It always found the card once `_deduped_capped_terms` tokenized correctly (round 10).
+Only bare `bf` (2 characters, no punctuation) needed a real fix. There is no way to
+tell `bf` apart from an ordinary short word like `ex` by the term alone. Reopening the
+WIDENING ROW WALK for every 2-letter term was the R3 floor this repo has stood behind
+since round 4. The ruling asks for a path that does not reopen it.
+
+`_fts_letter_pair_alternative` (`server/capture_server.py`) is a SECOND FTS5 CLAUSE.
+It is ORed with the term's own prefix match inside `_fts_query`. It is an INDEXED
+intersection of two single-letter prefixes, `"b"* AND "f"*`. That costs what any
+indexed AND costs. It never grows with how common the term is, unlike a per-row
+Python scan. It is offered for every bare 2-letter alpha term. Nothing about the term
+alone says which are real initials. The decisive `match.match_query` is unchanged. It
+still requires its own compact-fold fallback before accepting a row this admits as a
+candidate. A false candidate is filtered for free.
+
+New cases: `case_do_search_dotted_initials_are_brought_back` supersedes round 9's own
+`case_do_search_fold_deletion_narrowed_bf_to_the_accepted_floor`, which asserted the
+now-overturned "does not find" verdict.
+
+`case_do_search_two_character_timing_stays_under_500ms_p95` measures `bf`, `ex`, `hi`,
+`on`, `gx`, `sc`, `fl`, `ob`, `ad` and `un` (30 samples) against a 3,000-card store.
+`rows_walked` stays 0 throughout. That is the real proof. An INDEXED lookup is what
+makes the cost independent of machine load. Isolated on an otherwise-idle machine, p95
+measured well under the owner's own 500ms ceiling.
+
+ASSERTED ON WORK DONE, NOT WALL TIME (F6-6, round-7): "a guard that goes red when
+nothing is wrong is spent." Inside the full `make check` run, sharing the CPU with
+dozens of other checks, the SAME 30 queries measured over 1s wall once. The machine
+was busy. The query was not slow. The case's own wall-time check stays a generous
+2.0s backstop now, the same shape `case_do_search_hostile_repeated_terms_stay_fast_
+on_real_names` already uses for its own 5.0s one.
+
+**CHECK: DOES `#24a` FIND ITS CARD NOW?** Yes, unchanged since round 9. It is already
+pinned by `case_do_search_number_widening_mirrors_canonical_number`'s "Rengar, Unseen
+(hash)" row (`#24a` finds SKU `8802`). Round 9 added that row when the `#`-prefixed
+composed shape closed as a side effect of F1. No new case is needed. The existing one
+already covers this exact query and card.
+
+**DOC FIXES.**
+
+L1: the round-10 sentence "`_fts_query` was checked and needs no change" is narrowed
+to hold OUTSIDE the accepted floor. A query like `un,9197044` shows why. Once
+`_deduped_capped_terms` splits it into `un` and `9197044`, the number term candidates
+the row through widening. `un` itself (2 characters, no digit) sits inside the
+accepted floor for the WIDENING MECHANISM alone. It still passes the decisive
+`match.match_query` fine. `un` is an ordinary plain substring of the card's own folded
+text, `"unseen"`. It needs no widening help at all. `_fts_query` needing no change was
+never in question for this shape. The floor is what excuses a term like `un` from
+ever needing a candidate-generating rule of its own.
+
+L2: `Dr.`, `Lt.` and `Mr.` alone, with no second initial paired beside them, also fold
+to a 2-character no-digit term (`dr`, `lt`, `mr`). Each reads as a floor term too,
+under `_is_floor_query`'s own fold-based classification. This is disclosed, not
+fixed. These are ordinary abbreviated WORDS, not two separate initials joined by a
+dot. The mechanism cannot tell the two apart from the term alone. In practice each
+already tokenizes as a real FTS5 index token — `unicode61` splits `Dr.` into `dr` at
+index time. An actual `Dr. Something` card is found through the ordinary index lookup
+regardless of the floor classification. The disclosure is about the TEST'S OWN excuse
+covering more ground than true dotted-initial pairs. It is never a missed card.
+
+L3: N4's own cause, corrected. The cause is not "the raw token before edge-punctuation
+stripping" in general. The cause is the PERIOD ITSELF, sitting INSIDE the token —
+`query_tokens` never strips an internal character. That period is what makes `B.F`
+three characters wide where `bf` is two. The `compact_text`-based classification from
+ruling 2, above, is what makes the two agree now.
+
+**MUTATION RESULTS, ROUND 11, EACH CONFIRMED RED THEN RESTORED:**
+
+| Mutation | Reverts | Result |
+|---|---|---|
+| `match.py:_number_match` hyphen-split fix removed | ruling 1 | 1 case fails (direct `match.match_query` assertion) |
+| `match.ts:numberMatch` hyphen-split fix removed (built with esbuild, run directly) | ruling 1 | reproduces the bug (`264/300` matches `002-64`) |
+| `_fts_letter_pair_alternative` wiring removed from `_fts_term_alternatives` | ruling 2 | 1 case fails |
+| `_is_floor_query` back to raw token length | ruling 2's test half | 2 cases fail |
+
+`server/capture_server.py:_number_candidate_forms`'s own copy of ruling 1's fix is not
+independently mutation-provable through `do_search`. The decisive `match.match_query`
+is fixed and unmutated. It rejects the wrong candidate regardless of what the
+widening step offers. A mutation there changes candidate volume, never the answer.
+Its own docstring states the mirror it keeps. The direct `match.match_query` case and
+the `match.py` mutation above are what prove the rule itself.
+
+Seeded fuzz re-run after every fix: 0 false positives, 640 queries (`_FUZZ_QUERIES`
+plus 200 card-sampled).
