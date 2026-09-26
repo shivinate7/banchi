@@ -843,18 +843,6 @@ class SectionEmpty(ValueError):
     """
 
 
-class SectionAhead(ValueError):
-    """`open_section` was asked to start a section behind one that is already declared.
-
-    A layout may legitimately run past the fill — the dividers editor takes `[1, 51]` on a
-    five-card box, and `_section_spans` renders that last section with a count of zero. A
-    divider opened at the rig goes in front of the NEXT card, which in that state is behind
-    a divider that already exists, and appending it would make the layout unsorted.
-    `check_sections` would refuse it as exactly that, which is true and unhelpful; this
-    names the declared divider that is in the way.
-    """
-
-
 class UnknownBox(ValueError):
     """A box number no registry entry covers."""
 
@@ -1912,15 +1900,37 @@ class Inventory:
 
     def next_key(self, box) -> float:
         """The key the next card captured into `box` takes: one past the highest, the back."""
-        return float(int(self.box_order(box).top) + 1)
+        top = self.box_order(box).top
+        return self._behind_empty_section(box, top, float(int(top) + 1))
 
     def _birth_key(self, box, index: int) -> float:
         """A new record's key: its own index in a box nothing was placed into, so such a box
         stays the identity; otherwise the back of the box."""
         order = self.box_order(box)
         if order.identity and all(int(i) < int(index) for i, _ in order.pairs):
-            return float(index)
-        return float(int(order.top) + 1)
+            return self._behind_empty_section(box, order.top, float(index))
+        return self._behind_empty_section(box, order.top, float(int(order.top) + 1))
+
+    def _behind_empty_section(self, box, top: float, key: float) -> float:
+        """`key`, or the last divider's key when that divider stands above every card
+        (above `top`, the box's highest key).
+
+        THE OWNER'S RULING, 2026-09-25: "Into the empty section (Recommended)". A box that
+        ends with an empty section (S was pressed, and no card is behind it yet) takes its
+        next captured or moved-in card INTO that section, behind the divider. Every capture
+        and every move-in reads its key here, so one rule covers them all. Before this, a
+        write that lowered the box's top key (a capture undo, a remove, a move of the last
+        card forward) left the divider above the next card's key, and that card went into the
+        section in front of it (the divider proof's F1).
+
+        A HAND-TYPED DIVIDER PAST THE LAST CARD (`[1, 51]` on a five-card box) is the same
+        layout, so the next capture goes into section 2 too, and S then refuses with
+        `SectionEmpty`. So `open_section` can no longer meet a divider past the next card,
+        and its `SectionAhead` refusal is deleted. D10 records it."""
+        layout = self.sections_for(box)
+        if layout and float(layout[-1]) > float(top):
+            return float(layout[-1])
+        return key
 
     def _on_hand(self, box, index) -> bool:
         card = self.cards.get(position_key(box, index))
@@ -2955,10 +2965,12 @@ class Inventory:
             raise CardDeparted(f"{new_key} is no longer the newest card in its box")
         # A DIVIDER PUT IN BEHIND THE TRANSPLANT builds on the move too. Deleting the
         # transplant would leave a section that starts past the box's next index, so the
-        # next capture would land in the wrong section.
+        # next capture would land in the wrong section. KEYS AGAINST KEYS (D265): a divider
+        # is an order key, so it is compared with the transplant's order key, never its
+        # stored index (the divider proof's F3).
         registered = self.boxes.get(str(transplant.box))
         if registered is not None and any(
-            int(start) > int(transplant.index) for start in registered.sections
+            float(start) > float(transplant.order_key) for start in registered.sections
         ):
             raise CardDeparted(f"a divider was put in after {new_key}")
 
@@ -3478,8 +3490,9 @@ class Inventory:
         `_state_before_sale` scans history filtering against `STATES`, and D26 records the
         day a state and an event sharing a word made months-old undo lines parse as states.
 
-        Refuses on a section that is still empty (`SectionEmpty`), and behind a divider
-        already declared past the fill (`SectionAhead`). A box has no lid any more
+        Refuses on a section that is still empty (`SectionEmpty`). A divider past the next
+        card is no longer a refusal: the next card goes behind it (`_behind_empty_section`),
+        so that section is empty too. A box has no lid any more
         (`D-sealed-boxes-removed`), so nothing refuses a section for a seal.
         """
         entry = self.ensure_box(number)
@@ -3487,17 +3500,39 @@ class Inventory:
         at = self.next_key(entry.box)
         layout = list(entry.layout()) or [1]
         last = layout[-1]
-        if last == at:
+        if last >= at:
             raise SectionEmpty(
                 f"section {len(layout)} of {self.box_title(entry.box)} holds nothing yet. "
                 f"Capture a card into it before starting another."
             )
-        if last > at:
-            raise SectionAhead(
-                f"{self.box_title(entry.box)} already has a divider past the next card. "
-                f"Edit the dividers instead."
-            )
         return self.set_sections(entry.box, layout + [at])
+
+    def close_section(self, number) -> Tuple[int, ...]:
+        """Take out the box's last divider while no card stands behind it. The capture
+        screen's `U` after `S` (UN-15).
+
+        IT REMOVES THAT ONE DIVIDER BY ITS KEY AND WRITES NOTHING ELSE. The screen used to
+        send the layout back through `set_sections`, but it sent stored order keys where
+        `PUT /boxes/<box>` reads card counts, so every divider whose key differs from its
+        count moved (the divider proof's F2). Here the store drops the last key off its own
+        list, so no other divider can move.
+
+        Refuses `BadSections` when a card on hand stands behind the last divider, or when the
+        box has no divider past its first. A departed record there (a card moved out, sold or
+        retired) is not in the box, so it does not hold the divider in.
+        """
+        entry = self.ensure_box(number)
+        layout = list(entry.layout())
+        last = self.layout_of(entry.box)[-1:]
+        held = any(self._on_hand(entry.box, i) for sec in last for i in sec["slots"])
+        if len(layout) < 2 or held:
+            raise BadSections(
+                f"{self.box_title(entry.box)} has no empty last section, so no divider was "
+                f"taken out. Edit the dividers instead."
+            )
+        kept = layout[:-1]
+        # `[1]` is the box `open_section` found undeclared (`[]`), so it goes back to that.
+        return self.set_sections(entry.box, kept if len(kept) > 1 else [])
 
     def box_fill(self, number) -> int:
         """The highest index this box holds. `next_index` minus one, and DISPLAY ONLY."""

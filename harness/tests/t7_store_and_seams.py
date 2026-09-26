@@ -27501,19 +27501,19 @@ def check_open_section(checks: Checks) -> None:
         )
 
         # A DECLARED DIVIDER PAST THE FILL is legal (`_section_spans` renders it with a
-        # count of zero) and is the one layout this route cannot append to, because the
-        # divider it would add belongs BEHIND one that already exists.
+        # count of zero). It is an empty last section, so under the owner's ruling of
+        # 2026-09-25 ("Into the empty section (Recommended)", D10) S refuses it as
+        # `section_empty`, and the next capture goes INTO it, behind the divider.
         with Store().write() as snapshot:
             snapshot.inventory.record_capture(
                 master.Card(box=5, index=1, cid=fake_cid("section-ahead-5-1"))
             )
         capture_server.do_put_box(5, {"sections": [1, 51]})
         checks.raises(
-            master.SectionAhead,
+            master.SectionEmpty,
             lambda: capture_server.do_open_section(5, {}),
-            "a divider already declared past the next card refuses, naming it — appending "
-            "would make the layout unsorted, and `check_sections` would say so in a "
-            "sentence about a list rather than about this box",
+            "a divider already declared past the next card is an empty section, so S "
+            "refuses it the way it refuses a second press",
         )
 
         refusal(
@@ -27548,8 +27548,8 @@ def check_open_section(checks: Checks) -> None:
         #
         # THE PATH AND THE CODES, which are the whole of what a client sees. `do_*` calls
         # above prove the behaviour; only a socket proves that `POST /boxes/6/sections`
-        # reaches it and that the store's three exceptions arrive as three distinct strings
-        # rather than as one 500. `app/src/server.ts:openSection` branches on all three.
+        # reaches it and that the store's refusals arrive as distinct strings
+        # rather than as one 500. `app/src/server.ts:openSection` branches on them.
         # Card 8 of box 6, so the section opened at 8 above holds something and the wire
         # press below is a real one rather than the replay refusal.
         capture_server.do_capture(capture_payload(6))
@@ -27568,7 +27568,7 @@ def check_open_section(checks: Checks) -> None:
             )
             for box, code, label in (
                 (6, "section_empty", "a replayed press is a 409 `section_empty`"),
-                (5, "section_ahead", "a divider ahead of the next card is 409 `section_ahead`"),
+                (5, "section_empty", "a divider ahead of the next card is 409 `section_empty`"),
             ):
                 status, body, _ = request(port, "POST", f"/boxes/{box}/sections", payload={})
                 checks.equal(

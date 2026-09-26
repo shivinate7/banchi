@@ -10562,7 +10562,6 @@
         "d1ab2f9117 That was a v1 feature, and v2 moved the whole of it into the four comma…",
         "d358f6fafe Rejected: live-only, which is faster to work through a stack but defers…",
         "d3ec15c081 This is the direct input to the row hierarchy that was guessed at, and…",
-        "d9925e42d5 **It refuses rather than guessing, in three named cases**: a second pre…",
         "db01bf7d52 **Since D# the default is derived rather than literal** — `vite.config.…",
         "dd528d52e7 Items 1 through 5 are all derivable from the run's own output, which me…",
         "de8233f0b6 7b was scheduled after the gate so that it would be built against a rea…",

@@ -518,10 +518,10 @@ was meant to be in front of.
 
 **Superseded 2026-09-25: a box has no seal and no capacity (D-sealed-boxes-removed).**
 
-**It refuses rather than guessing, in three named cases**: a second press with nothing
-captured between (`section_empty` — the divider you want is already there), a divider
-already declared past the next card (`section_ahead`), and a sealed box (`box_closed`, the
-same refusal a capture gets, for the same reason). Each is a sentence beside the control and
+**It refuses rather than guessing**: a second press with nothing captured between
+(`section_empty` — the divider you want is already there). A divider already declared past
+the next card was `section_ahead` until 2026-09-25. The next card goes behind it now, so
+`section_empty` answers it (D10). A sealed box (`box_closed`) went with the seal. Each is a sentence beside the control and
 never a halt: §5.5 stops the run when a card may have gone past unrecorded, and a refused
 divider changed nothing.
 

@@ -10,6 +10,7 @@ Every case below was observed FAILING before its fix was kept.
 from __future__ import annotations
 
 import os
+import random
 from typing import List, Optional, Tuple
 
 from harness.tests.t7_store_and_seams import (
@@ -849,10 +850,251 @@ def check_r5_links_and_empty_sections(checks: Checks) -> None:
         )
 
 
+def _layout(inv, box):
+    """The box as the store draws it: on-hand cids per section, in walk order."""
+    secs = inv.layout_of(box) or [dict(slots=[])]
+    return [
+        [inv.cards[master.position_key(box, i)].cid for i in sec["slots"]
+         if inv.cards[master.position_key(box, i)].state not in master.TERMINAL_STATES]
+        for sec in secs
+    ]
+
+
+def _labels(inv, box):
+    _, view = join.box_view(inv, box)
+    out = dict()
+    for idx, _key, card in inv.records_in(box):
+        if card.state not in master.TERMINAL_STATES:
+            place = view.at(int(box), int(idx))
+            out[card.cid] = (place.section, place.card)
+    return out
+
+
+def _where(inv, cid):
+    card = next(c for c in inv.cards.where(cid=cid) if c.state not in master.TERMINAL_STATES)
+    return int(card.index)
+
+
+def _fuzz_dividers(seeds, rounds):
+    """The divider proof's fuzz. A PHYSICAL MODEL of each box (sections of card names) is
+    kept beside the store, every operation goes through its route, and after each one the
+    store's sections and every card's section and card number must equal the model. Returns
+    `(operations, failures)`. Fixed seeds, so a failure replays exactly."""
+    bad = []
+    ops = 0
+    for seed in seeds:
+        rng = random.Random(seed)
+        with isolated_home():
+            phys = dict()
+            for b in (1, 2, 3):
+                capture_server.do_create_box(dict(box=b, name="B" + str(b)))
+                phys[b] = [[]]
+
+            def capture(b):
+                _, row = capture_server.do_capture(capture_payload(b))
+                inv = Store().read().inventory
+                phys[b][-1].append(inv.cards[master.position_key(b, row["index"])].cid)
+
+            for b in (1, 2, 3):
+                for _ in range(4):
+                    capture(b)
+                capture_server.do_open_section(b, dict())
+                phys[b].append([])
+                capture(b)
+
+            def cards(b):
+                return [c for sec in phys[b] for c in sec]
+
+            def drop(b, cid):
+                for sec in phys[b]:
+                    if cid in sec:
+                        sec.remove(cid)
+
+            for _ in range(rounds):
+                kind = rng.choice(("capture", "S", "undo_S", "move", "range", "sections",
+                                   "remove", "capture_undo"))
+                b = rng.choice((1, 2, 3))
+                dst = rng.choice((1, 2, 3))
+                inv = Store().read().inventory
+                saved = [[list(sec) for sec in phys[x]] for x in (1, 2, 3)]
+                try:
+                    if kind == "capture":
+                        capture(b)
+                    elif kind == "S":
+                        capture_server.do_open_section(b, dict())
+                        phys[b].append([])
+                    elif kind == "undo_S":
+                        if phys[b][-1] or len(phys[b]) < 2:
+                            continue
+                        # THE CAPTURE SCREEN'S U AFTER S (UN-15), through the route it calls.
+                        capture_server.do_close_section(b)
+                        phys[b].pop()
+                    elif kind == "move" and b != dst and cards(b):
+                        cid = rng.choice(cards(b))
+                        capture_server.do_move_cards(b, dict(to_box=dst, indices=[_where(inv, cid)]))
+                        drop(b, cid)
+                        phys[dst][-1].append(cid)
+                    elif kind == "range" and cards(b):
+                        cid = rng.choice(cards(b))
+                        rest = [c for c in cards(dst) if c != cid]
+                        if rest:
+                            target = rng.choice(rest)
+                            capture_server.do_move_range(b, dict(
+                                indices=[_where(inv, cid)], to_box=dst,
+                                before_card=_where(inv, target)))
+                            drop(b, cid)
+                            sec = next(x for x in phys[dst] if target in x)
+                            sec.insert(sec.index(target), cid)
+                        else:
+                            j = rng.randrange(len(phys[dst])) + 1
+                            capture_server.do_move_range(b, dict(
+                                indices=[_where(inv, cid)], to_box=dst, section_end=j))
+                            drop(b, cid)
+                            phys[dst][j - 1].append(cid)
+                    elif kind == "sections" and cards(b) and b != dst:
+                        first = rng.randrange(len(phys[b])) + 1
+                        before = rng.randrange(len(phys[dst])) + 1
+                        capture_server.do_move_sections(b, dict(
+                            first=first, last=first, to_box=dst, before=before))
+                        moving = phys[b].pop(first - 1)
+                        phys[b] = phys[b] or [[]]
+                        phys[dst].insert(before - 1, moving)
+                    elif kind == "remove" and cards(b):
+                        cid = rng.choice(cards(b))
+                        at = _where(inv, cid)
+                        aim = inv.cards[master.position_key(b, at)].capture_id
+                        capture_server.do_remove_card(b, at, dict(capture_id=aim))
+                        drop(b, cid)
+                    elif kind == "capture_undo":
+                        newest = inv.next_index(b) - 1
+                        card = inv.cards.get(master.position_key(b, newest))
+                        if card is None or card.cid not in cards(b):
+                            continue
+                        capture_server.do_delete_card(b, newest)
+                        drop(b, card.cid)
+                    else:
+                        continue
+                except capture_server.BadRequest:
+                    # A route's own refusal (a card already built on, a departed card in
+                    # the way) is a legal answer. The model goes back to where it was.
+                    for x, secs in zip((1, 2, 3), saved):
+                        phys[x] = secs
+                except Exception as caught:  # noqa: BLE001 — a raw store error is the failure
+                    # A STORE ERROR ON A WELL-AIMED WRITE IS A FAILURE, and S over a
+                    # section that holds a card is one too. A dropped front re-anchor
+                    # shows only as a refused section move, so this is what sees it.
+                    for x, secs in zip((1, 2, 3), saved):
+                        phys[x] = secs
+                    if not (isinstance(caught, master.SectionEmpty) and not phys[b][-1]):
+                        bad.append((seed, ops, kind + " raised " + type(caught).__name__,
+                                    b, [len(sec) for sec in phys[b]], str(caught)[:60]))
+                ops += 1
+                after = Store().read().inventory
+                for x in (1, 2, 3):
+                    want = phys[x]
+                    want_labels = dict(
+                        (cid, (n_sec, n)) for n_sec, sec in enumerate(want, 1)
+                        for n, cid in enumerate(sec, 1)
+                    )
+                    if _layout(after, x) != want or _labels(after, x) != want_labels:
+                        bad.append((seed, ops, kind, x, [len(sec) for sec in want],
+                                    [len(sec) for sec in _layout(after, x)]))
+                        phys[x] = _layout(after, x)
+    return ops, bad
+
+
+def check_divider_anchor(checks: Checks) -> None:
+    """The divider proof (D264, D265, D260, D58, D10): no write moves a divider off the cards
+    it separates. Three named cases, one per defect the proof found, then the fuzz.
+
+    F1: a divider left above the next card's key (`Inventory.next_key`) took the next
+    capture or move-in into the section in front of it. The owner's ruling, 2026-09-25:
+    "Into the empty section (Recommended)".
+    F2: the capture screen's divider undo sent stored keys where `PUT /boxes/<box>` reads
+    card counts, so other dividers moved. It calls `DELETE /boxes/<box>/sections` now.
+    F3: the move undo's divider guard compared an order key with a stored index.
+    Each case, and the fuzz, was red before the fix."""
+    checks.note("")
+    checks.note("BOX MAP — dividers stay with their cards (the divider proof)")
+
+    def cap(box):
+        capture_server.do_capture(capture_payload(box))
+
+    for how in ("remove", "capture undo"):
+        with isolated_home():
+            capture_server.do_create_box(dict(box=1, name="A"))
+            for _ in range(3):
+                cap(1)
+            capture_server.do_open_section(1, dict())
+            if how == "remove":
+                aim = Store().read().inventory.cards["1/3"].capture_id
+                capture_server.do_remove_card(1, 3, dict(capture_id=aim))
+            else:
+                capture_server.do_delete_card(1, 3)
+            cap(1)
+            checks.equal(
+                [n for _, n in _sections(1)], [2, 1],
+                f"F1: 3 captures, S, {how} of card 3, 1 capture: the new card goes INTO the "
+                "empty section, behind its divider",
+            )
+
+    with isolated_home():
+        capture_server.do_create_box(dict(box=1, name="A"))
+        for _ in range(3):
+            cap(1)
+        capture_server.do_open_section(1, dict())
+        for _ in range(3):
+            cap(1)
+        capture_server.do_mark_sold(1, 1, dict())
+        stored = list(Store().read().inventory.box(1).sections)
+        capture_server.do_open_section(1, dict())
+        capture_server.do_close_section(1)
+        checks.equal(
+            list(Store().read().inventory.box(1).sections), stored,
+            "F2: 3 captures, S, 3 captures, sell card 1, S, U: the undo takes out only its "
+            "own divider, and moves no other",
+        )
+        cap(1)
+        checks.raises(
+            master.BadSections, lambda: capture_server.do_close_section(1),
+            "and once a card stands behind the last divider, the undo refuses",
+        )
+
+    with isolated_home():
+        for b in (1, 2):
+            capture_server.do_create_box(dict(box=b, name="B" + str(b)))
+        for _ in range(5):
+            cap(1)
+        cap(2)
+        capture_server.do_move_range(1, dict(indices=[5], to_box=1, before_card=1))
+        capture_server.do_move_cards(2, dict(to_box=1, indices=[1]))
+        capture_server.do_open_section(1, dict())
+
+        def unmove():
+            with Store().write() as snapshot:
+                snapshot.inventory.unmove_card("2/1")
+
+        # THE STORE'S OWN GUARD, called directly: the route reads history first and
+        # refuses on its own, so only this call can see the store's comparison.
+        checks.raises(
+            master.CardDeparted, unmove,
+            "F3: the store refuses a move undo after S, in a box whose keys are below their "
+            "indices: the divider's key is compared with the card's key",
+        )
+
+    ops, bad = _fuzz_dividers(range(6), 150)
+    checks.ok(
+        not bad,
+        "no write moves a divider off its cards, or relabels a card it did not move "
+        "(" + str(ops) + " random operations over six seeds)",
+        "; ".join("seed %d op %d %s box %d wanted %s got %s" % v for v in bad[:5]),
+    )
+
+
 CHECKS = (
     check_box_map_safety, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
     check_undo_keeps_paid_answers, check_front_of_box, check_card_move_refusals,
     check_divider_editor_keys, check_delete_keeps_dividers, check_merge_speed,
-    check_r5_links_and_empty_sections,
+    check_r5_links_and_empty_sections, check_divider_anchor,
 )

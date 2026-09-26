@@ -57,6 +57,8 @@
     POST   /boxes/<box>/sections           put ONE divider in front of the next card, at the
                                            moment the real one goes in (D10, the capture
                                            screen's `S`). Takes no index: the store reads it
+    DELETE /boxes/<box>/sections           take out the EMPTY last divider, the capture
+                                           screen's `U` after `S` (UN-15). Moves no other
     POST   /pipeline/preflight             what a run would cost. FREE, creates no run
     POST   /pipeline/waiting               the photographed, unclaimed cards a spend over a
                                            selection would buy. FREE, decodes nothing
@@ -12830,6 +12832,20 @@ def do_open_section(box: int, payload: dict) -> dict:
     return body
 
 
+def do_close_section(box: int) -> dict:
+    """`DELETE /boxes/<box>/sections`: take out the box's empty last divider (UN-15).
+
+    The capture screen's `U` after `S`. `Inventory.close_section` removes that one divider by
+    its own key and moves no other, and refuses when a card stands behind it. No body: the
+    store knows which divider is last. Answers with the box row, as `POST` does."""
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        if inventory.box(box) is None:
+            raise BadRequest(HTTPStatus.NOT_FOUND, "box_not_found", f"No box {box}.")
+        inventory.close_section(box)
+        return _box_row(inventory, box)
+
+
 # --------------------------------------------------------------------------- the orders
 #
 # D66'S SCREEN HALF, AND IT IS FOUR ROUTES. `GET /orders` says which physical copies fill
@@ -15705,15 +15721,14 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # refusal, went with the seal: `D-sealed-boxes-removed`.)
         except master.BadSections as exc:
             self._fail(HTTPStatus.BAD_REQUEST, "sections_invalid", str(exc))
-        # `open_section`'s two, and they are 409s on the rule the comment above draws: the
-        # request was well-formed — it carries no index to be wrong about — and lost to
-        # something the STORE knows, which is where the last divider already is. Each
-        # already names that divider in a sentence written for a person, so both are
-        # answered with their own text rather than a substitute.
+        # `open_section`'s refusal, a 409 on the rule the comment above draws: the request
+        # was well-formed — it carries no index to be wrong about — and lost to something
+        # the STORE knows, which is where the last divider already is. It names that
+        # divider in a sentence written for a person, so it is answered with its own text.
+        # (`section_ahead` went when the next card started going behind an empty last
+        # section, the owner's ruling of 2026-09-25, D10.)
         except master.SectionEmpty as exc:
             self._fail(HTTPStatus.CONFLICT, "section_empty", str(exc))
-        except master.SectionAhead as exc:
-            self._fail(HTTPStatus.CONFLICT, "section_ahead", str(exc))
         except master.UnknownBox as exc:
             self._fail(HTTPStatus.NOT_FOUND, "box_not_found", str(exc))
         # D83's move primitive, caught here as a backstop rather than the whole story: the
@@ -16732,6 +16747,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 body = do_delete_box(int(match.group(1)))
                 return self._json(HTTPStatus.OK, body)
+            # UN-15: the capture screen's divider undo. Only the empty last one.
+            match = _BOX_SECTIONS_RE.match(path)
+            if match:
+                return self._json(HTTPStatus.OK, do_close_section(int(match.group(1))))
             # D61's way back. It drops a held batch — and the buyer addresses in it — now
             # rather than in half an hour, which is what CLAUDE.md's hard rule asks of
             # anything that makes this process hold one. Answers a body rather than a 204,

@@ -345,7 +345,7 @@ Capture is 50%, a wrong sale 30%, a wrong Review answer 20%. Pricing and move fo
 | UN-12 | A Pricing hold ignores `U`, and one `U` undoes half a hold. | `U` is read only in a price field. `setHold` pushes two stack entries. | UN-10's hook. One press is one stack entry. | Fast | `app/src/Pricing.tsx`, its spec | None. | Hold a no-market SKU, press `U` once. The hold is fully gone. | no |
 | UN-13 | A cut-off change has no receipt and no undo. | The cut-off write pushes no stack entry. | A receipt, and a stack entry that holds the prior value. | Fast | `app/src/Pricing.tsx`, its spec | None. Same write. | Change it, press `U`, and the old value is back. | no |
 | UN-14 | A move has no undo, and moving back puts the card at the front. | Section 4 excluded moves. `move_card` has no reversal. | Delete the transplant while it is the newest, and restore the tombstone. | Both | `store/master.py`, `server/capture_server.py`, `Inventory.tsx` | Yes. A new write. | Move, then undo. The card is back at its index, and nothing else moves. | Q1 |
-| UN-15 | A divider has no undo. | No reversal is built. | While no card is behind it, `U` drops it through `set_sections`. | Fast | `CaptureScreen.tsx` | Low. An existing write. | Press `S`, then `U`. The sections are as before. | no |
+| UN-15 | A divider has no undo. | No reversal is built. | While no card is behind it, `U` drops it through `DELETE /boxes/<box>/sections`. | Fast | `CaptureScreen.tsx` | Low. An existing write. | Press `S`, then `U`. The sections are as before. | no |
 
 ### 11.4 Lanes
 
@@ -466,9 +466,11 @@ Built on branch `ux/undo-capture`, `app/tests/capture-undo.spec.ts`.
   on the owner's Q1). The whole sitting is the strip, newest first. `.capture-undo-list`
   scrolls inside its own footer, a fixed `max-height` at desktop. The tablet breakpoint
   keeps its own horizontal scroll instead. Neither grows the page.
-- **UN-15.** A divider gets its own undo. `doSection` remembers the box's dividers as they
-  stood before the one it just added (`pendingDivider`). `U` puts them back through
-  `updateBox({ sections })`, Manage box's own route. It fires only while `pendingDivider` is
+- **UN-15.** A divider gets its own undo. `doSection` remembers the box it opened the divider
+  in (`pendingDivider`). `U` takes that divider back out through `closeSection` (`DELETE
+  /boxes/<box>/sections`), which removes only the empty last divider, by its own key. It
+  replaced `updateBox({ sections })` on 2026-09-26: that route reads card counts, and the box's
+  `sections` are order keys, so other dividers moved (D265). It fires only while `pendingDivider` is
   still the newer of the two reversible writes here, by `at` against the sitting's own
   newest shot. A capture into the SAME box clears it. The divider is built on.
 - **UN-3 (Q2, "keep the confirm here only").** The mechanism is unchanged. `do_remove_card`

@@ -26,7 +26,7 @@ import {
   photoUrl,
   removeCardInPlace,
   undoCapture,
-  updateBox,
+  closeSection,
   updateCard,
 } from './server'
 import { Dialog as Overlay } from './kit/overlay'
@@ -1146,18 +1146,15 @@ export function CaptureScreen() {
   >(null)
   const [sectionBusy, setSectionBusy] = useState(false)
 
-  /* UN-15: A DIVIDER'S OWN UNDO, "WHILE NO CARD IS BEHIND IT". `openSection` writes through
-   * `set_sections` — a whole layout, not an append the store can reverse on its own — so the
-   * screen holds the one fact `set_sections` needs to put the box back: the divider list as it
-   * stood a moment before (`sections`, D10's own shape, minus the entry `doSection` just
-   * added). `at` is when the divider was opened, compared against the newest shot's own `at`
+  /* UN-15: A DIVIDER'S OWN UNDO, "WHILE NO CARD IS BEHIND IT". `closeSection` takes the
+   * empty last divider back out in the store, so the screen holds only which box it went into
+   * (`box`). `at` is when the divider was opened, compared against the newest shot's own `at`
    * (`sitting`, D164's stack) so `U` reaches whichever write is actually the newest — a capture
    * into ANOTHER box after this one opened does not touch it, because a divider is a fact about
    * ONE box (D10) and `doCapture` clears this only when the capture lands in the SAME box, which
    * is "built on" in the plan's own words (11.1). */
   const [pendingDivider, setPendingDivider] = useState<{
     box: number
-    sections: number[]
     at: number
   } | null>(null)
 
@@ -2606,17 +2603,19 @@ export function CaptureScreen() {
     [patchOnHand, undoStack],
   )
 
-  /** UN-15: puts a divider back through `set_sections`, the same route Manage box's own
-   *  editor calls (undo.md 11.1's "Manage box edits the sections"). Shares `busyRef`/`busy`
-   *  and `undoNote` with the capture undo above — one strip, reporting on itself either way. */
+  /** UN-15: takes the divider back out through `closeSection`, which removes only the empty
+   *  last divider, by its own key in the store. Not `updateBox({ sections })`: that route
+   *  reads card counts, and the box record's `sections` are order keys, so re-sending them
+   *  moved every other divider whose key was not its count. Shares `busyRef`/`busy` and
+   *  `undoNote` with the capture undo above — one strip, reporting on itself either way. */
   const undoDivider = useCallback(
-    async (target: { box: number; sections: number[] }) => {
+    async (target: { box: number }) => {
       if (busyRef.current) return
       busyRef.current = true
       setBusy(true)
       setUndoNote(null)
       try {
-        const record = await updateBox(target.box, { sections: target.sections })
+        const record = await closeSection(target.box)
         setBoxRecords((prev) => {
           const rest = prev.filter((entry) => entry.box !== record.box)
           return [...rest, record].sort((left, right) => left.box - right.box)
@@ -2762,9 +2761,8 @@ export function CaptureScreen() {
         place: opened === null ? null : { section: opened.section, fromCard: opened.start },
         code: null,
       })
-      // UN-15: the layout as it stood before this divider, so `U` can put it back — the
-      // record's own `sections` (D10's list of divider indices) minus the one just appended.
-      setPendingDivider({ box, sections: record.sections.slice(0, -1), at: Date.now() })
+      // UN-15: which box `U` takes this divider back out of, and when it went in.
+      setPendingDivider({ box, at: Date.now() })
     } catch (err) {
       setSectionNote({ done: false, place: null, ...describe(err) })
     } finally {

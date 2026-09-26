@@ -24,10 +24,31 @@ Built 2026-08-29. The owner asked for sectioning they could create from the capt
 - **It is `next_index` and not count+1**, which matters exactly where D10 already matters: a box with permanent gaps in it. A count would put the divider in front of a card that will never be captured.
 - **An undeclared box materializes `[1, at]`, not `[at]`.** `check_sections` requires a layout to start at index 1 and is right to — there is no card before the front of a box. Nothing is invented by that: section 1 already started at card 1, and this is the first time anything needed to write it down.
 - **It logs `resectioned` through `set_sections`**, the event the dividers editor already writes, carrying both layouts. A new event name was considered and rejected on D26's evidence: this store has already been bitten by a state and a history event sharing a word.
-- **Two refusals, each in its own code**: `section_empty` (pressed twice with nothing captured between — the divider you want is already there, and an empty box takes this too, since card 1 is where the first section starts), `section_ahead` (a divider already declared past the next card, which the dividers editor allows and this cannot append behind). A third, `box_closed` (a sealed box took no divider), went with the seal on 2026-09-25 (D-sealed-boxes-removed).
+- **One refusal, in its own code**: `section_empty` (pressed twice with nothing captured between — the divider you want is already there, and an empty box takes this too, since card 1 is where the first section starts). A second, `section_ahead` (a divider already declared past the next card), went on 2026-09-25 with the empty-section rule below: the next card now goes behind such a divider, so that section is empty and `section_empty` answers it. A third, `box_closed` (a sealed box took no divider), went with the seal on 2026-09-25 (D-sealed-boxes-removed).
 - **No confirm and no undo, and neither is an oversight.** Nothing is spent and nothing is destroyed; the remedy for a mis-press is the dividers editor, which is where a wrong layout is corrected anyway, and `resectioned` carries the layout it moved from. A dialog on the screen the owner shoots a box from at feeder pace is what `docs/DESIGN.md` refuses in as many words.
 
 **The set hint is `H` now, and the swap cost nothing else.** `S` was on a field an operator opens a few times a run and was wanted for an act performed at the box. The option alphabet (`docs/DESIGN.md`) is every key this screen has not spent, so it lost `s` and gained `h` — and because `h` sorts after `e`, the first thirteen option keys are `1234567890ade` before and after, which is why `app/tests/capture-claims.spec.ts` pins them and stayed green.
+
+### The next card goes into an empty last section
+
+**The owner's ruling, 2026-09-25, verbatim: "Into the empty section (Recommended)".** When a
+box ends with an empty section (the owner pressed S, and no card is behind it yet), the next
+captured or moved-in card goes INTO that section, behind the divider.
+
+`store/master.py:Inventory._behind_empty_section` holds it. `next_key` and `_birth_key` read
+it, and every capture and every move-in takes its key from one of the two. So one rule covers
+every write the divider proof named. Before this, a write that lowered the box's highest key
+(a capture undo, a Manage box remove, a move that takes the last card forward, a section
+reorder, a section-move undo or a move undo) left the divider above the next card's key. The next card then went into the section
+in front of it (the proof's F1).
+
+**The effect on a hand-typed divider past the last card.** The dividers editor takes `[1, 51]`
+on a five-card box. That is the same layout, so the next capture now goes into section 2, at
+the divider's key. `S` then refuses with `section_empty`, and `SectionAhead` is deleted,
+because no layout can reach it now. Whether any real box holds such a divider is unmeasured.
+The divider proof found two boxes (4 and 6) that end with an empty section now.
+
+`harness/tests/t7_box_map.py:check_divider_anchor` guards it (D265, the divider anchor).
 
 ### The rule governs the INDEX; the label is a view
 
