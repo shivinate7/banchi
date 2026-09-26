@@ -113,13 +113,18 @@
   display: inline-flex;
   align-items: center;
   gap: var(--bn-2);
-  color: var(--bn-ink-2);
+  color: var(--bn-ink);
   font-size: var(--bn-fs-md);
+  font-weight: 600;
 }
 .review-identify-strip-said .bn-icon { color: var(--bn-ink-3); }
+.review-identify-strip-said .bn-money { font-weight: 600; }
+.review-identify-strip-presses { display: inline-flex; gap: var(--bn-2); }
+.review-identify-trouble { flex-basis: 100%; }
 @media (max-width: 559px) {
   .review-identify-strip { padding: var(--bn-3); }
-  .review-identify-open { width: 100%; }
+  .review-identify-strip-presses { width: 100%; }
+  .review-identify-strip-presses .bn-btn { flex: 1; }
 }
 
 /* D291: `.bn-sheet`'s own default width (kit.css, 420px) is sized for a

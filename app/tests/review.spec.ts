@@ -1417,7 +1417,56 @@ async function runsReads(page: Page, runs: unknown[]): Promise<string[]> {
     asked.push('/pipeline/identify')
     return route.fulfill({ status: 500, body: 'this case never spends' })
   })
+  /* The run a started spend opens in the sheet, and its export scope (D76), in run-panel's
+     own shape: registered first, so the more general run route below cannot shadow it. */
+  await page.route(/\/pipeline\/runs\/[^/]+\/scope/, (route) =>
+    route.fulfill(
+      json({
+        run: '2026-09-25-box9-01',
+        games: [],
+        scopes: ['category', 'sets'],
+        asked: null,
+        reason: null,
+        message: null,
+      }),
+    ),
+  )
+  /* The run a started spend opens in the sheet. */
+  await page.route(/\/pipeline\/runs\/[^/]+$/, (route) =>
+    route.fulfill(json({ ...runRow({ live: true, pid: 999, phase: 'identifying', collected: false }), console: '', files: [], manifest: {} })),
+  )
   return asked
+}
+
+type Spend = { body: Record<string, unknown> }
+
+/** The spend route, STUBBED: nothing here reaches a paid service. Registered after `runsReads`,
+ *  so it wins. `hold` keeps the answer back until the case releases it. */
+async function spendRoute(page: Page, hold?: Promise<void>): Promise<Spend[]> {
+  const spends: Spend[] = []
+  await page.route(/\/pipeline\/identify$/, async (route) => {
+    spends.push({ body: route.request().postDataJSON() as Record<string, unknown> })
+    if (hold !== undefined) await hold
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        started: [
+          {
+            run: '2026-09-25-box9-01',
+            path: '/tmp/runs/2026-09-25-box9-01',
+            pid: 999,
+            selection: { state: 'captured' },
+            scope: null,
+            cards: 12,
+            argv: [],
+          },
+        ],
+        failed: [],
+      }),
+    })
+  })
+  return spends
 }
 
 test('the Identify strip is absent while no card waits, and the run list is not read for it', async ({ page }) => {
@@ -1438,7 +1487,7 @@ test('the Identify strip names the waiting count and this store’s own past cos
   ])
   await open(page)
   const strip = page.locator('.review-identify-strip')
-  await expect(strip.getByRole('button')).toHaveText('Identify 12 cards, ~$0.04')
+  await expect(strip.locator('.review-identify-strip-said')).toHaveText('Identify 12 cards, ~$0.04')
   /* D221: the dollar figure is the mono face's own span, never typed into the label. */
   await expect(strip.locator('.bn-money')).toHaveText('$0.04')
 })
@@ -1447,7 +1496,7 @@ test('a store with no recorded spend draws the strip with no figure rather than 
   await waiting(page, 1)
   await runsReads(page, [runRow({ usage: {} })])
   await open(page)
-  await expect(page.locator('.review-identify-strip').getByRole('button')).toHaveText('Identify 1 card')
+  await expect(page.locator('.review-identify-strip-said')).toHaveText('Identify 1 card')
 })
 
 test('the strip opens the money gate on top, spends nothing, and leaving it goes back to Review', async ({ page }) => {
@@ -1467,4 +1516,48 @@ test('the strip opens the money gate on top, spends nothing, and leaving it goes
   await expect(composer).toHaveCount(0)
   await expect(page.locator('.review-runs-sheet')).toHaveCount(0)
   expect(asked).not.toContain('/pipeline/identify')
+})
+
+/* THE OWNER'S RULING, 2026-09-25: "Identify now" spends at once. It reaches the one spend route
+ * with `confirm: true` and the composer's own default send, and it asks for no pre-check on the
+ * way. PROVED RED: `defaultSend` returning an empty selection fails the body assertion. */
+test('Identify now spends at once, over the composer’s own default send, with no pre-check', async ({ page }) => {
+  await waiting(page, 12)
+  const asked = await runsReads(page, [runRow({ counts: { cards_in: 100 }, usage: { cost_usd: 0.3 } })])
+  const spends = await spendRoute(page)
+  await open(page)
+  await page.locator('.review-identify-now').click()
+
+  await expect.poll(() => spends.length).toBe(1)
+  expect(spends[0]?.body).toMatchObject({ confirm: true, state: 'captured', crop: true, max_edge: 1200 })
+  expect(spends[0]?.body.box).toBeUndefined()
+  expect(asked).not.toContain('/pipeline/preflight')
+  /* No confirm screen: the composer never opens. The receipt is the run itself, open in the
+     Runs sheet, where its own progress reads itself, the way a composer-started run's does. */
+  await expect(page.locator('.runs-composer')).toHaveCount(0)
+  await expect(page.locator('.review-runs-sheet')).toBeVisible()
+})
+
+/* A DOUBLE PRESS BUYS ONCE. Two clicks land in one task, before React can draw the busy state,
+ * so the only thing that can stop the second is the screen's own in-flight guard. The server's
+ * claim (D174) still refuses a second tab; that half is `make submission-selftest`'s.
+ * PROVED RED: deleting the `spending` ref's early return sends two spends. */
+test('a double press on Identify now spends once', async ({ page }) => {
+  await waiting(page, 12)
+  await runsReads(page, [])
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const spends = await spendRoute(page, held)
+  await open(page)
+  await page.locator('.review-identify-now').evaluate((button: HTMLButtonElement) => {
+    button.click()
+    button.click()
+  })
+  await expect.poll(() => spends.length).toBe(1)
+  await expect(page.locator('.review-identify-now')).toBeDisabled()
+  release()
+  await expect(page.locator('.review-runs-sheet')).toBeVisible()
+  expect(spends).toHaveLength(1)
 })

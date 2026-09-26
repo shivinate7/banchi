@@ -24,6 +24,7 @@ import {
   getQueues,
   getRuns,
   getStatus,
+  startRun,
   isDeparted,
   neighborWords,
   placeParts,
@@ -41,6 +42,7 @@ import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
 import { useOverlayFocus } from './runsOverlay'
 import { RunsContent, boxInHash, perCardRate, runInHash, stateInHash } from './Runs'
+import { defaultSend } from './RunsComposer'
 import { roundsToNothing } from './money'
 import './ReviewQueue.css'
 import { isRetiredReason, reasonLabel } from './reasons'
@@ -737,8 +739,11 @@ export function ReviewQueue() {
 
   /** True when the sheet was opened by the Identify strip, so it opens on the composer. */
   const [runsCompose, setRunsCompose] = useState(false)
-  const openRuns = useCallback((compose: boolean) => {
+  /** The run "Identify now" just started, opened in the sheet so its progress shows. */
+  const [runsRun, setRunsRun] = useState<string | null>(null)
+  const openRuns = useCallback((compose: boolean, run: string | null = null) => {
     setRunsCompose(compose)
+    setRunsRun(run)
     setRunsOpen(true)
   }, [])
   const closeRuns = useCallback(() => setRunsOpen(false), [])
@@ -763,6 +768,43 @@ export function ReviewQueue() {
     }
   }, [reloads])
   const captured = status?.states.captured ?? 0
+
+  /* "IDENTIFY NOW" (the owner's ruling, 2026-09-25): the paid run at once, over the composer's
+   * own default send (`defaultSend`), with no pre-check and no confirm screen. The server's one
+   * spend route still takes `confirm: true` (D33), and D174's claim is still written by the
+   * command inside the transaction that decides which cards it buys, so a second tab can never
+   * buy the same cards twice. THIS REF IS THE DOUBLE-PRESS GUARD ON THE SCREEN: a second press
+   * before the first answers sends nothing. A press after it has answered reaches the route,
+   * which refuses held cards (`cards_already_claimed`), and that sentence is drawn here. */
+  const spending = useRef(false)
+  const [spendBusy, setSpendBusy] = useState(false)
+  const [spendTrouble, setSpendTrouble] = useState<Failure | null>(null)
+  const identifyNow = useCallback(async () => {
+    if (spending.current) return
+    spending.current = true
+    setSpendBusy(true)
+    setSpendTrouble(null)
+    try {
+      const answer = await startRun(defaultSend())
+      const first = answer.started[0]
+      if (first !== undefined) {
+        /* The same receipt a composer-started run gets: a toast, then the run open in the
+           sheet, where its own progress reads itself while it is live. */
+        toast({ kind: 'ok', title: 'Identify started', body: `${captured} ${captured === 1 ? 'card' : 'cards'} sent to be read.` })
+        openRuns(false, first.run)
+      } else if (answer.failed.length > 0) {
+        const failed = answer.failed[0]
+        setSpendTrouble({ code: failed?.code ?? 'not_started', message: failed?.sentence ?? failed?.message ?? 'The run did not start. Nothing was paid for.' })
+      }
+      setReloads((n) => n + 1)
+    } catch (err) {
+      setSpendTrouble(describeFailure(err))
+    } finally {
+      spending.current = false
+      setSpendBusy(false)
+    }
+  }, [captured, openRuns])
+
   /* The run list is read only when there is a strip to price: a store with nothing waiting
      pays for no second read. */
   const waiting = captured > 0
@@ -1494,23 +1536,37 @@ export function ReviewQueue() {
         </>
       }
     >
-      {/* THE STRIP (D291): drawn only when the pipeline has cards waiting. One sentence and
-          one worded press, because it spends money. It opens the composer on its default
-          "needed" start, every card photographed and not identified, which is this N. */}
+      {/* THE STRIP (D291): drawn only when the pipeline has cards waiting. The owner picks
+          at the press (2026-09-25): wait for the free pre-check, or go straight to the bill.
+          Both presses keep their words, because both are about money. "Identify now" takes
+          the one solid fill, because it is the press that spends and must read as the loud
+          one. "Check first" is ghost beside it. */}
       {captured === 0 ? null : (
         <div className="review-identify-strip">
           <span className="review-identify-strip-said">
-            <Icon name="camera" size={16} />
-            Photographed, not yet identified.
+            <Icon name="zap" size={16} />
+            <span>
+              Identify {captured} {captured === 1 ? 'card' : 'cards'}
+              {about === null ? null : roundsToNothing(about) ? ', under a cent' : (
+                <>
+                  , ~<Money value={about} />
+                </>
+              )}
+            </span>
           </span>
-          <Button icon="zap" onClick={() => openRuns(true)} className="review-identify-open">
-            Identify {captured} {captured === 1 ? 'card' : 'cards'}
-            {about === null ? null : roundsToNothing(about) ? ', under a cent' : (
-              <>
-                , ~<Money value={about} />
-              </>
-            )}
-          </Button>
+          <span className="review-identify-strip-presses">
+            <Button variant="ghost" icon="eye" onClick={() => openRuns(true)} disabled={spendBusy} className="review-identify-open">
+              Check first
+            </Button>
+            <Button variant="primary" icon="zap" busy={spendBusy} disabled={spendBusy} onClick={() => void identifyNow()} className="review-identify-now">
+              Identify now
+            </Button>
+          </span>
+          {spendTrouble === null ? null : (
+            <Notice tone="danger" title="Nothing was paid for" code={spendTrouble.code} className="review-identify-trouble">
+              {spendTrouble.message}
+            </Notice>
+          )}
         </div>
       )}
 
@@ -1619,7 +1675,7 @@ export function ReviewQueue() {
           while open (`Sheet`'s own `useLeave`), so its GET /boxes and GET /pipeline/runs
           reads happen only when the operator is looking at it. */}
       <Sheet open={runsOpen} onClose={closeRuns} title="Runs" icon="history" className="review-runs-sheet">
-        <RunsContent compose={runsCompose} onLeave={closeRuns} />
+        <RunsContent compose={runsCompose} run={runsRun} onLeave={closeRuns} />
       </Sheet>
     </Page>
   )

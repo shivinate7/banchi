@@ -462,8 +462,9 @@ below).
 #/capture      Capture        live camera; box/game/set-hint/finish/rarity; undo; motion
                               trigger. Setup is remembered ON THE DEVICE (D142)
 #/review       Review         one card at a time, photo first. Runs folds in here (D291): an
-                              "Identify N cards, ~$X" strip when cards wait, past runs behind
-                              a link, in a sheet that holds the whole pipeline
+                              "Identify N cards, ~$X" strip when cards wait, with "Check first"
+                              (the composer) and "Identify now" (spends at once). Past runs
+                              sit behind a link, in a sheet that holds the whole pipeline
 #/runs         Runs           off-nav since D291. Opens Review's runs sheet, so a deep link
                               (`?run=`, `?state=captured`, `?box=`) still lands
 #/pricing      Pricing        hand-pricing worklist, one row per SKU, cut-off strip, holds
@@ -529,7 +530,7 @@ both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
 158<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
-305<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
+306<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before

@@ -16,6 +16,7 @@ import type {
   GameEntry,
   RunPreflight,
   RunSelection,
+  RunSend,
   RunStartFailure,
   RunStartedRun,
   RunSummary,
@@ -229,6 +230,15 @@ export function selectionOf(draft: SelectionDraft, carried: CarriedScope | null)
     if (instant !== null) out.since = instant
   }
   return out
+}
+
+/** THE SEND THE COMPOSER OPENS ON, UNCHANGED: its default start (every card photographed and
+ *  not identified) and its default reading. Review's "Identify now" (D291, the owner's ruling
+ *  of 2026-09-25) sends exactly this, so the press that skips the pre-check buys the same cards,
+ *  read the same way, as the composer's first stage would have quoted. One derivation, here,
+ *  beside the composer's own, so the two can never describe different sends. */
+export function defaultSend(): RunSend {
+  return { selection: selectionOf(NO_DRAFT, null), crop: DEFAULT_READING.crop, maxEdge: DEFAULT_READING.maxEdge }
 }
 
 /**

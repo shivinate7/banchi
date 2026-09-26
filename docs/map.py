@@ -6837,9 +6837,9 @@ COMPONENTS = [
                         "else on this screen; the mid-box delete is deliberately not on it. "
                         "The re-check sheet owns it the same way, and for the same reason.",
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
-                                "D28", "D29", "D32", "D35", "D37", "D46", "D55", "D67", "D77",
-                                "D87", "D118", "D137", "D162", "D164", "D167", "D172", "D194",
-                                "D218", "D221", "D252", "D253", "D259", "D288",
+                                "D28", "D29", "D32", "D33", "D35", "D37", "D46", "D55", "D67",
+                                "D77", "D87", "D118", "D137", "D162", "D164", "D167", "D172",
+                                "D174", "D194", "D218", "D221", "D252", "D253", "D259", "D288",
                                 "D291"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
@@ -9662,8 +9662,8 @@ COMPONENTS = [
                 # an all-or-nothing worklist — two entries out of a hundred and one used to
                 # suppress it for the other ninety-nine.
                 "governed_by": ["D4", "D13", "D16", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
-                                "D41", "D46", "D77", "D118", "D136", "D146", "D194", "D218", "D221",
-                                "D291"],
+                                "D41", "D46", "D76", "D77", "D118", "D136", "D146", "D174", "D194",
+                                "D218", "D221", "D291"],
                 "note": "NOT a harness test — it starts a browser, which docs/GATES.md keeps "
                         "off the seven-test contract deliberately. The photograph stub is "
                         "2160x3840 and that is load-bearing: the rig's stored frame is 9:16 "

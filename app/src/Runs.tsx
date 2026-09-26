@@ -108,8 +108,12 @@ export function perCardRate(runs: readonly RunSummary[]): number | null {
  *  path. */
 export function RunsContent({
   compose = false,
+  run = null,
   onLeave,
 }: {
+  /** A run to open on arrival: the one Review's "Identify now" just started, so its progress
+   *  shows the way a composer-started run's does. */
+  readonly run?: string | null
   /** Open straight onto the composer: Review's Identify strip pressed through to the money
    *  gate (D291), rather than the past-runs link. */
   readonly compose?: boolean
@@ -132,7 +136,7 @@ export function RunsContent({
   const [composerOpen, setComposerOpen] = useState(() => compose || stateInHash())
   const started = useRef(false)
   const [syncOpen, setSyncOpen] = useState(false)
-  const [openRun, setOpenRun] = useState<string | null>(() => runInHash())
+  const [openRun, setOpenRun] = useState<string | null>(() => run ?? runInHash())
 
   useEffect(() => {
     const fromHash = () => {
