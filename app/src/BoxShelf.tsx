@@ -41,6 +41,16 @@ type Dest = number | 'new'
  *  card, `e:<n>` at a section's end. */
 type GapId = string
 
+/** The one sentence the owner reads when a drop is refused. `section_gone`: the sections of the
+ *  box changed after the map drew it (an S on the rig), so nothing moved, and the map has read
+ *  the boxes again. Every other refusal keeps the plain title, with the server's words behind
+ *  it. */
+function failureTitle(code: string): string {
+  return code === 'section_gone'
+    ? 'That box changed since the map was drawn, so nothing moved. The map shows it as it is now.'
+    : 'That move did not happen.'
+}
+
 /** One view of Inventory: the walk or the shelf. The switch lives in both headers. */
 /** `#/inventory`'s three views, one `view` URL key (D285): the walk, the box map (D264) and
  *  the owner's "by set" view (D-set-view). THE LABELS ARE THE OWNER'S, 2026-09-25: "List /
@@ -324,7 +334,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
       lede="Every box and its sections. Pick up a section to move it to another box or another place."
       verdict={verdict}
       actions={<ShelfSwitch view="shelf" onView={onView} />}
-      status={failure === null ? null : <FailureNotice failure={failure} title="That move did not happen." />}
+      status={failure === null ? null : <FailureNotice failure={failure} title={failureTitle(failure.code)} />}
       loading={records === null && readFailure === null}
       empty={readFailure === null ? null : <FailureNotice failure={readFailure} title="The boxes could not be read." onRetry={load} />}
     >

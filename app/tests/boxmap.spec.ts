@@ -262,6 +262,8 @@ test('a drop onto sections that changed since the map was drawn is refused, and 
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
   const before = reads
   await page.getByRole('button', { name: /Put u1 at the end of Promos, in Mixed Singles/ }).click()
-  await expect(page.getByText(sentence)).toBeVisible()
+  await expect(
+    page.getByText('That box changed since the map was drawn, so nothing moved. The map shows it as it is now.'),
+  ).toBeVisible()
   await expect.poll(() => reads).toBeGreaterThan(before)
 })
