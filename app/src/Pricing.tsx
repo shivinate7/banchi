@@ -1550,15 +1550,17 @@ export function Pricing() {
          * $5.16"), on its own channel, so the toast's "next send" is true. A hold with no
          * earlier answer releases to none. */
         const prior = typeof held === 'object' ? held.before : undefined
-        const id =
-          prior === undefined || prior.value === null
+        const empty = prior === undefined || prior.value === null
+        const id = empty
             ? write(sku.sku, sku.bucket, undefined)
             : writeMany([{ sku: sku.sku, bucket: sku.bucket, value: prior.value, channel: prior.channel === 'unknown' ? 'unknown' : 'price' }])
         setHoldFor(null)
         toast({
           kind: 'receipt',
           title: `Released ${sku.name}`,
-          body: 'It goes out with the next send.',
+          /* THE TOAST SAYS WHAT THE NEXT SEND WILL DO. A row left with no answer and no market
+           * price is left out of a send until it has a price. */
+          body: empty && sku.bucket === 'no_market_data' ? 'It needs a price before it can go out.' : 'It goes out with the next send.',
           ttlMs: 8000,
           action: { label: 'Undo', kbd: 'U', onPress: () => undoByIdRef.current(id) },
         })

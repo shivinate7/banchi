@@ -2108,7 +2108,11 @@ test('a hold with no earlier answer releases to no answer', async ({ page }) => 
   })
   await expect(page.locator('.pricing-row')).toHaveAttribute('data-answer', 'held')
   await page.locator('.pricing-hold').first().click()
-  await expect(page.locator('.bn-toast', { hasText: 'Released Void Assault' })).toBeVisible()
+  const released = page.locator('.bn-toast', { hasText: 'Released Void Assault' })
+  await expect(released).toBeVisible()
+  /* THE TOAST IS TRUE: with no answer and no market price, a send leaves the card out. */
+  await expect(released).toContainText('It needs a price before it can go out.')
+  await expect(released).not.toContainText('next send')
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
   expect(sentFor(wire, '5')).toBeUndefined()
 })
