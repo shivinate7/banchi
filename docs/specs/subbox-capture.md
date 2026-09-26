@@ -322,11 +322,24 @@ can put a divider anywhere but the back. `div` is `null` only when a response ca
 `sections_detail[].div` at all — an older server, or a fixture that predates the field. The
 undo then falls back to the box-only form, which removes the last divider as it always has.
 
-**A 409 `section_gone` on a capture** falls back the same way a stale restore does. The
-picked section vanished from under the pick — almost certainly another device's U or S. The
-stored entry is forgotten, the pick returns to the last section, and one sentence says so. The
-capture itself still halts, because nothing was written. The operator's next press is the one
-that lands.
+**Every aim sends the box's `layout_token`** alongside a picked `section`/`after` (the Opus
+review's own guard, §1). It is read off `BoxRecord.layout_token` at the moment of the press,
+never composed. It is omitted along with the section field, for the default pick. A current
+server's own response always carries a fresh token. `layoutToken` reads `undefined` against
+an older one. The aim is then sent with no token at all — the same fallback a stale div
+takes, below.
+
+**A 409 `section_gone` or a 400 `layout_token_required` on a capture** is handled by
+`handleSectionMismatch`. The picked section may simply be gone — another device's U or S. Or
+a re-space moved on since the token was read. Then the OLD key can name a different section,
+with no error the key alone could catch. Nothing was written either way (the wire contract's
+own promise). The pick reverts at once, the same fallback a stale restore takes. The stored
+entry is forgotten, the pick falls back to the last section, and one plain sentence says so.
+The screen then re-reads `GET /boxes`. It checks whether a section still stands at the SAME
+ORDINAL the operator picked. Found: a toast OFFERS TO UNDO the revert, named by its own text
+("Keep Rares?"). Pressing Keep re-arms the pick at the fresh key. Left alone, or no section
+survives at that ordinal: the revert already said all there is to say. Either way the
+capture itself still halts. The operator's next press is the one that lands.
 
 **`demoServer.ts`** refuses `after` on `POST /boxes/<box>/sections`, with the demo's own
 refusal sentence. The frozen store carries no order keys to re-space, and its fixtures predate

@@ -1605,6 +1605,14 @@ export function CaptureScreen() {
   )
   const lastSection = sectionsDetail.length === 0 ? null : sectionsDetail[sectionsDetail.length - 1]!
 
+  /** THE BOX'S LAYOUT TOKEN (subbox-capture.md 1, the Opus review's first finding) — sent
+   *  beside any aim that names a section, so a re-space between the pick and the press
+   *  cannot make a stale key silently name the wrong one. `undefined` for a box `GET /boxes`
+   *  has not answered for, or an older server: the aim is then sent with no token, and the
+   *  server's own `layout_token_required` reads through the same fallback a `section_gone`
+   *  does below. */
+  const layoutToken = currentBoxRecord?.layout_token
+
   /** THE DEVICE-MEMORY KEY FOR THIS BOX'S PICK — `bid` where the store gave one (D145/D153),
    *  because a box NUMBER is reused and a `bid` never is; the box number itself where it did
    *  not, which is the same fallback `CaptureSetup.bid` already reads as "no id to give". */
@@ -2567,6 +2575,50 @@ export function CaptureScreen() {
    * with the first. `doUndo` is the nullary call the trigger seam still needs.
    */
 
+  /** A PICKED SECTION WENT STALE UNDER THE HAND — `section_gone` (a bad key or a stale
+   *  layout token) or `layout_token_required` (no token to send at all). The Opus review's
+   *  own instruction: re-read the box, and if a section still stands at the SAME ORDINAL the
+   *  operator picked, OFFER to keep it rather than silently adopting a different physical
+   *  section under the same pick. A toast with one action — accepted, `pickSection` re-arms
+   *  the pick at the new key; left alone (it expires, same as `status`'s own 5s), the pick
+   *  falls back to the last section, exactly as a bare `section_gone` with nothing to offer
+   *  already did. Never called from `doSection`: an S is the operator pressing right now, and
+   *  its own inline refusal already carries the server's sentence. */
+  const handleSectionMismatch = useCallback(async () => {
+    const staleOrdinal = pickedSection?.section ?? null
+    const staleName = pickedSection?.name ?? null
+    if (box === null) return
+    // THE PICK REVERTS NOW, LIKE ANY OTHER STALE-KEY FALLBACK — the toast below, when there
+    // is one, is an UNDO of this, not a question the pick waits on. Nothing here holds a
+    // capture up.
+    forgetSectionPick(sectionPickKey(box, boxBid))
+    setSelectedDiv(null)
+    if (staleOrdinal === null) {
+      setSectionPickNote('That section is gone. Back to the last section.')
+      return
+    }
+    setSectionPickNote('That section changed after a re-space. Back to the last section.')
+    try {
+      const answer = await getBoxes()
+      const fresh = answer.boxes.find((entry) => entry.box === box)
+      if (fresh !== undefined) {
+        setBoxRecords((prev) => [...prev.filter((entry) => entry.box !== fresh.box), fresh])
+        const atOrdinal = fresh.sections_detail.find((span) => span.section === staleOrdinal)
+        if (atOrdinal !== undefined && atOrdinal.div != null) {
+          const newDiv = atOrdinal.div
+          toast({
+            kind: 'status',
+            title: 'That section changed after a re-space.',
+            body: staleName === null ? `Keep section ${staleOrdinal}?` : `Keep ${staleName}?`,
+            action: { label: 'Keep', onPress: () => pickSection(newDiv) },
+          })
+        }
+      }
+    } catch {
+      // The re-read itself failed — the plain fallback sentence above already said so.
+    }
+  }, [box, boxBid, pickSection, pickedSection, sectionPickKey])
+
   const doCapture = useCallback(async () => {
     if (busyRef.current) return
     // A halted run ignores the trigger entirely. Not "queues it": spec 5.5 rejected
@@ -2630,6 +2682,9 @@ export function CaptureScreen() {
           // default, the last section) omits the field, so a browser that never picks stays
           // byte-identical to a capture before this feature existed (I1).
           section: selectedDiv ?? undefined,
+          // REQUIRED ALONGSIDE `section` (the Opus review's own guard against a stale key
+          // surviving a re-space) — omitted along with it.
+          layoutToken: selectedDiv === null ? undefined : layoutToken,
         })
         // Answered, so the next photograph gets its own id. Cleared on a replay too: the
         // ambiguity that id existed to resolve is now resolved. Through `rememberCaptureId`,
@@ -2665,6 +2720,16 @@ export function CaptureScreen() {
         if (card.section_div !== undefined && card.section_div !== null) {
           patchSectionCount(card.box, card.section_div, 1)
         }
+        // THE BOX'S LAYOUT TOKEN AFTER THE WRITE — moves when this very capture caused a
+        // re-space, so the NEXT aim at this box carries the fresh one rather than a stale
+        // one this capture itself invalidated.
+        if (card.layout_token !== undefined && card.layout_token !== null) {
+          setBoxRecords((prev) =>
+            prev.map((entry) =>
+              entry.box === card.box ? { ...entry, layout_token: card.layout_token! } : entry,
+            ),
+          )
+        }
         setRevision((prev) => prev + 1)
         setFlash((prev) => prev + 1)
         setUndoNote(null)
@@ -2672,15 +2737,13 @@ export function CaptureScreen() {
         // the SAME box as the pending divider, so its own undo takes over.
         setPendingDivider((prev) => (prev !== null && prev.box === card.box ? null : prev))
       } catch (err) {
-        // 409 `section_gone` (subbox-capture.md 1.2): the picked section is not there any
-        // more — a divider taken back out from another device, most likely. Nothing was
-        // written (the wire contract's own promise), so the id stays in the ref for a real
-        // retry, and the pick falls back to the last section so the NEXT press lands rather
-        // than refusing again on the same stale key.
-        if (err instanceof ServerError && err.code === 'section_gone') {
-          if (box !== null) forgetSectionPick(sectionPickKey(box, boxBid))
-          setSelectedDiv(null)
-          setSectionPickNote('That section is gone. Back to the last section.')
+        // 409 `section_gone` or 400 `layout_token_required` (subbox-capture.md 1.2): the
+        // picked section is not there any more, or a re-space moved on since the token was
+        // read. Nothing was written (the wire contract's own promise), so the id stays in the
+        // ref for a real retry, and `handleSectionMismatch` decides whether to offer keeping
+        // the pick by ordinal or to fall back straight to the last section.
+        if (err instanceof ServerError && (err.code === 'section_gone' || err.code === 'layout_token_required')) {
+          void handleSectionMismatch()
         }
         // The id stays in the ref. This is the case it exists for: the request may have
         // committed, and only resending the same id can tell the difference without costing
@@ -2711,17 +2774,17 @@ export function CaptureScreen() {
     // render. The seam re-arms on a keypress the operator made and not on a paint.
   }, [
     box,
-    boxBid,
     camera,
     finish,
     gameEntry,
     halt,
+    handleSectionMismatch,
+    layoutToken,
     patchOnHand,
     patchSectionCount,
     product,
     rarityClaim,
     rememberCaptureId,
-    sectionPickKey,
     selectedDiv,
     setHint,
   ])
@@ -2986,7 +3049,11 @@ export function CaptureScreen() {
     const priorPicked = pickedSection
     const priorLast = lastSection
     try {
-      const record = await openSection(box, selectedDiv ?? undefined)
+      const record = await openSection(
+        box,
+        selectedDiv ?? undefined,
+        selectedDiv === null ? undefined : layoutToken,
+      )
       setBoxRecords((prev) => {
         const rest = prev.filter((entry) => entry.box !== record.box)
         return [...rest, record].sort((left, right) => left.box - right.box)
@@ -3064,7 +3131,7 @@ export function CaptureScreen() {
       sectionBusyRef.current = false
       setSectionBusy(false)
     }
-  }, [box, lastSection, pickSection, pickedSection, refreshShotLabels, selectedDiv])
+  }, [box, lastSection, layoutToken, pickSection, pickedSection, refreshShotLabels, selectedDiv])
 
   /* The seam, with both implementations behind it now. The key trigger is Gate B's; the
    * motion trigger is Gate C's, and the screen still does not know which one is armed —

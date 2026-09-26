@@ -81,17 +81,34 @@ const BOX = {
   listed: 0,
   on_hand: 10,
   sections_detail: threeSections(),
+  layout_token: 'tok1',
 }
 
 async function open(
   page: Page,
   options: { spans?: Span[]; boxes?: readonly unknown[] } = {},
-): Promise<{ opens: { box: string; after?: string }[]; closes: { box: string; div?: string }[] }> {
-  const wire: { opens: { box: string; after?: string }[]; closes: { box: string; div?: string }[] } = {
+): Promise<{
+  opens: { box: string; after?: string }[]
+  closes: { box: string; div?: string }[]
+  /** Simulates a re-space this browser never saw — another device's own S or capture.
+   *  The next aim at this box that carries the OLD token is refused `section_gone`, exactly
+   *  as a real one would be (subbox-capture.md 1). */
+  bumpToken: () => void
+}> {
+  const wire: {
+    opens: { box: string; after?: string }[]
+    closes: { box: string; div?: string }[]
+    bumpToken: () => void
+  } = {
     opens: [],
     closes: [],
+    bumpToken: () => {
+      token = `tok${++tokenGen}`
+    },
   }
   let spans = options.spans ?? threeSections()
+  let tokenGen = 1
+  let token = 'tok1'
 
   await page.addInitScript(() => {
     const canvas = document.createElement('canvas')
@@ -123,7 +140,7 @@ async function open(
       body: JSON.stringify({ cards: 0, next_index: { '5': 11 } }),
     }),
   )
-  const boxRow = () => ({ ...BOX, sections_detail: spans })
+  const boxRow = () => ({ ...BOX, sections_detail: spans, layout_token: token })
   await page.route(/\/boxes$/, (route) =>
     route.fulfill({
       status: 200,
@@ -141,13 +158,19 @@ async function open(
 
   let nextIndex = 11
   await page.route(/\/capture$/, (route) => {
-    const asked = route.request().postDataJSON() as { section?: string }
-    const index = nextIndex
-    nextIndex += 1
+    const asked = route.request().postDataJSON() as { section?: string; layout_token?: string }
     // Whatever section the request named, or the last one — read here, never composed
     // twice (subbox-capture.md 1, "never compose a divider key").
     const named = asked.section
-    const target = named === undefined ? spans[spans.length - 1]! : spans.find((s) => s.div === named)
+    // THE RE-SPACE GUARD (subbox-capture.md 1, the Opus review's first finding): a token
+    // that no longer matches the box's own refuses exactly like a key the box does not have,
+    // whether or not the key itself would still resolve to a real section.
+    const target =
+      named === undefined
+        ? spans[spans.length - 1]!
+        : asked.layout_token !== token
+          ? undefined
+          : spans.find((s) => s.div === named)
     if (target === undefined) {
       return route.fulfill({
         status: 409,
@@ -155,6 +178,10 @@ async function open(
         body: JSON.stringify({ error: { code: 'section_gone', message: 'That section is gone. Read the box again.' } }),
       })
     }
+    // ALLOCATED ONLY ON A SUCCESS — a refused aim burns no index (the wire contract's own
+    // promise), and a mismatch test that retried after Keep would otherwise skip one.
+    const index = nextIndex
+    nextIndex += 1
     spans = spans.map((s) => (s.section === target.section ? { ...s, count: s.count + 1 } : s))
     return route.fulfill({
       status: 201,
@@ -286,6 +313,56 @@ test('every capture sends the picked section, and the placed label reads it back
   )
   // The section's own count moved, off the response — no re-fetch needed for it to show.
   await expect(sectionRow(page)).toContainText('next card 12')
+})
+
+test('a re-space under the pick offers to keep the section by ordinal, and a Keep re-arms it', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await sectionRow(page).click()
+  await page.locator('.capture-opt').filter({ hasText: /Section 2 of 3/ }).click()
+  await expect(sectionRow(page)).toContainText('Rares')
+
+  // Another device re-spaced this box: the token this pick was made against is gone, and
+  // the store never explains why over the wire — the token alone says so.
+  wire.bumpToken()
+
+  await page.keyboard.press('c')
+
+  // The refusal itself writes nothing and offers the confirm, never a halt.
+  await expect(page.locator('.bn-toast')).toContainText('Keep Rares?')
+  await page.locator('.bn-toast').getByRole('button', { name: 'Keep' }).click()
+
+  // The pick is re-armed at the SAME ordinal (its div would differ after a real re-space;
+  // this fixture only bumps the token, so the row still names the same section).
+  await expect(sectionRow(page)).toContainText('Section 2 of 3')
+  await expect(sectionRow(page)).toContainText('Rares')
+
+  // And it captures cleanly next press, with the fresh token.
+  await page.keyboard.press('c')
+  await expect(page.locator('.capture-undo-row').first()).toHaveAttribute(
+    'aria-label',
+    /Box 5, Section 2, Card 11$/,
+  )
+})
+
+test('a re-space under the pick with nothing kept falls back to the last section', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await sectionRow(page).click()
+  await page.locator('.capture-opt').filter({ hasText: /Section 2 of 3/ }).click()
+
+  wire.bumpToken()
+  await page.keyboard.press('c')
+  await expect(page.locator('.bn-toast')).toContainText('Keep Rares?')
+
+  // Left alone: the pick falls back on its own, the same plain sentence a gone key gives.
+  await expect(page.locator('.capture-section-slot .capture-refused')).toContainText(
+    'Back to the last section',
+    { timeout: 10_000 },
+  )
+  await expect(sectionRow(page)).toContainText('Section 3 of 3')
 })
 
 test('[ and ] step the pick toward the back and the front', async ({ page }) => {

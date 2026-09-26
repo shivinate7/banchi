@@ -925,6 +925,11 @@ export async function capture(input: {
    *  box, as every capture did before this field existed. Never an index — the store still
    *  picks the position; this only says which section it picks it in. */
   section?: string
+  /** THE BOX'S LAYOUT TOKEN, required alongside `section` (subbox-capture.md 1.2, the Opus
+   *  review's first finding) — read off `BoxRecord.layout_token` at the moment the pick was
+   *  made. A re-space between then and now answers 409 `section_gone` rather than risk a
+   *  stale key silently naming the wrong section. Omitted along with `section`. */
+  layoutToken?: string
 }): Promise<CardSummary> {
   const payload: Record<string, string | number | readonly string[]> = {
     box: input.box,
@@ -933,6 +938,7 @@ export async function capture(input: {
     game: input.game,
   }
   if (input.section !== undefined) payload.section = input.section
+  if (input.layoutToken !== undefined) payload.layout_token = input.layoutToken
 
   /* Omitted rather than sent empty, matching `sidecar_payload`'s rule on the other side:
    * the file stays a record of claims the operator actually made (D3 rung 1). The server
@@ -1783,10 +1789,14 @@ export async function updateBox(
  * new divider goes directly behind that section's last card — the owner's Q1 ruling — and is
  * the section directly after `after` in the answer's own `sections_detail`, never the last
  * entry any more.
+ *
+ * `layoutToken` IS REQUIRED ALONGSIDE `after` (subbox-capture.md 1.3, the same re-space
+ * guard `capture()`'s own carries) — omitted along with it.
  */
-export async function openSection(box: number, after?: string): Promise<BoxRecord> {
+export async function openSection(box: number, after?: string, layoutToken?: string): Promise<BoxRecord> {
   const payload: Record<string, string> = {}
   if (after !== undefined) payload.after = after
+  if (layoutToken !== undefined) payload.layout_token = layoutToken
   return (await request(`/boxes/${box}/sections`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
