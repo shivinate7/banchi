@@ -579,9 +579,10 @@ def case_the_moved_tombstone_names_no_photograph() -> None:
         equal(transplant.cid, digest,
               "the transplant keeps the card's name, because the name is the CARD's and the "
               "card is what moved")
-        equal(tombstone.cid, f"{photos.MOVED_PREFIX}{digest}",
-              "and the tombstone wears `moved:<name>`, so one name is never on two rows "
-              "under a UNIQUE index — cleared to NULL it would be re-issued by the heal")
+        equal(tombstone.cid, f"{photos.MOVED_PREFIX}{digest}@1/1",
+              "and the tombstone wears `moved:<name>@<its own key>`, so one name is never on "
+              "two rows under a UNIQUE index, even for a card moved twice — cleared to NULL "
+              "it would be re-issued by the heal")
     check(not photos.is_photo_cid(f"{photos.MOVED_PREFIX}{digest}"),
           "a `moved:` name names no photograph, so nothing composes a path from it")
     equal(master.MOVED_CID_PREFIX, photos.MOVED_PREFIX,
@@ -855,8 +856,8 @@ def case_a_move_moves_no_file() -> None:
     tombstone = snapshot.inventory.cards.get("1/1")
     equal(transplant.cid if transplant else None, digest,
           "the transplant in box 4 wears the name")
-    equal(tombstone.cid if tombstone else None, f"{photos.MOVED_PREFIX}{digest}",
-          "and the tombstone wears `moved:` in front of it")
+    equal(tombstone.cid if tombstone else None, f"{photos.MOVED_PREFIX}{digest}@1/1",
+          "and the tombstone wears `moved:` in front of it, and its own key after it")
 
 
 def case_two_captures_cannot_compose_one_photograph_path() -> None:
