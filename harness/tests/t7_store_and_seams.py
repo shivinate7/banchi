@@ -6622,6 +6622,37 @@ def check_undo_until_built_on(checks: Checks) -> None:
         else:
             checks.ok(False, "and the restore refuses it", "did not refuse")
 
+    # ------------------------------------------------ a restore takes back only what was cleared
+    # `POST /pricing/restore` once stored any value and date for a SKU the corpus did not hold,
+    # so a hold with a forged `before.at` could arrive through it. It now accepts only the rows
+    # the server's own stored clear holds, verbatim, and refuses the whole press otherwise.
+    with isolated_home():
+        first = "2026-09-01T10:00:00+00:00"
+        book = corpus.Corpus()
+        book.answers = {"2000": corpus.Answer(value="4.50", at=first), "2001": corpus.Answer(value="1.25", at=first)}
+        book.write()
+        taken = pipeline_routes.do_pricing_clear({})["cleared"]
+
+        def refused(sent, label):
+            try:
+                pipeline_routes.do_pricing_restore({"answers": sent})
+            except pipeline_routes.PipelineRefusal as caught:
+                checks.equal(caught.code, "restore_not_cleared", label)
+            else:
+                checks.ok(False, label, "did not refuse")
+            checks.equal(sorted(corpus.Corpus.read().answers), [], f"{label}: and it wrote nothing")
+
+        refused({"2000": {"value": "4.50", "at": "2020-01-01T00:00:00+00:00"}}, "a forged date is refused")
+        refused(
+            {"2000": {"value": {"withheld": "bullish", "before": {"value": "4.50", "channel": "price", "at": "2020-01-01T00:00:00+00:00"}}}},
+            "a hold is refused",
+        )
+        refused({"2999": {"value": "9.99"}}, "a SKU the clear did not take is refused")
+        refused({**taken, "2999": {"value": "9.99"}}, "one foreign row refuses the whole press")
+        back = pipeline_routes.do_pricing_restore({"answers": taken})
+        checks.equal(sorted(back["restored"]), ["2000", "2001"], "the clear's own rows still come back")
+        checks.equal(corpus.Corpus.read().answers["2000"].at, first, "verbatim, with their first date")
+
     # ------------------------------------------------ UN-14: a move, until either box changes
     with isolated_home():
         for _ in range(2):
