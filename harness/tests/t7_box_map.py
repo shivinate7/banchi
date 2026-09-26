@@ -788,20 +788,46 @@ def check_merge_speed(checks: Checks) -> None:
 
 
 def check_r5_links_and_empty_sections(checks: Checks) -> None:
-    """R5 review. Item 1: the capture-undo delete clears a dead move link too, so the next
-    capture at that index is never taken for the moved card. Item 2: an unchanged editor save
-    keeps an empty section (the plastic is still in the box) instead of refusing a repeat.
-    Both were red before the fix."""
+    """R5 review. Item 1: a delete that removes a moved card clears the dead move link too,
+    so the next capture at that index is never taken for the moved card. Item 2: an unchanged
+    editor save keeps an empty section (the plastic is still in the box) instead of refusing
+    a repeat. Both were red before the fix.
+
+    ITEM 1 HAS TWO HALVES SINCE THE UNDO SESSION (`docs/specs/undo.md` 11.8). The capture
+    undo (`do_delete_card`) now refuses a moved card with `capture_built_on`, so it can no
+    longer leave a dead link. Manage box's remove (`do_remove_card`) still can remove a
+    moved card, and it is the route the link clearing is proved through now."""
     checks.note("")
-    checks.note("BOX MAP R5 — capture-undo move links, and a save over an empty section")
+    checks.note("BOX MAP R5 — move links on a removed card, and a save over an empty section")
     with isolated_home():
         _shelf()
         capture_server.do_move_range(1, {"indices": [2], "to_box": 2, "section_end": 2})
-        capture_server.do_delete_card(2, 5)
+        moved = Store().read().inventory.cards.get("2/5")
+        refusal(
+            checks,
+            lambda: capture_server.do_delete_card(2, 5),
+            "capture_built_on",
+            "the capture undo refuses a moved card, so it cannot delete it",
+        )
+        kept = Store().read().inventory.cards.get("2/5")
+        checks.ok(
+            moved is not None and kept is not None and kept.cid == moved.cid
+            and Store().read().inventory.cards["1/2"].moved_to == "2/5",
+            "and the moved card, its name and the link to it all stay",
+        )
+
+    with isolated_home():
+        _shelf()
+        capture_server.do_move_range(1, {"indices": [2], "to_box": 2, "section_end": 2})
+        try:
+            capture_server.do_remove_card(2, 5, {"capture_id": None})
+        except capture_server.BadRequest as caught:
+            checks.ok(False, "Manage box's remove takes out the moved card", str(caught))
         capture_server.do_capture(capture_payload(2))
         checks.equal(
             Store().read().inventory.cards["1/2"].moved_to, None,
-            "the tombstone no longer points at 2/5, which holds a new card now",
+            "Manage box's remove clears the link, so the tombstone does not point at 2/5, "
+            "which holds a new card now",
         )
         chain, _ = resolve.follow_moved(Store().read().inventory, "1/2")
         checks.equal(chain, None, "and the join does not follow it onto that new card")
