@@ -208,9 +208,12 @@ a capture calls them inside the store lock. They read the `idx` and `ord` column
 
 - `Inventory.dividers_of(box)`: the dividers as `layout_of` draws them, through
   `front_of_box`.
-- `Inventory.section_ordinal(box, div)`: the section a divider key names, or `SectionGone`.
-- `Inventory.section_tail_key(box, div)`: the key rule, and the only one. It returns
-  `(key, ordinal, last)`. D-sections-are-sub-boxes states the rule and argues it.
+- `Inventory.layout_token(box)`: a short hash of the divider keys, in order (section 1).
+- `Inventory.section_ordinal(box, div, token)`: the section a divider key names, or
+  `SectionGone`. It refuses a token that is not the box's now before it reads the key.
+- `Inventory.section_tail_key(box, div, token, count)`: the key rule, and the only one. It
+  returns `(keys, ordinal, last)`: `count` keys, each the rule over the one before it, from
+  one read of the box. D-sections-are-sub-boxes states the rule and argues it.
 - `Inventory.section_div_of(box, key)`: the divider key of the section a key stands in. The
   capture response reads it after the write.
 - `Inventory.allocate_capture(box, section=...)`: it resolves the section before it allocates
@@ -229,13 +232,14 @@ a capture calls them inside the store lock. They read the `idx` and `ord` column
 | capture into an empty middle section | new | I4. The key equals the divider's key. |
 | capture under a planned divider | new | I5. With `[1, 51]` on 5 cards, a capture into section 1 takes key 6, and section 2 stays at card 51. |
 | stale aim | new | I6. A refusal writes nothing. `next_index` does not change, and no photograph is stored. |
+| aim read before a re-space | new | I16. A capture, an S or a Move to box aimed before a re-space is refused with `section_gone`, even where the old key is now another section's key. It writes nothing. The fuzz re-spaces between the aim and the write on a quarter of its aims. |
 | re-space | reused | I7. Order and section membership stay. `section_div` names the new key. |
 | S after section j | new | I8. One divider goes between j's last card and the next divider. No card key changes. Later sections move up one number. Their card numbers stay. |
 | U after S, by key | new | I9. Only that divider goes. It refuses the first divider, a section with a card, a key the box does not have, and a divider an editor save came after. |
 | capture undo | none | I10. It deletes the newest index even when that card is mid-box. The next capture into the emptied section takes the divider's key. |
 | remove | none | I11. Indices slide and keys do not. The fuzz holds it. |
 | move, range move, section move | Move to box requires `section` | I12. A move with `section` goes to that section's tail, in the order sent. A move with a key the box does not have, or with no section, moves nothing. |
-| move undo | the divider guard is narrowed | I13. A move into a middle section can be undone. The next section's divider was already behind it. |
+| move undo | the divider guard asks when | I13. A move into a middle section, or into the section before an empty last section, can be undone: those dividers were there before the move. A divider that went in behind the card after the move refuses. |
 | sell and unsell | none | I14. No key or divider is written. The fuzz holds it. |
 | divider editor | none | I15. After a mid-box S, a save with no edits keeps every divider. |
 
@@ -261,7 +265,10 @@ stays in the mix. The divider proof's own fuzz (seeds 0 to 5) replays as before.
 | The log never proves that S added the divider | I9, the fuzz |
 | An undeclared box keeps `[1]` after S and then U | the undeclared-box case |
 | The re-space is skipped | I7, the fuzz |
-| The move undo guard refuses every divider behind the transplant | I13 |
+| The move undo ignores the layout the move recorded | I13 |
+| The move records no layout | I13 |
+| The layout token is not checked | I16, the fuzz |
+| U's unreadable log is not caught | the history_unreadable case |
 | A SKU's copies sort by index | the copy-order case |
 | An empty section's first card takes a key between the dividers | I4, I10 |
 | `sections_detail[].div` is off by one | I2, I3 |
@@ -295,12 +302,19 @@ server keeps no pick. Each request carries its own aim.
 
 ## 7. Where the build differs from the plan
 
-- `section_tail_key` returns `(key, ordinal, last)`, not a bare key. The capture needs `last`
-  to keep today's rule for the last section. S needs the ordinal after a re-space.
-- **The move undo guard is narrowed** (`Inventory.unmove_card`). It refused any divider above
-  the transplant's key. A card moved to the tail of a middle section always has one. So the
-  undo of every such move refused. It now refuses only a divider that no record stands behind.
-  Only such a divider can have come after the move. What an undo writes does not change.
+- `section_tail_key` returns `(keys, ordinal, last)`, not a bare key. The capture needs
+  `last` to keep today's rule for the last section. S needs the ordinal after a re-space. A
+  Move to box of many cards reads the tail once and takes one key per card (the review's
+  fourth finding).
+- **Every aim carries a layout token** (the review's first finding). Section 1 argues it.
+- **The move undo asks when a divider went in** (`Inventory.unmove_card`, the review's third
+  finding). A move now records `to_box`'s layout on its arrival line (`sections`). The undo
+  refuses a divider behind the card only when the recorded layout did not hold it. So a
+  divider that was there before the move never refuses, and one that went in after it always
+  does. A move recorded before this change has no layout on its line. There, any divider
+  behind the card refuses, as before. What an undo writes does not change.
+- **U with an unreadable log is 503 `history_unreadable`**, not a 500 (the review's fifth
+  finding).
 - **The server refuses a Move to box with no `section`** (400 `section_required`). The plan
   kept the back-of-box answer. The coordinator ruled on 2026-09-26 to refuse, because it is
   the owner's own "no auto default". A caller that forgets the field now fails loudly. It
@@ -323,6 +337,10 @@ Measured 2026-09-26 on a `.backup` copy of the owner's store, never the live one
 - **M6.** 543 (SKU, box) pairs hold two or more copies on hand. None of them lists in a
   different order by index than by key today. Every box is still the identity. So the sort
   change moves nothing on the live store until a card goes into the middle of a box.
+- **M7, a whole-box merge** (the review's fourth finding): box 6 (520 cards) moved into
+  section 2 of box 2, on a fresh copy each run. The reviewed head (`6b2b1588`) held the lock
+  for 3.35 s. With the tail read once per batch it takes 0.18 s. The reviewer measured the
+  rule before this feature at 1.91 s.
 
 ## 9. The owner's rulings, 2026-09-26
 

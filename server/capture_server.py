@@ -912,7 +912,7 @@ REMOVE_FIELDS = ("capture_id",)
 # response must not move whatever card now happens to sit at this key, which after a first
 # successful move is nothing at all (the key is a tombstone). `to_box` is the one thing this
 # body adds that a delete does not need: a destination.
-MOVE_FIELDS = ("capture_id", "to_box", "section")
+MOVE_FIELDS = ("capture_id", "to_box", "section", "layout_token")
 # A move's undo (UN-14) names only the tombstone in the path. It carries no aim check,
 # because a tombstone's key is never reused, and no destination, because it goes back home.
 MOVE_UNDO_FIELDS = ("undo",)
@@ -921,7 +921,7 @@ MOVE_UNDO_FIELDS = ("undo",)
 # the shape that makes a whole-box move (merge, from the caller's side) the same request as
 # a ticked selection, with no second field to mean "everything". `to_box` is required either
 # way; there is no such thing as moving nowhere.
-MOVE_CARDS_FIELDS = ("indices", "to_box", "section")
+MOVE_CARDS_FIELDS = ("indices", "to_box", "section", "layout_token")
 # `section` ON BOTH MOVES is a divider key of `to_box` (`docs/specs/subbox-capture.md` 1.5):
 # each card goes to the tail of that section. IT IS REQUIRED. The owner's ruling, 2026-09-26:
 # "i need to specify where it goes there no auto default". A body with no `section` used to
@@ -943,8 +943,25 @@ def _optional_section(payload: dict, field: str) -> Optional[str]:
     return value.strip()
 
 
-def _require_section(payload: dict) -> str:
-    """A Move to box's `section`, or 400 `section_required`. A move has no default place."""
+def _aim_token(payload: dict, aimed: bool) -> Optional[str]:
+    """The `layout_token` an aim carries, or 400 `layout_token_required` when a section is
+    named without one (`docs/specs/subbox-capture.md` 1). A key alone can name the wrong
+    section after a re-space, so the token is not optional beside a key."""
+    token = payload.get("layout_token")
+    if not aimed:
+        return None
+    if not isinstance(token, str) or not token.strip():
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "layout_token_required",
+            "Send `layout_token` from GET /boxes beside the section it names.",
+        )
+    return token.strip()
+
+
+def _require_section(payload: dict) -> Tuple[str, str]:
+    """A Move to box's `section` and `layout_token`, or 400 `section_required`. A move has no
+    default place."""
     section = _optional_section(payload, "section")
     if section is None:
         raise BadRequest(
@@ -953,14 +970,18 @@ def _require_section(payload: dict) -> str:
             "Choose the section of the box the card goes into. A move has no default place. "
             "Send `section`, a section's `div` from GET /boxes.",
         )
-    return section
+    return section, _aim_token(payload, True)
 
 
-def _section_slot(inventory: master.Inventory, to_box: int, section: str):
-    """Where a card moved into `section` of `to_box` lands: `(index, key)`. The same tail
-    rule a capture uses (`Inventory.section_tail_key`)."""
-    key, _ordinal, _last = inventory.section_tail_key(to_box, section)
-    return inventory.next_index(to_box), key
+def _section_slots(inventory: master.Inventory, to_box: int, aim: Tuple[str, str], count: int):
+    """Where `count` cards moved into a section of `to_box` land: `(index, key)` each, in
+    order. ONE read of the tail for the batch (the review's fourth finding), the same rule a
+    capture uses (`Inventory.section_tail_key`). The indices follow on, as `move_card`
+    allocates them one after another."""
+    section, token = aim
+    keys, _ordinal, _last = inventory.section_tail_key(to_box, section, token, count)
+    first = inventory.next_index(to_box)
+    return [(first + n, key) for n, key in enumerate(keys)]
 
 # What `POST /boxes/<box>/listings/release` accepts. `confirm` is required and must be
 # exactly `true` — D33's field, reused rather than reinvented, and required for its reason:
@@ -2908,6 +2929,7 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
     # THE SECTION TO FILE INTO, by its divider key (`docs/specs/subbox-capture.md` 1.2). The
     # store picks the position, so this body still carries no index (capture-app.md 5.6).
     section = _optional_section(payload, "section")
+    layout_token = _aim_token(payload, section is not None)
     # THE CLAIMS THIS BODY CARRIES, KEYED BY RECORD FIELD NAME so they pass straight through
     # `allocate_capture` and `sidecar_payload`, both of which speak that vocabulary.
     #
@@ -2963,7 +2985,8 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
 
     with Store().write() as snapshot:
         card, created = snapshot.inventory.allocate_capture(
-            box, capture_id=capture_id, cid=cid, section=section, **claims
+            box, capture_id=capture_id, cid=cid, section=section,
+            layout_token=layout_token, **claims
         )
         if created:
             # THE PATH IS KNOWABLE BEFORE THE INDEX NOW, and that is the change. It used to
@@ -2979,11 +3002,12 @@ def do_capture(payload: dict) -> Tuple[HTTPStatus, dict]:
         body = _card_summary(snapshot.inventory, card, created=created)
         # READ AFTER THE WRITE, so it is the key of the section the card is in now, after a
         # re-space too. Null for a pooled card, which has no section.
+        located = body["place"]["located"]
         body["section_div"] = (
-            snapshot.inventory.section_div_of(card.box, card.order_key)
-            if body["place"]["located"]
-            else None
+            snapshot.inventory.section_div_of(card.box, card.order_key) if located else None
         )
+        # THE BOX'S TOKEN AFTER THE WRITE, which moves when this capture caused a re-space.
+        body["layout_token"] = snapshot.inventory.layout_token(card.box) if located else None
 
     return (HTTPStatus.CREATED if created else HTTPStatus.OK), body
 
@@ -5259,6 +5283,20 @@ def _move_built_on(store: Store, key: str, new_key: str) -> Optional[str]:
     return None
 
 
+def _arrival_layout(store: Store, key: str, new_key: str):
+    """The layout `to_box` had when the card arrived, off the move's own arrival line, or None
+    for a move recorded before that line carried one (or an unreadable history)."""
+    try:
+        events = store.history_at(new_key)
+    except (files.StoreError, OSError, ValueError):
+        return None
+    for event in reversed(events):
+        if event.get("position") == new_key and event.get("moved_from") == key:
+            sections = event.get("sections")
+            return sections if isinstance(sections, list) else None
+    return None
+
+
 def _unmove_one(snapshot, store: Store, box: int, index: int) -> dict:
     """Undo one move (UN-14): the card goes back to its own index, and the transplant goes.
 
@@ -5295,7 +5333,9 @@ def _unmove_one(snapshot, store: Store, box: int, index: int) -> dict:
             f"This move can no longer be undone: {why}. Move the card back instead.",
         )
     try:
-        restored, new_key = inventory.unmove_card(key)
+        restored, new_key = inventory.unmove_card(
+            key, sections_at_move=_arrival_layout(store, key, new_key)
+        )
     except (master.CardNotFound, master.CardDeparted) as exc:
         raise BadRequest(HTTPStatus.CONFLICT, "move_built_on", f"This move can no longer be undone: {exc}. Move the card back instead.") from None
 
@@ -5364,7 +5404,7 @@ def do_move_card(box: int, index: int, payload: dict) -> dict:
         )
     aimed_at = _optional_text(payload, "capture_id")
     to_box = _require_to_box(payload)
-    section = _require_section(payload)
+    aim = _require_section(payload)
 
     key = master.position_key(box, index)
 
@@ -5382,7 +5422,7 @@ def do_move_card(box: int, index: int, payload: dict) -> dict:
             )
         result = _move_one(
             snapshot, inventory, key, box, index, to_box,
-            slot=_section_slot(inventory, to_box, section),
+            slot=_section_slots(inventory, to_box, aim, 1)[0],
         )
         result["card"] = _card_row(
             inventory, result["new_box"], result["new_index"],
@@ -5437,7 +5477,7 @@ def do_move_cards(box: int, payload: dict) -> dict:
     """
     _reject_unknown(payload, MOVE_CARDS_FIELDS)
     to_box = _require_to_box(payload)
-    section = _require_section(payload)
+    aim = _require_section(payload)
     raw_indices = payload.get("indices")
     if raw_indices is not None:
         if not isinstance(raw_indices, list) or not raw_indices:
@@ -5476,14 +5516,13 @@ def do_move_cards(box: int, payload: dict) -> dict:
             )
         # IN THE BOX'S ORDER (D265), so the cards land at the destination as they stood.
         wanted = sorted(wanted, key=inventory.box_order(box).of)
+        # THE TAIL IS READ ONCE, and each card takes the next slot, so they land in the
+        # order sent and the lock is held for one read of the box, not one per card.
+        slots = _section_slots(inventory, to_box, aim, len(wanted))
         results = []
-        for at in wanted:
+        for at, slot in zip(wanted, slots):
             key = master.position_key(box, at)
-            # EACH CARD READS THE TAIL AFRESH, so they land in the order sent.
-            results.append(_move_one(
-                snapshot, inventory, key, box, at, to_box,
-                slot=_section_slot(inventory, to_box, section),
-            ))
+            results.append(_move_one(snapshot, inventory, key, box, at, to_box, slot=slot))
 
     return {
         "box": int(box),
@@ -12529,6 +12568,9 @@ def _box_row(
         # `app/src/CaptureScreen.tsx` has a named arm for it: where the store cannot tell its
         # drawers apart, the rule that predates the id decides, unchanged.
         "bid": master.int_or_none(entry.bid) if entry is not None else None,
+        # THE TOKEN EVERY AIM AT THIS BOX SENDS BESIDE ITS KEY (`docs/specs/subbox-capture.md`
+        # 1): a short hash of the divider keys, so a key read before a re-space is refused.
+        "layout_token": inventory.layout_token(box),
         "name": entry.name if entry is not None else None,
         # The STORED list, not the validated tuple. They differ only when the file was edited
         # by hand, and that is exactly when the operator needs to see what is in it.
@@ -12886,7 +12928,8 @@ def do_open_section(box: int, payload: dict) -> dict:
     # `after` IS THE ONE FIELD (the owner's Q1 ruling): a divider key. The new divider goes
     # right after that section, and still at an index the store reads, never one sent.
     after = _optional_section(payload, "after")
-    extra = sorted(set(payload) - {"after"})
+    layout_token = _aim_token(payload, after is not None)
+    extra = sorted(set(payload) - {"after", "layout_token"})
     if extra:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
@@ -12906,7 +12949,7 @@ def do_open_section(box: int, payload: dict) -> dict:
                 f"No box {box}. Create it with POST /boxes, or capture into it — a box "
                 f"registers itself the first time a card lands in it.",
             )
-        inventory.open_section(box, after=after)
+        inventory.open_section(box, after=after, layout_token=layout_token)
         body = _box_row(inventory, box)
 
     return body
@@ -12930,7 +12973,17 @@ def do_close_section(box: int, div: Optional[str]) -> dict:
         ) from None
     # THE EVENT THAT WROTE THE CURRENT LAYOUT, so an undeclared box goes back to `[]`
     # (`Inventory.close_section` checks that it matches before it uses it).
-    made = next((e for e in Store().named_events(RESECTIONED) if e.get("box") == box), None)
+    # AN UNREADABLE LOG IS A NAMED REFUSAL, never a 500 (the review's fifth finding). U can
+    # only prove S added the divider from this line, so without it nothing is taken out.
+    try:
+        made = next(
+            (e for e in Store().named_events(RESECTIONED) if e.get("box") == box), None
+        )
+    except (files.StoreError, OSError, ValueError, sqlite3.Error):
+        raise BadRequest(
+            HTTPStatus.SERVICE_UNAVAILABLE, "history_unreadable",
+            "The store's history could not be read, so the divider stays. Try again.",
+        ) from None
     with Store().write() as snapshot:
         inventory = snapshot.inventory
         if inventory.box(box) is None:
@@ -13675,9 +13728,10 @@ def _walk_plan_take(
 
     ORDER IS LOAD-BEARING (the wire contract's own words) and fixed HERE, not left to the
     client to sort: this stop's copies first, in the solver's densest-first order, then
-    every other on-hand copy ascending by (box, index) — the same order `copies_on_hand`
-    (`positions_for_sku`, sorted `(box, index)`) already returns, so the remainder needs no
-    second sort, only the stop's own copies filtered back out of it.
+    every other on-hand copy in box-walk order, by box and then order key (D265) — the same
+    order `copies_on_hand` (`positions_for_sku`, sorted `(box, order key, index)`) already
+    returns, so the remainder needs no second sort, only the stop's own copies filtered back
+    out of it.
     """
     here = sorted(take.copies, key=lambda copy: _walk_plan_sort_key(copy, places))
     name, number_display = _walk_plan_sku_display(inventory, here)

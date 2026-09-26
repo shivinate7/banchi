@@ -67,6 +67,7 @@ is rather than as coverage of everything below.
 from __future__ import annotations
 
 import bisect
+import hashlib
 
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
@@ -1984,12 +1985,33 @@ class Inventory:
         lowest = min((float(k) for _, k in self.box_order(box).pairs), default=None)
         return [float(d) for d in front_of_box(self.sections_for(box), lowest)]
 
-    def section_ordinal(self, box, div) -> int:
+    def layout_token(self, box) -> str:
+        """A short hash of the box's divider keys, in order (`docs/specs/subbox-capture.md` 1).
+
+        THE OPUS REVIEW'S FIRST FINDING, 2026-09-26: a re-space gives every divider a new
+        key, and an old key can then equal another section's new key. So a key alone can
+        name the wrong section with no error. Every aim sends this token beside its key, and
+        `section_ordinal` refuses a token that is not the box's now. Two equal tokens mean two
+        equal divider lists, so a key names the same interval, and a re-space keeps each card
+        in its section."""
+        text = ",".join(divider_key(d) for d in self.dividers_of(box))
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+    def section_ordinal(self, box, div, token) -> int:
         """The 1-based section whose divider key is `div`, or `SectionGone`.
+
+        `token` is the `layout_token` the screen read beside `div`. A different token, or no
+        token, is `SectionGone` before the key is read: the box changed after the screen
+        read it, and the key may now name another section.
 
         `div` is the string `divider_key` writes, which `GET /boxes` sends as
         `sections_detail[].div`. The stored first divider also names section 1, because
         the front may be drawn lower than it is stored (`front_of_box`)."""
+        if token != self.layout_token(box):
+            raise SectionGone(
+                f"The sections of {self.box_title(box)} changed after the screen read them. "
+                f"Read the box again and choose a section."
+            )
         try:
             want = divider_key(div)
         except (TypeError, ValueError):
@@ -2005,8 +2027,10 @@ class Inventory:
             f"and choose a section."
         )
 
-    def section_tail_key(self, box, div) -> Tuple[float, int, bool]:
-        """The key a card filed at the tail of section `div` takes: `(key, ordinal, last)`.
+    def section_tail_key(self, box, div, token, count: int = 1) -> Tuple[List[float], int, bool]:
+        """The keys `count` cards filed at the tail of section `div` take, in order:
+        `(keys, ordinal, last)`. One read of the box for the whole batch (the review's fourth
+        finding): a whole-box move reads the tail once and steps each next key from the last.
 
         THE OWNER'S RULING, 2026-09-26: a picked section fills "kinda like a subbox". The
         card goes to the near end of its section, directly behind the next divider, and no
@@ -2023,22 +2047,31 @@ class Inventory:
           Below `KEY_EPSILON` the box is re-spaced once, and the key is read again.
 
         `lo` is the highest key of any record in the section, a departed one too, so no two
-        records share a key. Raises `SectionGone` for a key the box does not have."""
+        records share a key. Each next key is the same rule over the key before it. Raises
+        `SectionGone` for a token or a key that is not the box's now."""
         box = _as_position_int(box, "box")
-        ordinal = self.section_ordinal(box, div)
+        ordinal = self.section_ordinal(box, div, token)
         for _ in range(2):
             divs = self.dividers_of(box)
-            if ordinal >= len(divs):
-                return self.next_key(box), ordinal, True
-            floor, hi = divs[ordinal - 1], divs[ordinal]
-            keys = [float(k) for _, k in self.box_order(box).pairs if floor <= float(k) < hi]
-            if not keys:
-                return floor, ordinal, False
-            lo = max(keys)
-            if int(lo) + 1 < hi:
-                return float(int(lo) + 1), ordinal, False
-            if (hi - lo) / 1024 >= KEY_EPSILON:
-                return lo + (hi - lo) / 1024, ordinal, False
+            last = ordinal >= len(divs)
+            hi = float("inf") if last else divs[ordinal]
+            if last:
+                out = [self.next_key(box)]
+            else:
+                floor = divs[ordinal - 1]
+                keys = [float(k) for _, k in self.box_order(box).pairs if floor <= float(k) < hi]
+                out = [] if keys else [floor]
+            lo = out[-1] if out else max(keys)
+            while len(out) < count:
+                if int(lo) + 1 < hi:
+                    lo = float(int(lo) + 1)
+                elif (hi - lo) / 1024 >= KEY_EPSILON:
+                    lo = lo + (hi - lo) / 1024
+                else:
+                    break
+                out.append(lo)
+            if len(out) >= count:
+                return out[:count], ordinal, last
             self._respace(box)
         raise BadSections("the gap stayed too narrow after the box was re-spaced")
 
@@ -2279,6 +2312,7 @@ class Inventory:
         capture_id: Optional[str] = None,
         cid: Optional[str] = None,
         section=None,
+        layout_token: Optional[str] = None,
         **claims,
     ) -> Tuple[Card, bool]:
         """Assign the next index in `box` and record the card. Returns `(card, created)`.
@@ -2335,8 +2369,8 @@ class Inventory:
 
         order = None
         if section is not None:
-            key, _ordinal, last = self.section_tail_key(box, section)
-            order = None if last else key
+            keys, _ordinal, last = self.section_tail_key(box, section, layout_token)
+            order = None if last else keys[0]
 
         self.ensure_box(box)
 
@@ -3054,10 +3088,15 @@ class Inventory:
         card.cid = f"{MOVED_CID_PREFIX}{card.cid}@{key}" if card.cid else None
 
         self._log(MOVED, key, moved_to=new_key, run=card.run, cid=transplant.cid)
-        self._log(str(transplant.state), new_key, moved_from=key, run=transplant.run)
+        # THE LAYOUT THE CARD ARRIVED IN, so its undo can ask whether a divider went in behind
+        # it after the move (the review's third finding), not only whether one stands there.
+        self._log(
+            str(transplant.state), new_key, moved_from=key, run=transplant.run,
+            sections=[as_order(v) for v in self.sections_for(to_box)],
+        )
         return card, transplant
 
-    def unmove_card(self, key: str) -> Tuple[Card, str]:
+    def unmove_card(self, key: str, sections_at_move=None) -> Tuple[Card, str]:
         """Undo `move_card`: the card goes back to `key`, and the transplant is deleted.
 
         UN-14 (`docs/specs/undo.md` section 11.3). Returns `(card, transplant key)`. The
@@ -3097,19 +3136,21 @@ class Inventory:
         # is an order key, so it is compared with the transplant's order key, never its
         # stored index (the divider proof's F3).
         registered = self.boxes.get(str(transplant.box))
-        # A DIVIDER PUT IN BEHIND THE TRANSPLANT builds on the move: one above its key with no
-        # record behind it, so it can only have come after. A divider that other records
-        # stand behind was already there when a Move-to-box filed the card at a section's
-        # tail (`docs/specs/subbox-capture.md`), so it does not refuse.
-        others = [
-            float(k) for i, k in self.box_order(transplant.box).pairs
-            if int(i) != int(transplant.index)
+        # A DIVIDER PUT IN BEHIND THE TRANSPLANT AFTER THE MOVE builds on the move. The question
+        # is when it went in, so `sections_at_move` (the layout the move's own arrival line
+        # recorded) answers it: a divider behind the card that the box did not have then.
+        # A divider that was already there (the next section's, or an empty last section's,
+        # as boxes 4 and 6 have) does not refuse. A move recorded before the arrival line
+        # carried a layout has no answer, so any divider behind the card refuses: the undo
+        # is lost, never guessed.
+        behind = [
+            float(start) for start in (registered.sections if registered is not None else [])
+            if float(start) > float(transplant.order_key)
         ]
-        if registered is not None and any(
-            float(start) > float(transplant.order_key)
-            and not any(k >= float(start) for k in others)
-            for start in registered.sections
-        ):
+        if sections_at_move is not None:
+            had = {float(v) for v in sections_at_move}
+            behind = [start for start in behind if start not in had]
+        if behind:
             raise CardDeparted(f"a divider was put in after {new_key}")
 
         # THE ORDER KEY COMES BACK FROM THE TOMBSTONE TOO (D265). The transplant holds the
@@ -3601,7 +3642,7 @@ class Inventory:
             )
         return after
 
-    def open_section(self, number, after=None) -> Tuple[int, ...]:
+    def open_section(self, number, after=None, layout_token=None) -> Tuple[int, ...]:
         """Put a divider in front of the next card. The capture screen's `S`.
 
         THE ACT AND THE RECORD ARE THE SAME GESTURE, which is the whole of D10's amendment
@@ -3638,7 +3679,7 @@ class Inventory:
             # S AFTER A PICKED SECTION (the owner's Q1 ruling, 2026-09-26: "Right after section
             # 2"). The divider goes at that section's tail key, between its last record and
             # the next divider, so no card key changes and the later sections move up one.
-            ordinal = self.section_ordinal(entry.box, after)
+            ordinal = self.section_ordinal(entry.box, after, layout_token)
             divs = self.dividers_of(entry.box)
             if ordinal < len(divs):
                 floor, hi = divs[ordinal - 1], divs[ordinal]
@@ -3647,8 +3688,8 @@ class Inventory:
                         f"section {ordinal} of {self.box_title(entry.box)} holds nothing yet. "
                         f"Capture a card into it before starting another after it."
                     )
-                key, _, _ = self.section_tail_key(entry.box, after)
-                return self.set_sections(entry.box, sorted(list(entry.layout()) + [key]))
+                keys, _, _ = self.section_tail_key(entry.box, after, layout_token)
+                return self.set_sections(entry.box, sorted(list(entry.layout()) + keys))
         # IN KEY SPACE (D265): the divider goes where the next card's KEY is, the back.
         at = self.next_key(entry.box)
         layout = list(entry.layout()) or [1]

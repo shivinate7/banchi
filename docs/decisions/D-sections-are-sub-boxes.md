@@ -53,7 +53,10 @@ named cost). Three things guard it.
    invariant in the spec's section 4, and a fuzz. The fuzz captures, presses S and U and moves
    cards into random sections against a physical model of each box. Each mutation in the
    spec's section 4 turns it red.
-2. A key the box does not have is refused with `section_gone` (409), and nothing is written.
+2. Every aim carries the box's layout token, a hash of its divider keys. A re-space gives
+   the dividers new keys, and an old key can equal another section's new key. So a token that
+   is not the box's now is refused with `section_gone` (409), and nothing is written. A key
+   the box does not have is refused the same way.
 3. The Capture screen always shows the picked section (Lane B).
 
 ### S after a picked section
@@ -74,9 +77,11 @@ fails loudly. The Map's drag and a move undo name their own place, so the rule d
 them. The spec's section 1.5 lists every caller checked.
 
 A move undo refused when any divider stood behind the transplant. A card moved to the tail of
-a middle section always has the next section's divider behind it. So the guard now refuses
-only a divider that no record stands behind, because only such a divider can have come after
-the move.
+a middle section always has the next section's divider behind it, so that undo always
+refused. The question is when a divider went in. So a move now records the target box's
+layout on its own arrival line. The undo refuses only a divider behind the card that the
+recorded layout did not hold. A divider from before the move never refuses, and a divider
+added after it always does.
 
 ### What does not change
 
