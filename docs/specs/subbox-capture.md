@@ -70,41 +70,78 @@ The response is the box row, as before. The new section is the one directly afte
 
 ### 1.4 `DELETE /boxes/<box>/sections?div=<div>` (U after S)
 
-`ux/divider-fix` owns the keyed form of this route and its refusal shape. This lane widens it
-only as far as I9 needs: a named empty divider that is not the last. The table below changes
-to match `ux/divider-fix` when that branch lands.
+`ux/divider-fix` owns this route and its refusal shapes (merged at `20392e87`). `div` is
+required. The route removes that one divider and moves no other. This lane widens it only as
+far as I9 needs.
 
-- With no `div`, it works as before. It removes the last divider if no card on hand stands
-  behind it.
-- With `div`, it removes that one divider and no other. It refuses the first divider. It
-  refuses a section that holds a card on hand. A departed record in the section does not hold
-  it.
+- **The last divider** (`ux/divider-fix`): it goes while no card on hand stands behind it.
+- **A middle divider** (this lane, I9): it goes only when the box's newest `resectioned` line
+  is the S that added it, and no card on hand stands in its section. So U after a mid-box S
+  works. A divider that an editor save put another one behind is not S's own any more, and it
+  stays (the stale U).
+- The first divider, a key the box does not have, and every other case refuse.
+
+A departed record in the section does not hold the divider in.
 
 | Status | Code | When |
 |---|---|---|
-| 400 | `sections_invalid` | The first section, or a section with a card on hand (as before). |
-| 409 | `section_gone` | The box has no section with that divider key. |
+| 400 | `div_required` | `div` is missing or is not a number. |
+| 404 | `box_not_found` | The box does not exist. |
+| 409 | `divider_built_on` | `div` is not S's own to undo, as above, or a card on hand stands behind it. Nothing is written. |
 
 ### 1.5 The two Move-to-box routes
 
 `POST /inventory/<box>/<index>/move` (one card) and `POST /inventory/<box>/move` (ticked cards,
-or a whole box) take one more optional field.
+or a whole box) take one more field, and it is REQUIRED.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `section` | string | A divider key of `to_box`. Each moved card goes to the tail of that section, in the order sent. It uses the same key rule as a capture. Missing: the card goes to the back of `to_box`, as before. |
+| `section` | string | A divider key of `to_box`. Each moved card goes to the tail of that section, in the order sent. It uses the same key rule as a capture. For the back of the box, send the last section's `div`. |
 
 | Status | Code | When |
 |---|---|---|
+| 400 | `section_required` | The body has no `section`. Nothing moves. |
 | 409 | `section_gone` | `to_box` has no section with that divider key. Nothing moves. |
 | 400 | `section_invalid` | `section` is not a string. |
 
-The owner ruled that a move has no default destination. The screen enforces it (Lane C). It
-sends `section` on every Move-to-box. The server keeps the old back-of-box answer for a body
-with no `section`, so older callers keep working. Section 7 gives the reason.
+The owner ruled that a move has no default destination: "i need to specify where it goes there
+no auto default". So the server refuses a Move to box that names no section. The undo of a
+move (`{"undo": true}` on the tombstone) names no section and is not refused.
 
-The Map's drag (`POST /boxes/<box>/cards/move`) does not change. It already names an exact
-gap.
+**The callers checked (2026-09-26).** Only a Move to box from a screen reaches the two routes
+above. No other caller starts to fail.
+
+| Caller | Path | Reaches the rule? |
+|---|---|---|
+| Move to box, one card (`Inventory.tsx`, `server.ts:moveCard`) | `do_move_card` | Yes. Lane C sends `section`. |
+| Move to box, ticked cards or a whole box (`BoxOps.tsx`, `server.ts:moveCards`) | `do_move_cards` | Yes. Lane C sends `section`. |
+| Move undo (`{"undo": true}`) | `do_move_card`, then `_unmove_one` | No. It returns before the rule. |
+| The Map's section move | `do_move_sections`, then `_cross`, then `_move_one` with its own slot | No. It names its gap. |
+| The Map's card or range move | `do_move_range`, then `_cross`, then `Inventory.place` | Its own rule, section 1.6. |
+| `Inventory.move_card`, `Inventory.move_cards` | the store, not a route | No. The rule is on the route. |
+| The CLI, orders, fulfillment | none of them moves a card | No. |
+| The demo server (`demoServer.ts`) | no move route | No. |
+| `scripts/cid-selftest.py` and the T7 cases | the two routes | They now send `section`. The T7 cases that meant the back of the box send the last section's key (`t7_store_and_seams.back_of`). |
+
+### 1.6 The Map's drag (`POST /boxes/<box>/cards/move`)
+
+The drag names an exact gap: `before_card` or `section_end`, as before. A body with no gap
+used to go to the near end of the box. It is refused now, unless the destination box is
+empty. An empty box has one place, so a drop there is exact.
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `section_required` | No `before_card` and no `section_end`, and `to_box` holds a record or a declared divider. Nothing moves. |
+
+**The callers checked (2026-09-26).** No caller sends a body with no gap into a box that
+holds cards.
+
+| Caller | What it sends |
+|---|---|
+| `app/src/BoxShelf.tsx` `dropAt`, card mode | A `c:` gap sends `before_card`. An `e:` gap sends `section_end`. The `end` gap sends neither, and the Map draws it in card mode only for a box with no sections, which is an empty box. |
+| `app/tests/boxmap.spec.ts` | Every recorded body carries `before_card` or `section_end`. |
+| `app/src/demoServer.ts` | No move route. |
+| `harness/tests/t7_box_map.py` | Every call names a gap, except "item 9", a move into an empty box, which stays legal. The fuzz's `range` kind always names a gap. |
 
 ## 2. The physical model
 
@@ -157,10 +194,10 @@ a capture calls them inside the store lock. They read the `idx` and `ord` column
 | stale aim | new | I6. A refusal writes nothing. `next_index` does not change, and no photograph is stored. |
 | re-space | reused | I7. Order and section membership stay. `section_div` names the new key. |
 | S after section j | new | I8. One divider goes between j's last card and the next divider. No card key changes. Later sections move up one number. Their card numbers stay. |
-| U after S, by key | new | I9. Only that divider goes. It refuses the first divider, a section with a card, and a key the box does not have. |
+| U after S, by key | new | I9. Only that divider goes. It refuses the first divider, a section with a card, a key the box does not have, and a divider an editor save came after. |
 | capture undo | none | I10. It deletes the newest index even when that card is mid-box. The next capture into the emptied section takes the divider's key. |
 | remove | none | I11. Indices slide and keys do not. The fuzz holds it. |
-| move, range move, section move | Move to box takes `section` | I12. A move with `section` goes to that section's tail, in the order sent. A move with a key the box does not have moves nothing. |
+| move, range move, section move | Move to box requires `section` | I12. A move with `section` goes to that section's tail, in the order sent. A move with a key the box does not have, or with no section, moves nothing. |
 | move undo | the divider guard is narrowed | I13. A move into a middle section can be undone. The next section's divider was already behind it. |
 | sell and unsell | none | I14. No key or divider is written. The fuzz holds it. |
 | divider editor | none | I15. After a mid-box S, a save with no edits keeps every divider. |
@@ -183,11 +220,15 @@ stays in the mix. The divider proof's own fuzz (seeds 0 to 5) replays as before.
 | The fractional step without whole numbers first | I5 |
 | S ignores `after` | I4, I8 |
 | U takes out the last divider, not the named one | I9, the fuzz |
+| U takes out a middle divider without reading the log | the stale U case |
+| The log never proves that S added the divider | I9, the fuzz |
 | The re-space is skipped | I7, the fuzz |
 | The move undo guard refuses every divider behind the transplant | I13 |
 | A SKU's copies sort by index | the copy-order case |
 | An empty section's first card takes a key between the dividers | I4, I10 |
 | `sections_detail[].div` is off by one | I2, I3 |
+| A Move to box with no section is not refused | I12 |
+| A drag with no gap into a box that holds cards is not refused | the drag refusal case beside item 9 |
 
 One mutation stayed green, and it is not a defect. Resolving the section after the box is
 registered leaves I6 true. The write that raises `SectionGone` discards the new box entry
@@ -222,12 +263,11 @@ server keeps no pick. Each request carries its own aim.
   the transplant's key. A card moved to the tail of a middle section always has one. So the
   undo of every such move refused. It now refuses only a divider that no record stands behind.
   Only such a divider can have come after the move. What an undo writes does not change.
-- **The server keeps the back-of-box answer for a move with no `section`.** The owner ruled
-  "no auto default", and Lane C enforces it on the screen. This lane keeps the fallback so
-  Lanes A and C can merge in either order. Recommendation: once Lane C lands, refuse a move
-  with no `section` (400 `section_required`). Then a caller that forgets the field fails
-  loudly. It cannot file a card at the back of a box without a word. That silent misfile
-  is the risk this whole feature guards.
+- **The server refuses a Move to box with no `section`** (400 `section_required`). The plan
+  kept the back-of-box answer. The coordinator ruled on 2026-09-26 to refuse, because it is
+  the owner's own "no auto default". A caller that forgets the field now fails loudly. It
+  cannot file a card at the back of a box without a word. Section 1.5 lists every caller
+  checked.
 
 ## 8. Measurements
 

@@ -9,15 +9,20 @@ Every case below was observed FAILING before its fix was kept.
 """
 from __future__ import annotations
 
+import json
 import os
 import random
+import threading
 from typing import List, Optional, Tuple
 
 from harness.tests.t7_store_and_seams import (
     Checks,
+    QuietHandler,
     Store,
     capture_payload,
     capture_server,
+    back_of,
+    error_code,
     fake_cid,
     isolated_home,
     join,
@@ -26,6 +31,7 @@ from harness.tests.t7_store_and_seams import (
     resolve,
     seam_run,
 )
+from harness.tests.t7_store_and_seams import request as http_request
 
 
 def check_box_map_safety(checks: Checks) -> None:
@@ -63,7 +69,7 @@ def check_box_map_safety(checks: Checks) -> None:
 
         refusal(
             checks,
-            lambda: capture_server.do_move_cards(5, {"to_box": 7, "indices": [3]}),
+            lambda: capture_server.do_move_cards(5, {"to_box": 7, "section": back_of(7), "indices": [3]}),
             "card_being_read",
             "a card with a live paid reading does not move (D262, D174)",
         )
@@ -72,7 +78,7 @@ def check_box_map_safety(checks: Checks) -> None:
             "and nothing moved: the card is still where the paid answer will land",
         )
 
-        capture_server.do_move_cards(5, {"to_box": 7, "indices": [2]})
+        capture_server.do_move_cards(5, {"to_box": 7, "section": back_of(7), "indices": [2]})
         loaded = resolve.load(run, {"pokemon": run.path("export.csv")})
         where = sorted(
             (p.box, p.index) for match in loaded.matches.values() for p in match.positions
@@ -85,7 +91,7 @@ def check_box_map_safety(checks: Checks) -> None:
 
         # The second move of one card commits: its second tombstone has its own name.
         try:
-            capture_server.do_move_cards(7, {"to_box": 8, "indices": [1]})
+            capture_server.do_move_cards(7, {"to_box": 8, "section": back_of(8), "indices": [1]})
             twice = True
         except Exception as caught:  # noqa: BLE001 — the failure is the assertion
             twice = f"{type(caught).__name__}: {caught}"
@@ -659,6 +665,16 @@ def check_card_move_refusals(checks: Checks) -> None:
         capture_server.do_create_box({"box": 3, "name": "Empty"})
         capture_server.do_move_range(1, {"indices": [2], "to_box": 3})
         checks.equal(_walk(3), ["o2"], "item 9: a card moves into an empty box")
+        # NO AUTO DEFAULT (D-sections-are-sub-boxes): a box that holds a card has more than
+        # one place, so a drag that names no gap into it is refused and moves nothing.
+        walks = (_walk(1), _walk(2))
+        refusal(
+            checks,
+            lambda: capture_server.do_move_range(1, {"indices": [3], "to_box": 2}),
+            "section_required",
+            "a drag that names no gap into a box that holds cards is refused",
+        )
+        checks.equal((_walk(1), _walk(2)), walks, "and no card moved")
 
 
 def check_divider_editor_keys(checks: Checks) -> None:
@@ -966,12 +982,14 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                     elif kind == "undo_S":
                         if phys[b][-1] or len(phys[b]) < 2:
                             continue
-                        # THE CAPTURE SCREEN'S U AFTER S (UN-15), through the route it calls.
-                        capture_server.do_close_section(b)
+                        # THE CAPTURE SCREEN'S U AFTER S (UN-15), through the route it calls,
+                        # aimed at the empty last divider by its key.
+                        last = Store().read().inventory.box(b).sections[-1]
+                        capture_server.do_close_section(b, str(last))
                         phys[b].pop()
                     elif kind == "move" and b != dst and cards(b):
                         cid = rng.choice(cards(b))
-                        capture_server.do_move_cards(b, dict(to_box=dst, indices=[_where(inv, cid)]))
+                        capture_server.do_move_cards(b, dict(to_box=dst, section=back_of(dst), indices=[_where(inv, cid)]))
                         drop(b, cid)
                         phys[dst][-1].append(cid)
                     elif kind == "range" and cards(b):
@@ -1087,18 +1105,73 @@ def check_divider_anchor(checks: Checks) -> None:
             cap(1)
         capture_server.do_mark_sold(1, 1, dict())
         stored = list(Store().read().inventory.box(1).sections)
-        capture_server.do_open_section(1, dict())
-        capture_server.do_close_section(1)
+        made = capture_server.do_open_section(1, dict())["sections"][-1]
+        capture_server.do_close_section(1, str(made))
         checks.equal(
             list(Store().read().inventory.box(1).sections), stored,
             "F2: 3 captures, S, 3 captures, sell card 1, S, U: the undo takes out only its "
             "own divider, and moves no other",
         )
+        made = capture_server.do_open_section(1, dict())["sections"][-1]
         cap(1)
-        checks.raises(
-            master.BadSections, lambda: capture_server.do_close_section(1),
-            "and once a card stands behind the last divider, the undo refuses",
+        refusal(
+            checks, lambda: capture_server.do_close_section(1, str(made)), "divider_built_on",
+            "and once a card stands behind the divider S made, the undo refuses",
         )
+
+    with isolated_home():
+        # THE STALE U (the review's first finding): S, then a dividers-editor save that
+        # adds a divider behind S's, then U. The undo names S's divider, which is no longer
+        # the last one, so it refuses and the editor's divider stays.
+        capture_server.do_create_box(dict(box=1, name="A"))
+        for _ in range(3):
+            cap(1)
+        made = capture_server.do_open_section(1, dict())["sections"][-1]
+        capture_server.do_put_box(1, dict(sections=[1, 4, 9]))
+        typed = list(Store().read().inventory.box(1).sections)
+        refusal(
+            checks, lambda: capture_server.do_close_section(1, str(made)), "divider_built_on",
+            "a stale U after an editor save refuses: S's divider is no longer the last one",
+        )
+        checks.equal(
+            list(Store().read().inventory.box(1).sections), typed,
+            "and the editor's dividers all stay",
+        )
+
+    with isolated_home():
+        # AN UNDECLARED BOX KEEPS THE `[1]` S WROTE, and the route's other answers.
+        capture_server.do_create_box(dict(box=1, name="A"))
+        for _ in range(2):
+            cap(1)
+        made = capture_server.do_open_section(1, dict())["sections"][-1]
+        capture_server.do_close_section(1, str(made))
+        checks.equal(
+            list(Store().read().inventory.box(1).sections), [1],
+            "U after S on an undeclared box keeps `[1]`: one section, as before",
+        )
+        made = capture_server.do_open_section(1, dict())["sections"][-1]
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for path, want, label in (
+                ("/boxes/1/sections", (400, "div_required"), "no `div` is a 400"),
+                ("/boxes/1/sections?div=x", (400, "div_required"), "a word for `div` is a 400"),
+                ("/boxes/9/sections?div=3", (404, "box_not_found"), "an unknown box is a 404"),
+                ("/boxes/1/sections?div=1", (409, "divider_built_on"),
+                 "a divider that is not the last one is a 409"),
+            ):
+                status, body, _ = http_request(port, "DELETE", path)
+                checks.equal((status, error_code(body)), want, "DELETE " + label)
+            status, body, _ = http_request(port, "DELETE", f"/boxes/1/sections?div={made}")
+            checks.equal(
+                (status, json.loads(body).get("sections")), (200, [1]),
+                "and S's own divider comes out over the wire, with the box row as the answer",
+            )
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
 
     with isolated_home():
         for b in (1, 2):
@@ -1107,7 +1180,7 @@ def check_divider_anchor(checks: Checks) -> None:
             cap(1)
         cap(2)
         capture_server.do_move_range(1, dict(indices=[5], to_box=1, before_card=1))
-        capture_server.do_move_cards(2, dict(to_box=1, indices=[1]))
+        capture_server.do_move_cards(2, dict(to_box=1, section=back_of(1), indices=[1]))
         capture_server.do_open_section(1, dict())
 
         def unmove():
@@ -1274,17 +1347,37 @@ def check_capture_into_section(checks: Checks) -> None:
             (None, before_divs, before_keys),
             "I9: U with that divider's key takes out that divider only, and moves no other",
         )
-        checks.raises(
-            master.BadSections, lambda: capture_server.do_close_section(1, _divs(1)[1]),
-            "I9: U refuses a section that holds a card",
+        # THE REFUSAL SHAPE IS `ux/divider-fix`'s: 409 `divider_built_on` for each.
+        refusal(
+            checks, lambda: capture_server.do_close_section(1, _divs(1)[1]), "divider_built_on",
+            "I9: U refuses a middle divider whose section holds a card",
         )
-        checks.raises(
-            master.BadSections, lambda: capture_server.do_close_section(1, _divs(1)[0]),
+        refusal(
+            checks, lambda: capture_server.do_close_section(1, _divs(1)[0]), "divider_built_on",
             "I9: U refuses the first divider",
         )
-        checks.raises(
-            master.SectionGone, lambda: capture_server.do_close_section(1, "41"),
+        refusal(
+            checks, lambda: capture_server.do_close_section(1, "41"), "divider_built_on",
             "I9: U refuses a divider key the box does not have",
+        )
+        checks.equal(
+            list(Store().read().inventory.sections_for(1)), before_divs,
+            "I9: and none of the three refusals took a divider out",
+        )
+        # THE STALE U, mid-box: S after section 2, then an editor save, then U. The newest
+        # layout change is the save, not the S, so the undo is not S's any more.
+        capture_server.do_open_section(1, dict(after=_divs(1)[1]))
+        stale = _divs(1)[2]
+        row = next(b for b in capture_server.do_boxes()["boxes"] if b["box"] == 1)
+        capture_server.do_put_box(1, {"sections": [d["start"] for d in row["sections_detail"]]})
+        saved = list(Store().read().inventory.sections_for(1))
+        refusal(
+            checks, lambda: capture_server.do_close_section(1, stale), "divider_built_on",
+            "I9: U after a mid-box S and then an editor save refuses",
+        )
+        checks.equal(
+            list(Store().read().inventory.sections_for(1)), saved,
+            "I9: and the saved dividers all stay",
         )
         checks.raises(
             master.SectionGone, lambda: capture_server.do_open_section(1, dict(after="41")),
@@ -1423,6 +1516,24 @@ def check_capture_into_section(checks: Checks) -> None:
         checks.equal(
             Store().read().inventory.cards["1/1"].state, master.CAPTURED,
             "I12: and the card did not move",
+        )
+        # THE OWNER'S RULING: "i need to specify where it goes there no auto default".
+        aim = Store().read().inventory.cards["1/1"].capture_id
+        refusal(
+            checks,
+            lambda: capture_server.do_move_card(1, 1, dict(capture_id=aim, to_box=3)),
+            "section_required",
+            "I12: a Move to box that names no section is refused: a move has no default place",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_move_cards(1, dict(to_box=3, indices=[1])),
+            "section_required",
+            "I12: and so is a move of ticked cards that names no section",
+        )
+        checks.equal(
+            Store().read().inventory.cards["1/1"].state, master.CAPTURED,
+            "I12: and neither refusal moved the card",
         )
 
     # I15: the divider editor after a mid-box S.

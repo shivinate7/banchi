@@ -1781,11 +1781,14 @@ export async function openSection(box: number): Promise<BoxRecord> {
   })) as BoxRecord
 }
 
-/** `DELETE /boxes/<box>/sections`: take out the box's empty last divider, the capture
- * screen's `U` after `S` (UN-15). The store removes that one divider by its own key and moves
- * no other. It refuses when a card stands behind the divider. */
-export async function closeSection(box: number): Promise<BoxRecord> {
-  return (await request(`/boxes/${box}/sections`, { method: 'DELETE' })) as BoxRecord
+/** `DELETE /boxes/<box>/sections?div=<key>`: take out the divider `openSection` added, the
+ * capture screen's `U` after `S` (UN-15). `div` is that answer's last `sections` entry. The
+ * store removes that one divider and moves no other. It refuses (409 `divider_built_on`) when
+ * the divider is no longer the last one, or a card stands behind it. */
+export async function closeSection(box: number, div: number): Promise<BoxRecord> {
+  return (await request(`/boxes/${box}/sections?div=${encodeURIComponent(String(div))}`, {
+    method: 'DELETE',
+  })) as BoxRecord
 }
 
 // --------------------------------------------------------------------------- capture ids

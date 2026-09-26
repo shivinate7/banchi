@@ -1147,14 +1147,15 @@ export function CaptureScreen() {
   const [sectionBusy, setSectionBusy] = useState(false)
 
   /* UN-15: A DIVIDER'S OWN UNDO, "WHILE NO CARD IS BEHIND IT". `closeSection` takes the
-   * empty last divider back out in the store, so the screen holds only which box it went into
-   * (`box`). `at` is when the divider was opened, compared against the newest shot's own `at`
+   * divider back out in the store, so the screen holds which box it went into (`box`) and its
+   * key (`div`, the last `sections` entry `openSection` answered). `at` is when the divider was opened, compared against the newest shot's own `at`
    * (`sitting`, D164's stack) so `U` reaches whichever write is actually the newest — a capture
    * into ANOTHER box after this one opened does not touch it, because a divider is a fact about
    * ONE box (D10) and `doCapture` clears this only when the capture lands in the SAME box, which
    * is "built on" in the plan's own words (11.1). */
   const [pendingDivider, setPendingDivider] = useState<{
     box: number
+    div: number
     at: number
   } | null>(null)
 
@@ -2609,13 +2610,13 @@ export function CaptureScreen() {
    *  moved every other divider whose key was not its count. Shares `busyRef`/`busy` and
    *  `undoNote` with the capture undo above — one strip, reporting on itself either way. */
   const undoDivider = useCallback(
-    async (target: { box: number }) => {
+    async (target: { box: number; div: number }) => {
       if (busyRef.current) return
       busyRef.current = true
       setBusy(true)
       setUndoNote(null)
       try {
-        const record = await closeSection(target.box)
+        const record = await closeSection(target.box, target.div)
         setBoxRecords((prev) => {
           const rest = prev.filter((entry) => entry.box !== record.box)
           return [...rest, record].sort((left, right) => left.box - right.box)
@@ -2624,6 +2625,9 @@ export function CaptureScreen() {
         setSectionNote(null)
         setUndoNote({ done: true, text: 'Undone', position: null, code: null, did: 1, want: 1 })
       } catch (err) {
+        // A REFUSED DIVIDER UNDO IS FINAL: the divider is built on, so `U` goes back to the
+        // captures, and the server's one sentence says why.
+        setPendingDivider(null)
         setUndoNote({ done: false, position: null, did: 0, want: 1, ...describe(err) })
       } finally {
         busyRef.current = false
@@ -2761,8 +2765,9 @@ export function CaptureScreen() {
         place: opened === null ? null : { section: opened.section, fromCard: opened.start },
         code: null,
       })
-      // UN-15: which box `U` takes this divider back out of, and when it went in.
-      setPendingDivider({ box, at: Date.now() })
+      // UN-15: which divider `U` takes back out, by the key the store gave it, and when.
+      const div = record.sections[record.sections.length - 1]
+      setPendingDivider(div === undefined ? null : { box, div, at: Date.now() })
     } catch (err) {
       setSectionNote({ done: false, place: null, ...describe(err) })
     } finally {

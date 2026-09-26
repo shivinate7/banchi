@@ -1812,7 +1812,7 @@ COMPONENTS = [
                                           "D89", "D100", "D115", "D118", "D132", "D145", "D146",
                                           "D164", "D167", "D172", "D173", "D183", "D192", "D213",
                                           "D253", "D258", "D259", "D264", "D265",
-                                          "D-sealed-boxes-removed"],
+                                          "D-sealed-boxes-removed", "D-sections-are-sub-boxes"],
                                           "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
