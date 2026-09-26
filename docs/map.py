@@ -9137,6 +9137,16 @@ COMPONENTS = [
                         "twice 75ms apart and waits for agreement, which `settleMotion`'s "
                         "start-to-finish wait cannot do for an animation it was never watching.",
                 "governed_by": ["D16", "D50", "D118"]},
+            "tests/iconTooltip.ts": {
+                "does": "one helper, `iconTip`, the one way a test finds an `IconButton`'s "
+                        "tooltip since round 3 portals it to `<body>` (D288, kit/index.tsx's "
+                        "own block comment above `IconButton`) — `button.querySelector"
+                        "('.bn-icon-tip')` can no longer reach a body-level sibling. Reads the "
+                        "control's own `data-tip-id` attribute and looks the id up globally, "
+                        "since `CSS.escape` is a browser global this Node-side helper has none "
+                        "of. Not a harness test; `icon-button.spec.ts` and `inventory.spec.ts` "
+                        "are its callers.",
+                "governed_by": ["D50", "D117", "D118", "D288"]},
             "tests/nav.spec.ts": {
                 "does": "the shell's keyboard, and the first test this app has had of the strip "
                         "every screen sits under: D51's Cmd-arrow steps the ring in the order "
