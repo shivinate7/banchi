@@ -604,3 +604,10 @@ On expiry: "Yes, until it's built on (Recommended)".
 - Measured for the plan, not a ruling: `sold_origin_unknown` (HOR-07) is seed-only. The
   owner's store has 0 sold or retired cards with no earlier state. So the owner need not
   test HOR-07 on the real store.
+- Q1, the five sentences that set a clock or a cap on undo (owner, 2026-09-25, verbatim):
+  "Switch all five (Recommended)". D164, D28 and D57 carry amendments. Sections 4 and 7 of
+  `docs/specs/undo.md` are amended. A move is undoable (UN-14).
+- Q2, "undo just N" on the capture strip (owner, 2026-09-25, verbatim): "Keep the confirm
+  here only". It keeps its confirm and stays permanent. It is the one exception to "Never
+  ask". The confirm's words say plainly that the removal is permanent and deletes the photo
+  (UN-3).

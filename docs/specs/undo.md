@@ -102,6 +102,8 @@ order, exactly where the owner said they were. Nothing has to be found, surfaced
   capability, not a new one.
 - **Moved is excluded.** A move is a transplant, and `Inventory.move_card` is the only correct
   way to reach it. Reversing one is a different write wearing the same word.
+  **AMENDED 2026-09-25, the owner's ruling (section 11.7, Q1): a move is undoable now.** It
+  lasts until either box changes. Section 11.3's UN-14 builds it.
 
 ### What it writes
 
@@ -162,7 +164,8 @@ in the order the hand took them (D164). The granular press is beside it, not ins
   and already supported. What changes is where each one can be reached from.
 - **It does not touch the writes themselves.** No sale, retirement, pull or capture changes.
 - **It does not put a control on the Fulfiller's screen.** He keeps his receipt and his twenty
-  seconds. The slow path is owner work and the shell-less screen has no route to it (D5, D31).
+  seconds. **AMENDED 2026-09-25, the owner's ruling (section 11.7, Q1): the twenty seconds
+  go.** His newest sale keeps its Undo until a newer sale or the next step is built on it. The slow path is owner work and the shell-less screen has no route to it (D5, D31).
 - **It does not make `#/inventory` a general writer of the order ledger.** One write reverses
   one pull because the two halves are one act. No other order capability moves there.
 
@@ -257,8 +260,9 @@ path is the record's own control. Only the limit changes:
   The newest reversible write on a screen keeps its Undo until a newer write replaces it.
 - **"Built on" limits both paths.** The server decides it and refuses with a sentence. The
   screen never guesses it.
-- **"Never ask" holds everywhere.** No press gets a confirm. A press that cannot be undone
-  today gets an undo instead.
+- **"Never ask" holds everywhere but one press.** No other press gets a confirm. A press that
+  cannot be undone today gets an undo instead. The one exception is "undo just N" on the
+  capture strip (Q2). It keeps its confirm and stays permanent.
 
 **Section 2 already ruled out the clock. The build kept it.** `UNDO_WINDOW_MS = 20_000` in
 `Inventory.tsx`, `Orders.tsx` and `Fulfillment.tsx` limits the row's Undo and the `U` key.
@@ -267,7 +271,7 @@ ruling.
 
 | Action | Built on when | The fix after that |
 |---|---|---|
-| Capture | Its sitting ends, or a run identifies it. A sitting ends at a 30-minute gap (`GAP_MINUTES`, D121, D164). | Manage box removes the card (D10 ruling 1). |
+| Capture | Its sitting ends, or a run identifies it. A sitting ends at a 30-minute gap (`GAP_MINUTES`, D121, D164). "Undo just N" is permanent and asks first (Q2). | Manage box removes the card (D10 ruling 1). |
 | Sale on Inventory | Its photograph is reclaimed (D89), or its box is buried (D134). | "This card is still here" puts the card back. It does not touch any order. |
 | Sale on Orders | Its order ships or closes (`store/orders.py:is_terminal_status`), or as for Inventory. | The same "still here" press. The order keeps its shipped copy (D212). |
 | Sale on Cards to pull | The same as Orders. The Fulfiller keeps the fast path only (D5, D31). | The owner's press on Inventory. |
@@ -323,15 +327,15 @@ ruling.
 ### 11.3 Action items, by the owner's pain weights
 
 Capture is 50%, a wrong sale 30%, a wrong Review answer 20%. Pricing and move follow.
-"Owner" is yes where the item needs the owner's word first. Section 11.7 asks it.
+"Owner" names the question in section 11.7 that answered the item.
 
 | id | The user-visible problem | Root cause | Fix | Mechanism | Files | Store risk | The check that proves it | Owner |
 |---|---|---|---|---|---|---|---|---|
-| UN-1 | From capture 36, capture 24 is out of reach. | `CaptureScreen.tsx:undoStack` slices to `UNDO_DEPTH`. | List the whole sitting, newest first, in a scrolling strip. | Fast | `app/src/CaptureScreen.tsx`, its CSS, `app/tests/capture-undo.spec.ts` | None. Same routes. | A 36-shot case reaches 24 both ways. Put the slice back and it goes red. | yes (Q1) |
+| UN-1 | From capture 36, capture 24 is out of reach. | `CaptureScreen.tsx:undoStack` slices to `UNDO_DEPTH`. | List the whole sitting, newest first, in a scrolling strip. | Fast | `app/src/CaptureScreen.tsx`, its CSS, `app/tests/capture-undo.spec.ts` | None. Same routes. | A 36-shot case reaches 24 both ways. Put the slice back and it goes red. | Q1 |
 | UN-2 | A reload ends the sitting and the strip. | `sitting` is page state. | Rebuild the sitting from the store, by the 30-minute gap. | Fast | `server/capture_server.py` (one read), `app/src/server.ts`, `app/src/types.ts`, `CaptureScreen.tsx` | None. A read. | Capture, reload, and the strip still lists the sitting. | no |
-| UN-3 | "Remove just this card?" asks, and the removal cannot be undone. | `do_remove_card` consumes the photograph. | Per Q2. Recommended: a set-aside state, with no renumber. | Fast | `server/capture_server.py`, `store/master.py`, `CaptureScreen.tsx` | Yes. A new state or a new write. | Remove 24 with no dialog, then undo it. Card 24 and its photo come back. | yes (Q2) |
+| UN-3 | "Remove just this card?" asks, and the removal cannot be undone. | `do_remove_card` consumes the photograph. | Keep the confirm (Q2). Its words say plainly that the removal is permanent and deletes the photo. | Confirm | `app/src/CaptureScreen.tsx`, `app/tests/capture-undo.spec.ts` | None. Same route. | The dialog's text names both facts. Remove either and the case goes red. | Q2 |
 | UN-4 | Every sale undo on the demo refuses (`sold_origin_unknown`). | `scripts/demo-seed.py` logs no state line. | The seed logs the lines a real capture, answer and sale log. | Both | `scripts/demo-seed.py`, a demo self-test | None to the real store. | Every seeded card has an origin. Drop one line and the self-test goes red. | no |
-| UN-5 | Sale Undo dies with its toast. "No undo for this one." `U` does nothing. | `UNDO_WINDOW_MS` limits the row, the receipt and `U` on three screens. | Rank, not clock. The newest sale keeps Undo in its row and on the page. | Fast | `app/src/Inventory.tsx`, `Orders.tsx`, `Fulfillment.tsx`, their specs | None. Same route. | Undo still works after a faked 60 s. A newer sale moves it. | yes (Q1) |
+| UN-5 | Sale Undo dies with its toast. "No undo for this one." `U` does nothing. | `UNDO_WINDOW_MS` limits the row, the receipt and `U` on three screens. | Rank, not clock. The newest sale keeps Undo in its row and on the page. | Fast | `app/src/Inventory.tsx`, `Orders.tsx`, `Fulfillment.tsx`, their specs | None. Same route. | Undo still works after a faked 60 s. A newer sale moves it. | Q1 |
 | UN-6 | "slid in with its $ button exactly where I had just tapped". | A pull drops its `PickLine`. `drop()` does the same on `#/fulfillment`. | The sold copy keeps its place, and its control becomes Undo (D57). | Fast | `app/src/Orders.tsx`, `Fulfillment.tsx`, their specs | None. | A rect-diff after a pull: no other row moves (D118). | no |
 | UN-7 | A sale reverses after its order shipped, or after its photo went. | `_sell` checks state and history only. | Refuse the undo when built on. Add "This card is still here", with the ledger untouched. | Slow | `server/capture_server.py`, `store/orders.py`, `app/src/BoxBrowse.tsx`, `server.ts` | Yes. A new write. | Ship an order, then undo: a refusal. "Still here" restores the card, and the ledger holds. | no |
 | UN-8 | Review retire says "Can be undone", and the card comes back on reload. | `do_queues` reads no card state. | A departed card owes no answer. Skip it in every open-entry read. | Both | `server/capture_server.py`, `app/src/ReviewQueue.tsx` (copy) | None. A read. | Retire from Review, then reload. The card is gone, and undo brings it back. | no |
@@ -340,7 +344,7 @@ Capture is 50%, a wrong sale 30%, a wrong Review answer 20%. Pricing and move fo
 | UN-11 | "Clear typed" expires, and "49 prices gone". | `cleared` lives only in the toast closure. | The server keeps the newest clear. Restore reads it until the next send. | Both | `server/pipeline_routes.py`, `pipeline/corpus.py`, `Pricing.tsx`, `ClearPrices.tsx` | Yes. A side file by `prices.json`. | Clear, reload, and restore. A send in between refuses it. | no |
 | UN-12 | A Pricing hold ignores `U`, and one `U` undoes half a hold. | `U` is read only in a price field. `setHold` pushes two stack entries. | UN-10's hook. One press is one stack entry. | Fast | `app/src/Pricing.tsx`, its spec | None. | Hold a no-market SKU, press `U` once. The hold is fully gone. | no |
 | UN-13 | A cut-off change has no receipt and no undo. | The cut-off write pushes no stack entry. | A receipt, and a stack entry that holds the prior value. | Fast | `app/src/Pricing.tsx`, its spec | None. Same write. | Change it, press `U`, and the old value is back. | no |
-| UN-14 | A move has no undo, and moving back puts the card at the front. | Section 4 excluded moves. `move_card` has no reversal. | Delete the transplant while it is the newest, and restore the tombstone. | Both | `store/master.py`, `server/capture_server.py`, `Inventory.tsx` | Yes. A new write. | Move, then undo. The card is back at its index, and nothing else moves. | yes (Q1) |
+| UN-14 | A move has no undo, and moving back puts the card at the front. | Section 4 excluded moves. `move_card` has no reversal. | Delete the transplant while it is the newest, and restore the tombstone. | Both | `store/master.py`, `server/capture_server.py`, `Inventory.tsx` | Yes. A new write. | Move, then undo. The card is back at its index, and nothing else moves. | Q1 |
 | UN-15 | A divider has no undo. | No reversal is built. | While no card is behind it, `U` drops it through `set_sections`. | Fast | `CaptureScreen.tsx` | Low. An existing write. | Press `S`, then `U`. The sections are as before. | no |
 
 ### 11.4 Lanes
@@ -349,12 +353,12 @@ Three lanes, with disjoint files. Lane S goes first. Lanes C and R start at once
 items that need nothing from S.
 
 - **Lane S, the store (Opus build, Opus review).** UN-4, UN-7 (server half), UN-8, UN-11
-  (server half), UN-2 (the read), UN-3 (server half, after Q2), UN-14 (after Q1). It owns
+  (server half), UN-2 (the read), UN-14. It owns
   `server/`, `store/`, `pipeline/`, `scripts/demo-seed.py`, `app/src/server.ts` and
   `app/src/types.ts`. It writes the store, so it needs an Opus review.
-- **Lane C, capture (Sonnet).** UN-1, UN-15 at once. UN-2 and UN-3 (screen halves) after
+- **Lane C, capture (Sonnet).** UN-1, UN-3 and UN-15 at once. UN-2's screen half after
   lane S lands. It owns `app/src/CaptureScreen.tsx`, its CSS and
-  `app/tests/capture-undo.spec.ts`. Its review is Sonnet, or Opus if Q2 picks a new write.
+  `app/tests/capture-undo.spec.ts`. Its review is Sonnet.
 - **Lane R, the sale, Review and Pricing screens (Sonnet build, Opus review).** UN-5, UN-6,
   UN-9, UN-10, UN-12, UN-13 at once. UN-7 and UN-11 (screen halves) after lane S lands. It
   owns `Inventory.tsx`, `Orders.tsx`, `Fulfillment.tsx`, `ReviewQueue.tsx`, `Pricing.tsx`,
@@ -379,7 +383,7 @@ items that need nothing from S.
 
 ### 11.6 Where the owner's answers meet a recorded decision
 
-Nothing below is repealed. Each one waits for the owner's word (Q1).
+The owner switched all five on 2026-09-25 (Q1). Each entry now carries its amendment.
 
 - **D164**, "capped at `UNDO_DEPTH` as before". The premise was that ten covers a sitting.
   The owner's own example needs thirteen.
@@ -390,22 +394,25 @@ Nothing below is repealed. Each one waits for the owner's word (Q1).
   a different write. "Never ask" asks for every press to be undoable.
 - **Section 7 of this file**, "He keeps his receipt and his twenty seconds." The Fulfiller's
   clock goes with the others.
-- **D10 ruling 1** is touched only if Q2 picks the re-insert.
+- **D10 ruling 1** is untouched. Q2 kept the confirm and the permanent removal.
 
-### 11.7 Open questions for the owner
+### 11.7 The owner's answers, 2026-09-25
 
-**Q1. May these five sentences change to "until it is built on"?** They are listed in 11.6.
-Options: (a) yes, all five. (b) yes, but keep moves out (drop UN-14). (c) no, keep them.
-**Recommended: (a).** Each one is the owner's own ruling applied to a sentence written
-before it.
+**Q1. May the five sentences in 11.6 change to "until it is built on"?** The owner's answer,
+verbatim:
 
-**Q2. How does "undo just 24" come back without a confirm?** Today the removal destroys the
-photograph.
-- (a) **Set it aside.** The card takes a state like retired, with a reason such as "not a
-  card". Graveyard hides it. D58 renumbers the cards behind it on screen. No stored index
-  moves. The retire undo, already built, brings it back.
-- (b) **Keep it and re-insert.** The removal keeps the photograph. The undo slides the later
-  cards back up. This is a new renumber beside D10 ruling 1.
-- (c) **Keep the one confirm** on this press only.
+```
+"Switch all five (Recommended)"
+```
 
-**Recommended: (a).** It reuses a built reversal, moves no index, and needs no new renumber.
+D164, D28 and D57 each carry an amendment. Sections 4 and 7 of this file carry theirs. UN-14
+is in.
+
+**Q2. How does "undo just 24" work with no confirm?** The owner's answer, verbatim:
+
+```
+"Keep the confirm here only"
+```
+
+"Undo just N" keeps its confirm and stays permanent. It is the one exception to "Never ask".
+UN-3 makes the confirm's words say that the removal is permanent and deletes the photo.

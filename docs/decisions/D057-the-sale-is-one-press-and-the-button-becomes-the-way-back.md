@@ -52,3 +52,7 @@ What covers it here, in descending order of worth: every control in the slot is 
 
 **What would reopen this: a sale recorded against a copy the owner did not mean.** The fix to reach for is `.fulfillment-step`'s displacement, not the panel this replaced.
 ---
+
+### Amended 2026-09-25: the row's Undo has no clock
+
+The owner's ruling of 2026-09-25, verbatim: "Switch all five (Recommended)". The row's control stays `Undo` past twenty seconds. It lasts until a newer sale replaces it, or until the sale is built on. That is when its order ships or closes, its photograph is reclaimed, or its box is buried. `docs/specs/undo.md` section 11 is the plan, and UN-5 builds it.
