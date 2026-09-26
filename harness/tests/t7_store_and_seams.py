@@ -10524,6 +10524,37 @@ def check_place_neighbors(checks: Checks) -> None:
             "at 2 is a gap",
         )
 
+        # --- an unallocated tail is not a gap --------------------------------------------
+        # The same divider far past the fill, TYPED AFTER THE CAPTURES: section 1 of box 9
+        # runs to index 50 while the box holds five cards. `section_gaps` counts terminal
+        # RECORDS, not unoccupied indices — that an empty tail adds nothing is the
+        # CONSTRUCTION, not a bounds check, and this is the box that would catch the bounds
+        # check creeping back in.
+        capture_server.do_create_box({"box": 9})
+        for _ in range(5):
+            capture_server.do_capture(capture_payload(9))
+        capture_server.do_put_box(9, {"sections": [1, 51]})
+        capture_server.do_mark_sold(9, 2, {})
+        place = capture_server.do_inventory()["cards"]["9/3"]["place"]
+        # 49, ONE DEPARTED CARD AND NOT A LOST PLAN. The divider is declared at index 51 and
+        # the box has sold one card, so it stands in front of the FIFTIETH card rather than
+        # the fifty-first slot. `Position._divider` keeps the other 45 slots counting for
+        # one card each.
+        checks.equal(
+            place["section_end"],
+            49,
+            "a divider typed past the fill still carries its unfilled slots — the block says "
+            "the section ends at 49, one short of the declared 50, because one card has left "
+            "the box in front of it (D58)",
+        )
+        checks.equal(
+            place["section_gaps"],
+            1,
+            "and the 45 unallocated indices behind it add NOTHING to the gap count: an "
+            "index with no record is a card that was never captured, not a hole where one "
+            "used to be — only the sold record at 2 is a gap",
+        )
+
         # --- pooled: no section is not "no holes" ----------------------------------------
         # A code card captured into the same box burns index 6 as a KEY — the photo and
         # sidecar are named after it — but it has no slot, so its block carries the pooled

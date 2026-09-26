@@ -520,14 +520,14 @@ was meant to be in front of.
 
 **It refuses rather than guessing**: a second press with nothing captured between
 (`section_empty` — the divider you want is already there). A divider already declared past
-the next card was `section_ahead` until 2026-09-25. The next card goes behind it now, so
+the next card was `section_ahead` until 2026-09-26. The next card goes behind it now, so
 `section_empty` answers it (D10). A sealed box (`box_closed`) went with the seal. Each is a sentence beside the control and
 never a halt: §5.5 stops the run when a card may have gone past unrecorded, and a refused
 divider changed nothing.
 
-**No undo, and no dialog.** The remedy is the dividers editor on `#/inventory`, which is
-where a wrong layout is corrected anyway, and a `resectioned` history line carries the
-layout it moved from. A confirm on the screen the owner shoots a box from at feeder pace is
+**No dialog, and `U` is the undo.** `U` takes S's divider back out while it is the last one
+and no card is behind it (UN-15). After that, the remedy is the dividers editor on
+`#/inventory`, and a `resectioned` history line carries the layout it moved from. A confirm on the screen the owner shoots a box from at feeder pace is
 what `docs/DESIGN.md` refuses in as many words.
 
 ## 6. trigger-seam

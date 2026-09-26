@@ -3779,7 +3779,6 @@
         "1f8f421a0e The argument for it: correcting a wrong layout is the whole point, a la…",
         "240d5f8c81 The owner asked for `U` to undo the most recent capture but for the con…",
         "25f1500f8e The next delete is only legal because the one before it succeeded, so c…",
-        "2853e7c008 Nothing is spent and nothing is destroyed; the remedy for a mis-press i…",
         "2ec562ee75 Until then the sentence above was aspirational — the only way to declar…",
         "31bd970dd7 So `card` is the index, `section` is 1, and `section_end` is None, whic…",
         "32bc362396 The control was one card and one button; it is now the session's ten mo…",
@@ -3814,7 +3813,6 @@
       ],
       "STE006": [
         "01fc0eb7a2 The rule governs the INDEX; the label is a view",
-        "2853e7c008 Nothing is spent and nothing is destroyed; the remedy for a mis-press i…",
         "32bc362396 The control was one card and one button; it is now the session's ten mo…",
         "3895a3a547 Undo deletes the record; it does not tombstone it",
         "5af1487092 Photos and sidecars are renamed inside the same locked operation; a `re…",
@@ -10571,7 +10569,6 @@
         "e937a93cb4 Row N undoes N: that card and everything captured after it, by walking…",
         "ea2e190609 The section below is kept as the history of the chip-row era it specifi…",
         "ec8f1f1a26 \"All, same commit\" was the whole of its schedule and it was not met: th…",
-        "efd398d6b8 The remedy is the dividers editor on `#/inventory`, which is where a wr…",
         "f0e46991f6 The **finish** toggle is `normal | holo | reverse_holo`, matching the e…",
         "f205749587 That is not an apology for the ordering — it is the same statement `doc…",
         "f240ca6911 7b was originally scheduled after the gate so it would be built against…",

@@ -843,6 +843,11 @@ class SectionEmpty(ValueError):
     """
 
 
+class DividerBuiltOn(ValueError):
+    """`close_section` was asked to take out a divider that is no longer S's own to undo: it
+    is not the box's last divider any more, or a card on hand stands behind it (UN-15)."""
+
+
 class UnknownBox(ValueError):
     """A box number no registry entry covers."""
 
@@ -3507,32 +3512,37 @@ class Inventory:
             )
         return self.set_sections(entry.box, layout + [at])
 
-    def close_section(self, number) -> Tuple[int, ...]:
-        """Take out the box's last divider while no card stands behind it. The capture
-        screen's `U` after `S` (UN-15).
+    def close_section(self, number, div) -> Tuple[int, ...]:
+        """Take out the divider `div` (its order key) while it is the box's last divider and
+        no card stands behind it. The capture screen's `U` after `S` (UN-15).
 
         IT REMOVES THAT ONE DIVIDER BY ITS KEY AND WRITES NOTHING ELSE. The screen used to
         send the layout back through `set_sections`, but it sent stored order keys where
         `PUT /boxes/<box>` reads card counts, so every divider whose key differs from its
-        count moved (the divider proof's F2). Here the store drops the last key off its own
+        count moved (the divider proof's F2). Here the store drops that one key off its own
         list, so no other divider can move.
 
-        Refuses `BadSections` when a card on hand stands behind the last divider, or when the
-        box has no divider past its first. A departed record there (a card moved out, sold or
-        retired) is not in the box, so it does not hold the divider in.
+        THE CALLER NAMES THE DIVIDER S MADE. Without it, a stale `U` after a dividers-editor
+        save took out the EDITOR's last divider (the review's first finding). Refuses
+        `DividerBuiltOn` when `div` is not the last divider, or when a card on hand stands
+        behind it. A departed record there (moved out, sold or retired) is not in the box, so
+        it does not hold the divider in.
         """
         entry = self.ensure_box(number)
         layout = list(entry.layout())
-        last = self.layout_of(entry.box)[-1:]
-        held = any(self._on_hand(entry.box, i) for sec in last for i in sec["slots"])
-        if len(layout) < 2 or held:
-            raise BadSections(
-                f"{self.box_title(entry.box)} has no empty last section, so no divider was "
-                f"taken out. Edit the dividers instead."
+        title = self.box_title(entry.box)
+        if len(layout) < 2 or float(layout[-1]) != as_order(div):
+            raise DividerBuiltOn(
+                f"The divider you added is no longer the last one in {title}, so it stays. "
+                f"Edit the dividers instead."
             )
-        kept = layout[:-1]
-        # `[1]` is the box `open_section` found undeclared (`[]`), so it goes back to that.
-        return self.set_sections(entry.box, kept if len(kept) > 1 else [])
+        last = self.layout_of(entry.box)[-1:]
+        if any(self._on_hand(entry.box, i) for sec in last for i in sec["slots"]):
+            raise DividerBuiltOn(
+                f"A card is already behind the divider you added in {title}, so it stays. "
+                f"Edit the dividers instead."
+            )
+        return self.set_sections(entry.box, layout[:-1])
 
     def box_fill(self, number) -> int:
         """The highest index this box holds. `next_index` minus one, and DISPLAY ONLY."""

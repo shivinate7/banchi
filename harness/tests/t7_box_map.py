@@ -9,15 +9,19 @@ Every case below was observed FAILING before its fix was kept.
 """
 from __future__ import annotations
 
+import json
 import os
 import random
+import threading
 from typing import List, Optional, Tuple
 
 from harness.tests.t7_store_and_seams import (
     Checks,
+    QuietHandler,
     Store,
     capture_payload,
     capture_server,
+    error_code,
     fake_cid,
     isolated_home,
     join,
@@ -26,6 +30,7 @@ from harness.tests.t7_store_and_seams import (
     resolve,
     seam_run,
 )
+from harness.tests.t7_store_and_seams import request as http_request
 
 
 def check_box_map_safety(checks: Checks) -> None:
@@ -926,8 +931,10 @@ def _fuzz_dividers(seeds, rounds):
                     elif kind == "undo_S":
                         if phys[b][-1] or len(phys[b]) < 2:
                             continue
-                        # THE CAPTURE SCREEN'S U AFTER S (UN-15), through the route it calls.
-                        capture_server.do_close_section(b)
+                        # THE CAPTURE SCREEN'S U AFTER S (UN-15), through the route it calls,
+                        # aimed at the empty last divider by its key.
+                        last = Store().read().inventory.box(b).sections[-1]
+                        capture_server.do_close_section(b, str(last))
                         phys[b].pop()
                     elif kind == "move" and b != dst and cards(b):
                         cid = rng.choice(cards(b))
@@ -1047,18 +1054,73 @@ def check_divider_anchor(checks: Checks) -> None:
             cap(1)
         capture_server.do_mark_sold(1, 1, dict())
         stored = list(Store().read().inventory.box(1).sections)
-        capture_server.do_open_section(1, dict())
-        capture_server.do_close_section(1)
+        made = capture_server.do_open_section(1, dict())["sections"][-1]
+        capture_server.do_close_section(1, str(made))
         checks.equal(
             list(Store().read().inventory.box(1).sections), stored,
             "F2: 3 captures, S, 3 captures, sell card 1, S, U: the undo takes out only its "
             "own divider, and moves no other",
         )
+        made = capture_server.do_open_section(1, dict())["sections"][-1]
         cap(1)
-        checks.raises(
-            master.BadSections, lambda: capture_server.do_close_section(1),
-            "and once a card stands behind the last divider, the undo refuses",
+        refusal(
+            checks, lambda: capture_server.do_close_section(1, str(made)), "divider_built_on",
+            "and once a card stands behind the divider S made, the undo refuses",
         )
+
+    with isolated_home():
+        # THE STALE U (the review's first finding): S, then a dividers-editor save that
+        # adds a divider behind S's, then U. The undo names S's divider, which is no longer
+        # the last one, so it refuses and the editor's divider stays.
+        capture_server.do_create_box(dict(box=1, name="A"))
+        for _ in range(3):
+            cap(1)
+        made = capture_server.do_open_section(1, dict())["sections"][-1]
+        capture_server.do_put_box(1, dict(sections=[1, 4, 9]))
+        typed = list(Store().read().inventory.box(1).sections)
+        refusal(
+            checks, lambda: capture_server.do_close_section(1, str(made)), "divider_built_on",
+            "a stale U after an editor save refuses: S's divider is no longer the last one",
+        )
+        checks.equal(
+            list(Store().read().inventory.box(1).sections), typed,
+            "and the editor's dividers all stay",
+        )
+
+    with isolated_home():
+        # AN UNDECLARED BOX KEEPS THE `[1]` S WROTE, and the route's other answers.
+        capture_server.do_create_box(dict(box=1, name="A"))
+        for _ in range(2):
+            cap(1)
+        made = capture_server.do_open_section(1, dict())["sections"][-1]
+        capture_server.do_close_section(1, str(made))
+        checks.equal(
+            list(Store().read().inventory.box(1).sections), [1],
+            "U after S on an undeclared box keeps `[1]`: one section, as before",
+        )
+        made = capture_server.do_open_section(1, dict())["sections"][-1]
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for path, want, label in (
+                ("/boxes/1/sections", (400, "div_required"), "no `div` is a 400"),
+                ("/boxes/1/sections?div=x", (400, "div_required"), "a word for `div` is a 400"),
+                ("/boxes/9/sections?div=3", (404, "box_not_found"), "an unknown box is a 404"),
+                ("/boxes/1/sections?div=1", (409, "divider_built_on"),
+                 "a divider that is not the last one is a 409"),
+            ):
+                status, body, _ = http_request(port, "DELETE", path)
+                checks.equal((status, error_code(body)), want, "DELETE " + label)
+            status, body, _ = http_request(port, "DELETE", f"/boxes/1/sections?div={made}")
+            checks.equal(
+                (status, json.loads(body).get("sections")), (200, [1]),
+                "and S's own divider comes out over the wire, with the box row as the answer",
+            )
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
 
     with isolated_home():
         for b in (1, 2):
