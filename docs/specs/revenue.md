@@ -51,9 +51,10 @@ never a pushed entry. D217 states why, and names the trade it costs.
 - **No cost basis, no profit, no P&L.** This repository has never recorded what a card cost.
   Every figure on this screen is GROSS. The word "gross" is in the page's own lede so the
   number is never mistaken for profit.
-- **No sealed/singles split.** `OrderLineWire.kind` is null on nearly every real line, and
-  guessing a kind from a product name is refused by CLAUDE.md and by `pipeline/orders.py`'s
-  own header. The product table is one mixed list, and sorting it does not un-mix it.
+- **Sealed and singles are still one mixed list by default, gross-sorted the same way.** A
+  Singles/Sealed/All switch (`ProductView`, review round 2026-09-26, defaulting to Singles)
+  narrows it, never re-sorts it — see "The Singles/Sealed switch" below for the rule it
+  narrows on.
 - **Canceled orders are silently excluded.** The owner's ruling, 2026-09-19, having seen the
   alternative. No footnote, no disclosed count. `Revenue.tsx:isCanceled` folds and compares
   the wire's own `status` string against the single word `canceled`. That is narrower than
@@ -95,3 +96,62 @@ screen's own history under the old ceiling stays in `D217`. It was raised to 64 
 These are a snapshot of one store on one day. They are kept here as the number this screen's
 first build was checked against. They are never rewritten to match a later tree — the same
 rule `docs/GATES.md` states for its own run records.
+
+## Review round, owner's preview, 2026-09-26
+
+Nine findings from a screenshot round, fixed together (`docs/reviews/ux-2026-09-23/
+RULINGS.md`, "Sales preview review, round 2").
+
+- **The board's value bar gets its own grid column, never shared with the price.** A bar
+  width plus a long dollar figure used to sit in one flex row. A flex item's default
+  min-width is its own content. Neither one shrank. The row overflowed, and the overflow
+  drew over the neighbouring columns' text. `.revenue-board-track` (the bar) and
+  `.revenue-board-value` (the price) are two separate grid cells now. A grid cell cannot
+  overlap a sibling cell's text, at any width.
+- **Finish and rarity are completed from the `skus` table, never left blank.**
+  `server/capture_server.py:_order_line_wire` fills `condition`/`rarity` from
+  `snapshot.skus.entries` when the order line's own fields are empty. `_row_for_bind` and
+  `_listing_decoration` already read this same table (identity-follows-sku.md §3.2).
+  Measured on the owner's real store: 0 of 1,406 lines carried a `condition` or `rarity`
+  from the feed itself. After the join, 1,373 resolve a condition and 1,117 resolve a
+  rarity. TCGplayer's own literal `"None"` (`pipeline/games.py`'s `rarities_not_claimed`) is
+  read as no rarity, the way that module already treats it. It never draws as a real rarity
+  string.
+- **The Singles/Sealed switch (item 5).** Verbatim in the RULINGS.md entry above. The rule,
+  `isSealed` in `Revenue.tsx`: `kind === 'sealed'` (the feed's own declared word), OR
+  `condition` equal to `pipeline/tcgcsv.py:SEALED_CONDITION` ("Unopened"), case-folded. The
+  second half carries almost all of the real signal. `kind` is never set in practice. Sealed
+  product with neither signal reads as a single, never as a guess — the same "no evidence,
+  no claim" rule the rest of this repo already keeps.
+- **A short display name, mechanically trimmed, never guessed.** `shortProductName` strips
+  the line's own `product_line`/`set_name`, and the tail of `set_name` after its last colon
+  (for a title that repeats the set a second time), off the front of the raw TCGplayer
+  title. It strips `condition` off the back too. A name the SKU table has nothing to say
+  about stays full-length — never cut on a guess. The full title sits on the name's `title`
+  attribute, for a hover or a focus. A bare trailing `"#"` is trimmed too: a sealed
+  product's own number-placeholder noise (`pipeline/pricearchive.py:_split_ledger_tail`'s
+  documented shape). A real card number always carries digits, and stays untouched.
+- **A card with no on-hand sibling draws a compact placeholder, not a full-bleed empty
+  tile.** `.revenue-tile-art:has(.bn-thumb[data-missing='true'])` undoes the tile's own
+  "fill the art area" rule, for exactly that one state.
+- **The row thumbnail is cropped to the card (D125), the same way every other screen crops
+  one.** `RowThumb` now asks `useCardCropWhenSeen` for the sibling copy's own rectangle —
+  the same primitive `Pricing.tsx`'s thumbnail already uses. The photo was never
+  un-croppable. This screen had simply never asked.
+- **"0% of gross" is now "<1% of gross", or nothing at all.** `pctLabel` rounds a real,
+  nonzero share down to `<1%` rather than to a false `0%`. It draws nothing for a $0 line.
+- **"Best sellers" is "What sold."** The heading sat over a sort control that could read
+  "Latest" or "A to Z" — neither one is "best". The new heading is true under any sort.
+- **`.revenue-tile-name` needed `display: block`, so its own ellipsis rule works
+  everywhere, not only inside a flex row.** A plain `<span>` is inline by default.
+  `overflow`/`text-overflow: ellipsis` do nothing on an inline box. It worked by accident in
+  the podium tile — a flex parent blockifies its own items — and failed in the board's
+  plain `<div>`. It also failed at every width the kit's own thumb-floor rule turns
+  `.bn-datalink` into `inline-flex` (`kit/data.css`, D117, under 767px). Both `Revenue.css`
+  rules are fixed the same way: `display: block; max-width: 100%`.
+- **"Last sold" and its date now share one line.** A deliberate trade against
+  `text-shape.spec.ts`'s repeated-sentence floor: three podium tiles landing on the same
+  sale date now repeat one four-word-or-longer sentence, which the checker is built to
+  catch. `text-shape-allow.json` lists it, by route, if the fixture ever produces that
+  coincidence. The owner asked for the line. The floor's own escape hatch is exactly for an
+  accepted finding like this one.

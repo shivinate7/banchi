@@ -3343,6 +3343,15 @@ export type OrderLineWire = {
   rarity: string | null
   unit_price: string | null
   kind: string | null
+  /** THE `skus` TABLE'S OWN FACTS FOR THIS LINE'S SKU (identity-follows-sku.md §3.2), never
+   *  the feed's — `condition`/`rarity` above are already completed from this same row on the
+   *  server (`server/capture_server.py:_order_line_wire`) where the feed said nothing, so
+   *  these two exist only for a screen that wants the raw product/set text as well, e.g. to
+   *  build a short display name off a long TCGplayer product title. `null` when the SKU is
+   *  not (yet) in the table. Optional so a fixture built before this field existed still
+   *  matches the shape — a screen reading it falls back to `null`, same as an absent SKU. */
+  product_line?: string | null
+  set_name?: string | null
 }
 
 /** What WE have recorded against one line — the ledger's own half, beside the feed's.

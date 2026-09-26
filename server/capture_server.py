@@ -13149,10 +13149,49 @@ def _order_progress(
     return rows
 
 
+def _order_line_wire(line, skus: "Skus") -> dict:  # noqa: F821 - store.skus.Skus, duck-typed
+    """One order line, as the feed said it, with `condition`/`rarity` FILLED IN FROM THE `skus`
+    TABLE where the feed's own line said nothing, and the SKU's `product_line`/`set_name`
+    carried alongside for a screen to build a short display name from (Sales review, findings
+    2 and 3).
+
+    THE FEED IS NEVER OVERWRITTEN, ONLY COMPLETED. `pipeline/orders.py`'s `OrderLine` docstring
+    is unchanged: what the feed said is kept verbatim, and none of it becomes a join key. This
+    is the read side, not the write side — `record.lines` on disk is untouched, and every call
+    here recomputes the same answer fresh from the CURRENT `skus` table, so a later `skus
+    adopt` or fetch is reflected immediately with nothing re-ingested.
+
+    A TCGplayer order line is not guaranteed to carry `condition`/`rarity` at all — the paste
+    is PROJECTED PII (`orderPaste.ts`), and a console export that omitted either cell used to
+    draw as "Foil $0.00" and "Unknown rarity" at 100% on `#/revenue`, which was never the
+    story: the copy's own facts were sitting in the `skus` table the whole time
+    (identity-follows-sku.md §3.2), keyed by the same SKU this line already carries. `_row_for
+    _bind` and `_listing_decoration` read this exact table for the same reason; this is a
+    third reader, never a second table.
+
+    A SKU THE TABLE DOES NOT HOLD YET answers with the feed's own fields, changed not at all —
+    the table not knowing this SKU is not this route's failure to report.
+    """
+    row = asdict(line)
+    sku_row = skus.entries.get(str(line.sku))
+    if sku_row is not None:
+        if not row.get("condition"):
+            row["condition"] = sku_row.condition or None
+        if not row.get("rarity"):
+            row["rarity"] = sku_row.rarity or None
+        row["product_line"] = sku_row.product_line or None
+        row["set_name"] = sku_row.set_name or None
+    else:
+        row["product_line"] = None
+        row["set_name"] = None
+    return row
+
+
 def _order_row(
     ledger: order_store.Ledger,
     record: order_store.OrderRecord,
     is_open: bool,
+    skus: "Skus",  # noqa: F821 - store.skus.Skus, duck-typed
 ) -> dict:
     """One order as the feed said it, with our own progress beside it.
 
@@ -13191,7 +13230,7 @@ def _order_row(
         "recorded": sum(row["recorded"] for row in progress),
         "open": bool(is_open),
         "terminal": order_store.is_terminal_status(record.status),
-        "lines": [asdict(line) for line in record.lines],
+        "lines": [_order_line_wire(line, skus) for line in record.lines],
         "progress": progress,
     }
 
@@ -13436,7 +13475,7 @@ def do_orders() -> dict:
     return {
         "summary": ledger.summary,
         "orders": [
-            _order_row(ledger, record, record.key in open_keys)
+            _order_row(ledger, record, record.key in open_keys, snapshot.skus)
             for record in sequence
         ],
         "resolution": {
