@@ -88,20 +88,36 @@ to match `ux/divider-fix` when that branch lands.
 ### 1.5 The two Move-to-box routes
 
 `POST /inventory/<box>/<index>/move` (one card) and `POST /inventory/<box>/move` (ticked cards,
-or a whole box) take one more optional field.
+or a whole box) take one more field, and it is REQUIRED.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `section` | string | A divider key of `to_box`. Each moved card goes to the tail of that section, in the order sent. It uses the same key rule as a capture. Missing: the card goes to the back of `to_box`, as before. |
+| `section` | string | A divider key of `to_box`. Each moved card goes to the tail of that section, in the order sent. It uses the same key rule as a capture. For the back of the box, send the last section's `div`. |
 
 | Status | Code | When |
 |---|---|---|
+| 400 | `section_required` | The body has no `section`. Nothing moves. |
 | 409 | `section_gone` | `to_box` has no section with that divider key. Nothing moves. |
 | 400 | `section_invalid` | `section` is not a string. |
 
-The owner ruled that a move has no default destination. The screen enforces it (Lane C). It
-sends `section` on every Move-to-box. The server keeps the old back-of-box answer for a body
-with no `section`, so older callers keep working. Section 7 gives the reason.
+The owner ruled that a move has no default destination: "i need to specify where it goes there
+no auto default". So the server refuses a Move to box that names no section. The undo of a
+move (`{"undo": true}` on the tombstone) names no section and is not refused.
+
+**The callers checked (2026-09-26).** Only a Move to box from a screen reaches the two routes
+above. No other caller starts to fail.
+
+| Caller | Path | Reaches the rule? |
+|---|---|---|
+| Move to box, one card (`Inventory.tsx`, `server.ts:moveCard`) | `do_move_card` | Yes. Lane C sends `section`. |
+| Move to box, ticked cards or a whole box (`BoxOps.tsx`, `server.ts:moveCards`) | `do_move_cards` | Yes. Lane C sends `section`. |
+| Move undo (`{"undo": true}`) | `do_move_card`, then `_unmove_one` | No. It returns before the rule. |
+| The Map's section move | `do_move_sections`, then `_cross`, then `_move_one` with its own slot | No. It names its gap. |
+| The Map's card or range move | `do_move_range`, then `_cross`, then `Inventory.place` | No. It names its gap. |
+| `Inventory.move_card`, `Inventory.move_cards` | the store, not a route | No. The rule is on the route. |
+| The CLI, orders, fulfillment | none of them moves a card | No. |
+| The demo server (`demoServer.ts`) | no move route | No. |
+| `scripts/cid-selftest.py` and the T7 cases | the two routes | They now send `section`. The T7 cases that meant the back of the box send the last section's key (`t7_store_and_seams.back_of`). |
 
 The Map's drag (`POST /boxes/<box>/cards/move`) does not change. It already names an exact
 gap.
@@ -160,7 +176,7 @@ a capture calls them inside the store lock. They read the `idx` and `ord` column
 | U after S, by key | new | I9. Only that divider goes. It refuses the first divider, a section with a card, and a key the box does not have. |
 | capture undo | none | I10. It deletes the newest index even when that card is mid-box. The next capture into the emptied section takes the divider's key. |
 | remove | none | I11. Indices slide and keys do not. The fuzz holds it. |
-| move, range move, section move | Move to box takes `section` | I12. A move with `section` goes to that section's tail, in the order sent. A move with a key the box does not have moves nothing. |
+| move, range move, section move | Move to box requires `section` | I12. A move with `section` goes to that section's tail, in the order sent. A move with a key the box does not have, or with no section, moves nothing. |
 | move undo | the divider guard is narrowed | I13. A move into a middle section can be undone. The next section's divider was already behind it. |
 | sell and unsell | none | I14. No key or divider is written. The fuzz holds it. |
 | divider editor | none | I15. After a mid-box S, a save with no edits keeps every divider. |
@@ -222,12 +238,11 @@ server keeps no pick. Each request carries its own aim.
   the transplant's key. A card moved to the tail of a middle section always has one. So the
   undo of every such move refused. It now refuses only a divider that no record stands behind.
   Only such a divider can have come after the move. What an undo writes does not change.
-- **The server keeps the back-of-box answer for a move with no `section`.** The owner ruled
-  "no auto default", and Lane C enforces it on the screen. This lane keeps the fallback so
-  Lanes A and C can merge in either order. Recommendation: once Lane C lands, refuse a move
-  with no `section` (400 `section_required`). Then a caller that forgets the field fails
-  loudly. It cannot file a card at the back of a box without a word. That silent misfile
-  is the risk this whole feature guards.
+- **The server refuses a Move to box with no `section`** (400 `section_required`). The plan
+  kept the back-of-box answer. The coordinator ruled on 2026-09-26 to refuse, because it is
+  the owner's own "no auto default". A caller that forgets the field now fails loudly. It
+  cannot file a card at the back of a box without a word. Section 1.5 lists every caller
+  checked.
 
 ## 8. Measurements
 

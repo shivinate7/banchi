@@ -18,6 +18,7 @@ from harness.tests.t7_store_and_seams import (
     Store,
     capture_payload,
     capture_server,
+    back_of,
     fake_cid,
     isolated_home,
     join,
@@ -63,7 +64,7 @@ def check_box_map_safety(checks: Checks) -> None:
 
         refusal(
             checks,
-            lambda: capture_server.do_move_cards(5, {"to_box": 7, "indices": [3]}),
+            lambda: capture_server.do_move_cards(5, {"to_box": 7, "section": back_of(7), "indices": [3]}),
             "card_being_read",
             "a card with a live paid reading does not move (D262, D174)",
         )
@@ -72,7 +73,7 @@ def check_box_map_safety(checks: Checks) -> None:
             "and nothing moved: the card is still where the paid answer will land",
         )
 
-        capture_server.do_move_cards(5, {"to_box": 7, "indices": [2]})
+        capture_server.do_move_cards(5, {"to_box": 7, "section": back_of(7), "indices": [2]})
         loaded = resolve.load(run, {"pokemon": run.path("export.csv")})
         where = sorted(
             (p.box, p.index) for match in loaded.matches.values() for p in match.positions
@@ -85,7 +86,7 @@ def check_box_map_safety(checks: Checks) -> None:
 
         # The second move of one card commits: its second tombstone has its own name.
         try:
-            capture_server.do_move_cards(7, {"to_box": 8, "indices": [1]})
+            capture_server.do_move_cards(7, {"to_box": 8, "section": back_of(8), "indices": [1]})
             twice = True
         except Exception as caught:  # noqa: BLE001 — the failure is the assertion
             twice = f"{type(caught).__name__}: {caught}"
@@ -971,7 +972,7 @@ def _fuzz_dividers(seeds, rounds, sections=False):
                         phys[b].pop()
                     elif kind == "move" and b != dst and cards(b):
                         cid = rng.choice(cards(b))
-                        capture_server.do_move_cards(b, dict(to_box=dst, indices=[_where(inv, cid)]))
+                        capture_server.do_move_cards(b, dict(to_box=dst, section=back_of(dst), indices=[_where(inv, cid)]))
                         drop(b, cid)
                         phys[dst][-1].append(cid)
                     elif kind == "range" and cards(b):
@@ -1107,7 +1108,7 @@ def check_divider_anchor(checks: Checks) -> None:
             cap(1)
         cap(2)
         capture_server.do_move_range(1, dict(indices=[5], to_box=1, before_card=1))
-        capture_server.do_move_cards(2, dict(to_box=1, indices=[1]))
+        capture_server.do_move_cards(2, dict(to_box=1, section=back_of(1), indices=[1]))
         capture_server.do_open_section(1, dict())
 
         def unmove():
@@ -1423,6 +1424,24 @@ def check_capture_into_section(checks: Checks) -> None:
         checks.equal(
             Store().read().inventory.cards["1/1"].state, master.CAPTURED,
             "I12: and the card did not move",
+        )
+        # THE OWNER'S RULING: "i need to specify where it goes there no auto default".
+        aim = Store().read().inventory.cards["1/1"].capture_id
+        refusal(
+            checks,
+            lambda: capture_server.do_move_card(1, 1, dict(capture_id=aim, to_box=3)),
+            "section_required",
+            "I12: a Move to box that names no section is refused: a move has no default place",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_move_cards(1, dict(to_box=3, indices=[1])),
+            "section_required",
+            "I12: and so is a move of ticked cards that names no section",
+        )
+        checks.equal(
+            Store().read().inventory.cards["1/1"].state, master.CAPTURED,
+            "I12: and neither refusal moved the card",
         )
 
     # I15: the divider editor after a mid-box S.

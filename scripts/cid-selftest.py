@@ -839,7 +839,8 @@ def case_a_move_moves_no_file() -> None:
         snapshot.inventory.allocate_capture(1, capture_id="mv", cid=digest, game="pokemon")
 
     with Tally() as tally:
-        answer = capture_server.do_move_card(1, 1, {"to_box": 4, "capture_id": "mv"})
+        answer = capture_server.do_move_card(
+            1, 1, {"to_box": 4, "capture_id": "mv", "section": "1"})
     equal(tally.touched, 0,
           "A MOVE TOUCHES NO FILE AT ALL — not a rename, not a sidecar rewrite, not an "
           "unlink. It was a rename plus a sidecar write plus a sidecar unlink, ordered "

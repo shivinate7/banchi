@@ -922,7 +922,10 @@ MOVE_UNDO_FIELDS = ("undo",)
 # way; there is no such thing as moving nowhere.
 MOVE_CARDS_FIELDS = ("indices", "to_box", "section")
 # `section` ON BOTH MOVES is a divider key of `to_box` (`docs/specs/subbox-capture.md` 1.5):
-# each card goes to the tail of that section. Absent, the card goes to the back of the box.
+# each card goes to the tail of that section. IT IS REQUIRED. The owner's ruling, 2026-09-26:
+# "i need to specify where it goes there no auto default". A body with no `section` used to
+# file the card at the back of the box, which is a silent misfile when a caller forgets the
+# field. The Map's drag names its own gap on another route, so it is not this rule's subject.
 
 
 def _optional_section(payload: dict, field: str) -> Optional[str]:
@@ -939,11 +942,22 @@ def _optional_section(payload: dict, field: str) -> Optional[str]:
     return value.strip()
 
 
-def _section_slot(inventory: master.Inventory, to_box: int, section: Optional[str]):
-    """Where a card moved into `section` of `to_box` lands: `(index, key)`, or None for the
-    back of the box. The same tail rule a capture uses (`Inventory.section_tail_key`)."""
+def _require_section(payload: dict) -> str:
+    """A Move to box's `section`, or 400 `section_required`. A move has no default place."""
+    section = _optional_section(payload, "section")
     if section is None:
-        return None
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "section_required",
+            "Choose the section of the box the card goes into. A move has no default place. "
+            "Send `section`, a section's `div` from GET /boxes.",
+        )
+    return section
+
+
+def _section_slot(inventory: master.Inventory, to_box: int, section: str):
+    """Where a card moved into `section` of `to_box` lands: `(index, key)`. The same tail
+    rule a capture uses (`Inventory.section_tail_key`)."""
     key, _ordinal, _last = inventory.section_tail_key(to_box, section)
     return inventory.next_index(to_box), key
 
@@ -5349,7 +5363,7 @@ def do_move_card(box: int, index: int, payload: dict) -> dict:
         )
     aimed_at = _optional_text(payload, "capture_id")
     to_box = _require_to_box(payload)
-    section = _optional_section(payload, "section")
+    section = _require_section(payload)
 
     key = master.position_key(box, index)
 
@@ -5422,7 +5436,7 @@ def do_move_cards(box: int, payload: dict) -> dict:
     """
     _reject_unknown(payload, MOVE_CARDS_FIELDS)
     to_box = _require_to_box(payload)
-    section = _optional_section(payload, "section")
+    section = _require_section(payload)
     raw_indices = payload.get("indices")
     if raw_indices is not None:
         if not isinstance(raw_indices, list) or not raw_indices:

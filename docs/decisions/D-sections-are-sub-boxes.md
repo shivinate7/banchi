@@ -67,9 +67,10 @@ key (`DELETE /boxes/<box>/sections?div=`). It removes that divider only.
 ### Move to box
 
 The owner ruled that a move has no default destination. So each Move-to-box route takes
-`section`, and the card goes to the tail of that section by the same rule. The screen
-enforces "no default" (Lane C). The server still sends a move with no `section` to the back of
-the box, so a caller from before this entry keeps working. The spec's section 7 argues this.
+`section`, and the card goes to the tail of that section by the same rule. The server refuses
+a Move to box with no `section` (400 `section_required`), so a caller that forgets the field
+fails loudly. The Map's drag and a move undo name their own place, so the rule does not reach
+them. The spec's section 1.5 lists every caller checked.
 
 A move undo refused when any divider stood behind the transplant. A card moved to the tail of
 a middle section always has the next section's divider behind it. So the guard now refuses
