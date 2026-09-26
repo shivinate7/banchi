@@ -3446,7 +3446,7 @@ export type ResolvedOrder = {
  *  (`docs/specs/order-walk-plan.md` §7). `pipeline/walkplan.py:plan` over one snapshot; NOT
  *  STORED (D36), and a plan re-pressed a minute later over a changed store can name
  *  different cards. */
-export type WalkPlanRef = { key: string; number: string; buyer: string | null }
+export type WalkPlanRef = { key: string; number: string; buyer: string | null; owed: number }
 
 /** One physical copy of a take's card, anywhere in the store — REBUILT 2026-09-19 (`docs/
  *  specs/order-walk-plan.md` §8, "The stop, rebuilt"). The flat fields the first build carried

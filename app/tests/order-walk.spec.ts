@@ -98,7 +98,12 @@ function walkPlanCopy(over: WalkPlanCopyInput = {}): WalkPlanCopy {
 }
 
 function walkPlanTake(over: Partial<WalkPlanTake> = {}): WalkPlanTake {
-  const forRef: WalkPlanRef = { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace' }
+  // The default ref's `owed` tracks THIS take's own `wanted` (post-override), not a fixed 1 —
+  // a case that raises `wanted` without naming its own `for` (`twoCopyPlan`'s two presses
+  // against one order) needs the sole ref to still owe enough for every press `pickOrderFor`
+  // makes against it.
+  const wanted = over.wanted ?? 1
+  const forRef: WalkPlanRef = { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace', owed: wanted }
   return {
     sku: SKU,
     name: 'Volcanion',

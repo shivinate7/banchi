@@ -200,7 +200,14 @@ function inventoryCard(over: Partial<InventoryCard> = {}): InventoryCard {
 }
 
 function walkPlanTake(over: Partial<WalkPlanTake> = {}): WalkPlanTake {
-  const forRef: WalkPlanRef = { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace' }
+  // The default ref's `owed` tracks THIS take's own `wanted` (post-override), not a fixed 1 —
+  // `order-walk.spec.ts`'s own `walkPlanTake` restates the same reason.
+  const forRef: WalkPlanRef = {
+    key: `TCGplayer:${ORDER_NUMBER}`,
+    number: ORDER_NUMBER,
+    buyer: 'Ada Lovelace',
+    owed: over.wanted ?? 1,
+  }
   return {
     sku: SKU,
     name: 'Volcanion',
@@ -1806,7 +1813,7 @@ test('a buyer with two open orders walks both at once — one selection, one pla
             sku: '9197754',
             name: 'Sunrise',
             number_display: '030',
-            for: [{ key: secondOrderKey, number: SECOND_ORDER, buyer: 'Ada Lovelace' }],
+            for: [{ key: secondOrderKey, number: SECOND_ORDER, buyer: 'Ada Lovelace', owed: 1 }],
             copies: [walkPlanCopy({ box: 5, index: 30, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5, Section 1, Card 1' })],
           }),
         ],
@@ -2570,7 +2577,7 @@ function sunrisePlan(): WalkPlan {
           sku: SECOND_SKU,
           name: 'Sunrise',
           number_display: '030',
-          for: [{ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second' }],
+          for: [{ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second', owed: 1 }],
           copies: [walkPlanCopy({ box: 5, index: 9, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5, Section 1, Card 1' })],
         }),
       ],
@@ -2771,6 +2778,45 @@ test('the card pane is the photograph, the pick and every copy with its place an
   await expect(pane.getByRole('button', { name: 'Retire' })).toHaveCount(0)
 })
 
+/* THE WORDING FIX (owner's ruling, 2026-09-25): "of Y" must never count a copy the store does
+ * not have, and a short card says so in a few words rather than a sentence — "say what's
+ * short but it's not intuitive to use so much verbiage." `wanted` is 3 across the walked
+ * orders, ONE copy is on hand, so "of 3" would be the diagnosed lie (Rengar's own case). */
+test('a short card says "Pick 1" and "2 short", never a wrong "of 3"', async ({ page }) => {
+  const owing = order({
+    wanted: 3,
+    recorded: 0,
+    progress: [
+      {
+        sku: SKU,
+        wanted: 3,
+        recorded: 0,
+        outstanding: 3,
+        over: 0,
+        copies: [],
+        at: null,
+        by_hand: 0,
+        reason: null,
+        declared_kind: null,
+        closed_at: null,
+        closed_reason: null,
+      },
+    ],
+  })
+  await open(page, {
+    orders: payloadOf(
+      [owing],
+      [{ key: owing.key, number: owing.number, complete: false, outstanding: 3, lines: [line({ wanted: 3, owed: 3, outstanding: 0, on_hand: 1 })] }],
+    ),
+    walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: 1, for: [{ key: owing.key, number: owing.number, buyer: 'Ada Lovelace', owed: 3 }] })] })]),
+  })
+
+  const pane = page.locator('.orders-card-pane')
+  await expect(pane.locator('.orders-card-pick')).toContainText('Pick 1')
+  await expect(pane.locator('.orders-card-pick')).not.toContainText('of 3')
+  await expect(pane.locator('.orders-card-pick')).toContainText('2 short')
+})
+
 /* --------------------------------------------------------------------------------- Mark sold */
 
 test('Mark sold records the copy against the owing order, and the order panel updates', async ({ page }) => {
@@ -2912,7 +2958,7 @@ test('a sale does not re-sort the walk list, and this section leads', async ({ p
         walkPlanTake({
           sku: SECOND_SKU,
           name: 'Sunrise',
-          for: [{ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second' }],
+          for: [{ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second', owed: 1 }],
           copies: [walkPlanCopy({ box: 5, index: 9, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5, Section 1, Card 1' })],
         }),
       ],

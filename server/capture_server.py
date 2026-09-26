@@ -13235,17 +13235,24 @@ def _walk_plan_sort_key(copy: "walkplan.Copy", places: _Places) -> Tuple[int, in
     return (0, int(slot)) if slot is not None else (1, int(copy.index))
 
 
-def _walk_plan_order_ref(ledger: order_store.Ledger, key: str) -> Optional[dict]:
-    """`{key, number, buyer}` for one order this walk is filling, or None for a key the
-    ledger no longer holds — the same skip `demand`'s own docstring argues, one register up."""
+def _walk_plan_order_ref(ledger: order_store.Ledger, key: str, sku: str) -> Optional[dict]:
+    """`{key, number, buyer, owed}` for one order this walk is filling, or None for a key the
+    ledger no longer holds — the same skip `demand`'s own docstring argues, one register up.
+
+    `owed` IS THE LEDGER'S OWN `outstanding`, ZEROED FOR A STOOD-DOWN LINE — the same filter
+    `walkplan.demand` applies (owner's ruling 2026-09-17, "if I stand a line down... it should
+    say owed 0"), read off this plan's own snapshot so a press this pass records against never
+    moves it. Its own reader, `pickOrderFor` (`app/src/OrdersWalkPane.tsx`), needs it to stop
+    handing a press to an order already full (`docs/specs/order-walk-plan.md` §8, amended)."""
     record = ledger.orders.get(key)
     if record is None:
         return None
-    return {"key": record.key, "number": record.number, "buyer": record.buyer}
+    owed = 0 if ledger.recorded(key, sku).closed else ledger.outstanding(key, sku)
+    return {"key": record.key, "number": record.number, "buyer": record.buyer, "owed": owed}
 
 
-def _walk_plan_refs(ledger: order_store.Ledger, keys: Sequence[str]) -> List[dict]:
-    return [ref for ref in (_walk_plan_order_ref(ledger, key) for key in keys) if ref is not None]
+def _walk_plan_refs(ledger: order_store.Ledger, keys: Sequence[str], sku: str) -> List[dict]:
+    return [ref for ref in (_walk_plan_order_ref(ledger, key, sku) for key in keys) if ref is not None]
 
 
 def _walk_plan_sku_display(
@@ -13335,7 +13342,7 @@ def _walk_plan_take(
         "condition": _agreed(record.condition for record in positions)
         or (listing.condition if listing is not None else None),
         "wanted": take.wanted,
-        "for": _walk_plan_refs(ledger, take.orders),
+        "for": _walk_plan_refs(ledger, take.orders, take.sku),
         "copies": rows,
         # `_listing_reading`, the SAME composer `do_search`'s `_group_row` calls, over the
         # SAME `listing` already read above for `condition` — added so a caller synthesising a
@@ -13404,7 +13411,7 @@ def _walk_plan_short(ledger: order_store.Ledger, short: "walkplan.Short") -> dic
         "wanted": short.wanted,
         "on_hand": short.on_hand,
         "short": short.short,
-        "for": _walk_plan_refs(ledger, short.orders),
+        "for": _walk_plan_refs(ledger, short.orders, short.sku),
     }
 
 

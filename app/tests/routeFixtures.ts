@@ -385,7 +385,7 @@ function severalOrdersWalkPlan(): WalkPlan {
             rarity: null,
             condition: 'Near Mint',
             wanted: 1,
-            for: [{ key: 'TCGplayer:A2FFC195-0000F4-006AC', number: 'A2FFC195-0000F4-006AC', buyer: 'Ada Lovelace' }],
+            for: [{ key: 'TCGplayer:A2FFC195-0000F4-006AC', number: 'A2FFC195-0000F4-006AC', buyer: 'Ada Lovelace', owed: 1 }],
             copies: [
               {
                 key: `${p.box}/${p.index}`,

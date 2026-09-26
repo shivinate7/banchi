@@ -67,24 +67,56 @@ export type WalkUndoFn = (
   refresh: readonly PullRefresh[],
 ) => Promise<WalkUndoOutcome>
 
-/** A take's `for` names every order sharing it but not how this stop's `wanted` splits between
- *  them. NEVER THE LIVE LEDGER: the first ref this pass has not yet recorded a copy against, by
- *  this pass's own tally alone, and once every ref has at least one, the first resolvable ref
- *  again. `record_pull` is the actual refusal if a specific order's line turns out full. */
+/** A take's `for` names every order sharing it, and `ref.owed` (from the plan's own snapshot,
+ *  never re-read live) is what it still wants BEFORE this pass. The press goes to the ref
+ *  whose remaining (`owed` minus what this pass has already recorded against it) is smallest
+ *  and still positive — the fewest-remaining-first rule (owner's ruling 2026-09-25: "if we
+ *  were to give it to someone, whoever it completes") — because the order closest to done is
+ *  the one a single short copy is most likely to finish. Ties go to the order placed longest
+ *  ago. AN ORDER WITH NOTHING LEFT OWED IS NEVER PICKED — no `for[0]` fallback
+ *  (`docs/specs/order-walk-plan.md` §8, amended): the caller who used to fall through to a
+ *  full order now gets `null` and refuses the press before the server has to. */
 function pickOrderFor(
   take: WalkPlanTake,
   ordersByKey: ReadonlyMap<string, OrderRow>,
   recordedForSku: ReadonlyMap<string, number>,
 ): OrderRow | null {
+  let best: { order: OrderRow; remaining: number; placedAt: string } | null = null
   for (const ref of take.for) {
     const order = ordersByKey.get(ref.key)
-    if (order !== undefined && (recordedForSku.get(ref.key) ?? 0) === 0) return order
+    if (order === undefined) continue
+    const remaining = ref.owed - (recordedForSku.get(ref.key) ?? 0)
+    if (remaining <= 0) continue
+    const placedAt = order.placed_at ?? ''
+    if (
+      best === null ||
+      remaining < best.remaining ||
+      (remaining === best.remaining && placedAt < best.placedAt)
+    ) {
+      best = { order, remaining, placedAt }
+    }
   }
-  for (const ref of take.for) {
-    const order = ordersByKey.get(ref.key)
-    if (order !== undefined) return order
-  }
-  return null
+  return best === null ? null : best.order
+}
+
+/** What a row's "Pick X of Y" (or "Pick X" plus a short flag) should say.
+ *
+ *  `onHand` IS THE STORE-WIDE ON-HAND COUNT FOR THE SKU — `take.copies` already lists every
+ *  on-hand copy, not only this stop's reach (D212/D93/D97), so its length is the true
+ *  denominator. `owed` is the walked set's own demand (`owedBySku`, which excludes a
+ *  stood-down line the same way the planner does). `Y` MUST NEVER COUNT A COPY THE STORE DOES
+ *  NOT HAVE — the diagnosed defect (`docs/specs/order-walk-plan.md` §8, amended): Rengar's "of
+ *  8" implied 7 more copies waited elsewhere, and none did. Where `owed` outruns `onHand`,
+ *  `of` is capped at what is really here and `short` carries the gap, so the row can say "7
+ *  short" instead of a wrong count (the owner's wording ruling, 2026-09-25: "say what's short
+ *  but it's not intuitive to use so much verbiage"). */
+function pickFigureOf(
+  take: WalkPlanTake,
+  owedBySku: ReadonlyMap<string, number>,
+): { readonly of: number; readonly short: number } {
+  const onHand = take.copies.length
+  const owed = Math.max(take.wanted, owedBySku.get(take.sku) ?? take.wanted)
+  return { of: Math.min(owed, onHand), short: Math.max(0, owed - onHand) }
 }
 
 /* ---------------------------------------------------------------------- the walk list's rows */
@@ -575,7 +607,7 @@ export function WalkList({
                 {shown.map((line) => {
                   const picked = line.rows.filter((row) => walk.soldKeys.has(row.copy.key)).length
                   const done = picked >= line.take.wanted
-                  const of = Math.max(line.take.wanted, owedBySku.get(line.take.sku) ?? line.take.wanted)
+                  const figure = pickFigureOf(line.take, owedBySku)
                   const current = line.rows.some((row) => row.rowKey === walk.current)
                   const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
                   const next = line.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? line.rows[0]
@@ -593,8 +625,10 @@ export function WalkList({
                         </span>
                         <span className="orders-walk-pick">
                           {done ? <Icon name="check" size={14} /> : null}
-                          {done ? 'Picked' : 'Pick'} {line.take.wanted} of {of}
+                          {done ? 'Picked' : 'Pick'} {line.take.wanted}
+                          {figure.short > 0 ? null : ` of ${figure.of}`}
                         </span>
+                        {figure.short > 0 ? <Pill tone="warn">{figure.short} short</Pill> : null}
                         {showBuyers ? <span className="orders-walk-for">{takeBuyers(line.take)}</span> : null}
                       </button>
                     </li>
@@ -679,7 +713,7 @@ export function WalkCardPane({
   /* NEVER A PHOTOGRAPH OF A POOLED CARD: a code card's photo is a live code (D24, opsec). */
   const row: Row | null =
     currentCard === null || currentRow.copy.place.located === false ? null : { key: currentRow.copy.key, card: currentCard }
-  const of =Math.max(take.wanted, owedBySku.get(take.sku) ?? take.wanted)
+  const figure = pickFigureOf(take, owedBySku)
   const sub = [take.number_display, take.set].filter((part): part is string => Boolean(part))
 
   const here = currentGroup.copies.find((copy) => copy.key === currentRow.copy.key) ?? null
@@ -710,8 +744,10 @@ export function WalkCardPane({
             {take.name ?? 'Not identified yet'}
           </span>
           <span className="orders-card-thin-place">
-            {hereWords === null ? `Pick ${take.wanted} of ${of}` : `${hereWords}, pick ${take.wanted} of ${of}`}
+            {hereWords === null ? `Pick ${take.wanted}` : `${hereWords}, pick ${take.wanted}`}
+            {figure.short > 0 ? '' : ` of ${figure.of}`}
           </span>
+          {figure.short > 0 ? <Pill tone="warn">{figure.short} short</Pill> : null}
         </span>
         {here === null ? null : (
           <span className="orders-card-thin-action">
@@ -747,7 +783,9 @@ export function WalkCardPane({
             </p>
           )}
           <p className="orders-card-pick">
-            Pick <strong>{take.wanted}</strong> of {of}
+            Pick <strong>{take.wanted}</strong>
+            {figure.short > 0 ? null : <> of {figure.of}</>}
+            {figure.short > 0 ? <Pill tone="warn">{figure.short} short</Pill> : null}
           </p>
           {showBuyers ? <p className="orders-card-for">For {takeBuyers(take)}</p> : null}
           <p className="orders-card-market">

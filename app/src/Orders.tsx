@@ -3146,7 +3146,16 @@ function PullStage({
   )
   const owedBySku = new Map<string, number>()
   for (const key of walkedKeys) {
-    for (const line of answers.get(key)?.lines ?? []) owedBySku.set(line.sku, (owedBySku.get(line.sku) ?? 0) + line.owed)
+    // A stood-down line owes zero on the walk (`pipeline/walkplan.py:demand`'s own filter,
+    // the owner's ruling 2026-09-17) — `ResolvedLine.owed` does not know this, so it is
+    // read here off the same `OrderLineProgress.closed_at` the ledger stores.
+    const closedSkus = new Set(
+      (ordersByKey.get(key)?.progress ?? []).filter((row) => row.closed_at !== null).map((row) => row.sku),
+    )
+    for (const line of answers.get(key)?.lines ?? []) {
+      if (closedSkus.has(line.sku)) continue
+      owedBySku.set(line.sku, (owedBySku.get(line.sku) ?? 0) + line.owed)
+    }
   }
   const cardsToPull = [...walkedKeys].reduce(
     (sum, key) => sum + (answers.get(key)?.lines ?? []).reduce((s, line) => s + Math.max(0, line.owed - line.outstanding), 0),
