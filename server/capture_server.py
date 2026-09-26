@@ -4431,6 +4431,13 @@ def do_delete_card(box: int, index: int) -> dict:
         # BUILT ON ONCE ITS SITTING ENDS (UN-2, `docs/specs/undo.md` 11.1). The server
         # decides it, with the same rule `GET /capture/sitting` answers by, so the strip and
         # this refusal cannot disagree. After it, Manage box removes the card (D10 ruling 1).
+        if card.moved_from:
+            raise BadRequest(
+                HTTPStatus.CONFLICT,
+                "capture_built_on",
+                f"{join.said_place(inventory, box, index)} was moved here, so it is not a "
+                f"capture to undo. Undo the move, or move it back.",
+            )
         if key not in _open_sitting(inventory):
             raise BadRequest(
                 HTTPStatus.CONFLICT,
@@ -6156,13 +6163,19 @@ def _open_sitting(inventory: master.Inventory) -> List[str]:
     while its newest capture is at most `SITTING_GAP_MINUTES` old. After that the sitting
     has ended, and every capture in it is built on.
     """
-    keys = [key for key in inventory.newest_sitting(SITTING_GAP_MINUTES * 60)
-            if key in inventory.cards]
+    # A TOMBSTONE AND A TRANSPLANT ARE NOT CAPTURES (UN-2 review round). A move copies
+    # `captured_at`, so both would otherwise sit in the sitting, and the capture undo would
+    # delete a moved card and its photograph.
+    keys = [
+        key for key in inventory.newest_sitting(SITTING_GAP_MINUTES * 60)
+        if key in inventory.cards
+        and inventory.cards[key].state != master.MOVED
+        and not inventory.cards[key].moved_from
+    ]
     if not keys:
         return []
-    try:
-        newest = datetime.fromisoformat(str(inventory.cards[keys[-1]].captured_at))
-    except (TypeError, ValueError):
+    newest = master.parse_stamp(inventory.cards[keys[-1]].captured_at)
+    if newest is None:
         return []
     age = (datetime.now(timezone.utc) - newest).total_seconds()
     return keys if age <= SITTING_GAP_MINUTES * 60 else []

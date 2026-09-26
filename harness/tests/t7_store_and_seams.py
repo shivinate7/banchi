@@ -6415,11 +6415,19 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
     MUTATION-TESTED, one guard per block. Each block names the line whose removal turns it
     red: UN-7's two `sale_built_on` refusals, UN-8's `owed_entries`, UN-11's side file and
-    its posting read, UN-14's history read and name check, and UN-4's `log_states`.
+    its posting read, UN-14's history read, name check, newest check and divider check,
+    UN-2's gap, its end, its transplant refusal, and UN-4's `log_states`.
+
+    EVERY CALL AFTER A GUARD GOES THROUGH `answers` OR `refusal`, and every read of an answer
+    is guarded, for `last_event`'s reason: a mutation must turn a NAMED check red, never raise
+    a traceback that hides every check behind it.
     """
     checks.note("")
     checks.note("UNDO UNTIL BUILT ON — docs/specs/undo.md section 11, lane S")
     from dataclasses import asdict
+
+    def field(body, name):
+        return body.get(name) if isinstance(body, dict) else None
 
     # ------------------------------------------------ UN-7: a sale whose photo is cleared
     with isolated_home():
@@ -6435,11 +6443,15 @@ def check_undo_until_built_on(checks: Checks) -> None:
             "sale_built_on",
             "UN-7: a sale whose photo was cleared is built on, and its undo refuses",
         )
-        back = capture_server.do_mark_sold(5, 1, {"still_here": True})
+        back = answers(
+            checks,
+            lambda: capture_server.do_mark_sold(5, 1, {"still_here": True}),
+            "\"This card is still here\" answers on a sale that is built on",
+        )
         checks.equal(
-            (back["state"], back["still_here"]),
+            (field(back, "state"), field(back, "still_here")),
             (master.IDENTIFIED, True),
-            "and \"This card is still here\" puts it back to its earlier state anyway",
+            "and puts the card back to its earlier state anyway",
         )
 
     # ---------------------------------------- UN-7: a sale whose order has shipped
@@ -6477,9 +6489,13 @@ def check_undo_until_built_on(checks: Checks) -> None:
             "sale_built_on",
             "and so does the card's own undo on #/inventory",
         )
-        back = capture_server.do_mark_sold(4, 1, {"still_here": True})
+        back = answers(
+            checks,
+            lambda: capture_server.do_mark_sold(4, 1, {"still_here": True}),
+            "\"still here\" answers on a shipped order's card",
+        )
         line = Store().read().ledger.recorded(key, "9191486")
-        checks.equal(back["state"], master.IDENTIFIED, "\"still here\" puts the card back")
+        checks.equal(field(back, "state"), master.IDENTIFIED, "and puts the card back")
         checks.equal(
             (line.fulfilled, line.by_hand, "un7-order" in line.copies),
             (1, 1, False),
@@ -6517,9 +6533,13 @@ def check_undo_until_built_on(checks: Checks) -> None:
             2,
             "and the server keeps it, so a reload still offers the undo",
         )
-        back = pipeline_routes.do_pricing_restore({"last_clear": True})
+        back = answers(
+            checks,
+            lambda: pipeline_routes.do_pricing_restore({"last_clear": True}),
+            "the stored clear answers a restore",
+        )
         checks.equal(
-            sorted(back["restored"]), ["2000", "2001"], "the stored clear restores both"
+            sorted(field(back, "restored") or []), ["2000", "2001"], "and restores both"
         )
         checks.equal(
             pipeline_routes.do_pricing_corpus()["last_clear"],
@@ -6550,19 +6570,27 @@ def check_undo_until_built_on(checks: Checks) -> None:
         mover = before.cards["6/1"]
         neighbor = asdict(before.cards["6/2"])
         capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
-        undone = capture_server.do_move_card(6, 1, {"undo": True})
+        undone = answers(
+            checks,
+            lambda: capture_server.do_move_card(6, 1, {"undo": True}),
+            "UN-14: the move's undo answers",
+        )
         after = Store().read().inventory
+        home = after.cards.get("6/1")
         checks.equal(
-            (undone["to"], undone["moved"], after.cards["6/1"].state, after.cards["6/1"].capture_id),
+            (field(undone, "to"), field(undone, "moved"), getattr(home, "state", None),
+             getattr(home, "capture_id", None)),
             ("6/1", "7/2", mover.state, mover.capture_id),
-            "UN-14: the move's undo puts the card back at its own index",
+            "and puts the card back at its own index",
         )
         checks.ok(
             "7/2" not in after.cards and asdict(after.cards["6/2"]) == neighbor,
             "and the transplant is gone, and nothing else in either box moved (D118)",
         )
         checks.equal(
-            after.cards["6/1"].cid, mover.cid, "the card wears its own name again, unprefixed"
+            (getattr(home, "cid", None), getattr(home, "moved_from", "unset")),
+            (mover.cid, None),
+            "the card wears its own name again, and is no transplant",
         )
         capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
         capture_server.do_mark_sold(6, 2, {})
@@ -6571,6 +6599,59 @@ def check_undo_until_built_on(checks: Checks) -> None:
             lambda: capture_server.do_move_card(6, 1, {"undo": True}),
             "move_built_on",
             "UN-14: a sale in the old box builds on the move, and its undo refuses",
+        )
+
+    # ---------------------- UN-14: the store's own guards, under the route's history read
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        capture_server.do_capture(capture_payload(7))
+        with Store().write() as snapshot:
+            checks.raises(
+                master.CardDeparted,
+                lambda: snapshot.inventory.unmove_card("6/1"),
+                "UN-14: the store refuses a move undo once the transplant is not the newest",
+            )
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        capture_server.do_open_section(7, {})
+        refusal(
+            checks,
+            lambda: capture_server.do_move_card(6, 1, {"undo": True}),
+            "move_built_on",
+            "UN-14: a divider put in behind the transplant builds on the move",
+        )
+
+    # ------------------ D83's chain: a move back, and a move on, write distinct tombstones
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        back = answers(
+            checks,
+            lambda: capture_server.do_move_card(7, 2, {"capture_id": mover.capture_id, "to_box": 6}),
+            "a transplant moves back to its first box without a UNIQUE clash on its name",
+        )
+        onward = answers(
+            checks,
+            lambda: capture_server.do_move_card(
+                6, 2, {"capture_id": mover.capture_id, "to_box": 8}
+            ),
+            "and on to a third box",
+        )
+        cards = Store().read().inventory.cards
+        tombstones = [cards[key].cid for key in ("6/1", "7/2", "6/2") if key in cards]
+        checks.equal(
+            (field(back, "to"), field(onward, "to"), getattr(cards.get("8/1"), "cid", None),
+             len(set(tombstones))),
+            ("6/2", "8/1", mover.cid, 3),
+            "and the card keeps its own name (D172) while three tombstones stay distinct",
         )
 
     # ------------------------------------------------ UN-2: the sitting, off the store
@@ -6618,6 +6699,41 @@ def check_undo_until_built_on(checks: Checks) -> None:
             "9/3" in Store().read().inventory.cards,
             "and the refused undo deleted nothing",
         )
+        naive = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+        with Store().write() as snapshot:
+            card = snapshot.inventory.cards.get("9/3")
+            if card is not None:
+                card.captured_at = naive
+        sitting = answers(
+            checks,
+            capture_server.do_capture_sitting,
+            "UN-2: a captured_at with no zone reads as UTC and never raises",
+        )
+        checks.equal(field(sitting, "open"), True, "and it counts as the open sitting")
+
+    # ---------------- UN-2: a moved card is not a capture, in the strip or in the undo
+    with isolated_home():
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(6))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7})
+        checks.equal(
+            [row["key"] for row in capture_server.do_capture_sitting()["cards"]],
+            ["6/2"],
+            "UN-2: the sitting leaves out the tombstone and the transplant",
+        )
+        said = _refusal_text(lambda: capture_server.do_delete_card(7, 1))
+        checks.ok(
+            said is not None and said[0] == "capture_built_on" and "moved here" in said[1],
+            "and the capture undo refuses the transplant AS A MOVED CARD, rather than delete "
+            "it: its own guard, not only the sitting's",
+            f"refusal was: {said}",
+        )
+        checks.ok(
+            "7/1" in Store().read().inventory.cards
+            and photos.path(mover.cid, files.home()).is_file(),
+            "and the moved card and its photograph are both still there",
+        )
 
     # ------------------------------------ UN-4, and every reversal, on a fresh demo seed
     with isolated_home():
@@ -6630,13 +6746,22 @@ def check_undo_until_built_on(checks: Checks) -> None:
         moved = [c for c in cards if c.state == master.MOVED]
         trips = 0
         for card in sold:
-            back = capture_server.do_mark_sold(card.box, card.index, {"undo": True})
-            capture_server.do_mark_sold(card.box, card.index, {})
-            trips += back["state"] == master.IDENTIFIED
+            back = answers(
+                checks,
+                lambda card=card: capture_server.do_mark_sold(card.box, card.index, {"undo": True}),
+                f"UN-4: the demo's sold {card.key} undoes",
+            )
+            capture_server.do_mark_sold(card.box, card.index, {}) if back else None
+            trips += field(back, "state") == master.IDENTIFIED
         for card in retired:
-            back = capture_server.do_retire(card.box, card.index, {"undo": True})
-            capture_server.do_retire(card.box, card.index, {"reason": card.retire_reason})
-            trips += back["state"] == master.IDENTIFIED
+            back = answers(
+                checks,
+                lambda card=card: capture_server.do_retire(card.box, card.index, {"undo": True}),
+                f"UN-4: the demo's retired {card.key} undoes",
+            )
+            if back:
+                capture_server.do_retire(card.box, card.index, {"reason": card.retire_reason})
+            trips += field(back, "state") == master.IDENTIFIED
         checks.equal(
             (trips, len(sold) > 0, len(retired) > 0),
             (len(sold) + len(retired), True, True),
@@ -6658,8 +6783,12 @@ def check_undo_until_built_on(checks: Checks) -> None:
             )
         live = next(c for c in cards if c.state == master.IDENTIFIED and c.box == 1)
         capture_server.do_move_card(1, live.index, {"capture_id": live.capture_id, "to_box": 2})
-        undone = capture_server.do_move_card(1, live.index, {"undo": True})
-        checks.equal(undone["to"], live.key, "and a fresh move on the demo round-trips")
+        undone = answers(
+            checks,
+            lambda: capture_server.do_move_card(1, live.index, {"undo": True}),
+            "a fresh move on the demo undoes",
+        )
+        checks.equal(field(undone, "to"), live.key, "and the card is back at its own key")
 
 
 # ---------------------------------------------------------------------------------- history

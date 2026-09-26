@@ -272,8 +272,8 @@ ruling.
 | Action | Built on when | The fix after that |
 |---|---|---|
 | Capture | Its sitting ends, or a run identifies it. A sitting ends at a 30-minute gap (`GAP_MINUTES`, D121, D164). "Undo just N" is permanent and asks first (Q2). | Manage box removes the card (D10 ruling 1). |
-| Sale on Inventory | Its photograph is reclaimed (D89), or its box is buried (D134). | "This card is still here" puts the card back. It does not touch any order. |
-| Sale on Orders | Its order ships or closes (`store/orders.py:is_terminal_status`), or as for Inventory. | The same "still here" press. The order keeps its shipped copy (D212). |
+| Sale on Inventory | Its photograph is reclaimed (D89), or its box is buried (D134). | "This card is still here" puts the card back. A shipped order re-points (the owner's ruling, 11.8). |
+| Sale on Orders | Its order ships or closes (`store/orders.py:is_terminal_status`), or as for Inventory. | The same "still here" press. The order keeps its count, and its line becomes a hand-fill (11.8). |
 | Sale on Cards to pull | The same as Orders. The Fulfiller keeps the fast path only (D5, D31). | The owner's press on Inventory. |
 | Retire | Its box is buried (D134). | None needed. Nothing downstream reads a retirement. |
 | Move | Either box changes: a capture, a sale, a retire or a move in either box. | A new move (the box map's Q4 default, RULINGS "Box map"). |
@@ -337,7 +337,7 @@ Capture is 50%, a wrong sale 30%, a wrong Review answer 20%. Pricing and move fo
 | UN-4 | Every sale undo on the demo refuses (`sold_origin_unknown`). | `scripts/demo-seed.py` logs no state line. | The seed logs the lines a real capture, answer and sale log. | Both | `scripts/demo-seed.py`, a demo self-test | None to the real store. | Every seeded card has an origin. Drop one line and the self-test goes red. | no |
 | UN-5 | Sale Undo dies with its toast. "No undo for this one." `U` does nothing. | `UNDO_WINDOW_MS` limits the row, the receipt and `U` on three screens. | Rank, not clock. The newest sale keeps Undo in its row and on the page. | Fast | `app/src/Inventory.tsx`, `Orders.tsx`, `Fulfillment.tsx`, their specs | None. Same route. | Undo still works after a faked 60 s. A newer sale moves it. | Q1 |
 | UN-6 | "slid in with its $ button exactly where I had just tapped". | A pull drops its `PickLine`. `drop()` does the same on `#/fulfillment`. | The sold copy keeps its place, and its control becomes Undo (D57). | Fast | `app/src/Orders.tsx`, `Fulfillment.tsx`, their specs | None. | A rect-diff after a pull: no other row moves (D118). | no |
-| UN-7 | A sale reverses after its order shipped, or after its photo went. | `_sell` checks state and history only. | Refuse the undo when built on. Add "This card is still here", with the ledger untouched. | Slow | `server/capture_server.py`, `store/orders.py`, `app/src/BoxBrowse.tsx`, `server.ts` | Yes. A new write. | Ship an order, then undo: a refusal. "Still here" restores the card, and the ledger holds. | no |
+| UN-7 | A sale reverses after its order shipped, or after its photo went. | `_sell` checks state and history only. | Refuse the undo when built on. Add "This card is still here". A shipped order's line re-points to a hand-fill (11.8). | Slow | `server/capture_server.py`, `store/orders.py`, `app/src/BoxBrowse.tsx`, `server.ts` | Yes. A new write. | Ship an order, then undo: a refusal. "Still here" restores the card, and the order keeps its count. | no |
 | UN-8 | Review retire says "Can be undone", and the card comes back on reload. | `do_queues` reads no card state. | A departed card owes no answer. Skip it in every open-entry read. | Both | `server/capture_server.py`, `app/src/ReviewQueue.tsx` (copy) | None. A read. | Retire from Review, then reload. The card is gone, and undo brings it back. | no |
 | UN-9 | The Review receipt is below the fold at 390, and its 20 px arrow fails. | The receipt sits under the answers, at `size="sm"`. | The page Undo (UN-10) is the door. The arrow meets the 40 px floor (D117). | Fast | `app/src/ReviewQueue.tsx`, its spec | None. | At 390, Undo is in view and 40 px or more. | no |
 | UN-10 | Undo looks different on every screen, and a phone loses it with the toast. | No shared primitive. Five `U` scopes. | One kit hook for `U`, and one Undo in `Page`'s toolbar, away from Send. | Fast | `app/src/kit/Page.tsx`, a kit hook, `kit.css`, `App.tsx` `SHORTCUTS`, `Gallery.tsx` | None. | One spec presses `U` on each screen. The kit check fails a screen that binds `U` itself. | no |
@@ -434,6 +434,22 @@ proves each one. Three choices the table left open are recorded here.
   `open: false` and no cards once the newest capture is more than 30 minutes old. The
   capture undo route reads the same rule, and refuses `capture_built_on` for a card outside
   the open sitting (the coordinator's word, 2026-09-25). The fix after that is Manage box.
+- **UN-14 review round.** A transplant now carries `moved_from`. The sitting read leaves out
+  tombstones and transplants. The capture undo refuses a transplant, so it cannot delete a
+  moved card or its photo. A tombstone's name is now `moved:<name>@<its key>`. A card moved
+  back, or on to a third box, now leaves distinct tombstones, and the UNIQUE index holds.
+  The card's own name is unchanged (D172). Older tombstones keep the bare
+  form, and the move undo reads both. A divider put in behind the transplant builds on the
+  move. A batch move is undone one card at a time, and only its last card is the newest, so
+  only that card can be undone. The others are moved back.
+- **"Still here" and the ledger: the owner's ruling, 2026-09-25, verbatim:**
+
+  ```
+  "Card back, order re-points"
+  ```
+
+  The behavior above stands. The card goes back. On a shipped order, the line keeps its
+  count and becomes a `sold_separately` hand-fill. The SKU's `sold_here` falls by one.
 
 ### 11.9 Lane C, as built (2026-09-25)
 

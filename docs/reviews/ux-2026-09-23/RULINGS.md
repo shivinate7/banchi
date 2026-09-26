@@ -611,3 +611,7 @@ On expiry: "Yes, until it's built on (Recommended)".
   here only". It keeps its confirm and stays permanent. It is the one exception to "Never
   ask". The confirm's words say plainly that the removal is permanent and deletes the photo
   (UN-3).
+- "This card is still here" on a shipped order (owner, 2026-09-25, verbatim): "Card back,
+  order re-points". The card goes back. The order line keeps its count and becomes a
+  `sold_separately` hand-fill, and the SKU's `sold_here` falls by one (UN-7,
+  `docs/specs/undo.md` 11.8).
