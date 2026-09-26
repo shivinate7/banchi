@@ -3720,36 +3720,49 @@ test('a SKU split across two stops does not advance early — the second stop ne
     },
   })
   const pulls = () => wire.filter((one) => one.path.endsWith('/orders/pull'))
-  /* THE BUTTON COUNT, NEVER THE WIRE ALONE (the same trap the toast/`U` case above names): a
-     press changes the count of Mark-sold buttons in the CURRENT pane the instant the state
-     update lands, so waiting for it before the next click is what keeps four sequential
-     presses from racing each other. */
+  /* UN-6 REBUILD (the Opus review round): the pane no longer advances itself between stops —
+     the sold copy's own row turns into Undo in place, and the operator steps on their own
+     press (J). This case used to assert the deleted auto-advance; it now asserts the per-stop
+     `satisfied` calculation walk-fix built (finding 4: a SKU split across two stops is judged
+     by THIS stop's own copies, never a store-wide tally) still holds, over the pull count and
+     the row that reads Undo, without depending on the pane switching on its own. */
+  const undoBtn = page.locator('.orders-card-pane').getByRole('button', { name: /^Undo/ })
   const markSold = page.locator('.orders-card-copy').getByRole('button', { name: 'Mark sold' })
   await expect(markSold).toHaveCount(1)
 
-  // James's own single copy — its own stop, fully satisfied on its own, so the pane switches to
-  // Konstantinos's own three, all still unsold.
+  // James's own single copy — its own stop, fully satisfied on its own.
   await markSold.first().click()
-  await expect(markSold).toHaveCount(3)
+  await expect(undoBtn).toBeVisible()
   await expect.poll(() => pulls().length).toBe(1)
   await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
 
-  // Two of Konstantinos's own three — NOT satisfied yet, so the pane must not advance to Riposte.
+  // The operator steps to Konstantinos's own stop — all three copies still unsold.
+  await page.keyboard.press('j')
+  await expect(markSold).toHaveCount(3)
+  await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
+
+  // Two of Konstantinos's own three sold, in place — the pane stays put either way.
   await markSold.first().click()
-  await expect(markSold).toHaveCount(2)
   await expect.poll(() => pulls().length).toBe(2)
   await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
   await markSold.first().click()
-  await expect(markSold).toHaveCount(1)
   await expect.poll(() => pulls().length).toBe(3)
   await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
 
-  // The THIRD of Konstantinos's own three — now the second stop is genuinely done, and the
-  // pane advances to Riposte, whose own single copy is the only Mark-sold button left.
+  // The THIRD of Konstantinos's own three — the second stop is genuinely done now, its own
+  // per-stop tally (finding 4) rather than a store-wide count of the SKU.
   await markSold.first().click()
-  await expect(markSold).toHaveCount(1)
   await expect.poll(() => pulls().length).toBe(4)
+  await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
+
+  // The operator steps to Riposte's own stop, whose one copy is the only Mark-sold left.
+  // `current` never moved off Konstantinos's FIRST row while the three sales landed (UN-6:
+  // selling never touches it), so this steps past his own other two rows first.
+  await page.keyboard.press('j')
+  await page.keyboard.press('j')
+  await page.keyboard.press('j')
   await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Riposte')
+  await expect(markSold).toHaveCount(1)
 })
 
 /* --------------------------------------------------------------------------------- the words */
