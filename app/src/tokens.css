@@ -316,17 +316,14 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* VARIANT B — brighter, more saturated accent + status. Surfaces untouched.
-     accent/ok/warn/danger/live all sat at S69-100% already (not desaturated), but at very
-     high lightness (55-78 L*) they read as pastel against the near-black ground. Each moves
-     down 11-19 L* points toward a punchier, more saturated-reading tone while staying at or
-     above AA 4.5:1 against --bn-surface (the harder of the two grounds) and --bn-accent-hover
-     keeps clearing >=7:1 under --bn-on-accent (DESIGN.md's PullConfirm floor). */
-  --bn-bg: #0c0e12;
-  --bn-surface: #14171c;
-  --bn-surface-2: #090b0e;
-  --bn-surface-3: #1b1f26;
-  --bn-surface-glass: rgba(20, 23, 28, 0.72);
+  /* VARIANT C — A's surface ladder + B's accent/status, plus a warmer ground.
+     Neutrals move from a cool H~218-220 to a warm H~30 (a low-saturation warm graphite
+     instead of blue-black), on top of A's deeper surface steps. */
+  --bn-bg: #0c0b0a;
+  --bn-surface: #26221f;
+  --bn-surface-2: #050504;
+  --bn-surface-3: #322d28;
+  --bn-surface-glass: rgba(38, 34, 31, 0.72);
   --bn-hover: rgba(255, 255, 255, 0.04);
 
   --bn-ink: #eef0f4;
@@ -370,10 +367,9 @@
   --bn-shadow-accent: 0 8px 28px -8px rgba(97, 118, 255, 0.55);
 
   --bn-btn-bg: var(--bn-surface-3);
-  --bn-btn-bg-hover: #262b34;
+  --bn-btn-bg-hover: #443c34;
   --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
 }
-   follows the POINTER, not the width: an iPad in portrait is 820px wide and all thumb. */
 /* The gap above a page's title follows the page's own side inset: 16px on a phone. */
 @media (max-width: 767px) {
   :root { --bn-page-top: var(--bn-4); }
