@@ -297,9 +297,11 @@ export function standing(input: StandingInput): Standing | null {
   /* BEHIND THE LINE: only what the spine does not already draw (the home lane's cut,
      2026-09-24). A failed read of typed prices, and the send rank's cards owing a price or
      runs owing a cut-off (b-pricing R4, R6-4, R8-1). The spine's own figures (to pull, to
-     review, runs to price, parked) never repeat here. */
-  const behind: string[] = []
-  if (bookFailed) behind.push('Your typed prices could not be read, so these counts may be off')
+     review, runs to price, parked) never repeat here. THE FAILED-READ NOTE RIDES EVERY RANK
+     THAT DRAWS BEHIND THE LINE, ranks 5 and 6 too, which draw their own list (R8 review, LOW
+     note a). */
+  const unread: string[] = bookFailed ? ['Your typed prices could not be read, so these counts may be off'] : []
+  const behind: string[] = [...unread]
   const add = (figure: number | null, label: string, when: boolean) => {
     if (when) behind.push(figure === null ? label : `${figure.toLocaleString()} ${label}`)
   }
@@ -461,7 +463,7 @@ export function standing(input: StandingInput): Standing | null {
       say: [t(` — ${where} ${live.length === 1 ? 'is' : 'are'} identifying.`)],
       href: '#/runs',
       kbd: ',R',
-      behind: ['Nothing is waiting on you.'],
+      behind: [...unread, 'Nothing is waiting on you.'],
       problem,
       running: true,
     }
@@ -491,7 +493,7 @@ export function standing(input: StandingInput): Standing | null {
       ],
       href: '#/runs?state=captured',
       kbd: ',R',
-      behind: [],
+      behind: unread,
       problem,
       running: false,
     }

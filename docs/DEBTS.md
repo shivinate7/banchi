@@ -92,6 +92,7 @@ DEBT31 Twelve decisions are cited by path, one of them dead, and the path guard 
 DEBT32 The archive sweep stays a press, and the owner intends to schedule it eventually
 DEBT33 An answered queue entry can never resurface, even when it is wrong
 DEBT34 The catalogue cache never expires, on a membership claim this store cannot re-check on its own
-DEBT35 emit exits differently on one run and several runs
+DEBT35 ~~emit exits differently on one run and several runs~~ — CLOSED 2026-09-25, fixed as recommended
 DEBT36 A layout read taken while the page still moves is wrong
+DEBT37 under `--cap`, a pending copy and an unseen live copy can both be out
 ```

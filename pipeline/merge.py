@@ -190,6 +190,12 @@ def _merged_match(sku: str, legs: Sequence[Leg]) -> join.SkuMatch:
             if all(leg.match.live_out is None for leg in legs)
             else max(leg.match.live_out or 0 for leg in legs)
         ),
+        # THE GUARD'S READING, the same on every leg (`cli/cmd_emit.py:_apply_guard`).
+        guard_live=(
+            None
+            if all(leg.match.guard_live is None for leg in legs)
+            else max(leg.match.guard_live or 0 for leg in legs)
+        ),
     )
 
 
@@ -306,6 +312,11 @@ NO_PRICE_YET = "no market price, and no price typed yet"
 #: R3-3). One sentence for the single-run path and the merged one, which both exit 1 on it,
 #: and the marker the send route reads to answer `needs_price` rather than `nothing_to_send`.
 ONLY_UNPRICED = "nothing to send: every card left needs a price first"
+
+#: What a send says when no card it matched adds a copy, and no price is owed (DEBT35). One
+#: sentence for the single-run path and the merged one. Both exit 1 on it, and both name each
+#: card's own reason under it. The send route reads it to answer `nothing_to_send`.
+NOTHING_NEW = "nothing new to send: every card left is already at TCGplayer, held back, or has no room"
 
 #: What emit names a card that is withheld or answered `unlisted`, on both send paths.
 HELD_BACK = "held back or answered unlisted"

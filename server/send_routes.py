@@ -899,7 +899,7 @@ def _empty_send_refusal(console: str, trimmed: list, step: str, code: int = 1) -
             f"Every card on this list needs a price first, so nothing was {step}. Type a "
             f"price on each, then send.{held}",
         )
-    if code == 0 or trimmed or "nothing to write" in console or "nothing new" in console:
+    if code == 0 or trimmed or merge.NOTHING_NEW in console:
         return PipelineRefusal(
             HTTPStatus.CONFLICT,
             "nothing_to_send",

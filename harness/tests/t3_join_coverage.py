@@ -370,15 +370,17 @@ def _resolve_in(
     return resolve.load(run, export_path, live_cap=live_cap)
 
 
-def _command(c, *argv):
-    """One `./pkmnscan` subcommand through the real dispatch. Returns what it printed."""
+def _command(c, *argv, exits=0):
+    """One `./pkmnscan` subcommand through the real dispatch. Returns what it printed.
+
+    `exits=1` is for an emit that adds nothing, which is refused on both paths (DEBT35)."""
     from cli import __main__ as entry
 
     buffer = StringIO()
     with redirect_stdout(buffer), redirect_stderr(buffer):
         code = entry.main(list(argv))
     text = buffer.getvalue()
-    c.ok(code == 0, f"`pkmnscan {argv[0]}` exits 0", f"exit {code}\n{text}")
+    c.ok(code == exits, f"`pkmnscan {argv[0]}` exits {exits}", f"exit {code}\n{text}")
     return text
 
 
@@ -782,7 +784,7 @@ def _check_committed_from_counts(c, export) -> None:
         # CAPTURED BEFORE THE SECOND EMIT — the claim below is that this file is not touched,
         # which cannot be checked against a file the assertion's own command rewrote.
         sent = run.path(runs.IMPORT_MERGED).read_bytes()
-        _command(c, "emit", str(run.directory), "--cap", "4")
+        _command(c, "emit", str(run.directory), "--cap", "4", exits=1)
 
         after = Store().read().inventory.listing_for(SEVEN_COPY_SKU)
         c.equal(

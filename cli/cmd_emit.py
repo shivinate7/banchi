@@ -480,6 +480,13 @@ def _apply_guard(guard, matches_by_sku, inventory):
         held[sku] = sendguard.on_hand(inventory.copies_on_hand(sku), inventory.cards, keys)
         rooms[sku] = sendguard.room(live.get(sku, 0), held[sku])
         for match in matches:
+            # THE GUARD'S READING IS A LIVE READING, SO `--cap` COUNTS IT (D7: "at most N
+            # copies LIVE"). The cap is spent against `copies_out`, which read the store and
+            # the join's export. A guard file that shows more live copies than either raised no
+            # bound, so `--cap 1` over one live copy sent one more. `SkuMatch.guard_live` takes
+            # the larger of the readings, and DEBT37 says what that
+            # costs. It is its own field, so `_would` still measures the send without the guard.
+            match.guard_live = live.get(sku, 0)
             if match.asked is None or match.asked > rooms[sku]:
                 match.asked = rooms[sku]
     return {"name": name, "live": live, "held": held, "rooms": rooms}
@@ -663,8 +670,10 @@ def _zero_rows_single(resolved, priced, changes, args, say):
 
 
 def _would(match, typed) -> int:
-    """What one match adds with the operator's own figure applied and no guard."""
-    room = match.room
+    """What one match adds with the operator's own figure applied and no guard. The room
+    WITHOUT the guard's reading: under `--cap` that reading closes the cap too, and measured
+    with it the guard's trim read as nothing to trim (the lane-end review of send-fixes)."""
+    room = match.unguarded_room
     asked = typed.get(match.sku)
     return room if asked is None else max(0, min(asked, room))
 
@@ -1668,15 +1677,19 @@ def _after_single(
         # `sub_threshold` or a price and pressed again is owed that sentence: the change
         # cannot reach TCGplayer through this run, because these copies have already been
         # sent under the old answer.
+        #
+        # EXIT 1, AS THE MERGED PATH DOES, WITH ITS SENTENCE (DEBT35). This branch exited 0 and
+        # said "nothing new to send" while the merged path exited 1 and said "nothing to write",
+        # so a shell caller got two answers to one question. The `no room` list above names
+        # each card's own reason, as the merged path's list does.
         sent = runs.open_run(run_dir.directory).emitted
-        say("nothing new to send — every copy this run matched is already at "
-            f"{master.PUSHED}.")
+        say(merge.NOTHING_NEW)
         if sent:
             say(f"      {listed_names} is unchanged, from the emit at {sent.get('at', 'an earlier run')}.")
             say("      A price changed after an emit cannot travel this road; the copies "
                 "are already sent.")
             say(f"next: pkmnscan reconcile {run_dir.directory} <staged-export.csv>")
-        return 0
+        return 1
     say(f"next: import {listed_names} to Staged in TCGplayer, "
         f"then Export From Staged and run")
     say(f"      pkmnscan reconcile {run_dir.directory} <staged-export.csv>")
@@ -1933,7 +1946,7 @@ def run_merged(args, say) -> int:
                 if why == merge.LIVE_ALREADY
             ]
             return _say_empty(left_out, cut_back, needs_price, live_names, say)
-        say("nothing to write — every matched SKU is held back, unlisted, or has no room")
+        say(merge.NOTHING_NEW)
         for sku, why in left_out:
             say(f"  {sku} — {why}")
         return 1
