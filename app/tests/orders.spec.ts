@@ -2312,7 +2312,14 @@ function sortFixturePayload(): OrdersPayload {
  *  anywhere. Reused as-is for BOTH the walk's own fetch (whichever buyer lands first) and the
  *  drawers sort's own fetch — the same plan answers every `/orders/walk-plan` call. */
 function sortWalkPlan(): WalkPlan {
-  const refOf = (b: { row: OrderRow }): WalkPlanRef => ({ key: b.row.key, number: b.row.number, buyer: b.row.buyer })
+  // `owed` (walk-fix): what this order still owes of the take's card, the same figure the
+  // fixture's own resolved line carries.
+  const refOf = (b: { row: OrderRow; resolved: ResolvedOrder }): WalkPlanRef => ({
+    key: b.row.key,
+    number: b.row.number,
+    buyer: b.row.buyer,
+    owed: b.resolved.outstanding,
+  })
   return walkPlanOf(
     [
       walkPlanStop({
