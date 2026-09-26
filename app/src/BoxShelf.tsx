@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
-import { Button, FailureNotice, Icon, IconButton, Segmented } from './kit'
+import { Button, FailureNotice, Icon, IconButton, Segmented, useUndoHotkey } from './kit'
 import { Page } from './kit/Page'
 import { describeFailure, getBoxes, getInventoryBox, moveRange, moveSections, undoSectionMove } from './server'
 import type { Failure } from './server'
@@ -259,23 +259,24 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
     }
   }, [receipt, undone, busy, load])
 
-  /* Esc puts the section down. U undoes the move the receipt shows. Both yield to typing. */
-  const keys = useRef({ putDown, undo, lifted, receipt })
-  keys.current = { putDown, undo, lifted, receipt }
+  /* Esc puts the section down, and yields to typing. */
+  const keys = useRef({ putDown, lifted })
+  keys.current = { putDown, lifted }
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) return
       if (event.key === 'Escape' && keys.current.lifted !== null) {
         event.preventDefault()
         keys.current.putDown()
-      } else if ((event.key === 'u' || event.key === 'U') && keys.current.receipt !== null) {
-        event.preventDefault()
-        void keys.current.undo()
       }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [])
+
+  /* U undoes the move the receipt shows (finding #11, the Opus review round): the one `U`
+   * primitive, `kit/undo.ts`'s `useUndoHotkey`, in place of a second hand-rolled listener. */
+  useUndoHotkey(() => (receipt === null ? null : () => void undo()))
 
   /* THE POINTER DRAG. The lifted block follows nothing on screen (a press never moves the rest
      of the page, D118); the gap under the pointer opens instead, and the release drops there. */
