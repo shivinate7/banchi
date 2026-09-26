@@ -3020,16 +3020,24 @@ export function CaptureScreen() {
         renumbered,
         code: null,
       })
+      /* THE NEW DIVIDER'S OWN KEY, for `pickSection` and for `U`'s own aim. `opened.div` is
+       * what a current server always sends (subbox-capture.md 1.1) and is read first. The
+       * fallback — `record.sections`' own last entry, the RAW divider list `BoxRecord.sections`
+       * carries — is ONLY a safe stand-in when `after` was omitted (S at the back, the one
+       * case that list's tail is guaranteed to name); it predates this lane and stays for a
+       * fixture or an older server that has not grown `sections_detail[].div` yet. A middle
+       * S with no `div` in the response has no reachable key at all — `U` then falls through
+       * to the ordinary capture undo, same as a truly divider-less answer. */
+      const backDiv = record.sections[record.sections.length - 1]
+      const newDiv = opened?.div ?? (priorPicked === null && backDiv !== undefined ? String(backDiv) : null)
       // THE SCREEN PICKS THE NEW SECTION, exactly as it always has — only now that is not
       // always the last one.
-      if (opened !== null) pickSection(opened.div ?? null)
+      if (opened !== null) pickSection(newDiv)
       // UN-15: which divider `U` takes back out, and when it went in — its OWN key, never
       // the box's last one: an S in the middle puts its divider somewhere past the front,
       // and the keyed route (`ux/divider-fix`) is what `undoDivider` needs to reach it.
-      // `closeSection` now REQUIRES a key, so this is only set when the response actually
-      // carried one — an older server or a fixture with no `div` field leaves `U` to fall
-      // through to the ordinary capture undo instead.
-      if (opened?.div != null) setPendingDivider({ box, div: opened.div, at: Date.now() })
+      // `closeSection` now REQUIRES a key, so this is only set when one was found above.
+      if (newDiv !== null) setPendingDivider({ box, div: newDiv, at: Date.now() })
       // A mid-box S renumbers every later section, and a shot's label was rendered against
       // the layout before it (D58) — reload the sitting and patch the strip by key.
       if (renumbered !== null) void refreshShotLabels()
