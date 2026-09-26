@@ -5086,6 +5086,21 @@ COMPONENTS = [
                 # D70: a live code's whole identity is its QR, decoded rather than assumed.
                 "governed_by": ["D70"],
             },
+            "match-selftest.py": {
+                "does": "FLT-06/04's one forgiving matcher, server side (UX-173). "
+                        "`server/match.py` against every row of "
+                        "`app/src/kit/match.cases.json` (the filtering lane's own case "
+                        "table); `capture_server._match_rank`, direct, for the number "
+                        "tier's canonical comparison and its accent fold; "
+                        "`capture_server.do_search`, end to end against a throwaway store, "
+                        "which is the only way to see the FTS5 candidate-step defect — a "
+                        "bare `54/132` or a hyphenated `heimerdinger-inventor` never "
+                        "reaching `_match_rank` at all. `PKMNSCAN_HOME` is repointed to a "
+                        "temp directory per case, so the operator's own store is never "
+                        "opened. Pure Python plus the project's own packages, no network — "
+                        "in `make check`, gated by D18 only because it writes a temp store.",
+                "governed_by": ["D166", "D213", "D271"],
+            },
 
             # ---- the render loop docs/DESIGN.md calls mandatory ----
             "screenshot.sh": {
@@ -5340,7 +5355,7 @@ COMPONENTS = [
                                 "D159", "D165", "D166", "D168", "D172", "D174", "D183", "D189",
                                 "D191", "D192", "D193", "D196", "D203", "D212", "D213", "D219",
                                 "D225", "D227", "D251", "D252", "D259", "D262", "D264", "D265",
-                                "D268", "D273", "D-sealed-boxes-removed", "D-sales-rows-by-sku"],
+                                "D268", "D271", "D273", "D-sealed-boxes-removed", "D-sales-rows-by-sku"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -5637,6 +5652,30 @@ COMPONENTS = [
                         "PKMNSCAN_TCG_ORDERS_URL aims it at a loopback socket the way T7 "
                         "already aims the export. PKMNSCAN_TCG_SELLER_KEY must be in .env or "
                         "a live fetch answers 403.",
+            },
+            "match.py": {
+                "does": "the one forgiving matcher (FLT-06/04, UX-173), ported from "
+                        "`app/src/kit/match.ts` — NFKC/NFKD accent folding, canonical "
+                        "collector-number comparison (zero padding and a hyphen standing "
+                        "for the slash), SKU-prefix and box-name matching, stdlib only "
+                        "(`unicodedata` stands in for the `regex` package's `\\p{L}`/`\\p{N}` "
+                        "classes, which `requirements.txt`'s own \"Deliberately absent\" "
+                        "section is why nothing new was added). `capture_server.py:_match_rank` "
+                        "calls its lower-level primitives to fix two defects a raw "
+                        "`.lower()`/`in` comparison had: a bare `54` wrongly matching `154/200`, "
+                        "and an accented name (`Flabébé`) not answering its unaccented query "
+                        "even once the FTS5 index had already surfaced it as a candidate. "
+                        "`_fts_query` calls its `canonical_number`/`_hyphen_to_slash` to widen "
+                        "the FTS5 CANDIDATE query itself, which is the half a rank fix alone "
+                        "cannot reach — the index's own token is always zero-padded, so a bare "
+                        "`54/132` or a hyphenated `054-132` never prefix-matched anything.",
+                "governed_by": ["D166", "D213", "D271"],
+                "tested_by": ["T7"],
+                "note": "`scripts/match-selftest.py` runs every row of "
+                        "`app/src/kit/match.cases.json` through this module directly, proving "
+                        "it agrees with the TypeScript original the filtering lane wrote the "
+                        "case table for. `make match-selftest`, wired into `make check`, not a "
+                        "harness test — no `Tn` id names it.",
             },
         },
     },

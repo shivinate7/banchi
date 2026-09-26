@@ -289,7 +289,9 @@ import os
 import re
 import signal
 import socket
+import sqlite3
 import sys
+import unicodedata
 import concurrent.futures
 import threading
 import time
@@ -313,6 +315,7 @@ from pipeline import routing  # noqa: E402
 from pipeline import skus as sku_fill  # noqa: E402
 from pipeline import walkplan  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
+from server import match  # noqa: E402
 from store import Store, db, files, master, numbers, photos, queues  # noqa: E402
 from store import orders as order_store  # noqa: E402
 
@@ -2090,6 +2093,9 @@ def _optional_section_names(payload: dict) -> Optional[Dict[int, Optional[str]]]
     return out
 
 
+_QUERY_LENGTH_CAP = 200
+
+
 def _require_query(query: str) -> str:
     """The search text, or a refusal. Whitespace is not a search.
 
@@ -2097,6 +2103,21 @@ def _require_query(query: str) -> str:
     that calls this draws a row per copy with a photo behind each one, and "the operator
     cleared the box" is not a request for all of it — `store/queues.py` makes the same call
     for the same reason when it declines to treat an empty queue as a full one.
+
+    A LONG `q` IS ALSO REFUSED (F1, the Opus review, 2026-09-25; NOT a full defense on its
+    own — `do_search`'s own candidate gathering now dedupes and bounds the TERM COUNT too,
+    R1, round-4 Opus review, 2026-09-25). `_QUERY_LENGTH_CAP` still bounds the wire cost of
+    any single request, the same way a body-size limit bounds a POST regardless of how
+    cheap the handler behind it became. 200 characters is generous against every real field
+    this route ever compares against (`store/master.py:Card`'s longest text field, a note,
+    and the longest order label this repo has ever composed both fit inside a tenth of it).
+
+    NFKC BEFORE THE LENGTH CHECK, NEVER AFTER (R2, round-4 Opus review, 2026-09-25). A
+    single codepoint can expand under NFKC — `"ﷺ"` (a compatibility ligature) becomes
+    about 18 characters — so `"ﷺ" * 200` is 200 characters here and about 3,600 once
+    normalized. `do_search` used to normalize AFTER this function ran, which let the cap be
+    typed around entirely. Normalizing HERE means the cap bounds what every downstream
+    reader (`_fts_query`, `match.match_query`) actually sees, not what arrived on the wire.
     """
     text = (query or "").strip()
     if not text:
@@ -2104,6 +2125,28 @@ def _require_query(query: str) -> str:
             HTTPStatus.BAD_REQUEST,
             "query_required",
             "Send `q` — a name, a collector number, a SKU or a set hint to look for.",
+        )
+    text = unicodedata.normalize("NFKC", text)
+    if len(text) > _QUERY_LENGTH_CAP:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "query_too_long",
+            f"`q` is {len(text)} characters; the limit is {_QUERY_LENGTH_CAP}. Search for "
+            "a name, a collector number, a SKU or a set hint, not a whole sentence.",
+        )
+    if "\x00" in text:
+        # F6, round-3 Opus review, 2026-09-25. `GET /search?q=%00` (and `a%00b`) 500'd:
+        # SQLite's C string binding stops at the first NUL, so a Python string carrying
+        # one truncates on its way into the driver while `sqlite3` itself still expects
+        # the ORIGINAL length, and the mismatch surfaces as `OperationalError:
+        # unterminated string` from deep inside `_fts_query`'s own MATCH — uncaught,
+        # because a NUL byte is not a shape `_require_query` had ever named. No query may
+        # give a 500; this refuses the one byte that can, rather than trying to quote or
+        # strip it out of every SQL string this route ever builds.
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "query_invalid",
+            "`q` may not contain a NUL byte.",
         )
     return text
 
@@ -10629,7 +10672,30 @@ def _match_rank(card: master.Card, query: str) -> Optional[int]:
     write-only. It is deliberately not a prefix or exact rank: it is prose a human typed
     ("blue-eyes, japanese"), not an identifier, and ranking it beside a collector number
     would let a chatty note outrank a real card's own name.
+
+    THE NUMBER TIER AND THE TEXT FOLD BOTH GO THROUGH `server/match.py` (FLT-06/04, UX-173),
+    A CORRECTION AGAINST THE ORIGINAL, WHICH COMPARED RAW LOWER-CASED STRINGS AND WAS WRONG
+    two ways at once. First, `query in field.lower()` is a bare substring test, so a query of
+    `54` found `154/200` — exactly what `kit/match.ts`'s rule 4 forbids ("never a substring").
+    `match._number_match` compares CANONICAL forms instead, so a bare token only ever matches
+    a number's own first part, never an unrelated run of digits inside a longer one; it also
+    folds a hyphen standing for the slash (`054-132` reads as `054/132`), which the raw
+    substring test could never do because the literal characters disagree. Second, `.lower()`
+    does not fold a combining mark, so a query of `flabebe` (typed without the accent) never
+    found `Flabébé` even though the FTS5 candidate step upstream — `unicode61
+    remove_diacritics 2` — had already surfaced the row as a candidate; the rank step then
+    silently dropped it. `match.fold_text` NFKD-folds every field the same way the index
+    does, so the two agree. SKU stays a bare substring on purpose (see the header above this
+    function): a `TCGplayer Id` is unique, so where its one group sorts costs nothing.
     """
+    # COUNTED HERE, NOT AT THE CALL SITE (F6-6's own robustness gap, round-8 Opus
+    # review, 2026-09-25). A call-site counter — `do_search` incrementing before it
+    # calls this function — only proves the CALLER'S OWN bookkeeping matches its OWN
+    # call, which a mutation of the caller's structure can silently defeat while this
+    # function still runs exactly as often. Counting inside the callee is robust to
+    # ANY caller-side mutation: the counter fires when `_match_rank` actually runs,
+    # never when some other line of code claims it will.
+    _SEARCH_WORK_COUNTERS["match_rank_calls"] += 1
     name = str(card.name or "")
     number = str(card.number or "")
     key = _card_number_key(card)
@@ -10640,22 +10706,118 @@ def _match_rank(card: master.Card, query: str) -> Optional[int]:
     # raw field is still here, and the display form joins it.
     shown = _number_display(card) or ""
 
-    if query in {number.strip().lower(), key.lower(), shown.lower()} - {""}:
+    # THE NUMBER FIELDS ARE COMPARED TWO WAYS, BOTH EXACT, NEITHER A BARE SUBSTRING — so
+    # both are checked here and the fields are left OUT of the plain substring loop below.
+    # FIRST, THE LITERAL STRING, CASE-FOLDED ONLY — this is what a code card's redemption
+    # code needs (C8, `codes/ledger.py`): `GXR-7Q?d-K3M-9TT` is not a collector number and
+    # `canonical_number` folds it into a shape `_is_number_shape` refuses outright, so the
+    # structural check below would silently drop it. A card whose OWN number is typed back
+    # exactly must always match, whatever shape that number is.
+    numbers = tuple(v for v in (number, key, shown) if v)
+    if query in {n.strip().lower() for n in numbers}:
         return _RANK_EXACT_NUMBER
-    if name.lower().startswith(query):
+    # SECOND, THE CANONICAL COLLECTOR-NUMBER FORM (UX-173) — a bare `query in field.lower()`
+    # over `number`/`key`/`shown` is exactly the bug rule 4 forbids (`54` finding `154/200`);
+    # `match._number_match` compares canonical forms instead, so a bare token only ever
+    # matches a number's own first part, and it folds a hyphen standing for the slash.
+    number_parts = [match._number_parts(match.canonical_number(n)) for n in numbers]
+    if match._number_match(query, number_parts):
+        return _RANK_EXACT_NUMBER
+    folded_query = match.fold_text(query)
+    if folded_query and match.fold_text(name).startswith(folded_query):
         return _RANK_NAME_PREFIX
-    for field in (
-        name,
-        number,
-        str(card.sku or ""),
-        str(card.set_hint or ""),
-        str(card.note or ""),
-        key,
-        shown,
-    ):
+    for field in (name, str(card.sku or ""), str(card.set_hint or ""), str(card.note or "")):
+        if folded_query and folded_query in match.fold_text(field):
+            return _RANK_SUBSTRING
         if query in field.lower():
             return _RANK_SUBSTRING
     return None
+
+
+_BARE_NUMBER_HEAD = re.compile(r"^(\d{1,2})(/.*)?$")
+
+
+def _zero_padded_variant(term: str) -> Optional[str]:
+    """`54` -> `054`, `54/132` -> `054/132`, or None where the term is not a bare number
+    typed without ITS OWN leading zeros.
+
+    `number_key` (`store/db.py:_add_search_index`) is always composed through
+    `store.numbers.join_key`, which is `zfill(3)(number) + "/" + printed_total` — unconditionally,
+    every game, because `zfill` on a string already three characters or longer is a no-op
+    (D76's per-game width rule governs what `join.py:number_index_key` compares on the
+    JOIN, never this — `store/numbers.py`'s own header: "Fuzzy '54' to '054' is fine in
+    SEARCH, and must never feed the join"). So the FTS5 index never carries a token that
+    starts with a bare 1-2-digit run; this widens the CANDIDATE query to the padded form the
+    index actually holds, the same zfill(3), never a fourth digit or more.
+    """
+    found = _BARE_NUMBER_HEAD.match(term)
+    if not found:
+        return None
+    digits, rest = found.group(1), found.group(2) or ""
+    return digits.zfill(3) + rest
+
+
+def _fts_query_variants(term: str) -> List[str]:
+    """Every SINGLE-TOKEN spelling of `term` that should reach the FTS5 candidate step
+    (UX-173, amended S2): the term itself — WITH A LEADING `#` STRIPPED FIRST, if it has
+    one — a hyphen standing for the collector-number slash (`054-132` -> `054/132`), and
+    each of those zero-padded (`54/132` -> `054/132`). Order-preserving and deduplicated,
+    so a term with no number shape at all still returns exactly `[term]`. See
+    `_fts_term_alternatives` for the hyphen-as-word-break case, which is not a single token
+    and does not belong in this list.
+
+    THE LEADING `#` NEVER REACHES THE INDEX (S2, the Opus review, 2026-09-25). `#54` found
+    nothing, because no token the index holds starts with `#` — `unicode61` treats it as an
+    ordinary separator (it is not one of `tokenchars`'s `/-`), so `#54` and `54` tokenize
+    identically at INDEX time and only the QUERY side still carried the `#`, defeating its
+    own prefix match. `#` names the number the same way `match.py:_number_match`'s own
+    leading-`#` rule already reads it (`_match_rank` has always trusted that rule once a
+    candidate reaches it); stripping it here just lets the SAME row become a candidate in
+    the first place. `match._number_match` still runs on the ranking side unchanged and
+    still accepts a bare digit term with no `#` at all, so this never widens what `#`
+    itself is allowed to mean.
+    """
+    # A plain `dict` keeps insertion order (Python 3.7+) and is used as an ordered set —
+    # `_fts_query`'s own OR clause must not repeat a spelling.
+    seen: Dict[str, None] = {}
+    bare = term[1:] if term.startswith("#") and len(term) > 1 else term
+    for candidate in (term, bare, match._hyphen_to_slash(bare)):
+        seen.setdefault(candidate, None)
+    for candidate in list(seen):
+        padded = _zero_padded_variant(candidate)
+        if padded:
+            seen.setdefault(padded, None)
+    return list(seen)
+
+
+def _fts_quote(term: str) -> str:
+    """One term, quoted and made a prefix — the one escaping rule `_fts_query` states."""
+    return '"' + term.replace('"', '""') + '"*'
+
+
+def _fts_term_alternatives(term: str) -> List[str]:
+    """Every standalone FTS5 clause `term` should try, ORed together (UX-173): each single
+    token from `_fts_query_variants`, quoted, PLUS — where `term` carries a hyphen AS A
+    WORD BREAK rather than a digit-to-digit separator — the hyphen split into its own words,
+    each still required (`heimerdinger-inventor` finds a name the tokenizer indexed as TWO
+    words, `heimerdinger` and `inventor`, because `-` is a `tokenchars` character and the
+    literal hyphenated token is never one the index holds).
+
+    A DIGIT-ADJACENT HYPHEN IS NOT ALSO SPLIT HERE, so `054-132` contributes `("054-132"*
+    OR "054/132"*)` from the variants above and not a THIRD alternative `("054"* "132"*)` —
+    the number tiers already reach it more precisely (`_number_match` compares canonical
+    forms), and a generic AND-of-halves would let `054-132` also match any row carrying
+    `054` and `132` as two unrelated words, which is not what a person typing a card number
+    asked for.
+    """
+    clauses = [_fts_quote(v) for v in _fts_query_variants(term)]
+    words = [w for w in term.split("-") if w]
+    if len(words) > 1 and not any(w.isdigit() for w in words):
+        clauses.append("(" + " ".join(_fts_quote(w) for w in words) + ")")
+    seen: Dict[str, None] = {}
+    for clause in clauses:
+        seen.setdefault(clause, None)
+    return list(seen)
 
 
 def _fts_query(text: str) -> str:
@@ -10680,12 +10842,424 @@ def _fts_query(text: str) -> str:
     no attempt to tokenize the way FTS5 itself would (e.g. `4/102` splitting is FTS5's
     tokenizer's job, not this function's); this function's only job is turning a sentence
     into an AND of prefix terms.
+
+    A TERM WITH A NUMBER SHAPE OR A HYPHEN BECOMES AN OR OF ITS SPELLINGS, NOT ONE PREFIX
+    (UX-173, a CORRECTION against the original playbook, which quoted the bare term and was
+    wrong two ways at once. The index's own number token is always zero-padded
+    (`number_key`'s `zfill(3)`), so a bare `54/132` or a hyphenated `054-132` never
+    prefix-matched anything. And a hyphenated NAME (`heimerdinger-inventor`) is one token to
+    the index too — `-` is a `tokenchars` character — while the field it is meant to find
+    (`Heimerdinger, Inventor`) tokenizes on the comma into two separate words; the literal
+    hyphenated token never matched either. Both measured directly, before this fix:
+    `do_search` answered empty for both. `_fts_term_alternatives` is the widening, per term;
+    parenthesised so the per-term OR does not leak into the AND between terms.
+    Accents need no widening here: `store/db.py:_FTS_TOKENIZE` is `unicode61
+    remove_diacritics 2`, which folds the query side exactly as it folds the index — the
+    accent bug UX-173 also names is entirely in `_match_rank`'s own field comparison, fixed
+    there.
     """
     terms = text.split()
     if not terms:
         return ""
-    escaped = ('"' + term.replace('"', '""') + '"*' for term in terms)
-    return " ".join(escaped)
+    clauses = []
+    for term in terms:
+        alternatives = _fts_term_alternatives(term)
+        clauses.append(alternatives[0] if len(alternatives) == 1 else "(" + " OR ".join(alternatives) + ")")
+    # EXPLICIT `AND`, NEVER A BARE SPACE (S1, the Opus review, 2026-09-25). FTS5's bareword
+    # join IS an implicit AND between two plain terms, but it REFUSES that same join the
+    # moment either side is a parenthesized group: `("54"* OR "054"*) "132"*` is a syntax
+    # error near the second token, and so is the reverse order — measured directly against
+    # `sqlite3`'s own fts5 module, both orders. Any term whose own alternatives outnumber
+    # one (a 1-2 digit number, or a hyphen `_fts_term_alternatives` also splits on) turns
+    # its clause into such a group, so a plain `" ".join` broke every multi-word query
+    # where ANY word needed a widened spelling: `54 132`, `4 102`, `Ho-Oh ex`, `ex ho-oh`,
+    # `pikachu 54`, `25 pikachu`, `porygon-z v`, `x 1-2`. `AND` written out is the exact
+    # same operator FTS5's own whitespace already meant, so this changes no query's answer
+    # — it only stops the ones that were 500ing.
+    interpretations = [" AND ".join(clauses)]
+    # A SECOND INTERPRETATION, ONLY FOR A TWO-TERM QUERY WHOSE SECOND WORD IS BARE DIGITS
+    # (S2, UX-173 amended, the Opus review, 2026-09-25). `swsh 050` names ONE number the
+    # index holds as ONE token (`swsh050` — nothing glues a set-code prefix to its digits
+    # the way `/` or `-` does, so `tokenchars` never sees two), and the AND-per-term
+    # interpretation above can never find it: neither `swsh`* nor `050`* alone is a prefix
+    # of a token that starts with neither. `match.py:_pair_match` already states which two
+    # spellings are worth trying; this offers the SAME pairing as an ALTERNATIVE candidate
+    # reading, an OR beside the first, never a replacement — `eiscue 044` (a name and a
+    # SEPARATE number field) still finds its card through the FIRST interpretation, because
+    # `match.match_query` (`do_search`'s own decisive check, once a candidate is in hand)
+    # is what picks the real answer between two readings that both reached it.
+    if len(terms) == 2 and match._DIGITS_ONLY.match(terms[1]):
+        pair = _fts_pair_alternatives(terms[0], terms[1])
+        if pair:
+            interpretations.append(pair)
+    if len(interpretations) == 1:
+        return interpretations[0]
+    return " OR ".join("(" + i + ")" for i in interpretations)
+
+
+def _fts_pair_alternatives(left: str, right: str) -> Optional[str]:
+    """The glued-number reading of two adjacent terms (S2, UX-173 amended): concatenated
+    and slash-joined, zero-padded on either side — the same spellings
+    `match.py:_pair_match` tries, one level earlier so the CANDIDATE step can even find the
+    row for `_match_rank`/`match.match_query` to then confirm or reject precisely. Never
+    fires for an empty `left` — `query_tokens` already drops an empty token before either
+    side of a pair reaches this."""
+    if not left:
+        return None
+    lefts = {left}
+    left_padded = _zero_padded_variant(left)
+    if left_padded:
+        lefts.add(left_padded)
+    rights = {right}
+    right_padded = _zero_padded_variant(right)
+    if right_padded:
+        rights.add(right_padded)
+    forms: Dict[str, None] = {}
+    for one in lefts:
+        for two in rights:
+            forms.setdefault(one + two, None)
+            forms.setdefault(one + "/" + two, None)
+    return "(" + " OR ".join(_fts_quote(f) for f in forms) + ")"
+
+
+_LEADING_SLASH_DIGITS = re.compile(r"^/([0-9]+)$")
+
+# R1, BLOCKING (round-4 Opus review, 2026-09-25). Only the first `_SUPPLEMENTAL_TERM_CAP`
+# DISTINCT terms of a query feed the four candidate widenings below. Each one is a real
+# SQL scan that cannot use an index (a `LIKE` with a leading `%`, or an `LTRIM` on every
+# row), so its cost is O(store) PER TERM — a query of a hundred distinct words would run a
+# hundred such scans before any of the AND/intersection logic below gets a chance to
+# narrow anything. 8 is generous against every real query this route has ever named in its
+# own tests (a name is at most a few words) and small enough to keep the worst case
+# bounded regardless of what a caller types. The base FTS query (`_fts_query`, above) is
+# UNBOUNDED in term count on purpose — it is index-backed and cheap per term, so capping it
+# would refuse a legitimate long query for no gain.
+_SUPPLEMENTAL_TERM_CAP = 8
+
+# WORK COUNTERS, TEST-ONLY (F6-6, round-7 Opus delta review, 2026-09-25: "a guard that
+# goes red when nothing is wrong is spent"). The match-selftest timing cases asserted
+# wall-clock time alone, which goes red on a loaded CI runner (measured: load average 16)
+# with no code defect at all — the exact "cry wolf" this repo's own working agreement
+# already names. These three counters — a `_match_rank` call, a `match.match_query`
+# call, and an SQL SCAN of the `cards` table (STATEMENTS, not rows — see `_count_cards_
+# scan`'s own docstring, round-8) — are WORK DONE, never wall time, so a test can assert
+# "this query does at most N units of work" and stay true regardless of what else the
+# machine is doing. Reset with `_reset_search_work_counters()` before a timed run; read
+# as a plain dict afterward. Never read in production code, and the increment itself is
+# one dict lookup plus one addition, cheap enough that leaving it always-on costs
+# nothing worth removing it for.
+#
+# UNLOCKED MODULE STATE (F5, round-9 Opus delta review, 2026-09-25). `REQUEST_SLOTS`
+# threads a real request through concurrently and this dict is not locked, so two
+# in-flight searches increment the SAME counters together. Tests must read it
+# single-threaded — one `do_search` call per `_reset_search_work_counters()`, never two
+# concurrent ones sharing a read.
+_SEARCH_WORK_COUNTERS = {"match_rank_calls": 0, "match_query_calls": 0, "rows_walked": 0}
+
+_CARDS_TABLE_SCAN = re.compile(r"\bFROM\s+cards\b", re.IGNORECASE)
+
+
+def _count_cards_scan(sql: str) -> None:
+    """Attached to a connection via `sqlite3.Connection.set_trace_callback` — fires for
+    EVERY SQL statement THAT CONNECTION RUNS, whichever Python function issued it (F6-6's
+    own robustness gap, round-8 Opus review, 2026-09-25). The round-7 version counted
+    inside `_fts_supplemental_candidates`'s own row-walk loop — proof that loop ran, and
+    nothing else. Loading round-6's four separate per-term SQL sources back in (each its
+    own `conn.execute`, a different code path entirely, SAME connection) stayed green at
+    `rows_walked=0`, because that counter never SAW those scans happen.
+
+    SCOPED TO ONE CONNECTION, NEVER TO ALL SQL EVERYWHERE (narrowed, round-9 Opus delta
+    review, 2026-09-25 — the round-8 docstring overclaimed "no matter which code — old,
+    new, or a future rewrite — issues it"). `do_search` opens exactly ONE connection
+    today and attaches this trace to it, so this counts a `cards` table scan issued by
+    ANY function running on THAT connection — round-6's old architecture, a future
+    rewrite, anything — but a scan on a SEPARATE connection this trace was never
+    attached to is invisible to it, the same way the round-7 counter was invisible to a
+    different FUNCTION. A future code path that opens its own `db.connect(...)` inside
+    `_fts_supplemental_candidates` (or anywhere else `do_search` reaches) needs its own
+    trace, or needs to reuse `do_search`'s own connection — this function cannot see
+    across a connection boundary by itself.
+
+    STATEMENTS, NOT ROWS. `set_trace_callback` reports the SQL text run, never how many
+    rows it touched, and re-reading every cursor to count rows would cost more than the
+    query itself. A statement count still proves the thing this counter exists to prove
+    — ONE scan for a whole query, never one per term — which is a count of `conn.execute`
+    calls, not of rows.
+
+    `\\bFROM\\s+cards\\b`, NEVER A BARE SUBSTRING. `cards_fts`, the INDEXED base query,
+    contains the literal text `FROM cards_fts`, which a plain `"FROM cards" in sql` check
+    would also match — `\\b` (a word boundary) refuses that, because `_` is a word
+    character in regex and there is none between `cards` and `_fts`."""
+    if _CARDS_TABLE_SCAN.search(sql):
+        _SEARCH_WORK_COUNTERS["rows_walked"] += 1
+
+
+def _reset_search_work_counters() -> None:
+    for key in _SEARCH_WORK_COUNTERS:
+        _SEARCH_WORK_COUNTERS[key] = 0
+
+
+def _deduped_capped_terms(text: str, *, lower: bool = False) -> List[str]:
+    """A query's terms, deduped (first occurrence kept) and capped at
+    `_SUPPLEMENTAL_TERM_CAP` distinct terms — the ONE place this happens, shared by the
+    candidate-widening step (`_fts_supplemental_candidates`) and `do_search`'s own rank
+    loop below (F1, round-5 Opus delta review, 2026-09-25, on 65b8f39d). BOTH CALLERS PASS
+    `lower=True` (the widening step joined round-6, R5-3 below — round 5 kept it
+    case-sensitive there on the theory that every source function folds case internally
+    anyway, so it never mattered; that theory missed the DEDUPE ITSELF, which happens
+    BEFORE any source function runs). `lower=False` stays available and tested, because
+    the two callers agreeing is a fact about their own call sites today, not a promise
+    this function makes on their behalf.
+
+    THE RANK LOOP HAD ITS OWN, SEPARATE, UNDEDUPED LIST. `do_search`'s
+    `terms = [term.lower() for term in text.split()]` ran `_match_rank` once per RAW term
+    per candidate — a repeated term was never folded, the identical defect R1 fixed for the
+    candidate step, still live one function over. `("1 " * 100)` (100 repeated terms)
+    measured 5.6-12.4s at 3,000 cards and 19.9s at 10,000 on a REAL-NAME fixture (round-4's
+    own `f"Bench Card {i}"` tests never matched enough candidates to notice this loop's
+    own cost). A single shared function, called from both places, is what keeps the two
+    from drifting apart again — the widening step already had this fix; the rank loop
+    just never got it.
+
+    TOKENIZED BY `match.query_tokens`, NEVER A BARE `text.split()` (N1, round-10 Opus
+    delta review, 2026-09-25, on fdc84825 — the SAME CLASS OF BUG as F1, one level up:
+    F1 fixed the widening step's own NUMBER comparison to agree with `match._number_
+    match`; this fixes the TOKENIZER feeding it to agree with `match.query_tokens`,
+    which `match_query` (the decisive step) has always used). A bare `text.split()`
+    only ever splits on whitespace — `match.query_tokens` ALSO turns a comma into a
+    space and strips edge punctuation per token (`rengar,24a/219` is ONE whitespace
+    token, `"rengar,24a/219"`, but TWO real tokens, `rengar` and `24a/219`; `/166,`
+    strips to `/166`). Measured on the real store: `rengar,24a/219` and `repel,126/132`
+    missed 60 of 60 sampled; `/221,` missed 60 of 60; `/166,` missed all 193 real
+    matches; `004,`, `(004)`, `004.` and `unseen,rengar` all missed too — the widening
+    step was handed a token the matcher itself would never see, so it could never widen
+    correctly for it, however good the comparison inside each rule already was."""
+    terms = match.query_tokens(text)
+    if lower:
+        terms = [term.lower() for term in terms]
+    return list(dict.fromkeys(terms))[:_SUPPLEMENTAL_TERM_CAP]
+
+
+def _number_candidate_forms(term: str) -> set:
+    """Every canonical form `match._number_match` itself would accept for this term —
+    MIRRORS IT EXACTLY (F1, round-9 Opus delta review, 2026-09-25, replacing `_bare_
+    number`'s own ad hoc zero-strip, which never split a composed term on `/` at all).
+
+    THE BUG, MEASURED ON THE REAL STORE: `24a/219` (bare-letter composed, no leading
+    zero typed) missed Rengar, Unseen `024a/219` — 11 of 11 sampled. `0027/166` (extra
+    zero, composed) missed Hand Hammer `027/166` — 11 of 11 letter-composed, 300 of 300
+    plain-composed sampled. The WIDENING gate was `match._number_shape_ok(term)`, which
+    checks ONE side of a number only (0-6 letters, digits, 0-2 letters) — a term
+    containing `/` fails it outright (the trailing `/219` is neither letter nor digit,
+    so the shape check never reaches the end of the string), so a composed QUERY term
+    never reached this widening at all, regardless of how correct the zero-strip itself
+    might have been.
+
+    `match._number_match` (the DECISIVE step) never had this bug — it already splits on
+    `/` per side via `canonical_number`, strips a leading `#`, and folds a hyphen
+    standing for the slash via `_hyphen_to_slash`, then validates the WHOLE form with
+    `match._is_number_shape` (which DOES split on `/`). This function computes the
+    IDENTICAL candidate forms, so the widening step accepts exactly what the decisive
+    step would — no second, slightly different shape rule to keep in step.
+
+    THIS IS TRUE PER TERM, NEVER A PROMISE ABOUT A WHOLE QUERY ON ITS OWN (N1, round-10
+    Opus delta review, 2026-09-25). A term only ever reaches this function once
+    `_deduped_capped_terms` has already split the query the SAME WAY `match.query_
+    tokens` would — `rengar,24a/219` is one comma-joined string, and this function was
+    never asked to notice that. It agrees with the decisive step exactly because the
+    CALLER hands it the same tokens the decisive step would see, not because it does any
+    splitting of its own beyond the one `/` inside a single term."""
+    bare = term[1:] if term.startswith("#") else term
+    if not match._has_digit(bare):
+        return set()
+    forms = {match.canonical_number(bare), match.canonical_number(match._hyphen_to_slash(bare))}
+    return {f for f in forms if match._is_number_shape(f)}
+
+
+def _text_digit_word_matches(term: str, folded_field: str) -> bool:
+    """Rule 7's digits-only TEXT-word match, for ONE term against one already-folded
+    field — MIRRORS `match._digit_word_match` EXACTLY (F1, round-9 Opus delta review,
+    2026-09-25). `004` missed the card whose name contains "spent 4": `_prepare` in
+    `match.py` builds `words` from EVERY all-digit word in every folded text field, and
+    `_digit_word_match` compares a query term against those WORDS — a TEXT rule, never a
+    NUMBER-field one. The zero-pad widening above only ever checked `number_key`/
+    `number`/`number_display` — a pure-digit term reached it (it easily passes the
+    shape check), but nothing here ever looked at `name`, `set_hint` or `note` for it,
+    so a card findable only through its TEXT carrying that digit was never a candidate."""
+    words = [w for w in folded_field.split(" ") if w and match._DIGITS_ONLY.match(w)]
+    if not words:
+        return False
+    if match._ZEROS_ONLY.match(term):
+        return any(w.startswith(term) for w in words)
+    bare = match._drop_leading_zeros(term)
+    if term != bare:
+        return any(w.startswith(term) or match._drop_leading_zeros(w) == bare for w in words)
+    return any(match._drop_leading_zeros(w).startswith(bare) for w in words)
+
+
+def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
+    """Every extra candidate the base FTS5 query (`_fts_query`, above) cannot reach on its
+    own — a SECOND half of a number alone (`/132`), a NUMBER mismatch a canonical compare
+    closes (`934` for `0934`, `tg5` for `tg05`, `24a/219` for `024a/219`, a DIGIT WORD
+    inside NAME text (`004` for a name containing "spent 4"), or a MID-WORD fragment
+    (`izard` for `Charizard`) — DEDUPED AND CAPPED ACROSS TERMS (R1, round-4), UNIONED
+    NEVER INTERSECTED (F2, round-5), in ONE ROW WALK FOR EVERY TERM TOGETHER (F6-3,
+    round-7, BLOCKING BY THE OWNER'S OWN RULING: "NOT accepted").
+
+    ONE WALK, NOT FOUR TIMES EIGHT (F6-3). The four widenings used to be four SEPARATE
+    functions, each its own `SELECT ... FROM cards` — a real O(store) scan apiece,
+    because none of them can use an index (a `LIKE` with a leading `%`, or a Python fold
+    no SQL can express). Up to 8 distinct terms times several sources is many full-table
+    scans for ONE query. This function reads each card's row ONCE and checks every
+    term's every widening rule against that one row before moving to the next.
+
+    A 2-CHARACTER NUMBER-SHAPED TERM WIDENS (F6-2, round-7). R3's mid-word TEXT floor
+    (3 characters) never applied to numbers — `6a` is already a specific collector-number
+    code, not a common substring.
+
+    NUMBER MATCHING MIRRORS `match._number_match` EXACTLY, via `_number_candidate_forms`
+    (F1, round-9 Opus delta review, 2026-09-25 — see that function's own docstring for
+    the bug this replaces: `_number_shape_ok`, checked directly against a term that
+    might contain `/`, refused every COMPOSED query term outright, so `24a/219`,
+    `0027/166` and their kind never reached ANY number widening).
+
+    A DIGIT WORD IN TEXT ALSO WIDENS (F1, round-9), via `_text_digit_word_matches` —
+    mirroring `match._digit_word_match`'s own rule against `name`/`set_hint`/`note`,
+    never only against the number columns.
+
+    DEDUPED ON THE FOLDED FORM, `lower=True` (R5-3, round-6). `lower=False` would let
+    `ex`, `EX`, `Ex` and `eX` burn 4 of the 8-term cap on the SAME word spelled 4 ways —
+    every rule below folds case itself, so the cap should count DISTINCT MEANING, never
+    distinct bytes.
+
+    UNION, NEVER INTERSECTION (F2, round-5). The first version of this function
+    INTERSECTED across terms — wrong whenever only one term needed a widening at all.
+    The base FTS `hits` dict already carries the real AND across every term via one
+    combined `MATCH` expression, so this function only ever WIDENS what candidates the
+    decisive step (`match.match_query`, in `do_search` below) gets to see — it can never
+    make an already-passing row disappear, and a union can only add rows, never remove
+    one the base query already found.
+
+    A SUPERSET, like every candidate source here has always been: `match.match_query`
+    (or `_match_rank`, for a single-term query) still decides which candidate is real.
+
+    THE FOLD-PREFIX RULE IS DELETED (M10, round-8 Opus delta review, 2026-09-25: "if it
+    is redundant, delete it"). CORRECTED, round-9 Opus delta review, 2026-09-25: the
+    SUBSTRING rule's compact-containment check is a superset of a prefix check for MOST
+    terms, but NOT a strict one — `bf` found "B.F. Sword" through the deleted fold rule
+    (which stripped ALL punctuation before comparing) and finds nothing through the
+    substring rule alone, because `bf` is a 2-character term with no digit, which the
+    substring rule's own floor (F6-2, above) never admits. `bf` sits inside the accepted
+    1-2 character TEXT floor (`_is_floor_query`), the SAME gap R3 already accepted for
+    every other short text term — this is that gap, not a new one, and the fold rule's
+    own no-floor design was the part actually redundant to remove, not a guarantee that
+    every query it once answered stays answered."""
+    terms = _deduped_capped_terms(text, lower=True)
+    if not terms:
+        return []
+
+    slash_suffixes: Dict[str, set] = {}
+    number_forms: Dict[str, set] = {}
+    digit_word_terms: set = set()
+    substring_terms: Dict[str, Tuple[str, str]] = {}
+    for term in terms:
+        found = _LEADING_SLASH_DIGITS.match(term)
+        if found:
+            digits = found.group(1)
+            slash_suffixes[term] = {digits, digits.zfill(3)}
+        # F1, round-9: mirrors `match._number_match` exactly — splits a composed term
+        # on `/`, strips a leading `#`, folds a hyphen standing for the slash. No
+        # length floor here: `match._number_match` itself has none, and a term this
+        # rule accepts is already number-shaped, never a common text substring.
+        forms = _number_candidate_forms(term)
+        if forms:
+            number_forms[term] = forms
+        # F1, round-9: a pure-digit term widens against TEXT fields too now, mirroring
+        # `match._digit_word_match`. No letter, so this never collides with the
+        # substring rule below.
+        if match._DIGITS_ONLY.match(term):
+            digit_word_terms.add(term)
+        # F6-2, round-7: a digit-bearing 2-character term widens; R3's mid-word TEXT
+        # floor (3 characters) was never about numbers.
+        if (len(term) >= 3 or (len(term) == 2 and match._has_digit(term))) and match._has_letter(term):
+            folded_term = match.fold_text(term)
+            compact_term = match.compact_text(term)
+            if folded_term:
+                substring_terms[term] = (folded_term, compact_term)
+
+    if not (slash_suffixes or number_forms or digit_word_terms or substring_terms):
+        return []
+
+    out: Dict[str, str] = {}
+    for key, sku, number_key, number, number_display, name, set_hint, note in conn.execute(
+        "SELECT key, sku, number_key, number, number_display, name, set_hint, "
+        "json_extract(payload, '$.note') FROM cards"
+    ):
+        key = str(key)
+        number_cols = (number_key, number, number_display)
+        folded_fields = None  # computed lazily, only if a substring or digit-word term needs it
+
+        for term in terms:
+            matched = False
+
+            if term in slash_suffixes:
+                suffixes = slash_suffixes[term]
+                for column in number_cols:
+                    if column and any(column.endswith("/" + s) for s in suffixes):
+                        matched = True
+                        break
+
+            if not matched and term in number_forms:
+                forms = number_forms[term]
+                for column in number_cols:
+                    if not column:
+                        continue
+                    col_canonical = match.canonical_number(column)
+                    for form in forms:
+                        whole = "/" in form
+                        if col_canonical == form or (not whole and col_canonical.startswith(form + "/")):
+                            matched = True
+                            break
+                    if matched:
+                        break
+
+            if not matched and (term in substring_terms or term in digit_word_terms):
+                if folded_fields is None:
+                    folded_fields = [
+                        (match.fold_text(field), match.compact_text(field))
+                        for field in (name, set_hint, note)
+                        if field
+                    ]
+                if term in substring_terms:
+                    folded_term, compact_term = substring_terms[term]
+                    for folded_field, compact_field in folded_fields:
+                        if folded_term in folded_field or (compact_term and compact_term in compact_field):
+                            matched = True
+                            break
+                if not matched and term in digit_word_terms:
+                    for folded_field, _compact_field in folded_fields:
+                        if _text_digit_word_matches(term, folded_field):
+                            matched = True
+                            break
+
+            if matched:
+                out.setdefault(key, sku)
+                break  # this row is already a candidate — no need to check its other terms
+
+    return list(out.items())
+
+
+def _card_match_fields(card: master.Card) -> "match.MatchFields":
+    """This card, in the generic shape `server/match.py:match_query` takes — the same
+    contract `app/src/kit/match.ts` speaks (S2, UX-173 amended). Built off the fields
+    `_match_rank` has always ranked: name/set_hint/note as text, the three number
+    spellings `_match_rank` already compares (the raw field, the composed key, the
+    screen-drawn form), and the SKU."""
+    return {
+        "text": [card.name, card.set_hint, card.note],
+        "numbers": [card.number, _card_number_key(card), _number_display(card)],
+        "skus": [card.sku] if card.sku else [],
+    }
 
 
 def _distinct(values: Iterable) -> List[str]:
@@ -10873,23 +11447,50 @@ def do_search(query: str) -> dict:
     leaving the client to read `on_hand` twice — `app/src/CardLocations.tsx:headroom` is its
     reader and the arithmetic there is unchanged.
     """
+    # NFKC HAPPENS INSIDE `_require_query` NOW, NOT HERE (R2, round-4 Opus review,
+    # 2026-09-25; was S2, UX-173 amended). A full-width digit (`５４/１３２`) is a DIFFERENT
+    # codepoint than its ASCII form, and `store/db.py:_FTS_TOKENIZE`'s `unicode61`
+    # tokenizer does not NFKC-fold a query the way `match.fold_text`/`match.canonical_
+    # number` do — so the FTS5 candidate query built from the RAW text never matched the
+    # ASCII token the index holds. Normalizing BEFORE the length check (rather than after,
+    # here) closes the R2 bypass: a single codepoint can expand under NFKC, so checking
+    # length first let the 200-character cap be typed around with one repeated character.
     text = _require_query(query)
 
     inventory = Store().read().inventory
     places = _Places(inventory)
 
-    match = _fts_query(text)
+    match_expr = _fts_query(text)
     ranked: Dict[str, int] = {}
     loose: List[master.Card] = []
-    if match:
+    if match_expr:
         conn = db.connect(files.inventory_dir())
+        # CONNECTION-LEVEL, so it counts a `cards` scan no matter which function issues
+        # it (round-8; see `_count_cards_scan`'s own docstring).
+        conn.set_trace_callback(_count_cards_scan)
         try:
-            hits = conn.execute(
+            hits: "Dict[str, object]" = {}
+            for key, sku in conn.execute(
                 "SELECT cards.key, cards.sku FROM cards_fts "
                 "JOIN cards ON cards.rowid = cards_fts.rowid "
                 "WHERE cards_fts MATCH ? ORDER BY bm25(cards_fts)",
-                (match,),
-            ).fetchall()
+                (match_expr,),
+            ):
+                hits.setdefault(str(key), sku)
+            # SUPPLEMENTAL CANDIDATES, UNIONED WITH THE BASE QUERY ABOVE (S2, UX-173
+            # amended; F8, F2, MID-WORD, R1, all the same day, 2026-09-25): FTS5's own
+            # prefix index cannot answer a query naming the SECOND half of a number alone
+            # (`/132`), one that only reaches a real token once a hyphen or an apostrophe
+            # is folded out (`hooh`, `farfetchd`), a 3+ digit query missing MORE leading
+            # zeros than it typed (`934` for a card stored as `0934`), or a MID-WORD
+            # fragment (`izard` for `Charizard`). `_fts_supplemental_candidates` dedupes
+            # and bounds terms, then UNIONS each term's own widened candidates (F2,
+            # round-5 Opus delta review, 2026-09-25 — an earlier version intersected
+            # across terms, which dropped a real match whenever only one term needed a
+            # widening; see the function's own docstring). A superset, like the base
+            # query already was; `match.match_query`/`_match_rank` below still decide.
+            for key, sku in _fts_supplemental_candidates(conn, text):
+                hits.setdefault(key, sku)
         finally:
             conn.close()
         # RANK IS STILL COMPUTED BY `_match_rank`, NOT READ OFF `bm25`. bm25 orders which
@@ -10910,13 +11511,23 @@ def do_search(query: str) -> dict:
         # BEST (lowest) rank among the terms that match wins — order-independent, which is
         # what "eiscue 044" and "044 eiscue" both need to return the identical list. A
         # single-term query degrades to exactly the old call (`terms == [needle]`).
-        terms = [term.lower() for term in text.split()]
-        seen_keys: set = set()
-        for key, sku in hits:
-            key = str(key)
-            if key in seen_keys:
-                continue
-            seen_keys.add(key)
+        #
+        # DEDUPED AND CAPPED THROUGH THE SAME `_deduped_capped_terms` HELPER
+        # `_fts_supplemental_candidates` uses (F1, round-5 Opus delta review, 2026-09-25,
+        # on 65b8f39d). This loop ran `_match_rank` once per RAW term per candidate, and a
+        # repeated term was never folded — the same defect R1 fixed for the candidate
+        # step, still live here. `("1 "*100)` (100 repeated terms) measured 5.6-12.4s at
+        # 3,000 cards and 19.9s at 10,000, because every candidate paid for 100 calls to
+        # `_match_rank` instead of 1. `token_count` keeps the RAW (pre-dedupe) token count
+        # for the single-term fallback below — "how many words did the operator type",
+        # never "how many distinct ones". TOKENIZED BY `match.query_tokens`, NEVER a bare
+        # whitespace split (N1, round-10 Opus delta review, 2026-09-25) — the same reason
+        # `_deduped_capped_terms` itself changed: `a,b` is ONE whitespace-split token but
+        # TWO real ones, so a bare `text.split()` count would have disagreed with what
+        # `match_query` itself considers "a single-term query".
+        token_count = len(match.query_tokens(text))
+        terms = _deduped_capped_terms(text, lower=True)
+        for key, sku in hits.items():
             card = inventory.cards.get(key)
             if card is None:
                 # The FTS row and the live snapshot disagree — a card deleted between the
@@ -10924,16 +11535,60 @@ def do_search(query: str) -> dict:
                 # triggers should make impossible. Either way, a candidate this snapshot
                 # cannot see is not a result this snapshot can render.
                 continue
-            term_ranks = [r for r in (_match_rank(card, term) for term in terms) if r is not None]
-            if not term_ranks:
-                # FTS5's tokenizer can match text `_match_rank` would not — e.g. a prefix
-                # match inside `note`'s free prose that the substring pass would also have
-                # caught, so this should be rare-to-never; kept as a filter rather than an
-                # assumption, because trusting bm25's candidate set unconditionally would
-                # silently drop `_match_rank`'s own exact-vs-prefix-vs-substring distinction
-                # the day the two tokenizers disagree about a corner case.
+            # THE DECISIVE CHECK RUNS FIRST, NOW (R5-1, BLOCKING, round-6 Opus delta
+            # review, 2026-09-25, on ce5a6168). `term_ranks` used to be computed for
+            # EVERY candidate before `match.match_query` ever ran — cheap while the
+            # candidate step was still narrow, but F2's UNION (round 5) can make most of
+            # the store a candidate for a query like `/NNN /NNN /NNN...` (every term
+            # widens on its own, no intersection narrows the union back down), so this
+            # loop was paying for up to 8 `_match_rank` calls on rows `match_query` was
+            # always going to reject anyway. Measured on the real-store copy: `/132 /298
+            # /166 /198 /219 /221 /1 /2` took 552-578ms for a 63-byte body — the decisive
+            # check rejects almost every candidate, so almost all of that time was
+            # `term_ranks` no result ever used. `term_ranks` is now computed ONLY when
+            # `matched` already is true (needed for `rank` below) or when `token_count
+            # == 1` (needed for the literal-number fallback two lines down, the one case
+            # where `term_ranks` decides `matched` rather than just `rank`).
+            # `match.match_query` — THE SAME PORT `scripts/match-selftest.py` GROUP 1
+            # PROVES AGAINST THE SHARED CASE TABLE — decides whether a candidate is a
+            # real match. Before this, "does at least one term rank" was the only gate,
+            # which is exactly wrong once the candidate step above can surface a row on
+            # ONE term alone (`swsh` for `swsh050`, `akali` for `Akali, Deadly Duelist`):
+            # a query of `akali zed` would have wrongly accepted a card that only ever
+            # matched `akali`, with `zed` found nowhere.
+            #
+            # THE FALLBACK IS NARROWED TO THE ONE CARVE-OUT IT WAS FOR (F3, round-3 Opus
+            # review, 2026-09-25). It used to be "any single-term rank at all", which
+            # let `_match_rank`'s SUBSTRING pass — a bare `query in field.lower()`, no
+            # shape check — stand in for `match.py`'s own, stricter rules whenever they
+            # disagreed. Measured: `#8926367` folds to `8926367` and is a SUBSTRING of a
+            # card whose SKU IS `8926367`, so `_match_rank` ranked it — but
+            # `match._sku_match` requires the RAW token itself to be `_SKU_SHAPE`
+            # (`^[0-9]{3,}$`), which `#8926367` is not (the `#` is still on it), so
+            # `match_query` correctly refused the same row. `do_search` returned a row
+            # the shared matcher rejects, for 95 different `#`-prefixed queries against
+            # the owner's store. Only `_match_rank`'s LITERAL, case-folded EXACT NUMBER
+            # check survives as a fallback now — the one piece with no `match.py`
+            # equivalent, because a code card's own redemption code is not a
+            # collector-number shape `_is_number_shape` will ever accept, and no case in
+            # the shared table has ever needed one. T7's own `check_code_ledger`
+            # ("the dispute lookup is GET /search") is what this narrower fallback
+            # still keeps green — SUBSTRING and NAME-PREFIX ranks no longer bypass
+            # `match_query` on their own.
+            matched = match.match_query(text, _card_match_fields(card))
+            _SEARCH_WORK_COUNTERS["match_query_calls"] += 1
+            term_ranks: List[int] = []
+            if matched or token_count == 1:
+                term_ranks = [r for r in (_match_rank(card, term) for term in terms) if r is not None]
+            if not matched and token_count == 1:
+                # `terms[0]` — LOWERCASED, matching `term_ranks`'s own computation just
+                # above — never `text`, which still carries its original case and would
+                # never equal the lowercased number set `_match_rank`'s literal check
+                # compares against.
+                matched = _RANK_EXACT_NUMBER in term_ranks
+            if not matched:
                 continue
-            rank = min(term_ranks)
+            rank = min(term_ranks) if term_ranks else _RANK_SUBSTRING
             sku = str(sku).strip() if sku else ""
             if not sku:
                 loose.append(card)
@@ -10946,6 +11601,16 @@ def do_search(query: str) -> dict:
             # changing: whichever copy of a tied SKU the query returns first, the lower rank wins.
             ranked[sku] = min(rank, ranked.get(sku, rank))
 
+    # ponytail: the body built below is UNPAGED — every ranked SKU's full group, every
+    # copy, in one response. Measured (round-5 Opus delta review, 2026-09-25, D271): a
+    # broad hostile query (`("e " * 100)`) returns a 719KB body at 3,000 cards and 2.4MB
+    # at 10,000, and the JSON encode plus the socket write of that body is most of what
+    # pushes real HTTP p95 over 500ms — the matcher itself stays fast (see D271's table).
+    # The owner's real ~3,510-card store never hits this, because a real query there
+    # matches far fewer rows than a deliberately hostile one does. Ceiling: a genuinely
+    # broad query on a synthetic store of 3,000+ cards. Upgrade path: page the response
+    # (a `limit`/`cursor` on `groups`), a real change needing its own decision — D271
+    # names it, never builds it here.
     groups: List[dict] = []
     for sku, rank in ranked.items():
         copies = inventory.positions_for_sku(sku)
@@ -11197,15 +11862,20 @@ def _card_matches_filters(card: master.Card, filters: Dict[str, Optional[str]]) 
     )
 
 
-def _card_facets(inventory: master.Inventory, cells: Optional[List[dict]] = None) -> dict:
+def _card_facets(
+    inventory: master.Inventory,
+    cells: Optional[List[dict]] = None,
+    filters: Optional[Dict[str, Optional[str]]] = None,
+    hide_sold: bool = False,
+) -> dict:
     """The game/set/rarity vocabulary THIS STORE ACTUALLY HOLDS, with counts (D213).
 
-    ONE INDEXED-COLUMN SCAN, NEVER A HARDCODED LIST. `game`, `set_name` and `rarity` are
-    three of the columns `store/db.py:TABLES["cards"]` declares beside the payload, so this
-    is `select` over three columns for every card, and never a walk that builds a `Card`
-    object per row — the same trade `_positions_in` already makes. Measured on the owner's
-    store: 3,510 rows, negligible beside `do_boxes`'s own existing per-box scan, which this
-    route already pays.
+    ONE INDEXED-COLUMN SCAN, NEVER A HARDCODED LIST. `game`, `set_name`, `rarity` and
+    `state` are four of the columns `store/db.py:TABLES["cards"]` declares beside the
+    payload, so this is `select` over four columns for every card, and never a walk that
+    builds a `Card` object per row — the same trade `_positions_in` already makes. Measured
+    on the owner's store: 3,510 rows, negligible beside `do_boxes`'s own existing per-box
+    scan, which this route already pays.
 
     SETS AND RARITIES ARE SCOPED PER GAME, NEVER ONE FLAT LIST. D213's own ruling for the
     control is a dropdown "because dropdowns would allow for standardization across card
@@ -11226,18 +11896,54 @@ def _card_facets(inventory: master.Inventory, cells: Optional[List[dict]] = None
     (`pipeline/games.py`'s registry has no blank entry) — so `""` cannot collide with a real
     game and is free to mean "no claim", the same read-side backfill D21 already applies
     everywhere else a `Card.game` of `None` is rendered.
+
+    EVERY COUNT FOLLOWS THE OTHER ACTIVE FILTERS, HIDE SOLD INCLUDED (UX-210, a CORRECTION
+    against the original, which counted every card in the store regardless of what the
+    screen was actually filtering on or hiding). With Hide sold on, the owner measured the
+    rail saying "9 matches" while the walk — which excludes sold — showed 7; and
+    `Pokémon (37)` plus `Riftbound (85)` summed to 122, every card ever captured, sold
+    included. `hide_sold` is a blanket cut applied first, matching what D132's toggle
+    hides. Each of the three DIMENSIONS is then counted under the OTHER TWO active
+    facets — never its own, or picking "Rare" would make every other rarity's count read
+    zero — which is what makes the filters compose IN ANY ORDER: picking rarity first and
+    set second gives the identical counts as the reverse. The GAME bucket a set or a
+    rarity nests under is not itself a "filter" in this sense; it is the bucket key the
+    client already selects by, so an active `game` filter changes nothing here.
     """
+    filters = filters or {}
+
+    def _other(*skip: str) -> Dict[str, Optional[str]]:
+        return {k: v for k, v in filters.items() if k not in skip}
+
+    def _passes(card_filters: Dict[str, Optional[str]], **values: Optional[str]) -> bool:
+        for key, wanted in card_filters.items():
+            if _facet_norm(values.get(key)) != _facet_norm(wanted):
+                return False
+        return True
+
+    games_filters = _other("game")
+    sets_filters = _other("game", "set_name")
+    rarities_filters = _other("game", "rarity")
+
     games: Dict[Optional[str], int] = {}
     sets: Dict[Optional[str], Dict[Optional[str], int]] = {}
     rarities: Dict[Optional[str], Dict[Optional[str], int]] = {}
     # FOLDED FROM THE FACET CELLS (FLT-09), so `GET /boxes` pays ONE scan for both blocks.
+    # A cell's `gone` is `master.TERMINAL_STATES` (sold, retired, moved), the set D132's Hide
+    # sold hides (S3, the search-server lane's Opus review), so the cut is the same one.
     for cell in cells if cells is not None else _facet_cells(inventory):
+        if hide_sold and cell["gone"]:
+            continue
         game, set_name, rarity, n = cell["game"], cell["set"], cell["rarity"], cell["count"]
-        games[game] = games.get(game, 0) + n
-        sets.setdefault(game, {})
-        sets[game][set_name] = sets[game].get(set_name, 0) + n
-        rarities.setdefault(game, {})
-        rarities[game][rarity] = rarities[game].get(rarity, 0) + n
+        values = {"game": game, "set_name": set_name, "rarity": rarity}
+        if _passes(games_filters, **values):
+            games[game] = games.get(game, 0) + n
+        if _passes(sets_filters, **values):
+            sets.setdefault(game, {})
+            sets[game][set_name] = sets[game].get(set_name, 0) + n
+        if _passes(rarities_filters, **values):
+            rarities.setdefault(game, {})
+            rarities[game][rarity] = rarities[game].get(rarity, 0) + n
 
     def _rows(counts: Dict[Optional[str], int], key: str) -> List[dict]:
         # Real values first, alphabetically; the null bucket always last, so a screen
@@ -11295,6 +12001,7 @@ def _box_row(
     box: int,
     places: "Optional[_Places]" = None,
     filters: Optional[Dict[str, Optional[str]]] = None,
+    hide_sold: bool = False,
 ) -> dict:
     """One box, as `GET /boxes` renders it and as both write routes answer with it.
 
@@ -11339,6 +12046,13 @@ def _box_row(
     call on an object already in hand. `None` (the default) means no filter is active and
     no `matches` key is added at all — the box rail's "N on hand" stays what it always was
     for a screen that never turned the filter on.
+
+    `hide_sold` NARROWS `matches` THE SAME WAY (UX-210). A sold card never leaves the
+    `cards`/`sold` counts above — those answer "what is recorded here", D58's own promise —
+    but it must leave `matches`, because that count answers a DIFFERENT question: "how many
+    of these will the walk show", and the walk hides sold cards by default (D132). Before
+    this, the rail's "N matches" and the walk's own row count disagreed by exactly the sold
+    cards under the current filter — measured by the owner: 9 against 7.
     """
     entry = inventory.box(box)
     view = (places or _Places(inventory)).view(box)
@@ -11382,7 +12096,15 @@ def _box_row(
         # fact about the SKU that a sold copy has as much as an identified one.
         if _listing_hold(inventory, card):
             listed += 1
-        if filters is not None and _card_matches_filters(card, filters):
+        if (
+            filters is not None
+            # S3, THE OPUS REVIEW, 2026-09-25: the same D132 correction as `_card_facets`
+            # above — Hide sold drops every DEPARTED card off the walk, not sold alone, so
+            # `matches` must follow `master.TERMINAL_STATES` or a retired/moved card would
+            # still count here while never drawing a row.
+            and not (hide_sold and card.state in master.TERMINAL_STATES)
+            and _card_matches_filters(card, filters)
+        ):
             matches += 1
 
     try:
@@ -11489,6 +12211,7 @@ def do_boxes(
     game: object = _FACET_UNSET,
     set_name: object = _FACET_UNSET,
     rarity: object = _FACET_UNSET,
+    hide_sold: bool = False,
 ) -> dict:
     """Every box this store knows about: the registry, plus any box a card names.
 
@@ -11509,6 +12232,13 @@ def do_boxes(
     `_FACET_UNSET` (the default) means "not filtering this facet" — passing `None`
     explicitly means "filter for no claim", which `_box_row`/`_card_matches_filters` fold
     the same way `_card_facets`'s menu does.
+
+    `hide_sold` IS A FOURTH INPUT AND NOT A FOURTH FACET (UX-210): it is a plain bool, no
+    null bucket to distinguish, so it needs none of `_FACET_UNSET`'s three-state care —
+    `False` (the default, and what an old caller sends by sending nothing) means what it
+    always meant, count every card. Threaded into BOTH `_box_row`'s `matches` and
+    `_card_facets`'s counts, because a "matches" figure that disagreed with a `facets`
+    figure over the identical toggle would be the same defect this closes, one field over.
 
     `facets` RIDES ALONG UNCONDITIONALLY, FILTERED OR NOT — it is what the filter's own
     dropdowns are populated from, and it costs one indexed-column scan regardless of
@@ -11540,8 +12270,11 @@ def do_boxes(
     places = _Places(inventory)
     cells = _facet_cells(inventory)
     return {
-        "boxes": [_box_row(inventory, box, places, filters=filters) for box in sorted(numbers)],
-        "facets": _card_facets(inventory, cells),
+        "boxes": [
+            _box_row(inventory, box, places, filters=filters, hide_sold=hide_sold)
+            for box in sorted(numbers)
+        ],
+        "facets": _card_facets(inventory, cells, filters=filters, hide_sold=hide_sold),
         "facet_cells": cells,
     }
 
@@ -14048,6 +14781,15 @@ def _reconcile_cutoff(payload: dict) -> str:
 
     A DATE ALONE, NEVER A TIMESTAMP — compared against the first ten characters of
     `placed_at`, which is `store/orders.py:now`'s own format and always starts with one.
+
+    NEVER AFTER TODAY (the search-server lane, 2026-09-24, from the Orders review). A
+    future cutoff would stand down every order placed before a day that has not happened
+    yet — which is every open order in the store, live `Ready to Ship` work included, the
+    exact HOR-04 hazard D203 exists to prevent. Two ISO-8601 dates compare correctly as
+    plain strings, so this is one comparison against `order_store.today()`, the same
+    function the default above already calls. THE SCREEN ALREADY DISABLES THE PRESS past
+    today (`ReconcileBacklogPanel`, the orders lane's own build); this is the SECOND guard,
+    on the server, so a stale client or a direct request cannot bypass the first.
     """
     raw = payload.get("cutoff")
     if raw is None:
@@ -14058,7 +14800,16 @@ def _reconcile_cutoff(payload: dict) -> str:
             "cutoff_invalid",
             f"cutoff was {raw!r}; send a date as YYYY-MM-DD, or omit it for today.",
         )
-    return raw.strip()
+    cutoff = raw.strip()
+    today = order_store.today()
+    if cutoff > today:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "cutoff_in_future",
+            f"cutoff was {cutoff}, after today ({today}). A cutoff past today would stand "
+            "down orders that have not had their chance to ship yet.",
+        )
+    return cutoff
 
 
 def _reconcile_candidates(
@@ -14738,6 +15489,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     kwargs["set_name"] = params["set"][0] or None
                 if "rarity" in params:
                     kwargs["rarity"] = params["rarity"][0] or None
+                # `hide_sold` (UX-210) is a PLAIN BOOL, not a three-state facet — `?set=`'s
+                # blank-means-null-bucket rule does not apply here, so its absence is simply
+                # `False`, the same answer an old caller who never sends it always got.
+                if "hide_sold" in params:
+                    kwargs["hide_sold"] = params["hide_sold"][0].strip().lower() in (
+                        "1", "true", "yes",
+                    )
                 return self._json(HTTPStatus.OK, do_boxes(**kwargs))
             # D134's graveyard: an exact string, matched by no other route's pattern, over
             # a lock-free read on both its sources.

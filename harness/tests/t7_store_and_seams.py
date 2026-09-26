@@ -8353,12 +8353,124 @@ def check_inventory_filter_facets(checks: Checks) -> None:
             "active facet is ANDed, not the last one applied winning",
         )
 
+        # --- S3, THE OPUS REVIEW, 2026-09-25: A DIMENSION IS NEVER COUNTED UNDER ITS OWN
+        # FILTER. `_card_facets` builds `sets_filters`/`rarities_filters` by EXCLUDING the
+        # dimension's own key (`_other("game", "set_name")`, `_other("game", "rarity")`) —
+        # every earlier assertion in this function reads `facets["sets"]`/`["rarities"]`
+        # only with NO filter active at all, so a mutant that dropped that exclusion (making
+        # the set menu narrow itself to whatever set is picked) went undetected: "picking
+        # rarity first and set second gives the identical counts as the reverse" is a claim
+        # this function had never once put a live `set_name`/`rarity` filter beside a
+        # `facets` read to test.
+        set_filtered = capture_server.do_boxes(game="riftbound", set_name="Unleashed")
+        checks.equal(
+            {row["set"]: row["count"] for row in set_filtered["facets"]["sets"]["riftbound"]},
+            {"Unleashed": 1, None: 1},
+            "with `set=Unleashed` ACTIVE, the SET menu still lists both sets — a dimension "
+            "never narrows its own menu, or picking one set would erase every other choice "
+            "from the dropdown that offered it",
+        )
+        checks.equal(
+            {row["rarity"]: row["count"] for row in set_filtered["facets"]["rarities"]["riftbound"]},
+            {"Rare": 1},
+            "and the RARITY menu still follows the set filter as an ORDINARY other-facet — "
+            "narrowed to only `set=Unleashed`'s own card the same way `matches` is, "
+            "dropping the unclassified card's None-rarity bucket because IT carries no "
+            "set at all — an other-facet obeys every active filter but its own",
+        )
+        rarity_filtered = capture_server.do_boxes(game="riftbound", rarity="Rare")
+        checks.equal(
+            {row["rarity"]: row["count"] for row in rarity_filtered["facets"]["rarities"]["riftbound"]},
+            {"Rare": 1, None: 1},
+            "and the reverse: with `rarity=Rare` ACTIVE, the RARITY menu still lists both "
+            "rarities — the same dimension-never-counts-itself rule from the other side",
+        )
+        checks.equal(
+            {row["set"]: row["count"] for row in rarity_filtered["facets"]["sets"]["riftbound"]},
+            {"Unleashed": 1},
+            "while the SET menu (an ordinary other-facet under `rarity=Rare`) narrows to "
+            "just the classified card — the null-set card is Rare too but has no `set` to "
+            "list, so it drops out of the SET bucket the same way any other-facet narrows",
+        )
+
         # --- clearing the filter restores everything ------------------------------------
         cleared = capture_server.do_boxes()
         checks.ok(
             all("matches" not in row for row in cleared["boxes"]),
             "and calling with no filter keywords at all returns to the unfiltered shape — "
             "the same route, the same rows, nothing left over from the last question asked",
+        )
+
+        # --- UX-210: hide_sold narrows both `matches` and `facets`, ANY ORDER of the OTHER
+        # active filters, the owner's own measured shape ("9 matches" against a 7-row walk,
+        # a games total of 122 that was every card ever captured). Three more Riftbound
+        # cards in box 1, one departed by each of the three doors, added here rather than
+        # in the setup above so the first half of this test stays the ground D213 was
+        # originally measured against.
+        #
+        # F4, round-3 Opus review, 2026-09-25: SOLD ALONE IS NOT ENOUGH. D132 hides every
+        # DEPARTED card, not sold alone, and the fixture before this fix carried only a
+        # SOLD card — a mutant narrowing S3's fix back to `state == master.SOLD` (instead
+        # of `state in master.TERMINAL_STATES`) stayed GREEN, because a retired or moved
+        # card was never in this fixture to leak through. `rift_d` (RETIRED) and `rift_e`
+        # (MOVED) are that mutant's own counter-example: both carry the SAME set/rarity as
+        # `rift_c`, so every assertion below that stayed unchanged by adding `rift_c` alone
+        # now ALSO has to stay unchanged with two more departed cards added, or the mutant
+        # shows through as a wrong number.
+        with Store().write() as snapshot:
+            rift_c, _ = snapshot.inventory.allocate_capture(1, game="riftbound", cid=fake_cid("facet-rift-sold"))
+            snapshot.inventory.cards[rift_c.key].set_name = "Unleashed"
+            snapshot.inventory.cards[rift_c.key].rarity = "Rare"
+            snapshot.inventory.set_state(rift_c.key, master.SOLD)
+            rift_d, _ = snapshot.inventory.allocate_capture(1, game="riftbound", cid=fake_cid("facet-rift-retired"))
+            snapshot.inventory.cards[rift_d.key].set_name = "Unleashed"
+            snapshot.inventory.cards[rift_d.key].rarity = "Rare"
+            snapshot.inventory.set_state(rift_d.key, master.RETIRED)
+            rift_e, _ = snapshot.inventory.allocate_capture(1, game="riftbound", cid=fake_cid("facet-rift-moved"))
+            snapshot.inventory.cards[rift_e.key].set_name = "Unleashed"
+            snapshot.inventory.cards[rift_e.key].rarity = "Rare"
+            snapshot.inventory.set_state(rift_e.key, master.MOVED)
+
+        no_hide = capture_server.do_boxes(game="riftbound")
+        checks.equal(
+            {row["box"]: row["matches"] for row in no_hide["boxes"]},
+            {1: 5, 2: 0},
+            "before this fix's toggle: game=riftbound counts the sold, retired AND moved "
+            "cards too — a departed card is still on hand as far as a bare game filter is "
+            "concerned",
+        )
+        with_hide = capture_server.do_boxes(game="riftbound", hide_sold=True)
+        checks.equal(
+            {row["box"]: row["matches"] for row in with_hide["boxes"]},
+            {1: 2, 2: 0},
+            "and with hide_sold=True EVERY departed copy drops out of `matches` — sold, "
+            "retired AND moved, not sold alone — while `cards`/`sold` (D58's own promise) "
+            "are untouched",
+        )
+        checks.equal(
+            capture_server.do_boxes()["boxes"][0]["sold"],
+            1,
+            "and the plain `sold` count on the unfiltered row still counts only the sold "
+            "one — hide_sold narrows `matches` and `facets` alone, never the box's own "
+            "census, and retired/moved have their own separate counters",
+        )
+        hidden_facets = capture_server.do_boxes(hide_sold=True)["facets"]
+        rift_games = {row["game"]: row["count"] for row in hidden_facets["games"]}
+        checks.equal(
+            rift_games["riftbound"], 2,
+            "and the GAMES facet drops every departed card — sold, retired and moved — "
+            "before this fix it summed every card ever captured regardless of Hide sold, "
+            "which is the owner's own 'Pokémon (37) + Riftbound (85) = 122, every card "
+            "ever captured' measurement",
+        )
+        combined_hide = capture_server.do_boxes(rarity="Rare", hide_sold=True)
+        checks.equal(
+            {row["game"]: row["count"] for row in combined_hide["facets"]["games"]},
+            {"riftbound": 1},
+            "filters compose in ANY ORDER: rarity=Rare picked before hide_sold gives the "
+            "identical games count as hide_sold picked first — one live Rare Riftbound "
+            "card, and the sold, retired AND moved Rare ones all excluded — a "
+            "`state == SOLD` mutant would count `rift_d`/`rift_e` here too and answer 3",
         )
 
         # --- the wire itself: `?set=` (blank) means the unclassified bucket, not "unset" --
@@ -8618,6 +8730,42 @@ def check_box_routes_and_search(checks: Checks) -> None:
                 "not a request for every card in the store",
             )
 
+        # F6, round-3 Opus review, 2026-09-25: NO QUERY MAY 500. A NUL byte truncates the
+        # C string sqlite3's driver binds while Python's own `len()` still sees the whole
+        # thing, and the mismatch surfaced as an uncaught `OperationalError` from deep
+        # inside `_fts_query`'s own MATCH — `q=%00` and `q=a%00b` both 500'd. Asserted
+        # in-process first (the refusal itself), then over a real socket (F6's own report
+        # named the WIRE route, `GET /search?q=%00`) so a future regression cannot hide
+        # behind an in-process call that never reaches the real query-string decode.
+        for nul_query in ("\x00", "a\x00b"):
+            refusal(
+                checks,
+                lambda q=nul_query: capture_server.do_search(q),
+                "query_invalid",
+                f"a search for {nul_query!r} refuses as query_invalid rather than 500ing",
+            )
+
+        # AND OVER THE REAL SOCKET, the shape F6's own report named — a query STRING with
+        # a percent-encoded NUL, decoded by `parse_qs` the same way a browser's own request
+        # would arrive.
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for wire_query in ("/search?q=%00", "/search?q=a%00b"):
+                status, body, _ = request(port, "GET", wire_query)
+                checks.equal(
+                    status, 400, f"GET {wire_query} answers 400, never 500",
+                )
+                checks.equal(
+                    error_code(body), "query_invalid",
+                    f"and GET {wire_query} names the refusal",
+                )
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
         found = capture_server.do_search("eiscue")["groups"]
         if checks.equal(
             [group["sku"] for group in found],
@@ -8780,9 +8928,17 @@ def check_search_fts5(checks: Checks) -> None:
     every existing assertion there (`eiscue`, `japanese`, `044/167`, the D67 mixed-number
     case) passes unmodified against this rewrite, which is what proves the CANDIDATE SET
     changed and the ANSWER did not. This function proves the three properties that are new:
-    multi-word any-order matching, prefix matching from a word's start (and the accepted
-    loss of mid-word matching), and that the index tracks every write shape the ordinary
-    application makes, plus the migration that seeds it for a store that predates it.
+    multi-word any-order matching, prefix matching from a word's start, and that the index
+    tracks every write shape the ordinary application makes, plus the migration that seeds
+    it for a store that predates it.
+
+    MID-WORD MATCHING WAS AN ACCEPTED LOSS AND IS NOT ONE ANY MORE (the owner's ruling,
+    2026-09-25: "Add mid-word search"). D271's one matcher wins over this item's own
+    prefix-only trade-off. `server/capture_server.py:_fts_substring_candidates` is a
+    fourth candidate source, a plain SQL `LIKE '%term%'` scan, measured first on a
+    synthetic 2,500-card store before it shipped
+    (`docs/decisions/D271-one-forgiving-search-matcher.md` carries the numbers). The
+    `midword` case below now asserts the FOUND direction.
 
     ORDINARY WRITES EXERCISE `cards_fts_ad` THEN `cards_fts_ai`, NEVER `cards_fts_au` —
     THIS WAS NOT WHAT store/db.py's OWN COMMENT NEXT TO THE THIRD TRIGGER PREDICTS, AND IT
@@ -8821,19 +8977,20 @@ def check_search_fts5(checks: Checks) -> None:
             f"forward={forward!r} backward={backward!r}",
         )
 
-        # --- prefix from a word's start, and the accepted loss of mid-word matching ---
+        # --- prefix from a word's start, and mid-word matching (MID-WORD, 2026-09-25) ---
         prefix = [g["sku"] for g in capture_server.do_search("chariz")["groups"]]
         midword = [g["sku"] for g in capture_server.do_search("izard")["groups"]]
         checks.ok(
             bool(prefix),
             "a partial word typed from its start still hits ('chariz' finds Charizard)",
         )
-        checks.equal(
-            midword, [],
-            "and a mid-word fragment does NOT ('izard' does not find Charizard) — the "
-            "owner was told mid-word matching is the cost of FTS5 over LIKE and took it "
-            "explicitly (docs/specs/store-scaling/08-search-fts5.md); a future session "
-            "'fixing' this is reopening a settled trade-off, not closing a bug",
+        checks.ok(
+            bool(midword) and midword == prefix,
+            "and a mid-word fragment DOES too ('izard' finds Charizard) — the owner "
+            "reversed the earlier trade-off ('Add mid-word search'); measured first on a "
+            "synthetic 2,500-card store, never this repo's own, before it shipped "
+            "(docs/decisions/D271-one-forgiving-search-matcher.md)",
+            f"midword={midword!r} prefix={prefix!r}",
         )
 
         # --- the index tracks capture, sale, box moves and rename -----------------------
@@ -31006,6 +31163,50 @@ def check_order_reconcile_backlog(checks: Checks) -> None:
             "an unknown field refuses — this route never takes a reason; it writes exactly "
             "one",
         )
+
+        # search-server lane, 2026-09-24 (from the Orders review): a cutoff after today
+        # would stand down every open order, live Ready-to-ship included — the SAME
+        # hazard HOR-04 found in the screen's own preview, at the server this time. The
+        # screen already disables the press past today; this is the SECOND guard.
+        future = str(int(order_store.today()[:4]) + 1) + order_store.today()[4:]
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_order_reconcile({"preview": True, "cutoff": future}),
+            "a cutoff after today refuses, even under preview, which writes nothing",
+        )
+        if caught is not None:
+            checks.equal(
+                caught.code, "cutoff_in_future",
+                "and the refusal names itself so a client can tell it apart from "
+                "cutoff_invalid's plain formatting complaint",
+            )
+        checks.equal(
+            capture_server.do_order_reconcile({"preview": True, "cutoff": order_store.today()})["cutoff"],
+            order_store.today(),
+            "today itself is still a valid cutoff — the refusal is strictly AFTER today, "
+            "never on it",
+        )
+
+        # S4, THE OPUS REVIEW, 2026-09-25: THE BOUNDARY ITSELF, NOT A YEAR PAST IT. The
+        # `future` case above jumps a whole year ahead, which a looser mutant (a cutoff
+        # refused only past, say, 30 days out) would still pass — it never asks the one
+        # question the guard's own docstring answers ("NEVER AFTER TODAY... strictly AFTER
+        # today, never on it"): where exactly the line falls. `tomorrow`, one real UTC day
+        # past `order_store.today()`, is that line.
+        tomorrow = (
+            datetime.now(timezone.utc) + timedelta(days=1)
+        ).strftime("%Y-%m-%d")
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_order_reconcile({"preview": True, "cutoff": tomorrow}),
+            "exactly tomorrow refuses too — the boundary is today, not 'today plus some "
+            "slack'",
+        )
+        if caught is not None:
+            checks.equal(
+                caught.code, "cutoff_in_future",
+                "with the same refusal code as a cutoff a year out",
+            )
 
 
 # ---------------------------------------------------------------- the order screen
