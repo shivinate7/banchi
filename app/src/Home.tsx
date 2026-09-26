@@ -845,7 +845,9 @@ export function Home() {
                 // which is `runScope.ts`'s own founding defect (D56), repeated one screen over.
                 const boxLabel = runBoxLabel(run) ?? 'Run'
                 return (
-                  <a key={run.run} className="home-run" href={`#/runs?run=${encodeURIComponent(run.run)}`}>
+                  /* The run's directory name rides a tooltip only (D196), as the Runs sheet's does:
+                     the box label and the age already tell two runs apart. */
+                  <a key={run.run} className="home-run" href={`#/runs?run=${encodeURIComponent(run.run)}`} title={run.run}>
                     <span className="home-run-text">
                       {/* D218: found beyond the reader's own list — `runScope.ts:boxLabel`
                           composes `Box N · Name` off a template literal, so the reader's
@@ -857,7 +859,6 @@ export function Home() {
                           <span key={at}>{part}</span>
                         ))}
                       </span>
-                      <span className="home-run-name bn-mono">{run.run}</span>
                     </span>
                     <span className="home-run-when">{whenLabel(run.updated_at ?? run.created_at)}</span>
                     <StagePill stage={stageOf(run)} />

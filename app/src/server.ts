@@ -64,6 +64,7 @@ import type {
   PricingClearable,
   PricingClearResult,
   PricingWorklist,
+  RunSelection,
   RunSend,
   RunPreflight,
   RunStarted,
@@ -2099,6 +2100,17 @@ export async function preflightRun(send: RunSend): Promise<RunPreflight> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(onTheWire(send)),
   })) as RunPreflight
+}
+
+/** The cards a spend over this selection would buy: photographed, and held by no live claim.
+ *  FREE, decodes nothing. Review's Identify strip counts, prices and spends this one list
+ *  (D291), so the press can never buy a card the strip did not name. */
+export async function waitingCards(selection: RunSelection): Promise<{ keys: string[]; claimed: number }> {
+  return (await request('/pipeline/waiting', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(onTheWire({ selection })),
+  })) as { keys: string[]; claimed: number }
 }
 
 /** ONE PRESS IN THE SHAPE THE ROUTE READS, and the selection is the payload rather than a field

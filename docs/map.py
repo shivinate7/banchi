@@ -5487,7 +5487,7 @@ COMPONENTS = [
                                 "D89", "D100", "D103", "D104", "D105", "D134", "D137", "D145",
                                 "D147", "D156", "D159", "D163", "D165", "D166", "D168", "D170",
                                 "D172", "D174", "D180", "D188", "D189", "D212", "D216", "D219",
-                                "D225", "D227", "D236"],
+                                "D225", "D227", "D236", "D291"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -6275,7 +6275,8 @@ COMPONENTS = [
                                      "loads on its own, so no figure waits on another.",
                              "governed_by": ["D5", "D6", "D10", "D13", "D32", "D33", "D52", "D56",
                                              "D63", "D69", "D86", "D89", "D94", "D95", "D125",
-                                             "D142", "D145", "D156", "D172", "D192", "D202", "D218"]},
+                                             "D142", "D145", "D156", "D172", "D192", "D196", "D202",
+                                             "D218"]},
             "src/Home.css": {"does": "the home screen's look: the hero and its deck, the stage "
                                      "spine, the box and run cards. The one screen in the app "
                                      "that draws a display figure above 36px — "
@@ -6313,9 +6314,7 @@ COMPONENTS = [
                                               "D104", "D113", "D116", "D132", "D134", "D159",
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
-                                              "D225", "D227", "D236", "D252",
-                                              "D268",
-                                              "D273"]},
+                                              "D225", "D227", "D236", "D252", "D268", "D273", "D291"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -6839,8 +6838,8 @@ COMPONENTS = [
                 "governed_by": ["D3", "D4", "D5", "D6", "D9", "D10", "D13", "D22", "D23", "D26",
                                 "D28", "D29", "D32", "D33", "D35", "D37", "D46", "D55", "D67",
                                 "D77", "D87", "D118", "D137", "D162", "D164", "D167", "D172",
-                                "D174", "D194", "D218", "D221", "D252", "D253", "D259", "D288",
-                                "D291"],
+                                "D174", "D180", "D194", "D218", "D221", "D252", "D253", "D259",
+                                "D288", "D291"],
             },
             # D9 governs a stylesheet here, and it is the sharpest instance of what building
             # 7b early costs: the price bands that drive the type scale are the one set of

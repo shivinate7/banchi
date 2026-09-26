@@ -232,13 +232,23 @@ export function selectionOf(draft: SelectionDraft, carried: CarriedScope | null)
   return out
 }
 
-/** THE SEND THE COMPOSER OPENS ON, UNCHANGED: its default start (every card photographed and
- *  not identified) and its default reading. Review's "Identify now" (D291, the owner's ruling
- *  of 2026-09-25) sends exactly this, so the press that skips the pre-check buys the same cards,
- *  read the same way, as the composer's first stage would have quoted. One derivation, here,
- *  beside the composer's own, so the two can never describe different sends. */
-export function defaultSend(): RunSend {
-  return { selection: selectionOf(NO_DRAFT, null), crop: DEFAULT_READING.crop, maxEdge: DEFAULT_READING.maxEdge }
+/** THE SELECTION THE COMPOSER OPENS ON: the ticked cards `#/inventory` handed over, when there
+ *  are any (`Runs.tsx`'s handoff opens it on the `ticked` start), and otherwise every card
+ *  photographed and not identified. Review's Identify strip (D291) names and prices this same
+ *  set, so "Check first" and "Identify now" are over one rule. One derivation, `selectionOf`. */
+export function openingSelection(carried: CarriedScope | null): RunSelection {
+  const ticked = carried !== null && carried.keys.length > 0
+  return selectionOf({ ...NO_DRAFT, start: ticked ? 'ticked' : 'needed' }, ticked ? carried : null)
+}
+
+/** "IDENTIFY NOW" (D291, the owner's ruling of 2026-09-25): exactly the cards the strip
+ *  counted and priced, as a `keys` selection (D180), read the composer's default way. Never a
+ *  state: a capture in another tab after the strip read its list must not grow the spend.
+ *  An empty list is refused here, because the wire drops an empty `keys` term and a send with
+ *  no term at all is a press over the whole store. */
+export function sendOfKeys(keys: readonly string[]): RunSend {
+  if (keys.length === 0) throw new Error('A spend must name at least one card.')
+  return { selection: { keys: [...keys] }, crop: DEFAULT_READING.crop, maxEdge: DEFAULT_READING.maxEdge }
 }
 
 /**

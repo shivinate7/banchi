@@ -1325,6 +1325,39 @@ def do_pipeline_preflight(payload: dict) -> dict:
     return _preflight(_resolve_send(payload))
 
 
+def do_pipeline_waiting(payload: dict) -> dict:
+    """`POST /pipeline/waiting` — the cards a spend over this selection would buy. FREE.
+
+    THE ANSWER REVIEW'S IDENTIFY STRIP COUNTS, PRICES AND SPENDS (D291). A card state is not
+    what the spend counts: the spend counts PHOTOGRAPHS, and a card a live run has already
+    claimed is refused at the press (D174). So this answers the one list both halves read —
+    every photographed card the selection names, minus the ones a live claim holds — and the
+    screen then sends exactly that list as a `keys` selection (D180). A capture in another tab
+    after this answer cannot grow the spend, because the spend names its cards.
+
+    CHEAP ON PURPOSE, AND NOT THE PREFLIGHT. This is `_selection_captures` (a sidecar scan,
+    and the store where a term needs it) and `_send_keys`, the same two reads the spend route
+    makes before it spawns. It decodes no photograph, spawns nothing and writes nothing.
+    """
+    send = _resolve_send(payload)
+    try:
+        keys = _send_keys(_selection_captures(send.selection))
+    except PipelineRefusal as exc:
+        # A selection that names no photograph is an empty answer here, not a refusal: nothing
+        # is waiting. Every other refusal (a malformed term, a store that will not open) stands.
+        if exc.status != HTTPStatus.NOT_FOUND:
+            raise
+        keys = []
+    held: set = set()
+    try:
+        for _, shared in Store().read().submissions.overlap(keys):
+            held.update(shared)
+    except Exception:  # noqa: BLE001 — no claims readable is no claims, the press still refuses
+        pass
+    free = sorted(key for key in set(keys) if key not in held)
+    return {"keys": free, "claimed": len(set(keys)) - len(free)}
+
+
 # ------------------------------------------------------------------- the crop preview
 
 # The band is JPEG at this quality. High, because the whole point of the strip is whether

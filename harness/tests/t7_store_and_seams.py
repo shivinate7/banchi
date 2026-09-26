@@ -26199,6 +26199,23 @@ def check_pipeline_routes(checks: Checks) -> None:
                 "screen can withhold its confirm before the operator reaches for it, in the "
                 "one vocabulary that has an answer for a press over two drawers",
             )
+            # THE STRIP'S LIST (D291): what a spend over this selection would buy — every
+            # photographed card it names, minus the ones a live claim holds. The screen counts,
+            # prices and spends exactly this list, so it must leave the claimed card out.
+            status, body, _ = request(port, "POST", "/pipeline/waiting", payload={"box": 3})
+            waiting = json.loads(body)
+            checks.equal(
+                (status, "3/1" in waiting["keys"], waiting["claimed"], len(waiting["keys"]) > 0),
+                (200, False, 1, True),
+                "POST /pipeline/waiting leaves out the card a live run has claimed, and says it did "
+                "— so Review's strip never offers to buy what is already being paid for",
+            )
+            status, body, _ = request(port, "POST", "/pipeline/waiting", payload={"box": 7})
+            checks.equal(
+                (status, json.loads(body)["claimed"]),
+                (200, 0),
+                "and it claims nothing held over a drawer nobody is paying to read",
+            )
             status, body, _ = request(port, "POST", "/pipeline/preflight", payload={"box": 7})
             checks.equal(
                 json.loads(body)["claimed"],
