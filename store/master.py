@@ -142,6 +142,10 @@ MOVED = "moved"
 # an event sharing a state's word would make a reversal restorable to it.
 PHOTO_RECLAIMED = "photo_reclaimed"
 
+# THE HISTORY EVENT A MOVE'S UNDO WRITES ON THE TRANSPLANT'S KEY (UN-14). An event and not a
+# state, for `PHOTO_RECLAIMED`'s reason. The card's own key logs its restored state instead.
+MOVE_UNDONE = "move_undone"
+
 # A POSITION'S STATE DESCRIBES ONE PHYSICAL CARD AND NOTHING ELSE (D7, amended).
 #
 # `pushed`, `staged` and `live` used to live in this tuple, and a card wore one of them the
@@ -2514,10 +2518,9 @@ class Inventory:
         never receives `photo` as a claim — so the caller (the one place that also moves the
         file on disk) sets it after this returns, inside the same write lock.
 
-        UNDO IS NOT A SEPARATE OPERATION. The transplant is not itself terminal; moving it
-        back is calling this method again in the other direction. It lands at a NEW index in
-        the original box — the tombstoned key is never reclaimed, the same permanent-gap
-        behavior every other terminal state already has.
+        THE UNDO IS `unmove_card` (UN-14), until either box changes. After that, the fix is
+        an ordinary move back: this method again, in the other direction. That lands at a
+        NEW index in the original box, and the tombstoned key is never reclaimed.
 
         Refuses `CardNotFound` if `key` holds no record, `CardDeparted` if it is already
         sold, retired, or moved (a card that left through one door cannot leave again
@@ -2579,6 +2582,47 @@ class Inventory:
         self._log(MOVED, key, moved_to=new_key, run=card.run, cid=transplant.cid)
         self._log(str(transplant.state), new_key, moved_from=key, run=transplant.run)
         return card, transplant
+
+    def unmove_card(self, key: str) -> Tuple[Card, str]:
+        """Undo `move_card`: the card goes back to `key`, and the transplant is deleted.
+
+        UN-14 (`docs/specs/undo.md` section 11.3). Returns `(card, transplant key)`. The
+        card at `key` becomes the transplant's record again, at its own index, so nothing
+        else in either box moves (D58, D118). What changed on the transplant since the move
+        comes back with it.
+
+        THE TRANSPLANT MUST STILL BE THE NEWEST CARD IN ITS BOX. Deleting it then releases
+        its index exactly as D10's undo releases the newest capture. The index belonged to
+        this same card, so no other card's number is ever reused. Whether either box was
+        built on since is the caller's question: it reads history, and this does not.
+
+        Refuses `CardNotFound` if `key` holds no record or its transplant is gone, and
+        `CardDeparted` if `key` is not a moved tombstone or the transplant is not the newest.
+        """
+        card = self.cards.get(key)
+        if card is None:
+            raise CardNotFound(f"no card at {key!r}")
+        if card.state != MOVED or not card.moved_to:
+            raise CardDeparted(f"{key} is {card.state}, not moved")
+        new_key = str(card.moved_to)
+        transplant = self.cards.get(new_key)
+        if transplant is None:
+            raise CardNotFound(f"the card moved from {key} is no longer at {new_key}")
+        # THE SAME CARD, BY ITS NAME (D172), before anything is deleted. `moved_to` is a
+        # key, and a key can hold another card: the demo seed's tombstone names a slot
+        # another card holds. `move_card` put `moved:<name>` on the tombstone, so the two
+        # names must agree, or this would delete a card that never moved.
+        if not transplant.cid or card.cid != f"{MOVED_CID_PREFIX}{transplant.cid}":
+            raise CardNotFound(f"the card at {new_key} is not the one moved from {key}")
+        if int(transplant.index) != self.next_index(transplant.box) - 1:
+            raise CardDeparted(f"{new_key} is no longer the newest card in its box")
+
+        restored = replace(transplant, box=card.box, index=card.index, moved_to=None)
+        del self.cards[new_key]
+        self.cards[key] = restored
+        self._log(MOVE_UNDONE, new_key, moved_back_to=key, run=restored.run)
+        self._log(str(restored.state), key, moved_back_from=new_key, run=restored.run)
+        return restored, new_key
 
     def move_cards(self, keys: Sequence[str], to_box) -> List[Tuple[Card, Card]]:
         """Move several cards to fresh, contiguous indices in `to_box`, in the given order.

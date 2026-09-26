@@ -427,6 +427,51 @@ class Corpus:
         return self._decisions(run_name, skus, unpriced)
 
 
+# ------------------------------------------------------------------ the newest clear (UN-11)
+
+#: The newest mass-clear, kept beside `prices.json` so its undo outlives the toast and a
+#: reload. One clear only: a new clear replaces it, and a restore deletes it.
+LAST_CLEAR_FILENAME = "prices-cleared.json"
+
+
+def last_clear_path() -> Path:
+    from store import files
+
+    return files.prices_path().with_name(LAST_CLEAR_FILENAME)
+
+
+def write_last_clear(cleared: dict, at: int) -> None:
+    """Keep the answers a clear removed, verbatim, and the unix second it removed them.
+
+    `at` is on the posted-price clock (`store/postings.py`), because a send is what builds
+    on a clear, and the two stamps must compare.
+    """
+    from store import files
+
+    files.write_json(last_clear_path(), {"at": int(at), "cleared": dict(cleared)})
+
+
+def read_last_clear() -> Optional[dict]:
+    """The newest clear, or None. A file that will not parse is None: the undo is lost,
+    and nothing in `prices.json` is at risk."""
+    target = last_clear_path()
+    if not target.is_file():
+        return None
+    try:
+        data = json.loads(target.read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("cleared"), dict):
+        return None
+    if not isinstance(data.get("at"), int):
+        return None
+    return data
+
+
+def drop_last_clear() -> None:
+    last_clear_path().unlink(missing_ok=True)
+
+
 # ------------------------------------------------------------------ provenance and the digest
 
 
