@@ -2103,7 +2103,7 @@ export async function preflightRun(send: RunSend): Promise<RunPreflight> {
 }
 
 /** The cards a spend over this selection would buy: photographed, and held by no live claim.
- *  FREE, decodes nothing. Review's Identify strip counts, prices and spends this one list
+ *  FREE, decodes nothing, and writes nothing. Review's Identify strip counts, prices and spends this one list
  *  (D291), so the press can never buy a card the strip did not name. */
 export async function waitingCards(selection: RunSelection): Promise<{ keys: string[]; claimed: number }> {
   return (await request('/pipeline/waiting', {

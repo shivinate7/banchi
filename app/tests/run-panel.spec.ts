@@ -312,6 +312,18 @@ async function open(
      leg and calling it the total.
      THE FIGURES SCALE WITH THE DRAWERS ASKED FOR, so a fixture cannot pass a screen that sent
      something other than what it was showing. */
+  /* REVIEW'S IDENTIFY STRIP (D291) asks which cards a spend would buy, on arrival, whenever a
+     tick list was handed over. Answered with the keys it was asked about: this file is about
+     the Runs sheet, and `review.spec.ts` owns the strip. */
+  await page.route(/\/pipeline\/waiting$/, async (route) => {
+    const body = route.request().postDataJSON() as { keys?: string[] }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ keys: body.keys ?? [], claimed: 0 }),
+    })
+  })
+
   await page.route(/\/pipeline\/preflight$/, async (route) => {
     const body = route.request().postDataJSON() as SelectionBody
     record('POST', route.request().url(), body)
