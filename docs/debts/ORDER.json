@@ -39,6 +39,10 @@
     "034-the-catalogue-cache-never-expires-on-a-membership-claim.md",
     "035-emit-exits-differently-on-one-run-and-several-runs.md",
     "036-a-layout-read-taken-while-the-page-still-moves-is-wrong.md",
-    "037-under-cap-a-pending-copy-and-an-unseen-live-copy-can-both-be-out.md"
+    "037-under-cap-a-pending-copy-and-an-unseen-live-copy-can-both-be-out.md",
+    "038-a-section-move-receipt-names-no-owed-cards-and-no-next-capture.md",
+    "039-the-public-demo-refuses-every-box-map-move.md",
+    "040-a-divider-save-can-move-a-divider-past-departed-records.md",
+    "041-pricing-never-offers-make-this-the-rule.md"
   ]
 }

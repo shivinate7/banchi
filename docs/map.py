@@ -8547,7 +8547,7 @@ COMPONENTS = [
                         "each took exactly one case red. What it found on its first run: "
                         "`.orders-backlog p` inking 950px and six `.kit-spec-note` runs up to "
                         "1254px, none of which carried a measure at all. D118.",
-                "governed_by": ["D27", "D50", "D95", "D123"]},
+                "governed_by": ["D27", "D50", "D95", "D123", "D275"]},
             "tests/button-stack.spec.ts": {
                 "does": "same-role buttons stacked in one sector share a width "
                         "(`D195`), asserted the way `cursor.spec.ts` "

@@ -1332,9 +1332,12 @@
        +4px, 2026-09-25 (D272/D275, the follow-up lane after PR 2): the phone page pad moved
        from a flat 12px to the kit's own `--bn-page-top`, 16px on a phone. Every rect below the
        page head shifts down by that same 4px, confirmed against the real DOM at 390x754 (a
-       measured screenshot pass, not arithmetic): 370px and 218px, the same margins as before,
-       carried forward. */
-    height: clamp(218px, calc(100dvh - 370px - var(--bn-tabbar-h)), 560px);
+       measured screenshot pass, not arithmetic): 370px, the same margin as before, carried
+       forward. THE FLOOR GOES THE OTHER WAY, 214px to 210px (the PR 3 integration): at 390x667
+       with the 34px inset the rows around the stage now total about 354.77px, so the stage has
+       569 - 354.77 = 214.23px. A floor of 218px pushed the shutter 4px into the tab bar
+       (`phone.spec.ts`). 210px keeps the same ~4px cushion. */
+    height: clamp(210px, calc(100dvh - 370px - var(--bn-tabbar-h)), 560px);
     max-height: none;
     align-self: stretch;
   }
