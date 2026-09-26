@@ -554,6 +554,48 @@ ever. It is a rejection of the question AS FRAMED. A session that wants to chang
 should first say what the previous framing got wrong, in one sentence, and should not put the
 same three options to the owner again.
 
+**AMENDMENT, 2026-09-25 — the fallback was the defect, and it is gone.** The shipped
+`pickOrderFor` (`app/src/OrdersWalkPane.tsx`) followed this section's words for the first press
+against each ref. Then it diverged. Once every ref had one copy recorded this pass, it fell back
+to `take.for[0]` unconditionally. It never checked whether that ref still owed anything. Take a
+card wanted by two or more orders, in a bigger quantity than the order count. Say the first ref
+owes less than its round-robin share. A press then went to an ALREADY-FULL order. The server
+refused it (`over_fulfilled`). Every press after that refused the same way, because a refusal
+changes no tally. This was diagnosed and reproduced against a copy of the real store, 2026-09-25
+— Mirror Image, two buyers, four presses, the third and fourth both refused.
+
+The fix. `_walk_plan_order_ref`/`_walk_plan_refs` (`server/capture_server.py`) put `owed` on
+every ref now. It is the ledger's own `outstanding`, zeroed for a stood-down line exactly as
+`demand` already filters, read off the plan's own snapshot. `pickOrderFor` takes the ref whose
+remaining (`owed` minus this pass's own tally) is smallest and still positive. It returns `null`,
+never `for[0]`, once no ref still owes. THIS AMENDS THIS SECTION'S OWN WORDS ABOVE ("the first
+order in the take's `for` that this pass's own tally has not filled") to say what the words
+always meant. No ref this pass has already filled is ever picked again.
+
+The owner also settled the shortfall question this section left open above ("is the heuristic
+the answer"). Asked directly, 2026-09-25, about a card too short to cover every order that wants
+it, verbatim:
+
+> `i'd say just flag as too few on hand orsomething but yea if we were to give it to someone
+> whoever it completes`
+
+So one rule now serves both halves. Smallest-remaining-first empties the ref closest to done
+first. That is the ref a short copy is most likely to complete. It never revisits a full ref.
+Ties go to the order placed longest ago. D212 (no order claims a copy, so there is no assignment
+to make) and D97 (the plan says how many, never which) are both untouched. This still decides
+only which OPEN order a press records against, one press at a time. It never decides which
+physical copy answers it.
+
+**Wording, the same ruling.** "Pick X of Y" let Y count copies the store does not have. A card
+too short to cover the walked demand showed a Y that implied copies elsewhere. Those copies did
+not exist — Rengar's "of 8" when the store held one. The owner, on how to say it, verbatim:
+
+> `say what's short but it's not intuitive to use so much verbiage`
+
+`Y` is now capped at what is really on hand — `take.copies.length`, the store-wide on-hand count
+already on the wire. A short card drops `of Y` for a short flag instead: `Pick 1` beside `7
+short`, never a sentence.
+
 ### The shortfall block
 
 The plan cannot fill every SKU, and on this store it misses 23 of 59. One block, at the foot,
@@ -1001,6 +1043,8 @@ against the intersection build before it was kept.
 
 **BUILT.** The half of §9a finding 4 that was fixed in form and not in substance, plus the
 freeze ruling above it.
+
+**Superseded 2026-09-25: a box has no seal and no capacity (D-sealed-boxes-removed).**
 
 - **`WalkPlanCopy` carries the box's own numbers** — `box_total`, `box_closed` and `fraction`,
   the same three `Place` carries. `_walk_plan_copy` already held them in the block `_Places.of`

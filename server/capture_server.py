@@ -43,6 +43,8 @@
     POST   /boxes/<box>/listings/release   give up what this box's copies could account for,
                                            on the operator's word (D34)
     GET    /search?q=<text>                find a card by name, number, SKU, set hint or note
+    GET    /skus/photos?sku=<s>&sku=<s>    the first on-hand, photographed copy of each named
+                                           SKU — `#/revenue`'s thumbnail lookup (D89's own gap)
     GET    /games                          the per-game registry, as `pipeline/games.py` authors it
     GET    /codes                          the code ledger: counts, tiers, every code (C8)
     GET    /codes/lots                     every lot built so far, newest first
@@ -56,6 +58,8 @@
                                            moment the real one goes in (D10, the capture
                                            screen's `S`). Takes no index: the store reads it
     POST   /pipeline/preflight             what a run would cost. FREE, creates no run
+    POST   /pipeline/waiting               the photographed, unclaimed cards a spend over a
+                                           selection would buy. FREE, decodes nothing
     POST   /pipeline/crop-preview          what the reading sends: the cut, and the digits
     POST   /pipeline/identify              START A RUN. THE ONE THAT SPENDS MONEY
     GET    /tcg/sets                       D65's real set names for a game, for the hint field
@@ -287,7 +291,9 @@ import os
 import re
 import signal
 import socket
+import sqlite3
 import sys
+import unicodedata
 import concurrent.futures
 import threading
 import time
@@ -312,6 +318,7 @@ from pipeline import routing  # noqa: E402
 from pipeline import skus as sku_fill  # noqa: E402
 from pipeline import walkplan  # noqa: E402
 from cli import runs as cli_runs  # noqa: E402
+from server import match  # noqa: E402
 from store import Store, db, files, master, numbers, photos, queues  # noqa: E402
 from store import orders as order_store  # noqa: E402
 
@@ -640,6 +647,9 @@ _BOX_LISTINGS_RELEASE_RE = re.compile(r"^/boxes/(\d+)/listings/release$")
 # nothing at all — the index comes from `next_index` inside the lock, which is the only
 # place it can be read without a round trip that could go stale between the two halves.
 _BOX_SECTIONS_RE = re.compile(r"^/boxes/(\d+)/sections$")
+# The box map (D264): move touching sections as objects.
+_BOX_SECTIONS_MOVE_RE = re.compile(r"^/boxes/(\d+)/sections/move$")
+_BOX_CARDS_MOVE_RE = re.compile(r"^/boxes/(\d+)/cards/move$")
 # D89's pair: the free count of what a reclaim would delete, and the reclaim itself.
 _BOX_PHOTOS_RE = re.compile(r"^/boxes/(\d+)/photos$")
 _BOX_PHOTOS_RECLAIM_RE = re.compile(r"^/boxes/(\d+)/photos/reclaim$")
@@ -939,7 +949,9 @@ BOX_POST_FIELDS = ("box", "name", "sections")
 # body that could rename a box NUMBER would be a renumber, which D10 forbids outright: every
 # position key in `inventory.json`, every photo directory and every printed label is built
 # from it.
-BOX_PUT_FIELDS = ("name", "sections", "state", "section_names")
+# No `state` since `D-sealed-boxes-removed`: a box has no lid, so a body naming one is an
+# unknown field and refused as one.
+BOX_PUT_FIELDS = ("name", "sections", "section_names")
 
 # ----------------------------------------------------------- the order screen, on the wire
 #
@@ -1300,7 +1312,7 @@ IDENTITY_RESTORED = "identity_restored"
 # D20's five, and they differ from the route-written names above in WHO APPENDS THEM. Those are
 # written here, by `_history`, because the store has no opinion about them. These five are
 # written by `store/master.py:Inventory._log` from inside `set_sections`, `ensure_box`,
-# `set_name`, `close_box` and `reopen_box` — the box routes below call those methods and
+# `set_name` and, until `D-sealed-boxes-removed`, `close_box`/`reopen_box` — the box routes call those methods and
 # append nothing themselves. They are named here anyway, and the reason is the paragraph below: this tuple
 # is what the disjointness rule is stated over, and an event this server causes but does not
 # spell would be outside it.
@@ -1317,9 +1329,9 @@ IDENTITY_RESTORED = "identity_restored"
 #                 relabels every card behind it. `do_put_box` recorded the absence of this
 #                 event as a known gap while a name was only a label; it is not only a
 #                 label any more.
-#   box_closed    the lid went on and capacity froze at the fill (D20).
-#   box_reopened  the lid came off and capacity went back to unknown, rather than standing
-#                 as a stale fact.
+#   box_closed    the lid went on and capacity froze at the fill (D20). NOTHING WRITES IT
+#                 SINCE `D-sealed-boxes-removed`; the name stays because old history holds it.
+#   box_reopened  the lid came off. Nothing writes it either, for the same reason.
 RESECTIONED = "resectioned"
 BOX_CREATED = "box_created"
 BOX_RENAMED = "box_renamed"
@@ -2030,8 +2042,13 @@ def _optional_sections(payload: dict) -> Optional[Tuple[int, ...]]:
             f"like [1, 31, 56]. Send [] to go back to the default divider size.",
         )
     try:
-        return master.check_sections(raw)
-    except master.BadSections as exc:
+        # A REPEATED START IS AN EMPTY SECTION, which the editor draws with the start of the
+        # section after it (the R5 review). The list is checked with repeats folded, and kept
+        # with them, so `do_put_box` can keep each empty section's own divider. A repeat that
+        # is not an existing empty section still refuses there, once mapped to keys.
+        master.check_sections(list(dict.fromkeys(raw)))
+        return tuple(int(v) for v in raw)
+    except (master.BadSections, TypeError, ValueError) as exc:
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "sections_invalid",
@@ -2082,26 +2099,7 @@ def _optional_section_names(payload: dict) -> Optional[Dict[int, Optional[str]]]
     return out
 
 
-def _optional_box_state(payload: dict) -> Optional[str]:
-    """`open` or `closed`, or None when the request does not mention the lid.
-
-    Its own code rather than `field_not_settable`, because the field IS settable and the
-    value is not one of the two. The message names both, since this is the control that
-    freezes a box's capacity and a client guessing at `"sealed"` deserves better than a
-    generic refusal.
-    """
-    raw = payload.get("state")
-    if raw is None:
-        return None
-    if not isinstance(raw, str) or raw.strip() not in master.BOX_STATES:
-        raise BadRequest(
-            HTTPStatus.BAD_REQUEST,
-            "box_state_invalid",
-            f"state was {raw!r}; send {' or '.join(master.BOX_STATES)}. Closing a box "
-            f"freezes its capacity at the cards it holds; opening one puts capacity back "
-            f"to unknown.",
-        )
-    return raw.strip()
+_QUERY_LENGTH_CAP = 200
 
 
 def _require_query(query: str) -> str:
@@ -2111,6 +2109,21 @@ def _require_query(query: str) -> str:
     that calls this draws a row per copy with a photo behind each one, and "the operator
     cleared the box" is not a request for all of it — `store/queues.py` makes the same call
     for the same reason when it declines to treat an empty queue as a full one.
+
+    A LONG `q` IS ALSO REFUSED (F1, the Opus review, 2026-09-25; NOT a full defense on its
+    own — `do_search`'s own candidate gathering now dedupes and bounds the TERM COUNT too,
+    R1, round-4 Opus review, 2026-09-25). `_QUERY_LENGTH_CAP` still bounds the wire cost of
+    any single request, the same way a body-size limit bounds a POST regardless of how
+    cheap the handler behind it became. 200 characters is generous against every real field
+    this route ever compares against (`store/master.py:Card`'s longest text field, a note,
+    and the longest order label this repo has ever composed both fit inside a tenth of it).
+
+    NFKC BEFORE THE LENGTH CHECK, NEVER AFTER (R2, round-4 Opus review, 2026-09-25). A
+    single codepoint can expand under NFKC — `"ﷺ"` (a compatibility ligature) becomes
+    about 18 characters — so `"ﷺ" * 200` is 200 characters here and about 3,600 once
+    normalized. `do_search` used to normalize AFTER this function ran, which let the cap be
+    typed around entirely. Normalizing HERE means the cap bounds what every downstream
+    reader (`_fts_query`, `match.match_query`) actually sees, not what arrived on the wire.
     """
     text = (query or "").strip()
     if not text:
@@ -2118,6 +2131,28 @@ def _require_query(query: str) -> str:
             HTTPStatus.BAD_REQUEST,
             "query_required",
             "Send `q` — a name, a collector number, a SKU or a set hint to look for.",
+        )
+    text = unicodedata.normalize("NFKC", text)
+    if len(text) > _QUERY_LENGTH_CAP:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "query_too_long",
+            f"`q` is {len(text)} characters; the limit is {_QUERY_LENGTH_CAP}. Search for "
+            "a name, a collector number, a SKU or a set hint, not a whole sentence.",
+        )
+    if "\x00" in text:
+        # F6, round-3 Opus review, 2026-09-25. `GET /search?q=%00` (and `a%00b`) 500'd:
+        # SQLite's C string binding stops at the first NUL, so a Python string carrying
+        # one truncates on its way into the driver while `sqlite3` itself still expects
+        # the ORIGINAL length, and the mismatch surfaces as `OperationalError:
+        # unterminated string` from deep inside `_fts_query`'s own MATCH — uncaught,
+        # because a NUL byte is not a shape `_require_query` had ever named. No query may
+        # give a 500; this refuses the one byte that can, rather than trying to quote or
+        # strip it out of every SQL string this route ever builds.
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "query_invalid",
+            "`q` may not contain a NUL byte.",
         )
     return text
 
@@ -2174,6 +2209,26 @@ _Boxmates = Tuple[
     Tuple[int, ...],
     Tuple[int, ...],
 ]
+
+
+def _positioner(
+    box: int,
+    layout: Tuple[int, ...],
+    occupied: Tuple[int, ...],
+    order: master.BoxOrder,
+    **extra,
+):
+    """`index -> join.Position` for one box, counted in the box's order (D265).
+
+    `occupied` is the on-hand indices IN PHYSICAL ORDER (index order until something is
+    placed into the box). Mapped to orders once, here, so a walk over a whole box is linear.
+    """
+    if order.identity:
+        return lambda index: join.Position(box, int(index), layout, occupied, **extra)
+    mapped = tuple(order.of(i) for i in occupied)
+    return lambda index: join.Position(
+        box, int(index), layout, occupied, ordered=(order.of(index), mapped, ()), **extra
+    )
 
 
 def _location_of(claim: Optional[str]) -> bool:
@@ -2322,6 +2377,12 @@ class _Places:
         # caches the CARD, which is the layer `view()` cannot see. Safe for the same reason
         # every other cache on this class is: the instance never outlives one request.
         self._of_cache: Dict[Tuple[int, int], dict] = {}
+        # PER-BOX MEMO FOR `Inventory.box_order` (D265), THE PR 3 INTEGRATION. `box_order`
+        # selects the whole box every call, and `.of()` reached it three times per card
+        # (`_company`, the neighbour walk and the block's own `order`). Search's mid-word
+        # widening answers hundreds of rows, so 'ex' on a 3,000-card store spent 17s here.
+        # One request, one snapshot: the order cannot move under this instance.
+        self._order_cache: Dict[int, "master.BoxOrder"] = {}
 
     @classmethod
     def for_keys(
@@ -2366,10 +2427,22 @@ class _Places:
             except master.BadPosition:
                 occupied = None
             else:
-                occupied = tuple(idx for idx, claim in raw if _location_of(claim))
+                order = inventory.box_order(number)
+                occupied = tuple(
+                    sorted((idx for idx, claim in raw if _location_of(claim)), key=order.of)
+                )
             total = len(occupied) if occupied is not None else 0
             self._cache[number] = (entry, layout, int(total), occupied)
         return self
+
+    def _order(self, box) -> "master.BoxOrder":
+        """`Inventory.box_order`, once per box for this instance's life (one request)."""
+        number = int(box)
+        order = self._order_cache.get(number)
+        if order is None:
+            order = self._inventory.box_order(number)
+            self._order_cache[number] = order
+        return order
 
     def view(self, box) -> Tuple[Optional[master.Box], Tuple[int, ...], int, Optional[Tuple[int, ...]]]:
         """`(registry entry or None, validated layout, denominator, on-hand indices)`.
@@ -2486,10 +2559,13 @@ class _Places:
             self._degraded = True
             self._boxmates = {}
             return None
-        occupants = tuple((i, name) for i, name, gone in sorted(rows) if not gone)
+        # IN THE BOX'S ORDER (D265): a neighbour is the card physically next to this one.
+        order = self._order(number)
+        rows.sort(key=lambda row: order.of(row[0]))
+        occupants = tuple((i, name) for i, name, gone in rows if not gone)
         cached = (
             occupants,
-            tuple(i for i, _, gone in sorted(rows) if gone),
+            tuple(sorted(order.of(i) for i, _, gone in rows if gone)),
             tuple(where for where, (_, name) in enumerate(occupants) if name is not None),
         )
         self._boxmates[number] = cached
@@ -2555,7 +2631,13 @@ class _Places:
             return None, None
         occupants, gaps, named = mates
 
-        indices = [i for i, _ in occupants]
+        # IN ORDER SPACE (D265). `gaps` is already orders; `at`, `start` and `end` are
+        # indices, mapped here. With no order, each map is the identity.
+        order = self._order(box)
+        indices = [order.of(i) for i, _ in occupants]
+        at = order.of(at)
+        start = order.of(start)
+        end = None if end is None else order.of(end)
         before = bisect_left(indices, at) - 1
         after = bisect_right(indices, at)
 
@@ -2627,7 +2709,6 @@ class _Places:
                 "section_start": None,
                 "section_end": None,
                 "box_total": 0,
-                "box_closed": False,
                 "fraction": None,
                 # D30's decoration answers null with the rest of the place: a pooled card
                 # has no slot to count from and no section to have gaps in. Null and not
@@ -2664,16 +2745,16 @@ class _Places:
                 "section_start": None,
                 "section_end": None,
                 "box_total": 0,
-                "box_closed": bool(entry.closed) if entry is not None else False,
                 "neighbors": None,
                 "section_gaps": None,
                 "fraction": None,
             }
 
         # THE NAME RIDES THE POSITION, so the label says it (D259).
-        position = join.Position(
-            number, at, layout, occupied, box_name=entry.name if entry is not None else None
-        )
+        position = _positioner(
+            number, layout, occupied, self._order(number),
+            box_name=entry.name if entry is not None else None,
+        )(at)
         slot = position.slot
 
         # `Position.section_end` IS None FOR THE FINAL DECLARED SECTION, on purpose: it runs
@@ -2718,6 +2799,9 @@ class _Places:
             "label": position.label,
             "box": number,
             "index": at,
+            # WHERE THE CARD STANDS IN ITS BOX, 1 AT THE FAR BACK (D265): the sort key a walk
+            # orders by. It equals `index` until something is placed into the box. Never drawn.
+            "order": self._order(number).of(at),
             # D58 — this card's number among the cards in the box, which is what every
             # rendered number on the screen counts in. `index` above it is the STORE KEY:
             # the route path, the photo filename and what every write aims by. They differ
@@ -2742,7 +2826,6 @@ class _Places:
             "section_start": position.section_start,
             "section_end": end,
             "box_total": total,
-            "box_closed": bool(entry.closed) if entry is not None else False,
             # D30's digital half: what makes `Card 17` countable by hand again once the
             # section has holes. Both null together when the walk degraded — the app
             # draws no sentence, which is the honest rendering of "cannot say".
@@ -4253,6 +4336,24 @@ def _drop_from_stores(snapshot, key: str) -> Tuple[bool, bool, bool]:
     return review_deleted, parked_deleted, cache_deleted
 
 
+def _move_links(inventory: master.Inventory) -> Dict[str, List[master.Card]]:
+    """Every tombstone with a move link, by the key its link names (D262). One indexed read."""
+    pointing: Dict[str, List[master.Card]] = {}
+    for tomb in inventory.cards.where(state=master.MOVED):
+        if tomb.moved_to:
+            pointing.setdefault(tomb.moved_to, []).append(tomb)
+    return pointing
+
+
+def _clear_move_links(pointing: Dict[str, List[master.Card]], key: str) -> None:
+    """A MOVE LINK TO A DELETED CARD IS CLEARED (the R4 and R5 reviews). It names nothing now,
+    and after a capture-undo the same key can hold a new card. The join already refuses a
+    link whose card has another name (`cli/resolve.py:follow_moved`), and the record says so
+    too. Both deletes, `do_delete_card` and `do_remove_card`, call this."""
+    for tomb in pointing.pop(key, ()):
+        tomb.moved_to = None
+
+
 def do_delete_card(box: int, index: int) -> dict:
     """Undo one capture: the record, the queue entries and the paid answer, then the files.
 
@@ -4465,6 +4566,9 @@ def do_delete_card(box: int, index: int) -> dict:
         sidecar = sidecar_for(inventory, card)
 
         del inventory.cards[key]
+        # The next capture takes this index again, so a move link to it must not survive to
+        # name that new card (the R5 review).
+        _clear_move_links(_move_links(inventory), key)
 
         # `_drop_from_stores` has the argument in full — the wreckage undo used to leave in
         # the queue files and the answer cache, and why the pops are unconditional where
@@ -4735,6 +4839,7 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
                 gone = (
                     f"retired: {other.retire_reason}"
                     if other.state == master.RETIRED
+                    else "moved" if other.state == master.MOVED
                     else "sold"
                 )
                 blockers.append((at, f"{where} is {gone}"))
@@ -4797,12 +4902,23 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
         del inventory.cards[key]
         review_deleted, parked_deleted, cache_deleted = _drop_from_stores(snapshot, key)
 
+        # Tombstones anywhere whose move link names a card about to slide (D262), after the
+        # links to the deleted card itself are cleared.
+        pointing = _move_links(inventory)
+        _clear_move_links(pointing, key)
         for at, old_key, other in movers:
             new_index = at - 1
             new_key = master.position_key(box, new_index)
             del inventory.cards[old_key]
             other.box = int(box)
             other.index = new_index
+            # NO ORDER KEY IS WRITTEN (D265, the R3 review). Every card keeps its key, so
+            # every card keeps its place; the deleted card leaves a gap in key space, which
+            # nothing counts. A key that slid with its index crossed the keys of placed cards.
+            # THE MOVE LINK FOLLOWS THE SLIDE (D262): a tombstone that named this card's old
+            # place names its new one, so the join can still follow it.
+            for tomb in pointing.get(old_key, ()):
+                tomb.moved_to = new_key
             # DERIVED FROM THE CARD'S NAME AND THEREFORE UNCHANGED BY THE SHIFT. It was
             # re-derived from `(box, new_index)` here, fresh rather than string-edited, to
             # keep a stale absolute path from another machine's store from surviving a
@@ -4905,7 +5021,13 @@ def do_remove_card(box: int, index: int, payload: dict) -> dict:
 
 
 def _move_one(
-    snapshot, inventory: master.Inventory, key: str, box: int, index: int, to_box: int
+    snapshot,
+    inventory: master.Inventory,
+    key: str,
+    box: int,
+    index: int,
+    to_box: int,
+    slot: Optional[Tuple[int, float]] = None,
 ) -> dict:
     """One card's whole move, against an ALREADY-OPEN snapshot. `do_move_card`'s body,
     lifted out so `do_move_cards` can call it in a loop inside ONE `Store.write()` — the
@@ -4916,7 +5038,7 @@ def _move_one(
     that method itself raises as a backstop. The reason is the same one every other
     terminal-state refusal in this file gives: a person reading `card_sold` knows to send
     `undo` to `/sold` first, and `card_departed` naming nothing would send them hunting.
-    `CardNotFound`/`CardDeparted`/`BoxClosed`/`PositionOccupied` still reach `_dispatch`'s
+    `CardNotFound`/`CardDeparted`/`PositionOccupied` still reach `_dispatch`'s
     generic handlers for any caller that skips these checks — store/master.py's own
     defense, not duplicated here, just not solely relied upon.
 
@@ -4968,8 +5090,22 @@ def _move_one(
             f"{join.said_place(inventory, box, index)} was already moved to {card.moved_to} (D83). Move "
             f"the transplant at {card.moved_to} instead.",
         )
+    # A CARD WITH A LIVE PAID READING DOES NOT MOVE (D262, D174). The claim holds this
+    # key, and the batch writes its answer onto that key when it lands. Moved, the key is a
+    # tombstone: the answer lands there and the card stays unidentified, with the money
+    # spent. `Submissions.overlap` is the check every paid press already makes.
+    held = snapshot.submissions.overlap([key])
+    if held:
+        runs_named = ", ".join(sub.run or sub.receipt for sub, _ in held)
+        raise BadRequest(
+            HTTPStatus.CONFLICT,
+            "card_being_read",
+            f"{join.said_place(inventory, box, index)} is being read by a paid run "
+            f"({runs_named}). Move it after that reading lands, or release the claim on "
+            f"Runs first. Nothing was moved.",
+        )
 
-    tombstone, transplant = inventory.move_card(key, to_box)
+    tombstone, transplant = inventory.move_card(key, to_box, slot=slot)
     new_key = transplant.key
 
     # THE TRANSPLANT KEEPS THE NAME AND THEREFORE THE PATH. `move_card` hands it this card's
@@ -5279,6 +5415,8 @@ def do_move_cards(box: int, payload: dict) -> dict:
                 "to_box_same",
                 f"to_box is {join.said_place(inventory, box)} itself — nothing to move.",
             )
+        # IN THE BOX'S ORDER (D265), so the cards land at the destination as they stood.
+        wanted = sorted(wanted, key=inventory.box_order(box).of)
         results = []
         for at in wanted:
             key = master.position_key(box, at)
@@ -5290,6 +5428,620 @@ def do_move_cards(box: int, payload: dict) -> dict:
         "moved": len(results),
         "cards": results,
     }
+
+
+# ---------------------------------------------------------------- the box map (D264, D265)
+#
+# A SECTION IS AN OBJECT THAT MOVES WHOLE, AND A CARD OR A RANGE MOVES BY ITSELF. One press
+# moves touching sections (with their dividers and names), or one card or a range of cards
+# from one section, to a gap in a box: the same box reorders. ONE `Store.write()` per press,
+# so a refusal part way through writes nothing. Each card that crosses boxes goes through
+# `_move_one`, so every guard a single move has (a live paid reading, a card that already
+# left) holds here too, and the queues and the cache follow each card by the same code.
+#
+# EACH MOVED CARD TAKES A NEW ORDER KEY BETWEEN ITS NEW NEIGHBOURS' KEYS (D265, the owner's
+# ruling "A key on each card"), in the same write. `Inventory.place` is the one placement.
+#
+# THE RECEIPT IS THE PHYSICAL INSTRUCTION, in the owner's orientation: card 1 is at the far
+# back, and a section's cards stand on the near side of its divider (`docs/specs/box-map.md`
+# section 5.4). UNDO IS EXACT while neither box has changed since, which is a comparison of
+# the two boxes' own records, never a clock (`docs/specs/undo.md` section 2).
+
+SECTIONS_MOVED = "sections_moved"
+SECTIONS_MOVE_UNDONE = "sections_move_undone"
+MOVE_SECTIONS_FIELDS = ("first", "last", "to_box", "new_box", "before", "aim")
+MOVE_RANGE_FIELDS = ("indices", "to_box", "before_card", "section_end", "aim")
+UNDO_SECTIONS_FIELDS = ("move",)
+
+
+def _box_digest(inventory: master.Inventory, box: int) -> str:
+    """One box as it stands: its record and every card record in it, hashed. What undo
+    compares, so "neither box has changed" is a fact about the data and not about a clock."""
+    entry = inventory.box(box)
+    body = {
+        "box": asdict(entry) if entry is not None else None,
+        "cards": [asdict(card) for _, _, card in inventory.records_in(box)],
+    }
+    return hashlib.sha256(json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def _divider_words(names: Dict[int, str], ordinal: int) -> str:
+    name = names.get(ordinal)
+    return f"the divider {name}" if name else f"the divider of Section {ordinal}"
+
+
+def _landmarks(
+    inventory: master.Inventory, box: int, slots: Sequence[int]
+) -> Tuple[Optional[str], Optional[str], int]:
+    """The first and last NAMED card of a run of slots, and how many cards are on hand in it.
+    A card nobody has named is not a landmark (D116)."""
+    named: List[str] = []
+    count = 0
+    for at in slots:
+        card = inventory.cards.get(master.position_key(box, at))
+        if card is None or card.state in master.TERMINAL_STATES:
+            continue
+        count += 1
+        if isinstance(card.name, str) and card.name:
+            named.append(card.name)
+    return (named[0] if named else None, named[-1] if named else None, count)
+
+
+def _card_name(inventory: master.Inventory, box: int, index: int) -> Optional[str]:
+    card = inventory.cards.get(master.position_key(box, index))
+    return card.name if card is not None and isinstance(card.name, str) and card.name else None
+
+
+def _find_words(first: Optional[str], last: Optional[str], count: int, what: str) -> str:
+    if first and last and first != last:
+        return f"{what}. Its first card is {first}. Its last card is {last}."
+    if first:
+        return f"{what}. Its first card is {first}."
+    return f"{what}."
+
+
+def _section_move_receipt(
+    names: Dict[int, str],
+    src_title: str,
+    dst_title: str,
+    chosen: Sequence[int],
+    landmarks: Tuple[Optional[str], Optional[str], int],
+    target: Optional[Tuple[int, Optional[str]]],
+    dst_empty: bool,
+    renumbered: List[str],
+) -> dict:
+    """The physical instruction for a section move: a heading and numbered steps (5.4).
+
+    "Behind" and "in front of" are never used alone. The steps say "on your side" and "on the
+    far side", because card 1 is at the far back of a box."""
+    first, last, count = landmarks
+    what = (
+        _divider_words(names, chosen[0])
+        if len(chosen) == 1
+        else f"{_divider_words(names, chosen[0])} and the {_plural(len(chosen) - 1, 'divider')} after it"
+    )
+    heading = (
+        f"Move {_plural(count, 'card')} in {src_title}."
+        if src_title == dst_title
+        else f"Move {_plural(count, 'card')} from {src_title} to {dst_title}."
+    )
+    # SECTION 1 MAY HAVE NO PLASTIC IN FRONT OF IT: the front of the box is its divider
+    # (D10). So a move of section 1 finds the cards, not a divider, and a landing in front
+    # of section 1 asks for a divider only where the cards already there have none.
+    front = chosen[0] == 1
+    if front:
+        what = f"the {_plural(count, 'card')} at the far back"
+    steps = [_find_words(first, last, count, f"In {src_title}, find {what}")]
+    dividers = "that divider" if len(chosen) == 1 else f"those {len(chosen)} dividers"
+    if front:
+        steps.append(
+            f"Take out those {_plural(count, 'card')} up to the next divider, with any "
+            f"divider in front of them."
+        )
+    else:
+        steps.append(
+            f"Take out {dividers} and the {_plural(count, 'card')} on your side of it, "
+            f"up to the next divider."
+        )
+    if dst_empty:
+        steps.append(f"Put them into {dst_title} in the same order, card 1 farthest from you.")
+    elif target is None:
+        steps.append(f"In {dst_title}, put them at the end nearest you, in the same order.")
+    elif target[0] == 1:
+        steps.append(
+            f"In {dst_title}, put them at the far back, in the same order. If the cards "
+            f"already there have no divider, put one in front of them."
+        )
+    else:
+        ordinal, name = target
+        at = f"the divider {name}" if name else f"the divider of Section {ordinal}"
+        steps.append(f"In {dst_title}, find {at}. Put them just on the far side of it, in the same order.")
+    return {"heading": heading, "steps": steps, "renumbered": renumbered}
+
+
+def _section_idents(sections: Sequence[Dict[str, object]]) -> Dict[str, int]:
+    """A section's identity (its first slot's index, or its divider) to its ordinal."""
+    return {
+        (str(sec["slots"][0]) if sec["slots"] else f"at{sec['div']}"): ordinal
+        for ordinal, sec in enumerate(sections, start=1)
+    }
+
+
+def _renumbered(
+    title: str, names: Dict[int, str], was: Dict[str, int], now: Dict[str, int]
+) -> List[str]:
+    """`In RB Origins, Signatures moves from Section 3 to Section 2.` for each section that
+    stayed in this box and whose number changed."""
+    lines = []
+    for ident, old in sorted(was.items(), key=lambda kv: kv[1]):
+        new = now.get(ident)
+        if new is None or new == old:
+            continue
+        label = names.get(old) or f"Section {old}"
+        lines.append(f"In {title}, {label} moves from Section {old} to Section {new}.")
+    return lines
+
+
+def _box_state(inventory: master.Inventory, box: int) -> Optional[dict]:
+    """What undo puts back for one box: its dividers, their names, and every card's key."""
+    entry = inventory.box(box)
+    if entry is None:
+        return None
+    return {
+        "sections": list(entry.sections),
+        "section_names": dict(entry.section_names),
+        "keys": {key: card.order for _, key, card in inventory.records_in(box)},
+    }
+
+
+def _aim_or_refuse(
+    inventory: master.Inventory, box: int, indices: Sequence[int], aim, title: str
+) -> None:
+    """The write carries what the screen saw: the count and the first and last card's name."""
+    if aim is None:
+        return
+    cids = [inventory.cards[master.position_key(box, at)].cid for at in indices]
+    seen = {"count": len(indices), "first": cids[0] if cids else None, "last": cids[-1] if cids else None}
+    if not isinstance(aim, dict) or any(aim.get(k) != v for k, v in seen.items()):
+        raise BadRequest(
+            HTTPStatus.CONFLICT, "section_changed",
+            f"{title} changed since the map was drawn, so nothing was moved. "
+            f"Look at the map again and move it once more.",
+        )
+
+
+def _cross(
+    snapshot, inventory: master.Inventory, box: int, indices: Sequence[int], to_box: int
+) -> Tuple[List[int], List[List[object]]]:
+    """Move each card to `to_box` through `_move_one`. Returns the new indices, in order, and
+    what undo needs for each: `[old key, new key, state, state_at, photo]`."""
+    block: List[int] = []
+    pairs: List[List[object]] = []
+    # THE DESTINATION'S NEXT INDEX AND KEY ARE READ ONCE PER PRESS (the R3 review): one
+    # scan, then each card takes the next pair. The cards land at the back, and
+    # `Inventory.place` gives them their real keys.
+    next_index = inventory.next_index(to_box)
+    next_key = inventory.next_key(to_box)
+    for n, at in enumerate(indices):
+        key = master.position_key(box, at)
+        card = inventory.cards[key]
+        kept: List[object] = [key, None, card.state, card.state_at, card.photo]
+        moved = _move_one(
+            snapshot, inventory, key, box, at, to_box, slot=(next_index + n, next_key + n)
+        )
+        kept[1] = moved["to"]
+        block.append(int(moved["new_index"]))
+        pairs.append(kept)
+    return block, pairs
+
+
+def _record_move(
+    inventory: master.Inventory,
+    *,
+    kind: str,
+    box: int,
+    to_box: int,
+    created: Optional[int],
+    moved: int,
+    undo: dict,
+    receipt: dict,
+    landed: List[int],
+) -> dict:
+    move_id = uuid.uuid4().hex[:12]
+    after = {str(int(box)): _box_digest(inventory, box)}
+    if int(to_box) != int(box):
+        after[str(int(to_box))] = _box_digest(inventory, to_box)
+    inventory._log(
+        SECTIONS_MOVED, None, move=move_id, kind=kind, box=int(box), to_box=int(to_box),
+        created=created, moved=moved, undo=undo, after=after,
+    )
+    rows = [_box_row(inventory, box)]
+    if int(to_box) != int(box):
+        rows.append(_box_row(inventory, to_box))
+    return {
+        "move": move_id,
+        "box": int(box),
+        "to_box": int(to_box),
+        "created": created,
+        "moved": moved,
+        "landed": landed,
+        "receipt": receipt,
+        "boxes": rows,
+    }
+
+
+def _destination(inventory: master.Inventory, payload: dict, box: int) -> Tuple[int, Optional[int]]:
+    """`(to_box, created)`: the box named, or a new one when `new_box` is true."""
+    if payload.get("new_box") is True:
+        to_box = inventory.next_box_number()
+        inventory.ensure_box(to_box)
+        return to_box, to_box
+    to_box = _require_to_box(payload)
+    dst = inventory.box(to_box)
+    # A BOX THE REGISTRY DOES NOT HOLD IS REFUSED, NEVER MADE (the R3 review): a move must not
+    # create a box silently, and a receipt must never name a box the store does not have
+    # (D259). `new_box` is the one way a move makes a box.
+    if dst is None:
+        raise BadRequest(
+            HTTPStatus.NOT_FOUND, "box_not_found",
+            "That box does not exist any more. Look at the map again.",
+        )
+    return to_box, None
+
+
+def do_move_sections(box: int, payload: dict) -> dict:
+    """`POST /boxes/<box>/sections/move`: move touching sections as objects (D264).
+
+    `first`..`last` are the source ordinals: one section is `first == last`, a merge is every
+    section, a split is one section to the last with `new_box: true`. `to_box` is the
+    destination, or the source itself to reorder. `before` is the destination ordinal the
+    sections land in front of, or null for the near end. `aim` is what the screen saw,
+    `{"count", "first", "last"}` over the moved cards' names (cids), refused on a mismatch.
+    """
+    _reject_unknown(payload, MOVE_SECTIONS_FIELDS)
+    try:
+        first = int(payload.get("first"))
+        last = int(payload.get("last", first))
+        before = None if payload.get("before") is None else int(payload["before"])
+    except (TypeError, ValueError):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST, "sections_invalid",
+            "Send the first and last section to move, and the gap, as whole numbers.",
+        ) from None
+    if payload.get("new_box") is not True and payload.get("to_box") is None:
+        raise BadRequest(HTTPStatus.BAD_REQUEST, "to_box_required", "Send a box to move them into.")
+
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        if inventory.box(box) is None:
+            raise BadRequest(HTTPStatus.NOT_FOUND, "box_not_found", "That box does not exist.")
+        src_title = inventory.box_title(box)
+        sections = inventory.layout_of(box)
+        if not (1 <= first <= last <= len(sections)):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST, "sections_invalid",
+                f"{src_title} has {_plural(len(sections), 'section')}. Choose sections that exist.",
+            )
+        chosen = list(range(first, last + 1))
+        slots = [at for j in chosen for at in sections[j - 1]["slots"]]
+        on_hand = [at for at in slots if inventory._on_hand(box, at)]
+        if not on_hand:
+            raise BadRequest(
+                HTTPStatus.CONFLICT, "section_empty",
+                f"That section of {src_title} holds no cards, so there is nothing to move.",
+            )
+        _aim_or_refuse(inventory, box, on_hand, payload.get("aim"), src_title)
+        to_box, created = _destination(inventory, payload, box)
+        same = int(to_box) == int(box)
+        dst_sections = sections if same else inventory.layout_of(to_box)
+        if before is not None and not (1 <= before <= len(dst_sections)):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST, "before_invalid",
+                f"{inventory.box_title(to_box)} has no Section {before} to put them in front of.",
+            )
+        if same and (
+            (before is not None and first <= before <= last + 1)
+            or (before is None and last == len(sections))
+        ):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST, "before_invalid",
+                "The sections are already there. Choose another gap.",
+            )
+
+        dst_title = inventory.box_title(to_box)
+        src_names = inventory.section_names_for(box)
+        dst_names = src_names if same else inventory.section_names_for(to_box)
+        landmarks = _landmarks(inventory, box, slots)
+        target = None if before is None else (before, dst_names.get(before))
+        dst_empty = not same and not any(
+            inventory._on_hand(to_box, at) for sec in dst_sections for at in sec["slots"]
+        )
+        was_src = {k: v for k, v in _section_idents(sections).items() if not first <= v <= last}
+        was_dst = {} if same else _section_idents(dst_sections)
+        undo = {
+            "src": _box_state(inventory, box),
+            "dst": None if same else _box_state(inventory, to_box),
+            "pairs": [],
+        }
+
+        names = [sections[j - 1]["name"] for j in chosen]
+        if same:
+            items = []
+            for j, name in zip(chosen, names):
+                items.append(("div", name))
+                items += [("card", at) for at in sections[j - 1]["slots"]]
+            inventory.drop_sections(box, chosen)
+            gap = ("end", None) if before is None else (
+                "before", before - sum(1 for j in chosen if j < before)
+            )
+            landed = inventory.place(box, items, gap)
+        else:
+            block, undo["pairs"] = _cross(snapshot, inventory, box, on_hand, to_box)
+            arrived = iter(block)
+            items = []
+            for j, name in zip(chosen, names):
+                items.append(("div", name))
+                items += [
+                    ("card", next(arrived))
+                    for at in sections[j - 1]["slots"]
+                    if at in set(on_hand)
+                ]
+            inventory.drop_sections(box, chosen)
+            landed = inventory.place(
+                to_box, items, ("end", None) if before is None else ("before", before)
+            )
+
+        renumbered = _renumbered(
+            src_title, src_names, was_src, _section_idents(inventory.layout_of(box))
+        )
+        if not same:
+            renumbered += _renumbered(
+                dst_title, dst_names, was_dst, _section_idents(inventory.layout_of(to_box))
+            )
+        receipt = _section_move_receipt(
+            src_names, src_title, dst_title, chosen, landmarks, target, dst_empty, renumbered
+        )
+        return _record_move(
+            inventory, kind="sections", box=box, to_box=to_box, created=created,
+            moved=landmarks[2], undo=undo, receipt=receipt, landed=landed,
+        )
+
+
+def do_move_range(box: int, payload: dict) -> dict:
+    """`POST /boxes/<box>/cards/move`: one card, or a range of cards from one section (D264).
+
+    `indices` are the stored indices of the cards, in the order they stand, all in one
+    section. The gap is `before_card` (a card's index in `to_box`: the cards go on its far
+    side, into its section) or `section_end` (an ordinal of `to_box`: after that section's
+    last card). No divider moves. `aim` is the screen's `{"count", "first", "last"}`.
+    """
+    _reject_unknown(payload, MOVE_RANGE_FIELDS)
+    raw = payload.get("indices")
+    try:
+        indices = [int(v) for v in raw] if isinstance(raw, list) and raw else None
+        before_card = None if payload.get("before_card") is None else int(payload["before_card"])
+        section_end = None if payload.get("section_end") is None else int(payload["section_end"])
+    except (TypeError, ValueError):
+        indices = None
+    if indices is None or (before_card is not None and section_end is not None):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST, "range_invalid",
+            "Send the cards to move, and at most one gap: a card to go in front of, or a "
+            "section's end. No gap is the end of the box nearest you.",
+        )
+    if payload.get("to_box") is None:
+        raise BadRequest(HTTPStatus.BAD_REQUEST, "to_box_required", "Send a box to move them into.")
+
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        if inventory.box(box) is None:
+            raise BadRequest(HTTPStatus.NOT_FOUND, "box_not_found", "That box does not exist.")
+        src_title = inventory.box_title(box)
+        sections = inventory.layout_of(box)
+        owner = next(
+            (n for n, sec in enumerate(sections, 1) if set(indices) <= set(sec["slots"])), None
+        )
+        if owner is None or any(not inventory._on_hand(box, at) for at in indices):
+            raise BadRequest(
+                HTTPStatus.CONFLICT, "range_invalid",
+                f"Those cards are not all on hand in one section of {src_title}. "
+                f"Look at the map again.",
+            )
+        order = {at: n for n, at in enumerate(sections[owner - 1]["slots"])}
+        indices = sorted(indices, key=order.get)
+        _aim_or_refuse(inventory, box, indices, payload.get("aim"), src_title)
+        to_box, _ = _destination(inventory, payload, box)
+        same = int(to_box) == int(box)
+        if same and before_card in indices:
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST, "before_invalid",
+                "The cards cannot go in front of one of themselves. Choose another gap.",
+            )
+        dst_title = inventory.box_title(to_box)
+        dst_sections = sections if same else inventory.layout_of(to_box)
+        dst_names = inventory.section_names_for(to_box)
+        # NO GAP IS THE NEAR END: the end of the last section, or an empty box.
+        if before_card is None and section_end is None and dst_sections:
+            section_end = len(dst_sections)
+        if before_card is not None:
+            # A CARD ON HAND ONLY: a sold card or a tombstone is not where a hand can put
+            # anything in front of (the R3 review).
+            if not inventory._on_hand(to_box, before_card):
+                raise BadRequest(
+                    HTTPStatus.BAD_REQUEST, "before_invalid",
+                    f"{dst_title} has no card on hand there to put them in front of.",
+                )
+            gap = ("card", before_card)
+            there = _card_name(inventory, to_box, before_card)
+            put = (
+                f"In {dst_title}, find {there}. Put them just on the far side of it, in the same order."
+                if there
+                else f"In {dst_title}, find the card the map shows. Put them just on the far side of it, in the same order."
+            )
+        elif section_end is None:
+            gap = ("end", None)
+            put = f"Put them into {dst_title} in the same order, card 1 farthest from you."
+        else:
+            if not 1 <= section_end <= len(dst_sections):
+                raise BadRequest(
+                    HTTPStatus.BAD_REQUEST, "before_invalid",
+                    f"{dst_title} has no Section {section_end}.",
+                )
+            gap = ("section_end", section_end)
+            standing = [
+                at for at in dst_sections[section_end - 1]["slots"]
+                if inventory._on_hand(to_box, at) and at not in indices
+            ]
+            last = _card_name(inventory, to_box, standing[-1]) if standing else None
+            if last:
+                put = f"In {dst_title}, find {last}. Put them just on your side of it, in the same order."
+            else:
+                put = (
+                    f"In {dst_title}, find {_divider_words(dst_names, section_end)}. "
+                    f"Put them just on your side of it, in the same order."
+                )
+        if same and _range_stays(sections, owner, indices, gap, inventory, box):
+            raise BadRequest(
+                HTTPStatus.BAD_REQUEST, "before_invalid",
+                "The cards are already there. Choose another gap.",
+            )
+        first, last_name, count = _landmarks(inventory, box, indices)
+        heading = (
+            f"Move {_plural(count, 'card')} in {src_title}."
+            if same
+            else f"Move {_plural(count, 'card')} from {src_title} to {dst_title}."
+        )
+        steps = [
+            _find_words(first, last_name, count, f"In {src_title}, Section {owner}, find "
+                        f"{'the card' if count == 1 else f'the {count} cards'} the map shows"),
+            f"Take out {'that card' if count == 1 else f'those {count} cards'}, and no divider.",
+            put,
+        ]
+        undo = {
+            "src": _box_state(inventory, box),
+            "dst": None if same else _box_state(inventory, to_box),
+            "pairs": [],
+        }
+        if same:
+            items = [("card", at) for at in indices]
+        else:
+            block, undo["pairs"] = _cross(snapshot, inventory, box, indices, to_box)
+            items = [("card", at) for at in block]
+        inventory.place(to_box, items, gap)
+        receipt = {"heading": heading, "steps": steps, "renumbered": []}
+        return _record_move(
+            inventory, kind="cards", box=box, to_box=to_box, created=None,
+            moved=count, undo=undo, receipt=receipt, landed=[],
+        )
+
+
+def _range_stays(sections, owner: int, indices, gap, inventory, box) -> bool:
+    """Whether a same-box card move would leave every card where it stands (a no-op).
+
+    The moved cards stand together in their section when no on-hand card sits between them.
+    Then the gap in front of the first on-hand card after them, or the end of their own section
+    when none follows, is where they already are.
+    """
+    slots = [at for at in sections[owner - 1]["slots"] if inventory._on_hand(box, at) or at in indices]
+    where = [slots.index(at) for at in indices]
+    if where != list(range(where[0], where[0] + len(where))):
+        return False
+    after = slots[where[-1] + 1:]
+    kind, at = gap
+    if kind == "card":
+        return bool(after) and at == after[0]
+    if kind == "section_end":
+        return at == owner and not after
+    return False
+
+
+def do_undo_section_move(payload: dict) -> dict:
+    """`POST /boxes/sections/undo`: put a section or card move back exactly (D264).
+
+    ALLOWED ONLY WHILE NEITHER BOX HAS CHANGED SINCE THE MOVE. Both boxes' records are hashed
+    and compared with the hashes the move wrote. A capture, a sale, a rename or another move
+    in either box refuses, and then the way back is a new move.
+    """
+    _reject_unknown(payload, UNDO_SECTIONS_FIELDS)
+    move_id = _optional_text(payload, "move")
+    if not move_id:
+        raise BadRequest(HTTPStatus.BAD_REQUEST, "move_required", "Send the move to undo.")
+    found = next(
+        (e for e in Store().named_events(SECTIONS_MOVED) if e.get("move") == move_id), None
+    )
+    if found is None:
+        raise BadRequest(HTTPStatus.NOT_FOUND, "move_not_found", "That move is not on record.")
+    if any(e.get("move") == move_id for e in Store().named_events(SECTIONS_MOVE_UNDONE)):
+        raise BadRequest(HTTPStatus.CONFLICT, "move_undone", "That move is already undone.")
+
+    box = int(found["box"])
+    to_box = int(found["to_box"])
+    undo = found.get("undo") or {}
+    with Store().write() as snapshot:
+        inventory = snapshot.inventory
+        for number, digest in (found.get("after") or {}).items():
+            if _box_digest(inventory, int(number)) != digest:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT, "box_changed_since",
+                    f"{inventory.box_title(int(number))} has changed since that move, so it "
+                    f"cannot be put back exactly. Move it back instead.",
+                )
+        # A LIVE PAID READING KEEPS ITS CARD (D174, D262, the R3 review). Undo takes a moved
+        # card off its new key and gives it back its old one. A claim on either key would see
+        # its answer land on the wrong record, so the undo refuses, as the move itself does.
+        touched = [key for pair in undo.get("pairs") or [] for key in pair[:2]]
+        held = snapshot.submissions.overlap(touched)
+        if held:
+            runs_named = ", ".join(sub.run or sub.receipt for sub, _ in held)
+            raise BadRequest(
+                HTTPStatus.CONFLICT, "card_being_read",
+                f"A paid run ({runs_named}) is reading a card this undo would move back. "
+                f"Undo it after that reading lands. Nothing was put back.",
+            )
+        for tomb_key, new_key, state, state_at, photo in undo.get("pairs") or []:
+            arrived = inventory.cards[new_key]
+            tomb = inventory.cards[tomb_key]
+            tomb.state = state
+            tomb.state_at = state_at
+            tomb.moved_to = None
+            tomb.sku = arrived.sku
+            tomb.condition = arrived.condition
+            tomb.capture_id = arrived.capture_id
+            tomb.photo = photo
+            tomb.cid = arrived.cid
+            del inventory.cards[new_key]
+            for queue in (snapshot.review, snapshot.parked):
+                held = queue.entries.pop(new_key, None)
+                if held is not None:
+                    held.position = tomb_key
+                    held.box = int(tomb.box)
+                    held.index = int(tomb.index)
+                    queue.entries[tomb_key] = held
+            cached = snapshot.cache.entries.pop(new_key, None)
+            if cached is not None:
+                snapshot.cache.entries[tomb_key] = cached
+        for number, saved in ((box, undo.get("src")), (to_box, undo.get("dst"))):
+            if not saved:
+                continue
+            target = inventory.ensure_box(number)
+            target.sections = list(saved["sections"])
+            target.section_names = dict(saved["section_names"])
+            for key, value in (saved.get("keys") or {}).items():
+                card = inventory.cards.get(key)
+                if card is not None:
+                    card.order = value
+        created = found.get("created")
+        if created is not None and not inventory.cards.where(box=int(created)):
+            del inventory.boxes[str(int(created))]
+        inventory._log(SECTIONS_MOVE_UNDONE, None, move=move_id, box=box, to_box=to_box)
+        rows = [_box_row(inventory, box)]
+        if to_box != box and inventory.box(to_box) is not None:
+            rows.append(_box_row(inventory, to_box))
+    return {"move": move_id, "undone": True, "boxes": rows}
 
 
 def _release_plan(inventory: master.Inventory, box: int) -> Tuple[List[dict], dict]:
@@ -10192,7 +10944,30 @@ def _match_rank(card: master.Card, query: str) -> Optional[int]:
     write-only. It is deliberately not a prefix or exact rank: it is prose a human typed
     ("blue-eyes, japanese"), not an identifier, and ranking it beside a collector number
     would let a chatty note outrank a real card's own name.
+
+    THE NUMBER TIER AND THE TEXT FOLD BOTH GO THROUGH `server/match.py` (FLT-06/04, UX-173),
+    A CORRECTION AGAINST THE ORIGINAL, WHICH COMPARED RAW LOWER-CASED STRINGS AND WAS WRONG
+    two ways at once. First, `query in field.lower()` is a bare substring test, so a query of
+    `54` found `154/200` — exactly what `kit/match.ts`'s rule 4 forbids ("never a substring").
+    `match._number_match` compares CANONICAL forms instead, so a bare token only ever matches
+    a number's own first part, never an unrelated run of digits inside a longer one; it also
+    folds a hyphen standing for the slash (`054-132` reads as `054/132`), which the raw
+    substring test could never do because the literal characters disagree. Second, `.lower()`
+    does not fold a combining mark, so a query of `flabebe` (typed without the accent) never
+    found `Flabébé` even though the FTS5 candidate step upstream — `unicode61
+    remove_diacritics 2` — had already surfaced the row as a candidate; the rank step then
+    silently dropped it. `match.fold_text` NFKD-folds every field the same way the index
+    does, so the two agree. SKU stays a bare substring on purpose (see the header above this
+    function): a `TCGplayer Id` is unique, so where its one group sorts costs nothing.
     """
+    # COUNTED HERE, NOT AT THE CALL SITE (F6-6's own robustness gap, round-8 Opus
+    # review, 2026-09-25). A call-site counter — `do_search` incrementing before it
+    # calls this function — only proves the CALLER'S OWN bookkeeping matches its OWN
+    # call, which a mutation of the caller's structure can silently defeat while this
+    # function still runs exactly as often. Counting inside the callee is robust to
+    # ANY caller-side mutation: the counter fires when `_match_rank` actually runs,
+    # never when some other line of code claims it will.
+    _SEARCH_WORK_COUNTERS["match_rank_calls"] += 1
     name = str(card.name or "")
     number = str(card.number or "")
     key = _card_number_key(card)
@@ -10203,22 +10978,147 @@ def _match_rank(card: master.Card, query: str) -> Optional[int]:
     # raw field is still here, and the display form joins it.
     shown = _number_display(card) or ""
 
-    if query in {number.strip().lower(), key.lower(), shown.lower()} - {""}:
+    # THE NUMBER FIELDS ARE COMPARED TWO WAYS, BOTH EXACT, NEITHER A BARE SUBSTRING — so
+    # both are checked here and the fields are left OUT of the plain substring loop below.
+    # FIRST, THE LITERAL STRING, CASE-FOLDED ONLY — this is what a code card's redemption
+    # code needs (C8, `codes/ledger.py`): `GXR-7Q?d-K3M-9TT` is not a collector number and
+    # `canonical_number` folds it into a shape `_is_number_shape` refuses outright, so the
+    # structural check below would silently drop it. A card whose OWN number is typed back
+    # exactly must always match, whatever shape that number is.
+    numbers = tuple(v for v in (number, key, shown) if v)
+    if query in {n.strip().lower() for n in numbers}:
         return _RANK_EXACT_NUMBER
-    if name.lower().startswith(query):
+    # SECOND, THE CANONICAL COLLECTOR-NUMBER FORM (UX-173) — a bare `query in field.lower()`
+    # over `number`/`key`/`shown` is exactly the bug rule 4 forbids (`54` finding `154/200`);
+    # `match._number_match` compares canonical forms instead, so a bare token only ever
+    # matches a number's own first part, and it folds a hyphen standing for the slash.
+    number_parts = [match._number_parts(match.canonical_number(n)) for n in numbers]
+    if match._number_match(query, number_parts):
+        return _RANK_EXACT_NUMBER
+    folded_query = match.fold_text(query)
+    if folded_query and match.fold_text(name).startswith(folded_query):
         return _RANK_NAME_PREFIX
-    for field in (
-        name,
-        number,
-        str(card.sku or ""),
-        str(card.set_hint or ""),
-        str(card.note or ""),
-        key,
-        shown,
-    ):
+    for field in (name, str(card.sku or ""), str(card.set_hint or ""), str(card.note or "")):
+        if folded_query and folded_query in match.fold_text(field):
+            return _RANK_SUBSTRING
         if query in field.lower():
             return _RANK_SUBSTRING
     return None
+
+
+_BARE_NUMBER_HEAD = re.compile(r"^(\d{1,2})(/.*)?$")
+
+
+def _zero_padded_variant(term: str) -> Optional[str]:
+    """`54` -> `054`, `54/132` -> `054/132`, or None where the term is not a bare number
+    typed without ITS OWN leading zeros.
+
+    `number_key` (`store/db.py:_add_search_index`) is always composed through
+    `store.numbers.join_key`, which is `zfill(3)(number) + "/" + printed_total` — unconditionally,
+    every game, because `zfill` on a string already three characters or longer is a no-op
+    (D76's per-game width rule governs what `join.py:number_index_key` compares on the
+    JOIN, never this — `store/numbers.py`'s own header: "Fuzzy '54' to '054' is fine in
+    SEARCH, and must never feed the join"). So the FTS5 index never carries a token that
+    starts with a bare 1-2-digit run; this widens the CANDIDATE query to the padded form the
+    index actually holds, the same zfill(3), never a fourth digit or more.
+    """
+    found = _BARE_NUMBER_HEAD.match(term)
+    if not found:
+        return None
+    digits, rest = found.group(1), found.group(2) or ""
+    return digits.zfill(3) + rest
+
+
+def _fts_query_variants(term: str) -> List[str]:
+    """Every SINGLE-TOKEN spelling of `term` that should reach the FTS5 candidate step
+    (UX-173, amended S2): the term itself — WITH A LEADING `#` STRIPPED FIRST, if it has
+    one — a hyphen standing for the collector-number slash (`054-132` -> `054/132`), and
+    each of those zero-padded (`54/132` -> `054/132`). Order-preserving and deduplicated,
+    so a term with no number shape at all still returns exactly `[term]`. See
+    `_fts_term_alternatives` for the hyphen-as-word-break case, which is not a single token
+    and does not belong in this list.
+
+    THE LEADING `#` NEVER REACHES THE INDEX (S2, the Opus review, 2026-09-25). `#54` found
+    nothing, because no token the index holds starts with `#` — `unicode61` treats it as an
+    ordinary separator (it is not one of `tokenchars`'s `/-`), so `#54` and `54` tokenize
+    identically at INDEX time and only the QUERY side still carried the `#`, defeating its
+    own prefix match. `#` names the number the same way `match.py:_number_match`'s own
+    leading-`#` rule already reads it (`_match_rank` has always trusted that rule once a
+    candidate reaches it); stripping it here just lets the SAME row become a candidate in
+    the first place. `match._number_match` still runs on the ranking side unchanged and
+    still accepts a bare digit term with no `#` at all, so this never widens what `#`
+    itself is allowed to mean.
+    """
+    # A plain `dict` keeps insertion order (Python 3.7+) and is used as an ordered set —
+    # `_fts_query`'s own OR clause must not repeat a spelling.
+    seen: Dict[str, None] = {}
+    bare = term[1:] if term.startswith("#") and len(term) > 1 else term
+    for candidate in (term, bare, match._hyphen_to_slash(bare)):
+        seen.setdefault(candidate, None)
+    for candidate in list(seen):
+        padded = _zero_padded_variant(candidate)
+        if padded:
+            seen.setdefault(padded, None)
+    return list(seen)
+
+
+def _fts_quote(term: str) -> str:
+    """One term, quoted and made a prefix — the one escaping rule `_fts_query` states."""
+    return '"' + term.replace('"', '""') + '"*'
+
+
+def _fts_letter_pair_alternative(term: str) -> Optional[str]:
+    """A DOTTED-INITIAL PATH FOR A BARE 2-LETTER TERM (the owner's ruling, 2026-09-25,
+    round-11 gaps review, "Bring it back"): `bf` and `B.F` must behave the same and
+    both find "B.F. Sword". `B.F` (its own period kept — `query_tokens` only strips
+    edge punctuation, never an internal character) is already 3 characters wide and
+    clears the existing `len(term) >= 3` substring floor unconditionally; the folded
+    fallback in `match._text_match` then finds it. Bare `bf` (2 characters, no
+    punctuation at all) never did — the SAME accepted 1-2 character TEXT floor that
+    excuses `ex`/`hi`/`on` from `_fts_supplemental_candidates`'s own ROW WALK also
+    excused `bf`, and there is no way to tell `bf` apart from `ex` by the term alone —
+    reopening the WALK for every 2-letter term was the R3 floor this repo has stood
+    behind since round 4, and stays closed.
+
+    THIS NEVER TOUCHES THE WALK. It is a second FTS5 clause, ORed with the term's own
+    prefix match inside `_fts_query` — an INDEXED intersection of two single-letter
+    prefixes (`"b"* AND "f"*`), which costs what any indexed AND costs and never grows
+    with how common the term is, unlike a per-row Python scan. Offered for every bare
+    2-letter alpha term, because nothing about the term alone says which ones are real
+    initials — the decisive `match.match_query` (unchanged) still requires its own
+    compact-fold fallback (rule 7) before accepting a row this admits as a candidate,
+    so a term with no true dotted-initial match anywhere is filtered out for free."""
+    if len(term) != 2 or not term.isalpha():
+        return None
+    return "(" + " AND ".join(_fts_quote(ch) for ch in term) + ")"
+
+
+def _fts_term_alternatives(term: str) -> List[str]:
+    """Every standalone FTS5 clause `term` should try, ORed together (UX-173): each single
+    token from `_fts_query_variants`, quoted, PLUS — where `term` carries a hyphen AS A
+    WORD BREAK rather than a digit-to-digit separator — the hyphen split into its own words,
+    each still required (`heimerdinger-inventor` finds a name the tokenizer indexed as TWO
+    words, `heimerdinger` and `inventor`, because `-` is a `tokenchars` character and the
+    literal hyphenated token is never one the index holds).
+
+    A DIGIT-ADJACENT HYPHEN IS NOT ALSO SPLIT HERE, so `054-132` contributes `("054-132"*
+    OR "054/132"*)` from the variants above and not a THIRD alternative `("054"* "132"*)` —
+    the number tiers already reach it more precisely (`_number_match` compares canonical
+    forms), and a generic AND-of-halves would let `054-132` also match any row carrying
+    `054` and `132` as two unrelated words, which is not what a person typing a card number
+    asked for.
+    """
+    clauses = [_fts_quote(v) for v in _fts_query_variants(term)]
+    words = [w for w in term.split("-") if w]
+    if len(words) > 1 and not any(w.isdigit() for w in words):
+        clauses.append("(" + " ".join(_fts_quote(w) for w in words) + ")")
+    letter_pair = _fts_letter_pair_alternative(term)
+    if letter_pair:
+        clauses.append(letter_pair)
+    seen: Dict[str, None] = {}
+    for clause in clauses:
+        seen.setdefault(clause, None)
+    return list(seen)
 
 
 def _fts_query(text: str) -> str:
@@ -10243,12 +11143,435 @@ def _fts_query(text: str) -> str:
     no attempt to tokenize the way FTS5 itself would (e.g. `4/102` splitting is FTS5's
     tokenizer's job, not this function's); this function's only job is turning a sentence
     into an AND of prefix terms.
+
+    A TERM WITH A NUMBER SHAPE OR A HYPHEN BECOMES AN OR OF ITS SPELLINGS, NOT ONE PREFIX
+    (UX-173, a CORRECTION against the original playbook, which quoted the bare term and was
+    wrong two ways at once. The index's own number token is always zero-padded
+    (`number_key`'s `zfill(3)`), so a bare `54/132` or a hyphenated `054-132` never
+    prefix-matched anything. And a hyphenated NAME (`heimerdinger-inventor`) is one token to
+    the index too — `-` is a `tokenchars` character — while the field it is meant to find
+    (`Heimerdinger, Inventor`) tokenizes on the comma into two separate words; the literal
+    hyphenated token never matched either. Both measured directly, before this fix:
+    `do_search` answered empty for both. `_fts_term_alternatives` is the widening, per term;
+    parenthesised so the per-term OR does not leak into the AND between terms.
+    Accents need no widening here: `store/db.py:_FTS_TOKENIZE` is `unicode61
+    remove_diacritics 2`, which folds the query side exactly as it folds the index — the
+    accent bug UX-173 also names is entirely in `_match_rank`'s own field comparison, fixed
+    there.
     """
     terms = text.split()
     if not terms:
         return ""
-    escaped = ('"' + term.replace('"', '""') + '"*' for term in terms)
-    return " ".join(escaped)
+    clauses = []
+    for term in terms:
+        alternatives = _fts_term_alternatives(term)
+        clauses.append(alternatives[0] if len(alternatives) == 1 else "(" + " OR ".join(alternatives) + ")")
+    # EXPLICIT `AND`, NEVER A BARE SPACE (S1, the Opus review, 2026-09-25). FTS5's bareword
+    # join IS an implicit AND between two plain terms, but it REFUSES that same join the
+    # moment either side is a parenthesized group: `("54"* OR "054"*) "132"*` is a syntax
+    # error near the second token, and so is the reverse order — measured directly against
+    # `sqlite3`'s own fts5 module, both orders. Any term whose own alternatives outnumber
+    # one (a 1-2 digit number, or a hyphen `_fts_term_alternatives` also splits on) turns
+    # its clause into such a group, so a plain `" ".join` broke every multi-word query
+    # where ANY word needed a widened spelling: `54 132`, `4 102`, `Ho-Oh ex`, `ex ho-oh`,
+    # `pikachu 54`, `25 pikachu`, `porygon-z v`, `x 1-2`. `AND` written out is the exact
+    # same operator FTS5's own whitespace already meant, so this changes no query's answer
+    # — it only stops the ones that were 500ing.
+    interpretations = [" AND ".join(clauses)]
+    # A SECOND INTERPRETATION, ONLY FOR A TWO-TERM QUERY WHOSE SECOND WORD IS BARE DIGITS
+    # (S2, UX-173 amended, the Opus review, 2026-09-25). `swsh 050` names ONE number the
+    # index holds as ONE token (`swsh050` — nothing glues a set-code prefix to its digits
+    # the way `/` or `-` does, so `tokenchars` never sees two), and the AND-per-term
+    # interpretation above can never find it: neither `swsh`* nor `050`* alone is a prefix
+    # of a token that starts with neither. `match.py:_pair_match` already states which two
+    # spellings are worth trying; this offers the SAME pairing as an ALTERNATIVE candidate
+    # reading, an OR beside the first, never a replacement — `eiscue 044` (a name and a
+    # SEPARATE number field) still finds its card through the FIRST interpretation, because
+    # `match.match_query` (`do_search`'s own decisive check, once a candidate is in hand)
+    # is what picks the real answer between two readings that both reached it.
+    if len(terms) == 2 and match._DIGITS_ONLY.match(terms[1]):
+        pair = _fts_pair_alternatives(terms[0], terms[1])
+        if pair:
+            interpretations.append(pair)
+    if len(interpretations) == 1:
+        return interpretations[0]
+    return " OR ".join("(" + i + ")" for i in interpretations)
+
+
+def _fts_pair_alternatives(left: str, right: str) -> Optional[str]:
+    """The glued-number reading of two adjacent terms (S2, UX-173 amended): concatenated
+    and slash-joined, zero-padded on either side — the same spellings
+    `match.py:_pair_match` tries, one level earlier so the CANDIDATE step can even find the
+    row for `_match_rank`/`match.match_query` to then confirm or reject precisely. Never
+    fires for an empty `left` — `query_tokens` already drops an empty token before either
+    side of a pair reaches this."""
+    if not left:
+        return None
+    lefts = {left}
+    left_padded = _zero_padded_variant(left)
+    if left_padded:
+        lefts.add(left_padded)
+    rights = {right}
+    right_padded = _zero_padded_variant(right)
+    if right_padded:
+        rights.add(right_padded)
+    forms: Dict[str, None] = {}
+    for one in lefts:
+        for two in rights:
+            forms.setdefault(one + two, None)
+            forms.setdefault(one + "/" + two, None)
+    return "(" + " OR ".join(_fts_quote(f) for f in forms) + ")"
+
+
+_LEADING_SLASH_DIGITS = re.compile(r"^/([0-9]+)$")
+
+# R1, BLOCKING (round-4 Opus review, 2026-09-25). Only the first `_SUPPLEMENTAL_TERM_CAP`
+# DISTINCT terms of a query feed the four candidate widenings below. Each one is a real
+# SQL scan that cannot use an index (a `LIKE` with a leading `%`, or an `LTRIM` on every
+# row), so its cost is O(store) PER TERM — a query of a hundred distinct words would run a
+# hundred such scans before any of the AND/intersection logic below gets a chance to
+# narrow anything. 8 is generous against every real query this route has ever named in its
+# own tests (a name is at most a few words) and small enough to keep the worst case
+# bounded regardless of what a caller types. The base FTS query (`_fts_query`, above) is
+# UNBOUNDED in term count on purpose — it is index-backed and cheap per term, so capping it
+# would refuse a legitimate long query for no gain.
+_SUPPLEMENTAL_TERM_CAP = 8
+
+# WORK COUNTERS, TEST-ONLY (F6-6, round-7 Opus delta review, 2026-09-25: "a guard that
+# goes red when nothing is wrong is spent"). The match-selftest timing cases asserted
+# wall-clock time alone, which goes red on a loaded CI runner (measured: load average 16)
+# with no code defect at all — the exact "cry wolf" this repo's own working agreement
+# already names. These three counters — a `_match_rank` call, a `match.match_query`
+# call, and an SQL SCAN of the `cards` table (STATEMENTS, not rows — see `_count_cards_
+# scan`'s own docstring, round-8) — are WORK DONE, never wall time, so a test can assert
+# "this query does at most N units of work" and stay true regardless of what else the
+# machine is doing. Reset with `_reset_search_work_counters()` before a timed run; read
+# as a plain dict afterward. Never read in production code, and the increment itself is
+# one dict lookup plus one addition, cheap enough that leaving it always-on costs
+# nothing worth removing it for.
+#
+# UNLOCKED MODULE STATE (F5, round-9 Opus delta review, 2026-09-25). `REQUEST_SLOTS`
+# threads a real request through concurrently and this dict is not locked, so two
+# in-flight searches increment the SAME counters together. Tests must read it
+# single-threaded — one `do_search` call per `_reset_search_work_counters()`, never two
+# concurrent ones sharing a read.
+_SEARCH_WORK_COUNTERS = {"match_rank_calls": 0, "match_query_calls": 0, "rows_walked": 0}
+
+_CARDS_TABLE_SCAN = re.compile(r"\bFROM\s+cards\b", re.IGNORECASE)
+
+
+def _count_cards_scan(sql: str) -> None:
+    """Attached to a connection via `sqlite3.Connection.set_trace_callback` — fires for
+    EVERY SQL statement THAT CONNECTION RUNS, whichever Python function issued it (F6-6's
+    own robustness gap, round-8 Opus review, 2026-09-25). The round-7 version counted
+    inside `_fts_supplemental_candidates`'s own row-walk loop — proof that loop ran, and
+    nothing else. Loading round-6's four separate per-term SQL sources back in (each its
+    own `conn.execute`, a different code path entirely, SAME connection) stayed green at
+    `rows_walked=0`, because that counter never SAW those scans happen.
+
+    SCOPED TO ONE CONNECTION, NEVER TO ALL SQL EVERYWHERE (narrowed, round-9 Opus delta
+    review, 2026-09-25 — the round-8 docstring overclaimed "no matter which code — old,
+    new, or a future rewrite — issues it"). `do_search` opens exactly ONE connection
+    today and attaches this trace to it, so this counts a `cards` table scan issued by
+    ANY function running on THAT connection — round-6's old architecture, a future
+    rewrite, anything — but a scan on a SEPARATE connection this trace was never
+    attached to is invisible to it, the same way the round-7 counter was invisible to a
+    different FUNCTION. A future code path that opens its own `db.connect(...)` inside
+    `_fts_supplemental_candidates` (or anywhere else `do_search` reaches) needs its own
+    trace, or needs to reuse `do_search`'s own connection — this function cannot see
+    across a connection boundary by itself.
+
+    STATEMENTS, NOT ROWS. `set_trace_callback` reports the SQL text run, never how many
+    rows it touched, and re-reading every cursor to count rows would cost more than the
+    query itself. A statement count still proves the thing this counter exists to prove
+    — ONE scan for a whole query, never one per term — which is a count of `conn.execute`
+    calls, not of rows.
+
+    `\\bFROM\\s+cards\\b`, NEVER A BARE SUBSTRING. `cards_fts`, the INDEXED base query,
+    contains the literal text `FROM cards_fts`, which a plain `"FROM cards" in sql` check
+    would also match — `\\b` (a word boundary) refuses that, because `_` is a word
+    character in regex and there is none between `cards` and `_fts`."""
+    if _CARDS_TABLE_SCAN.search(sql):
+        _SEARCH_WORK_COUNTERS["rows_walked"] += 1
+
+
+def _reset_search_work_counters() -> None:
+    for key in _SEARCH_WORK_COUNTERS:
+        _SEARCH_WORK_COUNTERS[key] = 0
+
+
+def _deduped_capped_terms(text: str, *, lower: bool = False) -> List[str]:
+    """A query's terms, deduped (first occurrence kept) and capped at
+    `_SUPPLEMENTAL_TERM_CAP` distinct terms — the ONE place this happens, shared by the
+    candidate-widening step (`_fts_supplemental_candidates`) and `do_search`'s own rank
+    loop below (F1, round-5 Opus delta review, 2026-09-25, on 65b8f39d). BOTH CALLERS PASS
+    `lower=True` (the widening step joined round-6, R5-3 below — round 5 kept it
+    case-sensitive there on the theory that every source function folds case internally
+    anyway, so it never mattered; that theory missed the DEDUPE ITSELF, which happens
+    BEFORE any source function runs). `lower=False` stays available and tested, because
+    the two callers agreeing is a fact about their own call sites today, not a promise
+    this function makes on their behalf.
+
+    THE RANK LOOP HAD ITS OWN, SEPARATE, UNDEDUPED LIST. `do_search`'s
+    `terms = [term.lower() for term in text.split()]` ran `_match_rank` once per RAW term
+    per candidate — a repeated term was never folded, the identical defect R1 fixed for the
+    candidate step, still live one function over. `("1 " * 100)` (100 repeated terms)
+    measured 5.6-12.4s at 3,000 cards and 19.9s at 10,000 on a REAL-NAME fixture (round-4's
+    own `f"Bench Card {i}"` tests never matched enough candidates to notice this loop's
+    own cost). A single shared function, called from both places, is what keeps the two
+    from drifting apart again — the widening step already had this fix; the rank loop
+    just never got it.
+
+    TOKENIZED BY `match.query_tokens`, NEVER A BARE `text.split()` (N1, round-10 Opus
+    delta review, 2026-09-25, on fdc84825 — the SAME CLASS OF BUG as F1, one level up:
+    F1 fixed the widening step's own NUMBER comparison to agree with `match._number_
+    match`; this fixes the TOKENIZER feeding it to agree with `match.query_tokens`,
+    which `match_query` (the decisive step) has always used). A bare `text.split()`
+    only ever splits on whitespace — `match.query_tokens` ALSO turns a comma into a
+    space and strips edge punctuation per token (`rengar,24a/219` is ONE whitespace
+    token, `"rengar,24a/219"`, but TWO real tokens, `rengar` and `24a/219`; `/166,`
+    strips to `/166`). Measured on the real store: `rengar,24a/219` and `repel,126/132`
+    missed 60 of 60 sampled; `/221,` missed 60 of 60; `/166,` missed all 193 real
+    matches; `004,`, `(004)`, `004.` and `unseen,rengar` all missed too — the widening
+    step was handed a token the matcher itself would never see, so it could never widen
+    correctly for it, however good the comparison inside each rule already was."""
+    terms = match.query_tokens(text)
+    if lower:
+        terms = [term.lower() for term in terms]
+    return list(dict.fromkeys(terms))[:_SUPPLEMENTAL_TERM_CAP]
+
+
+def _number_candidate_forms(term: str) -> set:
+    """Every canonical form `match._number_match` itself would accept for this term —
+    MIRRORS IT EXACTLY (F1, round-9 Opus delta review, 2026-09-25, replacing `_bare_
+    number`'s own ad hoc zero-strip, which never split a composed term on `/` at all).
+
+    THE BUG, MEASURED ON THE REAL STORE: `24a/219` (bare-letter composed, no leading
+    zero typed) missed Rengar, Unseen `024a/219` — 11 of 11 sampled. `0027/166` (extra
+    zero, composed) missed Hand Hammer `027/166` — 11 of 11 letter-composed, 300 of 300
+    plain-composed sampled. The WIDENING gate was `match._number_shape_ok(term)`, which
+    checks ONE side of a number only (0-6 letters, digits, 0-2 letters) — a term
+    containing `/` fails it outright (the trailing `/219` is neither letter nor digit,
+    so the shape check never reaches the end of the string), so a composed QUERY term
+    never reached this widening at all, regardless of how correct the zero-strip itself
+    might have been.
+
+    `match._number_match` (the DECISIVE step) never had this bug — it already splits on
+    `/` per side via `canonical_number`, strips a leading `#`, and folds a hyphen
+    standing for the slash via `_hyphen_to_slash`, then validates the WHOLE form with
+    `match._is_number_shape` (which DOES split on `/`). This function computes the
+    IDENTICAL candidate forms, so the widening step accepts exactly what the decisive
+    step would — no second, slightly different shape rule to keep in step.
+
+    THIS IS TRUE PER TERM, NEVER A PROMISE ABOUT A WHOLE QUERY ON ITS OWN (N1, round-10
+    Opus delta review, 2026-09-25). A term only ever reaches this function once
+    `_deduped_capped_terms` has already split the query the SAME WAY `match.query_
+    tokens` would — `rengar,24a/219` is one comma-joined string, and this function was
+    never asked to notice that. It agrees with the decisive step exactly because the
+    CALLER hands it the same tokens the decisive step would see, not because it does any
+    splitting of its own beyond the one `/` inside a single term.
+
+    THE HYPHEN SPLITS THE NUMBER, IT NEVER JOINS IT (the owner's ruling, 2026-09-25,
+    round-11 gaps review, quoted verbatim in D271: "No, a hyphen splits"). This now
+    MIRRORS `match._number_match`'s own round-11 fix exactly: `hyphen_form` only
+    differs from `bare` when a hyphen stood BETWEEN TWO DIGITS, and in that case only
+    the composed (`/`-converted) form is a candidate — never `bare` read whole, which
+    would join two digit runs the hyphen deliberately kept apart (`002-64` must never
+    read as `264`)."""
+    bare = term[1:] if term.startswith("#") else term
+    if not match._has_digit(bare):
+        return set()
+    hyphen_form = match._hyphen_to_slash(bare)
+    forms = {match.canonical_number(hyphen_form)}
+    if hyphen_form == bare:
+        forms.add(match.canonical_number(bare))
+    return {f for f in forms if match._is_number_shape(f)}
+
+
+def _text_digit_word_matches(term: str, folded_field: str) -> bool:
+    """Rule 7's digits-only TEXT-word match, for ONE term against one already-folded
+    field — MIRRORS `match._digit_word_match` EXACTLY (F1, round-9 Opus delta review,
+    2026-09-25). `004` missed the card whose name contains "spent 4": `_prepare` in
+    `match.py` builds `words` from EVERY all-digit word in every folded text field, and
+    `_digit_word_match` compares a query term against those WORDS — a TEXT rule, never a
+    NUMBER-field one. The zero-pad widening above only ever checked `number_key`/
+    `number`/`number_display` — a pure-digit term reached it (it easily passes the
+    shape check), but nothing here ever looked at `name`, `set_hint` or `note` for it,
+    so a card findable only through its TEXT carrying that digit was never a candidate."""
+    words = [w for w in folded_field.split(" ") if w and match._DIGITS_ONLY.match(w)]
+    if not words:
+        return False
+    if match._ZEROS_ONLY.match(term):
+        return any(w.startswith(term) for w in words)
+    bare = match._drop_leading_zeros(term)
+    if term != bare:
+        return any(w.startswith(term) or match._drop_leading_zeros(w) == bare for w in words)
+    return any(match._drop_leading_zeros(w).startswith(bare) for w in words)
+
+
+def _fts_supplemental_candidates(conn: sqlite3.Connection, text: str) -> List[Tuple[str, str]]:
+    """Every extra candidate the base FTS5 query (`_fts_query`, above) cannot reach on its
+    own — a SECOND half of a number alone (`/132`), a NUMBER mismatch a canonical compare
+    closes (`934` for `0934`, `tg5` for `tg05`, `24a/219` for `024a/219`, a DIGIT WORD
+    inside NAME text (`004` for a name containing "spent 4"), or a MID-WORD fragment
+    (`izard` for `Charizard`) — DEDUPED AND CAPPED ACROSS TERMS (R1, round-4), UNIONED
+    NEVER INTERSECTED (F2, round-5), in ONE ROW WALK FOR EVERY TERM TOGETHER (F6-3,
+    round-7, BLOCKING BY THE OWNER'S OWN RULING: "NOT accepted").
+
+    ONE WALK, NOT FOUR TIMES EIGHT (F6-3). The four widenings used to be four SEPARATE
+    functions, each its own `SELECT ... FROM cards` — a real O(store) scan apiece,
+    because none of them can use an index (a `LIKE` with a leading `%`, or a Python fold
+    no SQL can express). Up to 8 distinct terms times several sources is many full-table
+    scans for ONE query. This function reads each card's row ONCE and checks every
+    term's every widening rule against that one row before moving to the next.
+
+    A 2-CHARACTER NUMBER-SHAPED TERM WIDENS (F6-2, round-7). R3's mid-word TEXT floor
+    (3 characters) never applied to numbers — `6a` is already a specific collector-number
+    code, not a common substring.
+
+    NUMBER MATCHING MIRRORS `match._number_match` EXACTLY, via `_number_candidate_forms`
+    (F1, round-9 Opus delta review, 2026-09-25 — see that function's own docstring for
+    the bug this replaces: `_number_shape_ok`, checked directly against a term that
+    might contain `/`, refused every COMPOSED query term outright, so `24a/219`,
+    `0027/166` and their kind never reached ANY number widening).
+
+    A DIGIT WORD IN TEXT ALSO WIDENS (F1, round-9), via `_text_digit_word_matches` —
+    mirroring `match._digit_word_match`'s own rule against `name`/`set_hint`/`note`,
+    never only against the number columns.
+
+    DEDUPED ON THE FOLDED FORM, `lower=True` (R5-3, round-6). `lower=False` would let
+    `ex`, `EX`, `Ex` and `eX` burn 4 of the 8-term cap on the SAME word spelled 4 ways —
+    every rule below folds case itself, so the cap should count DISTINCT MEANING, never
+    distinct bytes.
+
+    UNION, NEVER INTERSECTION (F2, round-5). The first version of this function
+    INTERSECTED across terms — wrong whenever only one term needed a widening at all.
+    The base FTS `hits` dict already carries the real AND across every term via one
+    combined `MATCH` expression, so this function only ever WIDENS what candidates the
+    decisive step (`match.match_query`, in `do_search` below) gets to see — it can never
+    make an already-passing row disappear, and a union can only add rows, never remove
+    one the base query already found.
+
+    A SUPERSET, like every candidate source here has always been: `match.match_query`
+    (or `_match_rank`, for a single-term query) still decides which candidate is real.
+
+    THE FOLD-PREFIX RULE IS DELETED (M10, round-8 Opus delta review, 2026-09-25: "if it
+    is redundant, delete it"). CORRECTED, round-9 Opus delta review, 2026-09-25: the
+    SUBSTRING rule's compact-containment check is a superset of a prefix check for MOST
+    terms, but NOT a strict one — `bf` found "B.F. Sword" through the deleted fold rule
+    (which stripped ALL punctuation before comparing) and finds nothing through the
+    substring rule alone, because `bf` is a 2-character term with no digit, which the
+    substring rule's own floor (F6-2, above) never admits. `bf` sits inside the accepted
+    1-2 character TEXT floor (`_is_floor_query`), the SAME gap R3 already accepted for
+    every other short text term — this is that gap, not a new one, and the fold rule's
+    own no-floor design was the part actually redundant to remove, not a guarantee that
+    every query it once answered stays answered."""
+    terms = _deduped_capped_terms(text, lower=True)
+    if not terms:
+        return []
+
+    slash_suffixes: Dict[str, set] = {}
+    number_forms: Dict[str, set] = {}
+    digit_word_terms: set = set()
+    substring_terms: Dict[str, Tuple[str, str]] = {}
+    for term in terms:
+        found = _LEADING_SLASH_DIGITS.match(term)
+        if found:
+            digits = found.group(1)
+            slash_suffixes[term] = {digits, digits.zfill(3)}
+        # F1, round-9: mirrors `match._number_match` exactly — splits a composed term
+        # on `/`, strips a leading `#`, folds a hyphen standing for the slash. No
+        # length floor here: `match._number_match` itself has none, and a term this
+        # rule accepts is already number-shaped, never a common text substring.
+        forms = _number_candidate_forms(term)
+        if forms:
+            number_forms[term] = forms
+        # F1, round-9: a pure-digit term widens against TEXT fields too now, mirroring
+        # `match._digit_word_match`. No letter, so this never collides with the
+        # substring rule below.
+        if match._DIGITS_ONLY.match(term):
+            digit_word_terms.add(term)
+        # F6-2, round-7: a digit-bearing 2-character term widens; R3's mid-word TEXT
+        # floor (3 characters) was never about numbers.
+        if (len(term) >= 3 or (len(term) == 2 and match._has_digit(term))) and match._has_letter(term):
+            folded_term = match.fold_text(term)
+            compact_term = match.compact_text(term)
+            if folded_term:
+                substring_terms[term] = (folded_term, compact_term)
+
+    if not (slash_suffixes or number_forms or digit_word_terms or substring_terms):
+        return []
+
+    out: Dict[str, str] = {}
+    for key, sku, number_key, number, number_display, name, set_hint, note in conn.execute(
+        "SELECT key, sku, number_key, number, number_display, name, set_hint, "
+        "json_extract(payload, '$.note') FROM cards"
+    ):
+        key = str(key)
+        number_cols = (number_key, number, number_display)
+        folded_fields = None  # computed lazily, only if a substring or digit-word term needs it
+
+        for term in terms:
+            matched = False
+
+            if term in slash_suffixes:
+                suffixes = slash_suffixes[term]
+                for column in number_cols:
+                    if column and any(column.endswith("/" + s) for s in suffixes):
+                        matched = True
+                        break
+
+            if not matched and term in number_forms:
+                forms = number_forms[term]
+                for column in number_cols:
+                    if not column:
+                        continue
+                    col_canonical = match.canonical_number(column)
+                    for form in forms:
+                        whole = "/" in form
+                        if col_canonical == form or (not whole and col_canonical.startswith(form + "/")):
+                            matched = True
+                            break
+                    if matched:
+                        break
+
+            if not matched and (term in substring_terms or term in digit_word_terms):
+                if folded_fields is None:
+                    folded_fields = [
+                        (match.fold_text(field), match.compact_text(field))
+                        for field in (name, set_hint, note)
+                        if field
+                    ]
+                if term in substring_terms:
+                    folded_term, compact_term = substring_terms[term]
+                    for folded_field, compact_field in folded_fields:
+                        if folded_term in folded_field or (compact_term and compact_term in compact_field):
+                            matched = True
+                            break
+                if not matched and term in digit_word_terms:
+                    for folded_field, _compact_field in folded_fields:
+                        if _text_digit_word_matches(term, folded_field):
+                            matched = True
+                            break
+
+            if matched:
+                out.setdefault(key, sku)
+                break  # this row is already a candidate — no need to check its other terms
+
+    return list(out.items())
+
+
+def _card_match_fields(card: master.Card) -> "match.MatchFields":
+    """This card, in the generic shape `server/match.py:match_query` takes — the same
+    contract `app/src/kit/match.ts` speaks (S2, UX-173 amended). Built off the fields
+    `_match_rank` has always ranked: name/set_hint/note as text, the three number
+    spellings `_match_rank` already compares (the raw field, the composed key, the
+    screen-drawn form), and the SKU."""
+    return {
+        "text": [card.name, card.set_hint, card.note],
+        "numbers": [card.number, _card_number_key(card), _number_display(card)],
+        "skus": [card.sku] if card.sku else [],
+    }
 
 
 def _distinct(values: Iterable) -> List[str]:
@@ -10347,6 +11670,54 @@ def _copy_row(places: _Places, card: master.Card) -> dict:
     }
 
 
+#: Round 2 review finding: the client's own `PHOTO_LOOKUP_CAP` (`Revenue.tsx`) bounded the
+#: request it SENDS, but nothing bounded what this route would ANSWER for — a hand-typed
+#: query string could ask for any number of SKUs in one call. No shared constant reaches
+#: across the TS/Python boundary here (`ORDER_NAMES_LIMIT`'s own precedent has the same
+#: gap, one bound per side), so this is `Revenue.tsx:PHOTO_LOOKUP_CAP`'s value, kept in
+#: step by hand.
+SKUS_PHOTOS_LIMIT = 40
+
+
+def do_skus_photos(skus: Sequence[str]) -> dict:
+    """The first on-hand copy WITH a photograph, for each named SKU — `#/revenue`'s
+    thumbnail lookup (D-sales-rows-by-sku). A sold card's own photograph is usually gone
+    (D89 reclaims it on purpose), so a sales row asks for ANOTHER copy of the same SKU
+    still on the shelf. `Inventory.copies_on_hand`'s own box-walk order decides which copy
+    that is; the first one carrying a real photograph wins, using the same `photo_for`
+    predicate `_copy_row` already applies rather than a second copy of it. A SKU with no
+    photographed copy on hand is simply ABSENT from the answer, never a guess and never a
+    stand-in image — the client's own fallback tile covers that case. Free and read-only,
+    like `do_search` above: no lock, one bounded pass per requested SKU.
+
+    REFUSES OVER `SKUS_PHOTOS_LIMIT` (round 2 review): the client's own cap bounds what it
+    SENDS, never what this route would do with a longer list a different caller sent.
+    """
+    if len(skus) > SKUS_PHOTOS_LIMIT:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "too_many_skus",
+            f"{len(skus)} SKUs in one call, and this route answers at most "
+            f"{SKUS_PHOTOS_LIMIT}. Ask in smaller batches.",
+        )
+    inventory = Store().read().inventory
+    out: Dict[str, dict] = {}
+    for sku in skus:
+        if not sku or sku in out:
+            continue
+        for card in inventory.copies_on_hand(sku):
+            path = photo_for(inventory, card)
+            if path is None:
+                continue
+            out[sku] = {
+                "box": card.box,
+                "index": card.index,
+                "cid": card.cid if photos.is_photo_cid(card.cid) else None,
+            }
+            break
+    return {"photos": out}
+
+
 def do_search(query: str) -> dict:
     """Find a card by name, number, SKU or set hint. Grouped by SKU, D7's map made visible.
 
@@ -10388,23 +11759,50 @@ def do_search(query: str) -> dict:
     leaving the client to read `on_hand` twice — `app/src/CardLocations.tsx:headroom` is its
     reader and the arithmetic there is unchanged.
     """
+    # NFKC HAPPENS INSIDE `_require_query` NOW, NOT HERE (R2, round-4 Opus review,
+    # 2026-09-25; was S2, UX-173 amended). A full-width digit (`５４/１３２`) is a DIFFERENT
+    # codepoint than its ASCII form, and `store/db.py:_FTS_TOKENIZE`'s `unicode61`
+    # tokenizer does not NFKC-fold a query the way `match.fold_text`/`match.canonical_
+    # number` do — so the FTS5 candidate query built from the RAW text never matched the
+    # ASCII token the index holds. Normalizing BEFORE the length check (rather than after,
+    # here) closes the R2 bypass: a single codepoint can expand under NFKC, so checking
+    # length first let the 200-character cap be typed around with one repeated character.
     text = _require_query(query)
 
     inventory = Store().read().inventory
     places = _Places(inventory)
 
-    match = _fts_query(text)
+    match_expr = _fts_query(text)
     ranked: Dict[str, int] = {}
     loose: List[master.Card] = []
-    if match:
+    if match_expr:
         conn = db.connect(files.inventory_dir())
+        # CONNECTION-LEVEL, so it counts a `cards` scan no matter which function issues
+        # it (round-8; see `_count_cards_scan`'s own docstring).
+        conn.set_trace_callback(_count_cards_scan)
         try:
-            hits = conn.execute(
+            hits: "Dict[str, object]" = {}
+            for key, sku in conn.execute(
                 "SELECT cards.key, cards.sku FROM cards_fts "
                 "JOIN cards ON cards.rowid = cards_fts.rowid "
                 "WHERE cards_fts MATCH ? ORDER BY bm25(cards_fts)",
-                (match,),
-            ).fetchall()
+                (match_expr,),
+            ):
+                hits.setdefault(str(key), sku)
+            # SUPPLEMENTAL CANDIDATES, UNIONED WITH THE BASE QUERY ABOVE (S2, UX-173
+            # amended; F8, F2, MID-WORD, R1, all the same day, 2026-09-25): FTS5's own
+            # prefix index cannot answer a query naming the SECOND half of a number alone
+            # (`/132`), one that only reaches a real token once a hyphen or an apostrophe
+            # is folded out (`hooh`, `farfetchd`), a 3+ digit query missing MORE leading
+            # zeros than it typed (`934` for a card stored as `0934`), or a MID-WORD
+            # fragment (`izard` for `Charizard`). `_fts_supplemental_candidates` dedupes
+            # and bounds terms, then UNIONS each term's own widened candidates (F2,
+            # round-5 Opus delta review, 2026-09-25 — an earlier version intersected
+            # across terms, which dropped a real match whenever only one term needed a
+            # widening; see the function's own docstring). A superset, like the base
+            # query already was; `match.match_query`/`_match_rank` below still decide.
+            for key, sku in _fts_supplemental_candidates(conn, text):
+                hits.setdefault(key, sku)
         finally:
             conn.close()
         # RANK IS STILL COMPUTED BY `_match_rank`, NOT READ OFF `bm25`. bm25 orders which
@@ -10425,13 +11823,23 @@ def do_search(query: str) -> dict:
         # BEST (lowest) rank among the terms that match wins — order-independent, which is
         # what "eiscue 044" and "044 eiscue" both need to return the identical list. A
         # single-term query degrades to exactly the old call (`terms == [needle]`).
-        terms = [term.lower() for term in text.split()]
-        seen_keys: set = set()
-        for key, sku in hits:
-            key = str(key)
-            if key in seen_keys:
-                continue
-            seen_keys.add(key)
+        #
+        # DEDUPED AND CAPPED THROUGH THE SAME `_deduped_capped_terms` HELPER
+        # `_fts_supplemental_candidates` uses (F1, round-5 Opus delta review, 2026-09-25,
+        # on 65b8f39d). This loop ran `_match_rank` once per RAW term per candidate, and a
+        # repeated term was never folded — the same defect R1 fixed for the candidate
+        # step, still live here. `("1 "*100)` (100 repeated terms) measured 5.6-12.4s at
+        # 3,000 cards and 19.9s at 10,000, because every candidate paid for 100 calls to
+        # `_match_rank` instead of 1. `token_count` keeps the RAW (pre-dedupe) token count
+        # for the single-term fallback below — "how many words did the operator type",
+        # never "how many distinct ones". TOKENIZED BY `match.query_tokens`, NEVER a bare
+        # whitespace split (N1, round-10 Opus delta review, 2026-09-25) — the same reason
+        # `_deduped_capped_terms` itself changed: `a,b` is ONE whitespace-split token but
+        # TWO real ones, so a bare `text.split()` count would have disagreed with what
+        # `match_query` itself considers "a single-term query".
+        token_count = len(match.query_tokens(text))
+        terms = _deduped_capped_terms(text, lower=True)
+        for key, sku in hits.items():
             card = inventory.cards.get(key)
             if card is None:
                 # The FTS row and the live snapshot disagree — a card deleted between the
@@ -10439,16 +11847,60 @@ def do_search(query: str) -> dict:
                 # triggers should make impossible. Either way, a candidate this snapshot
                 # cannot see is not a result this snapshot can render.
                 continue
-            term_ranks = [r for r in (_match_rank(card, term) for term in terms) if r is not None]
-            if not term_ranks:
-                # FTS5's tokenizer can match text `_match_rank` would not — e.g. a prefix
-                # match inside `note`'s free prose that the substring pass would also have
-                # caught, so this should be rare-to-never; kept as a filter rather than an
-                # assumption, because trusting bm25's candidate set unconditionally would
-                # silently drop `_match_rank`'s own exact-vs-prefix-vs-substring distinction
-                # the day the two tokenizers disagree about a corner case.
+            # THE DECISIVE CHECK RUNS FIRST, NOW (R5-1, BLOCKING, round-6 Opus delta
+            # review, 2026-09-25, on ce5a6168). `term_ranks` used to be computed for
+            # EVERY candidate before `match.match_query` ever ran — cheap while the
+            # candidate step was still narrow, but F2's UNION (round 5) can make most of
+            # the store a candidate for a query like `/NNN /NNN /NNN...` (every term
+            # widens on its own, no intersection narrows the union back down), so this
+            # loop was paying for up to 8 `_match_rank` calls on rows `match_query` was
+            # always going to reject anyway. Measured on the real-store copy: `/132 /298
+            # /166 /198 /219 /221 /1 /2` took 552-578ms for a 63-byte body — the decisive
+            # check rejects almost every candidate, so almost all of that time was
+            # `term_ranks` no result ever used. `term_ranks` is now computed ONLY when
+            # `matched` already is true (needed for `rank` below) or when `token_count
+            # == 1` (needed for the literal-number fallback two lines down, the one case
+            # where `term_ranks` decides `matched` rather than just `rank`).
+            # `match.match_query` — THE SAME PORT `scripts/match-selftest.py` GROUP 1
+            # PROVES AGAINST THE SHARED CASE TABLE — decides whether a candidate is a
+            # real match. Before this, "does at least one term rank" was the only gate,
+            # which is exactly wrong once the candidate step above can surface a row on
+            # ONE term alone (`swsh` for `swsh050`, `akali` for `Akali, Deadly Duelist`):
+            # a query of `akali zed` would have wrongly accepted a card that only ever
+            # matched `akali`, with `zed` found nowhere.
+            #
+            # THE FALLBACK IS NARROWED TO THE ONE CARVE-OUT IT WAS FOR (F3, round-3 Opus
+            # review, 2026-09-25). It used to be "any single-term rank at all", which
+            # let `_match_rank`'s SUBSTRING pass — a bare `query in field.lower()`, no
+            # shape check — stand in for `match.py`'s own, stricter rules whenever they
+            # disagreed. Measured: `#8926367` folds to `8926367` and is a SUBSTRING of a
+            # card whose SKU IS `8926367`, so `_match_rank` ranked it — but
+            # `match._sku_match` requires the RAW token itself to be `_SKU_SHAPE`
+            # (`^[0-9]{3,}$`), which `#8926367` is not (the `#` is still on it), so
+            # `match_query` correctly refused the same row. `do_search` returned a row
+            # the shared matcher rejects, for 95 different `#`-prefixed queries against
+            # the owner's store. Only `_match_rank`'s LITERAL, case-folded EXACT NUMBER
+            # check survives as a fallback now — the one piece with no `match.py`
+            # equivalent, because a code card's own redemption code is not a
+            # collector-number shape `_is_number_shape` will ever accept, and no case in
+            # the shared table has ever needed one. T7's own `check_code_ledger`
+            # ("the dispute lookup is GET /search") is what this narrower fallback
+            # still keeps green — SUBSTRING and NAME-PREFIX ranks no longer bypass
+            # `match_query` on their own.
+            matched = match.match_query(text, _card_match_fields(card))
+            _SEARCH_WORK_COUNTERS["match_query_calls"] += 1
+            term_ranks: List[int] = []
+            if matched or token_count == 1:
+                term_ranks = [r for r in (_match_rank(card, term) for term in terms) if r is not None]
+            if not matched and token_count == 1:
+                # `terms[0]` — LOWERCASED, matching `term_ranks`'s own computation just
+                # above — never `text`, which still carries its original case and would
+                # never equal the lowercased number set `_match_rank`'s literal check
+                # compares against.
+                matched = _RANK_EXACT_NUMBER in term_ranks
+            if not matched:
                 continue
-            rank = min(term_ranks)
+            rank = min(term_ranks) if term_ranks else _RANK_SUBSTRING
             sku = str(sku).strip() if sku else ""
             if not sku:
                 loose.append(card)
@@ -10461,6 +11913,16 @@ def do_search(query: str) -> dict:
             # changing: whichever copy of a tied SKU the query returns first, the lower rank wins.
             ranked[sku] = min(rank, ranked.get(sku, rank))
 
+    # ponytail: the body built below is UNPAGED — every ranked SKU's full group, every
+    # copy, in one response. Measured (round-5 Opus delta review, 2026-09-25, D271): a
+    # broad hostile query (`("e " * 100)`) returns a 719KB body at 3,000 cards and 2.4MB
+    # at 10,000, and the JSON encode plus the socket write of that body is most of what
+    # pushes real HTTP p95 over 500ms — the matcher itself stays fast (see D271's table).
+    # The owner's real ~3,510-card store never hits this, because a real query there
+    # matches far fewer rows than a deliberately hostile one does. Ceiling: a genuinely
+    # broad query on a synthetic store of 3,000+ cards. Upgrade path: page the response
+    # (a `limit`/`cursor` on `groups`), a real change needing its own decision — D271
+    # names it, never builds it here.
     groups: List[dict] = []
     for sku, rank in ranked.items():
         copies = inventory.positions_for_sku(sku)
@@ -10589,6 +12051,8 @@ def _section_spans(
     total: int,
     occupied: Tuple[int, ...],
     names: Optional[Dict[int, str]] = None,
+    order: Optional[master.BoxOrder] = None,
+    about: Optional[Dict[int, Tuple[Optional[str], Optional[str]]]] = None,
 ) -> List[dict]:
     """Every section of one box: where it starts, where it ends, how many cards are in it.
 
@@ -10621,18 +12085,21 @@ def _section_spans(
     editor honest: it seeds from `start` and posts in the same space, and `do_put_box` maps
     it back through the same `occupied` before the store sees an index.
     """
+    # `occupied` is in physical order and `order` maps it (D265).
+    order = order if order is not None else master.BoxOrder()
+    position_of = _positioner(box, layout, occupied, order)
     per_section: Dict[int, int] = {}
     for index in occupied:
-        section = join.Position(box, index, layout, occupied).section
+        section = position_of(index).section
         per_section[section] = per_section.get(section, 0) + 1
 
-    mapped = join.Position(box, 1, layout, occupied).layout
+    mapped = position_of(occupied[0] if occupied else 1).layout
 
     spans: List[dict] = []
     seen: Set[int] = set()
     at = 1
     while at <= total:
-        position = join.Position(box, occupied[at - 1], layout, occupied)
+        position = position_of(occupied[at - 1])
         end = position.section_end
         spans.append(
             {
@@ -10664,6 +12131,20 @@ def _section_spans(
         )
 
     spans.sort(key=lambda span: span["section"])
+    # THE BOX MAP'S LANDMARKS AND AIM (D264): the first and last card on hand in each section,
+    # by name for the eye and by cid for the write's aim. Null for an empty section, and
+    # absent entirely where the caller passed no `about`.
+    if about is not None:
+        for span in spans:
+            first = last = None
+            if span["count"]:
+                start = int(span["start"])
+                first = occupied[start - 1] if 0 < start <= len(occupied) else None
+                last = occupied[start + int(span["count"]) - 2] if first is not None else None
+            one = about.get(first, (None, None)) if first is not None else (None, None)
+            two = about.get(last, (None, None)) if last is not None else (None, None)
+            span["first_cid"], span["first_name"] = one
+            span["last_cid"], span["last_name"] = two
     return spans
 
 
@@ -10693,15 +12174,20 @@ def _card_matches_filters(card: master.Card, filters: Dict[str, Optional[str]]) 
     )
 
 
-def _card_facets(inventory: master.Inventory, cells: Optional[List[dict]] = None) -> dict:
+def _card_facets(
+    inventory: master.Inventory,
+    cells: Optional[List[dict]] = None,
+    filters: Optional[Dict[str, Optional[str]]] = None,
+    hide_sold: bool = False,
+) -> dict:
     """The game/set/rarity vocabulary THIS STORE ACTUALLY HOLDS, with counts (D213).
 
-    ONE INDEXED-COLUMN SCAN, NEVER A HARDCODED LIST. `game`, `set_name` and `rarity` are
-    three of the columns `store/db.py:TABLES["cards"]` declares beside the payload, so this
-    is `select` over three columns for every card, and never a walk that builds a `Card`
-    object per row — the same trade `_positions_in` already makes. Measured on the owner's
-    store: 3,510 rows, negligible beside `do_boxes`'s own existing per-box scan, which this
-    route already pays.
+    ONE INDEXED-COLUMN SCAN, NEVER A HARDCODED LIST. `game`, `set_name`, `rarity` and
+    `state` are four of the columns `store/db.py:TABLES["cards"]` declares beside the
+    payload, so this is `select` over four columns for every card, and never a walk that
+    builds a `Card` object per row — the same trade `_positions_in` already makes. Measured
+    on the owner's store: 3,510 rows, negligible beside `do_boxes`'s own existing per-box
+    scan, which this route already pays.
 
     SETS AND RARITIES ARE SCOPED PER GAME, NEVER ONE FLAT LIST. D213's own ruling for the
     control is a dropdown "because dropdowns would allow for standardization across card
@@ -10722,18 +12208,54 @@ def _card_facets(inventory: master.Inventory, cells: Optional[List[dict]] = None
     (`pipeline/games.py`'s registry has no blank entry) — so `""` cannot collide with a real
     game and is free to mean "no claim", the same read-side backfill D21 already applies
     everywhere else a `Card.game` of `None` is rendered.
+
+    EVERY COUNT FOLLOWS THE OTHER ACTIVE FILTERS, HIDE SOLD INCLUDED (UX-210, a CORRECTION
+    against the original, which counted every card in the store regardless of what the
+    screen was actually filtering on or hiding). With Hide sold on, the owner measured the
+    rail saying "9 matches" while the walk — which excludes sold — showed 7; and
+    `Pokémon (37)` plus `Riftbound (85)` summed to 122, every card ever captured, sold
+    included. `hide_sold` is a blanket cut applied first, matching what D132's toggle
+    hides. Each of the three DIMENSIONS is then counted under the OTHER TWO active
+    facets — never its own, or picking "Rare" would make every other rarity's count read
+    zero — which is what makes the filters compose IN ANY ORDER: picking rarity first and
+    set second gives the identical counts as the reverse. The GAME bucket a set or a
+    rarity nests under is not itself a "filter" in this sense; it is the bucket key the
+    client already selects by, so an active `game` filter changes nothing here.
     """
+    filters = filters or {}
+
+    def _other(*skip: str) -> Dict[str, Optional[str]]:
+        return {k: v for k, v in filters.items() if k not in skip}
+
+    def _passes(card_filters: Dict[str, Optional[str]], **values: Optional[str]) -> bool:
+        for key, wanted in card_filters.items():
+            if _facet_norm(values.get(key)) != _facet_norm(wanted):
+                return False
+        return True
+
+    games_filters = _other("game")
+    sets_filters = _other("game", "set_name")
+    rarities_filters = _other("game", "rarity")
+
     games: Dict[Optional[str], int] = {}
     sets: Dict[Optional[str], Dict[Optional[str], int]] = {}
     rarities: Dict[Optional[str], Dict[Optional[str], int]] = {}
     # FOLDED FROM THE FACET CELLS (FLT-09), so `GET /boxes` pays ONE scan for both blocks.
+    # A cell's `gone` is `master.TERMINAL_STATES` (sold, retired, moved), the set D132's Hide
+    # sold hides (S3, the search-server lane's Opus review), so the cut is the same one.
     for cell in cells if cells is not None else _facet_cells(inventory):
+        if hide_sold and cell["gone"]:
+            continue
         game, set_name, rarity, n = cell["game"], cell["set"], cell["rarity"], cell["count"]
-        games[game] = games.get(game, 0) + n
-        sets.setdefault(game, {})
-        sets[game][set_name] = sets[game].get(set_name, 0) + n
-        rarities.setdefault(game, {})
-        rarities[game][rarity] = rarities[game].get(rarity, 0) + n
+        values = {"game": game, "set_name": set_name, "rarity": rarity}
+        if _passes(games_filters, **values):
+            games[game] = games.get(game, 0) + n
+        if _passes(sets_filters, **values):
+            sets.setdefault(game, {})
+            sets[game][set_name] = sets[game].get(set_name, 0) + n
+        if _passes(rarities_filters, **values):
+            rarities.setdefault(game, {})
+            rarities[game][rarity] = rarities[game].get(rarity, 0) + n
 
     def _rows(counts: Dict[Optional[str], int], key: str) -> List[dict]:
         # Real values first, alphabetically; the null bucket always last, so a screen
@@ -10791,6 +12313,7 @@ def _box_row(
     box: int,
     places: "Optional[_Places]" = None,
     filters: Optional[Dict[str, Optional[str]]] = None,
+    hide_sold: bool = False,
 ) -> dict:
     """One box, as `GET /boxes` renders it and as both write routes answer with it.
 
@@ -10835,6 +12358,13 @@ def _box_row(
     call on an object already in hand. `None` (the default) means no filter is active and
     no `matches` key is added at all — the box rail's "N on hand" stays what it always was
     for a screen that never turned the filter on.
+
+    `hide_sold` NARROWS `matches` THE SAME WAY (UX-210). A sold card never leaves the
+    `cards`/`sold` counts above — those answer "what is recorded here", D58's own promise —
+    but it must leave `matches`, because that count answers a DIFFERENT question: "how many
+    of these will the walk show", and the walk hides sold cards by default (D132). Before
+    this, the rail's "N matches" and the walk's own row count disagreed by exactly the sold
+    cards under the current filter — measured by the owner: 9 against 7.
     """
     entry = inventory.box(box)
     view = (places or _Places(inventory)).view(box)
@@ -10846,6 +12376,8 @@ def _box_row(
     retired = 0
     moved = 0
     listed = 0
+    # `(cid, name)` by index, for the box map's landmarks and aim (D264).
+    about: Dict[int, Tuple[Optional[str], Optional[str]]] = {}
     for card in inventory.cards.where(box=int(box)):
         try:
             if int(card.box) != int(box):
@@ -10857,6 +12389,10 @@ def _box_row(
             # counting what names box 3, and a record nobody can place names no box.
             continue
         cards += 1
+        with contextlib.suppress(TypeError, ValueError):
+            about[int(card.index)] = (
+                card.cid, card.name if isinstance(card.name, str) and card.name else None
+            )
         if card.state == master.SOLD:
             sold += 1
         elif card.state == master.RETIRED:
@@ -10872,7 +12408,15 @@ def _box_row(
         # fact about the SKU that a sold copy has as much as an identified one.
         if _listing_hold(inventory, card):
             listed += 1
-        if filters is not None and _card_matches_filters(card, filters):
+        if (
+            filters is not None
+            # S3, THE OPUS REVIEW, 2026-09-25: the same D132 correction as `_card_facets`
+            # above — Hide sold drops every DEPARTED card off the walk, not sold alone, so
+            # `matches` must follow `master.TERMINAL_STATES` or a retired/moved card would
+            # still count here while never drawing a row.
+            and not (hide_sold and card.state in master.TERMINAL_STATES)
+            and _card_matches_filters(card, filters)
+        ):
             matches += 1
 
     try:
@@ -10891,7 +12435,10 @@ def _box_row(
     # spans with it, exactly as an invalid layout already does one line down.
     on_hand: Optional[int] = len(occupied) if occupied is not None else None
     detail = (
-        _section_spans(int(box), layout, len(occupied), occupied, inventory.section_names_for(box))
+        _section_spans(
+            int(box), layout, len(occupied), occupied, inventory.section_names_for(box),
+            inventory.box_order(box), about,
+        )
         if layout is not None and occupied is not None
         else []
     )
@@ -10917,8 +12464,6 @@ def _box_row(
         # The STORED list, not the validated tuple. They differ only when the file was edited
         # by hand, and that is exactly when the operator needs to see what is in it.
         "sections": list(entry.sections) if entry is not None else [],
-        "state": entry.state if entry is not None else master.BOX_OPEN,
-        "capacity": entry.capacity if entry is not None else None,
         "fill": fill,
         "next_index": next_index,
         "cards": cards,
@@ -10978,6 +12523,7 @@ def do_boxes(
     game: object = _FACET_UNSET,
     set_name: object = _FACET_UNSET,
     rarity: object = _FACET_UNSET,
+    hide_sold: bool = False,
 ) -> dict:
     """Every box this store knows about: the registry, plus any box a card names.
 
@@ -10998,6 +12544,13 @@ def do_boxes(
     `_FACET_UNSET` (the default) means "not filtering this facet" — passing `None`
     explicitly means "filter for no claim", which `_box_row`/`_card_matches_filters` fold
     the same way `_card_facets`'s menu does.
+
+    `hide_sold` IS A FOURTH INPUT AND NOT A FOURTH FACET (UX-210): it is a plain bool, no
+    null bucket to distinguish, so it needs none of `_FACET_UNSET`'s three-state care —
+    `False` (the default, and what an old caller sends by sending nothing) means what it
+    always meant, count every card. Threaded into BOTH `_box_row`'s `matches` and
+    `_card_facets`'s counts, because a "matches" figure that disagreed with a `facets`
+    figure over the identical toggle would be the same defect this closes, one field over.
 
     `facets` RIDES ALONG UNCONDITIONALLY, FILTERED OR NOT — it is what the filter's own
     dropdowns are populated from, and it costs one indexed-column scan regardless of
@@ -11029,8 +12582,11 @@ def do_boxes(
     places = _Places(inventory)
     cells = _facet_cells(inventory)
     return {
-        "boxes": [_box_row(inventory, box, places, filters=filters) for box in sorted(numbers)],
-        "facets": _card_facets(inventory, cells),
+        "boxes": [
+            _box_row(inventory, box, places, filters=filters, hide_sold=hide_sold)
+            for box in sorted(numbers)
+        ],
+        "facets": _card_facets(inventory, cells, filters=filters, hide_sold=hide_sold),
         "facet_cells": cells,
     }
 
@@ -11105,7 +12661,7 @@ def do_create_box(payload: dict) -> Tuple[HTTPStatus, dict]:
 
 
 def do_put_box(box: int, payload: dict) -> dict:
-    """Rename a box, declare its dividers, name its sections, seal it, or open it again.
+    """Rename a box, declare its dividers, or name its sections.
 
     THE FOUR FIELDS ARE THE FOUR THINGS A BOX HAS THAT A HUMAN DECIDES — `section_names` is
     the fourth as of D132, keyed by the ordinal the screen prints. Its number is not
@@ -11113,12 +12669,8 @@ def do_put_box(box: int, payload: dict) -> dict:
     which D10 forbids outright: every position key, every photo directory and every label the
     operator has read off a screen is built from that number.
 
-    SEALING IS THE ONE THAT MATTERS, and it is a write of exactly one number. `close_box`
-    freezes `capacity` at the fill, and from that moment every `place` block in the product
-    divides by it instead of by a total that grows — which is the difference between "#40 of
-    53 so far" and D20's "#40 of 250 · 16% in". Re-opening puts capacity back to unknown
-    rather than leaving a stale number standing, and refuses nothing: a box re-opened to take
-    more cards is an ordinary correction.
+    NO SEAL (`D-sealed-boxes-removed`, the owner's ruling of 2026-09-25). A box has no lid,
+    so `state` is not a field here and a body that sends one is refused as unknown.
 
     RE-SECTIONING RELABELS CARDS AND MOVES NO INDEX (D10, amended). Every card behind a moved
     divider renders in a different section from the moment this returns. That is correct when
@@ -11151,7 +12703,6 @@ def do_put_box(box: int, payload: dict) -> dict:
     name = _optional_name(payload)
     sections = _optional_sections(payload)
     section_names = _optional_section_names(payload)
-    state = _optional_box_state(payload)
 
     with Store().write() as snapshot:
         inventory = snapshot.inventory
@@ -11163,7 +12714,7 @@ def do_put_box(box: int, payload: dict) -> dict:
                 f"registers itself the first time a card lands in it.",
             )
 
-        entry = inventory.ensure_box(box)
+        inventory.ensure_box(box)
         if "name" in payload:
             # Through `set_name` rather than by assignment, which is what buys the
             # `box_renamed` line and the duplicate check. It takes `None` as "clear the
@@ -11181,17 +12732,32 @@ def do_put_box(box: int, payload: dict) -> dict:
             # THE FRONT OF THE BOX IS INDEX 1 WHATEVER HAS SOLD OUT OF IT, which is what
             # keeps `check_sections`' own rule — a layout starts at 1, because there is no
             # card before the front of a box — true when card 1 itself has left.
+            # AN UNCHANGED START KEEPS ITS STORED DIVIDER (the R5 review). The editor sends
+            # every start it was seeded with, and an EMPTY section shares the start of the
+            # section after it, so mapping both back through the cards gave one key twice and
+            # the save was refused. A start the operator did not touch is the divider that is
+            # already there; only an edited start is mapped through the cards.
+            stored = list(inventory.sections_for(box))
+            seeded = [int(d["start"]) for d in _box_row(inventory, box)["sections_detail"]]
+            keep = stored if len(stored) == len(seeded) else []
             occupied = _Places(inventory).occupied(box)
             if occupied is not None:
+                # IN ORDER SPACE (D265): the dividers are stored as orders.
+                order = inventory.box_order(box)
                 gone = tuple(
                     sorted(
-                        int(card.index)
+                        order.of(int(card.index))
                         for card in inventory.cards.where(box=int(box))
                         if _same_box(card, box) and card.state in master.TERMINAL_STATES
                     )
                 )
+                in_order = tuple(order.of(i) for i in occupied)
                 sections = master.check_sections(
-                    [join.divider_index(k, occupied, gone) for k in sections]
+                    [
+                        keep[at] if keep and at < len(seeded) and seeded[at] == k
+                        else join.divider_index(k, in_order, gone)
+                        for at, k in enumerate(sections)
+                    ]
                 )
             inventory.set_sections(box, sections)
         if section_names is not None:
@@ -11202,18 +12768,6 @@ def do_put_box(box: int, payload: dict) -> dict:
                 inventory.set_section_names(box, section_names)
             except master.BadSections as exc:
                 raise BadRequest(HTTPStatus.BAD_REQUEST, "section_unknown", str(exc)) from None
-
-        # THE LID IS MOVED LAST, after any layout change in the same request, so a box that
-        # is being declared and sealed together freezes its capacity with the layout already
-        # in place. Only a real change is applied: re-opening an open box would otherwise
-        # write a `box_reopened` event for a request that changed nothing, which is the
-        # no-op-logging `do_put_card` refuses to do. Sealing a sealed box is NOT skipped the
-        # same way — `close_box` raises, and the refusal is worth more than the silence,
-        # because the alternative reading is that this call re-froze capacity at a new fill.
-        if state == master.BOX_CLOSED:
-            inventory.close_box(box)
-        elif state == master.BOX_OPEN and entry.closed:
-            inventory.reopen_box(box)
 
         body = _box_row(inventory, box)
 
@@ -11548,6 +13102,15 @@ def _order_progress(
                 # that rides on the line itself, and `_engine_order` prefers it.
                 "declared_kind": row.kind,
                 "at": row.at,
+                # THE STAND-DOWN, ON THE WIRE — `types.ts`'s `OrderLineProgress` always
+                # declared these two, and this builder never sent them, so a stood-down
+                # line's row on `#/orders` looked identical to an untouched one and every
+                # client-side `closed_at !== null` check read `undefined`, never a stand-down
+                # (the review round's finding 1). `row.closed_at`/`row.closed_reason` are the
+                # ledger's own `LineProgress` fields (`store/orders.py`), read here rather
+                # than re-derived.
+                "closed_at": row.closed_at,
+                "closed_reason": row.closed_reason,
             }
         )
     return rows
@@ -11936,17 +13499,24 @@ def _walk_plan_sort_key(copy: "walkplan.Copy", places: _Places) -> Tuple[int, in
     return (0, int(slot)) if slot is not None else (1, int(copy.index))
 
 
-def _walk_plan_order_ref(ledger: order_store.Ledger, key: str) -> Optional[dict]:
-    """`{key, number, buyer}` for one order this walk is filling, or None for a key the
-    ledger no longer holds — the same skip `demand`'s own docstring argues, one register up."""
+def _walk_plan_order_ref(ledger: order_store.Ledger, key: str, sku: str) -> Optional[dict]:
+    """`{key, number, buyer, owed}` for one order this walk is filling, or None for a key the
+    ledger no longer holds — the same skip `demand`'s own docstring argues, one register up.
+
+    `owed` IS THE LEDGER'S OWN `outstanding`, ZEROED FOR A STOOD-DOWN LINE — the same filter
+    `walkplan.demand` applies (owner's ruling 2026-09-17, "if I stand a line down... it should
+    say owed 0"), read off this plan's own snapshot so a press this pass records against never
+    moves it. Its own reader, `pickOrderFor` (`app/src/OrdersWalkPane.tsx`), needs it to stop
+    handing a press to an order already full (`docs/specs/order-walk-plan.md` §8, amended)."""
     record = ledger.orders.get(key)
     if record is None:
         return None
-    return {"key": record.key, "number": record.number, "buyer": record.buyer}
+    owed = 0 if ledger.recorded(key, sku).closed else ledger.outstanding(key, sku)
+    return {"key": record.key, "number": record.number, "buyer": record.buyer, "owed": owed}
 
 
-def _walk_plan_refs(ledger: order_store.Ledger, keys: Sequence[str]) -> List[dict]:
-    return [ref for ref in (_walk_plan_order_ref(ledger, key) for key in keys) if ref is not None]
+def _walk_plan_refs(ledger: order_store.Ledger, keys: Sequence[str], sku: str) -> List[dict]:
+    return [ref for ref in (_walk_plan_order_ref(ledger, key, sku) for key in keys) if ref is not None]
 
 
 def _walk_plan_sku_display(
@@ -12036,7 +13606,7 @@ def _walk_plan_take(
         "condition": _agreed(record.condition for record in positions)
         or (listing.condition if listing is not None else None),
         "wanted": take.wanted,
-        "for": _walk_plan_refs(ledger, take.orders),
+        "for": _walk_plan_refs(ledger, take.orders, take.sku),
         "copies": rows,
         # `_listing_reading`, the SAME composer `do_search`'s `_group_row` calls, over the
         # SAME `listing` already read above for `condition` — added so a caller synthesising a
@@ -12105,7 +13675,7 @@ def _walk_plan_short(ledger: order_store.Ledger, short: "walkplan.Short") -> dic
         "wanted": short.wanted,
         "on_hand": short.on_hand,
         "short": short.short,
-        "for": _walk_plan_refs(ledger, short.orders),
+        "for": _walk_plan_refs(ledger, short.orders, short.sku),
     }
 
 
@@ -13542,6 +15112,15 @@ def _reconcile_cutoff(payload: dict) -> str:
 
     A DATE ALONE, NEVER A TIMESTAMP — compared against the first ten characters of
     `placed_at`, which is `store/orders.py:now`'s own format and always starts with one.
+
+    NEVER AFTER TODAY (the search-server lane, 2026-09-24, from the Orders review). A
+    future cutoff would stand down every order placed before a day that has not happened
+    yet — which is every open order in the store, live `Ready to Ship` work included, the
+    exact HOR-04 hazard D203 exists to prevent. Two ISO-8601 dates compare correctly as
+    plain strings, so this is one comparison against `order_store.today()`, the same
+    function the default above already calls. THE SCREEN ALREADY DISABLES THE PRESS past
+    today (`ReconcileBacklogPanel`, the orders lane's own build); this is the SECOND guard,
+    on the server, so a stale client or a direct request cannot bypass the first.
     """
     raw = payload.get("cutoff")
     if raw is None:
@@ -13552,7 +15131,16 @@ def _reconcile_cutoff(payload: dict) -> str:
             "cutoff_invalid",
             f"cutoff was {raw!r}; send a date as YYYY-MM-DD, or omit it for today.",
         )
-    return raw.strip()
+    cutoff = raw.strip()
+    today = order_store.today()
+    if cutoff > today:
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "cutoff_in_future",
+            f"cutoff was {cutoff}, after today ({today}). A cutoff past today would stand "
+            "down orders that have not had their chance to ship yet.",
+        )
+    return cutoff
 
 
 def _reconcile_candidates(
@@ -14120,21 +15708,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
             )
         except (master.BadPosition, master.PositionOccupied, master.DuplicateCaptureId) as exc:
             self._fail(HTTPStatus.CONFLICT, "inventory_conflict", str(exc))
-        # D20's THREE, CAUGHT HERE SO NONE OF THEM CAN LEAVE AS A 500. Each already carries a
-        # message written for a person by `store/master.py` — `check_sections` names what is
-        # wrong with a layout, `allocate_capture` names the sealed box and tells you to open
-        # it or use another — so they are answered with their own text rather than a
-        # substitute. `BoxClosed` reaches this from two directions and both are the same
-        # sentence to the operator: a capture into a sealed box, and a request to seal a box
-        # that is already sealed.
-        #
-        # `BadSections` IS 400 AND THE OTHER TWO ARE NOT, because a bad layout is something
-        # the request said and the other two are something the store says. A sealed box is a
-        # 409: the request was well-formed and lost a race with the lid.
+        # CAUGHT HERE SO IT CANNOT LEAVE AS A 500. `check_sections` names what is wrong with a
+        # layout in a sentence for a person, so it is answered with its own text. It is a
+        # 400: a bad layout is something the request said. (`BoxClosed`, D20's sealed-box
+        # refusal, went with the seal: `D-sealed-boxes-removed`.)
         except master.BadSections as exc:
             self._fail(HTTPStatus.BAD_REQUEST, "sections_invalid", str(exc))
-        except master.BoxClosed as exc:
-            self._fail(HTTPStatus.CONFLICT, "box_closed", str(exc))
         # `open_section`'s two, and they are 409s on the rule the comment above draws: the
         # request was well-formed — it carries no index to be wrong about — and lost to
         # something the STORE knows, which is where the last divider already is. Each
@@ -14150,7 +15729,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # move routes run their own state checks first, with the richer per-door messages
         # `card_sold`/`card_retired`/`card_moved` already give — these two exist for any
         # caller that reaches `Inventory.move_card` without going through them, the same
-        # belt-and-braces relationship `BoxClosed` already has with `allocate_capture`.
+        # belt-and-braces relationship a store refusal has with the route in front of it.
         except master.CardNotFound as exc:
             self._fail(HTTPStatus.NOT_FOUND, "card_not_found", str(exc))
         except master.CardDeparted as exc:
@@ -14158,7 +15737,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # A FOURTH JOINS THEM, for the same reason and with the same shape. `BoxNameTaken`
         # is a 409 rather than a 400 on the rule the comment above draws: the request was
         # well-formed and lost to something the STORE knows — another box already answers
-        # to that name — which is exactly `BoxClosed`'s case one field over. Its message
+        # to that name. Its message
         # names the incumbent box, so it is answered with its own text.
         except master.BoxNameTaken as exc:
             self._fail(HTTPStatus.CONFLICT, "name_taken", str(exc))
@@ -14243,6 +15822,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     kwargs["set_name"] = params["set"][0] or None
                 if "rarity" in params:
                     kwargs["rarity"] = params["rarity"][0] or None
+                # `hide_sold` (UX-210) is a PLAIN BOOL, not a three-state facet — `?set=`'s
+                # blank-means-null-bucket rule does not apply here, so its absence is simply
+                # `False`, the same answer an old caller who never sends it always got.
+                if "hide_sold" in params:
+                    kwargs["hide_sold"] = params["hide_sold"][0].strip().lower() in (
+                        "1", "true", "yes",
+                    )
                 return self._json(HTTPStatus.OK, do_boxes(**kwargs))
             # D134's graveyard: an exact string, matched by no other route's pattern, over
             # a lock-free read on both its sources.
@@ -14265,6 +15851,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # the two are one refusal, and the code says which to send next.
                 query = parse_qs(parsed.query, keep_blank_values=True).get("q") or [""]
                 return self._json(HTTPStatus.OK, do_search(query[0]))
+            if path == "/skus/photos":
+                # `#/revenue`'s thumbnail lookup — see `do_skus_photos`'s own header.
+                asked = parse_qs(parsed.query, keep_blank_values=True).get("sku") or []
+                return self._json(HTTPStatus.OK, do_skus_photos(asked))
             # D34's preflight. Matched BEFORE `_BOXES_ITEM_RE`'s explainer below, which
             # would otherwise answer a real route with "there is no GET /boxes/<n>" — that
             # regex is anchored one segment shorter, so it cannot match this path, and the
@@ -14385,6 +15975,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                         band=band, box=box, after=after, limit=limit
                     ),
                 )
+            if path == "/pipeline/sets":
+                # ON-HAND CARDS GROUPED BY SET (`#/inventory?view=sets`). A read, free,
+                # aggregated server-side — see `do_pipeline_sets`'s own header.
+                return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_sets())
             if path == "/pipeline/price-now":
                 # NAMED SKUs, THE ARCHIVE FIRST AND `readings` AS ITS FALLBACK
                 # (D219, D189) — `#/revenue`'s sold-cards comparison
@@ -14763,6 +16357,17 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if match:
                 body = do_open_section(int(match.group(1)), self._body())
                 return self._json(HTTPStatus.OK, body)
+            # The box map (D264): a section move, and its exact undo.
+            match = _BOX_SECTIONS_MOVE_RE.match(path)
+            if match:
+                body = do_move_sections(int(match.group(1)), self._body())
+                return self._json(HTTPStatus.OK, body)
+            match = _BOX_CARDS_MOVE_RE.match(path)
+            if match:
+                body = do_move_range(int(match.group(1)), self._body())
+                return self._json(HTTPStatus.OK, body)
+            if path == "/boxes/sections/undo":
+                return self._json(HTTPStatus.OK, do_undo_section_move(self._body()))
             # THE PIPELINE WRITES, AND THE FIRST OF THEM IS THE ONLY ROUTE IN THIS SERVER
             # THAT CAN COST MONEY. It is named for it, it refuses without an explicit
             # `confirm`, and it refuses a second run over a capture directory a live run is
@@ -14785,6 +16390,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
             if path == "/pipeline/preflight":
                 return self._json(
                     HTTPStatus.OK, pipeline_routes.do_pipeline_preflight(self._body())
+                )
+            if path == "/pipeline/waiting":
+                return self._json(
+                    HTTPStatus.OK, pipeline_routes.do_pipeline_waiting(self._body())
                 )
             # The crop preview, and it sits BEFORE the one that spends for the reason the
             # money gate itself gives: what the reading does to the bytes has to be legible

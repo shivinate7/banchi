@@ -615,3 +615,38 @@ On expiry: "Yes, until it's built on (Recommended)".
   order re-points". The card goes back. The order line keeps its count and becomes a
   `sold_separately` hand-fill, and the SKU's `sold_here` falls by one (UN-7,
   `docs/specs/undo.md` 11.8).
+
+## Search, send and Home calls for PR 3 (2026-09-25)
+- Search (orchestrator): 8 different mid-word terms of 3 or more letters measured over 500ms
+  p95 on the copy of the real store. That is not inside the accepted "fast on a real-sized
+  store" call. The fix walks the rows once. A timing guard must count work, not only wall
+  time, so that it does not go red when nothing is wrong.
+- Defect found (the b-pricing R7 builder, older than the lane, on main):
+  `emit --cap N --live-guard F` does not count live copies. So TCGplayer can hold 2 copies
+  against a cap of 1. D7 says `--cap N` holds a SKU to at most N copies live, so D7 already
+  calls this a defect. It touches the send path, so it gets its own item with an Opus review
+  and a send matrix row. The send-fixes lane owns the fix.
+- Carried PR 2 items (orchestrator, option a): five items go to one follow-up lane after PR
+  2. They are the Home h1 greeting, the capture top gap, the Fulfillment `<Page>` variant,
+  Runs R2, and 6 icon entries.
+- Search (orchestrator): `#` forms, composed forms with a letter or an extra zero, and a digit
+  word in name text are older than the lane. D271 discloses them as known gaps, with rows in
+  its case table. They do not block.
+- Home "Cannot be filled" (owner, 2026-09-25, the owner's chosen option, verbatim): "New
+  \"missing a copy\" filter". Orders gets a show facet for every buyer who is missing a copy,
+  and Home opens it. So the number on Home and the list on Orders always agree.
+  D287 and D285 record the build.
+- Home's h1 (owner, 2026-09-25, verbatim): "yeah just keep the greeting". Home's h1 stays the
+  greeting (D121). The scaffold check learns it as a deliberate exception, not as an
+  allow-list entry. A hidden "Home" h1 was declined, because the document title already says
+  Home. The layout follow-up lane lands this as an amendment to D275.
+- The cap count under `--live-guard` (owner, 2026-09-25, the owner's chosen option,
+  verbatim): "Take the larger (Recommended)". The cap counts the larger of the guard's live
+  count and the store's pending copies, never their sum. That is right in the usual case,
+  where the pending copy has landed. In the rare case, the send can go over the cap by up to
+  the number of pending copies. That is a known limit. The send-fixes lane lands this in D7's
+  amendment, with its own debt entry.
+- Inventory's view switch (owner, 2026-09-25, verbatim): "List / Map / Sets". The box walk
+  is "List", the box map is "Map", and the by-set view is "Sets", on one switch. The URL
+  values stay `walk`, `shelf` and `sets` (the integration builder's call, process-only: a
+  label changes, a machine key does not). D264 and D-set-view record the build.

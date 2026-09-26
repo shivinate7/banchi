@@ -49,7 +49,6 @@ import './BoxOps.css'
  */
 
 /** The word `state` carries when the lid is on. */
-const CLOSED = 'closed'
 
 /** No listing records handed down. Not the same as "this store has listed nothing". */
 const NO_LISTINGS: Readonly<Record<string, Listing>> = {}
@@ -252,7 +251,6 @@ function trackPlace(record: BoxRecord, total: number): Place {
     section_start: 1,
     section_end: null,
     box_total: total,
-    box_closed: record.state === CLOSED,
     fraction: null,
   }
 }
@@ -302,22 +300,15 @@ export function BoxIdentity({
   at?: number | null
   actions?: ReactNode
 }) {
-  const sealed = record.state === CLOSED
   const holds = known(record.on_hand)
   const total = denominator(record)
   const spans = spansOf(trackPlace(record, total), record.sections_detail)
 
-  /* The copies are on hand and the BOX is sealed: `sealed at 543` closes the line and the pill
-     beside it carries the state, so no count is ever called sealed. The captured figure is
-     dropped only where it would repeat the seal. */
-  const sealedAt = sealed && record.capacity !== null ? record.capacity : null
-
   /* THE CENSUS TRIAD (D41), BROUGHT TO THIS PANEL. `CardLocations`' own three figures — copies,
      in the boxes, live on TCGplayer — are `bn-stat` tiles: a big tabular-nums value over a
      muted label, no separators. This panel's facts are the same shape now, one `bn-stat` per
-     field. `fill unread` and `sealed at N` are not counts of what is in the box — the first is
-     an unread state, the second is D20's frozen capacity, a denominator rather than a fourth
-     thing IN the box — so both stay plain text, after the figures. */
+     field. `fill unread` is not a count of what is in the box, so it stays plain text, after
+     the figures. A box has no lid and no capacity (`D-sealed-boxes-removed`). */
   const censusStats: { key: string; value: number; label: string }[] = []
   const censusNotes: string[] = []
   if (holds === null) censusNotes.push('fill unread')
@@ -325,25 +316,17 @@ export function BoxIdentity({
   if (record.sold > 0) censusStats.push({ key: 'sold', value: record.sold, label: 'sold' })
   if (record.retired > 0) censusStats.push({ key: 'retired', value: record.retired, label: 'retired' })
   if (record.moved > 0) censusStats.push({ key: 'moved', value: record.moved, label: 'moved' })
-  if (sealedAt !== record.cards) censusStats.push({ key: 'captured', value: record.cards, label: 'captured' })
-  if (sealedAt !== null) censusNotes.push(`sealed at ${sealedAt}`)
+  censusStats.push({ key: 'captured', value: record.cards, label: 'captured' })
 
   return (
     <div className="boxops-identity">
       <div className="boxops-identity-top">
         {/* THE NAME ALONE (D259): the number is the store's key, never
-            drawn. An unnamed box has a stored default name since the locating lane. THE STATE
-            PILL ONLY FOR THE EXCEPTION, ON THE NAME'S LINE (UX-269, UX-221's rule): on the
-            figures' line an "open" pill sat inline for one box and wrapped alone for another,
-            and nearly every box is open, so the word told the hand nothing. Sealed is drawn. */}
+            drawn. An unnamed box has a stored default name since the locating lane. No state
+            pill: a box has no lid (`D-sealed-boxes-removed`). */}
         <div className="boxops-identity-text">
           <h2 className="boxops-identity-name">{record.name ?? UNNAMED_BOX}</h2>
         </div>
-        {sealed ? (
-          <Pill tone="default" icon="lock" className="boxops-state boxops-state-sealed">
-            sealed
-          </Pill>
-        ) : null}
         {actions}
       </div>
 
@@ -421,7 +404,6 @@ export function BoxOps({
   const onWrite = (patch: {
     name?: string
     sections?: number[]
-    state?: 'open' | 'closed'
     section_names?: Record<number, string>
   }) => write(() => updateBox(record.box, patch))
   /* D132 — one draft per section, keyed by ordinal, seeded from what the wire says now. */
@@ -433,9 +415,6 @@ export function BoxOps({
   const [moveTo, setMoveTo] = useState('')
   const [moved, setMoved] = useState<MoveCardsResult | null>(null)
   const [proposed, setProposed] = useState<number[] | null>(null)
-  /* Which direct-write op was pressed, so the row that fired says so rather than the whole
-     list going quietly grey. */
-  const [firing, setFiring] = useState<'lid' | null>(null)
   const moveId = useId()
   const readAt = oldestReading(listings)
   /* Said in full once, so the note and its hover cannot drift apart. */
@@ -476,8 +455,6 @@ export function BoxOps({
     }
   }
 
-  const sealed = record.state === CLOSED
-  const fill = known(record.fill)
 
   const startEdit = (which: Exclude<Editing, null>) => {
     setRefused(null)
@@ -536,7 +513,7 @@ export function BoxOps({
     <Overlay kind="sheet" label={`Manage ${record.name ?? UNNAMED_BOX}`} onClose={onClose} className="boxops-sheet">
       <header className="inv-sheet-head">
         <div className="inv-sheet-head-text">
-          <span className="bn-eyebrow">{sealed ? 'Sealed box' : 'Open box'}</span>
+          <span className="bn-eyebrow">Box</span>
           <h2 className="inv-sheet-title">{record.name ?? UNNAMED_BOX}</h2>
         </div>
         <IconButton icon="x" label="Close" onClick={onClose} />
@@ -578,7 +555,6 @@ export function BoxOps({
                     for what it is to the owner, never the store's "index" (D196). */}
                 <Census label="Fill" value={known(record.fill)} help="The highest card position ever captured in this box." />
                 <Census label="Next capture" value={known(record.next_index)} help="Where the next card captured into this box lands." />
-                {sealed ? <Census label="Sealed at" value={known(record.capacity)} /> : null}
               </dl>
             </section>
 
@@ -619,33 +595,6 @@ export function BoxOps({
                   disabled={record.sections_detail.length === 0}
                   onClick={() => startEdit('section-names')}
                 />
-                {sealed ? (
-                  <Op
-                    icon="unlock"
-                    label="Re-open box"
-                    detail="capacity clears"
-                    busy={busy}
-                    running={firing === 'lid'}
-                    onClick={() => {
-                      setFiring('lid')
-                      void onWrite({ state: 'open' }).finally(() => setFiring(null))
-                    }}
-                  />
-                ) : (
-                  /* The number is on the control: sealing freezes capacity at the fill and every
-                     fraction in the product then divides by it. */
-                  <Op
-                    icon="lock"
-                    label="Seal box"
-                    detail={fill === null ? 'fill unreadable' : `freezes at ${fill}`}
-                    busy={busy || fill === null}
-                    running={firing === 'lid'}
-                    onClick={() => {
-                      setFiring('lid')
-                      void onWrite({ state: 'closed' }).finally(() => setFiring(null))
-                    }}
-                  />
-                )}
               </div>
             </section>
 
@@ -754,10 +703,8 @@ export function BoxOps({
                   value={moveTo === '' ? null : moveTo}
                   placeholder="Choose a box…"
                   options={others.map((candidate) => ({
-                    // The name and the sealed state fold into one parenthetical rather than a
-                    // typed separator (D218).
                     value: String(candidate.box),
-                    label: `${candidate.name ?? UNNAMED_BOX}${candidate.state === CLOSED ? ' (sealed)' : ''}`,
+                    label: candidate.name ?? UNNAMED_BOX,
                   }))}
                   onChange={setMoveTo}
                 />

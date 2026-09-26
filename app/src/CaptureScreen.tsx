@@ -98,7 +98,8 @@ const NO_CLAIM_LABEL = 'No claim'
  *  unpicked box, an unverified game or a game the operator did not choose from the loaded
  *  registry, so `box_required`, `game_invalid` and `game_unverified` mean this device's own
  *  copy of the registry or the setup has gone stale since the page loaded — the same class of
- *  problem `box_closed` and `store_busy` are, just caught one layer later. `image_*` would
+ *  problem `store_busy` is, just caught one layer later. (A box has no seal since
+ *  `D-sealed-boxes-removed`, so no capture is refused as `box_closed`.) `image_*` would
  *  mean the frame the camera handed the screen was not a usable photograph. */
 const HALT_CODE_INFO: Record<string, { headline: string; resume: string }> = {
   server_busy: {
@@ -108,10 +109,6 @@ const HALT_CODE_INFO: Record<string, { headline: string; resume: string }> = {
   origin_not_allowed: {
     headline: 'Captures are paused — this page is not the one the server trusts to write.',
     resume: 'Reload the page from the address the server expects, then resume.',
-  },
-  box_closed: {
-    headline: 'Captures are paused — that box was sealed just now.',
-    resume: 'Pick a different box, or reopen this one from the Inventory screen, then resume.',
   },
   store_busy: {
     headline: 'Captures are paused — the store is busy.',
@@ -273,10 +270,8 @@ const BOX_DIGITS = /^[0-9]+$/
 /** One row of the Box field: what the registry calls it, how full it is, whether it is shut.
  *
  *  `next` is the store's high-water mark and NOT a card count — the two disagree the moment
- *  a record is removed, which is why the row trails the server's own word for it. `sealed`
- *  is the fact this screen could not see until it started reading `GET /boxes`: D20 refuses
- *  a capture into a shut box before it computes an index, so offering one here bought a
- *  refusal at the shutter. */
+ *  a record is removed, which is why the row trails the server's own word for it. A box has
+ *  no seal (`D-sealed-boxes-removed`), so every box here takes cards. */
 type BoxOption = {
   box: number
   /** WHICH DRAWER THIS ROW IS, as opposed to which number it wears (D145). Carried so a pick
@@ -286,7 +281,6 @@ type BoxOption = {
   bid: number | null
   name: string | null
   next: number | undefined
-  sealed: boolean
   /** Cards the box HOLDS — `BoxRecord.on_hand`, or its arithmetic where the server sent the
    *  parts and not the total. The hand order's second term (D142). `null`
    *  for a box this screen only knows about because `/status` named it: `GET /boxes` is what
@@ -1421,7 +1415,6 @@ export function CaptureScreen() {
         bid: record.bid ?? null,
         name: record.name,
         next: record.next_index,
-        sealed: record.state === 'closed',
         /* The server's own count first, its arithmetic second — `BoxBrowse` does the same, and
            for the same reason: `on_hand` is nullable because an uncountable box is not an
            empty one, and a payload predating the field is not either. */
@@ -1442,7 +1435,6 @@ export function CaptureScreen() {
           bid: null,
           name: null,
           next: nextIndex[key],
-          sealed: false,
           onHand: null,
         })
       } else {
@@ -1702,10 +1694,10 @@ export function CaptureScreen() {
 
      PHOTOGRAPHING INTO THE WRONG DRAWER IS THE EXPENSIVE FAILURE ON THIS SCREEN, and the
      setup now outlives the browser, so the gap between "the box I last picked" and "a box that
-     still exists and still takes cards" is a gap that can be days wide. Between two sittings a
-     box can be sealed (D20), deleted (D34's panel), or deleted and its number handed to a
-     different physical drawer by `next_box_number`'s lowest-free allocation. The first two are
-     refused at the shutter anyway; the THIRD is refused HERE, and was refused nowhere at all
+     still exists" is a gap that can be days wide. Between two sittings a box can be deleted
+     (D34's panel), or deleted and its number handed to a different physical drawer by
+     `next_box_number`'s lowest-free allocation. The first is refused at the shutter anyway;
+     the SECOND is refused HERE, and was refused nowhere at all
      until 2026-09-12, because box 7 exists and takes cards — it is simply not the box the
      operator thinks they are looking at.
 
@@ -1720,14 +1712,13 @@ export function CaptureScreen() {
 
      IT RUNS ONCE. `restoredBoxRef` is spent on the first answer — nulled before the verdict,
      so the good path spends it too — because the operator may deliberately re-pick a box this
-     effect just cleared, or pick a sealed one to see the refusal, and an ungated version would
+     effect just cleared, and an ungated version would
      take it straight back off them. What is being judged is the RESTORE, which happens on mount
      and never again.
 
-     THE THIRD CASE IS THE ID'S, AND IT WAS REFUSED NOWHERE UNTIL 2026-09-12
-     (D153, on D145's id). D142
-     enumerated all three and built two: a reallocated number passes `found !== undefined` and
-     `state !== 'closed'` because box 7 really does exist and really does take cards. The
+     THE REUSED NUMBER IS THE ID'S CASE, AND IT WAS REFUSED NOWHERE UNTIL 2026-09-12
+     (D153, on D145's id). A reallocated number passes `found !== undefined` because box 7
+     exists. The
      paragraph above it — *"the restore falls back to NO SELECTION, never to a guess"* — read as
      though it covered every case, and a reader had no way to tell that the code covered two.
      Photographs then go to an address that does not match the shelf, silently, and D36's realign
@@ -1767,7 +1758,7 @@ export function CaptureScreen() {
     restoredBoxRef.current = null
     restoredBidRef.current = null
     const found = boxRecords.find((record) => record.box === wanted)
-    if (found !== undefined && found.state !== 'closed') {
+    if (found !== undefined) {
       const bid = found.bid ?? null
       // The store has no id for this drawer: nothing to compare, and the older rule stands.
       if (bid === null) return
@@ -1791,11 +1782,8 @@ export function CaptureScreen() {
     setBox(null)
     setBoxBid(null)
     setRestoreNote(
-      found === undefined
-        ? 'The box this browser was last set to is not in the store any more, so nothing is ' +
-            'selected. Pick the drawer in front of you.'
-        : `${captureBoxLabel(found.box, found.name)} has been sealed since you last captured ` +
-            'into it, so nothing is selected. Pick another drawer.',
+      'The box this browser was last set to is not in the store any more, so nothing is ' +
+        'selected. Pick the drawer in front of you.',
     )
     setOpenField('box')
   }, [boxesSeen, boxRecords])
@@ -1912,13 +1900,6 @@ export function CaptureScreen() {
     if (boxBusy) return
     const top = boxTop
     if (top !== undefined) {
-      if (top.sealed) {
-        setBoxNote(
-          `${captureBoxLabel(top.box, top.name)} is sealed and takes no more cards. Open it ` +
-            `on the Inventory screen, or pick another.`,
-        )
-        return
-      }
       chooseBox(top.box, top.bid)
       return
     }
@@ -3268,9 +3249,16 @@ export function CaptureScreen() {
                         <span className="capture-frame-glyph" aria-hidden="true">
                           <Icon name="camera" size={26} />
                         </span>
-                        <Button variant="primary" icon="camera" onClick={camera.retry}>
+                        <Button variant="primary" icon="camera" className="capture-frame-open-words" onClick={camera.retry}>
                           Open the camera
                         </Button>
+                        {/* A SHORT VIEWFINDER DRAWS ONLY THE ICON (the PR 3 integration). The
+                            frame is 9:16, so its width follows the stage's height, and on a
+                            phone it is narrower than the words (61px at 390x667, 155px at
+                            390x844, against a 166px press). CaptureScreen.css shows exactly one
+                            of these two presses by the viewport's own height; the other is
+                            `display: none`, so a screen reader meets one "Open the camera". */}
+                        <IconButton icon="camera" size="lg" label="Open the camera" className="capture-frame-open-icon" onClick={camera.retry} />
                       </>
                     ) : cameraFault ? (
                       <>
@@ -3654,11 +3642,9 @@ export function CaptureScreen() {
                     {boxBusy
                       ? 'Adding…'
                       : boxTop !== undefined
-                        ? boxTop.sealed
-                          ? 'Sealed'
-                          : /* The box picker's own words for this fact, "next 43" (see its trail
-                               below): never "index", a pipeline noun (D196). */
-                            `Next ${boxTop.next ?? '?'}`
+                        ? /* The box picker's own words for this fact, "next 43" (see its trail
+                             below): never "index", a pipeline noun (D196). */
+                          `Next ${boxTop.next ?? '?'}`
                         : boxOffer !== null
                           ? 'New box'
                           : ''}
@@ -3683,19 +3669,9 @@ export function CaptureScreen() {
                        this file for the counted card number (D58, see `boxNextText` below),
                        and reusing it for a box's own next-allocation index would recreate
                        the exact cross-screen confusion that reservation exists to prevent.
-                       "next 43" keeps the cut without the collision — see PROGRESS.md. */
-                    trail={option.sealed ? 'Sealed' : `next ${option.next ?? '?'}`}
-                    trailWord={option.sealed}
-                    onPick={() => {
-                      if (option.sealed) {
-                        setBoxNote(
-                          `${captureBoxLabel(option.box, option.name)} is sealed and takes no ` +
-                            `more cards. Open it on the Inventory screen, or pick another.`,
-                        )
-                        return
-                      }
-                      chooseBox(option.box, option.bid)
-                    }}
+                       "next 43" keeps the cut without the collision. */
+                    trail={`next ${option.next ?? '?'}`}
+                    onPick={() => chooseBox(option.box, option.bid)}
                   />
                 ))}
                 {boxOffer === null ? null : (

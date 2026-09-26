@@ -1458,6 +1458,11 @@ export type Place = {
 
   box: number
 
+  /** Where the card stands in its box, 1 at the far back (D265). The sort key a walk orders
+   *  by. It equals `index` until a section is placed into the box. Never drawn. Optional
+   *  because an older server omits it: then `index` is the order. */
+  order?: number
+
   /** The card's sequential position in the box — D10's allocator number, 1-based. THE STORE
    *  KEY: the `/inventory/<box>/<index>` path every write aims by, the `<index>.jpg` the
    *  photograph is named after, and half of `key`. It stopped being the numerator of the
@@ -1488,12 +1493,9 @@ export type Place = {
   section_start: number
   section_end: number | null
 
-  /** How many cards the box holds. For a closed box that number is final; for an open one it
-   *  is how many are in it so far and it moves with the next capture. `box_closed` is what
-   *  says which of those two sentences is true, and it is the whole reason both fields are on
-   *  the wire rather than one. */
+  /** How many cards the box holds now (D58). A box has no lid (`D-sealed-boxes-removed`), so
+   *  this number always moves with the next capture. */
   box_total: number
-  box_closed: boolean
 
   /** How far into the box this card sits, 0 to 1, or null when the server cannot say — an
    *  empty box, or a record whose numbers do not support the division. NULL IS NOT ZERO and
@@ -1742,21 +1744,54 @@ export type SectionDetail = {
   /** The operator's own word for the section — `Rares` — or null where none was given.
    *  Joined at read time by ordinal (D132), the way `box_name` is (D56). */
   name: string | null
+  /** The box map's landmarks and aim (D264): the first and last card on hand in the section,
+   *  by name for the eye (null where no card is named) and by cid for a move's aim. Null for
+   *  an empty section. Absent from an older server. */
+  first_name?: string | null
+  last_name?: string | null
+  first_cid?: string | null
+  last_cid?: string | null
 }
 
-/** What a box's `state` may be SET to, which is one thing and not the same thing as what may
- *  come back off disk.
- *
- *  Narrow because it is sent: the server refuses anything it does not know as
- *  `box_state_invalid`, and a union caught at the call site is better than a refusal caught at
- *  the rig. Exactly the split `Finish` and `InventoryCard.metadata_finish` already draw — what
- *  the wire accepts, and what a record written before the server validated anything may hold.
- *
- *  ASSUMED, AND THE ONE TYPE IN THIS FILE THAT IS. The route contract names the refusals
- *  `box_state_invalid` and `box_closed` without publishing the vocabulary they police; these
- *  two words are read off those codes and off `Place.box_closed`, which is a boolean and so
- *  admits exactly two states. If the server speaks a third, this union is the one edit. */
-export type BoxState = 'open' | 'closed'
+/** What `POST /boxes/<box>/sections/move` answers (D264): the move's id for Undo, the
+ *  physical instruction, and both boxes as `GET /boxes` draws them. */
+export type SectionMoveResult = {
+  move: string
+  box: number
+  to_box: number
+  /** The box a split made, or null. */
+  created: number | null
+  moved: number
+  /** Each moved section's new ordinal in the destination. */
+  landed: number[]
+  receipt: {
+    heading: string
+    steps: string[]
+    renumbered: string[]
+  }
+  boxes: BoxRecord[]
+}
+
+/** Where a section move lands: in front of a section of `toBox`, or at its near end (null). */
+export type SectionMoveTarget = {
+  toBox: number | 'new'
+  before: number | null
+}
+
+/** Where a card or a range lands (D264): in front of a card of `toBox` (its stored index),
+ *  or after the last card of one of its sections. */
+export type CardMoveTarget = {
+  toBox: number
+  beforeCard: number | null
+  sectionEnd: number | null
+}
+
+/** What `POST /boxes/sections/undo` answers. */
+export type SectionUndoResult = {
+  move: string
+  undone: boolean
+  boxes: BoxRecord[]
+}
 
 /** One box: what it is called, how it is divided, and how full it is. `GET /boxes` serves a
  *  list of these and `POST`/`PUT /boxes` answer with the one they wrote.
@@ -1807,8 +1842,6 @@ export type BoxRecord = {
    *  answers a count, this is the one edit and the call sites fail loudly at the compiler
    *  rather than quietly at the box. */
   sections: number[]
-  state: string
-  capacity: number
   fill: number
   next_index: number
   cards: number
@@ -2385,8 +2418,12 @@ export type MergedSku = PricingSku & {
  *  property of what is in the drawer; this route merges the VIEW and never the file, and one
  *  answer to a merged row is one `PUT` per run in that row's `in`. */
 export type RosterRun = RunSummary & {
-  /** Why this run still has pricing in it, in `emit`'s own words. Empty means answered. */
+  /** Why this run still has pricing in it, in `emit`'s own words. Empty means answered. For a
+   *  person to read, never for a screen to decide on: that is `owed` below. */
   owes: string[]
+  /** The machine code for each `owes` reason, in the same order, and the count its sentence
+   *  carries (R4). A screen decides on this and never on the sentence. */
+  owed: OwedReason[]
   /** Open while it OWES something OR HOLDS AN UNSENT COPY (D156). The
    *  first is `owes`; the second is `unsent` below, and it is what keeps an answered, emitted
    *  run on the worklist for as long as one of its copies is not at TCGplayer. */
@@ -2396,6 +2433,27 @@ export type RosterRun = RunSummary & {
    *  2026-09-12, which the picker reads as zero. */
   unsent?: number
 }
+
+/** WHY AN EMPTY SEND SENT NOTHING, as figures (R6-2): cards that need a price, priced cards
+ *  under the cut-off a listed-only send held back, and cards TCGplayer already held every copy
+ *  of, with their names. Rides a `needs_price` or `under_cut_off` refusal's `data.empty`. */
+export type EmptySend = {
+  needs_price: number
+  under_cut_off: number
+  live: number
+  live_names: string[]
+}
+
+/** WHY A RUN OWES, AS A CODE. The same list as `server/pipeline_routes.py:OWE_CODES`, one
+ *  literal per line, reconciled both ways by `make readiness-agreement`. */
+export type OweCode =
+  | 'sub_threshold_unset'
+  | 'needs_price'
+  | 'never_emitted'
+  | 'unreadable'
+
+/** One `owes` reason as a code, with the count its sentence carries, or null. */
+export type OwedReason = { code: OweCode; count: number | null }
 
 /** What no worklist can offer, named rather than left out (D156,
  *  `CLAUDE.md`: never silently drop a card). Each figure is a door to the screen that moves
@@ -3435,11 +3493,11 @@ export type ResolvedOrder = {
  *  (`docs/specs/order-walk-plan.md` §7). `pipeline/walkplan.py:plan` over one snapshot; NOT
  *  STORED (D36), and a plan re-pressed a minute later over a changed store can name
  *  different cards. */
-export type WalkPlanRef = { key: string; number: string; buyer: string | null }
+export type WalkPlanRef = { key: string; number: string; buyer: string | null; owed: number }
 
 /** One physical copy of a take's card, anywhere in the store — REBUILT 2026-09-19 (`docs/
  *  specs/order-walk-plan.md` §8, "The stop, rebuilt"). The flat fields the first build carried
- *  (`box`, `index`, `slot`, `card`, `label`, `neighbors`, `box_total`, `box_closed`,
+ *  (`box`, `index`, `slot`, `card`, `label`, `neighbors`, `box_total`,
  *  `fraction`) are GONE — every one of them now lives inside `place`, which is the full block
  *  `_Places.of` composes, the same dict `do_search` sends. The client composes NOTHING from
  *  the stop any more; the old `neighborShim`/`placeOf` reconstruction is deleted with them. */
@@ -3455,7 +3513,7 @@ export type WalkPlanCopy = {
    *  for a copy recorded before the field existed. */
   cid: string | null
   /** The full place, exactly what `SearchCopy.place` carries. Includes `box_name`, `section`,
-   *  `section_name`, `section_start`, `section_end`, `box_total`, `box_closed`, `fraction`,
+   *  `section_name`, `section_start`, `section_end`, `box_total`, `fraction`,
    *  `neighbors`, `label`, `slot`, `card`. */
   place: Place
   /** True when this copy stands at THIS stop (same box and section) — the solver's reach. */
@@ -4207,6 +4265,41 @@ export type ValueTable = {
    *  figure — a store-wide chip count no row list is needed to draw, matching the fields
    *  `do_pipeline_value_page`'s `totals` block carries. */
   totals: { cards: number; valued: number; value: string; under_cutoff: number; at_or_over: number }
+}
+
+/** `GET /pipeline/sets` — one distinct card on hand, grouped under its set. `box`/`cid` are
+ *  a REPRESENTATIVE copy, never every copy: `#/inventory?box=<box>&card=<cid>` is
+ *  `BoxBrowse.tsx`'s own deep link (Review's place pill uses it too), and the walk it lands
+ *  on already shows every other on-hand copy of `sku` through `CopiesPanel`. `null` on
+ *  `box`/`cid` only for a record whose position will not coerce — `do_pipeline_sets`'s own
+ *  rule, `do_pipeline_value`'s too. */
+export type SetGroupCard = {
+  sku: string | null
+  cid: string | null
+  box: number | null
+  name: string | null
+  /** The composed form a screen draws (D67) — `cardNumber.ts` composes nothing here, this
+   *  is `pipeline/join.py:display_number`'s own string, already on the wire. */
+  number_display: string | null
+  qty: number
+}
+
+/** One game-and-set group, cards in the set's own printed order (server-side natural sort
+ *  over the raw number, `do_pipeline_sets:_natural_number_key`). */
+export type SetGroup = {
+  game: string | null
+  set_name: string
+  cards: SetGroupCard[]
+}
+
+/** `GET /pipeline/sets` whole: every on-hand (`identified`) card, by set, one row per
+ *  distinct card with its quantity — never one row per physical copy. `no_set` is every
+ *  on-hand card whose `set_name` is empty, in the same shape, so a card with no set is a
+ *  group and not a silent drop. */
+export type SetsReport = {
+  at: string
+  groups: SetGroup[]
+  no_set: SetGroupCard[]
 }
 
 /* ============================================================ the one press (send to live)

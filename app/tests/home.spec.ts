@@ -331,3 +331,97 @@ test('the Review tile says "waiting", never a bare figure, when the queue is not
   await expect(note).not.toHaveText('')
 })
 
+/* THE REVIEWER'S MIXED STORE (the delta review, R4 F1): one run, two priced cards and one with
+ * no market price. The owner's Q3 ruling sends the two and keeps the third on the list, so
+ * Home says "send 2", names the price apart, and never says the run cannot be sent. The count
+ * is Pricing's own bar rule, per SKU, never per run. */
+function mixedSku(sku: string, bucket: string, add: number) {
+  return {
+    sku,
+    game: 'pokemon',
+    name: `Card ${sku}`,
+    bucket,
+    add_to_quantity: add,
+    at_cap: false,
+    in: [{ run: runRow().run }],
+    claimed_add: add,
+    over_cap: false,
+    row: {},
+    snap: { market: bucket === 'no_market_data' ? null : '2.00', direct_low: null, low: null, low_with_shipping: null, now: null },
+  }
+}
+
+test('a mixed run: Home sends the priced copies and names the unpriced card apart', async ({ page }) => {
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
+    json(route, {
+      runs: [],
+      roster: [{ ...runRow({ joined: true, phase: 'emit' }), owes: ['1 card with no market price needs a price', 'never emitted'], owed: [{ code: 'needs_price', count: 1 }, { code: 'never_emitted', count: null }], open: true, unsent: 3 }],
+      skus: [mixedSku('7001', 'listable', 1), mixedSku('7002', 'listable', 1), mixedSku('7003', 'no_market_data', 1)],
+      written_at: {},
+      skipped: [],
+      asked: [],
+      threshold: '0.49',
+      floor: '0.49',
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  const say = page.locator('.home-standing .home-standing-say')
+  await expect(say).toContainText('send 2 copies to TCGplayer')
+  await expect(page.locator('.home-standing')).toContainText('1 card needs a price')
+  await expect(page.locator('.home-standing')).not.toContainText('before it can be sent')
+  await expect(page.locator('.home-standing')).not.toContainText('before they can be sent')
+  /* THE PRICING TILE COUNTS THE SAME COPIES (the screenshot review, R4): it summed every run's
+     unsent copies, the unpriced and the held ones too. It reads the bar's rule now. */
+  const tile = page.locator('a.home-stage[href="#/pricing"]')
+  await expect(tile).toContainText('to price, 2 ready')
+  await expect(tile).not.toContainText('3 ready')
+  await expect(tile).not.toContainText('3 copies')
+})
+
+test('every card needs a price: Home says price it, and counts no copy as ready', async ({ page }) => {
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
+    json(route, {
+      runs: [],
+      roster: [{ ...runRow({ joined: true, phase: 'emit' }), owes: ['1 card with no market price needs a price', 'never emitted'], owed: [{ code: 'needs_price', count: 1 }, { code: 'never_emitted', count: null }], open: true, unsent: 1 }],
+      skus: [mixedSku('7003', 'no_market_data', 1)],
+      written_at: {},
+      skipped: [],
+      asked: [],
+      threshold: '0.49',
+      floor: '0.49',
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  const say = page.locator('.home-standing .home-standing-say')
+  await expect(say).toContainText('price 1 card')
+  await expect(say).not.toContainText('send')
+  await expect(page.locator('.home-standing')).not.toContainText('before it can be sent')
+})
+
+/* THE SCREEN READS THE CODE, NEVER THE SENTENCE (the coordinator's ruling on R4): the server's
+ * words for a price owed may change, and Home must not change with them. The code stays
+ * `needs_price`, so the line still sends the priced copies and blames no cut-off. */
+test('a reworded owed sentence changes nothing on Home while its code stays', async ({ page }) => {
+  await page.route(/\/orders$/, (route) => json(route, { summary: '', orders: [], resolution: { orders: [], counts: {} } }))
+  await page.route(/\/pipeline\/pricing(\?|$)/, (route) =>
+    json(route, {
+      runs: [],
+      roster: [{ ...runRow({ joined: true, phase: 'emit' }), owes: ['one card still lacks a market price', 'not written yet'], owed: [{ code: 'needs_price', count: 1 }, { code: 'never_emitted', count: null }], open: true, unsent: 3 }],
+      skus: [mixedSku('7001', 'listable', 1), mixedSku('7002', 'listable', 1), mixedSku('7003', 'no_market_data', 1)],
+      written_at: {},
+      skipped: [],
+      asked: [],
+      threshold: '0.49',
+      floor: '0.49',
+    }),
+  )
+  await page.goto('/#/')
+  await expect(page.locator('main.home')).toBeVisible()
+  await expect(page.locator('.home-standing .home-standing-say')).toContainText('send 2 copies to TCGplayer')
+  await expect(page.locator('.home-standing')).toContainText('1 card needs a price')
+  await expect(page.locator('.home-standing')).not.toContainText('cut-off')
+})

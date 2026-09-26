@@ -189,7 +189,14 @@
 .orders-card-thin-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .orders-card-thin-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orders-card-thin-name.is-unnamed { color: var(--bn-ink-3); font-style: italic; }
-.orders-card-thin-place { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* THE SHORT PILL SITS BESIDE "Pick N", never on a line of its own under it (the review round's
+   finding 7): `.orders-card-thin-text` is a flex COLUMN, so a pill placed as its own third
+   child fell to its own row, under the place line, rather than beside it. This row holds the
+   place text and the pill together; the place text alone shrinks and ellipses, the pill never
+   does. */
+.orders-card-thin-meta { display: flex; align-items: center; gap: var(--bn-2); min-width: 0; }
+.orders-card-thin-place { flex: 1 1 auto; min-width: 0; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.orders-card-thin-meta .bn-pill { flex: none; }
 .orders-card-thin-action { flex: none; }
 .orders-card-thin-action .bn-btn { min-height: var(--bn-control-h-lg); min-width: var(--bn-control-h-lg); }
 

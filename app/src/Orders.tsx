@@ -920,6 +920,12 @@ async function undoFromToast(target: PullTarget, place: string, name: string): P
   try {
     await undoPull([target])
     toast({ kind: 'ok', icon: 'undo', title: `Put ${name} back`, body: `${place} holds it again.` })
+    /* `undoneTarget`/`undoneAt` are how a MOUNTED walk's own tally hears about this — this
+       write never goes through `useOrderWalk` at all, so without this the walk kept believing
+       the copy this pull put back was still recorded (the review round's finding 2, D171).
+       `PullStage` watches `undoneAt` and calls `walk.noteExternalUndo`, which is a no-op for
+       a copy the walk never recorded in the first place. */
+    setHub((current) => ({ undoneTarget: target, undoneAt: current.undoneAt + 1 }))
   } catch (err) {
     /* FINDING #8 (the Opus review round): `pull_not_recorded` means the ledger no longer
      * holds this pull — it was already reversed some other way (the server's own message
@@ -2904,6 +2910,21 @@ function PullStage({
 
   const walk = useOrderWalk({ walkedKeys, ordersByKey, rawCards, onPull: onWalkPull, onUndo: onWalkUndo })
 
+  /* A TOAST OR `U` UNDO REACHES THIS MOUNTED WALK — the review round's finding 2. Neither
+   *  path calls `walk.undoCopy` (they write through `undoFromToast`, module-level, with no
+   *  access to this hook's state), so without this the walk's own tally never learned that a
+   *  copy it recorded is no longer held, and the NEXT press against that order silently did
+   *  nothing (D171: a refusal that reaches nobody did not happen). `hub.undoneAt` is a
+   *  counter rather than the target itself, so a repeat undo of the same copy still fires
+   *  this effect. `noteExternalUndo` is itself a no-op for a copy this walk never recorded. */
+  const seenUndoAt = useRef(hub.undoneAt)
+  useEffect(() => {
+    if (hub.undoneAt === seenUndoAt.current) return
+    seenUndoAt.current = hub.undoneAt
+    if (hub.undoneTarget !== null) walk.noteExternalUndo(hub.undoneTarget)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hub.undoneAt, hub.undoneTarget])
+
   /* THE SKIP LINK'S LANDING SPOT (interaction review, "32 tab stops"). A Tab-only pass has to
    *  cross the filter bar and the buyer list before it reaches the walk. A skip link, one press
    *  that focuses a landmark already there, is the standard fix and needs no new key. */
@@ -3156,7 +3177,20 @@ function PullStage({
   )
   const owedBySku = new Map<string, number>()
   for (const key of walkedKeys) {
-    for (const line of answers.get(key)?.lines ?? []) owedBySku.set(line.sku, (owedBySku.get(line.sku) ?? 0) + line.owed)
+    // A stood-down line owes zero on the walk (`pipeline/walkplan.py:demand`'s own filter,
+    // the owner's ruling 2026-09-17) — `ResolvedLine.owed` does not know this, so it is
+    // read here off the same `OrderLineProgress.closed_at` the ledger stores. `!= null`
+    // (loose) rather than `!== null`: the review round's finding 1 was `undefined !== null`
+    // reading true for a wire that omitted the key, so every line looked stood down. The
+    // server now always sends it (`server/capture_server.py:_order_progress`), and this
+    // stays loose as the second, cheaper line of defence should that ever regress again.
+    const closedSkus = new Set(
+      (ordersByKey.get(key)?.progress ?? []).filter((row) => row.closed_at != null).map((row) => row.sku),
+    )
+    for (const line of answers.get(key)?.lines ?? []) {
+      if (closedSkus.has(line.sku)) continue
+      owedBySku.set(line.sku, (owedBySku.get(line.sku) ?? 0) + line.owed)
+    }
   }
   const cardsToPull = [...walkedKeys].reduce(
     (sum, key) => sum + (answers.get(key)?.lines ?? []).reduce((s, line) => s + Math.max(0, line.owed - line.outstanding), 0),

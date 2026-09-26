@@ -140,8 +140,10 @@ test('every owner screen is capped above the desk, in both rail states', async (
              a child. Measuring `main` everywhere would call that a defect; measuring only
              `.bn-page` would let a screen with no cap anywhere pass by not having one. So this
              names the two shapes a capped column takes in this product, and a screen that grows
-             a third has to say so here. */
-          const main = document.querySelector('.bn-page, .ff-column')
+             a third has to say so here. A `<Page width={false}>` (D275's amendment, the
+             Fulfiller's screen) opts out of the kit's cap and is full-bleed on purpose, so it is
+             skipped: the capped column inside it is what this measures. */
+          const main = document.querySelector('.bn-page:not([data-bn-page-width="auto"]), .ff-column')
           return {
             pageW: main === null ? null : Math.round(main.getBoundingClientRect().width),
             overflow:

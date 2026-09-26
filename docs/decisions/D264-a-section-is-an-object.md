@@ -79,5 +79,16 @@ New guards come with the section object:
 
 ### What is built
 
-SPECIFIED, NOT BUILT. `docs/specs/box-map.md` lists the slices in build order. The first slice
-is a safety fix to today's "Move to box", and it needs no new screen.
+BUILT on `ux/boxmap`, 2026-09-25, for PR 3. Slice 0 is in D262 (a moved card keeps its
+price). The section move, the reorder, the merge, the split and the exact undo are in
+D-a-key-on-each-card, with the order key they need. The Shelf view in `#/inventory` is the
+screen. The aim, the paid-reading refusal and the sealed box are each refused at the write.
+
+### The switch labels, 2026-09-25
+
+The owner's ruling, verbatim: "List / Map / Sets". One switch on `#/inventory` now serves three
+views: the box walk is "List", this map is "Map", and D-set-view's by-set view is "Sets". The
+PR 3 integration merged the box map and the set view into that one kit `Segmented` control,
+`BoxShelf.tsx:ShelfSwitch`. The URL values stay `view=walk`, `view=shelf` and `view=sets`.
+They are machine keys that specs and deep links already carry, so no alias is needed. The
+record's own name for this view stays "the Shelf" where it names the code.

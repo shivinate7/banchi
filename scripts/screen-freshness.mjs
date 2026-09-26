@@ -149,7 +149,7 @@ const ts = (await import(pathToFileURL(TYPESCRIPT).href)).default
  * adding a line here, only by adding a line here AND making the source say why. */
 const NON_MUTATING = new Set([
   'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
-  'getInventoryCopies', 'fetchOrderPicks', 'walkPlan',
+  'getInventoryCopies', 'fetchOrderPicks', 'walkPlan', 'waitingCards',
 ])
 const NON_MUTATING_CLAIM = /writes nothing|creates no run directory|creates nothing/i
 
@@ -228,6 +228,13 @@ const RECORDED = {
     'getHoldingsValue',
     // The capture strip's sitting, read back off the store (undo.md UN-2).
     'getCaptureSitting',
+    // `#/revenue`'s thumbnail lookup (D-sales-rows-by-sku): the first on-hand,
+    // photographed copy of each named SKU. A plain read, called on arrival like
+    // `getHoldingsValue` above rather than gated behind a press.
+    'getSkuPhotos',
+    // The owner's "by set" view (D-set-view): every on-hand card, grouped by set,
+    // aggregated server-side. A plain read, same shape as every other entry here.
+    'getInventorySets',
   ],
   writes: [
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',
@@ -276,6 +283,8 @@ const RECORDED = {
                                                // way `correctAnswer`/`undoCorrectAnswer` do
 
     'saleStillHere', 'undoMove', 'restoreLastClear', // undo.md UN-7, UN-14 and UN-11
+    'moveSections', 'undoSectionMove',        // D264, the box map's section move and its undo
+    'moveRange',                              // D264, one card or a range, the next slice
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.
@@ -287,9 +296,11 @@ const RECORDED = {
   // `walkPlan` (docs/specs/order-walk-plan.md §7) is the same shape a third time:
   // `do_order_walk_plan` reads one snapshot and calls `pipeline/walkplan.py:plan`, which
   // touches no wire and no store of its own.
+  // `waitingCards` (D291, Review's Identify strip) is a POST because a selection's `keys` term
+  // can be a long tick list; `do_pipeline_waiting` scans sidecars and reads the store only.
   nonMutating: [
     'preflightRun', 'cropPreview', 'fetchOrders', 'previewOrders', 'previewReconcileBacklog',
-    'getInventoryCopies', 'fetchOrderPicks', 'walkPlan',
+    'getInventoryCopies', 'fetchOrderPicks', 'walkPlan', 'waitingCards',
   ],
   nonRequests: [
     'describeFailure', 'photoUrl', 'positionLabel', 'isDeparted', 'placeParts', 'placeSentence',

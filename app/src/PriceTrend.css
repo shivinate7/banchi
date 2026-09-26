@@ -12,7 +12,7 @@
 .pricetrend-mini {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--bn-0-5);
   width: 56px;
   flex: none;
   --trend-ink: var(--bn-ink-3);
@@ -73,4 +73,4 @@
 }
 
 .pricetrend-reading { gap: var(--bn-2); }
-.pricetrend-skel { width: 56px; height: 26px; border-radius: var(--bn-r-xs); }
+.pricetrend-skel { display: block; width: 56px; height: 26px; border-radius: var(--bn-r-xs); background: var(--bn-surface-2); }

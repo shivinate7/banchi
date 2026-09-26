@@ -452,6 +452,8 @@ covered line into the directory that by 0.2 has none.
 
 **Empty box**: `default=0` yields 1. No branch, no error.
 
+**Superseded 2026-09-25: a box has no seal and no capacity (D-sealed-boxes-removed).**
+
 **A box that does not exist**: creation is implicit, and it stays implicit even though a box
 is now an object. **This paragraph used to read "there is no box object anywhere in `store/`,
 only a flat dict keyed by box and index", and D20 built one** — `store/master.py:Box`, with a

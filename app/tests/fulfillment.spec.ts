@@ -87,7 +87,6 @@ function pooledPlace(card: FixtureCard) {
     section_start: null,
     section_end: null,
     box_total: 0,
-    box_closed: false,
     fraction: null,
     game: 'pokemon_code',
     game_display: 'Pokémon code cards',
@@ -355,7 +354,6 @@ function searchAnswer(q: string, states: Store, soldHere = 0) {
                   section_start: 1,
                   section_end: 25,
                   box_total: 25,
-                  box_closed: true,
                   fraction: card.index / 25,
                 },
         }
@@ -604,7 +602,6 @@ const ORDER_COPY_PLACE = {
   section_start: 1,
   section_end: 25,
   box_total: 25,
-  box_closed: true,
   fraction: 0.28,
   neighbors: null,
   section_gaps: 0,
@@ -718,7 +715,6 @@ function multiCopy(key: string, box: number, section: number, card: number, sect
       section_start: 1,
       section_end: sectionEnd,
       box_total: sectionEnd,
-      box_closed: true,
       fraction: 0.4,
       neighbors: null,
       section_gaps: 0,
@@ -1868,7 +1864,7 @@ const WALK_ORDER_PLAN = {
           place: {
             label: 'Box 5, Section 1, Card 1', located: true, box: 5, index: 1, slot: 1,
             section: 1, card: 1, box_name: null, section_start: 1, section_end: 10,
-            box_total: 10, box_closed: true, fraction: 0.1, neighbors: null, section_gaps: 0,
+            box_total: 10, fraction: 0.1, neighbors: null, section_gaps: 0,
           },
           here: true,
         }],
@@ -1888,7 +1884,7 @@ const WALK_ORDER_PLAN = {
           place: {
             label: 'Box 1, Section 1, Card 1', located: true, box: 1, index: 1, slot: 1,
             section: 1, card: 1, box_name: null, section_start: 1, section_end: 10,
-            box_total: 10, box_closed: true, fraction: 0.1, neighbors: null, section_gaps: 0,
+            box_total: 10, fraction: 0.1, neighbors: null, section_gaps: 0,
           },
           here: true,
         }],
@@ -1930,7 +1926,7 @@ const UNCOUNTED_SECTION_PLAN = {
           place: {
             label: 'Box 6 · departed', located: true, box: 6, index: 9, slot: null,
             section: null, card: null, box_name: null, section_start: 1, section_end: null,
-            box_total: 0, box_closed: false, fraction: null, neighbors: null, section_gaps: null,
+            box_total: 0, fraction: null, neighbors: null, section_gaps: null,
           },
           here: true,
         }],
@@ -1950,7 +1946,7 @@ const UNCOUNTED_SECTION_PLAN = {
           place: {
             label: 'Box 6, Section 1, Card 2', located: true, box: 6, index: 2, slot: 2,
             section: 1, card: 2, box_name: null, section_start: 1, section_end: 10,
-            box_total: 10, box_closed: true, fraction: 0.2, neighbors: null, section_gaps: 0,
+            box_total: 10, fraction: 0.2, neighbors: null, section_gaps: 0,
           },
           here: true,
         }],

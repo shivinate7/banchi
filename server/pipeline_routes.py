@@ -1326,6 +1326,39 @@ def do_pipeline_preflight(payload: dict) -> dict:
     return _preflight(_resolve_send(payload))
 
 
+def do_pipeline_waiting(payload: dict) -> dict:
+    """`POST /pipeline/waiting` — the cards a spend over this selection would buy. FREE.
+
+    THE ANSWER REVIEW'S IDENTIFY STRIP COUNTS, PRICES AND SPENDS (D291). A card state is not
+    what the spend counts: the spend counts PHOTOGRAPHS, and a card a live run has already
+    claimed is refused at the press (D174). So this answers the one list both halves read —
+    every photographed card the selection names, minus the ones a live claim holds — and the
+    screen then sends exactly that list as a `keys` selection (D180). A capture in another tab
+    after this answer cannot grow the spend, because the spend names its cards.
+
+    CHEAP ON PURPOSE, AND NOT THE PREFLIGHT. This is `_selection_captures` (a sidecar scan,
+    and the store where a term needs it) and `_send_keys`, the same two reads the spend route
+    makes before it spawns. It decodes no photograph, spawns nothing and writes nothing.
+    """
+    send = _resolve_send(payload)
+    try:
+        keys = _send_keys(_selection_captures(send.selection))
+    except PipelineRefusal as exc:
+        # A selection that names no photograph is an empty answer here, not a refusal: nothing
+        # is waiting. Every other refusal (a malformed term, a store that will not open) stands.
+        if exc.status != HTTPStatus.NOT_FOUND:
+            raise
+        keys = []
+    held: set = set()
+    try:
+        for _, shared in Store().read().submissions.overlap(keys):
+            held.update(shared)
+    except Exception:  # noqa: BLE001 — no claims readable is no claims, the press still refuses
+        pass
+    free = sorted(key for key in set(keys) if key not in held)
+    return {"keys": free, "claimed": len(set(keys)) - len(free)}
+
+
 # ------------------------------------------------------------------- the crop preview
 
 # The band is JPEG at this quality. High, because the whole point of the strip is whether
@@ -2194,7 +2227,29 @@ def _run_is_open(manifest: dict, pricing: dict, answers: Optional[dict]) -> bool
     return bool(_run_owes(manifest, pricing, answers))
 
 
-def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[str]:  # noqa: D401
+#: THE MACHINE CODE FOR EACH `owes` REASON, SENT BESIDE THE SENTENCE AS `owed` (R4, the
+#: coordinator's ruling). A screen reads the code and never the sentence, so the words may
+#: change freely. `app/src/types.ts:OweCode` is the same list, and `make readiness-agreement`
+#: reconciles the two both ways.
+#:   sub_threshold_unset  the cut-off price is unset, and `emit` refuses the whole run
+#:   needs_price          cards with no market price and no answer, left out of a send
+#:   never_emitted        the run has never written a file
+#:   unreadable           the run's files or answers cannot be read
+OWE_CODES = ("sub_threshold_unset", "needs_price", "never_emitted", "unreadable")
+
+
+def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[str]:
+    """`_run_owed`'s sentences alone, for every caller that only asks whether a run owes."""
+    return [reason["text"] for reason in _run_owed(manifest, pricing, answers)]
+
+
+def _owe(code: str, text: str, count: Optional[int] = None) -> dict:
+    """One `owes` reason: its code, its sentence, and the count the sentence carries."""
+    assert code in OWE_CODES, code
+    return {"code": code, "text": text, "count": count}
+
+
+def _run_owed(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[dict]:  # noqa: D401
     """Why this run still has pricing work in it, in the words `emit` would refuse it with.
 
     THE PICKER DRAWS A REMAINDER RATHER THAN A TOTAL BECAUSE OF THIS FUNCTION. Every chip used
@@ -2215,19 +2270,46 @@ def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[st
     try:
         answered = decisions.Decisions.parse(answers or {})
     except decisions.MalformedDecisions:
-        return ["answers file cannot be read"]
+        return [_owe("unreadable", "answers file cannot be read")]
     below = [
         row.get("sku")
         for row in pricing.get("skus") or []
         if row.get("bucket") == "sub_threshold"
     ]
-    owes = list(answered.blocking(below))
+    # `blocking` HAS ONE REASON, the cut-off price unset. A second one fails
+    # `make readiness-agreement`'s reason count, which is where its code gets added.
+    owes = [_owe("sub_threshold_unset", reason, len(below)) for reason in answered.blocking(below)]
+    # A PRICE OWED THAT NO LONGER BLOCKS THE SEND (D277 Q3, the delta review R3-2). A card with
+    # no market price and no answer is left out of a send rather than refusing it, so
+    # `blocking` no longer names it. The run still owes that price, and the screens must say
+    # so, by its code, `needs_price`, which keeps it apart from a reason that stops the whole
+    # run. Read off this run's own rows, because the corpus holds no entry for a card nobody
+    # answered.
+    unpriced = (answers or {}).get("no_market_data") or {}
+    held = (answers or {}).get("overrides") or {}
+    waiting = sum(
+        1
+        for row in pricing.get("skus") or []
+        if row.get("bucket") == "no_market_data"
+        and int(row.get("add_to_quantity") or 0) > 0
+        and unpriced.get(str(row.get("sku"))) is None
+        and str(row.get("sku")) not in held
+    )
+    if waiting:
+        owes.append(
+            _owe(
+                "needs_price",
+                f"{waiting} card{'' if waiting == 1 else 's'} with no market price "
+                f"need{'s' if waiting == 1 else ''} a price",
+                waiting,
+            )
+        )
     if not manifest.get("emitted"):
         # NEVER EMITTED IS WORK, AND IT IS THE COMMON CASE. Nothing has been shipped out of
         # this run, so it is open whatever its answers say — but it is listed AFTER the
         # blocking reasons, because a refusal names something to fix and this names something
         # to press.
-        owes.append("never emitted")
+        owes.append(_owe("never_emitted", "never emitted"))
     return owes
 
 
@@ -2725,9 +2807,17 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
                 else None
             )
         except (OSError, ValueError, decisions.MalformedDecisions):
-            owed_by_run[entry.name] = ["run files cannot be read"]
+            # THROUGH `_owe`, like every other reason (R6-7), so its code is checked.
+            unreadable = [_owe("unreadable", "run files cannot be read")]
+            owed_by_run[entry.name] = [reason["text"] for reason in unreadable]
             roster.append(
-                {**summary, "owes": owed_by_run[entry.name], "open": True, "unsent": 0}
+                {
+                    **summary,
+                    "owes": owed_by_run[entry.name],
+                    "owed": [{"code": reason["code"], "count": reason["count"]} for reason in unreadable],
+                    "open": True,
+                    "unsent": 0,
+                }
             )
             continue
         if summary.get("box_former"):
@@ -2755,14 +2845,23 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
                     "rescued_by": [rescue["run"] for rescue in rescues],
                 }
             )
-            roster.append({**summary, "owes": [], "open": False, "unsent": 0})
+            roster.append({**summary, "owes": [], "owed": [], "open": False, "unsent": 0})
             continue
-        owes = _run_owes(manifest, parsed, answers)
+        owed = _run_owed(manifest, parsed, answers)
+        owes = [reason["text"] for reason in owed]
         owed_by_run[entry.name] = owes
         parsed_by_run[entry.name] = parsed
         if parsed:
             tables.append((run_files.open_run(entry), parsed))
-        roster.append({**summary, "owes": owes, "open": bool(owes), "unsent": 0})
+        roster.append(
+            {
+                **summary,
+                "owes": owes,
+                "owed": [{"code": reason["code"], "count": reason["count"]} for reason in owed],
+                "open": bool(owes),
+                "unsent": 0,
+            }
+        )
 
     ledger: Optional[UnsentLedger] = None
     if snapshot is not None and tables:
@@ -3837,6 +3936,127 @@ def do_pipeline_value_page(
             "under_cutoff": sum(seat["under"] for seat in agg["tally"].values()),
             "at_or_over": sum(seat["over"] for seat in agg["tally"].values()),
         },
+    }
+
+
+# A DIGIT RUN COMPARED AS AN INT, EVERYTHING ELSE AS A LOWERED STRING — a natural sort over
+# the RAW `number` column, never a per-game rule. `pipeline/games.py` dispatches a join key
+# by game (`number_and_printed_total` for Pokemon, `printed_code` for One Piece and
+# Riftbound) because MATCHING one spelling against another needs to know which game it is;
+# ORDERING them does not, and re-deriving that dispatch here for a job that only needs
+# monotonic order would be the workaround this repo's "check the primitive first" rule
+# warns against. `198` sorts after `99` because the digit run is read as one integer, not
+# character by character (`"99" < "198"` as text, wrongly); `OP1-1` sorts before `OP1-10`
+# for the same reason.
+_NUMBER_RUN = re.compile(r"(\d+)")
+
+
+def _natural_number_key(number: object) -> Tuple[object, ...]:
+    text = str(number or "")
+    return tuple(int(part) if part.isdigit() else part.lower() for part in _NUMBER_RUN.split(text))
+
+
+def do_pipeline_sets() -> dict:
+    """`GET /pipeline/sets` — every on-hand card grouped by game and set, in printed-number
+    order, one row per distinct card with its quantity (the owner: *"do i have anyway of
+    seeing my inventory by set order? basically a view where i just know what qty of each
+    card and then can click in if interested and it pops me to inventory screen?"* — D-set-view).
+
+    ON HAND MEANS STATE `identified`, NARROWER THAN `do_pipeline_value`'s "not a terminal
+    state": a captured-and-not-yet-identified card carries no name, set or number to group
+    by, so it is not a "card on hand" this view can show anything about.
+
+    AGGREGATED HERE, NEVER SHIPPED PER COPY (the owner's own store: 2,455 on-hand cards
+    behind 771 distinct rows across 6 sets). The grouping key is the SKU where the card has
+    one; a `sku_unknown` card (D258) groups on its own name and displayed number instead, so
+    two unidentified physical copies of the same card still count as one row with `qty: 2`
+    rather than vanishing for having no SKU to key on.
+
+    ORDER IS THE SET'S OWN PRINTED NUMBER, `_natural_number_key` OVER THE RAW `number`
+    COLUMN. `number_display` (D67) is what ships for the eye — the same composed form every
+    other screen already draws, off the same stored column `store/master.py:_card_columns`
+    fills — the raw column is read only to sort by.
+
+    A CARD WITH NO SET IS NOT DROPPED (the hard rule against a silent drop): `no_set` is one
+    more list, on this same payload, named in a plain sentence by the client rather than by
+    this route (D196 — no user-visible string is composed server-side).
+
+    ONE REPRESENTATIVE COPY'S `box` AND `cid` IS ALL A TAP NEEDS. `#/inventory?box=<n>&
+    card=<cid>` is `BoxBrowse.tsx`'s existing deep link (`wantedCard`, built for Review's
+    place pill) — this route builds no new walk, and lands on a row whose `CopiesPanel`
+    already shows every other on-hand copy of the same SKU.
+
+    A PLAIN READ, `do_pipeline_value`'s posture: no socket, no write, no lock.
+    """
+    try:
+        inventory = Store().read().inventory
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            "store_unreadable",
+            f"The store could not be read, so nothing can be grouped: {exc}",
+        ) from None
+
+    groups: Dict[Tuple[str, str], Dict[str, dict]] = {}
+    no_set: Dict[str, dict] = {}
+
+    for _key, (box_raw, _idx_raw, sku_raw, name, set_name, number, number_display, game, cid) in (
+        inventory.cards.select(
+            ("box", "idx", "sku", "name", "set_name", "number", "number_display", "game", "cid"),
+            state=master.IDENTIFIED,
+        )
+    ):
+        sku = str(sku_raw) if sku_raw else None
+        # THREE GROUPING RUNGS, NARROWEST WINS. A SKU is a confirmed identity, so every
+        # copy of it is one row. Failing that, a name or a number is still SOMETHING to
+        # group two physical copies on. Failing THAT — a card with no SKU, no name and no
+        # number, `sku_unknown` at its bluntest — nothing here can tell it apart from
+        # another blank card, so grouping on a shared blank key would silently MERGE two
+        # distinct physical cards into one row a tap can reach only one of (caught against
+        # the owner's own store: 4 such cards, one box, would have collapsed to a single
+        # `qty: 4` row). `_key` (`box/idx`, always present) is the fallback that keeps
+        # every blank card its own row.
+        if sku:
+            row_key = sku
+        elif name or number_display:
+            row_key = f"name:{name or ''}|number:{number_display or ''}"
+        else:
+            row_key = f"blank:{cid or _key}"
+        set_label = str(set_name).strip() if set_name else ""
+        bucket = no_set if set_label == "" else groups.setdefault((str(game or ""), set_label), {})
+        row = bucket.get(row_key)
+        if row is None:
+            try:
+                box = int(box_raw)
+            except (TypeError, ValueError):
+                box = None
+            row = {
+                "sku": sku,
+                "cid": cid or None,
+                "box": box,
+                "name": name or None,
+                "number_display": number_display or None,
+                "qty": 0,
+                "_sort": _natural_number_key(number),
+            }
+            bucket[row_key] = row
+        row["qty"] += 1
+
+    def _cards_of(bucket: Dict[str, dict]) -> List[dict]:
+        rows = sorted(bucket.values(), key=lambda row: row["_sort"])
+        for row in rows:
+            row.pop("_sort", None)
+        return rows
+
+    payload_groups = [
+        {"game": game or None, "set_name": set_name, "cards": _cards_of(bucket)}
+        for (game, set_name), bucket in sorted(groups.items(), key=lambda item: item[0])
+    ]
+
+    return {
+        "at": master.now(),
+        "groups": payload_groups,
+        "no_set": _cards_of(no_set),
     }
 
 

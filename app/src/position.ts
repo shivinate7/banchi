@@ -309,7 +309,8 @@ function sectionSpan(place: Place): { start: number; of: number; growing: boolea
   if (!Number.isFinite(total) || total <= 0) return null
   if (!Number.isFinite(start) || start < 1) return null
 
-  const growing = !place.box_closed && (end === null || end >= total)
+  // A box has no lid (`D-sealed-boxes-removed`), so its last section always grows.
+  const growing = end === null || end >= total
   const of = (growing ? total : (end ?? total)) - start + 1
   if (!Number.isFinite(of) || of <= 0) return null
   return { start, of, growing }

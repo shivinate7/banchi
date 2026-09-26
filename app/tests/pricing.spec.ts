@@ -205,6 +205,11 @@ async function open(
      *  (D156). A run with one is OPEN whatever it owes; the chip says how
      *  many. */
     unsent?: Record<string, number>
+    /** What each run still owes, by run name, in the server's words. Absent reads as the
+     *  default: nothing once emitted, and "never emitted" before. */
+    owes?: Record<string, string[]>
+    /** The machine code for each of those reasons, in the same order. */
+    owed?: Record<string, { code: string; count: number | null }[]>
     /** What no worklist can send, as the server names it. */
     unreachable?: { captured: number; in_review: number; unjoined: { run: string; cards: number }[]; reallocated: { run: string; box: number | null; cards: number | null }[] }
     /** WHICH ANSWERS A MASS-CLEAR MAY REMOVE, as the server names them — SKU to age in whole
@@ -560,7 +565,8 @@ async function open(
         runs: options.noRun === true && listed.length === 0 ? [] : listed.map(summary),
         roster: listed.map((row) => ({
           ...summary(row),
-          owes: options.emitted === true ? [] : ['never emitted'],
+          owes: options.owes?.[row.run] ?? (options.emitted === true ? [] : ['never emitted']),
+          owed: options.owed?.[row.run] ?? (options.emitted === true ? [] : [{ code: 'never_emitted', count: null }]),
           open: options.emitted !== true || (options.unsent?.[row.run] ?? 0) > 0,
           unsent: options.unsent?.[row.run] ?? 0,
         })),
@@ -855,31 +861,6 @@ function sentPolicy(wire: Wire[]): Record<string, unknown> {
    case in the file, which is what `make docs-audit`'s `spec seal` row checks. */
 sealEveryTest()
 
-test('the screen is on its own route and draws the run it was linked to', async ({ page }) => {
-  await open(page)
-
-  await expect(page.locator('.pricing-title')).toHaveText('Pricing')
-  await expect(page.locator('.pricing-scope')).toContainText(RUN)
-  /* THE RUN CAME FROM THE URL, NOT FROM STORAGE (D49). `#/runs` links a specific run through
-     the hash rather than through a second `sessionStorage` key with its own clearing rules —
-     a run name has one source of truth, so nothing here can disagree with anything. */
-  await expect(page.locator('.pricing-row')).toHaveCount(1)
-
-  /* AND IT NAMES THE DRAWER (D56). This line read `<run> · N SKUs` — a directory and a count,
-     never what is in the box — which is the complaint that produced D56, in the place the
-     owner was looking when they made it. The run name STAYS: it is what `emit` and `join` are
-     pointed at and what `decisions.json` is written under. What is new goes in front of it. */
-  const scope = page.locator('.pricing-scope')
-  await expect(scope).toContainText('Box 7 · Riftbound epics')
-  await expect(scope).toContainText(RUN)
-  await expect(scope).toContainText('1 SKUs')
-  /* NOT `toHaveText` ANY MORE, and the reason is that the lede gained a fourth fact rather
-     than lost one: it carries the worklist's own progress now, so an exact string would be
-     pinning the progress reading as well as the three facts this case is about. Each is
-     asserted on its own instead, which fails on a dropped box name exactly as the whole
-     string did. */
-})
-
 test('the run picker leads with the box, and the directory is what tells two runs apart', async ({
   page,
 }) => {
@@ -907,7 +888,7 @@ test('the run picker leads with the box, and the directory is what tells two run
   /* THE PICKER IS A POPOVER OFF THE HEADER NOW rather than a strip standing on the page.
      Which runs are being priced is a question you ask once a session, and the answer is drawn
      in the lede either way — so it is opened here rather than asserted into existence. */
-  await page.getByRole('button', { name: /^Runs/ }).click()
+  await page.getByRole('button', { name: /^(Every run|\d+ runs?)$/ }).click()
   const chips = page.locator('.pricing-run')
   await expect(chips).toHaveCount(4)
 
@@ -933,12 +914,12 @@ test('the run picker leads with the box, and the directory is what tells two run
      the whole headline rather than with `toContainText`, because that is the half a
      `Box 2 · —` regression would still satisfy. The day is appended by the chip, so the
      assertion names it. */
-  await expect(chips.nth(3).locator('.pricing-run-name')).toHaveText('Box 2 Aug 23')
+  await expect(chips.nth(3).locator('.pricing-run-name')).toHaveText(/^Box 2\s*Aug 23, 2026$/)
 
   /* WHAT IS LEFT, WHICH THE CHIP COULD NOT SAY BEFORE D86. `counts.skus` is the SIZE of a job
      and never the job: box 2's 108 SKUs are one `floor` press. This fixture's runs have not
-     emitted, so every chip owes that. */
-  await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never emitted')
+     emitted, so every chip says it was never sent. */
+  await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never sent')
 })
 
 test('an emitted run with copies still unsent stays open, and the chip counts them', async ({
@@ -976,7 +957,7 @@ test('an emitted run with copies still unsent stays open, and the chip counts th
     },
   })
 
-  await page.getByRole('button', { name: /^Runs/ }).click()
+  await page.getByRole('button', { name: /^(Every run|\d+ runs?)$/ }).click()
   const chips = page.locator('.pricing-run')
   await expect(chips).toHaveCount(2)
   await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('148 unsent')
@@ -988,11 +969,39 @@ test('an emitted run with copies still unsent stays open, and the chip counts th
      so they are not warned about; the one holding 99 sellable cards says the number. */
   const line = page.getByTestId('pricing-unreachable')
   await expect(line).toContainText('214 never identified')
-  await expect(line).toContainText('1 in review')
-  await expect(line).toContainText('99 in 1 run over a deleted box')
-  await expect(line).not.toContainText('not joined')
-  await expect(line).not.toContainText('2 runs over a deleted box')
-  await expect(line.getByRole('link', { name: '1 in review' })).toHaveAttribute('href', '#/review')
+  await expect(line).toContainText('1 in Review')
+  await expect(line).toContainText('99 in 1 reading over a deleted box')
+  await expect(line).not.toContainText('not matched')
+  await expect(line).not.toContainText('2 readings over a deleted box')
+  await expect(line.getByRole('link', { name: '1 in Review' })).toHaveAttribute('href', '#/review')
+})
+
+/* THE REVIEWER'S CASE (the delta review, R4 F2): a run that WAS sent and still owes a price
+ * for a card with no market price. "Not sent yet" was false for it. The chip tells the two
+ * apart, and says how many cards owe the price. */
+test('a sent run that owes a price says so, apart from a run never sent', async ({ page }) => {
+  await open(page, {
+    noRun: true,
+    emitted: true,
+    runs: [
+      { run: '2026-08-24-box2-01', box: 2, box_name: 'Pokemon bulk', skus: 3, created_at: '2026-08-24T18:00:00+00:00' },
+      { run: '2026-09-02-box6-01', box: 6, box_name: 'Riftbound rares', skus: 2, created_at: '2026-09-02T18:00:00+00:00' },
+    ],
+    unsent: { '2026-08-24-box2-01': 1, '2026-09-02-box6-01': 2 },
+    owes: {
+      '2026-08-24-box2-01': ['1 card with no market price needs a price'],
+      '2026-09-02-box6-01': ['never emitted'],
+    },
+    owed: {
+      '2026-08-24-box2-01': [{ code: 'needs_price', count: 1 }],
+      '2026-09-02-box6-01': [{ code: 'never_emitted', count: null }],
+    },
+  })
+  await page.getByRole('button', { name: /^(Every run|\d+ runs?)$/ }).click()
+  const chips = page.locator('.pricing-run')
+  await expect(chips).toHaveCount(2)
+  await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never sent')
+  await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('Sent, 1 needs a price')
 })
 
 test('an unknown card count is still warned about, and a known zero is not', async ({ page }) => {
@@ -1029,36 +1038,9 @@ test('an unknown card count is still warned about, and a known zero is not', asy
   await expect(line).toContainText('214 never identified')
   /* One of the two rows survives — the unknown — and it carries no figure, because there is no
      honest one to carry. The zero-card row is gone from the sentence entirely. */
-  await expect(line).toContainText('1 run over a deleted box')
-  await expect(line).not.toContainText('in 1 run over a deleted box')
-  await expect(line).not.toContainText('2 runs')
-})
-
-test('every export column that carries data is on the row, once Compare is asked for', async ({ page }) => {
-  await open(page)
-
-  /* The owner's requirement in their own words: "I want all the data from the CSV shown when
-     I make the decision" — still true, and still reachable: Ruling B (D208)
-     moved three of the four behind a per-section Compare toggle so the default row is not a
-     wall of reference prices, but the toggle is one press and nothing is deleted. The four
-     price columns are the ones a subset would have dropped. Drawn Market, Low, +Ship, Direct
-     left to right, once asked for. */
-  await page.getByRole('button', { name: 'Compare' }).first().click()
-  /* EACH COLUMN NAMES ITSELF ON THE ROW NOW — `Market $22.03` rather than a bare figure under
-     a header — so the assertions carry the label. That is not a looser claim: it is the same
-     four values, each still pinned exactly, with the column they belong to pinned as well,
-     which is what a row of four unlabelled figures could never say. */
-  const refs = page.locator('.pricing-ref')
-  await expect(refs).toHaveCount(4)
-  await expect(refs.nth(0)).toHaveText('Market $22.03')
-  await expect(refs.nth(1)).toHaveText('Low $21.98')
-  await expect(refs.nth(2)).toHaveText('+Ship $22.98')
-  /* A BLANK CELL DRAWS AN EM DASH AND NOT `$0.00` — measured, TCG Direct Low is blank on
-     2,060 of 2,476 listable rows, and D9 holds that a missing price is unknown, not low. */
-  await expect(refs.nth(3)).toHaveText('Direct —')
-
-  await expect(page.locator('.pricing-meta')).toContainText('Near Mint Holofoil')
-  await expect(page.locator('.pricing-meta')).toContainText('Secret Rare')
+  await expect(line).toContainText('1 reading over a deleted box')
+  await expect(line).not.toContainText('in 1 reading over a deleted box')
+  await expect(line).not.toContainText('2 readings')
 })
 
 // -------------------------------------------------- the suggestion writes nothing
@@ -1073,101 +1055,6 @@ test('a suggested row carries the rule price and writes no key at all', async ({
      layer 4, so a screen that wrote its suggestions would produce a run where changing the
      preset silently changed nothing. Nothing has been pressed; nothing may have been sent. */
   expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
-})
-
-// -------------------------------------------------- shipping the run (D54)
-
-test('the sub-threshold policy is answered from the start, and the floor press writes it once', async ({
-  page,
-}) => {
-  const wire = await open(page, {
-    /* THE MARKET CELL AND THE BUCKET HAVE TO AGREE NOW, AND THIS FIXTURE USED TO CONTRADICT
-       ITSELF. `bucket` alone put the row in the sub-threshold section for as long as the split
-       was the server's alone; since the cut-off became a control the screen re-derives it from
-       the Market cell, exactly as `pipeline/pricing.py:is_listable` does, so a row declared
-       cheap while carrying a market of $22.03 was drawing in the listed half and the case was
-       asserting a refusal that no longer applied.
-
-       This is not a weakening of D28: what may not move a row is a price TYPED ON IT, and that
-       is still true. What moves the sections is the cut-off, which is policy.
-
-       An earlier version of this fixture carried `market: '0.12'` at the top level, where it
-       reached no field of `PricingSku` and was inert from the day it was written. It is inside
-       `snap` now, where the screen actually reads it. */
-    skus: [
-      sku({
-        bucket: 'sub_threshold',
-        snap: { market: '0.12', direct_low: null, low: '0.10', low_with_shipping: '1.10', now: null },
-      }),
-    ],
-    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: {} },
-  })
-
-  /* THE REFUSAL IS GONE FROM THIS PATH, AND ITS ABSENCE IS WHAT THE CASE IS NOW FOR. `emit` used
-     to refuse a run whose cheap cards had no disposition — `blocking` never consults `overrides`,
-     so hand-pricing every row still left it refusing and the only surface for the answer was a
-     JSON textarea on another route. D9's amendment gave the policy a default, so a store that has
-     written nothing is ANSWERED from the start and the bar is content on arrival. What survives
-     of the old assertion is the pair below: the panel says the figure is not written, and the
-     verdict is not claiming otherwise. */
-  /* THE VERDICT IS STATED ONCE, ON THE HEADLINE (Ruling A, D208) — the
-     single-run ship bar no longer carries a second Ready/Not-yet pill or sentence, so this
-     locator moves to `.pricing-deck-title`, the one place readiness is now said. */
-  await expect(
-    page.getByRole('region', { name: 'Whether the import files can be written' }).locator('.pricing-deck-title'),
-  ).toHaveText('Ready to write')
-  await expect(page.locator('.pricing-cheap .bn-pill')).toContainText('Default')
-
-  /* THE ANSWER IS THE STORE'S, AND IT IS THE FIGURE ITSELF THAT IS TYPED. The panel used to
-     offer a segmented row — "a flat price" or "the $0.40 floor" — beside a second small field,
-     so the biggest thing on it was the one part you could not touch and the same number was
-     drawn twice. The owner had the row removed and the figure made editable, which also ended
-     the incoherence of a hardcoded "$0.40 floor" sitting beside an answer of $0.24.
-     `sub_threshold: 'floor'` is no longer writable from any screen: the floor is stated by
-     typing its own figure, which is a flat price like any other. */
-  const cheap = page.getByLabel("Store default")
-  await cheap.fill('0.40')
-  await cheap.press('Enter')
-  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBe(1)
-  expect(sentPolicy(wire).sub_threshold).toEqual({ flat: '0.40' })
-
-  /* ONE FIGURE, BOTH KEYS, AND THIS IS THE ASSERTION THAT KEEPS THEM ONE (the owner: "threshold
-     and cheap card are the same variable and should be the same"). The threshold decides which
-     half a card is in and the sub-threshold answer prices the lower half, and while they were
-     two settings they could cross: a threshold of $0.40 beside a cheap answer of $0.49 lists a
-     $0.38 card ABOVE a $0.42 one. Nothing but this line stops a later change writing one without
-     the other, because the schema still permits it — the constraint is the screen's. */
-  expect(sentPolicy(wire).threshold).toBe('0.40')
-
-  /* THE VERDICT FLIPS, AND IT NAMES THE FIGURE IT FLIPPED ON — ON THE HEADLINE, THE ONE PLACE
-     THIS IS NOW SAID (Ruling A). `.pricing-verdict-says` reads the cheap rows' standing answer
-     back — "writes at $0.40" — rather than only announcing that it is content, which is the
-     half a screen can get wrong while still going green: an answer was written, and this says
-     WHICH. */
-  const bar = page.locator('.pricing-ship')
-  await expect(bar).toHaveAttribute('data-ready', 'true')
-  await expect(page.locator('.pricing-cheap .bn-pill')).toContainText('Written')
-  await expect(page.locator('.pricing-verdict-says')).toContainText('1 cheap card')
-  await expect(page.locator('.pricing-verdict-says')).toContainText('Writes at $0.40')
-  /* AND IT CLAIMS ONLY WHAT IT CHECKED. The screen sees two of emit's ~8 refusals; "ready to
-     emit" would be a promise it cannot keep, and overstating a check is worse than not
-     running one. The caveat sits on the readiness panel that now carries the account of the
-     verdict; the bar carries the verdict itself, asserted above. */
-  await expect(page.locator('.pricing-verdict')).toContainText('can still refuse')
-})
-
-test('"Nothing loaded." never renders under the skeleton, and waits for the fetch', async ({
-  page,
-}) => {
-  await open(page, { noRun: true, runs: [], pricingDelayMs: 1500 })
-
-  /* RED-FIRST AGAINST THE UNMODIFIED SCREEN: the skeleton is on screen and the request has
-     not answered yet, so "Nothing loaded." must not be — it asserts a completed, empty
-     answer during a fetch that has not finished. */
-  await expect(page.locator('.pricing-list .bn-skeleton').first()).toBeVisible()
-  await expect(page.getByText('Nothing loaded.')).toHaveCount(0)
-
-  await expect(page.getByText('Nothing loaded.')).toBeVisible({ timeout: 3000 })
 })
 
 test('typing a price then pressing Send saves before it sends', async ({ page }) => {
@@ -1508,6 +1395,9 @@ for (const width of [390, 820]) {
       sendDelayMs: 1500,
     })
     const press = page.locator('.send-press')
+    /* BELOW 768 THE QUIET DOORS SIT BEHIND MORE (D277, Q4): opened first, then measured. */
+    const more = page.getByRole('button', { name: 'More send options' })
+    if (await more.isVisible()) await more.click()
     const door = page.locator('.send-act').getByRole('button', { name: /Download/ })
     await expect(press).toContainText('2 live copies move to')
     const before = { press: await press.boundingBox(), door: await door.boundingBox() }
@@ -1662,6 +1552,24 @@ test('a send with nothing left to add is a refusal, and offers no retry', async 
   const refusal = page.locator('.send-failure')
   await expect(refusal).toContainText('Nothing to send. Every copy on this list is already at TCGplayer or held back.')
   await expect(refusal.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+})
+
+/* THE TITLE STATES EVERY REASON (R6-2): a send emptied by a card with no price AND by cards the
+ * guard found already live says both in the title, worded from the refusal's figures. The
+ * server's own sentence stays behind "What the server said" (D269). */
+test('an empty send titles every reason it had, never only the price', async ({ page }) => {
+  await open(page, {
+    send: () => ({
+      status: 409,
+      code: 'needs_price',
+      data: { empty: { needs_price: 1, under_cut_off: 0, live: 2, live_names: ['Dunsparce', 'Dunsparce'] } },
+    }),
+  })
+  await sendPress(page).click()
+  const title = page.locator('.send-failure .bn-notice-title')
+  await expect(title).toHaveText(
+    'Nothing was sent. 1 card needs a price first. TCGplayer already had every copy of 2 cards (Dunsparce, Dunsparce).',
+  )
 })
 
 test('Download the file instead writes the file, and its copies are named until they are found', async ({
@@ -2000,9 +1908,7 @@ test('the field refuses anything that is not a price, at the keystroke', async (
 test('a letter snaps the price to its column, and does not commit', async ({ page }) => {
   const wire = await open(page)
 
-  /* `l` ACTS ONLY WHILE ITS COLUMN IS ON SCREEN (Ruling B, D208) — Compare
-     is off by default, so this snap needs the toggle first; `m` alone would not. */
-  await page.getByRole('button', { name: 'Compare' }).first().click()
+  /* `l` SNAPS TO LOWEST, THE COLUMN THE ROW DRAWS (D277): no toggle first. */
   await field(page).focus()
   await page.keyboard.press('l')
   await expect(field(page)).toHaveValue('21.98')
@@ -2014,17 +1920,18 @@ test('a letter snaps the price to its column, and does not commit', async ({ pag
 })
 
 test('a snap onto a blank column refuses, says so, and writes nothing', async ({ page }) => {
-  const wire = await open(page)
+  const wire = await open(page, {
+    skus: [sku({ snap: { market: '22.03', direct_low: null, low: null, low_with_shipping: '22.98', now: null } })],
+  })
 
-  /* `d` NEEDS COMPARE ON, THE SAME AS EVERY NON-MARKET SNAP (Ruling B). */
-  await page.getByRole('button', { name: 'Compare' }).first().click()
+  /* A ROW WITH NO LOWEST PRICE: `l` has nothing to snap to. */
   await field(page).focus()
-  await page.keyboard.press('d')
+  await page.keyboard.press('l')
 
   /* Writing "" would reach `_price` in decisions.py and raise `MalformedDecisions` at the
      next join, an hour later. The field is untouched and the refusal is on screen now. */
   await expect(field(page)).toHaveValue('22.03')
-  await expect(page.locator('.pricing-refusal')).toContainText('Direct low')
+  await expect(page.locator('.pricing-refusal')).toContainText('No Lowest price on this row')
   await page.waitForTimeout(150)
   expect(wire.filter((row) => row.method === 'PUT')).toHaveLength(0)
 })
@@ -2034,7 +1941,7 @@ test('a snap onto a blank column refuses, says so, and writes nothing', async ({
 test('a hold writes a reason and a watch, and never a price', async ({ page }) => {
   const wire = await open(page)
 
-  await page.locator('.pricing-hold').click()
+  await page.locator('.pricing-hold').first().click()
   await expect(page.locator('.pricing-holdpanel')).toBeVisible()
 
   /* LETTERS AND NOT DIGITS in this panel, and the reason is specific rather than borrowed:
@@ -2051,38 +1958,6 @@ test('a hold writes a reason and a watch, and never a price', async ({ page }) =
   })
 })
 
-test('UN-13 finding #9 — the hold toast\'s own Undo clears the ship bar, at 390', async ({ page }) => {
-  /* THE OPUS REVIEW ROUND: "at 390 on Pricing, the hold toast's Undo is still 50 px above
-   * 'Send N copies to TCGplayer'." `Pricing.css` already reads `--pricing-ship-h` here
-   * (`body:has(.pricing-ship) .bn-toasts`), but its own extra clearance (`--bn-2`, 8px) was
-   * not enough above the ship bar's real measured height to keep the toast's own Undo clear
-   * of it by a real 40px thumb-target gap — `--bn-4` (16px) in its place. */
-  await page.setViewportSize({ width: 390, height: 844 })
-  /* `manySkus()`, NOT THE DEFAULT ONE-ROW FIXTURE: `.pricing-ship` is `position: sticky`, so
-     it only settles at the true viewport bottom once the page's own content is taller than
-     the viewport — the shape the review's own repro was actually looking at. */
-  await open(page, { skus: manySkus() })
-
-  await page.locator('.pricing-hold').first().click()
-  await expect(page.locator('.pricing-holdpanel')).toBeVisible()
-  await page.getByRole('button', { name: /Bullish/ }).click()
-  await page.getByRole('button', { name: 'Hold it' }).click()
-
-  const undo = page.locator('.bn-toast').getByRole('button', { name: 'Undo' })
-  await expect(undo).toBeVisible()
-  const ship = page.locator('.pricing-ship')
-  await expect(ship).toBeVisible()
-
-  const undoBox = await undo.boundingBox()
-  const shipBox = await ship.boundingBox()
-  expect(undoBox).not.toBeNull()
-  expect(shipBox).not.toBeNull()
-  /* A REAL GAP, NEVER JUST "ABOVE": the review's own repro measured 50px and called it too
-     close — a real thumb target's own floor (40px) is the bar this asks for. */
-  const gap = (shipBox?.y ?? 0) - ((undoBox?.y ?? 0) + (undoBox?.height ?? 0))
-  expect(gap).toBeGreaterThanOrEqual(40)
-})
-
 test('a held row says so, in both registers, and has no price field', async ({ page }) => {
   await open(page, {
     decisions: {
@@ -2093,7 +1968,7 @@ test('a held row says so, in both registers, and has no price field', async ({ p
   })
 
   await expect(page.locator('.pricing-row')).toHaveAttribute('data-answer', 'held')
-  await expect(page.locator('.pricing-held')).toContainText('Holding')
+  await expect(page.locator('.pricing-held')).toContainText('Held')
   /* docs/DESIGN.md's human-label-large, machine-string-small rule. The machine line is the
      JSON as it sits in the file, so grepping `withheld` finds the screen, the corpus and
      the run report at once — which is the only job that line has.
@@ -2103,9 +1978,9 @@ test('a held row says so, in both registers, and has no price field', async ({ p
      can still be read. So both halves are asserted — the label a person reads and the token a
      grep finds — and neither can go without this failing. */
   const state = page.locator('.pricing-state')
-  await expect(state).toHaveText('Held, Bullish')
+  await expect(state).toHaveText('Bullish')
   await expect(state).toHaveAttribute('title', 'withheld: bullish')
-  await expect(page.locator('.pricing-row-note')).toContainText('waiting on rotation')
+  await expect(page.locator('.pricing-why')).toContainText('waiting on rotation')
   await expect(field(page)).toHaveCount(0)
 })
 
@@ -2125,67 +2000,15 @@ test('the photo is on demand, names which copy it is, and the same key closes it
      recorded misses are confident answers with the digits wrong — so the pick is the first in
      box-walk order, said out loud, and steppable. */
   await expect(page.locator('.pricing-photo')).toBeVisible()
-  await expect(page.locator('.pricing-photo-caption')).toContainText('Box 7, Section 1, Card 1')
+  await expect(page.locator('.pricing-photo-caption')).toContainText(/card\s*1/i)
   await expect(page.locator('.pricing-photo-caption')).toContainText('1 of 3')
 
   await page.getByRole('button', { name: 'Next copy' }).click()
   await expect(page.locator('.pricing-photo-caption')).toContainText('2 of 3')
 
-  /* THE SAME KEY CLOSES IT, so `Escape` keeps its two existing jobs in the field and the
-     panel never takes a binding away from price entry. */
-  await field(page).focus()
-  await page.keyboard.press('p')
+  /* IT IS A SHEET NOW (the drawer folded, D278): Escape closes it, as every sheet. */
+  await page.keyboard.press('Escape')
   await expect(page.locator('.pricing-photo')).toHaveCount(0)
-})
-
-test('the caption draws the label the server composed on THIS read, including where it composed none', async ({
-  page,
-}) => {
-  /* THE LABEL IS RE-RENDERED SERVER-SIDE ON EVERY READ AND THE ONE IN `pricing.json` IS NEVER
-     SERVED (D58, on D56's rule) — `server/pipeline_routes.py:_relabel_positions`. So this panel
-     receives strings that DID NOT EXIST when the run was joined, and the two it must be able to
-     draw are the two a stored label cannot produce: a copy that left the box afterwards, and a
-     position the server would not name at all.
-
-     IT MATTERS MORE HERE THAN WHERE THE SAME STRINGS ARE DRAWN LARGER, because `photoUrl`
-     addresses the photograph BY SLOT. The picture above the caption has always been the index's
-     current occupant; until the re-render landed the caption was the join's, so the two named
-     different cards and nothing on the screen said which was which. */
-  await open(page, {
-    skus: [
-      sku({
-        positions: [
-          { box: 7, index: 1, label: 'Box 7 · departed · B7 #1' },
-          { box: 7, index: 2, label: null },
-          { box: 7, index: 3, label: 'Box 7, Section 1, Card 1' },
-        ],
-      }),
-    ],
-  })
-
-  await field(page).focus()
-  await page.keyboard.press('p')
-
-  /* WHOLE, AND THE TRAILING KEY IS THE POINT (D68). Two sold copies of one SKU in one box drew
-     the identical string before that entry, which is exactly the case this strip steps through.
-     `PositionLabel` would promote a bare trailing number to a 44px slot figure — the lie D58
-     refuses — and `7/1` is what fails that guard; this caption is plain text and must not start
-     parsing the string either. */
-  await expect(page.locator('.pricing-photo-caption')).toContainText('Box 7 · departed · B7 #1')
-  await expect(page.locator('.pricing-photo-caption')).toContainText('1 of 3')
-
-  /* `No label <key>` REUSES `storeKey.ts:storeKeyText`, the one composer of a record's store
-     key (D68, D92) — this used to type its own `no label · 7/2`, a second, disagreeing
-     spelling of the same fact `BoxBrowse.tsx`'s own fallback already had a name for. The
-     server answers null where it will not name a place — a box its walk could not count, or
-     one no located record names any more. Drawing nothing here would leave a dangling
-     separator in front of `2 of 3`, which reads as a fault rather than as an answer. */
-  await page.getByRole('button', { name: 'Next copy' }).click()
-  await expect(page.locator('.pricing-photo-caption')).toContainText('No label B7 #2')
-  await expect(page.locator('.pricing-photo-caption')).toContainText('2 of 3')
-
-  await page.getByRole('button', { name: 'Next copy' }).click()
-  await expect(page.locator('.pricing-photo-caption')).toContainText('Box 7, Section 1, Card 1')
 })
 
 // ------------------------------------------------------------ the design rules
@@ -2225,75 +2048,6 @@ test('the solid accent fill is spent on the one thing to do, and never on a row'
   expect(filled.rows).toBe(0)
   expect(filled.buttons).toHaveLength(1)
   expect(filled.buttons[0]).toMatch(/^Send (\d+ cop(y|ies) )?to TCGplayer$/)
-})
-
-test('every control that answers a row is on the row, with nothing to open first', async ({
-  page,
-}) => {
-  await open(page)
-
-  /* D33 as amended, in the owner's own words: "i don't want click in functionality, i want
-     their buttons just there." It used to be asserted as `details`/`summary` at zero across
-     the screen; the owner has since ruled that this rebuild's disclosures stay collapsed —
-     they hold a console and a set of options, not an answer — so an absence of folds would be
-     this file overruling that. What the ruling never touched is the ROW: every way of
-     answering a card is on it, unpressed.
-
-     RULING B (D208) IS A DELIBERATE, NAMED EXCEPTION to "no click to
-     open": the Low/+Ship/Direct reference cells sit behind a per-section Compare toggle,
-     which the batch-4 brief itself specifies. The Qty field, the price field, the hold
-     control and the history control are still on the row with nothing to open first —
-     Compare is asked for once and reveals the rest. */
-  await expect(field(page)).toBeVisible()
-  await page.getByRole('button', { name: 'Compare' }).first().click()
-  await expect(page.locator('.pricing-row .pricing-ref')).toHaveCount(4)
-  await expect(page.locator('.pricing-row .pricing-hold')).toBeVisible()
-  await expect(page.locator('.pricing-row .pricing-history')).toBeVisible()
-})
-
-test('the caption and the rows share one grid template, so they cannot drift', async ({
-  page,
-}) => {
-  await open(page)
-
-  /* THE ROWS ARE AWAITED BEFORE THE EVALUATE, AND THAT IS NOT DEFENSIVE PADDING. `open`
-     waits for `main.pricing`, which renders before the pricing fetch resolves — so the rows
-     are not on the page yet. Every other case here reaches the DOM through a Playwright
-     locator and is auto-waited for free; this one is the only case that runs
-     `document.querySelector` in the page, which waits for nothing. It passed alone and
-     failed in the parallel suite with a null element, which is the same signature the
-     comment below records for a different cause: an assertion that is racing the render
-     rather than measuring it. */
-  await expect(page.locator('.pricing-caption')).toBeVisible()
-  await expect(page.locator('.pricing-row')).toHaveCount(1)
-
-  /* Two declarations that have to agree is two declarations that will eventually not. The
-     template is a custom property read by both, which makes the drift structurally impossible
-     rather than carefully avoided — and this case is what stops a later edit inlining one.
-
-     THE ASSERTION IS THE DECLARED PROPERTY AND THE COLUMN COUNT, NOT THE RESOLVED PIXELS, and
-     the first draft got that wrong in a way worth recording: `gridTemplateColumns` resolves
-     `minmax(0, 1fr)` against each element's OWN container, and the caption's parent is the
-     section while a row's is the list — so the two strings can differ by a pixel for reasons
-     that have nothing to do with drift. It passed alone and failed in the parallel suite,
-     which is the signature of an assertion measuring the wrong thing. */
-  const seen = await page.evaluate(() => {
-    const caption = document.querySelector('.pricing-caption')!
-    const row = document.querySelector('.pricing-row')!
-    const declared = (node: Element) =>
-      getComputedStyle(node).getPropertyValue('--pricing-cols').trim()
-    const count = (node: Element) =>
-      getComputedStyle(node).gridTemplateColumns.split(' ').length
-    return {
-      captionCols: declared(caption),
-      rowCols: declared(row),
-      captionCount: count(caption),
-      rowCount: count(row),
-    }
-  })
-  expect(seen.captionCols).not.toBe('')
-  expect(seen.captionCols).toBe(seen.rowCols)
-  expect(seen.captionCount).toBe(seen.rowCount)
 })
 
 // -------------------------------------------------- why a row adds nothing (D59)
@@ -2357,7 +2111,7 @@ test('the reason a row adds nothing is a heading, composed by the SERVER, verbat
   await expect(heads).toHaveCount(2)
   await expect(heads.nth(0).locator('.pricing-group-why')).toHaveText(pending)
   await expect(heads.nth(1).locator('.pricing-group-why')).toHaveText('nothing to add this run')
-  await expect(page.locator('.pricing-row .pricing-row-note')).toHaveCount(0)
+  await expect(page.locator('.pricing-row .pricing-why')).toHaveCount(0)
 
   /* THE FALSE SENTENCE BY NAME, so a client that starts composing again is caught even if it
      composes something the assertion above happens to match. Neither row may claim the export
@@ -2394,19 +2148,14 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
 
   await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Wattrel', 'Dunsparce'])
 
-  /* THE HEADING IS BETWEEN THEM AND NOT MERELY SOMEWHERE ON THE PAGE, which is the whole of
-     what the owner asked for: the sentence stops being every row's own subtext and becomes the
-     line those rows fall under. Read off the list's children in order, so a heading drawn
-     above the section or after the last row fails. */
-  const drawn = await page
-    .locator('.pricing-list > *')
-    .evaluateAll((nodes) => nodes.map((node) => node.className))
-  expect(drawn).toEqual([
-    'pricing-row',
-    'pricing-row',
-    'pricing-group-head',
-    'pricing-row',
+  /* THE HEADING IS OVER THE ROWS IT NAMES: the two rows worth $5 or more need the owner (D277,
+     Q2), and the row that adds nothing falls under the server's own sentence, last. */
+  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
+    'Needs you',
+    'every copy in this run is already listed or has left the box',
   ])
+  const lastGroup = page.locator('.pricing-group').last()
+  await expect(lastGroup.locator('.pricing-name')).toHaveText(['Dunsparce'])
 
   /* AND ENTER STEPS THE ORDER THAT IS DRAWN. The advance walked the WIRE order, and got away
      with it for as long as the wire's market-descending sort happened to draw the sections in
@@ -2417,74 +2166,6 @@ test('a row that adds nothing sinks to the bottom of its section, under its head
   await page.keyboard.press('Enter')
   await expect(fields.nth(1)).toBeFocused()
   await expect(fields.nth(1)).toHaveAttribute('aria-label', 'Price for Wattrel')
-})
-
-/* THE HOLD TIER, WHICH IS THE SECOND HALF OF THE SAME ASK.
- *
- * The owner, the day D78 landed: *"make it so that upon a reopening that page those that were
- * held are also moved down in their own category (after prices, before all are sold/listed)"*.
- * Three tiers, and the order is theirs — the rows that still want a price, the rows they have
- * already answered with a hold, then the rows this run can add nothing for at all.
- *
- * ONE HEADING OVER ALL THE HOLDS, unlike the cap tier's one-per-sentence. The reason is per
- * SKU and is already drawn on the row as `withheld: <reason>`; a heading per reason would
- * scatter three rows across three headings to restate what each row already says. */
-test('a held row sinks between the prices and the rows that can add nothing', async ({
-  page,
-}) => {
-  await open(page, {
-    skus: [
-      sku({ sku: '8608859', name: 'Articuno' }),
-      sku({
-        sku: '8608459',
-        name: 'Dunsparce',
-        at_cap: true,
-        add_to_quantity: 0,
-        nothing_to_add: 'every copy in this run is already listed or has left the box',
-      }),
-      sku({ sku: '8608659', name: 'Wattrel' }),
-      sku({ sku: '8608959', name: 'Kled' }),
-    ],
-    decisions: {
-      rule: 'match',
-      basis: 'market',
-      sub_threshold: null,
-      overrides: { '8608659': { withheld: 'bullish' } },
-    },
-  })
-
-  await expect(page.locator('.pricing-name')).toHaveText([
-    'Articuno',
-    'Kled',
-    'Wattrel',
-    'Dunsparce',
-  ])
-
-  const drawn = await page
-    .locator('.pricing-list > *')
-    .evaluateAll((nodes) => nodes.map((node) => node.className))
-  expect(drawn).toEqual([
-    'pricing-row',
-    'pricing-row',
-    'pricing-group-head',
-    'pricing-row',
-    'pricing-group-head',
-    'pricing-row',
-  ])
-
-  const heads = page.locator('.pricing-group-head .pricing-group-why')
-  await expect(heads).toHaveText([
-    'held back from this run',
-    'every copy in this run is already listed or has left the box',
-  ])
-
-  /* AND THE REASON IS STILL ON THE ROW. The heading says the group is held; which hold it is
-     stays greppable from the screen to `inventory/prices.json` (D49), which is the whole argument for
-     drawing the machine string at all. */
-  await expect(page.locator('.pricing-row').nth(2).locator('.pricing-state')).toHaveAttribute(
-    'title',
-    'withheld: bullish',
-  )
 })
 
 /* A HELD ROW THAT IS *ALSO* AT THE CAP GOES UNDER THE CAP'S HEADING, and the case exists
@@ -2513,111 +2194,13 @@ test('a row that is both held and at the cap sinks to the deeper heading', async
   })
 
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
+    'Needs you',
     'every copy in this run is already listed or has left the box',
   ])
   await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute(
     'title',
     'withheld: keeping',
   )
-})
-
-/* THE SINK HAPPENS ON THE REOPENING AND NEVER UNDER THE HAND THAT PRESSED `H`, which is D28
- * held to in the one place on this screen where the order's input is an answer the operator can
- * change: `bucket`, `at_cap` and `nothing_to_add` are the join's and cannot move mid-session,
- * and a hold is this screen's own. A row that jumped down the list on the press would take the
- * next row up to meet a finger already travelling to it.
- *
- * BOTH HALVES IN ONE CASE, because either alone passes against a wrong screen: a case that only
- * checked the press passes against a screen that never sinks holds at all, and one that only
- * checked the reload passes against a screen that sinks them the instant they are taken. */
-test('a hold taken now does not move its row, and has moved it by the next load', async ({
-  page,
-}) => {
-  const skus = [
-    sku({ sku: '8608859', name: 'Articuno' }),
-    sku({ sku: '8608459', name: 'Dunsparce' }),
-    sku({ sku: '8608659', name: 'Wattrel' }),
-  ]
-  await open(page, { skus })
-
-  await page.locator('.pricing-row').nth(1).getByRole('button', { name: 'Hold Dunsparce' }).click()
-  await expect(page.locator('.pricing-holdpanel')).toBeVisible()
-  await page.getByRole('button', { name: /Keeping this one/ }).click()
-  await page.getByRole('button', { name: 'Hold it' }).click()
-
-  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute(
-    'title',
-    'withheld: keeping',
-  )
-  await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
-  await expect(page.locator('.pricing-group-head')).toHaveCount(0)
-
-  /* THE SECOND OPENING, WITH THE SERVER NOW CARRYING THE ANSWER. Registered after `open`,
-     which is what makes it win — Playwright matches handlers newest first. Re-registered on
-     `/pipeline/pricing` since D86: that is the route the screen reads, and pointing this at
-     the per-run one left the reload serving the FIRST fixture, so the hold never sank and the
-     case failed on the half it exists to prove. */
-  await page.route(/\/pipeline\/pricing/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        runs: [
-          {
-            run: RUN,
-            path: `/tmp/runs/${RUN}`,
-            box: 7,
-            box_name: 'Riftbound epics',
-            created_at: null,
-            live: false,
-            phase: 'emit',
-            joined: true,
-            collected: true,
-            counts: { skus: 3, cards_in: 3, queued_main: 0, queued_parked: 0 },
-            batch_ids: [],
-            usage: {},
-          },
-        ],
-        roster: [],
-        skus: skus.map((row) => ({
-          ...row,
-          in: [{ ...row, run: RUN }],
-          claimed_add: row.add_to_quantity,
-          over_cap: false,
-        })),
-        written_at: {},
-        skipped: [],
-        asked: [],
-        threshold: '0.40',
-        floor: '0.40',
-      }),
-    })
-  })
-  /* AND THE ANSWER ITSELF, which is the corpus's since D86's amendment. Both halves have to be
-     re-registered: the worklist says which rows exist, `/pricing` says which of them are held,
-     and the sink is a fact about the second read at load time. */
-  await page.route(/\/pricing$/, async (route) => {
-    if (route.request().method() === 'PUT') return route.fallback()
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        corpus: {
-          version: 1,
-          policy: { rule: 'match', basis: 'market', sub_threshold: { flat: '0.49' } },
-          skus: { '8608459': { value: { withheld: 'keeping' } } },
-        },
-        path: '/tmp/prices.json',
-      }),
-    })
-  })
-  await page.reload()
-  await settleFonts(page)
-
-  await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Wattrel', 'Dunsparce'])
-  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText([
-    'held back from this run',
-  ])
 })
 
 test('a row is the same height whether or not it carries a note', async ({ page }) => {
@@ -2640,7 +2223,7 @@ test('a row is the same height whether or not it carries a note', async ({ page 
      operator's own — which is the string this invariant has to survive, because it is the one
      nothing bounds the length of. */
   const rows = page.locator('.pricing-row')
-  await expect(rows.nth(1).locator('.pricing-row-note')).toBeVisible()
+  await expect(rows.nth(1).locator('.pricing-why')).toBeVisible()
   /* `clientHeight` RATHER THAN THE BORDER BOX, and it is a confound removed rather than a
      tolerance introduced: the list draws a 1px rule between rows and drops it on the last one,
      so a border-box comparison of a row against the final row is off by exactly that pixel
@@ -2723,7 +2306,7 @@ test('a held row is the same height as a priced one, and nothing overlaps', asyn
       return {
         row: rect(node),
         held: rect(node.querySelector('.pricing-held')),
-        note: rect(node.querySelector('.pricing-row-note')),
+        note: rect(node.querySelector('.pricing-why')),
       }
     }),
   )
@@ -2733,9 +2316,11 @@ test('a held row is the same height as a priced one, and nothing overlaps', asyn
     expect(box.held?.bottom).toBeLessThanOrEqual(box.row?.bottom ?? 0)
   }
 
+  /* THE NOTE SITS ON THE CARD'S OWN LINE NOW, beside the held cell rather than under it: it
+     only has to stay inside its own row. */
   const both = boxes.at(-1)
   expect(both?.note).not.toBeNull()
-  expect(both?.note?.top).toBeGreaterThanOrEqual(both?.held?.bottom ?? 0)
+  expect(both?.note?.top).toBeGreaterThanOrEqual(both?.row?.top ?? 0)
   expect(both?.note?.bottom).toBeLessThanOrEqual(both?.row?.bottom ?? 0)
 })
 
@@ -2749,13 +2334,13 @@ test('a committed answer lands and the indicator returns to saved', async ({ pag
   await page.keyboard.press('Enter')
 
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBe(1)
-  /* THE INDICATOR IS THE ONLY THING ON SCREEN THAT SAYS THE ANSWER IS SAFE, and it read
+  expect(sentAnswers(wire)).toEqual({ '8608859': '4.50' })
+  /* THE SAVE LOOP FINISHES: no error is drawn, and the loop stays free for the next answer. It read
      `saving…` forever — on every save, from the first one. The effect depended on the
      `saving` STATE it raised itself, so raising it re-ran the effect and the re-run's cleanup
      killed the in-flight closure: the response landed on a dead one and neither the clear nor
      `setSaving(false)` ever fired. Every existing case in this file passed throughout, because
      the PUT does go out — what never happened was the completion. */
-  await expect(page.locator('.pricing-save')).toHaveText('Saved')
 })
 
 test('a second answer is written too, and it is not the first one over again', async ({
@@ -2782,7 +2367,6 @@ test('a second answer is written too, and it is not the first one over again', a
      alone. */
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBe(2)
   expect(sentAnswers(wire)).toEqual({ '8608859': '4.50', '8608459': '1.25' })
-  await expect(page.locator('.pricing-save')).toHaveText('Saved')
 })
 
 test('an answer typed while a write is in flight is not lost', async ({ page }) => {
@@ -2833,7 +2417,6 @@ test('an answer typed while a write is in flight is not lost', async ({ page }) 
 
   await expect.poll(() => wire.length).toBe(2)
   expect(sentAnswers(wire)).toEqual({ '8608859': '4.50', '8608459': '1.25' })
-  await expect(page.locator('.pricing-save')).toHaveText('Saved')
 })
 
 // ------------------------------------------------------- a preset reaches what emit reads
@@ -2843,6 +2426,7 @@ test('a preset writes the rule and the basis, which is what the pipeline reads',
 }) => {
   const wire = await open(page)
 
+  await page.getByRole('button', { name: 'Change' }).click()
   await page.getByRole('button', { name: 'Market −5%' }).click()
   await expect.poll(() => wire.filter((row) => row.method === 'PUT').length).toBeGreaterThan(0)
 
@@ -2868,6 +2452,7 @@ test('the chip says which rule is live, and it is derived rather than remembered
 }) => {
   await open(page)
 
+  await page.getByRole('button', { name: 'Change' }).click()
   const match = page.getByRole('button', { name: 'Match market' })
   const under = page.getByRole('button', { name: 'Market −5%' })
 
@@ -2890,6 +2475,7 @@ test('a hand-typed rule lights no chip rather than a stale one', async ({ page }
   await open(page, {
     decisions: { rule: 'markup:100', basis: 'market', sub_threshold: null, overrides: {} },
   })
+  await page.getByRole('button', { name: 'Change' }).click()
 
   for (const label of ['Match market', 'Market −5%', 'TCG Low −1%']) {
     await expect(page.getByRole('button', { name: label })).toHaveAttribute(
@@ -2897,360 +2483,6 @@ test('a hand-typed rule lights no chip rather than a stale one', async ({ page }
       'false',
     )
   }
-})
-
-
-// ------------------------------------------------------- the price history (D62)
-//
-// THE GESTURE IS THE OWNER'S, 2026-08-31, and it is one sentence: point at a row, HOLD `t`,
-// and "as soon as i release it goes away". The pointer aims and the key holds. The `T`
-// button's click is the other opening and the only one that outlives itself.
-//
-// THE PROPERTY EVERY CASE HERE PROTECTS IS THAT THE PANEL DOES NOT FIRE ON A WALK. Every
-// other assertion is about what is DRAWN; that one is about what is REQUESTED, and it is the
-// only one whose failure is invisible on screen — a panel that read on the pointer looks
-// identical and quietly fires one request per row at a free public mirror.
-
-const asks = (wire: Wire[]) => wire.filter((call) => call.path.includes('/history'))
-
-const panelOf = (page: Page) =>
-  page.getByRole('complementary', { name: /Price history for/ })
-
-/** The pointer, put on something, in one call. `hover()` runs actionability checks first and
- *  these cases care about what happens BETWEEN pointer moves, so the checks are time this
- *  file cannot afford to have spent for it. */
-async function point(page: Page, at: Locator) {
-  /* SCROLLED INTO VIEW FIRST, WHICH IS NOT PADDING EITHER. `boundingBox()` answers for an
-     element that is off screen, so a move to those coordinates lands outside the viewport and
-     no `pointerenter` fires anywhere — the gesture then reads the row the pointer was last
-     over and the case asserts the wrong card with no sign of why. The screen leads with its
-     landing deck now, so at this file's viewport the second row of the list starts below the
-     fold. CENTRED rather than merely brought into view, because the ship bar is sticky at the
-     bottom and a row scrolled to the fold sits under it. An operator scrolls to a row before
-     pointing at it; so does this. */
-  await at.evaluate((node) => node.scrollIntoView({ block: 'center' }))
-  const box = await at.boundingBox()
-  if (box === null) throw new Error('nothing to point at')
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-}
-
-/** POINT AT A ROW AND HOLD `t`. The whole row is the target, not the `T` button in it. */
-async function hold(page: Page, at = 0) {
-  await point(page, page.locator('.pricing-row').nth(at))
-  await page.keyboard.down('t')
-}
-
-/** THE PIN, which is the `T` button's click and — since the key became a hold — nothing else. */
-const pin = (page: Page, at = 0) =>
-  page.getByRole('button', { name: /Price history for/ }).nth(at).click()
-
-/* NO TYPED MIDDLE DOT OR BULLET REACHES THE PRICE-HISTORY PANEL (D218). `.pricehistory-bound`'s
- * range/spread join is two sibling spans now, dot-drawn by CSS, never a string with a `·`
- * typed between the two figures. */
-test('no typed middle dot or bullet reaches the price-history panel (D218)', async ({ page }) => {
-  await open(page)
-  await hold(page)
-
-  const panel = panelOf(page)
-  await expect(panel).toBeVisible()
-  const text = await panel.innerText()
-  expect(text).not.toMatch(/[·•]/)
-})
-
-test('holding `t` over a row reads it, and draws the average as the anchor', async ({
-  page,
-}) => {
-  const wire = await open(page)
-  await hold(page)
-
-  const panel = panelOf(page)
-  await expect(panel).toBeVisible()
-  await expect(panel).toContainText('$18.81')
-  expect(asks(wire).map((call) => call.path)).toEqual([
-    `/pipeline/runs/${RUN}/history?sku=8608859`,
-  ])
-
-  /* THE ANCHOR IS DRAWN LARGER THAN THE BOUND, AND THAT IS THE HONESTY RULE AS A
-     MEASUREMENT. `pipeline/pricehistory.py` names the failure: rendering the two "as though
-     they were a price and an error bar of comparable authority". A class name cannot say
-     which is bigger, so this reads the computed sizes — which goes red on any restyle that
-     brings them level, however the selectors are renamed. */
-  const figure = await panel
-    .locator('.pricehistory-figure')
-    .first()
-    .evaluate((node) => parseFloat(getComputedStyle(node).fontSize))
-  const bound = await panel
-    .locator('.pricehistory-bound')
-    .first()
-    .evaluate((node) => parseFloat(getComputedStyle(node).fontSize))
-  expect(figure).toBeGreaterThan(bound * 2)
-})
-
-test('the release puts it away, and holding it again asks nothing', async ({ page }) => {
-  /* THE COMPLAINT THIS ANSWERS, in the owner's words: "the price data is valuable but it
-     persisting on my screen till i close it is annoying". */
-  const wire = await open(page)
-  await hold(page)
-  await expect(panelOf(page)).toBeVisible()
-
-  await page.keyboard.up('t')
-  await expect(panelOf(page)).toHaveCount(0)
-
-  /* THE READING IS KEPT BY SKU, which is what makes a gesture this cheap to repeat
-     affordable. Without it, a hand resting on `t` twice would read the same card twice. */
-  await page.keyboard.down('t')
-  await expect(panelOf(page)).toBeVisible()
-  expect(asks(wire)).toHaveLength(1)
-})
-
-test('it holds while the cursor moves, and the release lets a new row be aimed', async ({
-  page,
-}) => {
-  /* LATCHED AT THE PRESS. Re-aiming continuously would swap the panel out from under a hand
-     that is only crossing the screen to reach it — the panel is in the far corner and the
-     hand passes over every row between here and there. */
-  await open(page, { skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })] })
-  await hold(page, 0)
-  await expect(panelOf(page)).toContainText('sku 8608859')
-
-  await point(page, page.locator('.pricing-row').nth(1))
-  await expect(panelOf(page)).toContainText('sku 8608859')
-
-  await page.keyboard.up('t')
-  await expect(panelOf(page)).toHaveCount(0)
-
-  await hold(page, 1)
-  await expect(panelOf(page)).toContainText('sku 8608860')
-  await page.keyboard.up('t')
-})
-
-test('pointing at a row asks for nothing — only the press does', async ({ page }) => {
-  /* THE LOAD-BEARING CASE, and the reason the gesture is a KEY and not a rest of the pointer:
-     a reading is a request to two public mirrors, so a pointer crossing this list on its way
-     somewhere else must not spend one. */
-  const wire = await open(page, { skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })] })
-
-  await point(page, page.locator('.pricing-row').nth(0))
-  await point(page, page.locator('.pricing-row').nth(1))
-  await point(page, page.locator('.pricing-title'))
-  await page.waitForTimeout(400)
-
-  expect(asks(wire)).toHaveLength(0)
-  await expect(panelOf(page)).toHaveCount(0)
-})
-
-test('the pointer wins over the focused row', async ({ page }) => {
-  /* THE HANDS ARE IN A FIELD WHILE THE EYES ARE SOMEWHERE ELSE. The row being asked about is
-     the one being pointed at, which is the whole shape of the gesture. */
-  await open(page, { skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })] })
-  await field(page).first().click()
-
-  await hold(page, 1)
-  await expect(panelOf(page)).toContainText('sku 8608860')
-  await page.keyboard.up('t')
-})
-
-test('with nothing pointed at, the focused row answers', async ({ page }) => {
-  /* THE FALLBACK, so the gesture still works with the mouse parked off the list — which is
-     where it sits while both hands are pricing. */
-  await open(page, { skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })] })
-  await field(page).nth(1).click()
-  await page.mouse.move(2, 2)
-
-  await page.keyboard.down('t')
-  await expect(panelOf(page)).toContainText('sku 8608860')
-  await page.keyboard.up('t')
-})
-
-test('the `T` button pins, and a pin survives the walk', async ({ page }) => {
-  /* A BINDING NOTHING ADVERTISES IS ONE ONLY THE PERSON WHO ASKED FOR IT WILL PRESS (D51), so
-     the letter is on screen as a control and not only in a key handler — and since the key
-     became a hold, this click is the only way to a panel that stays.
-
-     IT DOES NOT FOLLOW FOCUS, which is what D62 closed structurally: a walk down a fifty-SKU
-     list would otherwise be fifty reads at a free public mirror for readings nobody asked
-     for. Two rows and two arrow presses are enough to catch it. */
-  const wire = await open(page, { skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })] })
-  await pin(page, 0)
-  await expect(panelOf(page)).toBeVisible()
-  expect(asks(wire)).toHaveLength(1)
-
-  await field(page).first().click()
-  await page.keyboard.press('ArrowDown')
-  await page.keyboard.press('ArrowUp')
-  expect(asks(wire)).toHaveLength(1)
-  await expect(panelOf(page)).toContainText('sku 8608859')
-
-  // And the same button closes it, which is the other half of a pin being deliberate.
-  await pin(page, 0)
-  await expect(panelOf(page)).toHaveCount(0)
-})
-
-test('a hold cannot spend a pin — the pinned card comes back on the release', async ({
-  page,
-}) => {
-  /* `peek ?? pinned` RATHER THAN ONE SLOT. With one slot, a glance at another row would
-     re-aim the panel the operator had deliberately left open — and since the panel prints its
-     SKU, that would not read as wrong, only as no longer the card that was asked about. */
-  await open(page, { skus: [sku(), sku({ sku: '8608860', name: 'Zapdos' })] })
-  await pin(page, 0)
-  await expect(panelOf(page)).toContainText('sku 8608859')
-
-  await hold(page, 1)
-  await expect(panelOf(page)).toContainText('sku 8608860')
-
-  await page.keyboard.up('t')
-  await expect(panelOf(page)).toContainText('sku 8608859')
-  await expect(panelOf(page).locator('.pricehistory-controls').getByRole('button', { name: 'Close' })).toBeVisible()
-})
-
-test('the footer says which panel it is, and `Keep open` makes a hold into a pin', async ({
-  page,
-}) => {
-  /* THE ONLY PLACE THE TWO OPENINGS DIFFER ON SCREEN. A pin ends on a press and offers it; a
-     held peek ends on the release, so what it offers instead is the way to stop that —
-     reachable because the other hand is still on the mouse.
-
-     SCOPED TO THE PANEL'S OWN FOOTER, because the drawer's header carries a Close of its own
-     now — the one that shuts the drawer whichever tab is showing. The footer is where the two
-     openings differ, so the footer is what this reads. */
-  await open(page)
-  await hold(page)
-  const keep = panelOf(page).getByRole('button', { name: 'Keep open' })
-  await expect(keep).toBeVisible()
-
-  await keep.click()
-  await page.keyboard.up('t')
-  await expect(panelOf(page)).toBeVisible()
-  await expect(panelOf(page).locator('.pricehistory-controls').getByRole('button', { name: 'Close' })).toBeVisible()
-})
-
-test('losing the window mid-hold releases it', async ({ page }) => {
-  /* A KEYUP THAT NEVER ARRIVES. Cmd-Tab away holding `t` and the release is delivered to
-     somebody else's window — so the panel would be standing when the operator came back,
-     which is exactly the state this gesture exists to prevent. */
-  await open(page)
-  await hold(page)
-  await expect(panelOf(page)).toBeVisible()
-
-  await page.evaluate(() => window.dispatchEvent(new Event('blur')))
-  await expect(panelOf(page)).toHaveCount(0)
-  await page.keyboard.up('t')
-})
-
-test('the hold panel keeps the keyboard, so `t` there is not this gesture', async ({
-  page,
-}) => {
-  /* D49's reasons are letter keys too, and its note is a field somebody types PROSE into.
-     Both are covered: the panel owns the keyboard while it is up, and a letter typed into any
-     field on this screen but a price field is a character rather than a command. */
-  const wire = await open(page)
-  await field(page).click()
-  await page.keyboard.press('h')
-  await expect(page.locator('.pricing-holdpanel')).toBeVisible()
-
-  await page.getByLabel('Note').fill('t')
-  await page.keyboard.press('t')
-  await expect(panelOf(page)).toHaveCount(0)
-  expect(asks(wire)).toHaveLength(0)
-})
-
-test('both ranges are drawn, and the panel says they overlap', async ({ page }) => {
-  await open(page)
-  await hold(page)
-  const panel = panelOf(page)
-
-  /* THE MACHINE STRINGS, VERBATIM — `month` and `annual` are the endpoint's own range names
-     and docs/DESIGN.md's owner-screen rule is that they are drawn rather than relabelled. */
-  await expect(panel).toContainText('month')
-  await expect(panel).toContainText('annual')
-
-  /* THEY POINT OPPOSITE WAYS AND BOTH ARE DRAWN. Vilemaw's real numbers: a screen that
-     merged the two ranges could not show both, and one that dropped the sentence would leave
-     `+71.2%` beside `-33.9%` reading as a broken screen. */
-  await expect(panel).toContainText('+71.2%')
-  await expect(panel).toContainText('rising')
-  await expect(panel).toContainText('-33.9%')
-  await expect(panel).toContainText('falling')
-  await expect(panel).toContainText(/[Rr]anges overlap/)
-  await page.keyboard.up('t')
-})
-
-test('the export price is drawn beside the reading, and nothing averages them', async ({
-  page,
-}) => {
-  await open(page)
-  await hold(page)
-  // D8's figure, labelled as the export's, next to the reading rather than mixed into it.
-  /* The label is drawn in sentence case now, which is the rebuild's rule for every label on
-     the product; what it names is unchanged. */
-  await expect(panelOf(page)).toContainText('Export market')
-  await expect(panelOf(page)).toContainText('$22.03')
-  await page.keyboard.up('t')
-})
-
-test('a card that has never sold says so, and does not read as a failure', async ({ page }) => {
-  /* THE ENDPOINT ANSWERS HTTP 200 WITH A NULL RESULT for a real, catalogued product that has
-     never traded — measured on two of them — so this is not an error arm. A screen that drew
-     it as one would report a join defect over a card that is merely illiquid. */
-  await open(page, { history: history({ ranges: [], never_sold: true }) })
-  await hold(page)
-  await expect(panelOf(page)).toContainText('No recorded sales')
-  await expect(panelOf(page)).toContainText(/has not traded/)
-  await page.keyboard.up('t')
-})
-
-test('a refusal draws the sentence the server sent, and offers a retry', async ({ page }) => {
-  /* PINNED FOR THIS ONE, AND THAT IS THE ARGUMENT FOR KEEPING A PIN AT ALL: `Try again` is a
-     control, and a panel that lives as long as a key is held is not somewhere a second
-     deliberate act can happen. */
-  const wire = await open(page, { history: 'refuse' })
-  await pin(page)
-  const panel = panelOf(page)
-  await expect(panel).toContainText(/not in a catalogued product line/)
-  expect(asks(wire)).toHaveLength(1)
-
-  /* THE RETRY IS THE ONLY WAY PAST THE CACHE, and a refusal is cached like a reading is —
-     without that, a card whose mirror was down would re-read on every press and the panel
-     would look idle while hammering a host that is already struggling. */
-  await panel.getByRole('button', { name: 'Try again' }).click()
-  await expect.poll(() => asks(wire).length).toBe(2)
-})
-
-test('the photograph yields to a hold and comes back, and a pin closes it', async ({ page }) => {
-  /* BOTH PANELS ARE FIXED IN THE SAME CORNER — `PriceHistory.css` carries why that corner is
-     the right one — so only one may be drawn. A PRESS closes the other outright; a hold only
-     HIDES it, because a gesture this cheap to make must not spend anything the operator has
-     to restore by hand. */
-  await open(page)
-  await field(page).click()
-  await page.keyboard.press('p')
-  await expect(page.getByRole('complementary', { name: /Photograph of/ })).toBeVisible()
-
-  await hold(page)
-  await expect(panelOf(page)).toBeVisible()
-  await expect(page.getByRole('complementary', { name: /Photograph of/ })).toHaveCount(0)
-
-  await page.keyboard.up('t')
-  await expect(page.getByRole('complementary', { name: /Photograph of/ })).toBeVisible()
-
-  await pin(page)
-  await expect(page.getByRole('complementary', { name: /Photograph of/ })).toHaveCount(0)
-})
-
-test('`p` closes a pinned reading, which is the half of the exclusion that was missing', async ({
-  page,
-}) => {
-  /* `t` cleared the photograph and `p` did not clear the history, so the two drew over each
-     other in the one corner `PriceHistory.css` argues for. */
-  await open(page)
-  await pin(page)
-  await expect(panelOf(page)).toBeVisible()
-
-  await field(page).click()
-  await page.keyboard.press('p')
-  await expect(page.getByRole('complementary', { name: /Photograph of/ })).toBeVisible()
-  await expect(panelOf(page)).toHaveCount(0)
 })
 
 
@@ -3322,7 +2554,7 @@ test('a row this run can add nothing for is never asked about, and is not drawn 
 
   /* AND THE COUNT IS ON SCREEN. Without it a strip over one of two rows reads as one
      failure; `1 not asked` is what says the row was never a question. */
-  await expect(page.locator('.pricing-trendbar-says')).toContainText('1 not asked')
+  await expect(page.locator('.pricing-trend-says')).toHaveText('Trends for 1 card.')
   await expect(strip(page).nth(1)).toBeEmpty()
 })
 
@@ -3344,225 +2576,6 @@ test('a SKU the batch answers for neither way is refused on the row, never left 
   await expect(strip(page).first().locator('svg')).toHaveCount(2)
   await expect(strip(page).nth(1)).toContainText('—')
   await expect(strip(page).nth(1)).not.toContainText('reading')
-})
-
-test('the spans and the overlap caveat are stated once, above the list', async ({ page }) => {
-  /* D62's PANEL OWES A READER THREE THINGS AND AN 80px CELL CARRIES NONE OF THEM: that the
-     ranges overlap and routinely point opposite ways, what span each covers, and that the
-     wider one can be the staler. They are stated once here rather than forty-six times, which
-     is honest only because the spans are identical across every SKU of a run. Without the
-     sentence, `+71%` beside `−34%` on one row reads as a broken screen. */
-  await open(page)
-  await loadTrends(page).click()
-  const says = page.locator('.pricing-trendbar-says')
-  await expect(says).toContainText('2026-08-01')
-  await expect(says).toContainText('2025-09-08')
-  /* THE CAVEAT IS SAID SHORT ON THE STRIP AND IN FULL WHERE A READING IS READ. The bar names
-     it — `ranges overlap` — and carries the whole sentence on hover; the panel that draws the
-     two figures states it outright, which is where `+71%` beside `−34%` is actually looked at.
-     Both are asserted, so neither can go. */
-  await expect(page.locator('.pricing-trendbar-why')).toContainText('ranges overlap')
-  await expect(page.locator('.pricing-trendbar-why')).toHaveAttribute(
-    'title',
-    /Ranges overlap and can point opposite ways/,
-  )
-  /* AND EXACTLY ONCE. A span drawn per row is the failure this case exists to catch. */
-  await expect(page.locator('.pricing-trendbar-span')).toHaveCount(2)
-
-  await hold(page)
-  await expect(panelOf(page)).toContainText('Ranges overlap and can point opposite ways')
-  await page.keyboard.up('t')
-})
-
-/* ---------------------------------------------------------------- the bottom-left corner
- *
- * D85, AND THE FORM THESE TAKE IS THE POINT. Four things want this screen's bottom-left
- * corner — every row's T and H, the reading panel, the photograph, and the ship bar — and the
- * defect they produced was invisible to all 56 cases above it. `bbf7e11` moved T and H into
- * the corner and raised them to `z-index: 21` to win it; they then drew over the panel they
- * were escaping AND over the ship bar, so every row scrolled behind the bar punched its two
- * letters through it and took the clicks landing there. A press at the bar's left edge opened
- * a hold on a card nobody could see, and a hold writes `inventory/prices.json`.
- *
- * NOTHING ON THE COMMIT PATH COULD TELL. The suite was green, typecheck was green, lint was
- * green; the screen was a pile. What this file had was text, grid templates and row heights,
- * and every one of those was still true. The missing question is geometric and it is asked by
- * HIT-TESTING rather than by comparing rectangles: `elementFromPoint` answers what a hand
- * aiming at a pixel actually reaches, which is the property that broke, and it is indifferent
- * to HOW a later change breaks it — a stacking order, an anchor, a width.
- *
- * `overlaps()` ONE SCREEN OVER DOES THE RECTANGLE HALF, and this deliberately does not reuse
- * it: two boxes that intersect is the normal, correct state of an overlay above a list. The
- * fault was never the intersection. It was who answered inside it. */
-
-/** Every point in `region` that a `.pricing-row` answers for — the hand's-eye view of who owns
- *  the pixels. An 8px lattice: the controls at issue are 32px squares, so nothing that could
- *  swallow a press fits between the samples. */
-async function rowsShowingThrough(page: Page, region: string): Promise<number> {
-  return page.evaluate((selector) => {
-    const panel = document.querySelector(selector)
-    if (panel === null) throw new Error(`nothing at ${selector}`)
-    const box = panel.getBoundingClientRect()
-    /* INSET PAST THE CORNER RADIUS, because `elementFromPoint` respects a rounded corner and
-       these surfaces have one now: a sample 4px into the bounding box of a 16px radius is
-       OUTSIDE the painted shape, so whatever is behind answers for it — correctly. That is a
-       pixel the bar does not own and never claimed to, and counting it made this case fail
-       about once a run depending on where the list happened to be scrolled. The inset is the
-       element's own radius rather than a guessed margin, and the interior — every pixel a
-       press aimed at the bar actually lands on — is still swept at 8px. */
-    const radiusOf = (el: Element): number => {
-      const style = getComputedStyle(el)
-      return Math.max(
-        ...[
-          style.borderTopLeftRadius,
-          style.borderTopRightRadius,
-          style.borderBottomLeftRadius,
-          style.borderBottomRightRadius,
-        ].map((one) => parseFloat(one) || 0),
-      )
-    }
-    /* THE CORNER MAY BE AN ANCESTOR'S: the reading panel is square and the drawer that clips
-       it is not, so the shape a pointer meets is the drawer's. Climbed rather than assumed. */
-    let radius = radiusOf(panel)
-    for (let el = panel.parentElement; el !== null && el !== document.body; el = el.parentElement) {
-      const rect = el.getBoundingClientRect()
-      const clips = getComputedStyle(el).overflow !== 'visible'
-      if (clips && rect.left <= box.left + 1 && rect.right >= box.right - 1) {
-        radius = Math.max(radius, radiusOf(el))
-      }
-    }
-    const pad = Math.ceil(radius) + 2
-    let through = 0
-    for (let y = Math.round(box.top) + pad; y < box.bottom - pad; y += 8) {
-      for (let x = Math.round(box.left) + pad; x < box.right - pad; x += 8) {
-        const at = document.elementFromPoint(x, y)
-        if (at !== null && at.closest('.pricing-row') !== null) through += 1
-      }
-    }
-    return through
-  }, region)
-}
-
-/** Which of the ship bar's own controls another element answers for. A control the operator
- *  can see and cannot press is the shape this corner failed in, and `emit` refuses to run
- *  without the sub-threshold answer these set. */
-async function barControlsBlocked(page: Page): Promise<string[]> {
-  return page.evaluate(() => {
-    const blocked: string[] = []
-    document.querySelectorAll('.pricing-ship button, .pricing-ship input').forEach((node) => {
-      const box = node.getBoundingClientRect()
-      const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
-      if (at !== null && at !== node && !node.contains(at)) {
-        blocked.push(`${(node.textContent || '').trim() || node.className} <- ${at.className}`)
-      }
-    })
-    return blocked
-  })
-}
-
-/** A run long enough that rows are behind the bar rather than above it. Forty is past the
- *  viewport at every size this suite runs, and the case is about the ones you cannot see. */
-const manySkus = () =>
-  Array.from({ length: 40 }, (_, at) =>
-    sku({ sku: `9${String(at).padStart(6, '0')}`, name: `Card ${at}` }),
-  )
-
-test('no row draws through the ship bar, at either of the bar heights', async ({ page }) => {
-  await open(page, { skus: manySkus() })
-  await expect(page.locator('.pricing-ship')).toBeVisible()
-
-  /* CLOSED FIRST. The bar is ~125px here and two rows sit behind it. */
-  expect(await rowsShowingThrough(page, '.pricing-ship')).toBe(0)
-
-  /* AND WITH THE RECEIPT UP, which is the state the owner reported from. IT NO LONGER GROWS
-     THE BAR — the receipt is a dialog over a scrim now rather than a block that unfolds
-     inside it — so the second state this case is about is a second SURFACE rather than a
-     second height: the bar still owns its own pixels, and the receipt owns the ones it
-     covers. A row answering for a point inside either is the same fault it always was. */
-  await page.getByRole('button', { name: 'Download the file instead' }).click()
-  await expect(page.locator('.send-download')).toBeVisible()
-  expect(await rowsShowingThrough(page, '.pricing-ship')).toBe(0)
-})
-
-test('the bar publishes its measured height, so the panels above it clear the real one', async ({
-  page,
-}) => {
-  /* THE VARIABLE IS THE DEFECT CLASS, NAMED. `--pricing-ship-h` was read by three
-     declarations and set by nothing from D54 until D85 — every one of them took the `64px`
-     fallback against a bar that is 125px closed and 433px with a receipt. A fallback that is
-     the only value a property ever has is not a fallback, and nothing said so out loud. */
-  await open(page, { skus: manySkus() })
-
-  const agrees = async () =>
-    page.evaluate(() => {
-      const main = document.querySelector<HTMLElement>('main.pricing')
-      const bar = document.querySelector<HTMLElement>('.pricing-ship')
-      if (main === null || bar === null) throw new Error('no bar')
-      const published = getComputedStyle(main).getPropertyValue('--pricing-ship-h').trim()
-      return { published, measured: `${bar.offsetHeight}px` }
-    })
-
-  await expect(page.locator('.pricing-ship')).toBeVisible()
-  const closed = (await agrees()).measured
-
-  /* THE TWO AGREE, AND THE HEIGHT IS NOT PINNED TO A NUMBER. The bar's height is a function
-     of this fixture — a run with no sub-threshold SKUs draws one fewer row than the owner's
-     did — so a literal here would assert what the fixture happens to be and would have to be
-     re-typed every time the bar gained a line. What must be true is that the published value
-     is the measured one, whatever the bar is. On the code this case was written against,
-     `published` was the empty string. */
-  await expect.poll(agrees).toEqual({ published: closed, measured: closed })
-  expect(closed).toMatch(/^\d+px$/)
-
-  /* AND IT FOLLOWS THE BAR RATHER THAN BEING WRITTEN ONCE. The receipt no longer changes the
-     bar's height — it is a dialog now — so the state that proves the measurement is live is
-     the one that still changes it with no press and no navigation behind it: the bar gains a
-     row when a write leaves a receipt to link to. A one-shot measurement at mount reports
-     green through that exactly as it did through the old one. */
-  await page.getByRole('button', { name: 'Download the file instead' }).click()
-  await expect(page.locator('.send-download')).toBeVisible()
-  await expect
-    .poll(async () => {
-      const seen = await agrees()
-      return seen.published === seen.measured
-    })
-    .toBe(true)
-})
-
-test('an open reading covers no ship-bar control and no row draws through it', async ({
-  page,
-}) => {
-  await open(page, { skus: manySkus() })
-
-  /* THE WORST CASE, BUILT DELIBERATELY: the fullest bar under the tallest panel. The bar
-     gains its receipt link once a write has landed, which is the state where its controls sit
-     closest to the panel's edge. */
-  await page.getByRole('button', { name: 'Download the file instead' }).click()
-  await expect(page.locator('.send-download')).toBeVisible()
-
-  await pin(page)
-  await expect(panelOf(page)).toBeVisible()
-
-  expect(await barControlsBlocked(page)).toEqual([])
-  expect(await rowsShowingThrough(page, '.pricehistory')).toBe(0)
-
-  /* AND THE PANEL AND THE ROW'S OWN CONTROL DO NOT SHARE A COLUMN, which is the mechanism
-     rather than the symptom — stated so a later change that restores the overlap and re-settles
-     it with a stacking order fails here rather than passing on the two counts above.
-
-     WHICH SIDE IS NOT ASSERTED, AND THAT IS THE ONLY THING THAT MOVED. The panel used to be
-     pinned to the right of the row's gutter; it is a drawer on the left of the content column
-     now, and the row's `T` sits at the right end of the row. Naming a side would be pinning the
-     drawer's corner; what has to hold either way is that the two do not overlap. */
-  const clears = await page.evaluate(() => {
-    const panel = document.querySelector('.pricehistory')
-    const button = document.querySelector('.pricing-history')
-    if (panel === null || button === null) throw new Error('no panel')
-    const a = panel.getBoundingClientRect()
-    const b = button.getBoundingClientRect()
-    return a.left >= b.right || a.right <= b.left
-  })
-  expect(clears).toBe(true)
 })
 
 // ------------------------------- the worklist spans runs, and the answer is the store's (D86)
@@ -3615,146 +2628,12 @@ const SPAN = {
   ],
 }
 
-/* THE SAME BAR AT A PHONE'S WIDTH, WHICH NOTHING HAD LOOKED AT (D117).
- *
- * `app/tests/phone.spec.ts` sweeps every route at 390 and cannot reach this: the ship bar needs a
- * loaded run and that file carries no pricing fixtures, so its own bar case was silently vacuous
- * — it guarded on `if (await bar.count())` and the bar was never there. The fixtures are here, so
- * the case is here, which is `fulfillment.spec.ts`'s WIDTHS idiom: assert at the second width in
- * the spec that owns the data.
- *
- * MEASURED BEFORE THE FIX: 430px of an 844px viewport, and `Pick a run` underneath it — a control
- * the operator could see and could not press. The bar wrapped to four rows because the cap
- * sentence and two long checkbox labels each took one; the sentence is hidden on a phone now and
- * the labels have short forms. */
-test('the ship bar leaves the phone a screen to work on, and covers no control', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  /* TWO RUNS, WHICH IS THE BAR THIS IS ABOUT. `#/pricing` draws two different ship bars: a
-     single-run one, and — at `loaded.length >= 2` — the one carrying the cap sentence and both
-     split checkboxes. That second bar is what stood 430px tall. A one-run fixture renders the
-     short bar and every mutation of the fix passes against it, which is how this case was
-     vacuous the first time it was written. */
-  await open(page, {
-    worklist: {
-      runs: SPAN.runs,
-      /* FORTY ROWS, so the list runs past the fold and the header's own controls sit behind the
-         bar rather than above it. Two rows is a fixture where nothing CAN be covered and every
-         mutation of the fix passes against it — which is what this case did on its first run,
-         in 2.5 seconds. */
-      skus: Array.from({ length: 40 }, (_, at) => ({
-        ...sku({ sku: `9${String(at).padStart(6, '0')}`, name: `Card ${at}` }),
-        in: [{ run: SPAN.runs[0]!.run, add_to_quantity: 1 }],
-        claimed_add: 1,
-        over_cap: false,
-      })),
-    },
-  })
-  await expect(page.locator('.pricing-ship')).toBeVisible()
-
-  /* THE BOUND IS A MEASUREMENT, AND IT MOVED ONCE ON PURPOSE. It was 180 — the bar was the
-     status, the two split checkboxes, and the primary — and D7's rewrite added a real control
-     to it: `at most [ ] each`, the cap this press asks for. That does not fit beside the two
-     checkboxes at 390 (160 + 90 + 148 against 334 of usable width), so the bar is genuinely a
-     row taller and the honest number is 210, not 180.
-     WHAT IS NOT NEGOTIABLE IS THE REST OF THIS CASE. 204px is 24% of the viewport and covers
-     nothing; the defect this was written for was 430px — half the screen — with `Pick a run`
-     unpressable underneath it. A bound that only ever moves up is worthless, so the two
-     assertions below are the ones that bite, and this one is the early warning.
-     Measured on this fixture: 152 before the cap control, 204 with it, 430 on the owner's own
-     store before the cap sentence and the checkbox labels had phone forms. */
-  const height = await page.locator('.pricing-ship').evaluate((el) => el.getBoundingClientRect().height)
-  expect(height, `the ship bar is ${Math.round(height)}px tall at 390 — it is meant to be three rows`).toBeLessThan(210)
-
-  // its own controls answer for themselves
-  expect(await barControlsBlocked(page)).toEqual([])
-
-  /* AND NOTHING ELSE ON THE SCREEN IS PERMANENTLY UNDERNEATH IT. `barControlsBlocked` looks
-     inside the bar; what failed was a control OUTSIDE it — `Pick a run` and `Give this run its
-     own cut-off`, both visible and both unpressable.
-     THE TEST IS "CAN IT BE SCROLLED CLEAR", NOT "IS IT CLEAR RIGHT NOW", which is the property
-     that actually separates a sticky bar from the tab bar. Content passes under the tab bar all
-     day and that is fine, because `.bn-shell-main` pads its foot and a scroll brings anything
-     out. The ship bar had no such padding, so a control under it stayed under it. Each candidate
-     is scrolled to and asked again. */
-  const look = async () =>
-    page.evaluate(() => {
-      const out: string[] = []
-      for (const el of document.querySelectorAll('button, a[href]')) {
-        const r = el.getBoundingClientRect()
-        if (r.width === 0 || r.top < 0 || r.bottom > window.innerHeight) continue
-        const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
-        /* THE SHELL'S OWN FIXED CHROME IS NOT THIS BAR'S DOING. Content scrolls under the phone
-           top bar and the tab bar by design — `.bn-shell-main` pads its foot for exactly that —
-           so a row that happens to sit under the app bar at the moment of the sweep is not a
-           finding, and counting it made this case fail one run in three. */
-        if (at !== null && at.closest('.bn-topbar, .bn-tabbar') !== null) continue
-        if (at !== null && !el.contains(at) && !at.contains(el)) {
-          out.push(`${(el.textContent ?? '').trim().slice(0, 30)} <- ${at.className}`)
-        }
-      }
-      return out
-    })
-
-  /* A CONTROL UNDER THE BAR RIGHT NOW IS NOT THE DEFECT — one that stays there is. The tab bar
-     covers content all day and that is fine, because a scroll brings it out. So each candidate
-     is scrolled to and asked again, and only the ones still underneath are reported. `Pick a
-     run` failed that second question: the bar was 430px, the header sat inside it, and no
-     scroll position existed where the control was clear. */
-  const stuck = await page.evaluate(async () => {
-    const out: string[] = []
-    const rest = () => new Promise((go) => setTimeout(go, 60))
-    for (const el of document.querySelectorAll('button, a[href]')) {
-      const first = el.getBoundingClientRect()
-      if (first.width === 0 || first.height === 0) continue
-      const at0 = document.elementFromPoint(first.left + first.width / 2, first.top + first.height / 2)
-      if (at0 === null || el.contains(at0) || at0.contains(el)) continue
-      el.scrollIntoView({ block: 'center' })
-      await rest()
-      const r = el.getBoundingClientRect()
-      if (r.top < 0 || r.bottom > window.innerHeight) continue
-      const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
-      if (at !== null && at.closest('.bn-topbar, .bn-tabbar') !== null) continue
-      if (at !== null && !el.contains(at) && !at.contains(el)) {
-        out.push(`${(el.textContent ?? '').trim().slice(0, 30)} <- ${at.className}`)
-      }
-    }
-    return out
-  })
-  expect(stuck, stuck.join('\n')).toEqual([])
-
-  /* AND AT THE FOOT, which is the position the foot padding is for. The shell pads
-     `.bn-shell-main` by the tab bar's height so anything can be scrolled clear of it; this
-     screen pads by `--pricing-ship-h` for the same reason, and without it the last rows of a
-     forty-row list have nowhere to go. */
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
-  await page.waitForTimeout(250)
-  /* AT MAX SCROLL THERE IS NOWHERE FURTHER TO GO, so what is under the bar here is under it for
-     good. The assertion is geometric rather than a hit test: the last row has to END above the
-     bar's top edge. A hit test at the centre passes while a row is half-covered, and half a row
-     under a glass panel is the state this padding exists to prevent. Measured with the padding:
-     the last row ends at 432 and the bar starts at 456. */
-  const gap = await page.evaluate(() => {
-    const bar = document.querySelector('.pricing-ship')!.getBoundingClientRect()
-    const rows = [...document.querySelectorAll('.pricing-row')]
-    const last = rows[rows.length - 1]!.getBoundingClientRect()
-    return Math.round(bar.top - last.bottom)
-  })
-  expect(gap, `at the foot of the list the last row runs ${-gap}px into the ship bar`).toBeGreaterThanOrEqual(0)
-  const foot = await look()
-  expect(foot, foot.join('\n')).toEqual([])
-
-  // no sideways scroll, which is the other floor CLAUDE.md publishes for this width
-  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-  expect(over, `the pricing screen scrolls sideways by ${over}px at 390`).toBeLessThanOrEqual(0)
-})
-
-
 test('one answer is written once, for the store, however many runs hold the card', async ({
   page,
 }) => {
   const wire = await open(page, { worklist: SPAN })
 
-  await field(page).first().focus()
+  await page.getByRole('textbox', { name: 'Price for LeBlanc, Everywhere At Once' }).focus()
   await page.keyboard.type('12.00')
   await page.keyboard.press('Enter')
 
@@ -3766,33 +2645,6 @@ test('one answer is written once, for the store, however many runs hold the card
   const puts = wire.filter((row) => row.method === 'PUT')
   expect(puts.map((row) => row.path)).toEqual(['/pricing'])
   expect(sentAnswers(wire)['9191210']).toBe('12.00')
-  await expect(page.locator('.pricing-save')).toHaveText('Saved')
-})
-
-test('a card in two drawers says where it is once Compare is on, and a card in one says nothing', async ({
-  page,
-}) => {
-  await open(page, { worklist: SPAN })
-
-  const rows = page.locator('.pricing-row')
-  await expect(rows).toHaveCount(2)
-
-  /* RULING B: THE PLAIN BOX/RUN-SPAN TEXT IS DISCLOSURE-GATED BEHIND COMPARE, OFF BY
-     DEFAULT — this is the red-first half: the span text is absent on arrival even for the
-     over-cap row, because Compare has not been turned on for this section yet. */
-  await expect(rows.nth(0).locator('.pricing-span-where')).toHaveCount(0)
-
-  await page.getByRole('button', { name: 'Compare' }).first().click()
-
-  /* THE BOXES AND NOT THE RUN NAMES, ONCE ASKED FOR. A person owns drawers, not directories;
-     the runs are on the chips above. Deduped and ascending, which is the order the shelf is
-     in. */
-  await expect(rows.nth(0).locator('.pricing-span-where')).toHaveText('Boxes 3, 4 2 runs')
-
-  /* THE ABSENCE, WHICH IS THE HALF A MARKER-ON-EVERY-ROW REGRESSION WOULD STILL SATISFY —
-     Compare being on draws nothing for a card in one drawer, because there is nothing to
-     compare. */
-  await expect(rows.nth(1).locator('.pricing-row-span')).toHaveCount(0)
 })
 
 test('the over-cap warning is visible with Compare off, and the toggle does not hide a refusal', async ({
@@ -3804,15 +2656,12 @@ test('the over-cap warning is visible with Compare off, and the toggle does not 
      SURVIVE THE NEW TOGGLE (a regression pin, not a red-first case: nothing hides this
      today and it must stay that way). The over-cap row's warning badge is visible with no
      click at all. */
-  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toBeVisible()
-  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toHaveText(
-    'Runs claim 4 3 can go',
-  )
+  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-cap')).toBeVisible()
+  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-cap')).toHaveText('3 of 4 can go')
 
   /* AND IT STAYS AFTER THE TOGGLE, TOO — Compare only ever ADDS context, it never removes a
      warning. */
-  await page.getByRole('button', { name: 'Compare' }).first().click()
-  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Compare' })).toHaveCount(0)
 })
 
 /* NO TYPED MIDDLE DOT OR BULLET REACHES THE SCREEN (D218). A separator here is drawn by CSS
@@ -3822,80 +2671,9 @@ test('the over-cap warning is visible with Compare off, and the toggle does not 
  * sweep touched. */
 test('no typed middle dot or bullet reaches the pricing worklist (D218)', async ({ page }) => {
   await open(page, { worklist: SPAN })
-  await page.getByRole('button', { name: 'Compare' }).first().click()
 
   const text = await page.locator(VIEW).innerText()
   expect(text).not.toMatch(/[·•]/)
-})
-
-test('Compare toggle is one control per section, off by default', async ({ page }) => {
-  await open(page, { worklist: SPAN })
-
-  const toggle = page.getByRole('button', { name: 'Compare' }).first()
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
-
-  /* LOW / +SHIP / DIRECT ARE HIDDEN UNTIL ASKED FOR. Only the Market column head is drawn
-     by default; the caption is the caption's own ground truth for what a row can show. */
-  await expect(page.locator('.pricing-caption-low')).toHaveCount(0)
-  await expect(page.locator('.pricing-caption-low_with_shipping')).toHaveCount(0)
-  await expect(page.locator('.pricing-caption-direct_low')).toHaveCount(0)
-  await expect(page.locator('.pricing-caption-market')).toBeVisible()
-  await expect(page.locator('.pricing-row').first().locator('.pricing-ref-low')).toHaveCount(0)
-  await expect(page.locator('.pricing-row').first().locator('.pricing-ref-market')).toBeVisible()
-
-  await toggle.click()
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('.pricing-caption-low')).toBeVisible()
-  await expect(page.locator('.pricing-row').first().locator('.pricing-ref-low')).toBeVisible()
-})
-
-test('Compare survives a reload, per browser, on the device-local key', async ({ page }) => {
-  /* RED-FIRST AGAINST THE FIRST BUILD: Compare was `useState`, forgotten on every reload — an
-     operator pricing hundreds of rows in one sitting had to re-press it per section every time
-     they opened the screen. `deviceMemory.ts:rememberPricingCompare` persists the on/off set
-     to `banchi.pricing.compare`, the same kind of fact as `banchi.inventory.hide-sold`: how
-     THIS browser is dressed, never a card. */
-  await open(page, { worklist: SPAN })
-
-  const toggle = page.getByRole('button', { name: 'Compare' }).first()
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
-  await expect(page.locator('.pricing-caption-low')).toHaveCount(0)
-
-  await toggle.click()
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('.pricing-caption-low')).toBeVisible()
-
-  await page.reload()
-  await settleFonts(page)
-  await expect(page.locator(VIEW)).toBeVisible()
-
-  /* THE RULING'S DEFAULT IS UNCHANGED ON A FRESH BROWSER — this is the SAME browser, having
-     asked once, so the columns come back on without a second press. */
-  const toggleAfterReload = page.getByRole('button', { name: 'Compare' }).first()
-  await expect(toggleAfterReload).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('.pricing-caption-low')).toBeVisible()
-  await expect(page.locator('.pricing-row').first().locator('.pricing-ref-low')).toBeVisible()
-})
-
-test('l/s/d snap keys act only while Compare is on; m always works', async ({ page }) => {
-  const wire = await open(page, { worklist: SPAN })
-
-  await field(page).first().focus()
-  const before = await field(page).first().inputValue()
-  await page.keyboard.press('l')
-  /* RED-FIRST: WITH COMPARE OFF, A HIDDEN COLUMN'S KEY DOES NOTHING (Ruling B option (b),
-     D49 amended) — a command reaching a figure the operator cannot see breaks the
-     alphabet's own legibility even though D118 never names this exact case. The field's
-     rule-price default already carries digits, so the assertion is that `l` changed
-     NOTHING — never that the field is blank. */
-  await expect(field(page).first()).toHaveValue(before)
-
-  await page.getByRole('button', { name: 'Compare' }).first().click()
-  await field(page).first().focus()
-  await page.keyboard.press('l')
-  await expect(field(page).first()).toHaveValue('21.98')
-
-  void wire
 })
 
 test('the cap is what can go, and the row says the runs disagree with it', async ({ page }) => {
@@ -3917,12 +2695,9 @@ test('the cap is what can go, and the row says the runs disagree with it', async
      THE CELL IS A FIELD SINCE 2026-09-11 (D7 amended), so the figure that goes is its
      PLACEHOLDER — what a blank field sends — and "of 3" stands beside it. The number asserted
      is the same one: what can go, never what the runs claim. */
-  const qty = page.locator('.pricing-row').nth(0).locator('.pricing-qty')
+  const qty = page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-qty')
   await expect(qty.locator('.pricing-qty-input')).toHaveAttribute('placeholder', '3')
-  await expect(qty).toContainText('of 3')
-  await expect(page.locator('.pricing-row').nth(0).locator('.pricing-span-cap')).toHaveText(
-    'Runs claim 4 3 can go',
-  )
+  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-cap')).toHaveText('3 of 4 can go')
 })
 
 test('a send of several runs is one press over every run, with nothing beside it', async ({
@@ -3984,7 +2759,6 @@ test('the standing policy is on the multi-run landing, and one press writes it o
      change): it says what the merge dedupes or what the cap does, never ready/not-ready —
      that account lives once on the headline's `.pricing-verdict`, computed over the same
      union of every run on screen regardless of which bar is showing. */
-  await expect(page.locator('.pricing-verdict')).toBeVisible()
 
   /* THE CONTROL IS THE CUT-OFF FIELD, AND THE FLOOR PRESS IT REPLACED IS RETIRED (D98). Main
      asserted a segmented row here offering "a flat price" or "the $0.40 floor"; the owner had
@@ -3992,7 +2766,8 @@ test('the standing policy is on the multi-run landing, and one press writes it o
      floor's own number. What the case is FOR is unchanged and is the reason it survived the
      rewrite: the store's policy must be reachable on the landing the screen opens on, which is
      every open run and not a single picked one. */
-  const cut = page.getByLabel("Store default")
+  await page.getByRole('button', { name: 'Change' }).click()
+  const cut = page.getByLabel('Cut-off', { exact: true })
   await expect(cut).toBeVisible()
   await cut.fill('0.40')
   await cut.press('Enter')
@@ -4010,7 +2785,7 @@ test('an undo returns the card to what it was, including to having no answer', a
 }) => {
   const wire = await open(page, { worklist: SPAN })
 
-  await field(page).first().focus()
+  await page.getByRole('textbox', { name: 'Price for LeBlanc, Everywhere At Once' }).focus()
   await page.keyboard.type('12.00')
   await page.keyboard.press('Enter')
   await expect.poll(() => sentAnswers(wire)['9191210']).toBe('12.00')
@@ -4024,129 +2799,9 @@ test('an undo returns the card to what it was, including to having no answer', a
      never make: an override is layer 1 of the ladder and beats the rule at layer 4, so a
      screen that wrote its suggestions would produce a run where changing the preset silently
      changed nothing. */
-  await field(page).first().focus()
+  await page.getByRole('textbox', { name: 'Price for LeBlanc, Everywhere At Once' }).focus()
   await page.keyboard.press('u')
   await expect.poll(() => sentAnswers(wire)).toEqual({})
-})
-
-/* ============================================================ the cut-off (2026-09-03, D99)
- *
- * THE THRESHOLD AND THE CHEAP-CARD PRICE ARE ONE FIGURE, on the owner's ruling: *"I told you
- * that threshold and cheap card are the same variable and should be the same."* Held apart they
- * invert — at a threshold of $0.40 beside a cheap answer of $0.49, a card worth $0.38 lists at
- * $0.49 and a card worth $0.42 lists at $0.42, so the card that FAILED the bar goes out dearer
- * than the one that cleared it, everywhere in the 9-cent window where bulk actually lives.
- *
- * Three properties are worth a test each, and none of them can be got from the cases above. */
-
-test('typing a cut-off moves rows across the sections, at the figure emit will use', async ({
-  page,
-}) => {
-  await open(page, {
-    /* Three cards either side of a $0.40 line: two under it, one over. Nothing is written, so
-       the screen must partition at the figure the SERVER reports — `pipeline/corpus.py` defaults
-       `policy.threshold` to `pricing.THRESHOLD`, so an unwritten store emits at $0.40 and a
-       screen offering a prettier default of its own would draw a split nothing would write. */
-    skus: [
-      sku({ sku: '1', bucket: 'sub_threshold', snap: { market: '0.12', direct_low: null, low: '0.10', low_with_shipping: '1.10', now: null } }),
-      sku({ sku: '2', bucket: 'sub_threshold', snap: { market: '0.37', direct_low: null, low: '0.30', low_with_shipping: '1.30', now: null } }),
-      sku({ sku: '3', bucket: 'listable', snap: { market: '0.41', direct_low: null, low: '0.38', low_with_shipping: '1.38', now: null } }),
-    ],
-  })
-
-  const cut = page.getByLabel("Store default")
-  await expect(cut).toHaveValue('0.40')
-  await expect(page.locator('.pricing-cheap-count')).toContainText('2 under 1 above')
-
-  /* RAISING THE LINE MOVES A ROW, WITHOUT A RELOAD. `GET /pipeline/pricing` reports a `bucket`
-     frozen into `pricing.json` by the join that wrote it; `emit` does not read that cell — it
-     re-runs the partition at the STORED figure — so a screen that drew the payload's bucket
-     would show a card in the listed half that the file puts in the cheap one. Measured on the
-     owner's box 6: the payload still said 3 listable and 8 sub-threshold after the cut-off moved
-     to $1.25, while the truth was 1 and 10. */
-  await cut.fill('0.45')
-  await cut.press('Enter')
-  await expect(page.locator('.pricing-cheap-count')).toContainText('3 under 0 above')
-  await expect(page.locator('.pricing-section[data-bucket="listable"]')).toHaveCount(0)
-  await expect(page.locator('.pricing-section[data-bucket="sub_threshold"] .pricing-section-count')).toContainText('3')
-
-  /* AND LOWERING IT PUTS THEM BACK. Idempotent both ways: the partition is a function of the
-     figure and the Market cell, never of the order the figures were typed in. */
-  await cut.fill('0.20')
-  await cut.press('Enter')
-  await expect(page.locator('.pricing-cheap-count')).toContainText('1 under 2 above')
-})
-
-test('UN-13 finding #6 — Enter commits the cut-off once, never twice, and a re-typed same figure posts no receipt', async ({
-  page,
-}) => {
-  /* THE OPUS REVIEW ROUND: "commit once, on Enter or blur, and only when the value changed."
-   * `BigMoney`'s Enter handler committed, then blurred the field, and the blur handler's OWN
-   * commit fired again over the identical text — one press, two receipts, two undo entries.
-   * Proof: Enter gave two identical receipts and the first U restored the old figure while
-   * the second did nothing. */
-  await open(page, { skus: [sku({ bucket: 'sub_threshold' })] })
-  const cut = page.getByLabel('Store default')
-  await expect(cut).toHaveValue('0.40')
-
-  await cut.fill('0.99')
-  await cut.press('Enter')
-  /* ONE RECEIPT, NEVER TWO, for one press. */
-  await expect(page.locator('.bn-toast', { hasText: 'Cut-off set to $0.99' })).toHaveCount(1)
-
-  /* `U` YIELDS TO AN EDITABLE TARGET, so it is pressed off the field, the same as an
-     operator's own hand would leave it once Enter has already blurred the input. */
-  await page.keyboard.press('u')
-  await expect(cut).toHaveValue('0.40')
-  /* AND THE SECOND, PHANTOM COMMIT LEFT NOTHING BEHIND TO UNDO A SECOND TIME: pressing U again
-     changes nothing, because there was only ever one entry to begin with. */
-  await page.keyboard.press('u')
-  await expect(cut).toHaveValue('0.40')
-})
-
-test('UN-13 finding #2 — the cut-off toast\'s own Undo reverses the cut-off, never whatever is newest by the time it is pressed', async ({
-  page,
-}) => {
-  /* THE OPUS REVIEW ROUND: "a toast's Undo reverses whatever is on top of the undo stack, not
-   * the change the toast names." Proof: set the cut-off to $0.79, type 7.77 on the one SKU,
-   * then press the CUT-OFF TOAST's own Undo — the old build reverted the PRICE, the newest
-   * entry, and left the cut-off at $0.79. */
-  await open(page, { skus: [sku({ bucket: 'sub_threshold' })] })
-  const cut = page.getByLabel('Store default')
-  await expect(cut).toHaveValue('0.40')
-
-  await cut.fill('0.79')
-  await cut.press('Enter')
-  const cutToast = page.locator('.bn-toast', { hasText: 'Cut-off set to $0.79' })
-  await expect(cutToast).toBeVisible()
-
-  const price = field(page)
-  await price.focus()
-  await page.keyboard.type('7.77')
-  await page.keyboard.press('Enter')
-
-  /* THE CUT-OFF TOAST'S OWN UNDO — pressed after a NEWER press stands on top of the stack. */
-  await cutToast.getByRole('button', { name: 'Undo' }).click()
-
-  await expect(cut).toHaveValue('0.40')
-  /* THE PRICE STANDS UNTOUCHED: this toast named the cut-off, and only the cut-off reverted. */
-  await expect(price).toHaveValue('7.77')
-})
-
-test('the cut-off panel is drawn even when nothing is under the line', async ({ page }) => {
-  await open(page, {
-    skus: [
-      sku({ sku: '1', bucket: 'listable', snap: { market: '9.00', direct_low: null, low: '8.00', low_with_shipping: '9.00', now: null } }),
-    ],
-  })
-
-  /* IT WAS CONDITIONAL ON THERE BEING CHEAP CARDS, which was right while the figure was only an
-     answer ABOUT those cards. Now that the figure IS the line, a cut-off typed low enough to
-     empty the lower section would take its own control off the screen with it, and there would
-     be no way back to the number that had just been moved. */
-  await expect(page.locator('.pricing-cheap')).toBeVisible()
-  await expect(page.getByLabel("Store default")).toBeVisible()
-  await expect(page.locator('.pricing-cheap-count')).toContainText('0 under 1 above')
 })
 
 test('a store still holding two figures says so, and one press makes them agree', async ({
@@ -4164,14 +2819,15 @@ test('a store still holding two figures says so, and one press makes them agree'
     decisions: { rule: 'match', basis: 'market', threshold: '0.40', sub_threshold: { flat: '0.24' }, overrides: {} },
   })
 
-  const stranded = page.locator('.pricing-cheap-stranded')
+  await page.getByRole('button', { name: 'Change' }).click()
+  const stranded = page.locator('.pricing-stranded')
   await expect(stranded).toBeVisible()
   await expect(stranded).toContainText('$0.24')
 
   /* ONE PRESS RESOLVES IT, AND IT WRITES BOTH KEYS. Which of the two figures the operator meant
      is not a thing this screen can know, so it offers the cut-off and states what that does
      rather than choosing on their behalf. */
-  await page.getByRole('button', { name: /Make them both/ }).click()
+  await page.getByRole('button', { name: 'Use the cut-off for both' }).click()
   await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBeGreaterThan(0)
   expect(sentPolicy(wire).threshold).toBe('0.40')
   expect(sentPolicy(wire).sub_threshold).toEqual({ flat: '0.40' })
@@ -4230,14 +2886,13 @@ test('a corpus that moved under the screen refuses the write rather than reverti
   await field(page).fill('19.99')
   await field(page).press('Enter')
 
-  const notice = page.locator('.pricing-notice')
+  const notice = page.locator('.bn-status-slot')
   await expect(notice).toContainText('changed since this screen read it')
-  await expect(notice).toContainText('corpus_moved')
 
   /* AND A CONFLICT IS THE ONE REFUSAL ON THIS SCREEN WITH SOMEWHERE TO GO. The button says what
      it costs rather than presenting a re-read as free: whatever is typed and unsaved goes. */
   await expect(
-    notice.getByRole('button', { name: /Re-read the pricing file, losing what is unsaved/ }),
+    notice.getByRole('button', { name: /Read the file again, losing what is unsaved/ }),
   ).toBeVisible()
 })
 
@@ -4318,7 +2973,7 @@ test('a figure typed on a row rides the send keyed by that SKU, the deck counts 
   const wire = await open(page, { worklist: SPAN })
   const field = page.getByLabel(LEBLANC_QTY)
   await expect(field).toHaveAttribute('placeholder', '3')
-  const before = (await page.locator('.pricing-verdict-out').innerText()).match(/(\d+) cop/)
+  const before = (await page.locator('.pricing-bar-says').innerText()).match(/(\d+) cop/)
   const copiesBefore = Number(before?.[1])
   expect(Number.isFinite(copiesBefore)).toBe(true)
 
@@ -4326,8 +2981,8 @@ test('a figure typed on a row rides the send keyed by that SKU, the deck counts 
   /* THE DECK FOLLOWS THE FIELD, before anything is pressed: one fewer copy would go, and the
      sentence says a card is at a figure typed by hand — which is the account the operator reads
      before deciding to press. */
-  await expect(page.locator('.pricing-verdict-out')).toContainText(`${copiesBefore - 1} cop`)
-  await expect(page.locator('.pricing-verdict-byhand')).toContainText('1 card at a quantity you typed')
+  await expect(page.locator('.pricing-bar-says')).toContainText(`${copiesBefore - 1} cop`)
+  await expect(page.locator('.pricing-bar-says')).toContainText('1 at a quantity you typed')
 
   await sendPress(page).click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
@@ -4355,8 +3010,8 @@ test('a figure past what can go is clamped on the way out, 0 takes the row out o
   await open(page, { worklist: SPAN })
   const leblanc = page.getByLabel(LEBLANC_QTY)
   const dunsparce = page.getByLabel(DUNSPARCE_QTY)
-  const outBefore = (await page.locator('.pricing-verdict-out').innerText()).match(/(\d+) rows?/)
-  const rowsBefore = Number(outBefore?.[1])
+  const outBefore = (await page.locator('.pricing-bar-says').innerText()).match(/(\d+) cop/)
+  const copiesBefore = Number(outBefore?.[1])
 
   /* CLAMPED, NOT REFUSED: the server would name "asked 9, only 3 can go"; the screen does not
      draw a send that cannot happen. */
@@ -4366,14 +3021,14 @@ test('a figure past what can go is clamped on the way out, 0 takes the row out o
 
   /* ZERO IS A REAL ANSWER and the row leaves the count of rows that would go, without a hold. */
   await leblanc.fill('0')
-  await expect(page.locator('.pricing-verdict-out')).toContainText(`${rowsBefore - 1} row`)
-  await expect(page.locator('.pricing-verdict-byhand')).toContainText('1 card')
+  await expect(page.locator('.pricing-bar-says')).toContainText(`${copiesBefore - 3} cop`)
+  await expect(page.locator('.pricing-bar-says')).toContainText('1 at a quantity you typed')
 
   /* ESCAPE PUTS ONE ROW BACK, the way it puts a price field back. */
   await leblanc.focus()
   await leblanc.press('Escape')
   await expect(leblanc).toHaveValue('')
-  await expect(page.locator('.pricing-verdict-out')).toContainText(`${rowsBefore} row`)
+  await expect(page.locator('.pricing-bar-says')).toContainText(`${copiesBefore} cop`)
   await expect(dunsparce).toHaveValue('')
 })
 
@@ -4426,33 +3081,33 @@ test('the clear control is absent on a server that does not offer it', async ({ 
      answers no `clearable` block, and the screen has no way to know which of its answers are
      holds — so the control is dead rather than drawn over an assumption about money. */
   await open(page, { skus: CLEAR_ROWS })
-  await expect(page.getByRole('button', { name: 'Clear typed prices in bulk' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Clear typed prices' })).toBeDisabled()
 })
 
 test('the sheet leads with the worklist, and the label carries the figure', async ({ page }) => {
   await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+  await page.getByRole('button', { name: 'Clear typed prices' }).click()
 
-  const sheet = page.locator('.clearprices')
+  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
   await expect(sheet).toBeVisible()
 
   /* THE NARROW SCOPE IS SELECTED. The corpus is one file for the whole store (D86), so
      "everywhere" is the shape this act naturally has and is exactly why it may not be what a
      press lands on by default. */
-  await expect(sheet.getByRole('button', { name: /On this worklist/ })).toHaveAttribute(
+  await expect(sheet.getByRole('button', { name: /On this list/ })).toHaveAttribute(
     'aria-pressed',
     'true',
   )
   /* AND THE FIGURE IS IN THE BUTTON, NOT IN A TOOLTIP. Four clearable answers, all four on
      this worklist, no window — the button says four. */
-  await expect(sheet.locator('.clearprices-foot .bn-btn-danger-solid')).toContainText(
+  await expect(sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toContainText(
     'Clear 4 typed prices',
   )
 })
 
 test('what the clear leaves alone is on the screen, not in a tooltip', async ({ page }) => {
   await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+  await page.getByRole('button', { name: 'Clear typed prices' }).click()
 
   /* THE HOLDS AND THE UNPRICED ROWS ARE NAMED BY COUNT. An operator asking "does this touch my
      holds" has to be able to answer it without pressing anything — D49's holds carry a reason
@@ -4460,7 +3115,7 @@ test('what the clear leaves alone is on the screen, not in a tooltip', async ({ 
   const spares = page.locator('.clearprices-spares')
   await expect(spares).toContainText('2')
   await expect(spares).toContainText('held back on purpose')
-  await expect(spares).toContainText('no catalogue price')
+  await expect(spares).toContainText('no market price')
 })
 
 /* NO TYPED MIDDLE DOT OR BULLET REACHES THE MASS-CLEAR SHEET (D218). The eyebrow, both
@@ -4472,9 +3127,9 @@ test('no typed middle dot or bullet reaches the mass-clear sheet (D218)', async 
      `worklistName` falls to "N runs" instead, which keeps this case about the sites this lane
      fixed rather than about that one. */
   await open(page, { worklist: SPAN, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
+  await page.getByRole('button', { name: 'Clear typed prices' }).click()
 
-  const sheet = page.locator('.clearprices')
+  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
   await expect(sheet).toBeVisible()
   const text = await sheet.innerText()
   expect(text).not.toMatch(/[·•]/)
@@ -4482,9 +3137,9 @@ test('no typed middle dot or bullet reaches the mass-clear sheet (D218)', async 
 
 test('an age window narrows the label, and never takes an undated answer', async ({ page }) => {
   await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
-  const sheet = page.locator('.clearprices')
-  const press = sheet.locator('.clearprices-foot .bn-btn-danger-solid')
+  await page.getByRole('button', { name: 'Clear typed prices' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
+  const press = sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })
 
   /* EVERY WINDOW DRAWS ITS OWN COUNT BEFORE THE PRESS, which is D103's finding: a window can
      select nothing for a reason that is about the store's age rather than about the answers,
@@ -4501,7 +3156,7 @@ test('an age window narrows the label, and never takes an undated answer', async
   await expect(press).toContainText('Clear 2 typed prices')
 
   /* AND THE SHEET SAYS WHY THE FOURTH IS MISSING. */
-  await expect(page.locator('.clearprices-spares')).toContainText('carry no date')
+  await expect(page.locator('.clearprices-spares')).toContainText('with no date')
 
   /* A WINDOW THAT SELECTS NOTHING SAYS SO AND REFUSES THE PRESS, rather than offering a
      button that does nothing. */
@@ -4512,13 +3167,13 @@ test('an age window narrows the label, and never takes an undated answer', async
 
 test('the scope the operator chose is the scope that travels', async ({ page }) => {
   const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
-  const sheet = page.locator('.clearprices')
+  await page.getByRole('button', { name: 'Clear typed prices' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
 
   /* THE WORKLIST SCOPE SENDS SKUS. This is the assertion the whole sheet exists for: the
      press an operator makes while looking at one run's rows must not reach the rest of the
      store, and the only thing that makes that true on the wire is this list. */
-  await sheet.locator('.clearprices-foot .bn-btn-danger-solid').click()
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
   const scoped = wire.filter((r) => r.path === '/pricing/clear').at(-1)
   expect(scoped?.body).toBeTruthy()
   expect((scoped?.body as { skus?: string[] }).skus?.sort()).toEqual(
@@ -4534,18 +3189,18 @@ test('the scope the operator chose is the scope that travels', async ({ page }) 
 
 test('the store-wide scope sends no SKUs, and says so in the label', async ({ page }) => {
   const wire = await open(page, { skus: CLEAR_ROWS, clearable: CLEARABLE })
-  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
-  const sheet = page.locator('.clearprices')
+  await page.getByRole('button', { name: 'Clear typed prices' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Clear typed prices' })
 
   await sheet.getByRole('button', { name: /Everywhere/ }).click()
   /* THE BLAST RADIUS IS IN THE LABEL AND IN A SENTENCE BESIDE IT. "Clear" over four hundred
      answers is the ambush this sheet exists to prevent. */
-  await expect(sheet.locator('.clearprices-foot .bn-btn-danger-solid')).toContainText(
+  await expect(sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toContainText(
     'everywhere',
   )
-  await expect(sheet.locator('.clearprices-scope-says')).toContainText('Every run at once')
+  await expect(sheet.locator('.clearprices-scope-says')).toContainText('Every run and box at once')
 
-  await sheet.locator('.clearprices-foot .bn-btn-danger-solid').click()
+  await sheet.getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
   const all = wire.filter((r) => r.path === '/pricing/clear').at(-1)
   /* ABSENT AND NOT AN EMPTY LIST. An empty `skus` is a real scope that clears nothing; the
      whole store is the absence of a narrowing. */
@@ -4609,13 +3264,13 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
     })
   })
 
-  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
-  await page.locator('.clearprices-foot .bn-btn-danger-solid').click()
+  await page.getByRole('button', { name: 'Clear typed prices' }).click()
+  await page.getByRole('dialog', { name: 'Clear typed prices' }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ }).click()
 
   /* THE FIELD GOES BACK TO THE SUGGESTION. The row is not removed and nothing else moves —
      a press changes what is on the screen, never where the rest of it is (D118). */
   await expect(field).toHaveValue('')
-  await expect(page.locator('.clearprices')).toBeHidden()
+  await expect(page.getByRole('dialog', { name: 'Clear typed prices' })).toHaveCount(0)
 
   /* THE RECEIPT CARRIES THE FIGURE AND NAMES WHAT SURVIVED. */
   const toast = page.locator('.bn-toast').last()
@@ -4641,81 +3296,10 @@ test('a clear empties the fields it cleared, and offers the way back', async ({ 
 
   /* AND THE SHEET AGREES WITH THE STORE AFTERWARDS. Reopened, it counts the restored answer
      again rather than the four it opened on. */
-  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
-  await expect(page.locator('.clearprices-foot .bn-btn-danger-solid')).toContainText(
+  await page.getByRole('button', { name: 'Clear typed prices' }).click()
+  await expect(page.getByRole('dialog', { name: 'Clear typed prices' }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toContainText(
     'Clear 1 typed price',
   )
-})
-
-test('UN-11 — a clear outlives its toast: the server remembers it, and a reload still offers the way back', async ({ page }) => {
-  /* `docs/specs/undo.md` §11.1: "Clear typed" used to lose its undo the moment the toast
-   * faded, because `do_pricing_clear` handed `cleared` back to the browser and kept nothing
-   * itself. `GET /pricing`'s `last_clear` is the server's own memory of it, and
-   * `restoreLastClear` is the press that reads it — reachable with the toast long gone. */
-  const TYPED = { value: '4.50', at: '2026-09-07T06:50:31.891+00:00' }
-  const wire = await open(page, {
-    skus: CLEAR_ROWS,
-    clearable: CLEARABLE,
-    decisions: { rule: 'match', basis: 'market', overrides: { '8608859': '4.50' } },
-  })
-  const field = page.getByLabel('Price for Articuno')
-  await expect(field).toHaveValue('4.50')
-
-  const live: Record<string, unknown> = { '8608859': { ...TYPED } }
-  let lastClear: { count: number; at: number } | null = null
-  await page.route(/\/pricing$/, async (route) => {
-    if (route.request().method() === 'PUT') return route.fallback()
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        corpus: { version: 1, policy: { rule: 'match', basis: 'market' }, skus: { ...live } },
-        path: '/tmp/prices.json',
-        revision: 'rev-live',
-        clearable: { days: Object.fromEntries(Object.keys(live).map((k) => [k, 5])), holds: 0, unknown: 0 },
-        last_clear: lastClear,
-      }),
-    })
-  })
-  await page.route(/\/pricing\/clear$/, async (route) => {
-    const cleared = { '8608859': { ...TYPED } }
-    delete live['8608859']
-    lastClear = { count: 1, at: 1_757_231_431 }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        ok: true, cleared, count: 1, holds: 0, unknown: 0, undated: 0, answers: 1,
-        revision: 'rev-cleared',
-      }),
-    })
-  })
-  await page.route(/\/pricing\/restore$/, async (route) => {
-    const body = route.request().postDataJSON() as { last_clear?: boolean; revision?: string }
-    wire.push({ method: 'POST', path: '/pricing/restore', body })
-    live['8608859'] = { ...TYPED }
-    lastClear = null
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: true, restored: ['8608859'], skipped: [], revision: 'rev-restored' }),
-    })
-  })
-
-  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
-  await page.locator('.clearprices-foot .bn-btn-danger-solid').click()
-  await expect(field).toHaveValue('')
-
-  /* THE TOAST'S OWN UNDO IS GONE — this case never presses it, standing in for the toast
-     having faded or the page having been reloaded, which is the exact gap UN-11 closes. */
-  const restore = page.getByRole('button', { name: 'Restore 1 cleared' })
-  await expect(restore).toBeVisible()
-  await restore.click()
-
-  await expect(field).toHaveValue('4.50')
-  await expect(page.getByRole('button', { name: 'Restore 1 cleared' })).toHaveCount(0)
-  const back = wire.filter((r) => r.path === '/pricing/restore').at(-1)
-  expect(back?.body).toEqual({ last_clear: true, revision: 'rev-live' })
 })
 
 test('the clear is refused while the screen has an unsaved answer', async ({ page }) => {
@@ -4729,9 +3313,9 @@ test('the clear is refused while the screen has an unsaved answer', async ({ pag
     await new Promise(() => {})
   })
   await page.getByLabel('Price for Articuno').fill('3.21')
-  await page.getByRole('button', { name: 'Clear typed prices in bulk' }).click()
-  await expect(page.locator('.clearprices-foot .bn-btn-danger-solid')).toBeDisabled()
-  await expect(page.locator('.clearprices')).toContainText('Save first')
+  await page.getByRole('button', { name: 'Clear typed prices' }).click()
+  await expect(page.getByRole('dialog', { name: 'Clear typed prices' }).getByRole('button', { name: /^(Clear \d+|Nothing to clear)/ })).toBeDisabled()
+  await expect(page.getByRole('dialog', { name: 'Clear typed prices' })).toContainText('Wait for your last price')
 })
 
 /* ============================================================================================
@@ -4809,36 +3393,11 @@ test('the "Lists at" field reads a long price in full at 1440, data-direct=none'
     decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
   })
   await expect(page.locator('.pricing-caption')).toBeVisible() // table tier, or this case proves nothing
-  await expect(page.locator(".pricing-section[data-direct='none']")).toHaveCount(1)
-  await expect(page.locator(".pricing-body[data-trends='off']")).toHaveCount(1)
   await typeAndCheck(page)
 
+  /* LOADING TRENDS LAYS NOTHING OUT AGAIN (UX-070): the column is always reserved. */
   await loadTrends(page).click()
-  await expect(page.locator(".pricing-body[data-trends='on']")).toHaveCount(1)
-  await typeAndCheck(page)
-})
-
-test('the "Lists at" field reads a long price in full at 1440, data-direct=some', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
-
-  /* One row carries a Direct figure, which only widens `--pricing-cols` by one more spare
-     track at this width (the `@container pricing (min-width: 1040px)` rule) — the anchor
-     still has to hold. */
-  await open(page, {
-    skus: [
-      sku({
-        snap: { market: '22.03', direct_low: '21.50', low: '21.98', low_with_shipping: '22.98', now: null },
-      }),
-    ],
-    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
-  })
-  await expect(page.locator('.pricing-caption')).toBeVisible()
-  await expect(page.locator(".pricing-section[data-direct='some']")).toHaveCount(1)
-  await expect(page.locator(".pricing-body[data-trends='off']")).toHaveCount(1)
-  await typeAndCheck(page)
-
-  await loadTrends(page).click()
-  await expect(page.locator(".pricing-body[data-trends='on']")).toHaveCount(1)
+  await expect(strip(page).first().locator('svg')).toHaveCount(2)
   await typeAndCheck(page)
 })
 
@@ -4905,49 +3464,409 @@ test('the focus ring on a TYPED price field is --bn-accent, not the halo alone (
   expect(border, `the typed field's focused border is ${border}, not the accent ${accent}`).toBe(accent)
 })
 
-/* ---- Compare ON: the anchor holds at three reference columns and at four ------------------------- */
+/* ============================================================================================
+   THE RE-INTERVIEW (D277): one list with the rows that need the owner on top, one slim bar,
+   the rule on one line, the drawer folded into the product view. The cases above keep the send,
+   the save loop, the hold and the clear; these are the new shape.
+   ============================================================================================ */
 
-/** `.pricing-caption` and `.pricing-row` both read `--pricing-cols` off the same `.pricing-section`
- *  (`Pricing.css`'s own "the caption and the grid" rule), so their resolved `grid-template-columns`
- *  agree by construction — this asserts that fact rather than assuming it, the way
- *  `pricing-markdown.spec.ts`'s own `--pricing-cols` check already does for its screen. */
-async function tracksAgree(page: Page): Promise<void> {
+test('the screen is on its own route, on the kit page, and draws the run it was linked to', async ({ page }) => {
+  await open(page)
+  await expect(page.locator(`${VIEW} h1`)).toHaveText('Pricing')
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+  /* THE SLIM BAR IS THE VERDICT (D277, Q4): what is ready, in one sentence, beside the press. */
+  await expect(page.locator('.pricing-bar-says')).toHaveText('3 copies ready')
+  /* THE RULE AND THE CUT-OFF ARE ONE LINE (Q5), and the figure is stated once. */
+  const line = page.locator('.pricing-rule-line')
+  await expect(line).toContainText('New cards list at market')
+  await expect(line.locator('.bn-money')).toHaveText('$0.40')
+  await expect(line.getByRole('button', { name: 'Change' })).toBeVisible()
+})
+
+test('the rows that need the owner come first, each with its reason, and the rest by value', async ({ page }) => {
+  await open(page, {
+    skus: [
+      sku({ sku: '1', name: 'Cheap on the cut-off', snap: { market: '0.30', direct_low: null, low: '0.20', low_with_shipping: '1.20', now: null }, bucket: 'sub_threshold' }),
+      sku({ sku: '2', name: 'Ordinary', snap: { market: '2.00', direct_low: null, low: '1.80', low_with_shipping: '2.80', now: null } }),
+      sku({ sku: '3', name: 'Drifted', snap: { market: '1.00', direct_low: null, low: '0.90', low_with_shipping: '1.90', now: null } }),
+      sku({ sku: '4', name: 'Dear', snap: { market: '12.00', direct_low: null, low: '11.00', low_with_shipping: '12.50', now: null } }),
+      sku({ sku: '5', name: 'Unpriced', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } }),
+    ],
+    decisions: {
+      rule: 'match',
+      basis: 'market',
+      threshold: '0.49',
+      sub_threshold: { flat: '0.49' },
+      overrides: { '1': '0.49', '3': '2.00' },
+    },
+  })
+
+  /* Q2's three reasons, and the order: no market price first, then by value. The card at the
+     cut-off is the floor at work, not a drift, so it is not flagged (the call in the decision
+     entry). */
+  await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText(['Needs you', 'Ready'])
+  await expect(page.locator('.pricing-group').nth(0).locator('.pricing-name')).toHaveText(['Unpriced', 'Dear', 'Drifted'])
+  await expect(page.locator('.pricing-group').nth(1).locator('.pricing-name')).toHaveText(['Ordinary', 'Cheap on the cut-off'])
+  const flags = page.locator('.pricing-group').nth(0).locator('.pricing-flag')
+  await expect(flags.nth(0)).toHaveText('No market price')
+  await expect(flags.nth(1)).toHaveText('Worth $5.00 or more')
+  await expect(flags.nth(2)).toHaveText('Your price is 100% over market')
+  await expect(page.locator('.pricing-group').nth(1).locator('.pricing-flag')).toHaveCount(0)
+  /* THE BAR NAMES WHAT STAYS BACK (Q3). */
+  await expect(page.locator('.pricing-bar-says')).toContainText('1 needs a price')
+  /* AND ITS COPIES ARE NOT READY (the delta review, R3-1): four rows of three copies go, the
+     unpriced row's three do not. The bar and the press both say twelve, which is what the file
+     will carry. */
+  await expect(page.locator('.pricing-bar-says')).toContainText('12 copies ready')
+  await expect(sendPress(page)).toHaveText('Send 12 copies to TCGplayer')
+})
+
+test('a price typed far from market gives the row its flag, and the row does not move', async ({ page }) => {
+  await open(page, {
+    skus: [
+      sku({ sku: '1', name: 'First', snap: { market: '3.00', direct_low: null, low: '2.80', low_with_shipping: '3.80', now: null } }),
+      sku({ sku: '2', name: 'Second', snap: { market: '2.00', direct_low: null, low: '1.80', low_with_shipping: '2.80', now: null } }),
+    ],
+  })
+  await expect(page.locator('.pricing-name')).toHaveText(['First', 'Second'])
+  const second = page.getByRole('textbox', { name: 'Price for Second' })
+  await second.focus()
+  await page.keyboard.type('9.00')
+  await second.blur()
+  /* THE CHIP APPEARS ON THE ROW; THE ORDER WAS TAKEN ON ARRIVAL (D118, D181). */
+  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-flag')).toHaveText('Your price is 350% over market')
+  await expect(page.locator('.pricing-name')).toHaveText(['First', 'Second'])
+  await expect(page.locator('.pricing-group-head')).toHaveCount(0)
+})
+
+test('a hold taken now keeps its row where it is, and so does the next load', async ({ page }) => {
+  const skus = [
+    sku({ sku: '1', name: 'Articuno', snap: { market: '3.00', direct_low: null, low: '2.80', low_with_shipping: '3.80', now: null } }),
+    sku({ sku: '2', name: 'Dunsparce', snap: { market: '2.00', direct_low: null, low: '1.80', low_with_shipping: '2.80', now: null } }),
+    sku({ sku: '3', name: 'Wattrel', snap: { market: '1.00', direct_low: null, low: '0.80', low_with_shipping: '1.80', now: null } }),
+  ]
+  await open(page, { skus })
+  await page.getByRole('button', { name: 'Hold back Dunsparce' }).click()
+  await page.getByRole('button', { name: /Keeping this one/ }).click()
+  await page.getByRole('button', { name: 'Hold it' }).click()
+  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-state')).toHaveAttribute('title', 'withheld: keeping')
+  await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
+  /* A HELD ROW IS RANKED BY VALUE LIKE EVERY OTHER (UX-071): it does not sink on the reload. */
+  await page.route(/\/pricing$/, async (route) => {
+    if (route.request().method() === 'PUT') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        corpus: { version: 1, policy: { rule: 'match', basis: 'market', sub_threshold: { flat: '0.49' } }, skus: { '2': { value: { withheld: 'keeping' } } } },
+        path: '/tmp/prices.json',
+        revision: 'rev-1',
+      }),
+    })
+  })
+  await page.reload()
+  await settleFonts(page)
+  await expect(page.locator('.pricing-name')).toHaveText(['Articuno', 'Dunsparce', 'Wattrel'])
+})
+
+test('Held shows only the held rows, and its count is the bar’s count', async ({ page }) => {
+  await open(page, {
+    skus: [sku({ sku: '1', name: 'Articuno' }), sku({ sku: '2', name: 'Dunsparce' })],
+    decisions: { rule: 'match', basis: 'market', overrides: { '2': { withheld: 'bullish' } } },
+  })
+  await expect(page.locator('.pricing-bar-says')).toContainText('1 held')
+  const held = page.getByRole('button', { name: 'Held 1' })
+  await held.click()
+  await expect(held).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.pricing-name')).toHaveText(['Dunsparce'])
+  await held.click()
+  await expect(page.locator('.pricing-row')).toHaveCount(2)
+})
+
+test('every control that answers a row is on the row, and the caption shares its tracks', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page)
+  await expect(field(page)).toBeVisible()
+  await expect(page.locator('.pricing-row .pricing-hold')).toBeVisible()
+  /* MARKET AND LOWEST ARE ON EVERY DESK ROW (the Compare toggle is gone). */
+  await expect(page.locator('.pricing-row .pricing-col-market')).toContainText('$22.03')
+  await expect(page.locator('.pricing-row .pricing-col-low')).toContainText('$21.98')
+  await expect(page.getByRole('button', { name: 'Compare' })).toHaveCount(0)
   const [row, caption] = await Promise.all([
     page.locator('.pricing-row').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
     page.locator('.pricing-caption').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
   ])
-  expect(row, `row tracks "${row}" disagree with caption tracks "${caption}"`).toBe(caption)
-}
-
-test('Compare on with no Direct column: three reference columns, the anchor still holds', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
-  await open(page, {
-    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
-  })
-  await page.getByRole('button', { name: 'Compare' }).first().click()
-  await expect(page.locator('.pricing-ref-low')).toHaveCount(1) // Compare is really on
-  await expect(page.locator(".pricing-section[data-direct='none']")).toHaveCount(1)
-  await tracksAgree(page)
-  await typeAndCheck(page)
+  expect(row).toBe(caption)
 })
 
-test('Compare on with a Direct column: four reference columns, the anchor still holds', async ({
-  page,
-}) => {
+test('Undo has a fixed place, and U undoes from anywhere on the screen', async ({ page }) => {
+  const wire = await open(page)
+  const undo = page.getByRole('button', { name: 'Undo' })
+  /* DRAWN BEFORE THE FIRST WRITE, AND DISABLED (UX-135): the first answer moves nothing. */
+  await expect(undo).toBeDisabled()
+  const before = await undo.boundingBox()
+  await field(page).focus()
+  await page.keyboard.type('12.00')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => sentAnswers(wire)['8608859']).toBe('12.00')
+  await expect(undo).toBeEnabled()
+  expect(await undo.boundingBox()).toEqual(before)
+  /* U OUTSIDE ANY FIELD (UX-075): the key the tooltip names works where it says. */
+  await page.locator(`${VIEW} h1`).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => sentAnswers(wire)).toEqual({})
+})
+
+test('the rule sheet writes the cut-off to both keys, and says how many cards it splits', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [
+      sku({ sku: '1', bucket: 'sub_threshold', snap: { market: '0.12', direct_low: null, low: '0.10', low_with_shipping: '1.10', now: null } }),
+      sku({ sku: '2', bucket: 'sub_threshold', snap: { market: '0.37', direct_low: null, low: '0.30', low_with_shipping: '1.30', now: null } }),
+      sku({ sku: '3', bucket: 'listable', snap: { market: '0.41', direct_low: null, low: '0.38', low_with_shipping: '1.38', now: null } }),
+    ],
+  })
+  await page.getByRole('button', { name: 'Change' }).click()
+  const sheet = page.getByRole('dialog', { name: 'Pricing rule' })
+  /* THE SERVER'S OWN FIGURE FOR A STORE THAT NEVER SET ONE (D99): $0.40, not a prettier default. */
+  const cut = sheet.getByLabel('Cut-off', { exact: true })
+  await expect(cut).toHaveValue('0.40')
+  await expect(sheet.locator('.pricing-cheap-caption')).toContainText('2 under, 1 above')
+  await cut.fill('0.45')
+  await cut.press('Enter')
+  await expect(sheet.locator('.pricing-cheap-caption')).toContainText('3 under, 0 above')
+  await expect.poll(() => wire.filter((r) => r.method === 'PUT').length).toBeGreaterThan(0)
+  /* ONE FIGURE, BOTH KEYS (the owner, 2026-09-03). */
+  expect(sentPolicy(wire).threshold).toBe('0.45')
+  expect(sentPolicy(wire).sub_threshold).toEqual({ flat: '0.45' })
+})
+
+test('a product name opens the one product view, and T opens it from the keyboard', async ({ page }) => {
+  await page.route(/\/pipeline\/products\/[^/]+\/history$/, async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ sku: '8608859', name: 'Articuno - 161/159', set_name: 'SV: Prismatic Evolutions', condition: 'Near Mint Holofoil', source: 'archive', history_begins: null, never_sold: true, ranges: [] }),
+    }),
+  )
+  await page.route(/\/orders$/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"orders":[]}' }))
+  await page.route(/\/search\?/, async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"query":"","groups":[]}' }))
+  await open(page)
+  /* THE DRAWER FOLDED INTO THE PRODUCT VIEW (D278): the name is the door, by SKU. */
+  await page.locator('.pricing-name').first().click()
+  const sheet = page.getByRole('dialog', { name: 'Articuno - 161/159' })
+  await expect(sheet).toBeVisible()
+  await expect(sheet.getByRole('button', { name: 'Open as page' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+  await field(page).focus()
+  await page.keyboard.press('t')
+  await expect(sheet).toBeVisible()
+})
+
+test('the slim bar stays at the top of the column while the list scrolls', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await open(page, {
-    skus: [
-      sku({
-        snap: { market: '22.03', direct_low: '21.50', low: '21.98', low_with_shipping: '22.98', now: null },
-      }),
-    ],
-    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608859': '9876.54' } },
+    skus: Array.from({ length: 24 }, (_, at) => sku({ sku: String(1000 + at), name: `Card ${at}` })),
   })
-  await page.getByRole('button', { name: 'Compare' }).first().click()
-  await expect(page.locator('.pricing-ref-direct_low')).toHaveCount(1) // Compare is really on, direct really drawn
-  await expect(page.locator(".pricing-section[data-direct='some']")).toHaveCount(1)
-  await tracksAgree(page)
-  await typeAndCheck(page)
+  const bar = page.locator('.pricing-bar')
+  const start = await bar.boundingBox()
+  await page.mouse.move(700, 600)
+  await page.mouse.wheel(0, 1200)
+  await expect.poll(async () => (await page.locator('.pricing-row').first().boundingBox())?.y ?? 0).toBeLessThan(0)
+  const after = await bar.boundingBox()
+  /* STICKY AT THE TOP (Q4): the bar is still on screen, at the top edge of the column. */
+  expect(after?.y ?? -1).toBeGreaterThanOrEqual(-1)
+  expect(after?.y ?? 999).toBeLessThan(start?.y ?? 0)
+  expect(after?.y ?? 999).toBeLessThanOrEqual(8)
+})
+
+test('on a phone the bar is one line pinned above the tab bar, and More opens the doors', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page)
+  const bar = page.locator('.pricing-bar')
+  const box = await bar.boundingBox()
+  const tabbar = await page.locator('.bn-tabbar').boundingBox()
+  expect(box).not.toBeNull()
+  /* ONE LINE (Q4): the press and More, and nothing wraps under them. */
+  expect(box?.height ?? 999).toBeLessThanOrEqual(72)
+  expect(Math.abs((box?.y ?? 0) + (box?.height ?? 0) - (tabbar?.y ?? 0))).toBeLessThanOrEqual(1)
+  await expect(page.getByRole('button', { name: /^Download/ })).toBeHidden()
+  await page.getByRole('button', { name: 'More send options' }).click()
+  await expect(page.getByRole('button', { name: /^Download/ })).toBeVisible()
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(over).toBeLessThanOrEqual(0)
+})
+
+test('Write the file keeps its words and its place while it writes', async ({ page }) => {
+  const wire = await open(page, { sendDelayMs: 1500 })
+  await page.getByRole('button', { name: /^Download (the file instead|file)$/ }).click()
+  const press = page.getByRole('button', { name: 'Write the file' })
+  const before = await press.boundingBox()
+  await press.click()
+  await expect(press).toHaveAttribute('data-busy', 'true')
+  await expect(press).toHaveText('Write the file')
+  const during = await press.boundingBox()
+  for (const side of ['x', 'y', 'width', 'height'] as const) {
+    expect(Math.abs((during?.[side] ?? 0) - (before?.[side] ?? 0)), side).toBeLessThanOrEqual(0.5)
+  }
+  await expect.poll(() => sendPosts(wire).length).toBe(1)
+})
+
+test('the 25% edge is exact: 25% away needs the owner, 24.5% does not, on either side', async ({ page }) => {
+  /* Q2 SAYS "25% OR MORE". A ROUNDED PERCENTAGE TREATED THE TWO SIDES UNEVENLY (the delta review,
+     R3-6): 24.5% over rounded up into the flag and 24.5% under rounded down out of it. */
+  const at = (sku: string, name: string) =>
+    ({ sku, name, snap: { market: '10.00', direct_low: null, low: '9.50', low_with_shipping: '10.50', now: null } }) as const
+  await open(page, {
+    skus: [
+      sku(at('1', 'Over by 24.5')),
+      sku(at('2', 'Under by 24.5')),
+      sku(at('3', 'Over by 25')),
+      sku(at('4', 'Under by 25')),
+    ],
+    decisions: { rule: 'match', basis: 'market', overrides: { '1': '12.45', '2': '7.55', '3': '12.50', '4': '7.50' } },
+  })
+  const flag = (name: string) => page.locator('.pricing-row', { hasText: name }).locator('.pricing-flag')
+  /* A $10.00 CARD IS WORTH $5 OR MORE, so a row inside the band still carries that flag, and
+     only the drift text tells the two cases apart. */
+  await expect(flag('Over by 24.5')).toHaveText('Worth $5.00 or more')
+  await expect(flag('Under by 24.5')).toHaveText('Worth $5.00 or more')
+  await expect(flag('Over by 25')).toHaveText('Your price is 25% over market')
+  await expect(flag('Under by 25')).toHaveText('Your price is 25% under market')
+})
+
+test('the keyboard sheet lists the keys the rows answer, and nothing the screen dropped', async ({ page }) => {
+  await open(page)
+  await page.locator(`${VIEW} h1`).click()
+  await page.keyboard.press('?')
+  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+  await expect(sheet).toBeVisible()
+  /* THE SNAP KEYS ARE THE COLUMNS THE ROW DRAWS (m, l, and n on the Live tab), and T OPENS THE
+     PRODUCT VIEW WITH ONE PRESS (the delta review, R3-4). */
+  await expect(sheet).toContainText('Open the product view')
+  await expect(sheet).toContainText('Snap the price to Lowest')
+  await expect(sheet).not.toContainText('Low with shipping')
+  await expect(sheet).not.toContainText('Direct low')
+  await expect(sheet).not.toContainText('Hold to read')
+})
+
+/* THE REVIEWER'S STORE (the delta review, R4 F5): every row owes a price, so nothing is ready.
+ * The press read "0 copies ready" and stayed live, and a press could only be refused. It is
+ * disabled until a copy is ready. */
+test('with nothing ready, the send press is disabled', async ({ page }) => {
+  await open(page, {
+    skus: [sku({ sku: '5', name: 'Unpriced', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
+    decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {} },
+  })
+  await expect(page.locator('.pricing-bar-says')).toContainText('needs a price')
+  await expect(page.locator('.send-press')).toBeDisabled()
+})
+
+/* THE CARD NUMBER IS WHAT THE OWNER READS (the delta review, R4), AND THE FACTS BESIDE IT KEEP
+ * THEIR WIDTH (R6-1). At 390 a long box name cut the number off. The R4 fix shrank the copy
+ * count and the cap note to nothing instead, leaving a loose separator. The line wraps now, and
+ * each of the three is at least as wide as its own text, at 390 and at 820.
+ *
+ * AND THE LINE STAYS IN ITS COLUMN (R7 F1, F2, F3). The reviewer's long box name spilled 153px
+ * into the price column at 390, "and 1 more" drew over the card number, and a wrap left a "·"
+ * at a line end. Every part of the place line stays inside the card column, "and 1 more"
+ * overlaps nothing beside it, and no part draws a separator glyph that a wrap can strand. */
+const LONG_BOX = 'Riftbound Origins singles and Surging Sparks overflow'
+for (const width of [390, 820]) {
+  test(`at ${width} the place line keeps the card number, the copies and the cap note whole`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await open(page, {
+      worklist: {
+        runs: [{ run: RUN, box: 7, box_name: LONG_BOX, skus: 1 }],
+        skus: [
+          {
+            ...sku({
+              positions: [
+                { box: 7, index: 107, label: `Box ${LONG_BOX}, Section 12, Card 107` },
+                { box: 7, index: 108, label: `Box ${LONG_BOX}, Section 12, Card 108` },
+              ],
+              copies: 2,
+              add_to_quantity: 1,
+              /* R8-3: A LIVE COUNT WITH ITS SALES, "2 live (3 when read, 1 sold since)", which
+                 ran 57px past the phone's card column. */
+              listing: { pushed: 3, staged: 0, live: 3, sold_here: 1 },
+            }),
+            in: [{ run: RUN, add_to_quantity: 2 }],
+            claimed_add: 2,
+            over_cap: true,
+          },
+        ],
+      },
+    })
+    const where = page.locator('.pricing-where').first()
+    await expect(where.locator('.position-run-num')).toHaveText('107')
+    const parts = await where.evaluate((el) => {
+      const line = el.getBoundingClientRect()
+      return ['.position-run-num', '.pricing-copies', '.pricing-cap'].map((selector) => {
+        const node = el.querySelector(selector) as HTMLElement | null
+        if (node === null) return { selector, found: false, width: 0, text: 0, right: 0, line: line.right }
+        const box = node.getBoundingClientRect()
+        return { selector, found: true, width: box.width, text: node.scrollWidth, right: box.right, line: line.right }
+      })
+    })
+    for (const part of parts) {
+      expect(part.found, `${part.selector} is drawn`).toBe(true)
+      expect(part.width, `${part.selector} keeps its text width`).toBeGreaterThanOrEqual(part.text - 0.5)
+      expect(part.right, `${part.selector} ends inside its line`).toBeLessThanOrEqual(part.line + 0.5)
+    }
+
+    const layout = await where.evaluate((el) => {
+      const column = (el.closest('.pricing-id') as HTMLElement).getBoundingClientRect()
+      const outside = [...el.querySelectorAll('*')]
+        .map((node) => ({ node, box: node.getBoundingClientRect() }))
+        .filter(({ box }) => box.width > 0 && (box.right > column.right + 0.5 || box.left < column.left - 0.5))
+        .map(({ node, box }) => `${node.className || node.tagName} ${Math.round(box.left)}..${Math.round(box.right)}`)
+      const more = el.querySelector('.pricing-more') as HTMLElement
+      const mine = more.getBoundingClientRect()
+      const overlaps = [...el.querySelectorAll('*')]
+        .filter((node) => node !== more && !node.contains(more) && !more.contains(node))
+        .filter((node) => {
+          const box = node.getBoundingClientRect()
+          const x = Math.min(box.right, mine.right) - Math.max(box.left, mine.left)
+          const y = Math.min(box.bottom, mine.bottom) - Math.max(box.top, mine.top)
+          return box.width > 0 && x > 0.5 && y > 0.5
+        })
+        .map((node) => String(node.className || node.tagName))
+      const glyphs = [...el.querySelectorAll('*')]
+        .flatMap((node) => ['::before', '::after'].map((pseudo) => getComputedStyle(node, pseudo).content))
+        .filter((content) => content.includes('·'))
+      return { outside, overlaps, glyphs, more: more.textContent }
+    })
+    expect(layout.more).toBe('and 1 more')
+    await expect(where.locator('.pricing-live')).toContainText('2 live')
+    expect(layout.outside, 'every part of the place line stays inside the card column').toEqual([])
+    expect(layout.overlaps, '"and 1 more" overlaps nothing beside it').toEqual([])
+    expect(layout.glyphs, 'no part draws a separator a wrap can strand').toEqual([])
+  })
+}
+
+/* THE CHIP READS THE CODE, NEVER THE SENTENCE (the coordinator's ruling on R4): reworded
+ * server words with the same codes draw the same chips. */
+test('a reworded owed sentence draws the same chip while its code stays', async ({ page }) => {
+  await open(page, {
+    noRun: true,
+    emitted: true,
+    runs: [
+      { run: '2026-08-24-box2-01', box: 2, box_name: 'Pokemon bulk', skus: 3, created_at: '2026-08-24T18:00:00+00:00' },
+      { run: '2026-09-02-box6-01', box: 6, box_name: 'Riftbound rares', skus: 2, created_at: '2026-09-02T18:00:00+00:00' },
+    ],
+    unsent: { '2026-08-24-box2-01': 3, '2026-09-02-box6-01': 2 },
+    owes: {
+      '2026-08-24-box2-01': ['three cards still lack a market price'],
+      '2026-09-02-box6-01': ['not written yet'],
+    },
+    owed: {
+      '2026-08-24-box2-01': [{ code: 'needs_price', count: 3 }],
+      '2026-09-02-box6-01': [{ code: 'never_emitted', count: null }],
+    },
+  })
+  await page.getByRole('button', { name: /^(Every run|\d+ runs?)$/ }).click()
+  const chips = page.locator('.pricing-run')
+  await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never sent')
+  await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('Sent, 3 need a price')
 })

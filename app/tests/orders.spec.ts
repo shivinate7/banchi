@@ -12,6 +12,7 @@ const PHOTO_SVG =
 import type {
   InventoryCard,
   Listing,
+  OrderLineProgress,
   OrderRow,
   OrdersPayload,
   Place,
@@ -141,7 +142,6 @@ function walkPlanCopy(over: WalkPlanCopyInput = {}): WalkPlanCopy {
        row for ever (§9a finding 4). A fixture that kept sending 0 would make that defect
        untestable, so the default is a real drawer. */
     box_total: over.box_total ?? 133,
-    box_closed: over.box_closed ?? false,
     fraction: over.fraction === undefined ? 0.12 : over.fraction,
     neighbors: over.neighbors === undefined ? null : over.neighbors,
     ...over.place,
@@ -201,7 +201,14 @@ function inventoryCard(over: Partial<InventoryCard> = {}): InventoryCard {
 }
 
 function walkPlanTake(over: Partial<WalkPlanTake> = {}): WalkPlanTake {
-  const forRef: WalkPlanRef = { key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace' }
+  // The default ref's `owed` tracks THIS take's own `wanted` (post-override), not a fixed 1 —
+  // `order-walk.spec.ts`'s own `walkPlanTake` restates the same reason.
+  const forRef: WalkPlanRef = {
+    key: `TCGplayer:${ORDER_NUMBER}`,
+    number: ORDER_NUMBER,
+    buyer: 'Ada Lovelace',
+    owed: over.wanted ?? 1,
+  }
   return {
     sku: SKU,
     name: 'Volcanion',
@@ -2034,7 +2041,7 @@ test('a buyer with two open orders walks both at once — one selection, one pla
             sku: '9197754',
             name: 'Sunrise',
             number_display: '030',
-            for: [{ key: secondOrderKey, number: SECOND_ORDER, buyer: 'Ada Lovelace' }],
+            for: [{ key: secondOrderKey, number: SECOND_ORDER, buyer: 'Ada Lovelace', owed: 1 }],
             copies: [walkPlanCopy({ box: 5, index: 30, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5, Section 1, Card 1' })],
           }),
         ],
@@ -2798,7 +2805,7 @@ function sunrisePlan(): WalkPlan {
           sku: SECOND_SKU,
           name: 'Sunrise',
           number_display: '030',
-          for: [{ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second' }],
+          for: [{ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second', owed: 1 }],
           copies: [walkPlanCopy({ box: 5, index: 9, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5, Section 1, Card 1' })],
         }),
       ],
@@ -2999,6 +3006,338 @@ test('the card pane is the photograph, the pick and every copy with its place an
   await expect(pane.getByRole('button', { name: 'Retire' })).toHaveCount(0)
 })
 
+/* THE WORDING FIX (owner's ruling, 2026-09-25): "of Y" must never count a copy the store does
+ * not have, and a short card says so in a few words rather than a sentence — "say what's
+ * short but it's not intuitive to use so much verbiage." `wanted` is 3 across the walked
+ * orders, ONE copy is on hand, so "of 3" would be the diagnosed lie (Rengar's own case). */
+test('a short card says "Pick 1" and "2 short", never a wrong "of 3"', async ({ page }) => {
+  const owing = order({
+    wanted: 3,
+    recorded: 0,
+    progress: [
+      {
+        sku: SKU,
+        wanted: 3,
+        recorded: 0,
+        outstanding: 3,
+        over: 0,
+        copies: [],
+        at: null,
+        by_hand: 0,
+        reason: null,
+        declared_kind: null,
+        closed_at: null,
+        closed_reason: null,
+      },
+    ],
+  })
+  await open(page, {
+    orders: payloadOf(
+      [owing],
+      [{ key: owing.key, number: owing.number, complete: false, outstanding: 3, lines: [line({ wanted: 3, owed: 3, outstanding: 0, on_hand: 1 })] }],
+    ),
+    walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: 1, for: [{ key: owing.key, number: owing.number, buyer: 'Ada Lovelace', owed: 3 }] })] })]),
+  })
+
+  const pane = page.locator('.orders-card-pane')
+  await expect(pane.locator('.orders-card-pick')).toContainText('Pick 1')
+  await expect(pane.locator('.orders-card-pick')).not.toContainText('of 3')
+  await expect(pane.locator('.orders-card-pick')).toContainText('2 short')
+  /* THE SECOND ROUND'S FINDING 7 — REAL SPACING, NEVER A CONCATENATED "Pick 12 short". A
+   *  Pill sitting right after "Pick 1" with no text node between them reads as one run of
+   *  characters to the accessibility tree exactly as it does on screen; `toHaveText` (whole
+   *  string, not `toContainText`'s substring) is what would catch the missing space. */
+  await expect(pane.locator('.orders-card-pick')).toHaveText('Pick 1 2 short')
+
+  /* AND AT 390, BESIDE "Pick N", NEVER UNDER THE CARD NUMBER (the same finding): the thin
+   *  header's place line and its short pill sit in one row, `.orders-card-thin-meta`, so the
+   *  card name above them never shifts and the pill is never a line of its own underneath.
+   *  Walk mode's collapsed layout (`.orders-hub.is-walking`, which is what shows the thin
+   *  header at all) is a NAVIGATION, read off the column at the moment of the press
+   *  (`walkTo`) — resizing the viewport alone does not retroactively set `?walk=1`, so this
+   *  presses through the buyer chip exactly as the mobile entry case does. */
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.locator('.orders-buyerchip').click()
+  await page.locator('.orders-buyers-sheet .orders-index-row').first().click()
+  const meta = pane.locator('.orders-card-thin-meta')
+  await expect(meta).toHaveText('Box 3, Section 2, Card 17, pick 1 2 short')
+  const nameBox = await pane.locator('.orders-card-thin-name').boundingBox()
+  const metaBox = await meta.boundingBox()
+  expect(metaBox!.y, 'the meta row sits below the name, never beside or above it').toBeGreaterThan(nameBox!.y)
+  const placeBox = await pane.locator('.orders-card-thin-place').boundingBox()
+  const pillBox = await pane.locator('.orders-card-thin-meta .bn-pill').boundingBox()
+  expect(pillBox!.y, 'the pill sits on the SAME row as the place text, not a row under it').toBeLessThan(placeBox!.y + placeBox!.height)
+})
+
+/* THE REVIEW ROUND'S FINDING 1, REPRODUCED AND GUARDED AT THE CLIENT. `types.ts` always
+ * declared `closed_at`/`closed_reason` on `OrderLineProgress`, but the server's own builder
+ * never sent them, so the real wire's progress row had NO such key at all — not `null`,
+ * ABSENT. `row.closed_at !== null` then read `undefined !== null` as `true`, which is why
+ * Rengar drew "Pick 1 of 1" with no short flag on the real store: every line looked stood
+ * down. `server/capture_server.py:_order_progress` now always sends both keys (T11's own
+ * `_progress_wire_carries_closed_fields` proves that half), and `owedBySku` here reads
+ * `!= null` (loose) as a second, cheaper line of defence. This case builds the wire body BY
+ * HAND, with the key left out entirely — `as unknown as OrdersPayload`, deliberately outside
+ * `order()`'s own typed builder, which cannot express an absent required field — so a
+ * regression in EITHER half turns this red. */
+test('a progress row with no closed_at key at all is read as open, never as stood down', async ({ page }) => {
+  const raw = {
+    summary: '1 order',
+    orders: [
+      {
+        key: `TCGplayer:${ORDER_NUMBER}`,
+        source: 'TCGplayer',
+        number: ORDER_NUMBER,
+        placed_at: '2026-08-29T10:00:00+00:00',
+        status: 'Ready to ship',
+        first_seen: '2026-08-30T09:00:00+00:00',
+        changed_at: null,
+        buyer: 'Ada Lovelace',
+        wanted: 3,
+        recorded: 0,
+        open: true,
+        terminal: false,
+        lines: [line().line],
+        progress: [
+          // NO `closed_at`, NO `closed_reason` — the real wire's own shape before the fix.
+          { sku: SKU, wanted: 3, recorded: 0, outstanding: 3, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null },
+        ],
+      },
+    ],
+    resolution: {
+      orders: [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 3, lines: [line({ wanted: 3, owed: 3, outstanding: 0, on_hand: 1 })] }],
+      counts: { resolved: 1, short: 0, no_copies_on_hand: 0, sku_unknown: 0, sku_unseen: 0, not_a_single: 0 },
+    },
+  }
+  await open(page, {
+    orders: raw as unknown as OrdersPayload,
+    walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ wanted: 1, for: [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace', owed: 3 }] })] })]),
+  })
+
+  const pane = page.locator('.orders-card-pane')
+  await expect(pane.locator('.orders-card-pick')).toContainText('2 short')
+})
+
+/* THE REVIEW ROUND'S FINDING 3, THE REAL `pickOrderFor` DRIVEN THROUGH THE BROWSER — every
+ * earlier fixture in this file put one order in a take's `for`, so the only proof that the
+ * fewest-remaining-first rule works on more than one order was `harness/tests/t11_walk_plan.py`'s
+ * OWN COPY of the rule in Python, which cannot exercise the TypeScript at all. Two orders, owing
+ * 1 and 3 of one SKU, four copies on hand, four presses: the pull each press SENDS names the
+ * order the rule picks, read off the wire body's `number` — never off a screen read, which
+ * `pickOrderFor` itself could get wrong in a way nothing on screen would show. */
+function twoOrderProgress(sku: string, wanted: number): OrderLineProgress {
+  return { sku, wanted, recorded: 0, outstanding: wanted, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }
+}
+
+test('four presses over two orders go to the order pickOrderFor names, smallest remaining first', async ({ page }) => {
+  const orderA = order({ key: 'TCGplayer:A-1', number: 'A-1', buyer: 'Ada', placed_at: '2026-08-01T00:00:00+00:00', wanted: 1, recorded: 0, progress: [twoOrderProgress(SKU, 1)] })
+  const orderB = order({ key: 'TCGplayer:B-2', number: 'B-2', buyer: 'Bea', placed_at: '2026-08-02T00:00:00+00:00', wanted: 3, recorded: 0, progress: [twoOrderProgress(SKU, 3)] })
+  const copies = [0, 1, 2, 3].map((n) =>
+    walkPlanCopy({ box: 3, index: 21 + n, capture_id: `cap-${n}`, key: `3/${21 + n}`, slot: 17 + n, card: 17 + n, label: `Box 3, Section 2, Card ${17 + n}` }),
+  )
+  const wire = await open(page, {
+    orders: payloadOf(
+      [orderA, orderB],
+      [
+        { key: orderA.key, number: orderA.number, complete: false, outstanding: 1, lines: [line({ order: orderA.number, order_key: orderA.key, wanted: 1, owed: 1, outstanding: 0, on_hand: 4 })] },
+        { key: orderB.key, number: orderB.number, complete: false, outstanding: 3, lines: [line({ order: orderB.number, order_key: orderB.key, wanted: 3, owed: 3, outstanding: 0, on_hand: 4 })] },
+      ],
+    ),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({
+            wanted: 4,
+            for: [
+              { key: orderA.key, number: orderA.number, buyer: 'Ada', owed: 1 },
+              { key: orderB.key, number: orderB.number, buyer: 'Bea', owed: 3 },
+            ],
+            copies,
+          }),
+        ],
+      }),
+    ]),
+    pull: (body: unknown) => {
+      const b = body as { source: string; number: string }
+      return { undone: false, order_key: `${b.source}:${b.number}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] }
+    },
+  })
+
+  const markSold = page.locator('.orders-card-copy').getByRole('button', { name: 'Mark sold' })
+  for (let n = 0; n < 4; n++) {
+    /* WAIT FOR THE BUTTON COUNT TO FALL, NOT ONLY FOR THE WIRE — the wire records a request
+       the instant it fires, before the state update `onSell`'s own `then` makes lands, so a
+       second `.first()` in the same tick could hit the SAME still-labelled copy twice. */
+    await markSold.first().click()
+    await expect.poll(() => markSold.count()).toBe(3 - n)
+    await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(n + 1)
+  }
+  const numbers = wire.filter((one) => one.path.endsWith('/orders/pull')).map((one) => (one.body as { number: string }).number)
+  expect(numbers).toEqual(['A-1', 'B-2', 'B-2', 'B-2'])
+})
+
+/* THE PLACED_AT TIE-BREAK — an order with NO `placed_at` must not win a tie against one that
+ * has a real date. Two orders, both owing 1 (a genuine tie in remaining), one with no
+ * `placed_at` at all: before this round's fix, `order.placed_at ?? ''` made the null order sort
+ * as the "oldest" and win every time, since an empty string is lexically before any real
+ * timestamp. */
+test('a tie between two orders is not won by the one with no placed_at', async ({ page }) => {
+  const dated = order({ key: 'TCGplayer:C-3', number: 'C-3', buyer: 'Cal', placed_at: '2026-08-01T00:00:00+00:00', wanted: 1, recorded: 0, progress: [twoOrderProgress(SKU, 1)] })
+  const undated = order({ key: 'TCGplayer:D-4', number: 'D-4', buyer: 'Dee', placed_at: null, wanted: 1, recorded: 0, progress: [twoOrderProgress(SKU, 1)] })
+  const wire = await open(page, {
+    orders: payloadOf(
+      [dated, undated],
+      [
+        { key: dated.key, number: dated.number, complete: false, outstanding: 1, lines: [line({ order: dated.number, order_key: dated.key, wanted: 1, owed: 1, outstanding: 0, on_hand: 2 })] },
+        { key: undated.key, number: undated.number, complete: false, outstanding: 1, lines: [line({ order: undated.number, order_key: undated.key, wanted: 1, owed: 1, outstanding: 0, on_hand: 2 })] },
+      ],
+    ),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({
+            wanted: 2,
+            for: [
+              { key: undated.key, number: undated.number, buyer: 'Dee', owed: 1 },
+              { key: dated.key, number: dated.number, buyer: 'Cal', owed: 1 },
+            ],
+            copies: [walkPlanCopy({ capture_id: 'cap-a' }), walkPlanCopy({ box: 5, index: 22, slot: 18, card: 18, label: 'Box 5, Section 2, Card 18', capture_id: 'cap-b', key: '5/22' })],
+          }),
+        ],
+      }),
+    ]),
+    pull: (body: unknown) => {
+      const b = body as { source: string; number: string }
+      return { undone: false, order_key: `${b.source}:${b.number}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] }
+    },
+  })
+
+  await page.locator('.orders-card-copy').getByRole('button', { name: 'Mark sold' }).first().click()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
+  const sent = wire.find((one) => one.path.endsWith('/orders/pull'))
+  expect((sent?.body as { number: string }).number).toBe('C-3')
+})
+
+/* THE REVIEW ROUND'S FINDING 2, D171 — a toast/`U` undo must lower the walk's own tally, or a
+ * LATER press against the same order can silently do nothing. One order wants 2, two copies:
+ * sell the first, undo it with `U` (the toast's own fast path, never `undoCopy`), sell the
+ * SAME copy again, then sell the second. Before this round's fix, the undone press's tally
+ * entry was never removed, so by the fourth physical write the client believed 3 copies were
+ * recorded against a line that wants 2 — one press too early — and `pickOrderFor` returned
+ * `null` on the second copy's press. Nothing was sent and nothing was said. */
+test('a toast/U undo lowers the walk tally, so a later press against the same order still lands', async ({ page }) => {
+  const wire = await open(page, {
+    pull: (body: unknown) => {
+      const b = body as { undo?: boolean }
+      return b.undo === true
+        ? { undone: true, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: -1, recorded: 0, outstanding: 2, places: [place()], sales: [] }
+        : { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 1, places: [place()], sales: [] }
+    },
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({
+            wanted: 2,
+            for: [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, buyer: 'Ada Lovelace', owed: 2 }],
+            copies: [
+              walkPlanCopy({ capture_id: 'cap-a' }),
+              walkPlanCopy({ box: 5, index: 22, slot: 18, card: 18, label: 'Box 5, Section 2, Card 18', capture_id: 'cap-b', key: '5/22' }),
+            ],
+          }),
+        ],
+      }),
+    ]),
+  })
+  const pulls = () => wire.filter((one) => one.path.endsWith('/orders/pull'))
+  /* `markSold`'s OWN COUNT, NEVER THE WIRE ALONE, is what each step waits on: the wire records
+     a request the instant it fires, before the state update the click's own `then` makes has
+     landed, so polling `pulls().length` right after a click can race that update — exactly the
+     trap `expect(locator).toHaveCount` (which retries) does not fall into. */
+  const markSold = page.locator('.orders-card-copy').getByRole('button', { name: 'Mark sold' })
+  await expect(markSold).toHaveCount(2)
+
+  // 1. Sell the first copy.
+  await markSold.first().click()
+  await expect(markSold).toHaveCount(1)
+  await expect.poll(() => pulls().length).toBe(1)
+
+  // 2. `U` undoes it — the toast's own fast path, never the row's own inline Undo. The copy
+  // becomes sellable again, so the button count goes back up.
+  await page.getByRole('heading', { name: 'Orders' }).click()
+  await page.keyboard.press('u')
+  await expect(markSold).toHaveCount(2)
+  await expect.poll(() => pulls().length).toBe(2)
+  expect(pulls()[1]?.body).toMatchObject({ undo: true })
+
+  // 3. Sell the SAME copy again — accepted, same as before any of this.
+  await markSold.first().click()
+  await expect(markSold).toHaveCount(1)
+  await expect.poll(() => pulls().length).toBe(3)
+
+  // 4. Sell the second copy — THE PRESS THIS ROUND'S BUG SILENCED. If the tally never came
+  // back down after step 2, the client believes 3 copies are already recorded against a line
+  // that wants 2, `pickOrderFor` returns `null`, and this press sends nothing — the button
+  // stays put and a toast names the refusal instead of the count reaching zero.
+  await markSold.first().click()
+  await expect(markSold).toHaveCount(0)
+  await expect.poll(() => pulls().length).toBe(4)
+  await expect(page.locator('.bn-toast', { hasText: 'Nobody here still owes a copy' })).toHaveCount(0)
+})
+
+/* THE SECOND ROUND'S FINDING 5, D171 AGAIN, OLDER THAN THIS BRANCH. The card pane offers Mark
+ * sold on EVERY copy of the take (D212), not only the ones physically at this stop — but
+ * `onSell` used to look the pressed copy up in `rows`, which flattens only `here: true` copies,
+ * one per physical reach. A press on any OTHER copy (real, on hand, somewhere else in the
+ * store) silently returned: no request, no toast. `currentRow.take` is now the anchor
+ * regardless of which of its copies was pressed. */
+test('a press on a copy that is not at any stop still records against the owing order', async ({ page }) => {
+  const wire = await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({
+            wanted: 1,
+            copies: [
+              walkPlanCopy(), // the stop's own copy — box 3, index 21, here: true (default)
+              walkPlanCopy({ box: 9, index: 99, capture_id: 'cap-elsewhere', key: '9/99', here: false }),
+            ],
+          }),
+        ],
+      }),
+    ]),
+    pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
+  })
+
+  const copies = page.locator('.orders-card-copy')
+  await expect(copies).toHaveCount(2)
+  await copies.nth(1).getByRole('button', { name: 'Mark sold' }).click()
+
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
+  const sent = wire.find((one) => one.path.endsWith('/orders/pull'))
+  expect(sent?.body).toMatchObject({
+    source: 'TCGplayer',
+    number: ORDER_NUMBER,
+    sku: SKU,
+    targets: [{ box: 9, index: 99, capture_id: 'cap-elsewhere' }],
+  })
+})
+
+/* THE SECOND ROUND'S FINDING 6 — the refusal sentence itself, on screen. `for: []` gives
+ * `pickOrderFor` no ref to pick at all, so it returns `null` on the very first press: the case
+ * this sentence exists for. */
+test('pressing Mark sold with no order left to fill draws the refusal sentence, never nothing', async ({ page }) => {
+  const wire = await open(page, {
+    orders: oneOpenOrder(),
+    walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ for: [] })] })]),
+  })
+
+  await page.locator('.orders-card-copy').getByRole('button', { name: 'Mark sold' }).click()
+
+  await expect(page.locator('.bn-toast', { hasText: 'Nobody here still owes a copy' })).toBeVisible()
+  await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(0)
+})
+
 /* --------------------------------------------------------------------------------- Mark sold */
 
 test('Mark sold records the copy against the owing order, and the order panel updates', async ({ page }) => {
@@ -3140,7 +3479,7 @@ test('a sale does not re-sort the walk list, and this section leads', async ({ p
         walkPlanTake({
           sku: SECOND_SKU,
           name: 'Sunrise',
-          for: [{ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second' }],
+          for: [{ key: secondBuyerKey, number: SECOND_BUYER_ORDER, buyer: 'Nora Second', owed: 1 }],
           copies: [walkPlanCopy({ box: 5, index: 9, slot: 1, card: 1, capture_id: 'cap-second', label: 'Box 5, Section 1, Card 1' })],
         }),
       ],
@@ -3326,6 +3665,91 @@ test('a sale never advances the pane on its own (UN-6 rebuild): the operator ste
   /* The operator's own press moves the walk on. */
   await page.keyboard.press('j')
   await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Sunrise')
+})
+
+/* THE REVIEW ROUND'S FINDING 4 (LOW, older than this branch): `satisfied` in `onSell` compared
+ * the WHOLE CARD's tally against ONE STOP's own `wanted` — `totalRecorded(take.sku)` summed
+ * every order's recorded copies for the SKU across every stop, so a SKU split across two stops
+ * (D212's own case: Mirror Image, one copy at the first section and three at the second) read
+ * as satisfied after only 2 of the second stop's own 3 picks, because the first stop's already-
+ * recorded copy was still in the sum. The walk pane then lit a THIRD card early, while the
+ * second stop's own third copy sat unpicked. The fix scopes the count to THIS TAKE's own "here"
+ * copies (this stop's physical reach) — never the sku-wide tally. */
+test('a SKU split across two stops does not advance early — the second stop needs all its own picks', async ({ page }) => {
+  const firstOrder = order({ key: 'TCGplayer:M-1', number: 'M-1', buyer: 'James', progress: [{ sku: SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }] })
+  const secondOrder = order({ key: 'TCGplayer:M-2', number: 'M-2', buyer: 'Konstantinos', progress: [{ sku: SKU, wanted: 3, recorded: 0, outstanding: 3, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }] })
+  const thirdOrder = order({ key: 'TCGplayer:R-3', number: 'R-3', buyer: 'Eric', progress: [{ sku: SECOND_SKU, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null }] })
+  const wire = await open(page, {
+    orders: payloadOf(
+      [firstOrder, secondOrder, thirdOrder],
+      [
+        { key: firstOrder.key, number: firstOrder.number, complete: false, outstanding: 1, lines: [line({ order: firstOrder.number, order_key: firstOrder.key, wanted: 1, owed: 1, outstanding: 0, on_hand: 4 })] },
+        { key: secondOrder.key, number: secondOrder.number, complete: false, outstanding: 3, lines: [line({ order: secondOrder.number, order_key: secondOrder.key, wanted: 3, owed: 3, outstanding: 0, on_hand: 4 })] },
+        { key: thirdOrder.key, number: thirdOrder.number, complete: false, outstanding: 1, lines: [line({ order: thirdOrder.number, order_key: thirdOrder.key, sku: SECOND_SKU, wanted: 1, owed: 1, outstanding: 0, on_hand: 1, line: { ...line().line, sku: SECOND_SKU, name: 'Riposte' } })] },
+      ],
+    ),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        key: 'box/3/section/6', box: 3, section: 6,
+        takes: [walkPlanTake({ wanted: 1, for: [{ key: firstOrder.key, number: firstOrder.number, buyer: 'James', owed: 1 }], copies: [walkPlanCopy({ box: 3, index: 6, capture_id: 'cap-a', key: '3/6' })] })],
+      }),
+      walkPlanStop({
+        key: 'box/4/section/1', box: 4, section: 1,
+        takes: [walkPlanTake({
+          wanted: 3,
+          for: [{ key: secondOrder.key, number: secondOrder.number, buyer: 'Konstantinos', owed: 3 }],
+          copies: [
+            walkPlanCopy({ box: 4, index: 1, capture_id: 'cap-b', key: '4/1' }),
+            walkPlanCopy({ box: 4, index: 2, capture_id: 'cap-c', key: '4/2' }),
+            walkPlanCopy({ box: 4, index: 3, capture_id: 'cap-d', key: '4/3' }),
+          ],
+        })],
+      }),
+      walkPlanStop({
+        key: 'box/4/section/2', box: 4, section: 2,
+        takes: [walkPlanTake({
+          sku: SECOND_SKU, name: 'Riposte', number_display: '030',
+          wanted: 1, for: [{ key: thirdOrder.key, number: thirdOrder.number, buyer: 'Eric', owed: 1 }],
+          copies: [walkPlanCopy({ box: 4, index: 4, capture_id: 'cap-e', key: '4/4' })],
+        })],
+      }),
+    ]),
+    pull: (body: unknown) => {
+      const b = body as { source: string; number: string }
+      return { undone: false, order_key: `${b.source}:${b.number}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] }
+    },
+  })
+  const pulls = () => wire.filter((one) => one.path.endsWith('/orders/pull'))
+  /* THE BUTTON COUNT, NEVER THE WIRE ALONE (the same trap the toast/`U` case above names): a
+     press changes the count of Mark-sold buttons in the CURRENT pane the instant the state
+     update lands, so waiting for it before the next click is what keeps four sequential
+     presses from racing each other. */
+  const markSold = page.locator('.orders-card-copy').getByRole('button', { name: 'Mark sold' })
+  await expect(markSold).toHaveCount(1)
+
+  // James's own single copy — its own stop, fully satisfied on its own, so the pane switches to
+  // Konstantinos's own three, all still unsold.
+  await markSold.first().click()
+  await expect(markSold).toHaveCount(3)
+  await expect.poll(() => pulls().length).toBe(1)
+  await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
+
+  // Two of Konstantinos's own three — NOT satisfied yet, so the pane must not advance to Riposte.
+  await markSold.first().click()
+  await expect(markSold).toHaveCount(2)
+  await expect.poll(() => pulls().length).toBe(2)
+  await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
+  await markSold.first().click()
+  await expect(markSold).toHaveCount(1)
+  await expect.poll(() => pulls().length).toBe(3)
+  await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Volcanion')
+
+  // The THIRD of Konstantinos's own three — now the second stop is genuinely done, and the
+  // pane advances to Riposte, whose own single copy is the only Mark-sold button left.
+  await markSold.first().click()
+  await expect(markSold).toHaveCount(1)
+  await expect.poll(() => pulls().length).toBe(4)
+  await expect(page.locator('.orders-card-pane .orders-card-name')).toHaveText('Riposte')
 })
 
 /* --------------------------------------------------------------------------------- the words */

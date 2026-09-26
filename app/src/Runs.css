@@ -352,7 +352,7 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   .runs-boxes { grid-template-columns: minmax(0, 1fr); }
 }
 .runs-boxes > .bn-empty { grid-column: 1 / -1; padding: var(--bn-7) var(--bn-4); }
-.runs-box-skel { height: 66px; border-radius: var(--bn-r-lg); }
+.runs-boxes-loading { grid-column: 1 / -1; }
 .runs-box {
   position: relative;
   display: flex;
@@ -523,8 +523,7 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
 }
 .run-preview-card[aria-busy='true'] { opacity: 0.55; }
 /* The frame stays exactly 9:16: the cut is positioned in percentages of this box. */
-.run-preview-frame,
-.runs-preview-skel {
+.run-preview-frame {
   position: relative;
   display: block;
   height: min(34vh, 360px);
@@ -608,10 +607,8 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
 .runs-quote-line { font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
 .runs-quote-line strong { color: var(--bn-ink); font-weight: 600; }
 /* Several counts on one line, each a sibling span; CSS draws the separator between them
-   rather than one being typed into a string (D218). Shared by the failure and claim codes
-   below, which carry the same shape. */
-.runs-quote-line > *:not(:last-child)::after,
-.runs-code-parts > *:not(:last-child)::after {
+   rather than one being typed into a string (D218). */
+.runs-quote-line > *:not(:last-child)::after {
   content: '·';
   margin: 0 var(--bn-2);
   color: var(--bn-ink-4);
@@ -722,7 +719,6 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   font-size: var(--bn-fs-md);
 }
 .runs-receipt-box { font-weight: 600; text-align: left; }
-.runs-receipt-run { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
 .runs-receipt-fine { text-align: center; }
 
 /* The fetch control above the reconcile's drop zone. A row so the button and its "or drop one"
@@ -786,7 +782,7 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   margin: 0;
   color: var(--bn-ink-3);
 }
-.runs-pick-skel { height: 148px; border-radius: var(--bn-r-lg); }
+.runs-partial-said { margin: var(--bn-1) 0 0; }
 
 /* ---- the narrowing row, which applies on top of whichever start was chosen ---- */
 .runs-narrow {
@@ -889,8 +885,8 @@ button.runs-stage:hover { background: var(--bn-hover); color: var(--bn-ink); }
   .runs-narrow { gap: var(--bn-3); }
   .runs-narrow-label { flex-basis: 100%; }
   .runs-field-inline,
+  .runs-narrow > .bn-pick,
   .runs-since { flex-basis: 100%; }
-  .runs-field-inline > .bn-select { flex: 1; min-width: 0; }
   .runs-since input[type='datetime-local'] { flex: 1; }
   .runs-pick { min-height: 0; }
 }

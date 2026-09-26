@@ -50,7 +50,7 @@ import type { ReactNode } from 'react'
 import { describeFailure, getOrders, getProductHistory, search, type Failure } from './server'
 import type { OrderLineWire, OrderRow, ProductHistoryPayload, ProductHistoryRange, SearchGroup } from './types'
 import {
-  Button, Chip, EmptyState, Loading, Money, Notice, Page, Pill, Sep, Sheet,
+  Chip, EmptyState, IconButton, Loading, Money, Notice, Page, Pill, Sep, Sheet,
   registerSheet, sheetHref, type SheetHostProps, type SheetProps,
 } from './kit'
 import { SearchField } from './SearchField'
@@ -595,9 +595,7 @@ function ProductSheet({ sku, name, open = true, onClose }: SheetProps['product']
       title={name ?? activeSku}
       icon="history"
       footer={
-        <Button variant="quiet" icon="external" onClick={openAsPage}>
-          Open as page
-        </Button>
+        <IconButton icon="external" label="Open as page" onClick={openAsPage} />
       }
     >
       <ProductHistoryView sku={activeSku} onSwitchSku={setActiveSku} />

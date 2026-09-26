@@ -1060,7 +1060,6 @@ test('pressing the pause button moves nothing else on the screen (D118)', async 
 const HALT_CODES: readonly { code: string; headline: string }[] = [
   { code: 'server_busy', headline: 'the server is answering too many requests right now' },
   { code: 'origin_not_allowed', headline: 'this page is not the one the server trusts to write' },
-  { code: 'box_closed', headline: 'that box was sealed just now' },
   { code: 'store_busy', headline: 'the store is busy' },
   { code: 'store_unavailable', headline: 'the store could not be reached' },
   { code: 'inventory_conflict', headline: 'the store disagreed with what this screen expected' },

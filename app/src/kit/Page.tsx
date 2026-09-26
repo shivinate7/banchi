@@ -70,6 +70,18 @@ export type PageProps = {
   /** The accessible name of the toolbar. */
   readonly toolbarLabel?: string
   readonly className?: string
+  /** `false` skips `Page`'s own `<header>` (title/lede/actions). For the Fulfiller's screen
+   *  only (D5, no shell): it draws its own header and its own h1 in its `children`, so `Page`
+   *  drawing a second one would be a duplicate. Defaults to `true`. */
+  readonly header?: boolean
+  /** `false` skips the kit's page width, top gap and enter animation (D275's amendment). The
+   *  Fulfiller's screen sizes its own column (D5) and its sheet and zoomed photo are FIXED
+   *  children of this element: a transformed ancestor (the enter animation moves via
+   *  `transform`) would break their `position: fixed` reach past the page. Defaults to `true`. */
+  readonly width?: boolean
+  /** Any `data-*` attribute reaches the outer `<main>` unchanged (the Fulfiller's screen keys
+   *  its own CSS off `data-zoom` there — D275's amendment). */
+  readonly [dataAttr: `data-${string}`]: string | undefined
 }
 
 export function Page({
@@ -86,31 +98,44 @@ export function Page({
   status,
   toolbarLabel = 'Filters',
   className,
+  header = true,
+  width = true,
+  ...dataProps
 }: PageProps) {
   const route = usePageRoute()
   const heading = title ?? route?.title ?? route?.label ?? null
   const titleId = useId()
   /* A PAGE WITH NO H1 IS A DEFECT THAT DRAWS NOTHING WRONG. With no `title` and no route around
-     it, the page renders without its heading and nothing looks broken, so it says so in dev. */
+     it, the page renders without its heading and nothing looks broken, so it says so in dev.
+     `header={false}` draws no heading of its own on purpose (the Fulfiller's screen draws its
+     own h1 in `children`), so it is never this warning's business. */
   useEffect(() => {
-    if (import.meta.env.DEV && heading === null) {
+    if (header && import.meta.env.DEV && heading === null) {
       console.error('<Page> has no title: pass `title`, or draw it inside the shell\'s PageRouteContext. A page with no h1 has no name for a screen reader.')
     }
-  }, [heading])
+  }, [header, heading])
   return (
-    <main className={['bn-page', className].filter(Boolean).join(' ')} data-bn-page="" aria-labelledby={heading === null ? undefined : titleId}>
-      <header className="bn-head bn-page-head">
-        <div className="bn-head-text">
-          {heading === null ? null : (
-            <h1 className="bn-title" id={titleId} tabIndex={-1} data-bn-page-title="">
-              {icon ? <Icon name={icon} size={22} /> : null}
-              {heading}
-            </h1>
-          )}
-          {lede ? <p className="bn-lede">{lede}</p> : null}
-        </div>
-        {actions ? <div className="bn-head-actions">{actions}</div> : null}
-      </header>
+    <main
+      className={['bn-page', className].filter(Boolean).join(' ')}
+      data-bn-page=""
+      data-bn-page-width={width ? undefined : 'auto'}
+      aria-labelledby={header && heading !== null ? titleId : undefined}
+      {...dataProps}
+    >
+      {!header ? null : (
+        <header className="bn-head bn-page-head">
+          <div className="bn-head-text">
+            {heading === null ? null : (
+              <h1 className="bn-title" id={titleId} tabIndex={-1} data-bn-page-title="">
+                {icon ? <Icon name={icon} size={22} /> : null}
+                {heading}
+              </h1>
+            )}
+            {lede ? <p className="bn-lede">{lede}</p> : null}
+          </div>
+          {actions ? <div className="bn-head-actions">{actions}</div> : null}
+        </header>
+      )}
       {verdict ? <Verdict>{verdict}</Verdict> : null}
       {undo ? <div className="bn-page-undo">{undo}</div> : null}
       {toolbar ? <Toolbar label={toolbarLabel}>{toolbar}</Toolbar> : null}

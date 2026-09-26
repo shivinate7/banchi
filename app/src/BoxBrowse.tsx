@@ -79,11 +79,13 @@ import './BoxBrowse.css'
  * from './BoxBrowse'` keeps working) — `#/orders`' walk pane builds one too. */
 export type { Row } from './CardHero'
 
-/* Box-walk order — box, then index — the order the cards physically sit in. */
+/* Box-walk order — box, then the card's order in it (D265), the order the cards physically
+ * sit in. The order is the index until a section is placed into the box. */
 function rowsOf(cards: Record<string, InventoryCard>): Row[] {
+  const at = (card: InventoryCard) => card.place?.order ?? card.index
   return Object.entries(cards)
     .map(([key, card]) => ({ key, card }))
-    .sort((a, b) => a.card.box - b.card.box || a.card.index - b.card.index)
+    .sort((a, b) => a.card.box - b.card.box || at(a.card) - at(b.card))
 }
 
 const NO_ROWS: Row[] = []
@@ -593,6 +595,19 @@ function cardParam(): string | null {
   const at = hash.indexOf('?')
   if (at === -1) return null
   const value = new URLSearchParams(hash.slice(at + 1)).get('card')
+  return value === null || value.trim() === '' ? null : value.trim()
+}
+
+/** `#/inventory?q=<text>` — a store-wide search text, seeded once (D-set-view: the set
+ *  view's own tap, for a card whose `box` will not coerce, and so cannot be aimed at a
+ *  row the way `card=<cid>` aims one — see `cardParam` above). `q` is D285's own key for
+ *  a screen's search text (`kit/viewState.ts`'s comment), so a link built this way reads
+ *  the same as if the operator had typed it. */
+function qParam(): string | null {
+  const hash = window.location.hash
+  const at = hash.indexOf('?')
+  if (at === -1) return null
+  const value = new URLSearchParams(hash.slice(at + 1)).get('q')
   return value === null || value.trim() === '' ? null : value.trim()
 }
 
@@ -1782,6 +1797,18 @@ export function BoxBrowse({
     jumpBox.current = typeof row.card.box === 'number' ? row.card.box : null
     setJump(row.key)
   }, [rows, wantedCard, shelf, shelves])
+  /* `#/inventory?q=<text>`, SEEDED ONCE (D-set-view): the set view's own tap, for a card
+   *  whose `box` will not coerce — `qParam` above says why `card=<cid>` cannot aim a row
+   *  for it. Read once, on mount, never again: a second link pressed while this screen is
+   *  already open would otherwise overwrite whatever the operator has since typed. */
+  const seededQuery = useRef(false)
+  useEffect(() => {
+    if (seededQuery.current) return
+    seededQuery.current = true
+    const text = qParam()
+    if (text !== null) setQuery(text)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   useEffect(() => {
     if (goTo === undefined || goTo === null) return
     if (askedAt.current === goTo.at) return
@@ -1961,7 +1988,6 @@ export function BoxBrowse({
             const record = typeof cell === 'number' ? boxMap.get(cell) : undefined
             const onHand = record ? (record.on_hand ?? record.cards - record.sold - record.retired - record.moved) : null
             const pct = record && record.cards > 0 && onHand !== null ? Math.round((onHand / record.cards) * 100) : 0
-            const sealed = record?.state === 'closed'
             const matches = matchesByShelf.get(cell) ?? (typeof cell === 'number' ? facetMatchesByBox.get(cell) : undefined)
             return (
               <button
@@ -1978,10 +2004,8 @@ export function BoxBrowse({
                          name and then a naked number. Naming it here, in the one aria-label
                          the button already carries, rather than a second aria-label on the
                          count span, which a button's own explicit aria-label would swallow
-                         (S16). SEALED STAYS LAST: `inventory.spec.ts`'s own sealed-row case
-                         reads `/sealed$/` off this string, so the captured count is inserted
-                         before it rather than appended after. */
-                        `${shelfLabel(cell, record?.name)}${record ? `, ${record.cards.toLocaleString()} captured` : ''}${sealed ? ', sealed' : ''}`
+                         (S16). */
+                        `${shelfLabel(cell, record?.name)}${record ? `, ${record.cards.toLocaleString()} captured` : ''}`
                 }
                 aria-current={cell === shelf ? 'true' : undefined}
                 disabled={!reachable}
@@ -2027,18 +2051,6 @@ export function BoxBrowse({
                 {record ? (
                   <span className="browse-boxcell-bar" aria-hidden="true">
                     <span style={{ width: `${pct}%` }} />
-                  </span>
-                ) : null}
-                {record ? (
-                  // The track exists on every record row, sealed or not (the lock's own
-                  // horizontal form of D118: a row's geometry may not depend on which of its
-                  // states is drawn). Only the glyph inside is conditional.
-                  <span
-                    className="browse-boxcell-lock"
-                    title={sealed ? 'Sealed' : undefined}
-                    aria-hidden={sealed ? undefined : 'true'}
-                  >
-                    {sealed ? <Icon name="lock" size={12} /> : null}
                   </span>
                 ) : null}
                 {record ? <span className="browse-boxcell-count">{record.cards.toLocaleString()}</span> : null}
