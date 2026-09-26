@@ -15699,6 +15699,10 @@ class CaptureHandler(BaseHTTPRequestHandler):
                         band=band, box=box, after=after, limit=limit
                     ),
                 )
+            if path == "/pipeline/sets":
+                # ON-HAND CARDS GROUPED BY SET (`#/inventory?view=sets`). A read, free,
+                # aggregated server-side — see `do_pipeline_sets`'s own header.
+                return self._json(HTTPStatus.OK, pipeline_routes.do_pipeline_sets())
             if path == "/pipeline/price-now":
                 # NAMED SKUs, THE ARCHIVE FIRST AND `readings` AS ITS FALLBACK
                 # (D219, D189) — `#/revenue`'s sold-cards comparison

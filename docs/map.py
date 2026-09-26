@@ -3548,7 +3548,7 @@ COMPONENTS = [
                                 "D86", "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
                                 "D134", "D159", "D165", "D167", "D168", "D174", "D189", "D192",
                                 "D193", "D203", "D210", "D225", "D227", "D236", "D252", "D264",
-                                "D273", "D291", "D-sales-rows-by-sku"],
+                                "D273", "D291", "D-sales-rows-by-sku", "D-set-view"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -5543,11 +5543,12 @@ COMPONENTS = [
                 "governed_by": ["D1", "D2", "D3", "D8", "D9", "D12", "D13", "D16", "D19", "D20",
                                 "D21", "D22", "D24", "D25", "D29", "D32", "D33", "D35", "D36",
                                 "D43", "D47", "D48", "D49", "D54", "D56", "D58", "D59", "D62",
-                                "D64", "D65", "D68", "D76", "D78", "D79", "D86", "D87", "D88",
-                                "D89", "D100", "D103", "D104", "D105", "D134", "D137", "D145",
-                                "D147", "D156", "D159", "D163", "D165", "D166", "D168", "D170",
-                                "D172", "D174", "D180", "D188", "D189", "D212", "D216", "D219",
-                                "D225", "D227", "D236", "D277", "D291"],
+                                "D64", "D65", "D67", "D68", "D76", "D78", "D79", "D86", "D87",
+                                "D88", "D89", "D100", "D103", "D104", "D105", "D134", "D137",
+                                "D145", "D147", "D156", "D159", "D163", "D165", "D166", "D168",
+                                "D170", "D172", "D174", "D180", "D188", "D189", "D196", "D212",
+                                "D216", "D219", "D225", "D227", "D236", "D258", "D277", "D291",
+                                "D-set-view"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -6864,7 +6865,7 @@ COMPONENTS = [
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
                             "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D159", "D172",
                             "D181", "D192", "D213", "D218", "D221", "D252", "D259", "D263",
-                            "D275", "D285", "D264", "D265"]},
+                            "D264", "D265", "D275", "D285", "D-set-view"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -7018,8 +7019,8 @@ COMPONENTS = [
                 "governed_by": ["D5", "D6", "D7", "D8", "D10", "D13", "D24", "D26", "D27", "D28",
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
                                 "D58", "D68", "D71", "D83", "D90", "D93", "D118", "D119", "D125",
-                                "D132", "D172", "D181", "D192", "D196", "D213", "D218",
-                                "D260", "D275", "D264", "D285"],
+                                "D132", "D172", "D181", "D192", "D196", "D213", "D218", "D260",
+                                "D264", "D275", "D285", "D-set-view"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -7043,7 +7044,30 @@ COMPONENTS = [
                         "lens, the primary action pair and the `Wanted` line, all of which the "
                         "copies list already drew per row. What STAYED is the receipt's "
                         "sentence, which the copy row and the phone action bar both render.",
-                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D71", "D118", "D125", "D119"],
+                "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D71", "D118",
+                                "D119", "D125", "D-set-view"],
+            },
+            "src/InventorySets.tsx": {
+                "does": "THE OWNER'S \"BY SET\" VIEW (D-set-view), a second view inside "
+                        "#/inventory (D264's own precedent: a view switch lives inside "
+                        "Inventory rather than as a fourth screen, D31). One store-wide read "
+                        "(GET /pipeline/sets, server-aggregated), grouped by game and set in "
+                        "printed-number order, one row per distinct card with its quantity. A "
+                        "tap builds no new walk: it writes the same box/card pair "
+                        "BoxBrowse.tsx's wantedCard already reads off the hash (Review's place "
+                        "pill uses the identical link) and clears view in the same "
+                        "patchViewQuery call, a same-path query change and so a REPLACE, never "
+                        "a push (D201). Kit primitives only: Section, .bn-list/.bn-list-row, "
+                        "EmptyState/Notice/Loading for the three states a fetch can be in.",
+                "governed_by": ["D31", "D67", "D172", "D196", "D201", "D258", "D264", "D285",
+                                "D-set-view"],
+            },
+            "src/InventorySets.css": {
+                "does": "layout for the set view's rows — the card number column, the "
+                        "name column, and the row's own cursor. Everything else (the section "
+                        "head, the count, the list frame) is the kit's own .bn-section/"
+                        ".bn-list, unrepeated here.",
+                "governed_by": ["D-set-view"],
             },
             "src/BoxOps.tsx": {
                 "does": "D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER "
@@ -8180,7 +8204,7 @@ COMPONENTS = [
                                          "gap moves it through `moveSections`. The receipt is the "
                                          "server's physical instruction, with Undo on U.",
                                   "governed_by": ["D31", "D50", "D117", "D118", "D264", "D265",
-                                                  "D285"]},
+                                                  "D285", "D-set-view"]},
             "src/BoxShelf.css": {"does": "the Shelf's blocks, gaps, lift bar and receipt. A "
                                          "block's height follows its count with a 44px floor; a "
                                          "gap is 40px, the thumb floor.",
@@ -9436,6 +9460,20 @@ COMPONENTS = [
                         "that request. Neither can see the other's half. Like its siblings it "
                         "is NOT a harness test: it starts a browser, so it runs under "
                         "`make design-check` and is deliberately off the commit path.",
+            },
+            "tests/inventory-sets.spec.ts": {
+                "does": "THE OWNER'S \"BY SET\" VIEW (D-set-view), in a browser. The grouping "
+                        "and printed-number order are server work, checked against the "
+                        "owner's real store in do_pipeline_sets's own header; what this file "
+                        "checks is the CLIENT half — a group renders in the order the "
+                        "server sent it, a quantity reads off qty rather than the row count, "
+                        "a card with no set is its own group rather than a silent drop, and a "
+                        "tap lands on the ordinary box walk through the URL BoxBrowse.tsx "
+                        "already reads (box/card), with Sets left behind in the tab strip. "
+                        "Like its siblings it is NOT a harness test: it starts a browser, so "
+                        "it runs under `make design-check` and is deliberately off the commit "
+                        "path.",
+                "governed_by": ["D172", "D201", "D264", "D285", "D-set-view"],
             },
             "tests/correct-answer.spec.ts": {
                 "does": "`CardHero.tsx:ListingCorrection` is reachable on `#/inventory` for a "

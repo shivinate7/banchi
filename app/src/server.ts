@@ -100,6 +100,7 @@ import type {
   ReconcileBacklogResult,
   ValueTable,
   ValueCopy,
+  SetsReport,
   SubmissionClaims,
   ClaimRelease,
   HoldingsRange,
@@ -3064,6 +3065,13 @@ export async function getSkuPhotos(skus: string[]): Promise<Record<string, SkuPh
   const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
   const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as { photos: Record<string, SkuPhotoEntry> }
   return body.photos
+}
+
+/** Every on-hand card, grouped by set, one row per distinct card with its quantity — the
+ *  owner's "by set order" view (`#/inventory?view=sets`). A read; costs nothing, holds
+ *  nothing, aggregates server-side. */
+export async function getInventorySets(): Promise<SetsReport> {
+  return (await request('/pipeline/sets', NO_CACHE)) as SetsReport
 }
 
 /** Every run, newest first. A read; costs nothing and holds nothing, so a run started from

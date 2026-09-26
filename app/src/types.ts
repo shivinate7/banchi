@@ -4220,6 +4220,41 @@ export type ValueTable = {
   totals: { cards: number; valued: number; value: string; under_cutoff: number; at_or_over: number }
 }
 
+/** `GET /pipeline/sets` — one distinct card on hand, grouped under its set. `box`/`cid` are
+ *  a REPRESENTATIVE copy, never every copy: `#/inventory?box=<box>&card=<cid>` is
+ *  `BoxBrowse.tsx`'s own deep link (Review's place pill uses it too), and the walk it lands
+ *  on already shows every other on-hand copy of `sku` through `CopiesPanel`. `null` on
+ *  `box`/`cid` only for a record whose position will not coerce — `do_pipeline_sets`'s own
+ *  rule, `do_pipeline_value`'s too. */
+export type SetGroupCard = {
+  sku: string | null
+  cid: string | null
+  box: number | null
+  name: string | null
+  /** The composed form a screen draws (D67) — `cardNumber.ts` composes nothing here, this
+   *  is `pipeline/join.py:display_number`'s own string, already on the wire. */
+  number_display: string | null
+  qty: number
+}
+
+/** One game-and-set group, cards in the set's own printed order (server-side natural sort
+ *  over the raw number, `do_pipeline_sets:_natural_number_key`). */
+export type SetGroup = {
+  game: string | null
+  set_name: string
+  cards: SetGroupCard[]
+}
+
+/** `GET /pipeline/sets` whole: every on-hand (`identified`) card, by set, one row per
+ *  distinct card with its quantity — never one row per physical copy. `no_set` is every
+ *  on-hand card whose `set_name` is empty, in the same shape, so a card with no set is a
+ *  group and not a silent drop. */
+export type SetsReport = {
+  at: string
+  groups: SetGroup[]
+  no_set: SetGroupCard[]
+}
+
 /* ============================================================ the one press (send to live)
  *
  * `server/send_routes.py`, `D273`. One press reads what is live,

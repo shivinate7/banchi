@@ -3934,6 +3934,127 @@ def do_pipeline_value_page(
     }
 
 
+# A DIGIT RUN COMPARED AS AN INT, EVERYTHING ELSE AS A LOWERED STRING — a natural sort over
+# the RAW `number` column, never a per-game rule. `pipeline/games.py` dispatches a join key
+# by game (`number_and_printed_total` for Pokemon, `printed_code` for One Piece and
+# Riftbound) because MATCHING one spelling against another needs to know which game it is;
+# ORDERING them does not, and re-deriving that dispatch here for a job that only needs
+# monotonic order would be the workaround this repo's "check the primitive first" rule
+# warns against. `198` sorts after `99` because the digit run is read as one integer, not
+# character by character (`"99" < "198"` as text, wrongly); `OP1-1` sorts before `OP1-10`
+# for the same reason.
+_NUMBER_RUN = re.compile(r"(\d+)")
+
+
+def _natural_number_key(number: object) -> Tuple[object, ...]:
+    text = str(number or "")
+    return tuple(int(part) if part.isdigit() else part.lower() for part in _NUMBER_RUN.split(text))
+
+
+def do_pipeline_sets() -> dict:
+    """`GET /pipeline/sets` — every on-hand card grouped by game and set, in printed-number
+    order, one row per distinct card with its quantity (the owner: *"do i have anyway of
+    seeing my inventory by set order? basically a view where i just know what qty of each
+    card and then can click in if interested and it pops me to inventory screen?"* — D-set-view).
+
+    ON HAND MEANS STATE `identified`, NARROWER THAN `do_pipeline_value`'s "not a terminal
+    state": a captured-and-not-yet-identified card carries no name, set or number to group
+    by, so it is not a "card on hand" this view can show anything about.
+
+    AGGREGATED HERE, NEVER SHIPPED PER COPY (the owner's own store: 2,455 on-hand cards
+    behind 771 distinct rows across 6 sets). The grouping key is the SKU where the card has
+    one; a `sku_unknown` card (D258) groups on its own name and displayed number instead, so
+    two unidentified physical copies of the same card still count as one row with `qty: 2`
+    rather than vanishing for having no SKU to key on.
+
+    ORDER IS THE SET'S OWN PRINTED NUMBER, `_natural_number_key` OVER THE RAW `number`
+    COLUMN. `number_display` (D67) is what ships for the eye — the same composed form every
+    other screen already draws, off the same stored column `store/master.py:_card_columns`
+    fills — the raw column is read only to sort by.
+
+    A CARD WITH NO SET IS NOT DROPPED (the hard rule against a silent drop): `no_set` is one
+    more list, on this same payload, named in a plain sentence by the client rather than by
+    this route (D196 — no user-visible string is composed server-side).
+
+    ONE REPRESENTATIVE COPY'S `box` AND `cid` IS ALL A TAP NEEDS. `#/inventory?box=<n>&
+    card=<cid>` is `BoxBrowse.tsx`'s existing deep link (`wantedCard`, built for Review's
+    place pill) — this route builds no new walk, and lands on a row whose `CopiesPanel`
+    already shows every other on-hand copy of the same SKU.
+
+    A PLAIN READ, `do_pipeline_value`'s posture: no socket, no write, no lock.
+    """
+    try:
+        inventory = Store().read().inventory
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            "store_unreadable",
+            f"The store could not be read, so nothing can be grouped: {exc}",
+        ) from None
+
+    groups: Dict[Tuple[str, str], Dict[str, dict]] = {}
+    no_set: Dict[str, dict] = {}
+
+    for _key, (box_raw, _idx_raw, sku_raw, name, set_name, number, number_display, game, cid) in (
+        inventory.cards.select(
+            ("box", "idx", "sku", "name", "set_name", "number", "number_display", "game", "cid"),
+            state=master.IDENTIFIED,
+        )
+    ):
+        sku = str(sku_raw) if sku_raw else None
+        # THREE GROUPING RUNGS, NARROWEST WINS. A SKU is a confirmed identity, so every
+        # copy of it is one row. Failing that, a name or a number is still SOMETHING to
+        # group two physical copies on. Failing THAT — a card with no SKU, no name and no
+        # number, `sku_unknown` at its bluntest — nothing here can tell it apart from
+        # another blank card, so grouping on a shared blank key would silently MERGE two
+        # distinct physical cards into one row a tap can reach only one of (caught against
+        # the owner's own store: 4 such cards, one box, would have collapsed to a single
+        # `qty: 4` row). `_key` (`box/idx`, always present) is the fallback that keeps
+        # every blank card its own row.
+        if sku:
+            row_key = sku
+        elif name or number_display:
+            row_key = f"name:{name or ''}|number:{number_display or ''}"
+        else:
+            row_key = f"blank:{cid or _key}"
+        set_label = str(set_name).strip() if set_name else ""
+        bucket = no_set if set_label == "" else groups.setdefault((str(game or ""), set_label), {})
+        row = bucket.get(row_key)
+        if row is None:
+            try:
+                box = int(box_raw)
+            except (TypeError, ValueError):
+                box = None
+            row = {
+                "sku": sku,
+                "cid": cid or None,
+                "box": box,
+                "name": name or None,
+                "number_display": number_display or None,
+                "qty": 0,
+                "_sort": _natural_number_key(number),
+            }
+            bucket[row_key] = row
+        row["qty"] += 1
+
+    def _cards_of(bucket: Dict[str, dict]) -> List[dict]:
+        rows = sorted(bucket.values(), key=lambda row: row["_sort"])
+        for row in rows:
+            row.pop("_sort", None)
+        return rows
+
+    payload_groups = [
+        {"game": game or None, "set_name": set_name, "cards": _cards_of(bucket)}
+        for (game, set_name), bucket in sorted(groups.items(), key=lambda item: item[0])
+    ]
+
+    return {
+        "at": master.now(),
+        "groups": payload_groups,
+        "no_set": _cards_of(no_set),
+    }
+
+
 # ---------------------------------------------------------------- the store-wide reconcile
 
 

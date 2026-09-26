@@ -1,0 +1,22 @@
+/* THE OWNER'S "BY SET" VIEW (D-set-view) — one section per game/set, cards inside in
+ * printed order. Every color is a `--bn-*` token; nothing here names one. */
+
+.inventory-sets { display: flex; flex-direction: column; gap: var(--bn-6); }
+
+.sets-card-row {
+  justify-content: flex-start;
+  cursor: pointer;
+}
+.sets-card-number {
+  flex: 0 0 auto;
+  min-width: 4.5em;
+  color: var(--bn-ink-3);
+  font-size: var(--bn-fs-sm);
+}
+.sets-card-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

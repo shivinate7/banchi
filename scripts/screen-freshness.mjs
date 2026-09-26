@@ -230,6 +230,9 @@ const RECORDED = {
     // photographed copy of each named SKU. A plain read, called on arrival like
     // `getHoldingsValue` above rather than gated behind a press.
     'getSkuPhotos',
+    // The owner's "by set" view (D-set-view): every on-hand card, grouped by set,
+    // aggregated server-side. A plain read, same shape as every other entry here.
+    'getInventorySets',
   ],
   writes: [
     'capture', 'updateCard', 'undoCapture', 'reshootPhoto', 'answerReview', 'standDown',

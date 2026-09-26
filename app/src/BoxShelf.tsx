@@ -42,7 +42,11 @@ type Dest = number | 'new'
 type GapId = string
 
 /** One view of Inventory: the walk or the shelf. The switch lives in both headers. */
-export function ShelfSwitch({ view, onView }: { readonly view: 'walk' | 'shelf'; readonly onView: (next: 'walk' | 'shelf') => void }) {
+/** `#/inventory`'s three views, one `view` URL key (D285): the walk, the Shelf (D264) and
+ *  the owner's "by set" view (D-set-view). */
+export type InventoryView = 'walk' | 'shelf' | 'sets'
+
+export function ShelfSwitch({ view, onView }: { readonly view: InventoryView; readonly onView: (next: InventoryView) => void }) {
   return (
     <Segmented
       value={view}
@@ -51,6 +55,7 @@ export function ShelfSwitch({ view, onView }: { readonly view: 'walk' | 'shelf';
       options={[
         { value: 'walk', label: 'Walk' },
         { value: 'shelf', label: 'Shelf' },
+        { value: 'sets', label: 'Sets' },
       ]}
       onChange={onView}
     />
@@ -140,7 +145,7 @@ function useBoxCards(box: number | null, reload: number): readonly InventoryCard
   return read !== null && read.box === box ? read.cards : null
 }
 
-export function BoxShelf({ onView }: { readonly onView: (next: 'walk' | 'shelf') => void }) {
+export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) => void }) {
   const [records, setRecords] = useState<readonly BoxRecord[] | null>(null)
   const [readFailure, setReadFailure] = useState<Failure | null>(null)
   const [lifted, setLifted] = useState<Lifted | null>(null)

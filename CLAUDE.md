@@ -529,7 +529,7 @@ hand-typed hash list.
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
-155<!-- derived:app_src_file_count --> files under `app/src`: none read the
+157<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
 279<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.
