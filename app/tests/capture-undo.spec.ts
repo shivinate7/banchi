@@ -618,6 +618,39 @@ test('a capture built on its sitting refuses, and offers Manage box', async ({ p
   await expect(page.locator('.capture-halt-code')).toHaveText('capture_built_on')
   const fix = page.getByRole('button', { name: 'Manage box' })
   await expect(fix).toBeVisible()
+
+  /* The button's own press changes the hash to `#/inventory`, and that screen mounts and
+   * reads its own routes — `#/review` and `#/orders`'s own reads, which this file never
+   * otherwise needs. Stubbed here, not globally: this is the one test in this file that
+   * ever lets the hash leave `#/capture`. */
+  await page.route(/\/queues$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ review: [], parked: [] }),
+    }),
+  )
+  await page.route(/\/orders$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        summary: '0 orders',
+        orders: [],
+        resolution: {
+          orders: [],
+          counts: {
+            resolved: 0,
+            short: 0,
+            no_copies_on_hand: 0,
+            sku_unknown: 0,
+            sku_unseen: 0,
+            not_a_single: 0,
+          },
+        },
+      }),
+    }),
+  )
   await fix.click()
   await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#/inventory?box=3')
 })
@@ -1348,4 +1381,41 @@ test('a capture whose place is unlabeled never writes a zero count onto the box'
   )
   await shootInto(page, 3, 11, 1)
   expect(await nextCardEverywhere(page), 'the box row keeps its count, never "next card 1"').toBe(10)
+})
+
+/* THE 40PX THUMB FLOOR ON `.capture-undo-drop` (D117, the coordinator's review round,
+ * 2026-09-25). `IconButton`'s own `size="sm"` face is 24px, and the kit's `::before` cannot
+ * float this control's hit area past a coarse press on the NEXT card's row: at the old 12px
+ * gap and a corner overhang, the extended reach landed on the neighbour's own `.capture-key`
+ * — a coarse thumb aiming at "remove just this card" could fire the wrong card's undo
+ * instead. The probe is the same one `phone.spec.ts` sweeps every screen with: the four
+ * cardinal points at `FLOOR / 2 - 1` from centre must all resolve back to this control. */
+test('the per-row remove control clears the 40px thumb floor on a phone (D117)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page)
+  await shoot(page, 2)
+
+  const misses = await page.evaluate(() => {
+    const FLOOR = 40
+    const r = FLOOR / 2 - 1
+    const el = document.querySelectorAll('.capture-undo-drop')[0] as HTMLElement
+    const box = el.getBoundingClientRect()
+    const cx = box.left + box.width / 2
+    const cy = box.top + box.height / 2
+    const points: [string, number, number][] = [
+      ['top', cx, cy - r],
+      ['bottom', cx, cy + r],
+      ['left', cx - r, cy],
+      ['right', cx + r, cy],
+    ]
+    return points
+      .filter(([, x, y]) => {
+        const hit = document.elementFromPoint(x, y)
+        return !(hit !== null && (hit === el || el.contains(hit)))
+      })
+      .map(([side]) => side)
+  })
+  expect(misses, 'a probe that does not resolve back to the drop control').toEqual([])
 })
