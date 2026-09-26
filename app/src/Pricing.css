@@ -385,6 +385,8 @@
 .pricing-cheap-input:focus { outline: none; border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint-2); }
 .pricing-cheap-caption { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
 .pricing-file { font-size: var(--bn-fs-md); }
+/* THE CAP IS MONEY, SO IT TAKES THE MONEY FACE (D221), as the price field does. */
+.pricing-cap-field { font-family: var(--bn-font-mono); }
 
 .pricing-photo { display: flex; flex-direction: column; gap: var(--bn-3); }
 .pricing-photo-frame { border-radius: var(--bn-r-lg); overflow: hidden; background: var(--bn-surface-2); }

@@ -664,9 +664,15 @@ function markdownWords(asked: Record<string, unknown> | undefined): string {
       ? 'priced at'
       : `${pct === undefined || pct === null || pct === '' ? '10' : String(pct)}% under`
   const from = basis === 'market' ? 'market' : basis === 'low' ? 'the lowest listing' : 'your asking price'
+  return `Not sold in ${Number.isFinite(days) ? days : 7} days, ${off} ${from}`
+}
+
+/** The read's dollar cap as a number, or null where it has none (the owner's ruling, 2026-09-26).
+ *  A `match` read takes nothing off, so it has no cap to say. */
+function markdownCap(asked: Record<string, unknown> | undefined): number | null {
+  if (asked?.['rule'] === 'match') return null
   const cap = moneyField(typeof asked?.['cap'] === 'string' ? asked['cap'] : null)
-  const most = cap === null || rule === 'match' ? '' : `, at most $${cap} off a card`
-  return `Not sold in ${Number.isFinite(days) ? days : 7} days, ${off} ${from}${most}`
+  return cap === null ? null : Number(cap)
 }
 
 /* ============================================================================== the screen */
@@ -2272,7 +2278,16 @@ export function Pricing() {
   const ruleLine = liveTab ? (
     <p className="pricing-rule-line">
       <span>
-        {newest === null ? 'Nothing read from TCGplayer yet.' : `${markdownWords(newest.asked)}.`}{' '}
+        {newest === null ? (
+          'Nothing read from TCGplayer yet.'
+        ) : markdownCap(newest.asked) === null ? (
+          `${markdownWords(newest.asked)}.`
+        ) : (
+          /* THE CAP IS A DOLLAR FIGURE, SO IT IS DRAWN IN THE MONEY FACE (D221). */
+          <>
+            {markdownWords(newest.asked)}, at most <Money value={markdownCap(newest.asked)} /> off a card.
+          </>
+        )}{' '}
         {newest?.at ? <span className="pricing-rule-when">Read {clockTime(newest.at)}, {absoluteDate(newest.at)}.</span> : null}
       </span>
       {ruleRows.length === 0 ? null : (
@@ -3285,7 +3300,7 @@ function LiveSheet({
           <label className="bn-field">
             <span className="bn-field-label">At most this much off a card, in dollars</span>
             <input
-              className="bn-input bn-money"
+              className="bn-input pricing-cap-field"
               inputMode="decimal"
               placeholder="No limit"
               value={cap}

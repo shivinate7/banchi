@@ -22674,6 +22674,11 @@ def check_live_markdown_guards(checks: Checks) -> None:
         [False, False, True],
         "SEALED IS THE `Unopened` CONDITION, and nothing else",
     )
+    checks.equal(
+        [cmd_reprice._surveyed(c, "offered").get("sealed") for c in uncapped.rows],
+        [reprice.is_sealed(c.row) for c in uncapped.rows],
+        "and the survey carries it per row, so the Live tab can filter by it",
+    )
 
     # ------------------------------------------------------------------ a fresh read
     checks.equal(
