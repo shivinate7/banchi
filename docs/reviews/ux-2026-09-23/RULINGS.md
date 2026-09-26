@@ -593,7 +593,7 @@ What hurts: "capture mistakes 50%, marking the wrong card sold 30%, wrong review
 Refinement: "I do imagine that at a certain point inventory needs to lose its undo (or more
 like i would never use it), it's not that I relaly need undo forever, it's just a couple
 seconds isn't enough, and that a day feels arbitrary."
-On expiry: "Yes, until it's built on (Recommended)".
+On expiry: "Undo lasts until the feature is built on (Recommended)".
 ```
 
 - "Never ask" means no confirms. Every press is made undoable instead.
@@ -650,3 +650,47 @@ On expiry: "Yes, until it's built on (Recommended)".
   is "List", the box map is "Map", and the by-set view is "Sets", on one switch. The URL
   values stay `walk`, `shelf` and `sets` (the integration builder's call, process-only: a
   label changes, a machine key does not). D264 and D-set-view record the build.
+
+## Re-synced from the session record, 2026-09-26
+
+- LIVE STORE (owner, 2026-09-25, paraphrase: the owner does not protect the live store specially; the owner is not using the app now, and said either the live server or better demo seed data is fine). Orchestrator use: measure on a COPY of the live store first (no cost, no risk). The live server still has 4 request slots (DEBT11), so one agent at a time. Nothing contacts TCGplayer or spends money: that still needs the owner present (REAL-TEST).
+- MEASURED on a copy of the owner's store, 2026-09-25 (livecopy/MEASUREMENTS.md): 3,510 cards, 2,455 on hand, 916 SKUs, 5 boxes, 13 runs. Q2 "Needs you" = 9 of 33 unsent SKU rows (0 no market, 4 worth $5+, 5 typed 25%+ away). Q9: no single rule fits (best: market + $0.23, 16.9%), so "Make this the rule" has little to offer. Sales $0 lines: 0 of 1,406. Sealed boxes: 1 (ME01 C/UC). Box-name backfill: nothing to do, every box has a name (item CLOSED).
+- Demo seed shape (owner, 2026-09-25, verbatim: "copy and paste data already available, so demo is populated without modification"). The test seed stays unchanged. Real cards are added as extra boxes, only in the published build, behind an opt-in flag.
+- Existing off-by-one places (owner, 2026-09-25, verbatim: "the existing off-by-one places are usable, but prevention going forward would be beneficial"). No repair of existing data. Prevention is the box map lane's fix: dividers stay with their physical card after a delete. PR 3's checkpoint must ALSO prove that a plain "Move to box" (D83) and a mid-box delete on today's code can no longer shift a divider or a label.
+- DEFECT FOUND (b-pricing R7 builder, pre-existing on main): `emit --cap N --live-guard F` does not count live copies, so TCGplayer can end up holding 2 against a cap of 1. D7 says "--cap N hold this SKU to at most N copies LIVE", so D7 already decides it: a defect. It touches the send path, so it gets its own Opus-reviewed item plus a matrix row. It lands as a DEBT entry in the PR 3 integration.
+- OWNER RULINGS (2026-09-25):
+  - PR 3 and PR 4 become ONE combined PR, to save review. The owner asked "can we merge pr3 and pr 4 into one larger pr to save on review?".
+  - Runs fold: "Build it now, in this PR (Recommended)". The D291 fold plan is built in the combined PR by an Opus builder.
+  - The "002-64" search: "No, a hyphen splits (Recommended)". A hyphen splits the number, so "002-64" must not match 264. This holds in both matchers, match.py and match.ts.
+  - The "bf" search: "Bring it back (Recommended)". Letters that spell a dotted name match it again, so "bf" and "B.F" behave the same and find B.F. Sword.
+- OWNER (2026-09-25): a by-set Inventory view. Asked for: "do i have anyway of seeing my inventory by set order? basically a view where i just know what qty of each card and then can click in if interested and it pops me to inventory screen?". Then: "send a sonnet builder on it now we can add the set view into this PR and undo if it makes it in time". The set view joins the combined PR, and undo joins too if it is ready in time.
+- OWNER (2026-09-25), the undo process: "send an Opus agent to analyze undo mechanisms from an end-user perspective, without prior context. then have another agent with our context distill those findings and create action items. The undo process may have changed since the earlier documentation was written, so the owner should be interviewed for current perspective."
+- OWNER UNDO INTERVIEW (2026-09-25), the answers verbatim:
+  - How long: "Anytime, from a history".
+  - A press that cannot be undone: "Never ask". No confirms, so make every press undoable instead.
+  - Where undo lives: "hmm how would i for example, undo the 24th capture in my capturing run when i'm on capture 36? Undo of a single capture requires undoing intervening ones -- does that make sense in what im trying to have u think about? marking something sold on inventory though is much more straight forward.. etc.."
+    - Orchestrator note: two acts, rewind-to-N and remove-just-N. The capture stack today is capped at ten, so capture 24 is out of reach from 36.
+  - What hurts: "capture mistakes 50%, marking the wrong card sold 30%, wrong review answer 20%".
+- OWNER, undo refinement (2026-09-25): paraphrase: "Owner needs undo until the feature improves; seconds alone is too short." Then, on expiry: "Undo lasts until the feature is built on (Recommended)".
+  - RULING: an undo has no clock. It lasts until the next step depends on the action. Examples: a sale lasts until it is shipped or its order closes. A capture lasts until its sitting ends or it is identified. A Review answer lasts until it is listed.
+  - After that step, the fix is an ordinary action, not an undo. This REFINES the earlier answer "Anytime, from a history". The distiller defines that step for each action.
+- OWNER, the identify strip on Review (2026-09-25): "i should be able to pick whether i want to wait and get the free pre-check or if i wanna just go right through to the bill". Then, on what "Identify now" does: "Spend immediately".
+  - RULING: the strip offers two presses. "Check first" runs the existing free pre-check flow. "Identify now" starts the paid run at once, with no pre-check and no confirm.
+  - The strip's ~$X is the store's past cost per card times N. This amends the two-step money gate for this press only, and it sits in line with the owner's 2026-09-12 ruling "if I want to run everything, then I get to run everything".
+- OWNER, undo plan (2026-09-25):
+  - Q1: "Switch all five (Recommended)". These five sentences change to "until it is built on": D164's cap of ten, the twenty seconds in D28 and D57, the undo spec's "Moved is excluded" (section 4), and the Fulfiller's twenty seconds (section 7). UN-14, move undo, is in.
+  - Q2: "Keep the confirm here only". "Undo just capture N", which removes one card mid-sitting, keeps its confirm and stays permanent. It is the one exception to "Never ask".
+- OWNER (2026-09-25), a defect: "i notice sections can pass the width of their container (wb1 R2 has 12 sections but only 11 show on a card's locator)". It goes to lane ux/section-ruler.
+- OWNER (2026-09-25), the Inventory card locator block: "Make card and section locators larger and more intuitive, with cards below sections". The screenshot shows BACK/THIS/FRONT neighbours, three small icon buttons (sell, retire, move), "Section 1 · card 17 of 39" over a card ruler, a section ruler, and BACK / "Section 1 of 12" / FRONT. It goes to lane ux/section-ruler as expanded scope.
+- OWNER (2026-09-25), Orders sort: "on orders, on its filters, under the sort category, you can only pick placed by newest and placed by oldest, we could have more there? dollar value? etc?". Then picked all four: "Dollar value,Card count,Buyer name,Fewest drawers to open". It goes to lane ux/orders-sort, which joins the combined PR.
+- OWNER (2026-09-25), the combined-order walk:
+  - A card that is short on hand: "i'd say just flag as too few on hand orsomething but yea if we were to give it to someone whoever it completes". The walk flags the card as too few on hand, and the copy goes to the order it would complete.
+  - The wording: "convey what is short without unnecessary verbosity". Say what is short, in very few words.
+  - Bug confirmed by diagnosis: `pickOrderFor` in OrdersWalkPane.tsx falls back to a full order (for[0]), so the server refuses the press with over_fulfilled. The spec (§8) says "first order not filled". It goes to lane ux/walk-fix.
+- LESSON: a PW_ARGS glob like "tests/capture*.spec.ts" is a REGEX to Playwright and matches nothing, so the run is a false green. My briefs used it for capture, fulfillment and orders. Use "tests/capture" (a prefix) instead. The final full design-check on the integration branch is the real proof.
+- OWNER (2026-09-25), the locator redesign: paraphrase: if cheaper, build bolder now; or else, record findings. Orchestrator call: now is cheaper, because the lane holds the context and undo-screens is the critical path anyway. The same builder does a design-led pass with 2 mockups for the owner to pick from.
+- OWNER (2026-09-25), BACK/FRONT in the locator: "Keep it on each ruler". D260 stands, and each ruler keeps its own BACK/FRONT.
+- OWNER (2026-09-25), the locator direction: "B, large ruler (Recommended)". The card ruler is the dominant element (64px), with 48px icons and one identity line. BACK/FRONT stays on each ruler. The build uses CSS separators (D218) and keeps $ as the sell icon.
+- OWNER (2026-09-25), an empty last section: "Into the empty section (Recommended)". When a box ends with an empty section, the next captured or moved-in card goes INTO that section, behind the divider. This is fix (a): `next_key`/`_birth_key` read the last divider. It is the divider proof's F1.
+- DIVIDER PROOF (Opus, on 5915ad0a): FAIL, with 3 defects in this PR. F1: an orphaned empty last divider. F2: the UN-15 divider undo sends order keys where `do_put_box` reads card counts. F3: the `unmove_card` guard mixes key and index spaces. The owner's existing data: box 2 "ME01 C/UC" has 4 boundaries each reading one card late, from the 2026-08-25 mid-box delete under the old model. 264 cards were moved before this PR with no origin recorded. 10 dividers start at a departed card. Boxes 4 and 6 have an empty last section. Report only, no correction (the owner: "not worth correcting").
+- Owner, 2026-09-26, sections as sub-boxes, verbatim: "if i am in section 1, and i am capturing away, then section 1 is continuing to expand, if i am selecting section 2, then i am capturing that fills in section 2, kinda like a subbox". Divider-fix takes option (a): a divider typed ahead of the fill takes the next captures. The section picker is in THIS PR: "in this pr, but i think we need to properly plan it out before just building off these few lines, come with a plan".
