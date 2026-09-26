@@ -12912,28 +12912,6 @@ def do_open_section(box: int, payload: dict) -> dict:
     return body
 
 
-def _s_added(store: Store, box: int, key, layout) -> bool:
-    """Whether the box's newest layout change is the S that added divider `key` (I9).
-
-    U after a mid-box S names a divider that is not the last. So is a divider that an editor
-    save put another one behind (the stale U, which must refuse). The layout alone cannot
-    tell them apart, and the `resectioned` log can: the newest line for this box must add
-    exactly `key` and leave the layout as it stands now. An unreadable log is a refusal."""
-    try:
-        events = store.named_events("resectioned")
-    except (files.StoreError, OSError, ValueError):
-        return False
-    latest = next((e for e in events if e.get("box") == int(box)), None)
-    if latest is None:
-        return False
-    try:
-        was = sorted(float(d) for d in latest.get("sections_from") or [])
-        now_ = [float(d) for d in latest.get("sections_to") or []]
-    except (TypeError, ValueError):
-        return False
-    return now_ == [float(d) for d in layout] and sorted(was + [float(key)]) == now_
-
-
 def do_close_section(box: int, div: Optional[str]) -> dict:
     """`DELETE /boxes/<box>/sections?div=<divider_key>`: take out the divider S made (UN-15).
 
@@ -12950,15 +12928,15 @@ def do_close_section(box: int, div: Optional[str]) -> dict:
             HTTPStatus.BAD_REQUEST, "div_required",
             "Name the divider to take out, as ?div=<its key> from the answer that added it.",
         ) from None
-    store = Store()
-    with store.write() as snapshot:
+    # THE EVENT THAT WROTE THE CURRENT LAYOUT, so an undeclared box goes back to `[]`
+    # (`Inventory.close_section` checks that it matches before it uses it).
+    made = next((e for e in Store().named_events(RESECTIONED) if e.get("box") == box), None)
+    with Store().write() as snapshot:
         inventory = snapshot.inventory
         if inventory.box(box) is None:
             raise BadRequest(HTTPStatus.NOT_FOUND, "box_not_found", f"No box {box}.")
         try:
-            inventory.close_section(
-                box, key, after_s=_s_added(store, box, key, inventory.sections_for(box))
-            )
+            inventory.close_section(box, key, made)
         except master.DividerBuiltOn as exc:
             raise BadRequest(HTTPStatus.CONFLICT, "divider_built_on", str(exc)) from None
         return _box_row(inventory, box)
