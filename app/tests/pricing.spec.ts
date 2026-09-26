@@ -2862,10 +2862,15 @@ test('the over-cap warning is visible with Compare off, and the toggle does not 
 
   /* D156's OWN PROMISE — "what cannot go is named on the deck, with a door each" — MUST
      SURVIVE THE NEW TOGGLE (a regression pin, not a red-first case: nothing hides this
-     today and it must stay that way). The over-cap row's warning badge is visible with no
-     click at all. */
-  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-cap')).toBeVisible()
-  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-cap')).toHaveText('3 of 4 can go')
+     today and it must stay that way). The over-cap row's own fact is visible with no click
+     at all. THE ROW NO LONGER NAMES `claimed_add` BESIDE IT (the owner's review, 2026-09-26):
+     "3 copies" next to "4 can go" read as a contradiction — 4 could never be more than 3 —
+     so the runs' own claim rides the title only, and the visible text states one number the
+     copy count and one the cap allows, never the disagreement between two counts of copies. */
+  const copiesFact = page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-copies')
+  await expect(copiesFact).toBeVisible()
+  await expect(copiesFact).toHaveText('3 copies, 3 can go')
+  await expect(copiesFact).toHaveAttribute('title', 'The runs claim 4. 3 can go.')
 
   /* AND IT STAYS AFTER THE TOGGLE, TOO — Compare only ever ADDS context, it never removes a
      warning. */
@@ -2901,11 +2906,13 @@ test('the cap is what can go, and the row says the runs disagree with it', async
      because a count under a false sentence is worse than no count.
 
      THE CELL IS A FIELD SINCE 2026-09-11 (D7 amended), so the figure that goes is its
-     PLACEHOLDER — what a blank field sends — and "of 3" stands beside it. The number asserted
-     is the same one: what can go, never what the runs claim. */
+     PLACEHOLDER — what a blank field sends — and the copy line beside it says the same thing
+     in words. The number asserted is the same one: what can go, never what the runs claim —
+     the runs' own claim (4) rides the title, never the visible text (the owner's review,
+     2026-09-26). */
   const qty = page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-qty')
   await expect(qty.locator('.pricing-qty-input')).toHaveAttribute('placeholder', '3')
-  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-cap')).toHaveText('3 of 4 can go')
+  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-copies')).toHaveText('3 copies, 3 can go')
 })
 
 test('a send of several runs is one press over every run, with nothing beside it', async ({
@@ -3113,9 +3120,12 @@ test('the run door draws the estimate, and says what it was read at', async ({ p
   await open(page, {
     skus: [sku({ listing: { pushed: 0, staged: 0, live: 4, sold_here: 2 } })],
   })
+  /* THE VISIBLE TEXT IS ONE PLAIN SENTENCE (the owner's review, 2026-09-26: "0 live (3 when
+     read, 3 sold since)" was jargon). "4 when read, 2 sold since" now rides the title only —
+     `LiveCount`'s own tooltip — and the row itself says "2 live on TCGplayer". */
   const live = page.locator('.pricing-row .pricing-live').first()
-  await expect(live).toContainText('2 live')
-  await expect(live).toContainText('4 when read, 2 sold since')
+  await expect(live).toHaveText('2 live on TCGplayer')
+  await expect(live).toHaveAttribute('title', 'TCGplayer held 4 when this was read. 2 sold here since.')
 })
 
 test('a row with nothing sold since draws exactly what it drew before', async ({ page }) => {
@@ -3734,6 +3744,29 @@ test('the focus ring on a TYPED price field is --bn-accent, not the halo alone (
   expect(border, `the typed field's focused border is ${border}, not the accent ${accent}`).toBe(accent)
 })
 
+/* THE NUMBER CHIP IS HIDDEN ONLY WHEN THE NAME CARRIES IT AS ITS OWN TOKEN, NEVER A STRAY DIGIT
+ * (the coordinator's review, 2026-09-26, catching a defect in the first cut of this same lane).
+ * The first cut suppressed the chip on `sku.name.includes(sku.row['Number'])`, a plain substring
+ * test — so a name that happens to CONTAIN the number's digits anywhere, with no parenthesis and
+ * no "- " before it, would lose its chip wrongly. The row must ask whether the number reads as
+ * its own token: in parentheses, or after a trailing "- ", at the end of the name. */
+test('the card number chip hides only for its own token in the name, never a stray digit', async ({ page }) => {
+  await open(page, {
+    skus: [
+      sku({ sku: '1', name: 'Metal Chapter 1', row: { ...sku().row, Number: '1' } }),
+      sku({ sku: '2', name: 'Calm Rune (R02a)', row: { ...sku().row, Number: 'R02a' } }),
+      sku({ sku: '3', name: 'Garganacl - 084/132', row: { ...sku().row, Number: '084/132' } }),
+    ],
+  })
+  /* A STRAY DIGIT: "Metal Chapter 1" contains "1" as a substring, with no parenthesis and no
+     "- " before it — the number is not repeated here and the chip must stay. */
+  await expect(page.locator('.pricing-row', { hasText: 'Metal Chapter 1' }).locator('.pricing-number')).toHaveText('1')
+  /* THE TWO REAL FORMS: parenthesised, and trailing "- <number>". Both repeat the number as its
+     own token, so the chip is redundant and stays hidden. */
+  await expect(page.locator('.pricing-row', { hasText: 'Calm Rune' }).locator('.pricing-number')).toHaveCount(0)
+  await expect(page.locator('.pricing-row', { hasText: 'Garganacl' }).locator('.pricing-number')).toHaveCount(0)
+})
+
 /* ============================================================================================
    THE RE-INTERVIEW (D277): one list with the rows that need the owner on top, one slim bar,
    the rule on one line, the drawer folded into the product view. The cases above keep the send,
@@ -3777,10 +3810,13 @@ test('the rows that need the owner come first, each with its reason, and the res
   await expect(page.locator('.pricing-group-head .pricing-group-why')).toHaveText(['Needs you', 'Ready'])
   await expect(page.locator('.pricing-group').nth(0).locator('.pricing-name')).toHaveText(['Unpriced', 'Dear', 'Drifted'])
   await expect(page.locator('.pricing-group').nth(1).locator('.pricing-name')).toHaveText(['Ordinary', 'Cheap on the cut-off'])
+  /* ONLY A DRIFTED PRICE STILL DRAWS A REASON (the owner's review and add-on, 2026-09-26): "No
+     market price" repeats the Market column's own "—", and "Worth $5 or more" repeats the
+     Market figure two columns over, so neither draws here. A row's place in "Needs you" is
+     already why it matters. */
   const flags = page.locator('.pricing-group').nth(0).locator('.pricing-flag')
-  await expect(flags.nth(0)).toHaveText('No market price')
-  await expect(flags.nth(1)).toHaveText('Worth $5.00 or more')
-  await expect(flags.nth(2)).toHaveText('Your price is 100% over market')
+  await expect(flags).toHaveCount(1)
+  await expect(flags.nth(0)).toHaveText('Your price is 100% over market')
   await expect(page.locator('.pricing-group').nth(1).locator('.pricing-flag')).toHaveCount(0)
   /* THE BAR NAMES WHAT STAYS BACK (Q3). */
   await expect(page.locator('.pricing-bar-says')).toContainText('1 needs a price')
@@ -4076,10 +4112,11 @@ test('the 25% edge is exact: 25% away needs the owner, 24.5% does not, on either
     decisions: { rule: 'match', basis: 'market', overrides: { '1': '12.45', '2': '7.55', '3': '12.50', '4': '7.50' } },
   })
   const flag = (name: string) => page.locator('.pricing-row', { hasText: name }).locator('.pricing-flag')
-  /* A $10.00 CARD IS WORTH $5 OR MORE, so a row inside the band still carries that flag, and
-     only the drift text tells the two cases apart. */
-  await expect(flag('Over by 24.5')).toHaveText('Worth $5.00 or more')
-  await expect(flag('Under by 24.5')).toHaveText('Worth $5.00 or more')
+  /* A $10.00 CARD IS WORTH $5 OR MORE, so both rows inside the drift band still QUALIFY for
+     "Needs you" — but "Worth $5 or more" draws nothing now (the owner's add-on, 2026-09-26: it
+     repeats the Market figure). Only a real drift, 25% or past it, still reads in words. */
+  await expect(flag('Over by 24.5')).toHaveCount(0)
+  await expect(flag('Under by 24.5')).toHaveCount(0)
   await expect(flag('Over by 25')).toHaveText('Your price is 25% over market')
   await expect(flag('Under by 25')).toHaveText('Your price is 25% under market')
 })
@@ -4111,33 +4148,30 @@ test('with nothing ready, the send press is disabled', async ({ page }) => {
   await expect(page.locator('.send-press')).toBeDisabled()
 })
 
-/* THE CARD NUMBER IS WHAT THE OWNER READS (the delta review, R4), AND THE FACTS BESIDE IT KEEP
- * THEIR WIDTH (R6-1). At 390 a long box name cut the number off. The R4 fix shrank the copy
- * count and the cap note to nothing instead, leaving a loose separator. The line wraps now, and
- * each of the three is at least as wide as its own text, at 390 and at 820.
- *
- * AND THE LINE STAYS IN ITS COLUMN (R7 F1, F2, F3). The reviewer's long box name spilled 153px
- * into the price column at 390, "and 1 more" drew over the card number, and a wrap left a "·"
- * at a line end. Every part of the place line stays inside the card column, "and 1 more"
- * overlaps nothing beside it, and no part draws a separator glyph that a wrap can strand. */
-const LONG_BOX = 'Riftbound Origins singles and Surging Sparks overflow'
+/* THE SINGLE BOX/SECTION/CARD PLACE LINE IS GONE FROM THIS ROW (the owner's review,
+ * 2026-09-26: "why would I need to see one location for only one copy of a card when I'm
+ * handling pricing for all copies"). The R4/R6-1/R7 wrap-safety cases this block used to cover
+ * — the card number, "and N more" and the cap note each keeping their own width, staying
+ * inside the card column, and never stranding a "·" at a wrap — tested a line this screen no
+ * longer draws. What is left, "N copies, M can go" plus the live count, is ONE short phrase
+ * apiece and wraps with no part of its own to strand, so the case below is the whole of what
+ * replaces it: at both widths, every part of what remains still stays inside the card column.
+ * `PhotoSheet` still draws the per-copy place, unchanged. */
 for (const width of [390, 820]) {
-  test(`at ${width} the place line keeps the card number, the copies and the cap note whole`, async ({ page }) => {
+  test(`at ${width} the copy count and the live line stay inside the card column`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     await open(page, {
       worklist: {
-        runs: [{ run: RUN, box: 7, box_name: LONG_BOX, skus: 1 }],
+        runs: [{ run: RUN, box: 7, box_name: 'Riftbound Origins singles and Surging Sparks overflow', skus: 1 }],
         skus: [
           {
             ...sku({
               positions: [
-                { box: 7, index: 107, label: `Box ${LONG_BOX}, Section 12, Card 107` },
-                { box: 7, index: 108, label: `Box ${LONG_BOX}, Section 12, Card 108` },
+                { box: 7, index: 107, label: 'Riftbound Origins singles and Surging Sparks overflow, Section 12, Card 107' },
+                { box: 7, index: 108, label: 'Riftbound Origins singles and Surging Sparks overflow, Section 12, Card 108' },
               ],
               copies: 2,
               add_to_quantity: 1,
-              /* R8-3: A LIVE COUNT WITH ITS SALES, "2 live (3 when read, 1 sold since)", which
-                 ran 57px past the phone's card column. */
               listing: { pushed: 3, staged: 0, live: 3, sold_here: 1 },
             }),
             in: [{ run: RUN, add_to_quantity: 2 }],
@@ -4148,49 +4182,16 @@ for (const width of [390, 820]) {
       },
     })
     const where = page.locator('.pricing-where').first()
-    await expect(where.locator('.position-run-num')).toHaveText('107')
-    const parts = await where.evaluate((el) => {
-      const line = el.getBoundingClientRect()
-      return ['.position-run-num', '.pricing-copies', '.pricing-cap'].map((selector) => {
-        const node = el.querySelector(selector) as HTMLElement | null
-        if (node === null) return { selector, found: false, width: 0, text: 0, right: 0, line: line.right }
-        const box = node.getBoundingClientRect()
-        return { selector, found: true, width: box.width, text: node.scrollWidth, right: box.right, line: line.right }
-      })
-    })
-    for (const part of parts) {
-      expect(part.found, `${part.selector} is drawn`).toBe(true)
-      expect(part.width, `${part.selector} keeps its text width`).toBeGreaterThanOrEqual(part.text - 0.5)
-      expect(part.right, `${part.selector} ends inside its line`).toBeLessThanOrEqual(part.line + 0.5)
-    }
-
-    const layout = await where.evaluate((el) => {
+    await expect(where.locator('.pricing-copies')).toHaveText('2 copies, 1 can go')
+    await expect(where.locator('.pricing-live')).toHaveText('2 live on TCGplayer')
+    const outside = await where.evaluate((el) => {
       const column = (el.closest('.pricing-id') as HTMLElement).getBoundingClientRect()
-      const outside = [...el.querySelectorAll('*')]
+      return [...el.querySelectorAll('*')]
         .map((node) => ({ node, box: node.getBoundingClientRect() }))
         .filter(({ box }) => box.width > 0 && (box.right > column.right + 0.5 || box.left < column.left - 0.5))
         .map(({ node, box }) => `${node.className || node.tagName} ${Math.round(box.left)}..${Math.round(box.right)}`)
-      const more = el.querySelector('.pricing-more') as HTMLElement
-      const mine = more.getBoundingClientRect()
-      const overlaps = [...el.querySelectorAll('*')]
-        .filter((node) => node !== more && !node.contains(more) && !more.contains(node))
-        .filter((node) => {
-          const box = node.getBoundingClientRect()
-          const x = Math.min(box.right, mine.right) - Math.max(box.left, mine.left)
-          const y = Math.min(box.bottom, mine.bottom) - Math.max(box.top, mine.top)
-          return box.width > 0 && x > 0.5 && y > 0.5
-        })
-        .map((node) => String(node.className || node.tagName))
-      const glyphs = [...el.querySelectorAll('*')]
-        .flatMap((node) => ['::before', '::after'].map((pseudo) => getComputedStyle(node, pseudo).content))
-        .filter((content) => content.includes('·'))
-      return { outside, overlaps, glyphs, more: more.textContent }
     })
-    expect(layout.more).toBe('and 1 more')
-    await expect(where.locator('.pricing-live')).toContainText('2 live')
-    expect(layout.outside, 'every part of the place line stays inside the card column').toEqual([])
-    expect(layout.overlaps, '"and 1 more" overlaps nothing beside it').toEqual([])
-    expect(layout.glyphs, 'no part draws a separator a wrap can strand').toEqual([])
+    expect(outside, 'every part of the meta line stays inside the card column').toEqual([])
   })
 }
 

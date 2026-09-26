@@ -404,6 +404,20 @@ function usePhone(): boolean {
   return phone
 }
 
+/** THE NUMBER READS AS ITS OWN TOKEN AT THE END OF THE NAME, never a stray digit inside a
+ *  longer word (the coordinator's review, 2026-09-26, catching a defect in the first cut of
+ *  this same lane: a plain `name.includes(number)` hid the chip on any name that happened to
+ *  CONTAIN the number's characters anywhere, with nothing marking it as the same fact). The two
+ *  real forms this repo's names take are parenthesised ("Calm Rune (R02a)") and a trailing
+ *  "- " ("Garganacl - 084/132"), both anchored at the end of the string — never a bare
+ *  substring match. */
+function nameRepeatsNumber(name: string, number: string): boolean {
+  const trimmed = number.trim()
+  if (trimmed === '') return false
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(\\(${escaped}\\)|-\\s*${escaped})\\s*$`).test(name)
+}
+
 /* ------------------------------------------------------------------- the needs-you flags */
 
 /** WHY A ROW NEEDS THE OWNER (D277, Q2): no market price, worth $5 or more, or a typed price
@@ -565,8 +579,7 @@ function LiveCount({ live, soldHere, age }: { live: number; soldHere: number | u
           : `What TCGplayer held when this was read${age === null ? '' : `, ${age}`}.`
       }
     >
-      {forSaleNow} live
-      {sold > 0 ? <span className="pricing-live-age"> ({live} when read, {sold} sold since)</span> : null}
+      {forSaleNow === 0 ? 'None' : forSaleNow} live on TCGplayer
     </span>
   )
 }
@@ -579,14 +592,7 @@ function PricingThumb({ at, name, onOpen }: { at: PricingSku['positions'][number
   const host = useRef<HTMLButtonElement | null>(null)
   const crop = useCardCropWhenSeen(at, host)
   return (
-    <button
-      ref={host}
-      type="button"
-      className="pricing-thumb"
-      aria-label={`Photograph of ${name}`}
-      onClick={onOpen}
-      data-cropped={crop === null ? undefined : 'true'}
-    >
+    <button ref={host} type="button" className="pricing-thumb" aria-label={`Photograph of ${name}`} onClick={onOpen}>
       {at === null ? (
         <Icon name="image" size={14} />
       ) : (
@@ -597,6 +603,14 @@ function PricingThumb({ at, name, onOpen }: { at: PricingSku['positions'][number
           src={photoUrl(at.box, at.index)}
           alt=""
           loading="lazy"
+          /* `data-cropped` BELONGS ON THE IMG, NOT THE BUTTON (the owner's review, 2026-09-26):
+             `kit.css`'s `img.bn-crop[data-cropped='true']` rule reads the attribute off the
+             element it draws on. Set on the button instead, the selector never matched, the
+             image kept the base rule's `inset: 0`, and `cropStyle`'s own translate then shoved
+             a same-sized box up past the tile's edge — a sliver of the card in the corner over
+             empty grey, on every row. `Home.tsx`'s hero already sets it on its own `<img>`; this
+             was the one place `.bn-crop` disagreed with its own contract. */
+          data-cropped={crop === null ? undefined : 'true'}
           style={cropStyle(crop, THUMB_FOCUS)}
           onError={(event) => {
             event.currentTarget.style.visibility = 'hidden'
@@ -2365,7 +2379,9 @@ export function Pricing() {
           <div className="pricing-list" data-copies={source.copies ? 'some' : 'none'}>
             <div className="pricing-caption" aria-hidden="true">
               {source.copies ? <span /> : null}
-              <span>Card</span>
+              {/* "ITEM", NOT "CARD" (the owner's add-on, 2026-09-26): the rows include sealed
+                  product too, which is not a card. */}
+              <span>Item</span>
               <span className="pricing-col-market">Market</span>
               <span className="pricing-col-low">Lowest</span>
               <span className="pricing-col-trend">Trend</span>
@@ -2600,6 +2616,15 @@ function PricingRow({
   /* THE QTY FIELD SHOWS ONLY WHERE IT CAN SAY SOMETHING (UX-084, TXT-08): more than one copy, or a
      figure already typed. A single copy goes, or is held; there is no quantity to choose. */
   const showQty = source.copies && !sku.at_cap && (sku.copies > 1 || asked !== '')
+  /* ONE SENTENCE FOR "HOW MANY", NEVER TWO NUMBERS THAT DISAGREE (the owner's review,
+     2026-09-26): the runs' own claim (`claimed_add`) never appears beside the copy count —
+     it rode only the title, below — because "11 copies" next to "1 of 13 can go" read as a
+     contradiction when the two are really different questions (what is on hand, and what a
+     cap still lets go out). */
+  const copiesLine =
+    [sku.copies > 1 ? `${sku.copies} copies` : null, sku.over_cap ? `${sku.add_to_quantity} can go` : null]
+      .filter((part): part is string => part !== null)
+      .join(', ') || null
   return (
     <div
       className="pricing-row"
@@ -2618,35 +2643,51 @@ function PricingRow({
           <ProductLink sku={sku.sku} name={sku.name} className="pricing-name">
             {sku.name}
           </ProductLink>
-          {flag === null ? null : (
-            <Pill tone={flag.tone} className="pricing-flag">
+          {/* A REASON ONLY WHERE IT TELLS THE OWNER SOMETHING THE ROW DOES NOT ALREADY SHOW (the
+              owner's review, 2026-09-26, and the add-on that followed it). "Worth $5 or more"
+              repeats the Market figure two columns over. "No market price" repeats the Market
+              column's own "—". Neither draws here — the row's place in "Needs you" already says
+              it matters, and the empty Market cell already says why. A typed price adrift from
+              market is the one real comparison nothing else on the row states, so it is the one
+              case left, in plain words and never a coloured pill: colour marks a problem, never
+              "this is worth money" or "this has no listing". */}
+          {flag === null || flag.kind !== 'drift' ? null : (
+            <span className="pricing-flag" data-tone={flag.tone}>
               {flag.text}
-            </Pill>
+            </span>
           )}
         </span>
         <span className="pricing-meta">
           {/* "NEAR MINT" STAYS ON EVERY ROW (the owner's ruling, D137). */}
           <span className="pricing-cond">{sku.condition}</span>
           <span>{sku.set_name}</span>
-          {sku.row['Number'] ? <span className="pricing-number">{sku.row['Number']}</span> : null}
+          {/* THE NUMBER DOES NOT REPEAT WHAT THE NAME ALREADY SAYS (the owner's review,
+              2026-09-26): a variant name like "Calm Rune (R02a)" already carries its own
+              number, and drawing "R02a" again beside it stated the one fact twice. Suppressed
+              only when the name holds it as its own token (`nameRepeatsNumber`), never on a
+              bare substring — a stray digit inside a longer name is not the same fact. */}
+          {sku.row['Number'] && !nameRepeatsNumber(sku.name, sku.row['Number']) ? (
+            <span className="pricing-number">{sku.row['Number']}</span>
+          ) : null}
           {sku.row['Rarity'] ? <span className="pricing-rarity">{sku.row['Rarity']}</span> : null}
         </span>
-        {/* WHERE IT IS, AND HOW MANY (UX-192), in the shared place vocabulary, on its own line. */}
+        {/* HOW MANY, IN ONE FACT (the owner's review, 2026-09-26): the single BOX/SECTION/CARD
+            location is gone from this row — pricing is over every copy at once, and the one
+            location for one copy answered a question nobody here is asking. The photograph's own
+            sheet (PhotoSheet) still opens onto every copy's place, one at a time, for whoever
+            wants it. "N copies" and "M can go" are stated once each, never against a third,
+            unshown "claimed" figure that made an 11-copy row read "1 of 13 can go". */}
         <span className="pricing-meta pricing-where">
-          {source.copies && first !== null ? (
-            <span className="pricing-place">
-              <Location label={first.label} flow="run" />
-              {sku.positions.length > 1 ? <span className="pricing-more">and {sku.positions.length - 1} more</span> : null}
+          {!source.copies || copiesLine === null ? null : (
+            <span
+              className="pricing-copies"
+              title={sku.over_cap ? `The runs claim ${sku.claimed_add}. ${sku.add_to_quantity} can go.` : undefined}
+            >
+              {copiesLine}
             </span>
-          ) : null}
-          {source.copies && sku.copies > 1 ? <span className="pricing-copies">{sku.copies} copies</span> : null}
+          )}
           {sku.listing === null || (sku.listing.live ?? 0) === 0 ? null : (
             <LiveCount live={sku.listing.live} soldHere={sku.listing.sold_here} age={readAge} />
-          )}
-          {!sku.over_cap ? null : (
-            <span className="pricing-cap" title={`The runs claim ${sku.claimed_add}. ${sku.add_to_quantity} can go.`}>
-              {sku.add_to_quantity} of {sku.claimed_add} can go
-            </span>
           )}
           {why === null ? null : <span className="pricing-why">“{why}”</span>}
         </span>

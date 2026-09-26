@@ -81,14 +81,19 @@
 .pricing-caption,
 .pricing-row {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 76px 76px 64px 60px 136px 40px;
+  /* THE TREND COLUMN IS 128px, NOT 64 (the coordinator's add-on, 2026-09-26: "Lowest and Trend
+     touch"). Its content is two 56px minis plus their own gap (`PriceTrend.css`'s
+     `.pricetrend-mini`, `.pricetrend { gap: var(--bn-2) }`) — 120px, not 64 — so the column was
+     narrower than what it draws, and `overflow: hidden` cropped it flush against Lowest's own
+     right edge with none of the caption's gap visible past it. */
+  grid-template-columns: 36px minmax(0, 1fr) 76px 76px 128px 60px 136px 40px;
   align-items: center;
   column-gap: var(--bn-3);
   padding: 0 var(--bn-3);
 }
 .pricing-list[data-copies='none'] .pricing-caption,
 .pricing-list[data-copies='none'] .pricing-row {
-  grid-template-columns: minmax(0, 1fr) 76px 76px 64px 136px 40px;
+  grid-template-columns: minmax(0, 1fr) 76px 76px 128px 136px 40px;
 }
 .pricing-caption {
   min-height: var(--bn-8);
@@ -161,7 +166,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pricing-flag { flex: none; }
+/* A PLAIN REASON, NEVER A PILL (the owner's review and add-on, 2026-09-26): colour marks a real
+   problem only. A row worth pricing, or one with no market price at all, carries none here —
+   the Market column already says both — so `data-tone` only ever reaches `warn` (a typed price
+   adrift). See `flagOf` in Pricing.tsx. */
+.pricing-flag { flex: none; font-weight: 600; }
+.pricing-flag[data-tone='warn'] { color: var(--bn-warn); }
 /* EVERY FACT THAT CHANGES A PRICE DECISION READS AT 4.5:1 OR BETTER (UX-026): the meta line is
    `--bn-ink-3`, never the non-text `--bn-ink-4`. */
 .pricing-meta {
@@ -178,36 +188,22 @@
 /* A separator is drawn by CSS, never typed (D218). */
 .pricing-meta > *:not(:last-child)::after { content: '·'; margin-left: var(--bn-1-5); color: var(--bn-ink-3); }
 .pricing-number { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); }
-.pricing-place { display: inline-flex; align-items: center; gap: var(--bn-1); }
-/* NOTHING ON THE PLACE LINE IS CLIPPED (R4, R6-1). The card number, the copy count and the cap
-   note each keep their whole width: the line wraps to a second line rather than shrink one of
-   them to nothing. A place wider than the whole line wraps between its own parts. */
-.pricing-where { flex-wrap: wrap; overflow: visible; }
-.pricing-where > .pricing-place { max-width: 100%; min-width: 0; white-space: normal; }
-.pricing-where .bn-location { max-width: 100%; }
-/* A BOX NAME LONGER THAN THE COLUMN WRAPS INSIDE ITS OWN PART (R7 F1), never past the column
-   into the price. `overflow: visible` above is safe only because nothing here is wider than
-   the column. */
-.pricing-where .position-run-path { white-space: normal; overflow-wrap: anywhere; }
-/* "AND 1 MORE" IS ITS OWN ITEM (R7 F2): it keeps its whole width and wraps below the place
-   when the place fills the line, so it never draws over the card number. */
-.pricing-where > .pricing-place { flex-wrap: wrap; }
-.pricing-where .pricing-more { flex: none; white-space: nowrap; }
-/* THE LIVE COUNT WRAPS INSIDE THE COLUMN (R8-3): "2 live (3 when read, 1 sold since)" is wider
-   than the phone's card column, and it ran 57px past it into the price. */
+/* THE SINGLE BOX/SECTION/CARD LOCATION IS GONE FROM THIS LINE (the owner's review, 2026-09-26:
+   "why would I need to see one location for only one copy of a card when I'm handling pricing
+   for all copies"). What is left — the copy count, the live count, the held note — still wraps
+   rather than clips, so the rules below keep their reasons. */
+.pricing-where { flex-wrap: wrap; overflow: visible; column-gap: var(--bn-3); }
+/* THE LIVE COUNT WRAPS INSIDE THE COLUMN (R8-3): it once ran past the phone's card column. */
 .pricing-where > .pricing-live { white-space: normal; max-width: 100%; }
 /* NO GLYPH ON A LINE THAT WRAPS (R7 F3). A "·" drawn after an item stays at the line end when
-   the next item wraps, so the place line is separated by its gap alone. */
-.pricing-where { column-gap: var(--bn-3); }
+   the next item wraps, so the line is separated by its gap alone. */
 .pricing-meta.pricing-where > *::after { content: none; }
 /* THE OPERATOR'S NOTE IS THE ONE PART THAT GIVES WAY (D28): it starts from no width and takes
    what the line has left, up to its own cap, so a note never adds a line where the facts fit. */
 .pricing-where > .pricing-why { flex: 1 1 0; min-width: 6ch; }
-.pricing-more { color: var(--bn-ink-3); }
 .pricing-copies { font-weight: 600; color: var(--bn-ink-2); }
 .pricing-live { color: var(--bn-ink-2); }
 .pricing-live[data-none='true'] { color: var(--bn-ink-3); }
-.pricing-cap { color: var(--bn-warn); font-weight: 600; }
 .pricing-why { font-style: italic; color: var(--bn-ink-2); max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
 
 .pricing-ref { text-align: right; font-size: var(--bn-fs-md); color: var(--bn-ink); white-space: nowrap; }
