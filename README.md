@@ -31,9 +31,8 @@ the card sits in it.
 ## See it
 
 **[shivinate7.github.io/banchi](https://shivinate7.github.io/banchi/)** runs the real app
-against recorded server answers, not a live store. The photographs are real, and the pipeline
-joins prices and sales against a real TCGplayer export. The demo invents which boxes exist,
-what has sold and who ordered it, to make the store look worked rather than freshly built.
+against recorded server answers, not a live store. It runs on a copy of a real store, with
+every buyer name replaced by "Jane Doe N" and every address replaced by "123 Demo Way."
 Nothing you do there reaches a real store. GitHub rebuilds it on every push to `main` that
 changes its inputs.
 
