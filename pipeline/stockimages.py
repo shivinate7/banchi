@@ -79,23 +79,11 @@ POKEMON_KEY = "pokemon"
 # on its first try.
 _CODE_PREFIX = re.compile(r"^[^:]+:\s*")
 
-# A RAW ON-HAND NUMBER SOMETIMES CARRIES SPACES AROUND THE SLASH ("019 / 166"), WHICH
-# `join.number_index_key` DOES NOT FOLD (measured on a real-store copy: 9 Riftbound misses
-# out of 1913, of which this is the one that is a spacing defect rather than a genuine
-# absence — see `docs/specs/stock-images.md`). `number_index_key` strips leading zeros from
-# each digit run and keeps every other character verbatim, including a space, by design —
-# it is the shared join key and `join.py`'s behavior is not this module's to change. So the
-# fold happens here, once, as a lookup-only step: collapse whitespace touching the slash
-# before the shared key function ever sees the string.
-_SLASH_SPACING = re.compile(r"\s*/\s*")
-
-
-def _lookup_key(number: str) -> str:
-    """The one key every stock-image LOOKUP goes through — never the catalog side, which
-    already indexes clean numbers. `join.number_index_key` still does the real fold; this
-    only removes a spacing defect the store's own `number` cell can carry, ahead of it.
-    """
-    return join.number_index_key(_SLASH_SPACING.sub("/", str(number or "")))
+# A RAW ON-HAND NUMBER SOMETIMES CARRIES SPACES AROUND THE SLASH ("019 / 166"). This used to
+# need a lookup-only fold ahead of `join.number_index_key`, because that function used to keep
+# whitespace verbatim. The owner's ruling 2026-09-27 ("Fold in the shared key") moved the fold
+# into `number_index_key` itself, which now strips ALL whitespace in the cell — a superset of
+# the slash-only fold this module used to do. Call it directly.
 
 
 class _PokemonImages:
@@ -172,7 +160,7 @@ class _PokemonImages:
         set_id = self._set_id_for(set_name)
         if set_id is None:
             return None
-        return self._numbers_for(set_id).get(_lookup_key(number))
+        return self._numbers_for(set_id).get(join.number_index_key(number))
 
     def display_name(self, set_name: str) -> Optional[str]:
         """The vendored tree's OWN name for `set_name`, resolved the SAME two-try order
@@ -331,7 +319,7 @@ class StockImages:
         self.warm([(game, set_name)])
         if entry is None:
             return None
-        return entry[1].get(_lookup_key(number))
+        return entry[1].get(join.number_index_key(number))
 
     def url_for(self, game: str, set_name: str, number: str) -> Optional[str]:
         """The image for one card, or `None` on a join miss, a cold cache, or an
