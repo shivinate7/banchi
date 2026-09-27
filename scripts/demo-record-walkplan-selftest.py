@@ -128,9 +128,58 @@ def _old_rule_would_have_exploded() -> None:
                "got %d" % sets)
 
 
+def _order(key, buyer=None, is_open=False, terminal=False, wanted=0, recorded=0):
+    return {
+        "key": key, "buyer": buyer, "open": is_open, "terminal": terminal,
+        "wanted": wanted, "recorded": recorded,
+    }
+
+
+def _default_view_walkable_orders_groups_by_buyer() -> None:
+    """`default_view_walkable_orders` — the CI run 36322624741 defect: a store-wide walkable
+    set (open OR terminal-and-owing, with no grouping) over-recorded, because a group whose
+    every order is terminal-but-owing never shows in `Orders.tsx`'s default "open" tab and is
+    never ticked. Two buyers, same shape, prove the discriminator is the GROUP's own openness,
+    not each order's."""
+    listed = [
+        # Buyer A: one open order, one terminal-but-owing order. BOTH are walkable, and both
+        # belong to a group that DOES show in the default tab (it has an open order).
+        _order("a-open", buyer="Jane Doe 1", is_open=True, wanted=2, recorded=0),
+        _order("a-term", buyer="Jane Doe 1", is_open=False, terminal=True, wanted=1, recorded=0),
+        # Buyer B: no open order at all, one terminal-but-owing order. Walkable on its own
+        # (`owns_a_walkable_body`), but its group never shows in the default tab, so the
+        # real "Walk all" press never ticks it.
+        _order("b-term", buyer="Jane Doe 2", is_open=False, terminal=True, wanted=3, recorded=1),
+        # A closed, fully-satisfied order: not walkable at all, by either measure.
+        _order("c-done", buyer="Jane Doe 3", is_open=False, terminal=True, wanted=1, recorded=1),
+    ]
+    got = set(demo_record.default_view_walkable_orders(listed))
+    ok(got == {"a-open", "a-term"}, "only buyer A's orders are ticked by the default view",
+       "got %r" % got)
+
+    store_wide = {e["key"] for e in listed if demo_record.owns_a_walkable_body(e)}
+    ok(store_wide == {"a-open", "a-term", "b-term"},
+       "the store-wide walkable set is a strict superset (the prior version's own defect)",
+       "got %r" % store_wide)
+
+
+def _default_view_walkable_orders_blank_buyer_is_its_own_order() -> None:
+    """A `None`/blank buyer groups by its own order key (`buyerKeyOf`'s `order:<key>` arm),
+    never merged with any other blank-buyer order."""
+    listed = [
+        _order("solo-open", buyer=None, is_open=True, wanted=1, recorded=0),
+        _order("solo-term", buyer="   ", is_open=False, terminal=True, wanted=1, recorded=0),
+    ]
+    got = set(demo_record.default_view_walkable_orders(listed))
+    ok(got == {"solo-open"}, "a blank-buyer order groups alone, unmerged with another",
+       "got %r" % got)
+
+
 def main() -> int:
     _new_rule_is_linear()
     _two_screens_two_sets_both_recorded()
+    _default_view_walkable_orders_groups_by_buyer()
+    _default_view_walkable_orders_blank_buyer_is_its_own_order()
     _old_rule_would_have_exploded()
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0
