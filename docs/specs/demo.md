@@ -1,5 +1,12 @@
 # The public demo, and why it is not a fork
 
+**THE STORE IS NOW A MIRROR, NOT AN INVENTION, as of 2026-09-26 (`D-demo-mirror`, §13).**
+`demo-static` no longer builds from `demo-seed`/`demo-record`. It installs a scrubbed
+recording of the owner's own real store instead. Below, §§2-12 describe the flow that
+mechanism replaces. They stay accurate about the wire, the coverage sweep and the build.
+`demo-seed`/`demo-record`/`demo` still work exactly as written. They are just no longer what
+gets published. Read §13 first for what changed and why.
+
 **COVERAGE WIDENED 2026-09-24**: photographs, undo, facet counts, the order walk, a typed
 search, the graveyard, the price histories and the value bands (§3, §5, §8, §8a).
 
@@ -407,3 +414,59 @@ writers, rather than checking. `scripts/qr-clear-check.py` closes that gap.
 staged blob, never the working-tree file, and refuses on the first decode it finds, naming
 the file. `PKMNSCAN_QR=off` is the bypass, in the shape every other opsec rule in this hook
 already uses.
+
+
+## 13. The store is a mirror, not an invention (`D-demo-mirror`, 2026-09-26)
+
+**The owner's ruling.** "full mirror is fine." Photos are capped "to just 512mb." Every
+name reads "Jane Doe N." Every address reads "123 Demo Way." See `D-demo-mirror` for every
+quote in full. This section is the mechanism's own record. `D-demo-mirror` is the decision.
+
+**What replaces what.** `demo-static` used to depend on `demo` — `demo-seed` then
+`demo-record`, §§2-6. It now depends on `demo-mirror-install`. The BUILD step itself did
+not move. `VITE_DEMO=1 npx vite build` (§6) reads the same. Every reader downstream of
+`app/demo/bundle.json` stays the same too: `demoServer.ts`, the coverage spec (§8a),
+freshness (§10). Only the bundle's SOURCE changed.
+
+**Three commands, three machines.**
+
+- `make demo-mirror SOURCE=<checkout>` — the owner's Mac only. It reads a `.backup` copy
+  of the real `store.sqlite`. It scrubs that copy. It records the result offline. It writes
+  the scrubbed output to the tracked `demo-assets/mirror/`.
+- `make demo-mirror-rebuild` — the owner's Mac, to iterate on the scrub or the recorder
+  without reading the real store again.
+- `make demo-mirror-install` — CI, and anyone else. It reads no store. It contacts no
+  network. It copies the committed `demo-assets/mirror/` into `app/demo/` and
+  `app/public/demo/photos/`.
+
+**The one check is the owner's own ruling, not a CI gate.** The owner ruled out a second
+check in CI (`D-demo-mirror` carries the exact words). So `assert_scrubbed()` runs once, on
+the owner's own Mac, before anything is committed. It is a plain `assert` over the finished
+recording and the shipping export. Every buyer name must match `^Jane Doe \d+$`. Every
+address field must be blank or exactly "123 Demo Way." Nothing else runs this check. The
+workflow does not repeat it.
+
+**Why the store never leaves the Mac.** `demo-mirror/`, the raw snapshot, is gitignored.
+Its own comment in `.gitignore` records why. `demo-assets/mirror/`, the scrub's output, is
+the one thing committed. It stands on the same footing as `demo-assets/photos/` and
+`demo-assets/extra/photos/` (§3, §12): a tracked exception this repo allows only because of
+what curates it. `scripts/githooks/pre-commit` re-decodes every staged image under all
+three directories for a QR before it lets a commit through (D70). This entry widened that
+same check to cover the new directory.
+
+**Why the walk-plan sweep changed shape.** §5 records `WALK_PLAN_ORDERS = 7`, and every
+subset of the invented demo's seven orders — 127 sets. The owner's real ledger holds 834
+orders, measured 2026-09-26. Recording every subset of 834 orders is not a number this repo
+can reach by raising a constant. The fix narrows the question instead. Only an OPEN order
+can ever be ticked: every caller of `walkPlan` sends open keys alone (`Fulfillment.tsx`,
+`Orders.tsx`, D96/D220). So the sweep now reads the recorded `/orders` GET. It keeps the
+open keys only. It records every subset of those keys alone. The recorder still refuses
+outright past seven open orders. A future rebuild may cross that line. If it does, the fix
+is a different recording strategy for the walk plan. Raising the constant is not that fix.
+This is left as an open question, unmeasured as of this entry.
+
+**What is left open.** `ux/stock-images` is a separate lane. It is meant to put stock image
+URLs on route responses, so a recording can carry them. This section does not depend on it
+landing. `make demo-determinism` still proves the OLD invented seed deterministic, over
+`demo-seed`. It says nothing about the mirror. Proving the mirror deterministic means
+reading the real store twice, and nothing here does that yet.

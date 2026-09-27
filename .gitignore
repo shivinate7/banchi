@@ -155,6 +155,17 @@ app/public/demo
 # ignore-check: bare on purpose, see the note at the top of this file
 dist-demo
 
+# THE MIRROR'S INPUT: a `.backup` copy of the owner's real store, with real buyer names in it.
+# It is NEVER committed and never leaves this Mac (D-demo-mirror, docs/specs/demo.md §13).
+# `scripts/demo-mirror.py` reads it and writes the scrubbed demo store into `demo`, above.
+# ignore-check: bare on purpose, see the note at the top of this file
+demo-mirror
+
+# A worker's own throwaway snapshot and build home, never committed: the same real-data
+# hazard `demo-mirror` above names, one directory over.
+# ignore-check: bare on purpose, see the note at the top of this file
+scratch
+
 # D15, build-order step 9. `vendor/pokemon-tcg-data/` is a committed snapshot (cards + sets
 # JSON, ~26 MB) — but these two files are GENERATED from that snapshot by
 # `scripts/catalog-index.py` and `scripts/catalog-image-mirror.py`, `harness/.cache`-shaped:

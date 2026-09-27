@@ -93,18 +93,23 @@ class Server:
     bounced it would take their store offline to build a demo.
     """
 
-    def __init__(self, home: Path, port: int) -> None:
+    def __init__(self, home: Path, port: int, offline: bool = False) -> None:
         self.home = home
         self.port = port
         self.base = "http://127.0.0.1:%d" % port
         self.process: Optional[subprocess.Popen] = None
+        self.offline = offline
 
     def __enter__(self) -> "Server":
         env = dict(os.environ)
         env["PKMNSCAN_HOME"] = str(self.home)
         env["PKMNSCAN_PORT"] = str(self.port)
+        script = str(REPO_ROOT / "server" / "capture_server.py")
+        argv = [sys.executable, script]
+        if self.offline:
+            argv = [sys.executable, "-c", OFFLINE_BOOT, script]
         self.process = subprocess.Popen(
-            [sys.executable, str(REPO_ROOT / "server" / "capture_server.py")],
+            argv,
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -178,6 +183,28 @@ class Server:
             return status, json.loads(body)
         except ValueError:
             return status, None
+
+
+# THE MIRROR'S SERVER HAS NO NETWORK (D-demo-mirror). A mirror holds every SKU the owner ever
+# stocked, and `#/product`'s history route reads TCGplayer live for any SKU its archive lacks.
+# Swept over thousands of SKUs, that is thousands of requests to a host the owner allows from
+# a browser only (D216). So the server starts with every non-loopback `connect` refused,
+# before its first import. A read that needed the network answers an error, is not a 200, and
+# is not recorded. That is the "best effort" rule the invented demo already follows.
+OFFLINE_BOOT = (
+    "import os, runpy, socket, sys\n"
+    "def _guard(real):\n"
+    "    def connect(self, address):\n"
+    "        if isinstance(address, tuple) and address[0] not in ('127.0.0.1', '::1', 'localhost'):\n"
+    "            raise OSError('demo mirror recording is offline: refused %s' % (address[0],))\n"
+    "        return real(self, address)\n"
+    "    return connect\n"
+    "socket.socket.connect = _guard(socket.socket.connect)\n"
+    "socket.socket.connect_ex = _guard(socket.socket.connect_ex)\n"
+    "sys.argv = sys.argv[1:]\n"
+    "sys.path.insert(0, os.path.dirname(sys.argv[0]))\n"
+    "runpy.run_path(sys.argv[0], run_name='__main__')\n"
+)
 
 
 # ---------------------------------------------------------------------------- the sweep
@@ -381,7 +408,11 @@ def sweep(server: Server, space: Dict[str, List[str]]):
     # `fixtures/orders-shipping.csv` IS ALREADY ANONYMISED — every row reads `Buyer001
     # Placeholder / 101 Example St` — which is what makes it publishable at all. A real
     # export is a list of buyers' home addresses and must never reach this bundle.
-    shipping = REPO_ROOT / "fixtures" / "orders-shipping.csv"
+    # A MIRROR BRINGS ITS OWN, written by `demo-mirror.py:write_shipping_export` from the
+    # mirror's own open orders, with every name "Jane Doe N" and every street "123 Demo Way".
+    shipping = Path(str(space["home"])) / "shipping-export.csv"
+    if not shipping.is_file():
+        shipping = REPO_ROOT / "fixtures" / "orders-shipping.csv"
     if shipping.is_file():
         status, made = server.post(
             "/shipping/batches", {"content": shipping.read_text(encoding="utf-8")}
@@ -499,6 +530,16 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
     orders = list(space["orders"])  # type: ignore[arg-type]
     for key in orders:
         take_post("/orders/picks", {"keys": [key]})
+
+    # ONLY AN OPEN ORDER CAN BE TICKED. Every caller of `walkPlan` sends open keys alone:
+    # `Fulfillment.tsx` filters `order.open`, and `Orders.tsx` walks `walkableKeysAll`. So a set
+    # that holds a closed order is a question no screen asks. Counted, a mirror of the owner's
+    # whole ledger (834 orders, 2026-09-26) could never be recorded.
+    listed = (recorded.get("/orders", {}).get("body") or {}).get("orders") or []
+    orders = sorted(
+        str(entry["key"]) for entry in listed
+        if isinstance(entry, dict) and entry.get("open") and entry.get("key")
+    )
 
     # THE WALK PLAN DOES NOT MERGE — it is a solver over the whole ticked set, so every set
     # a person can tick is recorded on its own. Seven orders is 127 sets; the keys go in
@@ -758,6 +799,10 @@ def main() -> int:
         "--self-test", action="store_true",
         help="prove the QR refusal on a throwaway store, and exit",
     )
+    parser.add_argument(
+        "--offline", action="store_true",
+        help="refuse every non-loopback connection from the recorded server (the mirror)",
+    )
     args = parser.parse_args()
     if args.self_test:
         return self_test()
@@ -771,7 +816,7 @@ def main() -> int:
     space = parameter_space(home)
     warmed = warm_history_cache(home)
     port = free_port()
-    with Server(home, port) as server:
+    with Server(home, port, offline=args.offline) as server:
         recorded, skipped = sweep(server, space)
 
     photos = copy_photos(home)

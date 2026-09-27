@@ -2244,7 +2244,8 @@ COMPONENTS = [
                 # after it drifts, which is why an edit has to be stopped and not caught.
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
-                "governed_by": ["D11", "D14", "D16", "D18", "D44", "D47", "D58", "D70", "D92"],
+                "governed_by": ["D11", "D14", "D16", "D18", "D44", "D47", "D58", "D70", "D92",
+                                "D-demo-mirror"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; a sibling "
                         "hook's arrival is caught by `hook roster` since 2026-09-05. "
@@ -4948,6 +4949,21 @@ COMPONENTS = [
                 # number this copies across so the caption matches the picture.
                 "governed_by": ["D24", "D25", "D67", "D70"],
             },
+            "demo-mirror.py": {
+                "does": "builds the published demo as a scrubbed mirror of the owner's real "
+                        "store (owner's ruling 2026-09-26, `D-demo-mirror`). Reads a "
+                        "`.backup` copy of `store.sqlite` into gitignored `demo-mirror/`, "
+                        "overwrites every buyer name to `Jane Doe N` and every address to "
+                        "`123 Demo Way`, crops QR-cleared photographs under a 512 MB cap, "
+                        "records the store offline (no network), asserts the scrub, and "
+                        "commits only that scrubbed output to `demo-assets/mirror/`. "
+                        "`--install` is CI's own mode: copies the committed output into "
+                        "`app/demo/` and `app/public/demo/photos/`, reading no store.",
+                # D70 is the QR test the photograph step reuses from demo-photos.py. D61 is
+                # why the shipping export is written fresh rather than read (the store holds
+                # no address at all). D216 is why the recording runs offline.
+                "governed_by": ["D61", "D70", "D193", "D216", "D-demo-mirror"],
+            },
             "demo-histories.py": {
                 "does": "`make demo-histories`: records every demo card's price history, all "
                         "four ranges, from infinite-api into a NEW dated directory under "
@@ -4985,8 +5001,8 @@ COMPONENTS = [
                 # D43 is the port and the store, both derived rather than assumed: this
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
-                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D159", "D172",
-                                "D183", "D213", "D216", "D227"],
+                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D96", "D159",
+                                "D172", "D183", "D213", "D216", "D220", "D227", "D-demo-mirror"],
             },
             "demo_scrub.py": {
                 "does": "strips machine-local absolute paths out of the bundle before it is "
@@ -4996,8 +5012,11 @@ COMPONENTS = [
                         "it was written to remove.",
                 # The bundle goes to a public host, and `/status` and `/pricing` both answer
                 # with real filesystem paths. Underscored, not hyphenated, because it is the
-                # one file here that is IMPORTED rather than run.
-                "governed_by": ["D18"],
+                # one file here that is IMPORTED rather than run. D183 is why a real card's
+                # payload can carry a legacy `Path.home()`-rooted string at all (a pre-D183
+                # capture address); `D-demo-mirror` is why that string reaches this file for
+                # the first time and why its stand-in changed off `/home`.
+                "governed_by": ["D18", "D183", "D-demo-mirror"],
             },
             "demo-freshness.py": {
                 "does": "whether app/demo/bundle.json still describes the wire it was recorded "

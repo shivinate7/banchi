@@ -227,7 +227,18 @@ make demo           # seed a demo store and record the wire, a fixture bundle.
                     #   reach it. READ IT BEFORE CHANGING ANY demo-* TARGET.
 make demo-seed      # the store alone. Deterministic. Refuses with PKMNSCAN_HOME unset.
 make demo-record    # the bundle alone, on its own throwaway server and port.
-make demo-static    # both above, then a static build to dist-demo/.
+make demo-mirror SOURCE=<checkout>  # THE PUBLISHED DEMO'S REAL SOURCE as of `D-demo-mirror`
+                    #   (2026-09-26). Owner's Mac only. Snapshots a real store, scrubs every
+                    #   name to `Jane Doe N` and every address to `123 Demo Way`, crops
+                    #   QR-cleared photos under a 512 MB cap, records offline, asserts the
+                    #   scrub, commits only `demo-assets/mirror/`. The store never leaves
+                    #   this Mac. `make demo-mirror-rebuild` re-runs it from the existing
+                    #   gitignored snapshot, no SOURCE and no re-read of the real store.
+make demo-mirror-install  # CI's own step: the committed `demo-assets/mirror/`, copied into
+                    #   app/demo/ and app/public/demo/photos/. Reads no store, no network.
+make demo-static    # demo-mirror-install, then a static build to dist-demo/. `demo-seed` and
+                    #   `demo-record` above still work; they are just not what this builds
+                    #   from any more.
 make demo-preview   # serve dist-demo/ as a static host would.
 make demo-freshness # whether the bundle matches its recording. No gate: CI rebuilds fresh.
 make check          # harness + docs-audit + claim-stale + revert-guard +
