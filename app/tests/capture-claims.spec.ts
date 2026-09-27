@@ -1225,9 +1225,12 @@ test('a restored box the store still calls the same drawer is kept', async ({ pa
 test('the Rig panel starts open with no remembered box, and folded with one', async ({ page }) => {
   /* THE WALKTHROUGH'S FINDING: seven settings stood between opening Capture and picking a box,
      on a screen that already remembers the box across sittings (D142). A first-time browser has
-     nothing to fold FROM — the fields have to be visible to choose the first time. */
+     nothing to fold FROM — the fields have to be visible to choose the first time.
+     GAME MOVED TO STACK (owner's feedback, 2026-09-26) and is never folded, so the Rig's own
+     fold is read off one of its three REMAINING fields — Camera — instead. */
   await open(page, undefined, GAMES, HAND_BOXES, { probe: false })
   await expect(page.locator('.capture-rig-summary')).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.locator('.capture-row').filter({ hasText: /Camera/ })).toBeVisible()
   await expect(page.locator('.capture-row').filter({ hasText: /Game/ })).toBeVisible()
 })
 
@@ -1235,24 +1238,26 @@ test('a remembered box folds the Rig panel behind a one-line summary', async ({ 
   await open(page, { box: 3, bid: 23 }, GAMES, HAND_BOXES, { probe: false })
   const summary = page.locator('.capture-rig-summary')
   await expect(summary).toHaveAttribute('aria-expanded', 'false')
-  /* THE FIELDS ARE GONE, NOT MERELY HIDDEN — this is a fold and not a scroll. */
-  await expect(page.locator('.capture-row').filter({ hasText: /Game/ })).toHaveCount(0)
-  await expect(summary).toContainText('Pokémon')
+  /* THE FIELDS ARE GONE, NOT MERELY HIDDEN — this is a fold and not a scroll. Game is not
+     one of them any more (it lives in Stack), so it stays visible through the fold. */
+  await expect(page.locator('.capture-row').filter({ hasText: /Camera/ })).toHaveCount(0)
+  await expect(page.locator('.capture-row').filter({ hasText: /Game/ })).toBeVisible()
+  await expect(summary).toContainText('Manual')
 
   /* AND A PRESS REACHES IT LIKE ANY OTHER DISCLOSURE. */
   await summary.click()
   await expect(summary).toHaveAttribute('aria-expanded', 'true')
-  await expect(page.locator('.capture-row').filter({ hasText: /Game/ })).toBeVisible()
+  await expect(page.locator('.capture-row').filter({ hasText: /Camera/ })).toBeVisible()
 })
 
 test('a keyboard shortcut into a folded field opens it anyway', async ({ page }) => {
   /* EVERY OPTION RIDES A KEY, REGARDLESS OF THE FOLD. A shortcut fired while the panel reads
      closed must not open a picker into hidden markup — the operator would be typing into a
-     field they cannot see. */
+     field they cannot see. Camera (`v`), not Game: Game is never folded now. */
   await open(page, { box: 3, bid: 23 }, GAMES, HAND_BOXES)
   await expect(page.locator('.capture-rig-summary')).toHaveAttribute('aria-expanded', 'false')
-  await page.keyboard.press('g')
-  await expect(page.locator('.capture-open').filter({ hasText: 'Game' })).toBeVisible()
+  await page.keyboard.press('v')
+  await expect(page.locator('.capture-open').filter({ hasText: 'Camera' })).toBeVisible()
 })
 
 test('a box remembered before ids existed is let go of, and says it cannot tell', async ({
@@ -1369,11 +1374,10 @@ test('clearing the setup empties every claim, forgets the key, and can be undone
      reason for a registry that has not ARRIVED — "Waiting for the game list from the server"
      — which after a successful load is a sentence that is simply untrue.
 
-     THE RIG PANEL COLLAPSES ONCE A BOX IS REMEMBERED (this batch's item 17) — the fixture
-     seeded `box: 3`, so Game/Camera/Rotation/Trigger start folded. Open it first, the same
-     way an operator who wants to check the game would. */
-  const rigSummary = page.locator('.capture-rig-summary')
-  if ((await rigSummary.getAttribute('aria-expanded')) === 'false') await rigSummary.click()
+     GAME LIVES IN STACK NOW, NEVER FOLDED (owner's feedback, 2026-09-26 — "at least game
+     belongs in the stack section"), so it needs no Rig unfold to read. THE RIG PANEL STILL
+     COLLAPSES ONCE A BOX IS REMEMBERED (this batch's item 17), over its three remaining
+     fields — Camera, Rotation, Trigger. */
   await expect(page.locator('.capture-row').filter({ hasText: /Game/ })).toContainText('Pokémon')
 
   /* AND NOTHING IN THE STORE WAS ASKED TO DO ANYTHING. `sealEveryTest` records every request
@@ -1617,8 +1621,9 @@ test('no typed middle dot or bullet reaches the capture screen', async ({ page }
   await finishCell(page, 'reverse_holo').click()
   await page.keyboard.press('Escape')
 
-  // The Rig folds itself once a box is picked (D211). Unfold it so its own three-part
-  // summary line is in the DOM, then reach the Trigger row inside it.
+  // The Rig folds itself once a box is picked (D211). Unfold it so its own two-part
+  // summary line (rotation, trigger — Game moved to Stack) is in the DOM, then reach the
+  // Trigger row inside it.
   const rigSummary = page.locator('.capture-rig-summary')
   if ((await rigSummary.getAttribute('aria-expanded')) === 'false') await rigSummary.click()
 

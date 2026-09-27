@@ -302,8 +302,9 @@ test('the Section row names the pick, its count and where it physically goes', a
   await expect(sectionRow(page)).toContainText('Section 2 of 3')
   await expect(sectionRow(page)).toContainText('Rares')
   await expect(sectionRow(page)).toContainText('next card 11')
-  // NOT THE LAST SECTION: the row says where the card physically goes.
-  await expect(sectionRow(page)).toContainText('behind the section 3 divider')
+  // NOT THE LAST SECTION: the row says where the card physically goes. Cut from "behind the
+  // section N divider" (owner: "over verbiage", it truncated at 390) to "before section N".
+  await expect(sectionRow(page)).toContainText('before section 3')
 })
 
 test('every capture sends the picked section, and the placed label reads it back', async ({ page }) => {
@@ -460,8 +461,8 @@ test('the row does not move the shutter below it, on a pick or an S (D118)', asy
   await page.locator('.capture-opt').filter({ hasText: /Section 2 of 3/ }).click()
   const afterPick = await place(page, '.capture-shutter')
   // THE POSITION IS D118'S OWN CONCERN, never the shutter's own rendered height — a longer
-  // label on the row above it (a section's name, or "behind the section N divider") can
-  // shift Chromium's own sub-pixel text rounding by a hair without moving anything at all.
+  // label on the row above it (a section's name, or "before section N") can shift Chromium's
+  // own sub-pixel text rounding by a hair without moving anything at all.
   expect(afterPick.top).toBe(withListOpen.top)
   expect(afterPick.top).toBe(atRest.top)
 

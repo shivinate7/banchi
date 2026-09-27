@@ -89,7 +89,9 @@ const SECTION_KEY_LABEL = 'S'
  *  (a higher one, toward the last). */
 const SECTION_BACK_KEY = '['
 const SECTION_FRONT_KEY = ']'
-const SECTION_STEP_LABEL = '[ ]'
+/** Two caps, drawn side by side by `KeyCaps` — never one cap holding the joined string `"[ ]"`,
+ *  which wraps inside a one-letter cap's fixed width and reads as a stray bracket. */
+const SECTION_STEP_KEYS: readonly [string, string] = [SECTION_BACK_KEY, SECTION_FRONT_KEY]
 
 // Finish strings are rendered VERBATIM rather than as friendly labels: D3 rung 1 treats the
 // claim as trusted, and the string on screen is the string written into the sidecar and
@@ -632,9 +634,10 @@ type FieldId =
   | 'rotation'
   | 'trigger'
 
-/** The four fields the Rig panel's own disclosure folds away — used to keep the panel open
- *  while one of them is being edited, regardless of the disclosure's own state. */
-const RIG_FIELDS: ReadonlySet<FieldId> = new Set(['game', 'camera', 'rotation', 'trigger'])
+/** The three fields the Rig panel's own disclosure folds away — used to keep the panel open
+ *  while one of them is being edited, regardless of the disclosure's own state. Game moved out
+ *  to the Stack panel (owner's feedback, 2026-09-26): it is a per-card claim, not rig hardware. */
+const RIG_FIELDS: ReadonlySet<FieldId> = new Set(['camera', 'rotation', 'trigger'])
 
 /* The field letters, none of which may be `c`, `u` or `s` — those are the run's own keys and
  * stay reserved (see CAPTURE_KEY). `v` for the camera because `c` is taken, `o` for rotation
@@ -709,6 +712,27 @@ function triggerIcon(mode: TriggerMode): IconName {
   return mode === 'motion' ? 'eye' : 'keyboard'
 }
 
+/** Most rows carry one key. The section pick carries two — `[` steps back, `]` steps front
+ *  (SECTION_BACK_KEY/SECTION_FRONT_KEY) — and a single cap holding `"[ ]"` as one string wraps
+ *  inside the one-letter cap's fixed width and reads as a stray bracket. Two caps side by side,
+ *  the way the Box row already draws its own single `B` cap, says "two keys" rather than
+ *  "one broken one". */
+function KeyCaps({ k }: { k: string | readonly [string, string] }) {
+  if (typeof k === 'string') return <Kbd className="capture-k">{k}</Kbd>
+  // `.bn-kbd-group` is the kit's own primitive for holding several caps together (already used
+  // for a multi-key shortcut elsewhere) — reused rather than a second wrapper invented here.
+  return (
+    <span className="bn-kbd-group capture-k-pair">
+      <Kbd className="capture-k">{k[0]}</Kbd>
+      <Kbd className="capture-k">{k[1]}</Kbd>
+    </span>
+  )
+}
+
+function keyShortcutsText(k: string | readonly [string, string]): string {
+  return typeof k === 'string' ? k : k.join(' ')
+}
+
 function Row({
   k,
   label,
@@ -718,7 +742,7 @@ function Row({
   size,
   className,
 }: {
-  k: string
+  k: string | readonly [string, string]
   label: string
   icon?: IconName
   right: ReactNode
@@ -729,16 +753,17 @@ function Row({
   className?: string
 }) {
   const classes = [size === 'lg' ? 'capture-row capture-row-lg' : 'capture-row']
+  if (typeof k !== 'string') classes.push('capture-row-keypair')
   if (className !== undefined) classes.push(className)
   return (
     <button
       type="button"
       className={classes.join(' ')}
       aria-expanded={false}
-      aria-keyshortcuts={k}
+      aria-keyshortcuts={keyShortcutsText(k)}
       onClick={onToggle}
     >
-      <Kbd className="capture-k">{k}</Kbd>
+      <KeyCaps k={k} />
       {icon === undefined ? null : <Icon name={icon} size={15} className="capture-row-icon" />}
       <span className="capture-lab">{label}</span>
       <span className="capture-right">{right}</span>
@@ -759,7 +784,7 @@ function OpenField({
   size,
   pin,
 }: {
-  k: string
+  k: string | readonly [string, string]
   label: string
   icon?: IconName
   meta: ReactNode
@@ -792,12 +817,12 @@ function OpenField({
     <div className={classes.join(' ')}>
       <button
         type="button"
-        className="capture-row"
+        className={typeof k === 'string' ? 'capture-row' : 'capture-row capture-row-keypair'}
         aria-expanded={true}
-        aria-keyshortcuts={k}
+        aria-keyshortcuts={keyShortcutsText(k)}
         onClick={onClose}
       >
-        <Kbd className="capture-k">{k}</Kbd>
+        <KeyCaps k={k} />
         {icon === undefined ? null : <Icon name={icon} size={15} className="capture-row-icon" />}
         <span className="capture-lab">{label}</span>
         <span className="capture-meta">{meta}</span>
@@ -1748,6 +1773,16 @@ export function CaptureScreen() {
    *  number (D260) and `count` is how many it holds now, patched per capture by
    *  `patchSectionCount` the same way `newCardNumber` is patched by `patchOnHand`. */
   const nextCardInSection = pickedSection === null ? undefined : pickedSection.start + pickedSection.count
+
+  /** WHERE THE NEXT CAPTURE ACTUALLY LANDS — the owner's fix (feedback, 2026-09-26): with an
+   *  earlier section picked, the header stat, the Box row and the camera footer all kept
+   *  reading `newCardNumber` (the box's own total), disagreeing with the Section row's own
+   *  `nextCardInSection` a few pixels away — "next card 521" beside "next card 43" for the
+   *  SAME upcoming shot. Every "next card" on this screen reads this one number now. It falls
+   *  back to `newCardNumber` only when there is no section to pick from (`pickedSection ===
+   *  null`, e.g. before `GET /sections` has answered) — the last section's own next card
+   *  already equals the box's, so this changes nothing for an unpicked, default sitting. */
+  const nextCaptureCardNumber = nextCardInSection ?? newCardNumber
 
   /** WHERE A CARD CAPTURED HERE PHYSICALLY GOES, when the pick is not the last section — "the
    *  gap on the back side of" the NEXT section's divider (the physical model, subbox-capture.md
@@ -3558,7 +3593,7 @@ export function CaptureScreen() {
               tone: 'warn',
               text:
                 'The game list did not load, so there is nothing to capture as. Ask again ' +
-                'under Rig.',
+                'under Stack.',
               fix: null,
             },
       )
@@ -3679,8 +3714,11 @@ export function CaptureScreen() {
    * to avoid colliding with the `#N` other screens reserve for the counted number — but the
    * odometer three lines below draws that same `nextForBox` labelled "next card", so the
    * screen disagreed with itself the moment a card left the box. Both now read
-   * `newCardNumber`, and the word is "card", never "index" (D196). */
-  const boxNextText = boxIsEmpty ? 'Empty' : `next card ${newCardNumber ?? '?'}`
+   * `newCardNumber`, and the word is "card", never "index" (D196). Reads
+   * `nextCaptureCardNumber` now, not `newCardNumber` directly — see its own comment: with an
+   * earlier section picked, the box's own total and the next actual capture are two different
+   * numbers, and this row said the wrong one. */
+  const boxNextText = boxIsEmpty ? 'Empty' : `next card ${nextCaptureCardNumber ?? '?'}`
 
   // UX-076: the known-code lookup for the halt banner, read once here so the two JSX spots
   // that need it (headline, resume sentence) do not each re-index a possibly-undefined map.
@@ -3709,7 +3747,7 @@ export function CaptureScreen() {
       <div className="capture-odo" aria-label="This sitting">
         <Stat value={runCount === null ? '0' : String(runCount.shots)} label="captured" />
         <span className="capture-odo-rule" aria-hidden="true" />
-        <Stat value={box === null ? '—' : String(newCardNumber ?? '?')} label="next card" />
+        <Stat value={box === null ? '—' : String(nextCaptureCardNumber ?? '?')} label="next card" />
         {runCount === null ? null : runCount.gaps === 0 && runCount.ids === runCount.shots ? (
           <Pill tone="ok" icon="check" className="capture-odo-verdict">
             no gaps
@@ -4112,7 +4150,7 @@ export function CaptureScreen() {
               <Icon name="box" size={14} />
               <span className="capture-foot-box-name">{boxSentence}</span>
               {box === null ? null : (
-                <span className="capture-foot-next">next card {newCardNumber ?? '?'}</span>
+                <span className="capture-foot-next">next card {nextCaptureCardNumber ?? '?'}</span>
               )}
             </span>
             {/* ============ TUNING: the machine's readout and instruments, off the surface ============ */}
@@ -4485,7 +4523,7 @@ export function CaptureScreen() {
               Row stays in flow and sizes the slot, the open field overlays it. */}
           <div className="capture-section-slot">
           <Row
-            k={SECTION_STEP_LABEL}
+            k={SECTION_STEP_KEYS}
             label="Section"
             icon="divider"
             className={openField === 'section' ? 'capture-row-covered' : undefined}
@@ -4511,9 +4549,10 @@ export function CaptureScreen() {
                   <span>
                     <span className="capture-list-part">{`next card ${nextCardInSection ?? '?'}`}</span>
                     {behindSection === null ? null : (
-                      // WHERE THE CARD PHYSICALLY GOES, when the pick is not the last
-                      // section — the physical model's own sentence (subbox-capture.md §2).
-                      <span className="capture-list-part">{`behind the section ${behindSection} divider`}</span>
+                      // WHERE THE CARD PHYSICALLY GOES, when the pick is not the last section —
+                      // cut from "behind the section N divider" (owner: "over verbiage"), which
+                      // truncated at 390 and under a narrow Stack column. Same fact, fewer words.
+                      <span className="capture-list-part">{`before section ${behindSection}`}</span>
                     )}
                   </span>
                 </span>
@@ -4524,7 +4563,7 @@ export function CaptureScreen() {
             }}
           />
           {openField !== 'section' ? null : (
-            <OpenField k={SECTION_STEP_LABEL} label="Section" icon="divider" meta="Pick one" pin onClose={closeField}>
+            <OpenField k={SECTION_STEP_KEYS} label="Section" icon="divider" meta="Pick one" pin onClose={closeField}>
               <div className="capture-opts">
                 {sectionsDetail.map((span, position) => {
                   const isLast = span.section === sectionsDetail.length
@@ -4588,9 +4627,14 @@ export function CaptureScreen() {
               Capture card
             </Button>
 
-            {/* One block: the sentence is the whole truth and the shortcut rides on the
-                cause it fixes, so a cause with no button is read rather than replaced. */}
-            {blockers.length === 0 ? null : (
+            {/* FOLD INTO THE BUTTON (owner's ruling): when the camera is the ONLY thing
+                missing, the box below is noise — the viewfinder already carries its own "Open
+                the camera" button a few pixels up. One quiet line under the shutter is the
+                whole story. The box comes back the moment anything else joins it (a box, the
+                game list), because then there is a REASON list again and the fix buttons vary. */}
+            {blockers.length === 1 && blockers[0]?.key === 'camera' ? (
+              <p className="capture-quiet capture-camera-note">Open the camera first</p>
+            ) : blockers.length === 0 ? null : (
               <div className="capture-block" role="group" aria-label="Before you can capture">
                 <span className="bn-label capture-block-word">Before you can capture</span>
                 <ul className="capture-block-list">
@@ -4896,6 +4940,70 @@ export function CaptureScreen() {
         <section className="capture-card capture-card-stack" aria-label="Stack claims">
           <p className="bn-label capture-card-label">Stack</p>
 
+          {/* GAME MOVED HERE FROM THE RIG PANEL (owner's feedback, 2026-09-26): "at least game
+              belongs in the stack section" — it is a per-card claim like the set hint (D21),
+              never rig hardware like the camera or its rotation. The `G` key and its row in
+              `SHORTCUTS` (App.tsx) are unchanged; only where the field itself is drawn moved. */}
+          {openField === 'game' ? (
+            <OpenField k="G" label="Game" icon="layers" meta="Pick one" onClose={closeField}>
+              <div className="capture-opts">
+                {(registry?.games ?? []).map((entry, position) => (
+                  <Opt
+                    key={entry.key}
+                    k={OPTION_KEYS[position]}
+                    on={entry.key === game}
+                    name={entry.display}
+                    onPick={() => {
+                      pickGame(entry.key)
+                      closeField()
+                    }}
+                  />
+                ))}
+                {registry === null ? (
+                  <p className="capture-quiet">The server has not sent the game list yet.</p>
+                ) : null}
+              </div>
+              {registryNote === null ? null : (
+                <>
+                  <p className="capture-refused">{registryNote.text}</p>
+                  <Button size="sm" icon="refresh" onClick={() => void loadGames()}>
+                    Ask again
+                  </Button>
+                </>
+              )}
+              {gameEntry === null ? null : gameEntry.unverified ? (
+                <p className="capture-opennote">
+                  No TCGplayer export exists for {gameEntry.display} — it cannot be identified,
+                  priced, or listed. Captures are held until one is added.
+                </p>
+              ) : !gameEntry.catalogued ? (
+                <p className="capture-opennote">
+                  {gameEntry.display} is captured and located, but never identified, priced, or
+                  listed.
+                </p>
+              ) : gameEntry.prompt === PROMPT_UNWRITTEN ? (
+                <p className="capture-opennote">
+                  {gameEntry.display} has no identification prompt yet — cards are captured and
+                  positioned now, identified later.
+                </p>
+              ) : null}
+            </OpenField>
+          ) : (
+            <Row
+              k="G"
+              label="Game"
+              icon="layers"
+              right={
+                gameEntry === null ? (
+                  <span className="capture-val is-default">{gameSentence}</span>
+                ) : (
+                  <span className="capture-val">{gameEntry.display}</span>
+                )
+              }
+              onToggle={() => toggleField('game')}
+            />
+          )}
+
           {openField === 'set' ? (
             <OpenField
               k="H"
@@ -5029,13 +5137,23 @@ export function CaptureScreen() {
                     <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
                   ) : (
                     <span className="capture-val">
-                      {rarityParts === null
-                        ? rarityCountText
-                        : rarityParts.map((name) => (
-                            <span key={name} className="capture-list-part">
-                              {name}
-                            </span>
-                          ))}
+                      {/* THE NAMED LIST IS ITS OWN ELLIPSIS BOX (`.capture-val-name`, the same
+                          primitive the camera row's own value already leans on) — never a bare
+                          flex child of `.capture-val`. Two names plus the bits beside them can
+                          outrun a narrow Stack column, and a flex row clips an overflowing FIRST
+                          child from the left with no ellipsis mark: a two-pixel sliver of
+                          "Common" read as a stray tick before the CSS-drawn "· Uncommon". Wrapping
+                          the names lets THIS box shrink and truncate properly; `.capture-bits`
+                          stays a `flex: none` sibling, so the count marks are never the thing cut. */}
+                      <span className="capture-val-name">
+                        {rarityParts === null
+                          ? rarityCountText
+                          : rarityParts.map((name) => (
+                              <span key={name} className="capture-list-part">
+                                {name}
+                              </span>
+                            ))}
+                      </span>
                       <span
                         className="capture-bits"
                         role="img"
@@ -5191,9 +5309,6 @@ export function CaptureScreen() {
                 <span className="bn-label capture-card-label">Rig</span>
                 {rigVisible ? null : (
                   <span className="capture-rig-summary-val">
-                    <span className="capture-list-part">
-                      {gameEntry === null ? gameSentence : gameEntry.display}
-                    </span>
                     <span className="capture-list-part">{camera.rotation}°</span>
                     <span className="capture-list-part">
                       {triggerMode === 'manual' ? 'Manual' : 'Motion'}
@@ -5211,65 +5326,6 @@ export function CaptureScreen() {
 
           {!(rigOpen || (openField !== null && RIG_FIELDS.has(openField))) ? null : (
             <>
-          {openField === 'game' ? (
-            <OpenField k="G" label="Game" icon="layers" meta="Pick one" onClose={closeField}>
-              <div className="capture-opts">
-                {(registry?.games ?? []).map((entry, position) => (
-                  <Opt
-                    key={entry.key}
-                    k={OPTION_KEYS[position]}
-                    on={entry.key === game}
-                    name={entry.display}
-                    onPick={() => {
-                      pickGame(entry.key)
-                      closeField()
-                    }}
-                  />
-                ))}
-                {registry === null ? (
-                  <p className="capture-quiet">The server has not sent the game list yet.</p>
-                ) : null}
-              </div>
-              {registryNote === null ? null : (
-                <>
-                  <p className="capture-refused">{registryNote.text}</p>
-                  <Button size="sm" icon="refresh" onClick={() => void loadGames()}>
-                    Ask again
-                  </Button>
-                </>
-              )}
-              {gameEntry === null ? null : gameEntry.unverified ? (
-                <p className="capture-opennote">
-                  No TCGplayer export exists for {gameEntry.display} — it cannot be identified,
-                  priced, or listed. Captures are held until one is added.
-                </p>
-              ) : !gameEntry.catalogued ? (
-                <p className="capture-opennote">
-                  {gameEntry.display} is captured and located, but never identified, priced, or
-                  listed.
-                </p>
-              ) : gameEntry.prompt === PROMPT_UNWRITTEN ? (
-                <p className="capture-opennote">
-                  {gameEntry.display} has no identification prompt yet — cards are captured and
-                  positioned now, identified later.
-                </p>
-              ) : null}
-            </OpenField>
-          ) : (
-            <Row
-              k="G"
-              label="Game"
-              icon="layers"
-              right={
-                gameEntry === null ? (
-                  <span className="capture-val is-default">{gameSentence}</span>
-                ) : (
-                  <span className="capture-val">{gameEntry.display}</span>
-                )
-              }
-              onToggle={() => toggleField('game')}
-            />
-          )}
 
           {openField === 'camera' ? (
             <OpenField
@@ -5463,7 +5519,8 @@ export function CaptureScreen() {
           )}
 
           {/* THE CLEAR, AT THE FOOT OF THE LAST PANEL IN THE RAIL (D142).
-              It reaches all three panels — the box in Run, the four claims in Stack, the game
+              It reaches all three panels — the box in Run, the five claims in Stack (Game
+              among them since the owner's 2026-09-26 move), the camera, rotation and trigger
               here — so there is no panel it BELONGS to, and the foot of the column is where a
               control that ends a sitting reads as ending one. The head was the alternative and
               was refused: the kit's own head actions row is the odometer alone on a phone

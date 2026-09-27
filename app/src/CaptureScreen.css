@@ -195,6 +195,12 @@
   /* the key cap repaints with its row; the floor reaches controls, not a <kbd> inside one. */
   transition: border-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
+.capture-row:hover .capture-k-pair .capture-k { color: var(--bn-accent); border-color: var(--bn-accent); }
+.capture-k-pair { justify-self: start; }
+/* The Section row's own two-key pick (`[` `]`) needs a wider first track than every other
+   row's single cap — widened for THIS row alone, never the shared `.capture-row` template,
+   so every other row's column stays put. */
+.capture-row-keypair { grid-template-columns: 42px auto auto minmax(0, 1fr) 14px; }
 .capture-row-icon { color: var(--bn-ink-3); flex: none; }
 .capture-lab { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-2); white-space: nowrap; }
 /* `.capture-right` is the flex row that holds the value AND its sub-line as siblings — never
@@ -1282,7 +1288,9 @@
 .capture-stage-warn { align-items: center; }
 .capture-stage-warn .capture-refused { display: block; }
 .capture-servernote { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 6px 4px 0; }
-.capture-bits { display: inline-flex; gap: 2px; margin-left: 2px; }
+/* `flex: none` — the count marks are a fixed-width sibling of `.capture-val-name` and never
+   the thing an overflowing row shrinks or clips; the name box gives way first. */
+.capture-bits { display: inline-flex; flex: none; gap: 2px; margin-left: 2px; }
 .capture-bit { width: 5px; height: 5px; border-radius: 1.5px; background: var(--bn-line-strong); }
 .capture-bit.on { background: var(--bn-accent); }
 
