@@ -103,4 +103,5 @@ DEBT42 ~~A row with no market price hides a typed price that the send still list
 DEBT43 the merge-speed guard counts SQLite ticks only, and a pure-Python loop is invisible to it
 DEBT44 pokemontcg.io is deprecated (ends 2027-03-01), and `pipeline/stockimages.py` does not call it today
 DEBT45 no page lists what each test protects, so the owner cannot confirm the tests are current
+DEBT46 a search with a typo finds nothing, and no near match is offered
 ```
