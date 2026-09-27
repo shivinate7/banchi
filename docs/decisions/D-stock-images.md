@@ -35,3 +35,16 @@ never calls tcgcsv or pokemontcg.io itself.
 photograph — reachable this way, and unconditionally through Details and the photo sheet.
 Sets falls back to nothing, which is what it drew before this feature existed. That screen
 has no per-row index to build an owner photograph URL from.
+
+**A first review round found three real defects, all fixed in the same branch.** Pokemon
+measured 0 of 542 real cards on a store copy: the store's own `set_name` carries a code the
+vendored tree does not ("ME01: Mega Evolution" against "Mega Evolution"). Fixed inside
+`pipeline/stockimages.py` alone, by a second try that strips the code — never inside
+`pipeline/join.py:normalize_set`, which the pricing join still depends on. Measured after:
+Pokemon 100%, Riftbound 99.5% (unchanged, and already the review's own baseline). A cold
+`/pipeline/sets` cost about 2 seconds, and filled every `REQUEST_SLOTS` behind it. Fixed by
+moving the tcgcsv walk off the request thread entirely. `url_for` reads a cache only. A miss
+or a stale entry schedules a background `warm`, never a fetch inline.
+`server/capture_server.py:serve` also calls `warm` once at process start. And there were no
+Python tests: `harness/tests/t7_store_and_seams.py:check_stock_images` now covers the prefix
+fix, a miss, the non-blocking read, and the route threading, both sources stubbed.

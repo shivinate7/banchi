@@ -1460,21 +1460,35 @@ COMPONENTS = [
                                        "URL, or None` (D-stock-images). Riftbound and One "
                                        "Piece resolve through `pricehistory.py:Market`'s own "
                                        "tcgcsv walk, a second small index over `imageUrl` "
-                                       "because `ProductIndex` does not carry it. Pokemon "
-                                       "resolves through the vendored `vendor/"
-                                       "pokemon-tcg-data/` tree (D15), never the live "
-                                       "`api.pokemontcg.io` — that API answered HTTP 500/502 "
-                                       "on the day this was measured, and the vendored tree "
-                                       "already carries the same CDN URLs with no network "
-                                       "call. `server/pipeline_routes.py:STOCK_IMAGES` is the "
-                                       "one process-lifetime instance; `do_pipeline_sets` and "
-                                       "`do_pipeline_worklist` take it as an optional "
+                                       "because `ProductIndex` does not carry it — NEVER ON "
+                                       "THE REQUEST THREAD (the review round, measured: a "
+                                       "cold walk cost ~2s and one filled `REQUEST_SLOTS`). "
+                                       "`url_for` reads `_cache` only; a miss or a stale "
+                                       "entry calls `warm`, which schedules a background "
+                                       "thread and returns at once. `warm` is also what "
+                                       "`server/capture_server.py:serve` calls once at "
+                                       "process start, over every `(game, set_name)` pair "
+                                       "the store holds. Pokemon resolves through the "
+                                       "vendored `vendor/pokemon-tcg-data/` tree (D15), "
+                                       "never the live `api.pokemontcg.io` — that API "
+                                       "answered HTTP 500/502 on the day this was measured, "
+                                       "and the vendored tree already carries the same CDN "
+                                       "URLs with no network call. Its own `set_name` cell "
+                                       "carries a community code the vendored tree does not "
+                                       "(\"ME01: Mega Evolution\" against \"Mega "
+                                       "Evolution\") — measured at 0 of 542 real cards "
+                                       "before `_set_id_for` learned to strip it as a "
+                                       "second try, 542 of 542 (100%) after; Riftbound "
+                                       "measured 1904 of 1913 (99.5%), unchanged by this "
+                                       "fix. `server/pipeline_routes.py:STOCK_IMAGES` is the "
+                                       "one process-lifetime instance; `do_pipeline_sets` "
+                                       "and `do_pipeline_worklist` take it as an optional "
                                        "parameter, `None` by default, so no harness test "
                                        "opens a socket. Never raises: a join miss or an "
                                        "unreachable catalogue both answer `None`.",
                                "governed_by": ["D-stock-images", "D8", "D15", "D25", "D35",
                                                "D49", "D62", "D254"],
-                               "tested_by": []},
+                               "tested_by": ["T7"]},
             "selection.py": {"does": "WHICH CARDS A PRESS IS OVER — one object, read by the"
                                      "wire and the CLI alike, and the drawer is a TERM in it "
                                      "rather than the unit of work. Terms: paths, state, box[], "
@@ -5380,7 +5394,7 @@ COMPONENTS = [
                                 "D183", "D189", "D191", "D192", "D193", "D196", "D203", "D212",
                                 "D213", "D219", "D225", "D227", "D251", "D252", "D259", "D262",
                                 "D264", "D265", "D268", "D271", "D273", "D-sales-rows-by-sku",
-                                "D-sealed-boxes-removed"],
+                                "D-sealed-boxes-removed", "D-stock-images"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "

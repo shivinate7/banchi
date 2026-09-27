@@ -181,6 +181,33 @@ PID_FILE = "running.pid"
 # caller that passes this.
 STOCK_IMAGES = stockimages.StockImages()
 
+
+def warm_stock_images() -> None:
+    """Prime `STOCK_IMAGES` with every `(game, set_name)` pair the store holds — the
+    background-warm's other trigger, called once by `server/capture_server.py:serve` at
+    process start (never at import: a harness test imports this module directly and must
+    open no socket, `STOCK_IMAGES`'s own docstring).
+
+    A STORE THAT CANNOT BE READ WARMS NOTHING, SILENTLY. This runs before the server has
+    accepted a single request, so there is nobody to report a refusal to, and a store this
+    checkout has never seeded (a fresh worktree, D43) is not a fault — `do_pipeline_sets`
+    already answers an unreadable store as a `PipelineRefusal` on the real request path;
+    this is a courtesy that widens the very first request's coverage and nothing depends on
+    it having run.
+    """
+    try:
+        inventory = Store().read().inventory
+        pairs = {
+            (str(game or ""), str(set_name or "").strip())
+            for _key, (game, set_name) in inventory.cards.select(
+                ("game", "set_name"), state=master.IDENTIFIED
+            )
+        }
+    except (files.StoreError, OSError, ValueError, TypeError):
+        return
+    STOCK_IMAGES.warm(pair for pair in pairs if pair[0] and pair[1])
+
+
 # The free commands, and the flags each will accept from a request. An allowlist rather than
 # a passthrough: a request that could append arbitrary argv to `./pkmnscan` would be a shell
 # for anything on this machine that the origin check is not strong enough to guard.

@@ -44,6 +44,36 @@ carries the identical `images.pokemontcg.io` CDN URLs. It is committed, and
 are keyed by `pipeline/join.py:normalize_set`/`number_index_key`, the same fold the catalog
 join already uses, rather than a second normalizer.
 
+**The store's own `set_name` cell often carries a community code the vendored tree does
+not.** A review round measured this on a real-store copy: 0 of 542 Pokemon cards resolved.
+The store's cell reads "ME01: Mega Evolution". The vendored set is named plain "Mega
+Evolution". `pipeline/join.py:normalize_set` is NOT touched for this — that fold drives the
+pricing join (D25) and D22's own taxonomies, and this resolver is neither.
+`_PokemonImages._set_id_for` tries the cell as given first, and only on a miss strips a
+leading `"CODE: "` (any text up to the first colon) and tries again. A set with a real hyphen
+in its name, never a code colon, still matches on the first try. Measured after the fix, on
+the same real-store copy: Pokemon 542 of 542 (100%). Riftbound, untouched by this fix,
+measured 1904 of 1913 (99.5%) — the 9 misses are a raw-number formatting question (a stray
+space around the slash), left as found.
+
+## Never blocks a request
+
+A review round measured a cold `/pipeline/sets` at about 2 seconds. Four cold requests filled
+every one of `REQUEST_SLOTS`. A fifth, unrelated request then waited 1.8 seconds behind them.
+The cause was the tcgcsv walk — categories, groups, products. It ran on the request thread.
+
+**It no longer does.** `url_for`, for Riftbound and One Piece, reads `StockImages._cache`
+only. A cold key, or one past its own `TCGCSV_TTL_SECONDS`, calls `warm`. That schedules the
+walk on a background thread and returns at once. It answers `None` on cold, and the
+last-known URL on stale — serve-stale-while-revalidate, so a set does not flicker back to no
+photo every hour. `warm` is the one scheduling primitive, called two ways. `_tcgcsv_lookup`
+calls it inertly, on every read past a key's own TTL. `server/capture_server.py:serve` calls
+it once, explicitly, at process start, over every `(game, set_name)` pair the store holds
+(`pipeline_routes.warm_stock_images`). Never at import: a harness test that only imports the
+module opens no socket and starts no thread. Pokemon is never scheduled this way. Its own
+path reads local disk in well under a millisecond, and was never the slow one this exists
+for.
+
 ## Several SKUs, one image
 
 The owner's own addition, mid-build: a Riftbound common's normal and foil printings are one
@@ -85,6 +115,14 @@ fixture is therefore answered by a stub, the same way `/photo/` already is. Each
 case asserts two rows sharing one `image_url` still draw their own label — `condition` in
 Pricing, `printing` in Sets. Each also asserts that a join miss draws no stock image at all.
 Removing the `<img>` from either screen turns its case red.
+
+`harness/tests/t7_store_and_seams.py:check_stock_images` covers the Python side. Both
+sources are stubbed — a throwaway `vendor/pokemon-tcg-data/`-shaped tree for Pokemon, a fake
+`fetcher` for the tcgcsv walk. Neither ever reaches a real host. It asserts the "CODE: "
+prefix match, and a miss answering `None`. It asserts the cold-cache timing: a fetcher that
+sleeps 200ms still answers in under 100ms. It asserts the route threading too —
+`do_pipeline_sets` carries `image_url` only when handed a resolver, and carries `None` and
+opens no socket when it is not.
 
 ## What was not built
 

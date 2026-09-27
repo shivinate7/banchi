@@ -17127,6 +17127,11 @@ def serve(host: str = HOST, port: int = PORT) -> None:
         print(f"  WORKTREE  {ports.REPO_ROOT.name} — this is NOT the main checkout's store")
         print(f"            main tree serves :{ports.CAPTURE_BASE_PORT}")
     print("  Ctrl-C to stop.")
+    # THE STOCK-IMAGE CACHE'S OTHER TRIGGER (`D-stock-images`), never at import — a harness
+    # test imports `pipeline_routes` directly and must open no socket, which is exactly
+    # what `warm_stock_images` itself refuses to do from anywhere but here. Fire-and-forget:
+    # background threads, and a store this checkout cannot yet read warms nothing.
+    pipeline_routes.warm_stock_images()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
