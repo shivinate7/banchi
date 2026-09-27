@@ -5551,8 +5551,25 @@ def do_move_cards(box: int, payload: dict) -> dict:
 
 SECTIONS_MOVED = "sections_moved"
 SECTIONS_MOVE_UNDONE = "sections_move_undone"
-MOVE_SECTIONS_FIELDS = ("first", "last", "to_box", "new_box", "before", "aim")
-MOVE_RANGE_FIELDS = ("indices", "to_box", "before_card", "section_end", "aim")
+MOVE_SECTIONS_FIELDS = ("first", "last", "to_box", "new_box", "before", "aim", "layout_token")
+MOVE_RANGE_FIELDS = ("indices", "to_box", "before_card", "section_end", "aim", "layout_token")
+
+
+def _map_token_or_refuse(inventory, payload: dict, to_box: int, dst_sections, created) -> None:
+    """The Map's drop names its gap by a section NUMBER of `to_box` as the Map drew it, so it
+    carries the box's `layout_token` too (the re-review's finding, round 2). An S after a
+    middle section on the rig renumbers the later sections, and a Map open on another device
+    would then drop into the new, empty section without a word. A box with no sections (an
+    empty or a new box) has one place and needs no token, as its drop needs no gap."""
+    if created is not None or not dst_sections:
+        return
+    token = _aim_token(payload, True)
+    if token != inventory.layout_token(to_box):
+        raise BadRequest(
+            HTTPStatus.CONFLICT, "section_gone",
+            f"The sections of {inventory.box_title(to_box)} changed since the map was drawn. "
+            f"The map shows them as they are now, so drop the cards again.",
+        )
 UNDO_SECTIONS_FIELDS = ("move",)
 
 
@@ -5840,6 +5857,7 @@ def do_move_sections(box: int, payload: dict) -> dict:
         to_box, created = _destination(inventory, payload, box)
         same = int(to_box) == int(box)
         dst_sections = sections if same else inventory.layout_of(to_box)
+        _map_token_or_refuse(inventory, payload, to_box, dst_sections, created)
         if before is not None and not (1 <= before <= len(dst_sections)):
             raise BadRequest(
                 HTTPStatus.BAD_REQUEST, "before_invalid",
@@ -5977,6 +5995,7 @@ def do_move_range(box: int, payload: dict) -> dict:
                 f"Choose where in {dst_title} the cards go: in front of a card, or at the end "
                 f"of a section. A move has no default place.",
             )
+        _map_token_or_refuse(inventory, payload, to_box, dst_sections, None)
         if before_card is not None:
             # A CARD ON HAND ONLY: a sold card or a tombstone is not where a hand can put
             # anything in front of (the R3 review).

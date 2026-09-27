@@ -2040,7 +2040,7 @@ export async function moveSections(
   const where =
     target.toBox === 'new'
       ? { new_box: true }
-      : { to_box: target.toBox, before: target.before }
+      : { to_box: target.toBox, before: target.before, layout_token: target.layoutToken }
   return (await request(`/boxes/${box}/sections/move`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2067,6 +2067,7 @@ export async function moveRange(
       to_box: target.toBox,
       before_card: target.beforeCard,
       section_end: target.sectionEnd,
+      layout_token: target.layoutToken,
       aim,
     }),
   })) as SectionMoveResult

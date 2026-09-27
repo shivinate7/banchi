@@ -1785,6 +1785,9 @@ export type SectionMoveResult = {
 export type SectionMoveTarget = {
   toBox: number | 'new'
   before: number | null
+  /** `toBox`'s `layout_token` as the map drew it: the server refuses a drop onto sections that
+   *  changed since (409 `section_gone`). Omitted for a new box. */
+  layoutToken?: string
 }
 
 /** Where a card or a range lands (D264): in front of a card of `toBox` (its stored index),
@@ -1793,6 +1796,8 @@ export type CardMoveTarget = {
   toBox: number
   beforeCard: number | null
   sectionEnd: number | null
+  /** `toBox`'s `layout_token` as the map drew it (see `SectionMoveTarget`). */
+  layoutToken?: string
 }
 
 /** What `POST /boxes/sections/undo` answers. */
@@ -1814,9 +1819,10 @@ export type BoxRecord = {
    *  2026-09-26) — a short hash of the box's divider keys, in order. Send it beside any
    *  aim that names a section (a capture's `section`, an S's `after`) so a re-space cannot
    *  make a stale key silently name the wrong section: two equal tokens mean two equal
-   *  divider lists, and in an equal list a key names the same section it always did.
-   *  Optional because an older server, or a fixture that predates the field, sends none —
-   *  a screen with no token falls back the same way a stale pick does (§9, Q2's fallback). */
+   *  divider lists, and in an equal list a key names the same section it always did. The
+   *  server refuses an aim whose token is not the box's now (409 `section_gone`). Optional
+   *  because an older server, or a fixture that predates the field, sends none — a screen
+   *  with no token falls back the same way a stale pick does (§9, Q2's fallback). */
   layout_token?: string
 
   /** THE TRUE INDEX OF THIS DRAWER — allocated once at its creation, never reused, and never

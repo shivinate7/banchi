@@ -746,6 +746,15 @@ test('a capture built on its sitting refuses, and offers Manage box', async ({ p
       }),
     }),
   )
+  /* AND THE BOX'S OWN READ. `#/inventory?box=3` reads `GET /inventory/3` as it mounts. Unstubbed,
+     it raced the test's end: on a quiet machine the test finished first, and under load the
+     read reached the capture server and `sealEveryTest` failed the test ("reads reached the
+     capture server"). The Opus re-review of `ux/subbox-store` found it, 2026-09-26. */
+  await page.route(/\/inventory\/\d+(\?.*)?$/, (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 2, cards: {} }) })
+      : route.fallback(),
+  )
   await fix.click()
   await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#/inventory?box=3')
 })
