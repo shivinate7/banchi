@@ -49,6 +49,7 @@
     "044-pokemontcg-io-is-deprecated-and-this-repo-does-not-call-it.md",
     "045-no-page-lists-what-each-test-protects.md",
     "046-a-search-with-a-typo-finds-nothing.md",
-    "047-the-demo-network-guard-blocks-the-images-it-should-allow.md"
+    "047-the-demo-network-guard-blocks-the-images-it-should-allow.md",
+    "048-the-pricing-corpus-has-five-unlocked-writers.md"
   ]
 }
