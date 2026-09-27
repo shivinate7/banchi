@@ -22652,19 +22652,41 @@ def check_live_markdown_guards(checks: Checks) -> None:
     )
     checks.equal(plan(Decimal("5.00")).asked.get("cap"), "5.00", "and the read records its cap")
     back = reprice.read_back(
-        [
-            {tcgcsv.SKU_COLUMN: "SINGLE", tcgcsv.PRICE_COLUMN: "80.00"},
-            {tcgcsv.SKU_COLUMN: "SEALED", tcgcsv.PRICE_COLUMN: "345.00"},
-        ],
-        {"SINGLE": "100.0000", "SEALED": "349.9900"},
+        [{tcgcsv.SKU_COLUMN: "SINGLE", tcgcsv.PRICE_COLUMN: "80.00"}],
+        {"SINGLE": "100.0000"},
         floor=Decimal("0.25"),
-        cap=Decimal("5.00"),
     )
     checks.equal(
-        ({e.sku: e.refusal for e in back.refused}, [e.sku for e in back.edits]),
-        ({"SINGLE": reprice.OVER_CAP}, ["SEALED"]),
-        "THE APPLY REFUSES A PRICE THAT TAKES MORE THAN THE CAP OFF ONE COPY, and lets one "
-        "inside it through",
+        [e.sku for e in back.edits],
+        ["SINGLE"],
+        "THE CAP IS THE RULE'S ONLY (\"Rule only\"): a price typed $20 under the live one goes as "
+        "typed, whatever the read's cap",
+    )
+
+    # ------------------------------------ an earlier answer goes out only when it is higher
+    back = reprice.read_back(
+        [
+            {tcgcsv.SKU_COLUMN: "LOWER", tcgcsv.PRICE_COLUMN: "80.00"},
+            {tcgcsv.SKU_COLUMN: "HIGHER", tcgcsv.PRICE_COLUMN: "120.00"},
+            {tcgcsv.SKU_COLUMN: "TYPED-NOW", tcgcsv.PRICE_COLUMN: "70.00"},
+            {tcgcsv.SKU_COLUMN: "RULE", tcgcsv.PRICE_COLUMN: "90.00"},
+        ],
+        {"LOWER": "100.0000", "HIGHER": "100.0000", "TYPED-NOW": "100.0000", "RULE": "100.0000"},
+        floor=Decimal("0.25"),
+        earlier={
+            "LOWER": Decimal("80.00"),
+            "HIGHER": Decimal("120.00"),
+            "TYPED-NOW": Decimal("75.00"),
+            "RULE": Decimal("90.00"),
+        },
+        proposed={"RULE": Decimal("90.00")},
+    )
+    checks.equal(
+        ({e.sku: e.refusal for e in back.refused}, sorted(e.sku for e in back.edits)),
+        ({"LOWER": reprice.EARLIER_LOWER}, ["HIGHER", "RULE", "TYPED-NOW"]),
+        "\"IF THE PRICE I'VE TYPED IS HIGHER YEA\": a lower answer stored before the read is "
+        "refused, a higher one goes, a price written after the read goes, and the rule's own "
+        "price goes",
     )
     checks.raises(reprice.InvalidCap, lambda: reprice.check_cap("0"), "a cap of $0 is refused")
 
@@ -22709,6 +22731,32 @@ def check_live_markdown_guards(checks: Checks) -> None:
         checks.ok(
             "more than a day ago" in said and not (manual / cmd_reprice.IMPORT).exists(),
             "and `reprice apply --write` over a stale read writes no file",
+            said,
+        )
+
+    # AN EARLIER, LOWER ANSWER, THROUGH THE COMMAND: `_apply` reads the corpus's own stamps.
+    with isolated_home() as home:
+        fresh_at = master.now()
+        directory = _markdown_dir(home, "20260926-100200", at=fresh_at)
+        (directory / cmd_reprice.IMPORT).unlink()
+        files.write_json(directory / cmd_reprice.MANIFEST, {"at": fresh_at, "asked": {}, "skus": {}})
+        book = corpus.Corpus.read()
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value="19.99", at="2026-01-01T00:00:00.000+00:00")
+        book.write()
+        worklist = pipeline_routes._write_edits(directory, [{"sku": ARTICUNO_SKU, "price": "19.99"}])
+        said = command(checks, "reprice", "apply", str(worklist), "--write")
+        checks.ok(
+            f"[{reprice.EARLIER_LOWER}]" in said and not (directory / cmd_reprice.IMPORT).exists(),
+            "an answer stored before the read, lower than the live price, writes no file",
+            said,
+        )
+        book = corpus.Corpus.read()
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value="19.99", at=master.now())
+        book.write()
+        said = command(checks, "reprice", "apply", str(worklist), "--write")
+        checks.ok(
+            (directory / cmd_reprice.IMPORT).exists(),
+            "and the same price typed after the read is written",
             said,
         )
 

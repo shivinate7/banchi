@@ -609,7 +609,7 @@ NOT_IN_WORKLIST = "not_in_worklist"      # a SKU this markdown's survey never sa
 DUPLICATE = "duplicate"                  # the same SKU twice in one file (D7)
 UNREADABLE = "unreadable"                # the price cell is not a number
 BELOW_FLOOR = "below_floor"              # under the store's own floor (`policy.threshold`)
-OVER_CAP = "over_cap"                    # lowers a copy by more than the read's dollar cap
+EARLIER_LOWER = "earlier_lower"          # a lower price stored on an earlier visit, not this one
 RAISED = "raised"                        # above the live price. RETIRED as a refusal by D107 —
                                          # `read_back` lets an operator's raise through — and
                                          # kept in the vocabulary because receipts written
@@ -640,7 +640,7 @@ EDIT_SENTENCE: Dict[str, str] = {
     # receipt for 293 rows blamed a number nobody had set. The figure is printed once, on the
     # report's own `floored at` line, where it can only come from the value actually used.
     BELOW_FLOOR: "below the store's floor",
-    OVER_CAP: "lowers it by more than your cap",
+    EARLIER_LOWER: "a lower price typed before this read, not on this visit",
     RAISED: "above the live price (a refusal until D107; kept for older receipts)",
     UNCHANGED: "the same price it is already listed at",
     # VERBATIM FROM `SKIP_SENTENCE`, not re-worded, so the survey and the apply cannot drift
@@ -740,7 +740,8 @@ def read_back(
     floor: Decimal = pricing.FLOOR,
     offered: Optional[Sequence[str]] = None,
     unpriceable: Optional[Mapping[str, str]] = None,
-    cap: Optional[Decimal] = None,
+    earlier: Optional[Mapping[str, Decimal]] = None,
+    proposed: Optional[Mapping[str, Decimal]] = None,
 ) -> Application:
     """The operator's edited worklist, judged against what the export reported.
 
@@ -780,12 +781,19 @@ def read_back(
     nothing at all. Passing the survey's code rather than a boolean is what keeps one
     vocabulary between the row's sentence and the receipt's.
 
-    `cap` IS THE READ'S OWN DOLLAR CAP (`plan`'s `cap`, off the manifest's `asked`). A price
-    that takes more than it off one copy is refused `over_cap`, the row and not the file. It
-    holds for a typed price too: the cap is the owner's limit on how far one press lowers a
-    live listing, and a deeper cut is one the owner makes by raising the cap.
+    `earlier` MAPS A SKU TO THE PRICE THE CORPUS HELD FOR IT BEFORE THE READ WAS TAKEN (the
+    owner's ruling, 2026-09-26: "if the price i've typed is higher yea"). A stored answer from an
+    earlier visit goes out only when it is HIGHER than the live price. So an edit that lowers the
+    price, and is exactly that earlier answer, is refused `earlier_lower`, the row and not the
+    file. A price written after the read (typed, or "Mark down" on this visit) is stamped later
+    and is not in `earlier`. `proposed` is the read's own rule price per SKU: an edit equal to it
+    is the rule's mark-down, and the rule's price may always go.
+
+    THE DOLLAR CAP IS NOT CHECKED HERE (the owner's ruling, 2026-09-26: "Rule only"). It limits
+    the rule's proposal in `plan`. A price the owner types goes out as typed, above the floor.
     """
-    cap = check_cap(cap)
+    earlier = dict(earlier or {})
+    proposed = dict(proposed or {})
     out = Application()
     seen: Dict[str, Edit] = {}
     quantities = dict(live or {})
@@ -854,8 +862,8 @@ def read_back(
             edit.refusal = BELOW_FLOOR
             out.refused.append(edit)
             continue
-        if cap is not None and before - after > cap:
-            edit.refusal = OVER_CAP
+        if after < before and earlier.get(sku) == after and proposed.get(sku) != after:
+            edit.refusal = EARLIER_LOWER
             out.refused.append(edit)
             continue
         out.edits.append(edit)

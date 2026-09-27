@@ -721,13 +721,26 @@ def _apply(args, say) -> int:
         say(f"{corpus.FILENAME} is unusable: {exc}")
         return 1
 
-    # THE READ'S OWN CAP, OFF THE MANIFEST, never off the request: the cap is a setting of the
-    # read this worklist is judged against, like its percentage.
-    try:
-        cap = reprice.check_cap((manifest.get("asked") or {}).get("cap"))
-    except reprice.InvalidCap as exc:
-        say(f"{manifest_path} is unusable: {exc}")
-        return 1
+    # THE ANSWERS STORED BEFORE THIS READ WAS TAKEN, and the read's own rule prices (the owner's
+    # ruling, 2026-09-26: "if the price i've typed is higher yea"). An answer with no stamp is
+    # older than any read. See `reprice.read_back`'s `earlier`.
+    read_at = str(manifest.get("at") or "")
+    earlier = {}
+    for sku, answer in corpus.Corpus.read().answers.items():
+        if answer.channel != "price" or not isinstance(answer.value, str):
+            continue
+        if answer.at and read_at and str(answer.at) >= read_at:
+            continue
+        try:
+            earlier[sku] = tcgcsv.parse_price(answer.value)
+        except ArithmeticError:
+            continue
+    proposed = {}
+    for sku, entry in entries.items():
+        try:
+            proposed[sku] = tcgcsv.parse_price(str(entry.get("proposed") or ""))
+        except ArithmeticError:
+            continue
 
     edited = tcgcsv.read_export(path)
     application = reprice.read_back(
@@ -742,7 +755,8 @@ def _apply(args, say) -> int:
         offered=list(entries),
         unpriceable=unpriceable,
         floor=floor,
-        cap=cap,
+        earlier=earlier,
+        proposed=proposed,
     )
 
     say("")
@@ -781,7 +795,7 @@ def _apply(args, say) -> int:
         say("")
         say("not uploading")
         for code in (
-            reprice.UNCHANGED, reprice.BELOW_FLOOR, reprice.OVER_CAP, reprice.UNREADABLE,
+            reprice.UNCHANGED, reprice.BELOW_FLOOR, reprice.EARLIER_LOWER, reprice.UNREADABLE,
             reprice.NOT_IN_WORKLIST, *reprice.UNPRICEABLE_CODES,
             reprice.RAISED, reprice.DUPLICATE,
         ):

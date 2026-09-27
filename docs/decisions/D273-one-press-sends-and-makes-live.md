@@ -234,3 +234,13 @@ the survey, however old. On the owner's screen that survey was 17 days old.
   and is named, and the press goes on. Nothing left: `nothing_to_send`.
 
 Proof: T7 `check_live_markdown_guards`, each rule red under its own mutation.
+
+### Amended 2026-09-26, second: which stored prices a mark-down press carries
+
+The owner's words, verbatim: "if the price i've typed is higher yea". This entry's round-6 rule
+("a corpus answer the owner did not type there never rides") now reaches the Live tab with one
+exception. A price stored on an earlier visit rides a mark-down only when it is higher than the
+live price. The bar names each such card and its old and new price before the press. So a
+price the button did not name is never sent. A lower earlier price goes only when the owner
+writes it again on this visit. `reprice apply` refuses it otherwise (`earlier_lower`). The
+dollar cap is the rule's only (the owner: "Rule only").

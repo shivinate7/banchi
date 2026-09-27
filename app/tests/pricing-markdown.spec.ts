@@ -901,23 +901,23 @@ test('the counts add up: All is Not selling plus Passed over, whatever the surve
   await expect(page.getByRole('button', { name: 'Passed over 2' })).toBeVisible()
 })
 
-test('the dollar cap is said on the rule line, and a price past it is named and not sent', async ({ page }) => {
-  await open(page, {
-    skus: [live({ sku: '8608859', name: 'Articuno', asking: '20.0000', proposed: '18.00' })],
+test('the dollar cap is said on the rule line, and it is the rule\'s only: a typed price goes as typed', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [live({ sku: '8608859', name: 'Articuno', asking: '20.0000', proposed: '18.50' })],
     asked: { days: 7, rule: 'undercut:10', cap: '1.50' },
   })
   await expect(page.locator('.pricing-rule-line')).toContainText('at most $1.50 off a card')
+  /* "RULE ONLY" (the owner's ruling, 2026-09-26): $5 under the live price, past the cap, goes. */
   const field = page.getByRole('textbox', { name: 'Price for Articuno' })
   await field.click()
   await field.fill('15')
   await field.blur()
   await expect(field).toHaveValue('15.00')
-  await expect(page.locator('.pricing-state').first()).toContainText('More than $1.50 off')
-  await expect(page.getByRole('button', { name: 'Send 0 prices to TCGplayer' })).toBeDisabled()
-  await field.click()
-  await field.fill('18.75')
-  await field.blur()
-  await expect(page.getByRole('button', { name: 'Send 1 price to TCGplayer' })).toBeEnabled()
+  await expect(page.locator(VIEW)).not.toContainText('More than')
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
+  const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
+  expect(sent.edits).toEqual([{ sku: '8608859', price: '15.00' }])
 })
 
 test('Singles and Sealed filter the tab from the URL, and the send carries the kind', async ({ page }) => {
@@ -945,16 +945,34 @@ test('Singles and Sealed filter the tab from the URL, and the send carries the k
   await expect(page.locator('.pricing-name').first()).toContainText('Articuno')
 })
 
-test('a stored price equal to what the read showed is not a new price, and one that differs is', async ({ page }) => {
-  /* THE "280" ON THE OWNER'S SCREEN: every stored answer on a surveyed row was counted, most of
-     them the price TCGplayer already showed. */
-  await open(page, {
+test('an earlier stored price rides only when it is above the live price, and is named before the press', async ({ page }) => {
+  /* THE "280" ON THE OWNER'S SCREEN counted every stored answer on a surveyed row. The owner's
+     ruling, 2026-09-26: "if the price i've typed is higher yea". Equal: nothing to send. Lower:
+     never, unless written again on this visit. Higher: it rides, and the bar names it (D273). */
+  const wire = await open(page, {
     skus: [
       live({ sku: '8608859', name: 'Articuno', asking: '20.0000' }),
       live({ sku: '8608464', name: 'Dunsparce', asking: '5.0000' }),
+      live({ sku: '8608000', name: 'Kled', asking: '3.0000' }),
     ],
-    answers: { '8608859': { value: '20.00' }, '8608464': { value: '4.75' } },
+    answers: { '8608859': { value: '20.00' }, '8608464': { value: '4.75' }, '8608000': { value: '3.5' } },
   })
-  await expect(page.getByRole('button', { name: 'Send 1 price to TCGplayer' })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Send these prices' })).toContainText('1 new price ready')
+  const bar = page.getByRole('region', { name: 'Send these prices' })
+  await expect(bar.getByRole('button', { name: 'Send 1 price to TCGplayer' })).toBeVisible()
+  await expect(bar).toContainText('1 of them is a price you typed before, above the live price')
+  await bar.locator('.pricing-earlier summary').click()
+  await expect(bar.locator('.pricing-earlier li')).toHaveText(['Kled: $3.00 to $3.50'])
+
+  /* THE LOWER ONE GOES ONCE IT IS TYPED AGAIN, ON THIS VISIT. */
+  const field = page.getByRole('textbox', { name: 'Price for Dunsparce' })
+  await field.click()
+  await field.fill('4.60')
+  await field.blur()
+  await bar.getByRole('button', { name: 'Send 2 prices to TCGplayer' }).click()
+  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
+  const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
+  expect(sent.edits).toEqual([
+    { sku: '8608464', price: '4.60' },
+    { sku: '8608000', price: '3.50' },
+  ])
 })

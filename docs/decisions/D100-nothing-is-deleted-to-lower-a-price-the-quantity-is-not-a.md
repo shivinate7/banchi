@@ -94,12 +94,18 @@ The owner's words are in `docs/reviews/ux-2026-09-23/RULINGS.md`, 2026-09-26. Tw
   The rule then takes P% off, but never more than the cap off one copy. `pipeline/reprice.py:plan`
   proposes the rule's price or the asking price less the cap, whichever is higher. The cap lives
   in the read's `asked`, beside the percentage. With no cap in the last read, the sheet offers
-  none. `reprice apply` reads the cap off the manifest, never off the request. It refuses a price
-  that takes more than the cap off one copy (`over_cap`), per row. A typed price is held to the
-  cap too, because the cap is the owner's limit on one press. The owner raises the cap for a
-  deeper cut.
+  none. Amended the same day, the owner's word verbatim: "Rule only". The cap limits the rule's
+  proposal and nothing else. `reprice apply` does not check it, and a typed price goes out as
+  typed. The store's floor (`policy.threshold`) still holds for every price.
 - **No market price, no mark-down.** `plan` refuses a row with no `TCG Market Price` as
   `no_market`, before the rule prices it, on every basis. The asking-price basis could price it,
   and that was the defect. A card nobody has priced is the owner's to price by hand (D49).
 
 Proof: T7 `check_live_markdown_guards`, each rule red under its own mutation.
+
+### Amended 2026-09-26, second: an earlier price goes out only when it is higher
+
+The owner's words, verbatim: "if the price i've typed is higher yea". `reprice apply` refuses an
+edit that lowers the price and is exactly an answer the corpus held before the read was taken
+(`earlier_lower`), per row. A price written after the read is stamped later and goes. The read's
+own rule price always goes. Proof: T7 `check_live_markdown_guards`.

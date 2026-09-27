@@ -1033,7 +1033,7 @@ export function Pricing() {
       setTypedHere((held) => {
         const next = new Set(held)
         for (const { sku, value } of ops) {
-          if (typeof value === 'string' && value !== 'unlisted' && source.kind === 'run') next.add(sku)
+          if (typeof value === 'string' && value !== 'unlisted') next.add(sku)
           else next.delete(sku)
         }
         return next
@@ -1111,11 +1111,10 @@ export function Pricing() {
     const limit = sheet.stale_after_s
     return typeof limit !== 'number' || Number.isNaN(at) || Date.now() - at > limit * 1000
   }, [sheet])
-  /** The read's dollar cap, in cents, or null for none. */
-  const capCents = useMemo(() => {
-    const cap = sheet?.asked?.['cap']
-    return typeof cap === 'string' ? centsOf(cap) : null
-  }, [sheet])
+  /* A NEW READ STARTS A NEW VISIT: what was typed over another read is not typed over this one. */
+  useEffect(() => {
+    setTypedHere(new Set())
+  }, [stamp])
 
 
   const answerFor = useCallback(
@@ -1135,14 +1134,17 @@ export function Pricing() {
     setArrival(takeArrival(table, partitioned, answerFor, source.locked, cut, stamp !== null))
   }, [table, book, arrival, partitioned, answerFor, source.locked, cut, stamp])
 
-  /** THE PAIRS THE LIVE TAB WOULD SEND — a typed price on a row on screen that is NOT the price
-   *  the read showed, and nothing else. The count on the bar is this list, so "N new prices" is
-   *  N prices that change something (the 2026-09-26 review: a corpus answer equal to the live
-   *  price was counted as new). A locked row, and a price past the read's cap, are not pushable.
-   *  A read older than a day offers none: its prices are not current. */
-  const pushable = useMemo(() => {
+  /** THE PAIRS THE LIVE TAB WOULD SEND, and nothing else. A price written ON THIS VISIT (typed,
+   *  a preset, or "Mark down") that is not the price the read showed. And a price stored on an
+   *  EARLIER visit only when it is higher than the live price (the owner's ruling, 2026-09-26:
+   *  "if the price i've typed is higher yea"). A lower earlier price never goes unless it is
+   *  written again here. A locked row is not pushable. A read older than a day offers none: its
+   *  prices are not current. The dollar cap is the rule's only ("Rule only"): a typed price goes
+   *  as typed. `earlier` is the rows that ride from an earlier visit, named on the bar (D273). */
+  const { pushable, earlierRides } = useMemo(() => {
     const out: { sku: string; price: string }[] = []
-    if (stamp === null || readStale) return out
+    const earlier: { sku: string; name: string; price: string; was: string }[] = []
+    if (stamp === null || readStale) return { pushable: out, earlierRides: earlier }
     for (const row of rows) {
       if (source.locked(row.sku) !== null) continue
       const answer = answers[row.sku]
@@ -1150,12 +1152,16 @@ export function Pricing() {
       const now = centsOf(answer)
       const was = centsOf(askingOf.get(row.sku))
       if (now !== null && was !== null && now === was) continue
-      if (now !== null && was !== null && capCents !== null && was - now > capCents) continue
+      const price = moneyField(answer) ?? answer.trim()
+      if (!typedHere.has(row.sku)) {
+        if (now === null || was === null || now < was) continue
+        earlier.push({ sku: row.sku, name: row.name, price, was: moneyField(askingOf.get(row.sku)) ?? '' })
+      }
       /* SENT AS SHOWN: the field draws the answer to the cent, so the pair carries that string. */
-      out.push({ sku: row.sku, price: moneyField(answer) ?? answer.trim() })
+      out.push({ sku: row.sku, price })
     }
-    return out
-  }, [stamp, readStale, rows, answers, source, askingOf, capCents])
+    return { pushable: out, earlierRides: earlier }
+  }, [stamp, readStale, rows, answers, source, askingOf, typedHere])
 
   /* THE LIVE TAB'S PRESS, SEQUENCED AFTER THE SAVE: `reprice apply` reads `prices.json` off disk
      and refuses a stale digest. It re-reads on success and adopts the new digest. ONE PRESS
@@ -1188,6 +1194,7 @@ export function Pricing() {
         setShipTrouble(null)
         if (sending && result.wrote) {
           await sendMarkdown(stamp)
+          setTypedHere(new Set())
           void load(picked, stamp, liveTab)
           toast({
             kind: 'ok',
@@ -1441,6 +1448,7 @@ export function Pricing() {
         flash(input)
         touched.current.delete(row.sku)
       }
+      setTypedHere((held) => new Set([...held, ...moving.map((row) => row.sku)]))
       setNote(null)
       toast({
         kind: 'receipt',
@@ -1524,6 +1532,7 @@ export function Pricing() {
       flash(input)
       touched.current.delete(sku)
     }
+    setTypedHere((held) => new Set([...held, ...moving.map(({ sku }) => sku)]))
     toast({
       kind: 'receipt',
       title: `${moving.length} ${moving.length === 1 ? 'listing' : 'listings'} marked down`,
@@ -1540,6 +1549,11 @@ export function Pricing() {
               else skus[sku] = was
             }
             return { ...current, skus }
+          })
+          setTypedHere((held) => {
+            const next = new Set(held)
+            for (const { sku } of moving) next.delete(sku)
+            return next
           })
           for (const { sku } of moving) {
             const input = inputs.current.get(sku)
@@ -1573,6 +1587,7 @@ export function Pricing() {
       flash(input)
       touched.current.delete(sku)
     }
+    setTypedHere((held) => new Set([...held, ...moved]))
     toast({
       kind: 'receipt',
       title: `${moved.length} ${moved.length === 1 ? 'row' : 'rows'} priced at the cut-off`,
@@ -2393,6 +2408,22 @@ export function Pricing() {
         <p className="pricing-bar-says">
           {pushable.length === 0 ? 'Type a price on a listing to change it.' : `${pushable.length} new ${pushable.length === 1 ? 'price' : 'prices'} ready`}
         </p>
+        {/* A PRICE THE BUTTON DID NOT NAME IS NEVER SENT (D273): the earlier prices that ride are
+            named here, card by card, before the press. */}
+        {earlierRides.length === 0 ? null : (
+          <details className="pricing-earlier">
+            <summary>
+              {`${earlierRides.length} of them ${earlierRides.length === 1 ? 'is a price' : 'are prices'} you typed before, above the live price`}
+            </summary>
+            <ul>
+              {earlierRides.map((row) => (
+                <li key={row.sku}>
+                  {row.name}: <Money value={Number(row.was)} /> to <Money value={Number(row.price)} />
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         <div className="send-card">
           <div className="send-act">
             <Button
@@ -2596,7 +2627,6 @@ export function Pricing() {
                     flag={liveFlag(flagOf(sku, answerFor(sku), source.locked(sku.sku) !== null, cut), liveTab)}
                     suggestion={suggestionFor(sku)}
                     asking={liveTab ? (askingOf.get(sku.sku) ?? null) : undefined}
-                    capCents={liveTab ? capCents : null}
                     note={note !== null && note.sku === sku.sku ? note.text : null}
                     readAge={ageWords(source.readAtOf(sku))}
                     trend={trends[sku.sku]}
@@ -2722,7 +2752,6 @@ function fieldState(
   sku: MergedSku,
   standing: unknown,
   asking: string | null | undefined,
-  capCents: number | null = null,
 ): { text: ReactNode; tone: 'quiet' | 'ok' | 'warn'; title?: string } | null {
   if (isWithheld(standing)) {
     // The human label is drawn; the machine string it stands for travels in the title (D49).
@@ -2736,17 +2765,6 @@ function fieldState(
     if (!Number.isNaN(now) && !Number.isNaN(was)) {
       if (now > was) return { text: 'Above the live price', tone: 'warn' }
       if (now === was) return { text: 'Unchanged', tone: 'quiet' }
-      /* PAST THE READ'S CAP: the press leaves it out, and the server refuses it (`over_cap`). */
-      if (capCents !== null && Math.round(was * 100) - Math.round(now * 100) > capCents) {
-        return {
-          text: (
-            <>
-              More than <Money value={capCents / 100} /> off
-            </>
-          ),
-          tone: 'warn',
-        }
-      }
       return {
         text: (
           <>
@@ -2773,7 +2791,6 @@ function PricingRow({
   flag,
   suggestion,
   asking,
-  capCents,
   note,
   readAge,
   trend,
@@ -2796,7 +2813,6 @@ function PricingRow({
   flag: Flag | null
   suggestion: string
   asking: string | null | undefined
-  capCents: number | null
   note: string | null
   readAge: string | null
   trend: TrendRead | undefined
@@ -2816,7 +2832,7 @@ function PricingRow({
   const lockedWhy = source.locked(sku.sku)
   const why = withheld && standing !== 'unlisted' && standing.note ? standing.note : null
   const first = sku.positions[0] ?? null
-  const state = fieldState(sku, standing, asking, capCents)
+  const state = fieldState(sku, standing, asking)
   /* THE QTY FIELD SHOWS ONLY WHERE IT CAN SAY SOMETHING (UX-084, TXT-08): more than one copy, or a
      figure already typed. A single copy goes, or is held; there is no quantity to choose. */
   const showQty = source.copies && !sku.at_cap && (sku.copies > 1 || asked !== '')

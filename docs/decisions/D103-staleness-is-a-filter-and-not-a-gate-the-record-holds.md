@@ -138,9 +138,14 @@ The owner's words are in `docs/reviews/ux-2026-09-23/RULINGS.md`, 2026-09-26.
   more (236 of 408). A live listing already has a price somebody chose. So on this tab only a
   row with no market price leads, under "No market price". The owner types its price, and the
   rule never lowers it.
-- **What "N new prices" counts.** A typed price that is not the price the read showed. Before,
-  every stored answer on a surveyed row counted, most of them equal to the live price. That was
-  the "280".
+- **What "N new prices" counts.** A price that is not the price the read showed. It was written
+  on this visit (typed, a preset, the cut-off press or "Mark down"), or it was stored on an
+  earlier visit ABOVE the live price. The owner's words, verbatim: "if the price i've typed
+  is higher yea". A lower earlier price does not go. The bar names each earlier price that goes,
+  card by card, before the press. Before, every stored answer on a surveyed row counted, most of
+  them equal to the live price. That was the "280".
+- **The cap is the rule's only.** The owner's words, verbatim: "Rule only". "Mark down" writes
+  the capped proposal. A typed price is never held back by the cap.
 - **A press for the rule.** "A blank box keeps the price it already has" stands. So the rule's
   price reaches a field only by a press: "Mark down N" on the rule line writes the server's
   proposal (capped, never on a no-market row) onto the rule's picks on screen. It is one act

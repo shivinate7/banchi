@@ -385,6 +385,9 @@
 .pricing-cheap-input:focus { outline: none; border-color: var(--bn-accent); box-shadow: 0 0 0 3px var(--bn-accent-tint-2); }
 .pricing-cheap-caption { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
 .pricing-file { font-size: var(--bn-fs-md); }
+/* The earlier prices a Live send carries, named before the press (D273). */
+.pricing-earlier { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
+.pricing-earlier ul { margin: var(--bn-1) 0 0; padding-left: var(--bn-4); }
 /* THE CAP IS MONEY, SO IT TAKES THE MONEY FACE (D221), as the price field does. */
 .pricing-cap-field { font-family: var(--bn-font-mono); }
 
