@@ -2573,6 +2573,9 @@ export type PricingClearResult = {
    *  re-dating it — a restore that stamped would read as a store-wide re-pricing on the next
    *  markdown survey. */
   cleared: Record<string, { value: string | number | null; at?: string; from_run?: string }>
+  /** Which kept clear this is. The server keeps every clear not yet restored, and this clear's
+   *  Undo names it, so a later clear never takes its way back. Absent when nothing was cleared. */
+  clear_id?: string
   count: number
   holds: number
   unknown: number

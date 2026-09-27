@@ -428,10 +428,13 @@ class Corpus:
         return self._decisions(run_name, skus, unpriced)
 
 
-# ------------------------------------------------------------------ the newest clear (UN-11)
+# ------------------------------------------------------------------ the kept clears (UN-11)
 
-#: The newest mass-clear, kept beside `prices.json` so its undo outlives the toast and a
-#: reload. One clear only: a new clear replaces it, and a restore deletes it.
+#: Every mass-clear not yet restored, kept beside `prices.json` so its undo outlives the toast
+#: and a reload. EVERY ONE, NOT ONLY THE NEWEST (the owner's standing undo rule, "until it's
+#: built on"): a second clear must not take away the first one's way back. A restore removes
+#: the clear it restored. A send that carries a cleared SKU builds on that clear, and the
+#: route refuses it from then on.
 LAST_CLEAR_FILENAME = "prices-cleared.json"
 
 
@@ -441,36 +444,65 @@ def last_clear_path() -> Path:
     return files.prices_path().with_name(LAST_CLEAR_FILENAME)
 
 
-def write_last_clear(cleared: dict, at: int) -> None:
-    """Keep the answers a clear removed, verbatim, and the unix second it removed them.
+def read_clears() -> List[dict]:
+    """Every kept clear, oldest first, each `{id, at, cleared}`. A file that will not parse is
+    no clears: the undo is lost, and nothing in `prices.json` is at risk. A file in the older
+    one-clear shape `{at, cleared}` reads as one clear whose id is its `at`."""
+    target = last_clear_path()
+    if not target.is_file():
+        return []
+    try:
+        data = json.loads(target.read_text("utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(data, dict):
+        return []
+    rows = data.get("clears")
+    if rows is None and "cleared" in data:
+        rows = [{"id": str(data.get("at")), **data}]
+    out = []
+    for row in rows if isinstance(rows, list) else []:
+        if isinstance(row, dict) and isinstance(row.get("cleared"), dict) and isinstance(row.get("at"), int):
+            out.append({"id": str(row.get("id") or row["at"]), "at": row["at"], "cleared": row["cleared"]})
+    return out
+
+
+def _write_clears(clears: List[dict]) -> None:
+    from store import files
+
+    if not clears:
+        last_clear_path().unlink(missing_ok=True)
+        return
+    files.write_json(last_clear_path(), {"clears": clears})
+
+
+def write_last_clear(cleared: dict, at: int) -> str:
+    """Keep the answers a clear removed, verbatim, and the unix second it removed them, beside
+    every clear kept before it. Returns the new clear's id.
 
     `at` is on the posted-price clock (`store/postings.py`), because a send is what builds
     on a clear, and the two stamps must compare.
     """
-    from store import files
-
-    files.write_json(last_clear_path(), {"at": int(at), "cleared": dict(cleared)})
+    clears = read_clears()
+    taken = {row["id"] for row in clears}
+    ident, n = str(int(at)), 1
+    while ident in taken:
+        n += 1
+        ident = f"{int(at)}-{n}"
+    clears.append({"id": ident, "at": int(at), "cleared": dict(cleared)})
+    _write_clears(clears)
+    return ident
 
 
 def read_last_clear() -> Optional[dict]:
-    """The newest clear, or None. A file that will not parse is None: the undo is lost,
-    and nothing in `prices.json` is at risk."""
-    target = last_clear_path()
-    if not target.is_file():
-        return None
-    try:
-        data = json.loads(target.read_text("utf-8"))
-    except (OSError, ValueError):
-        return None
-    if not isinstance(data, dict) or not isinstance(data.get("cleared"), dict):
-        return None
-    if not isinstance(data.get("at"), int):
-        return None
-    return data
+    """The newest kept clear, or None."""
+    clears = read_clears()
+    return clears[-1] if clears else None
 
 
-def drop_last_clear() -> None:
-    last_clear_path().unlink(missing_ok=True)
+def drop_clear(ident: str) -> None:
+    """Remove one kept clear, by id. The others stay."""
+    _write_clears([row for row in read_clears() if row["id"] != ident])
 
 
 # ------------------------------------------------------------------ provenance and the digest

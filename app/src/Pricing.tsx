@@ -25,6 +25,8 @@ import {
   getPricingCorpus,
   getPricingWorklist,
   restoreLastClear,
+  restoreClear,
+  type KeptClear,
   putPricingCorpus,
   restorePricingAnswers,
   getRun,
@@ -361,6 +363,12 @@ function corpusAsDoc(book: PricingCorpus | null, run: string | null = null): Dec
     overrides: overrides as DecisionsDocument['overrides'],
     no_market_data: unpriced as DecisionsDocument['no_market_data'],
   }
+}
+
+/** Every kept clear the server offers, newest first. An older server sends `last_clear` only. */
+function keptOf(held: { last_clear?: KeptClear | null; clears?: KeptClear[] }): KeptClear[] {
+  if (held.clears !== undefined) return held.clears
+  return held.last_clear ? [held.last_clear] : []
 }
 
 /** The corpus with a clear's answers put back — ONLY the SKUs the server said it restored. */
@@ -837,7 +845,7 @@ export function Pricing() {
       setSheet(table)
       setBook(held.corpus)
       setClearable(held.clearable ?? null)
-      setLastClear(held.last_clear ?? null)
+      setKept(keptOf(held))
       revision.current = held.revision
       savedBook.current = held.corpus
       failedBook.current = null
@@ -1817,12 +1825,13 @@ export function Pricing() {
      no way to mass clear". The server says which answers may go; absent disables the control. */
   const [clearOpen, setClearOpen] = useState(false)
   const [clearable, setClearable] = useState<PricingClearable | null>(null)
-  /** UN-11 (`docs/specs/undo.md` SS11.3): the newest clear that can still be undone, read off
-   *  the server rather than kept only in a toast's own closure — this is what still offers
-   *  "Restore N cleared" after the toast has faded, or after a reload. Null once a send has
-   *  carried a cleared SKU (`clear_built_on`), the same "built on" limit every other undo
-   *  answers to. */
-  const [lastClear, setLastClear] = useState<{ count: number; at: number } | null>(null)
+  /** UN-11 (`docs/specs/undo.md` SS11.3): EVERY kept clear that can still be undone, newest
+   *  first, read off the server rather than kept only in a toast's own closure. This is what
+   *  still offers "Restore N cleared" after the toast has faded, or after a reload, for each
+   *  clear (the owner's standing undo ruling, "Anytime, from a history"). A clear a send has
+   *  carried a SKU of (`clear_built_on`) is not offered, the "built on" limit every undo has. */
+  const [kept, setKept] = useState<readonly KeptClear[]>([])
+  const [allClears, setAllClears] = useState(false)
   const clearableTotal = Object.keys(clearable?.days ?? {}).length
   /** THE SCOPE IS THE WORKLIST AS LOADED, never the filtered rows: a destructive press whose
    *  radius depends on a chip is a press nobody can predict. */
@@ -1841,7 +1850,7 @@ export function Pricing() {
   const refreshCorpus = useCallback(async () => {
     const answer = await getPricingCorpus()
     setClearable(answer.clearable ?? null)
-    setLastClear(answer.last_clear ?? null)
+    setKept(keptOf(answer))
     revision.current = answer.revision
   }, [])
 
@@ -1850,11 +1859,11 @@ export function Pricing() {
    *  to walk into the fields, only which SKUs came back — so this reads the corpus fresh and
    *  takes each restored SKU's answer off IT, the same "the response decides which rows come
    *  back" rule `withRestored` already follows for the toast's own path. */
-  const doRestoreLastClear = useCallback(async () => {
+  const doRestoreClear = useCallback(async (clear: KeptClear) => {
     try {
-      const back = await restoreLastClear(revision.current)
-      setLastClear(null)
+      const back = clear.id === undefined ? await restoreLastClear(revision.current) : await restoreClear(clear.id, revision.current)
       const held = await getPricingCorpus()
+      setKept(keptOf(held))
       revision.current = held.revision
       savedBook.current = held.corpus
       setBook(held.corpus)
@@ -1914,7 +1923,7 @@ export function Pricing() {
           onPress: () => {
             void (async () => {
               try {
-                const back = await restorePricingAnswers(result.cleared, revision.current)
+                const back = await restorePricingAnswers(result.cleared, revision.current, result.clear_id)
                 revision.current = back.revision
                 const kept = savedBook.current
                 if (kept !== null) {
@@ -2363,12 +2372,22 @@ export function Pricing() {
         {ruleLine}
         {/* UN-11: outlives the toast, and a reload. Gone once a send has carried a cleared
             SKU (`clear_built_on`) — the next read finds no `last_clear`. */}
-        {lastClear === null ? null : (
+        {kept.length === 0 ? null : (
           <Notice tone="info" className="pricing-restore-clear">
-            {lastClear.count} typed price{lastClear.count === 1 ? '' : 's'} cleared.{' '}
-            <Button size="sm" variant="quiet" icon="undo" onClick={() => void doRestoreLastClear()} words="word-only-control">
-              Restore {lastClear.count} cleared
-            </Button>
+            {/* ONE LINE PER KEPT CLEAR, newest first, each with its own Restore. Past three,
+                the rest fold behind "and N more". */}
+            {(allClears ? kept : kept.slice(0, 3)).map((clear) => (
+              <span key={clear.id ?? clear.at} className="pricing-restore-clear-row">
+                <Button size="sm" variant="quiet" icon="undo" onClick={() => void doRestoreClear(clear)} words="word-only-control">
+                  Restore {clear.count} cleared, {clockTime(clear.at * 1000)}
+                </Button>
+              </span>
+            ))}
+            {!allClears && kept.length > 3 ? (
+              <Button size="sm" variant="quiet" onClick={() => setAllClears(true)} words="word-only-control">
+                and {kept.length - 3} more
+              </Button>
+            ) : null}
           </Notice>
         )}
         {liveTab ? null : <UnreachableLine at={work?.unreachable ?? null} />}

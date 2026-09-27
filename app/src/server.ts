@@ -2733,15 +2733,38 @@ export async function getPricingCorpus(): Promise<{
   /* THE NEWEST CLEAR THAT CAN STILL BE UNDONE (UN-11), or null. The server keeps it beside
      the corpus, so the undo outlives the toast and a reload. Null once a send has carried a
      cleared SKU: the server decides that, and `restoreLastClear` is the press. */
-  last_clear?: { count: number; at: number } | null
+  last_clear?: { count: number; at: number; id?: string } | null
+  /* EVERY KEPT CLEAR THAT CAN STILL BE UNDONE, newest first (the owner's standing undo ruling,
+     "Anytime, from a history"). Each has its own Restore, `restoreClear`. Absent from an older
+     server, which offers `last_clear` alone. */
+  clears?: KeptClear[]
 }> {
   return (await request('/pricing', NO_CACHE)) as {
     corpus: PricingCorpus
     path: string
     revision: string
     clearable?: PricingClearable
-    last_clear?: { count: number; at: number } | null
+    last_clear?: { count: number; at: number; id?: string } | null
+    clears?: KeptClear[]
   }
+}
+
+/** One kept clear a restore can still undo: its id, how many prices it took, and the unix
+ *  second it took them. */
+export type KeptClear = { id?: string; count: number; at: number }
+
+/** Put back ONE kept clear, by its id, off the server's own copy. It refuses
+ *  `clear_built_on` once a send has carried one of its SKUs, and `no_clear_to_restore` once it
+ *  is gone. A price typed since is kept and named in `skipped`. */
+export async function restoreClear(
+  clear: string,
+  revision?: string,
+): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
+  return (await request('/pricing/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clear, ...(revision === undefined ? {} : { revision }) }),
+  })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
 }
 
 /**
@@ -2796,11 +2819,12 @@ export async function clearPricingAnswers(options: {
 export async function restorePricingAnswers(
   answers: PricingClearResult['cleared'],
   revision?: string,
+  clear?: string,
 ): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
   return (await request('/pricing/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(revision === undefined ? { answers } : { answers, revision }),
+    body: JSON.stringify({ answers, ...(revision === undefined ? {} : { revision }), ...(clear === undefined ? {} : { clear }) }),
   })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
 }
 

@@ -282,6 +282,7 @@ const RECORDED = {
                                                // the response into `written` the identical
                                                // way `correctAnswer`/`undoCorrectAnswer` do
     'saleStillHere', 'undoMove', 'restoreLastClear', // undo.md UN-7, UN-14 and UN-11
+    'restoreClear',                           // UN-11, one kept clear by its id ("Anytime, from a history")
     'moveSections', 'undoSectionMove',        // D264, the box map's section move and its undo
     'moveRange',                              // D264, one card or a range, the next slice
     'closeSection',                           // UN-15, S's own undo

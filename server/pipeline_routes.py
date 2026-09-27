@@ -5117,19 +5117,42 @@ def do_pricing_corpus() -> dict:
         "revision": _corpus_revision(),
         "clearable": _clearable_block(book),
         "last_clear": _last_clear_block(),
+        "clears": _clears_block(),
     }
 
 
 def _last_clear_block() -> Optional[dict]:
-    """The newest clear a restore can still undo, or None (UN-11).
+    """The newest kept clear a restore can still undo, or None (UN-11).
 
-    None once a send has carried a cleared SKU: that send built on the clear, and the fix
-    after it is to type the prices again. The server decides this, never the screen.
+    ONE, THE NEWEST, even when several are kept. The notice is one line on the screen, and an
+    older clear keeps its way back through its own toast's Undo until a send builds on it. A
+    clear a send has built on is never offered: the fix after it is to type the prices again.
+    The server decides this, never the screen.
     """
-    stored = corpus.read_last_clear()
-    if stored is None or _clear_built_on(stored):
+    stored = _newest_restorable()
+    if stored is None:
         return None
-    return {"count": len(stored["cleared"]), "at": stored["at"]}
+    return {"count": len(stored["cleared"]), "at": stored["at"], "id": stored["id"]}
+
+
+def _clears_block() -> List[dict]:
+    """EVERY kept clear a restore can still undo, newest first (the owner's standing undo
+    ruling, "Anytime, from a history"). A kept clear with no control on the screen is not
+    reachable, so the notice draws each one with its own Restore. A clear a send has built on
+    is left out."""
+    return [
+        {"count": len(stored["cleared"]), "at": stored["at"], "id": stored["id"]}
+        for stored in reversed(corpus.read_clears())
+        if not _clear_built_on(stored)
+    ]
+
+
+def _newest_restorable() -> Optional[dict]:
+    """The newest kept clear no send has built on, or None."""
+    for stored in reversed(corpus.read_clears()):
+        if not _clear_built_on(stored):
+            return stored
+    return None
 
 
 def _clear_built_on(stored: dict) -> List[str]:
@@ -5437,11 +5460,13 @@ def do_pricing_clear(payload: dict) -> dict:
         book.write()
         # THE UNDO OUTLIVES THE TOAST (UN-11). The answers go to a side file, so a reload
         # can still restore them. A clear that removes nothing leaves the older one alone.
-        corpus.write_last_clear(cleared, int(time.time()))
+        clear_id = corpus.write_last_clear(cleared, int(time.time()))
 
     return {
         "ok": True,
         "cleared": cleared,
+        # WHICH KEPT CLEAR THIS IS, so its toast's Undo names it and no other.
+        **({"clear_id": clear_id} if plan.skus else {}),
         "count": len(plan.skus),
         "holds": len(plan.holds),
         "unknown": len(plan.unknown),
@@ -5480,23 +5505,32 @@ def do_pricing_restore(payload: dict) -> dict:
     answers = payload.get("answers")
     stored = None
     if payload.get("last_clear") is True and answers is None:
-        # THE NEWEST CLEAR, READ BACK OFF THE SERVER (UN-11), so a reload or an expired
-        # toast does not lose the way back. It holds until a send carries a cleared SKU.
-        stored = corpus.read_last_clear()
-        if stored is None:
+        # THE NEWEST CLEAR NO SEND HAS BUILT ON, READ BACK OFF THE SERVER (UN-11), so a reload
+        # or an expired toast does not lose the way back.
+        kept = corpus.read_clears()
+        if not kept:
             raise PipelineRefusal(
                 HTTPStatus.CONFLICT,
                 "no_clear_to_restore",
                 "There is no cleared price to put back.",
             )
-        sent = _clear_built_on(stored)
-        if sent:
+        stored = _newest_restorable()
+        if stored is None:
+            _refuse_built_on(kept[-1])
+        answers = stored["cleared"]
+    elif answers is None and payload.get("clear") is not None:
+        # ONE KEPT CLEAR, BY ITS ID, off the server's own copy: the notice's row for it.
+        stored = next(
+            (row for row in corpus.read_clears() if row["id"] == str(payload["clear"])), None
+        )
+        if stored is None:
             raise PipelineRefusal(
                 HTTPStatus.CONFLICT,
-                "clear_built_on",
-                f"A send has gone out since the clear, carrying {len(sent)} of the cleared "
-                f"cards, so the clear can no longer be undone. Type those prices again.",
+                "no_clear_to_restore",
+                "That clear is not kept any more, so there is nothing to put back.",
             )
+        if _clear_built_on(stored):
+            _refuse_built_on(stored)
         answers = stored["cleared"]
     if not isinstance(answers, dict):
         raise PipelineRefusal(
@@ -5512,25 +5546,26 @@ def do_pricing_restore(payload: dict) -> dict:
             f"{len(answers)} answers is more than one press can restore ({MAX_CLEAR_SKUS}).",
         )
 
-    # ONLY WHAT THE SERVER CLEARED COMES BACK, verbatim, before anything is read or written.
+    # ONLY WHAT A KEPT CLEAR TOOK COMES BACK, verbatim, before anything is read or written.
+    # The request names its clear (`clear`, the id its clear answered with). With no name, the
+    # newest kept clear that holds every row sent is the one meant.
     if stored is None:
-        stored = corpus.read_last_clear()
-    held = (stored or {}).get("cleared") or {}
-    forged = sorted(
-        str(sku)
-        for sku, row in answers.items()
-        if not isinstance(row, dict)
-        or str(sku) not in held
-        or {k: row.get(k) for k in ("value", "at", "from_run")}
-        != {k: held[str(sku)].get(k) for k in ("value", "at", "from_run")}
-    )
-    if forged:
-        raise PipelineRefusal(
-            HTTPStatus.CONFLICT,
-            "restore_not_cleared",
-            f"{len(forged)} of these prices are not the ones the last clear took, so nothing "
-            f"was put back.",
+        named = payload.get("clear")
+        candidates = [
+            row for row in corpus.read_clears() if named is None or row["id"] == str(named)
+        ]
+        stored = next(
+            (row for row in reversed(candidates) if _clear_holds(row, answers)), None
         )
+        if stored is None:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "restore_not_cleared",
+                "These prices are not the ones a kept clear took, so nothing was put back.",
+            )
+        # UNTIL IT IS BUILT ON, the one test every undo here uses, for the toast's door too.
+        if _clear_built_on(stored):
+            _refuse_built_on(stored)
 
     try:
         book = corpus.Corpus.read()
@@ -5539,6 +5574,17 @@ def do_pricing_restore(payload: dict) -> dict:
             HTTPStatus.CONFLICT, "corpus_unreadable", str(exc)
         ) from None
 
+    # A NEWER KEPT CLEAR THAT TOOK THE SAME SKU HOLDS THE LATER ANSWER ("until it's built
+    # on"). Clear A took 5.00, the owner typed 6.00, clear B took 6.00: restoring A first must
+    # not put 5.00 back, or B's restore then skips it and the 6.00 is lost. So A skips it, and
+    # B keeps it.
+    kept = corpus.read_clears()
+    ids = [row["id"] for row in kept]
+    newer = {
+        sku
+        for row in kept[ids.index(stored["id"]) + 1:] if stored["id"] in ids
+        for sku in row["cleared"]
+    }
     restored: List[str] = []
     skipped: List[str] = []
     for sku, row in sorted(answers.items()):
@@ -5549,7 +5595,7 @@ def do_pricing_restore(payload: dict) -> dict:
                 "restore_invalid",
                 f"{key}: each answer must be an object carrying a `value`.",
             )
-        if key in book.answers:
+        if key in book.answers or key in newer:
             skipped.append(key)
             continue
         book.answers[key] = corpus.Answer(
@@ -5562,9 +5608,10 @@ def do_pricing_restore(payload: dict) -> dict:
     if restored:
         book.write()
     # THE STORED CLEAR GOES ONCE EVERY ANSWER IT HOLDS IS BACK, whichever door restored
-    # them: the toast's own map, or the stored one. A price typed since counts as back.
-    if stored is not None and all(sku in book.answers for sku in stored["cleared"]):
-        corpus.drop_last_clear()
+    # them: the toast's own map, or the stored one. A price typed since counts as back, and
+    # so does one a newer kept clear holds: that clear is its way back.
+    if all(sku in book.answers or sku in newer for sku in stored["cleared"]):
+        corpus.drop_clear(stored["id"])
 
     return {
         "ok": True,
@@ -5573,6 +5620,28 @@ def do_pricing_restore(payload: dict) -> dict:
         "answers": len(book.answers),
         "revision": _corpus_revision(),
     }
+
+
+def _clear_holds(stored: dict, answers: dict) -> bool:
+    """Whether a kept clear took every row sent, verbatim: value, date and run."""
+    held = stored["cleared"]
+    return all(
+        isinstance(row, dict)
+        and str(sku) in held
+        and {k: row.get(k) for k in ("value", "at", "from_run")}
+        == {k: held[str(sku)].get(k) for k in ("value", "at", "from_run")}
+        for sku, row in answers.items()
+    )
+
+
+def _refuse_built_on(stored: dict) -> None:
+    sent = _clear_built_on(stored)
+    raise PipelineRefusal(
+        HTTPStatus.CONFLICT,
+        "clear_built_on",
+        f"A send has gone out since the clear, carrying {len(sent)} of the cleared "
+        f"cards, so the clear can no longer be undone. Type those prices again.",
+    )
 
 
 def _cap_flag(payload: dict) -> list:
