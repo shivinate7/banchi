@@ -1650,7 +1650,10 @@ export async function getGames(): Promise<GameRegistry> {
  *  `keep_blank_values=True` parse would then see a real but empty `game` param and filter
  *  for "no game claim" when the caller never meant to filter on game at all — the exact
  *  three-state distinction `InventoryFacetFilter`'s own comment exists to protect. */
-export async function getBoxes(filter?: InventoryFacetFilter): Promise<BoxSummary> {
+export async function getBoxes(
+  filter?: InventoryFacetFilter,
+  opts?: { readonly withDigest?: boolean },
+): Promise<BoxSummary> {
   const params = new URLSearchParams()
   if (filter) {
     for (const [key, value] of Object.entries(filter)) {
@@ -1658,6 +1661,11 @@ export async function getBoxes(filter?: InventoryFacetFilter): Promise<BoxSummar
       params.set(key, value ?? '')
     }
   }
+  /* THE MAP'S EDIT-LAYOUT SNAPSHOT ONLY (D264, the strict review's finding, 2026-09-27): a
+   *  per-box `content_digest` over its cards, not only its dividers, so the batch Confirm's
+   *  freshness check can see a card arriving or leaving between the draft and the write.
+   *  Every other caller of this route omits it and pays nothing for it. */
+  if (opts?.withDigest) params.set('with_digest', '1')
   const query = params.toString()
   return (await request(`/boxes${query ? `?${query}` : ''}`, NO_CACHE)) as BoxSummary
 }
@@ -2113,14 +2121,26 @@ export async function moveSectionsBatch(input: SectionMoveBatchInput): Promise<S
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      tokens: input.tokens,
-      moves: input.moves.map((m) => ({
-        box: m.box,
-        first: m.first,
-        last: m.last,
-        ...(m.toBox === 'new' ? { new_box: true } : { to_box: m.toBox }),
-        before: m.before,
-      })),
+      digests: input.digests,
+      moves: input.moves.map((m) =>
+        m.kind === 'section'
+          ? {
+              kind: 'section',
+              box: m.box,
+              first: m.first,
+              last: m.last,
+              ...(m.toBox === 'new' ? { new_box: true } : { to_box: m.toBox }),
+              before: m.before,
+            }
+          : {
+              kind: 'range',
+              box: m.box,
+              indices: m.indices,
+              to_box: m.toBox,
+              before_card: m.beforeCard,
+              section_end: m.sectionEnd,
+            },
+      ),
     }),
   })) as SectionMoveBatchResult
 }

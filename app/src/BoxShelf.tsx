@@ -2,10 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { Button, FailureNotice, Icon, IconButton, Segmented, useUndoHotkey } from './kit'
 import { Page } from './kit/Page'
-import { describeFailure, getBoxes, moveSectionsBatch, undoSectionMove } from './server'
+import { describeFailure, getBoxes, getInventoryBox, moveSectionsBatch, undoSectionMove } from './server'
 import type { Failure } from './server'
 import { isEditableTarget } from './keys'
-import type { BoxRecord, SectionDetail, SectionMoveBatchResult, SectionMoveBatchStep } from './types'
+import type {
+  BoxRecord,
+  InventoryCard,
+  RangeMoveBatchStep,
+  SectionDetail,
+  SectionMoveBatchResult,
+  SectionMoveBatchStep,
+} from './types'
 import './BoxShelf.css'
 
 /* THE SHELF: every box, sections running back to front, left to right (D264, the owner's
@@ -19,17 +26,18 @@ import './BoxShelf.css'
  * (D88, `do_move_sections_batch`). Cancel throws the draft away. Confirm's receipt carries one
  * Undo that reverses the whole layout, the same primitive a single move already used.
  *
- * SCOPE CUT (deviation, reported): the card-level "Some cards" range move (`docs/specs/
- * box-map.md`'s "next slice", built 2026-09-25) is not carried into edit mode. It wrote through
- * a different route (`POST /boxes/<box>/cards/move`) with its own gap grammar (a card index,
- * not a section ordinal), which the batch/rollback mechanism this lane built does not cover.
- * The owner's ask here is the box LAYOUT — whole sections — and the fence says not to change
- * what a section move means or which cards travel with it; removing a screen that moves
- * individual cards is a capability question for the owner, not a layout question, so it is
- * flagged here rather than silently dropped or silently rebuilt on top of a second batch
- * mechanism this lane had no time to prove. */
+ * THE CONFIRM GATE SEES CARDS, NOT ONLY DIVIDERS (the strict review's finding, 2026-09-27).
+ * Edit layout reads the boxes AGAIN, with `content_digest` (`_box_digest`, over every card,
+ * not `layout_token` alone) — a card captured or sold between the draft and Confirm changes
+ * no divider, so a token-only check would miss it. Every digest is checked before a single
+ * write happens, and a mismatch refuses the WHOLE draft.
+ *
+ * CARD RANGES ARE BACK IN EDIT MODE (owner's ruling, 2026-09-27): a range drafts exactly like
+ * a section, in the same draft, the same Confirm, the same undo. A range can only be picked
+ * up from a box the draft has not touched yet (`dirtied`) — its real card list, fetched live,
+ * would otherwise disagree with what a queued section move already did to it in this draft. */
 
-type Scope = 'one' | 'after' | 'all'
+type Scope = 'one' | 'after' | 'all' | 'cards'
 
 type Lifted = {
   readonly box: number
@@ -39,7 +47,8 @@ type Lifted = {
 
 type Dest = number | 'new'
 
-/** A gap's id on the page: `s:<n>` in front of a section, `end`. */
+/** A gap's id on the page: `s:<n>` in front of a section, `c:<index>` in front of a card,
+ *  `e:<n>` at a section's end, `end` at the box's near end. */
 type GapId = string
 
 /** One view of Inventory: the walk, the shelf or the sets. The switch lives in the header. */
@@ -69,6 +78,25 @@ function cards(n: number): string {
   return n === 1 ? '1 card' : `${n} cards`
 }
 
+function cardName(card: InventoryCard): string {
+  return card.name ?? 'An unread card'
+}
+
+const onHand = (card: InventoryCard) => card.state !== 'sold' && card.state !== 'retired' && card.state !== 'moved'
+
+/** A box's on-hand cards by section, in the order they stand (the card's order key, D265). */
+function bySection(cardsOf: readonly InventoryCard[]): Map<number, InventoryCard[]> {
+  const out = new Map<number, InventoryCard[]>()
+  const sorted = [...cardsOf].filter(onHand).sort((a, b) => (a.place?.order ?? a.index) - (b.place?.order ?? b.index))
+  for (const card of sorted) {
+    const section = card.place?.section ?? 1
+    const list = out.get(section) ?? []
+    list.push(card)
+    out.set(section, list)
+  }
+  return out
+}
+
 function boxName(record: WorkingBox): string {
   if (record.name) return record.name
   return record.box < 0 ? 'New box' : 'Unnamed box'
@@ -93,6 +121,34 @@ function blockStyle(count: number, fullest: number): CSSProperties {
   const share = fullest > 0 ? count / fullest : 0
   return { '--shelf-share': share.toFixed(3) } as CSSProperties
 }
+
+/** One box's cards, read when a lift or a destination needs them — only ever a box the draft
+ *  has not touched yet (`dirtied`), so the live list agrees with what the shelf shows. */
+function useBoxCards(box: number | null, reload: number): readonly InventoryCard[] | null {
+  const [read, setRead] = useState<{ box: number; cards: InventoryCard[] } | null>(null)
+  useEffect(() => {
+    if (box === null) return
+    let live = true
+    getInventoryBox(box)
+      .then((inv) => {
+        if (live) setRead({ box, cards: Object.values(inv.cards) })
+      })
+      .catch(() => {
+        if (live) setRead({ box, cards: [] })
+      })
+    return () => {
+      live = false
+    }
+  }, [box, reload])
+  return read !== null && read.box === box ? read.cards : null
+}
+
+/** A queued range move keeps the section it left and the section it landed in, resolved once
+ *  at queue time (the source and destination boxes are both `undirtied`, so their sections
+ *  still match the server's own) — client-only render metadata, never sent (`server.ts`
+ *  rebuilds the wire body per `kind` from the typed fields alone). */
+type QueuedRangeStep = RangeMoveBatchStep & { readonly srcSection: number; readonly dstSection: number }
+type QueuedMove = SectionMoveBatchStep | QueuedRangeStep
 
 /** A working box: the shape the shelf renders, real or a not-yet-real split (D264, negative
  *  `box`). Rebuilt from the server's own boxes plus every move the draft has queued so far —
@@ -128,11 +184,38 @@ function withSections(box: WorkingBox, sections: SectionDetail[]): WorkingBox {
 
 /** The draft, replayed onto the server's own boxes, in the order it was queued — the same
  *  replay `do_move_sections_batch` performs server-side, so what the owner sees while
- *  dragging is what Confirm will produce. */
-function applyDraft(base: readonly WorkingBox[], moves: readonly SectionMoveBatchStep[]): WorkingBox[] {
+ *  dragging is what Confirm will produce. A range move never adds or removes a section (no
+ *  divider moves, D264's card-range rule) — only the two counts it touches change. */
+function applyDraft(base: readonly WorkingBox[], moves: readonly QueuedMove[]): WorkingBox[] {
   let boxes = base.slice()
   let seq = 0
   for (const move of moves) {
+    if (move.kind === 'range') {
+      const srcIdx = boxes.findIndex((b) => b.box === move.box)
+      const dstIdx = boxes.findIndex((b) => b.box === move.toBox)
+      if (srcIdx === -1 || dstIdx === -1) continue
+      const count = move.indices.length
+      boxes = boxes.map((b, i) => {
+        if (i === srcIdx && i === dstIdx) {
+          const secs = b.sections_detail.map((d, idx) => {
+            if (idx === move.srcSection - 1) return { ...d, count: Math.max(0, d.count - count) }
+            if (idx === move.dstSection - 1) return { ...d, count: d.count + count }
+            return d
+          })
+          return withSections(b, secs)
+        }
+        if (i === srcIdx) {
+          const secs = b.sections_detail.map((d, idx) => (idx === move.srcSection - 1 ? { ...d, count: Math.max(0, d.count - count) } : d))
+          return withSections(b, secs)
+        }
+        if (i === dstIdx) {
+          const secs = b.sections_detail.map((d, idx) => (idx === move.dstSection - 1 ? { ...d, count: d.count + count } : d))
+          return withSections(b, secs)
+        }
+        return b
+      })
+      continue
+    }
     const srcIdx = boxes.findIndex((b) => b.box === move.box)
     if (srcIdx === -1) continue
     const src = boxes[srcIdx] as WorkingBox
@@ -160,15 +243,22 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
   const [records, setRecords] = useState<readonly BoxRecord[] | null>(null)
   const [readFailure, setReadFailure] = useState<Failure | null>(null)
   const [mode, setMode] = useState<'view' | 'edit'>('view')
-  const [tokens, setTokens] = useState<Record<string, string> | null>(null)
-  const [moves, setMoves] = useState<readonly SectionMoveBatchStep[]>([])
+  const [entering, setEntering] = useState(false)
+  const [digests, setDigests] = useState<Record<string, string> | null>(null)
+  const [moves, setMoves] = useState<readonly QueuedMove[]>([])
+  /* BOXES THE DRAFT HAS ALREADY TOUCHED, as a source or a destination: a card range cannot be
+     picked up from — or dropped into — one of these, because its real card list (fetched
+     live) would disagree with what an earlier queued move in this same draft already did. */
+  const [dirtied, setDirtied] = useState<ReadonlySet<number>>(new Set())
   const [lifted, setLifted] = useState<Lifted | null>(null)
+  const [picked, setPicked] = useState<{ from: number; to: number } | null>(null)
   const [dest, setDest] = useState<Dest | null>(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [receipt, setReceipt] = useState<SectionMoveBatchResult | null>(null)
   const [undone, setUndone] = useState(false)
   const [over, setOver] = useState<GapId | null>(null)
+  const [cardsReload, setCardsReload] = useState(0)
 
   const load = useCallback(() => {
     getBoxes()
@@ -187,34 +277,67 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
   const range = source !== null && lifted !== null ? rangeOf(source, lifted) : null
   const liftedDetail = source !== null && lifted !== null ? source.sections_detail[lifted.section - 1] : undefined
   const liftedName = liftedDetail === undefined ? '' : sectionName(liftedDetail)
+  const cardMode = lifted?.scope === 'cards'
+
+  const sourceCards = useBoxCards(cardMode && lifted !== null ? lifted.box : null, cardsReload)
+  const destCards = useBoxCards(cardMode && typeof dest === 'number' ? dest : null, cardsReload)
+  const sectionCards = useMemo(
+    () => (sourceCards === null || lifted === null ? [] : (bySection(sourceCards).get(lifted.section) ?? [])),
+    [sourceCards, lifted],
+  )
+  const chosen = useMemo(() => {
+    if (picked === null) return []
+    const lo = Math.min(picked.from, picked.to)
+    const hi = Math.max(picked.from, picked.to)
+    return sectionCards.slice(lo, hi + 1)
+  }, [picked, sectionCards])
+  const chosenName =
+    chosen.length === 0 ? '' : chosen.length === 1 ? cardName(chosen[0] as InventoryCard) : `${chosen.length} cards`
 
   const putDown = useCallback(() => {
     setLifted(null)
     setDest(null)
     setOver(null)
+    setPicked(null)
   }, [])
 
   const enterEdit = useCallback(() => {
-    if (records === null) return
-    setTokens(Object.fromEntries(records.map((r) => [String(r.box), r.layout_token ?? ''])))
-    setMoves([])
-    setReceipt(null)
+    setEntering(true)
     setFailure(null)
-    setUndone(false)
-    setMode('edit')
-  }, [records])
+    getBoxes(undefined, { withDigest: true })
+      .then((summary) => {
+        setRecords(summary.boxes)
+        setDigests(Object.fromEntries(summary.boxes.map((r) => [String(r.box), r.content_digest ?? ''])))
+        setMoves([])
+        setDirtied(new Set())
+        setReceipt(null)
+        setUndone(false)
+        setCardsReload((n) => n + 1)
+        setMode('edit')
+      })
+      .catch((err: unknown) => setFailure(describeFailure(err)))
+      .finally(() => setEntering(false))
+  }, [])
 
   const cancelEdit = useCallback(() => {
     setMode('view')
-    setTokens(null)
+    setDigests(null)
     setMoves([])
+    setDirtied(new Set())
     putDown()
     setFailure(null)
   }, [putDown])
 
   const queue = useCallback(
-    (step: SectionMoveBatchStep) => {
+    (step: QueuedMove) => {
       setMoves((was) => [...was, step])
+      setDirtied((was) => {
+        const next = new Set(was)
+        next.add(step.box)
+        if (step.toBox !== 'new') next.add(step.toBox)
+        return next
+      })
+      setCardsReload((n) => n + 1)
       putDown()
     },
     [putDown],
@@ -222,18 +345,19 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
 
   const confirm = useCallback(async () => {
     if (busy) return
-    if (moves.length === 0 || tokens === null) {
+    if (moves.length === 0 || digests === null) {
       cancelEdit()
       return
     }
     setBusy(true)
     setFailure(null)
     try {
-      setReceipt(await moveSectionsBatch({ tokens, moves }))
+      setReceipt(await moveSectionsBatch({ digests, moves }))
       setUndone(false)
       setMode('view')
-      setTokens(null)
+      setDigests(null)
       setMoves([])
+      setDirtied(new Set())
       putDown()
     } catch (err) {
       setFailure(describeFailure(err))
@@ -241,7 +365,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
       setBusy(false)
       load()
     }
-  }, [busy, moves, tokens, cancelEdit, putDown, load])
+  }, [busy, moves, digests, cancelEdit, putDown, load])
 
   const undo = useCallback(async () => {
     if (receipt === null || undone || busy) return
@@ -258,14 +382,32 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
     }
   }, [receipt, undone, busy, load])
 
-  /* One drop: a section lands in front of a section of the destination, or at its near end. */
+  /* One drop, whichever input made it. A section lands in front of a section or at the end;
+     a card range lands in front of a card of the destination, or at a section's end. */
   const dropAt = useCallback(
     (gap: GapId) => {
       if (source === null || range === null || dest === null) return
+      if (cardMode) {
+        if (chosen.length === 0 || dest === 'new') return
+        const beforeCard = gap.startsWith('c:') ? Number(gap.slice(2)) : null
+        const sectionEnd = gap.startsWith('e:') ? Number(gap.slice(2)) : null
+        const dstSection = sectionEnd ?? (destCards ?? []).find((c) => c.index === beforeCard)?.place?.section ?? 1
+        queue({
+          kind: 'range',
+          box: source.box,
+          indices: chosen.map((c) => c.index),
+          toBox: dest,
+          beforeCard,
+          sectionEnd,
+          srcSection: lifted?.section ?? 1,
+          dstSection,
+        })
+        return
+      }
       const before = gap === 'end' ? null : Number(gap.slice(2))
-      queue({ box: source.box, first: range.first, last: range.last, toBox: dest, before })
+      queue({ kind: 'section', box: source.box, first: range.first, last: range.last, toBox: dest, before })
     },
-    [source, range, dest, queue],
+    [source, range, dest, cardMode, chosen, destCards, lifted, queue],
   )
 
   /* Esc puts the section down, and yields to typing. */
@@ -312,10 +454,10 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
     },
   }
 
-  const moving = lifted?.scope === 'all' && source !== null ? boxName(source) : liftedName
+  const moving = cardMode ? chosenName : lifted?.scope === 'all' && source !== null ? boxName(source) : liftedName
   const gaps: Gaps = { over, name: moving, onPut: dropAt, busy }
   const destRecord = dest === null || dest === 'new' ? null : (byBox.get(dest) ?? null)
-  const pairReady = dest !== null && source !== null && range !== null
+  const pairReady = dest !== null && source !== null && range !== null && (!cardMode || chosen.length > 0)
   /* A NOT-YET-REAL SPLIT (a negative `box`) IS NOT A DESTINATION FOR ANOTHER MOVE this same
      draft: `new_box` always allocates a fresh box, so a second drop into "the same" pending
      split has nothing real to land in until Confirm. Pick it up again, or Confirm first. */
@@ -350,7 +492,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
             </Button>
           </>
         ) : (
-          <Button variant="primary" icon="grip" onClick={enterEdit} disabled={records === null}>
+          <Button variant="primary" icon="grip" onClick={enterEdit} disabled={records === null || entering} busy={entering}>
             Edit layout
           </Button>
         )}
@@ -371,9 +513,26 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
           range={range}
           destinations={destinations}
           dest={dest}
-          onScope={(scope) => setLifted({ ...lifted, scope })}
+          chosenName={cardMode ? chosenName : null}
+          canPickCards={!dirtied.has(source.box)}
+          onScope={(scope) => {
+            setLifted({ ...lifted, scope })
+            setPicked(null)
+            if (scope === 'cards' && dest === 'new') setDest(null)
+          }}
           onDest={setDest}
           onCancel={putDown}
+        />
+      ) : null}
+
+      {editing && cardMode && dest === null ? (
+        <CardPicker
+          cards={sectionCards}
+          loading={sourceCards === null}
+          picked={picked}
+          onPick={(at) =>
+            setPicked((was) => (was === null || was.from !== was.to ? { from: at, to: at } : { from: was.from, to: at }))
+          }
         />
       ) : null}
 
@@ -389,8 +548,12 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
             gaps={dest === source.box ? gaps : undefined}
             reorder={dest === source.box}
             editing={editing}
+            cardGaps={dest === source.box && cardMode ? sourceCards : null}
+            skip={chosen.map((c) => c.index)}
           />
-          {dest === source.box ? null : <BoxRow record={destRecord} fullest={fullest} gaps={gaps} editing={editing} />}
+          {dest === source.box ? null : (
+            <BoxRow record={destRecord} fullest={fullest} gaps={gaps} editing={editing} cardGaps={cardMode ? destCards : null} />
+          )}
         </div>
       ) : (
         <div className="shelf-boxes">
@@ -406,6 +569,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
               onLift={
                 editing
                   ? (section) => {
+                      setPicked(null)
                       setLifted({ box: record.box, section, scope: 'one' })
                       setDest(null)
                     }
@@ -424,9 +588,9 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
 }
 
 /** The one sentence the owner reads when a drop is refused. `draft_stale`: a box the draft
- *  saw changed since Edit layout was pressed (an S on the rig, another device's move), so
- *  nothing in the draft was applied, and the map has read the boxes again. Every other
- *  refusal keeps the plain title, with the server's words behind it. */
+ *  saw changed since Edit layout was pressed (a capture, a sale, an S on the rig, another
+ *  device's edit), so nothing in the draft was applied, and the map has read the boxes
+ *  again. Every other refusal keeps the plain title, with the server's words behind it. */
 function failureTitle(code: string): string {
   return code === 'draft_stale' || code === 'section_gone'
     ? 'A box changed since Edit layout was pressed, so nothing in the draft was applied. The map shows it as it is now.'
@@ -440,6 +604,8 @@ function LiftBar({
   range,
   destinations,
   dest,
+  chosenName,
+  canPickCards,
   onScope,
   onDest,
   onCancel,
@@ -450,6 +616,8 @@ function LiftBar({
   readonly range: { first: number; last: number }
   readonly destinations: readonly WorkingBox[]
   readonly dest: Dest | null
+  readonly chosenName: string | null
+  readonly canPickCards: boolean
   readonly onScope: (scope: Scope) => void
   readonly onDest: (dest: Dest) => void
   readonly onCancel: () => void
@@ -457,21 +625,27 @@ function LiftBar({
   const total = source.sections_detail.length
   const after = total - lifted.section
   const count = movingCount(source, range.first, range.last)
+  const cardMode = lifted.scope === 'cards'
   const scopes: { value: Scope; label: string }[] = [{ value: 'one', label: 'This section' }]
   if (after > 0) scopes.push({ value: 'after', label: after === 1 ? 'This and the next' : `This and the ${after} after it` })
   if (total > 1) scopes.push({ value: 'all', label: 'The whole box' })
+  if (canPickCards) scopes.push({ value: 'cards', label: 'Some cards' })
   const others = destinations.filter((r) => r.box !== source.box)
-  const what = lifted.scope === 'all' ? boxName(source) : name
+  const what = cardMode ? chosenName || 'No card picked' : lifted.scope === 'all' ? boxName(source) : name
   return (
     <section className="shelf-lift" aria-label="Move sections">
       <p className="shelf-lift-line" aria-live="polite">
-        {dest === null ? (
+        {cardMode && !chosenName ? (
           <>
-            <strong>{what}</strong>, {cards(count)}. Which box does it go to?
+            <strong>{name}</strong>. Pick a card, or a first and a last card.
+          </>
+        ) : dest === null ? (
+          <>
+            <strong>{what}</strong>{cardMode ? '' : `, ${cards(count)}`}. Which box does it go to?
           </>
         ) : (
           <>
-            <strong>{what}</strong>, {cards(count)}. Drag it to a gap, or press a gap.
+            <strong>{what}</strong>{cardMode ? '' : `, ${cards(count)}`}. Drag it to a gap, or press a gap.
           </>
         )}
       </p>
@@ -482,24 +656,68 @@ function LiftBar({
             key={r.box}
             variant={dest === r.box ? 'primary' : 'default'}
             aria-pressed={dest === r.box}
+            disabled={cardMode && !chosenName}
             onClick={() => onDest(r.box)}
           >
             {boxName(r)}
           </Button>
         ))}
-        {total > 1 && lifted.scope !== 'all' ? (
-          <Button variant={dest === source.box ? 'primary' : 'default'} aria-pressed={dest === source.box} onClick={() => onDest(source.box)}>
+        {(total > 1 && lifted.scope !== 'all') || cardMode ? (
+          <Button
+            variant={dest === source.box ? 'primary' : 'default'}
+            aria-pressed={dest === source.box}
+            disabled={cardMode && !chosenName}
+            onClick={() => onDest(source.box)}
+          >
             Another place in {boxName(source)}
           </Button>
         ) : null}
-        <Button variant={dest === 'new' ? 'primary' : 'default'} aria-pressed={dest === 'new'} icon="plus" onClick={() => onDest('new')}>
-          New box
-        </Button>
+        {cardMode ? null : (
+          <Button variant={dest === 'new' ? 'primary' : 'default'} aria-pressed={dest === 'new'} icon="plus" onClick={() => onDest('new')}>
+            New box
+          </Button>
+        )}
         <Button variant="quiet" onClick={onCancel} kbd="Esc">
           Cancel
         </Button>
       </div>
     </section>
+  )
+}
+
+/* THE LIFTED SECTION'S CARDS. One press picks a card; a second press picks the last card of
+ * a range; a third starts again. */
+function CardPicker({
+  cards: list,
+  loading,
+  picked,
+  onPick,
+}: {
+  readonly cards: readonly InventoryCard[]
+  readonly loading: boolean
+  readonly picked: { from: number; to: number } | null
+  readonly onPick: (at: number) => void
+}) {
+  const lo = picked === null ? -1 : Math.min(picked.from, picked.to)
+  const hi = picked === null ? -1 : Math.max(picked.from, picked.to)
+  if (loading) return <p className="shelf-cards-empty">Reading the cards…</p>
+  if (list.length === 0) return <p className="shelf-cards-empty">This section holds no cards.</p>
+  return (
+    <ol className="shelf-cards" aria-label="The cards in this section">
+      {list.map((card, at) => (
+        <li key={card.index}>
+          <Button
+            variant={at >= lo && at <= hi ? 'primary' : 'default'}
+            aria-pressed={at >= lo && at <= hi}
+            className="shelf-card"
+            onClick={() => onPick(at)}
+          >
+            <span className="shelf-card-number">{card.place?.card ?? at + 1}</span>
+            <span className="shelf-card-name">{cardName(card)}</span>
+          </Button>
+        </li>
+      ))}
+    </ol>
   )
 }
 
@@ -529,7 +747,8 @@ function Gap({ gaps, id, where }: { readonly gaps: Gaps; readonly id: GapId; rea
 
 /** One box, drawn horizontally: sections run left (the far back, card 1) to right (the near
  *  end, nearest the owner) (D264, D260). `editing` gates the grip and the gaps: the map is
- *  read-only outside edit mode. */
+ *  read-only outside edit mode. `cardGaps`, given, means a card range's own gaps replace the
+ *  section blocks: a gap in front of every on-hand card, and one at each section's end. */
 function BoxRow({
   record,
   fullest,
@@ -541,6 +760,8 @@ function BoxRow({
   dragHandlers,
   busy,
   editing,
+  cardGaps,
+  skip,
 }: {
   readonly record: WorkingBox | null
   readonly fullest: number
@@ -556,6 +777,9 @@ function BoxRow({
   }
   readonly busy?: boolean
   readonly editing: boolean
+  /** Card mode: this box's cards, so a gap sits in front of each one. */
+  readonly cardGaps?: readonly InventoryCard[] | null
+  readonly skip?: readonly number[]
 }) {
   if (record === null) {
     return (
@@ -569,11 +793,13 @@ function BoxRow({
     )
   }
   const sections = record.sections_detail
-  const inRange = (s: number) => range != null && s >= range.first && s <= range.last
+  const cardMode = cardGaps !== undefined && cardGaps !== null
+  const perSection = cardMode ? bySection(cardGaps) : null
+  const inRange = (s: number) => range != null && s >= range.first && s <= range.last && !(cardMode && reorder)
   /* In a section reorder, no gap is offered inside or right after the moved sections: it
      would put them where they already are. */
   const offered = (before: number | null) => {
-    if (!reorder || range == null) return true
+    if (!reorder || range == null || cardMode) return true
     if (before === null) return range.last < sections.length
     return before < range.first || before > range.last + 1
   }
@@ -614,11 +840,31 @@ function BoxRow({
       <ol className="shelf-box-body">
         {sections.map((d) => (
           <li key={d.section} className="shelf-slot">
-            {gaps && offered(d.section) ? <Gap gaps={gaps} id={`s:${d.section}`} where={where(d)} /> : null}
-            {block(d)}
+            {gaps && !cardMode && offered(d.section) ? <Gap gaps={gaps} id={`s:${d.section}`} where={where(d)} /> : null}
+            {cardMode && gaps ? (
+              <div className="shelf-card-gaps" aria-label={sectionName(d)}>
+                <span className="shelf-block-name">{sectionName(d)}</span>
+                {(perSection?.get(d.section) ?? [])
+                  .filter((card) => !(skip ?? []).includes(card.index))
+                  .map((card) => (
+                    <div key={card.index} className="shelf-card-row">
+                      <Gap gaps={gaps} id={`c:${card.index}`} where={`just on the far side of ${cardName(card)}, in ${boxName(record)}`} />
+                      <span className="shelf-card-line">{cardName(card)}</span>
+                    </div>
+                  ))}
+                <Gap gaps={gaps} id={`e:${d.section}`} where={`at the end of ${sectionName(d)}, in ${boxName(record)}`} />
+              </div>
+            ) : (
+              block(d)
+            )}
           </li>
         ))}
-        {gaps && offered(null) ? (
+        {gaps && cardMode && sections.length === 0 ? (
+          <li className="shelf-slot">
+            <Gap gaps={gaps} id="end" where={`into ${boxName(record)}`} />
+          </li>
+        ) : null}
+        {gaps && !cardMode && offered(null) ? (
           <li className="shelf-slot">
             <Gap gaps={gaps} id="end" where={`at the end of ${boxName(record)} nearest you`} />
           </li>
