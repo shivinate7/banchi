@@ -1220,7 +1220,19 @@ export function CaptureScreen() {
    * touch it, because a divider is a fact about ONE box (D10) and `doCapture` clears this only
    * when the capture lands in the SAME box, which is "built on" in the plan's own words
    * (11.1). */
-  const [pendingDivider, setPendingDivider] = useState<{
+  /* THE RE-REVIEW'S FINDING 4 (2026-09-26): A REF, NEVER STATE — nothing here renders, so
+   * there is no reason to pay for a re-render on every S/U, and a `useState` would tempt the
+   * exact bug this fix removes. A `useLayoutEffect` re-points `fireUndoRef` before PAINT, but
+   * a paint only follows a COMMIT, and a commit only follows React deciding to process a
+   * `setState` — there is a real gap between "the S's network response landed" and "the next
+   * render committed", and a keydown can land inside it. `--repeat-each 20` on the old
+   * state-plus-layout-effect fix failed 3 of 20 for exactly this reason: `doUndo` fell through
+   * to `undoBack(1)`, deleting a real card instead of closing the divider S had just opened.
+   *
+   * This ref is written SYNCHRONOUSLY, the instant each fact is known, with no render in
+   * between — a plain JS assignment, not something React schedules. `doUndo` reads
+   * `pendingDividerRef.current` directly, so there is no commit for a keydown to race. */
+  const pendingDividerRef = useRef<{
     box: number
     div: string
     at: number
@@ -1230,6 +1242,13 @@ export function CaptureScreen() {
     // section regardless of what was actually picked beforehand.
     priorDiv: string | null
   } | null>(null)
+  /* THE SAME FINDING'S OTHER HALF: A U PRESSED WHILE AN S IS STILL IN FLIGHT MUST NEVER FALL
+   * THROUGH TO `undoBack` — that deletes a real card, and there is no capture yet for a
+   * divider that has not finished opening to be "built on". `doSection` sets this to its own
+   * in-flight promise before its first `await`, and clears it in its `finally`; `doUndo` awaits
+   * it first, so a keydown that lands mid-request waits for the S to answer (successfully or
+   * not) rather than guessing what it will do. */
+  const sectionInFlightRef = useRef<Promise<void> | null>(null)
 
   // The position a replayed capture came back with, or null. Set only when the server
   // answers `created: false` — see the capture path below for why that is the payoff of
@@ -2861,7 +2880,9 @@ export function CaptureScreen() {
         setUndoNote(null)
         // UN-15: a card behind the divider is "built on" (undo.md 11.1) — this capture is in
         // the SAME box as the pending divider, so its own undo takes over.
-        setPendingDivider((prev) => (prev !== null && prev.box === card.box ? null : prev))
+        if (pendingDividerRef.current !== null && pendingDividerRef.current.box === card.box) {
+          pendingDividerRef.current = null
+        }
       } catch (err) {
         // 409 `section_gone` or 400 `layout_token_required` (subbox-capture.md 1.2): the
         // picked section is not there any more, or a re-space moved on since the token was
@@ -3041,13 +3062,13 @@ export function CaptureScreen() {
           if (restored === null) forgetSectionPick(sectionPickKey(target.box, boxBid))
           else rememberSectionPick(sectionPickKey(target.box, boxBid), { div: restored, at: Date.now(), token: record.layout_token ?? null })
         }
-        setPendingDivider(null)
+        pendingDividerRef.current = null
         setSectionNote(null)
         setUndoNote({ done: true, text: 'Undone', position: null, code: null, did: 1, want: 1 })
       } catch (err) {
         // A REFUSED DIVIDER UNDO IS FINAL: the divider is built on, so `U` goes back to the
         // captures, and the server's one sentence says why.
-        setPendingDivider(null)
+        pendingDividerRef.current = null
         setUndoNote({ done: false, position: null, did: 0, want: 1, ...describe(err) })
       } finally {
         busyRef.current = false
@@ -3062,17 +3083,23 @@ export function CaptureScreen() {
    *  manual forever" reads the same in the wiring below as it always did.
    *
    *  UN-15: A DIVIDER TAKES PRIORITY OVER A CAPTURE ONLY WHILE IT IS THE NEWER OF THE TWO.
-   *  `pendingDivider.at` against the sitting's own newest shot — never a second clock, and
-   *  never "if a divider is pending", which would undo a divider from three drawers ago in
-   *  preference to the capture the operator just took after it. */
+   *  `pendingDividerRef.current.at` against the sitting's own newest shot — never a second
+   *  clock, and never "if a divider is pending", which would undo a divider from three
+   *  drawers ago in preference to the capture the operator just took after it.
+   *
+   *  THE RE-REVIEW'S FINDING 4: reads `pendingDividerRef`, not `pendingDivider` state, and
+   *  waits out `sectionInFlightRef` first — a U that lands before an in-flight S answers must
+   *  never guess by falling through to `undoBack`, which deletes a real card. */
   const doUndo = useCallback(async () => {
+    if (sectionInFlightRef.current !== null) await sectionInFlightRef.current
+    const pending = pendingDividerRef.current
     const newestShotAt = sitting.length === 0 ? -Infinity : sitting[sitting.length - 1]!.at
-    if (pendingDivider !== null && pendingDivider.at > newestShotAt) {
-      await undoDivider(pendingDivider)
+    if (pending !== null && pending.at > newestShotAt) {
+      await undoDivider(pending)
       return
     }
     await undoBack(1)
-  }, [undoBack, undoDivider, pendingDivider, sitting])
+  }, [undoBack, undoDivider, sitting])
 
   /** Section 6's one card, at any row the strip shows — `removeCardInPlace`, D10 ruling 1's
    *  other route, aimed by the row's own capture id. Shares `busyRef`/`busy` with every other
@@ -3194,89 +3221,101 @@ export function CaptureScreen() {
     // never move which section this S was ASKED to go after.
     const priorPicked = pickedSection
     const priorLast = lastSection
-    try {
-      const record = await openSection(
-        box,
-        selectedDiv ?? undefined,
-        selectedDiv === null ? undefined : layoutToken,
-      )
-      setBoxRecords((prev) => {
-        const rest = prev.filter((entry) => entry.box !== record.box)
-        return [...rest, record].sort((left, right) => left.box - right.box)
-      })
-      /* UX-024: `sections_detail` itself can be MISSING from the answer, not only empty —
-       * measured against the demo server, whose `openSection` reply carries no such field at
-       * all. `?? []` first, so a box the server could not render a layout for falls through
-       * to the same "no detail" receipt as an EMPTY array already did, rather than crashing
-       * before it gets there. */
-      const spans = record.sections_detail ?? []
-      /* THE NEW SECTION IS THE ONE DIRECTLY AFTER THE PICK, never the array's last entry any
-       * more (subbox-capture.md 1.3) — that was only ever true because every S used to go at
-       * the back. `?? null` because `noUncheckedIndexedAccess` is on and is right to be. */
-      const opened =
-        priorPicked === null
-          ? (spans[spans.length - 1] ?? null)
-          : (spans.find((span) => span.section === priorPicked.section + 1) ?? null)
-      // THE OWNER'S HAND WAS ON A MIDDLE SECTION, NOT THE BACK OF THE BOX (Q1) — every
-      // section after it moved up one ordinal, and no card number in any of them changed.
-      const renumbered =
-        priorPicked !== null && priorLast !== null && priorPicked.section < priorLast.section
-          ? { from: priorPicked.section + 1, to: priorLast.section }
-          : null
-      setSectionNote({
-        done: true,
-        // The act's own name, kept through the flow (docs/DESIGN.md's copy rule), with what
-        // it produced beside it. `from card N` and not `at card N`: the number is where the
-        // section STARTS, and the next card is the first one in it.
-        text: 'New section',
-        place: opened === null ? null : { section: opened.section, fromCard: opened.start },
-        renumbered,
-        code: null,
-      })
-      /* THE NEW DIVIDER'S OWN KEY, for `pickSection` and for `U`'s own aim. `opened.div` is
-       * what a current server always sends (subbox-capture.md 1.1) and is read first.
-       *
-       * THE FALLBACK'S ONE REAL CLIENT: an older capture server. `sections_detail[].div` is
-       * this feature's own addition to a route that already existed for D264's box map, so a
-       * tab whose bundle has already reloaded onto this build while the Python process behind
-       * it has not yet restarted onto the matching server patch reads a `sections_detail` with
-       * every other field but this one — the same version-skew window `GET /status`'s
-       * `boot_id`/`started_at` exist to name elsewhere in this app. `record.sections`, the RAW
-       * divider list `BoxRecord.sections` has carried since D10, is the one thing every server
-       * this repo has ever shipped answers, so its own last entry is a safe stand-in — ONLY
-       * when `after` was omitted (S at the back), the one case that list's tail is guaranteed
-       * to name. A middle S against such a server has no reachable key at all — `U` then falls
-       * through to the ordinary capture undo, same as a truly divider-less answer.
-       *
-       * THE GUARD IS `selectedDiv === null`, NOT `priorPicked === null`. `priorPicked` resolves
-       * to the box's own last section (an ordinary S) even when nothing was ever explicitly
-       * picked, the moment `sectionsDetail` is non-empty — so testing it for `null` only ever
-       * caught the narrower case of a box whose sections had not loaded at all yet. What
-       * decides whether `after` was sent is `selectedDiv`, so that is what decides whether the
-       * tail of `record.sections` is a safe read of the divider `after`'s omission put at the
-       * back.
-       *
-       * `app/tests/capture-section.spec.ts` proves this exact case; every other fixture in
-       * this app now carries `div`, so the real path (`opened.div`) is what they exercise. */
-      const backDiv = record.sections[record.sections.length - 1]
-      const newDiv = opened?.div ?? (selectedDiv === null && backDiv !== undefined ? String(backDiv) : null)
-      // THE SCREEN PICKS THE NEW SECTION, exactly as it always has — only now that is not
-      // always the last one.
-      if (opened !== null) pickSection(newDiv)
-      // UN-15: which divider `U` takes back out, and when it went in — its OWN key, never
-      // the box's last one: an S in the middle puts its divider somewhere past the front,
-      // and the keyed route (`ux/divider-fix`) is what `undoDivider` needs to reach it.
-      // `closeSection` now REQUIRES a key, so this is only set when one was found above.
-      if (newDiv !== null) setPendingDivider({ box, div: newDiv, at: Date.now(), priorDiv: selectedDiv })
-      // A mid-box S renumbers every later section, and a shot's label was rendered against
-      // the layout before it (D58) — reload the sitting and patch the strip by key.
-      if (renumbered !== null) void refreshShotLabels()
-    } catch (err) {
-      setSectionNote({ done: false, place: null, renumbered: null, ...describe(err) })
-    } finally {
-      sectionBusyRef.current = false
-      setSectionBusy(false)
-    }
+    // THE RE-REVIEW'S FINDING 4, OTHER HALF: `sectionInFlightRef` IS SET NOW, SYNCHRONOUSLY,
+    // before this async IIFE reaches its first `await` — so a `doUndo` invoked from ANY later
+    // keydown (which can only run after this synchronous stretch finishes) is guaranteed to
+    // see it. `doUndo` awaits it before reading `pendingDividerRef`, so a U that lands mid-S
+    // waits for this S to answer instead of falling through to `undoBack` and deleting a card.
+    const run = (async () => {
+      try {
+        const record = await openSection(
+          box,
+          selectedDiv ?? undefined,
+          selectedDiv === null ? undefined : layoutToken,
+        )
+        setBoxRecords((prev) => {
+          const rest = prev.filter((entry) => entry.box !== record.box)
+          return [...rest, record].sort((left, right) => left.box - right.box)
+        })
+        /* UX-024: `sections_detail` itself can be MISSING from the answer, not only empty —
+         * measured against the demo server, whose `openSection` reply carries no such field at
+         * all. `?? []` first, so a box the server could not render a layout for falls through
+         * to the same "no detail" receipt as an EMPTY array already did, rather than crashing
+         * before it gets there. */
+        const spans = record.sections_detail ?? []
+        /* THE NEW SECTION IS THE ONE DIRECTLY AFTER THE PICK, never the array's last entry any
+         * more (subbox-capture.md 1.3) — that was only ever true because every S used to go at
+         * the back. `?? null` because `noUncheckedIndexedAccess` is on and is right to be. */
+        const opened =
+          priorPicked === null
+            ? (spans[spans.length - 1] ?? null)
+            : (spans.find((span) => span.section === priorPicked.section + 1) ?? null)
+        // THE OWNER'S HAND WAS ON A MIDDLE SECTION, NOT THE BACK OF THE BOX (Q1) — every
+        // section after it moved up one ordinal, and no card number in any of them changed.
+        const renumbered =
+          priorPicked !== null && priorLast !== null && priorPicked.section < priorLast.section
+            ? { from: priorPicked.section + 1, to: priorLast.section }
+            : null
+        setSectionNote({
+          done: true,
+          // The act's own name, kept through the flow (docs/DESIGN.md's copy rule), with what
+          // it produced beside it. `from card N` and not `at card N`: the number is where the
+          // section STARTS, and the next card is the first one in it.
+          text: 'New section',
+          place: opened === null ? null : { section: opened.section, fromCard: opened.start },
+          renumbered,
+          code: null,
+        })
+        /* THE NEW DIVIDER'S OWN KEY, for `pickSection` and for `U`'s own aim. `opened.div` is
+         * what a current server always sends (subbox-capture.md 1.1) and is read first.
+         *
+         * THE FALLBACK'S ONE REAL CLIENT: an older capture server. `sections_detail[].div` is
+         * this feature's own addition to a route that already existed for D264's box map, so a
+         * tab whose bundle has already reloaded onto this build while the Python process behind
+         * it has not yet restarted onto the matching server patch reads a `sections_detail` with
+         * every other field but this one — the same version-skew window `GET /status`'s
+         * `boot_id`/`started_at` exist to name elsewhere in this app. `record.sections`, the RAW
+         * divider list `BoxRecord.sections` has carried since D10, is the one thing every server
+         * this repo has ever shipped answers, so its own last entry is a safe stand-in — ONLY
+         * when `after` was omitted (S at the back), the one case that list's tail is guaranteed
+         * to name. A middle S against such a server has no reachable key at all — `U` then falls
+         * through to the ordinary capture undo, same as a truly divider-less answer.
+         *
+         * THE GUARD IS `selectedDiv === null`, NOT `priorPicked === null`. `priorPicked` resolves
+         * to the box's own last section (an ordinary S) even when nothing was ever explicitly
+         * picked, the moment `sectionsDetail` is non-empty — so testing it for `null` only ever
+         * caught the narrower case of a box whose sections had not loaded at all yet. What
+         * decides whether `after` was sent is `selectedDiv`, so that is what decides whether the
+         * tail of `record.sections` is a safe read of the divider `after`'s omission put at the
+         * back.
+         *
+         * `app/tests/capture-section.spec.ts` proves this exact case; every other fixture in
+         * this app now carries `div`, so the real path (`opened.div`) is what they exercise. */
+        const backDiv = record.sections[record.sections.length - 1]
+        const newDiv = opened?.div ?? (selectedDiv === null && backDiv !== undefined ? String(backDiv) : null)
+        // THE SCREEN PICKS THE NEW SECTION, exactly as it always has — only now that is not
+        // always the last one.
+        if (opened !== null) pickSection(newDiv)
+        // UN-15: which divider `U` takes back out, and when it went in — its OWN key, never
+        // the box's last one: an S in the middle puts its divider somewhere past the front,
+        // and the keyed route (`ux/divider-fix`) is what `undoDivider` needs to reach it.
+        // `closeSection` now REQUIRES a key, so this is only set when one was found above.
+        // THE REF, SYNCHRONOUSLY, THE MOMENT THE RESPONSE LANDS — no `setState` in between
+        // for a keydown to race (finding 4).
+        if (newDiv !== null) pendingDividerRef.current = { box, div: newDiv, at: Date.now(), priorDiv: selectedDiv }
+        // A mid-box S renumbers every later section, and a shot's label was rendered against
+        // the layout before it (D58) — reload the sitting and patch the strip by key.
+        if (renumbered !== null) void refreshShotLabels()
+      } catch (err) {
+        setSectionNote({ done: false, place: null, renumbered: null, ...describe(err) })
+      } finally {
+        sectionBusyRef.current = false
+        setSectionBusy(false)
+        sectionInFlightRef.current = null
+      }
+    })()
+    sectionInFlightRef.current = run
+    await run
   }, [box, lastSection, layoutToken, pickSection, pickedSection, refreshShotLabels, selectedDiv])
 
   /* The seam, with both implementations behind it now. The key trigger is Gate B's; the
