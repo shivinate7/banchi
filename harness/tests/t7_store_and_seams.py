@@ -6745,13 +6745,62 @@ def check_undo_until_built_on(checks: Checks) -> None:
         book.write()
         b = pipeline_routes.do_pricing_clear({"skus": ["4000", "4001"]})
         first = answers(checks, lambda: pipeline_routes.do_pricing_restore({"clear": a["clear_id"]}), "clear A's restore answers")
-        checks.equal(field(first, "skipped"), ["4000"], "A skips X, because the newer clear B holds X's later answer")
+        checks.equal(
+            field(first, "skipped"),
+            [{"sku": "4000", "reason": "newer_clear"}],
+            "A skips X, because the newer clear B holds X's later answer, and says why",
+        )
         checks.ok("4000" not in corpus.Corpus.read().answers, "and A does not put 5.00 back")
         checks.equal([row["id"] for row in corpus.read_clears()], [b["clear_id"]], "A is done: its X is B's to bring back")
         second = answers(checks, lambda: pipeline_routes.do_pricing_restore({"clear": b["clear_id"]}), "clear B's restore answers")
         checks.equal(sorted(field(second, "restored") or []), ["4000", "4001"], "B brings back X and Y")
         back = corpus.Corpus.read().answers.get("4000")
         checks.equal(back and back.value, "6.00", "and X is 6.00, the later answer, never the 5.00 A took")
+
+    # ------------------------------------------------ a concurrent drop is a named skip, never a 500
+    # `do_pricing_restore` reads `corpus.read_clears()` twice: once to resolve the named clear,
+    # once more (below) to find every clear kept AFTER it. Between those two reads, a second
+    # request for the SAME clear can finish first and drop it — `drop_clear` only runs once
+    # every SKU the clear held is back, so the drop itself proves the SKU is already restored.
+    # The old code built the "newer" slice with `kept[ids.index(stored["id"]) + 1:]`, which
+    # calls `.index()` on the FULL LIST before its own `if stored["id"] in ids` guard ever
+    # runs — a `ValueError` and a 500, not a refusal. Forced deterministically: the FIRST read
+    # is answered with the pre-drop snapshot (so the named clear still resolves), the SECOND
+    # with the real, post-drop list — the exact gap the race lands in, no thread needed.
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers = {"9000": corpus.Answer(value="4.50")}
+        book.write()
+        one = pipeline_routes.do_pricing_clear({"skus": ["9000"]})
+        clear_id = one["clear_id"]
+        stale_kept = corpus.read_clears()  # still holds clear_id, the pre-drop snapshot
+        # the concurrent request: it finishes first, restores "9000", and drops the clear.
+        pipeline_routes.do_pricing_restore({"clear": clear_id})
+        checks.equal(corpus.read_clears(), [], "the concurrent restore drops the clear entirely")
+        checks.ok("9000" in corpus.Corpus.read().answers, "and puts the price back")
+
+        real_read_clears = corpus.read_clears
+        calls = {"n": 0}
+
+        def racing_read_clears():
+            calls["n"] += 1
+            return stale_kept if calls["n"] == 1 else real_read_clears()
+
+        corpus.read_clears = racing_read_clears
+        try:
+            back = answers(
+                checks,
+                lambda: pipeline_routes.do_pricing_restore({"clear": clear_id}),
+                "T7-RACE: a second restore of a clear another request just dropped never raises",
+            )
+        finally:
+            corpus.read_clears = real_read_clears
+        checks.equal(
+            field(back, "skipped"),
+            [{"sku": "9000", "reason": "answered_since"}],
+            "and names the skip rather than crashing on a stale id",
+        )
+        checks.equal(field(back, "restored"), [], "nothing restored twice")
 
     # ------------------------------------------------ UN-14: a move, until either box changes
     with isolated_home():
@@ -24303,9 +24352,9 @@ def check_pricing_clear(checks: Checks) -> None:
         )
         checks.equal(
             back["skipped"],
-            ["1000"],
-            "and REFUSES the one answered again since the clear, naming it — an undo that "
-            "quietly overwrote newer work would be worse than one that refuses",
+            [{"sku": "1000", "reason": "answered_since"}],
+            "and REFUSES the one answered again since the clear, naming it and why — an undo "
+            "that quietly overwrote newer work would be worse than one that refuses",
         )
         after = corpus.Corpus.read()
         checks.equal(
@@ -38250,18 +38299,29 @@ def check_send_matrix(checks: Checks) -> None:
         # note b). R8-1 lets the line say "typed prices", because the line is about that read. It
         # never asks for a send or a price, and nothing behind it counts a card owing a price.
         spare = failed.get("text", "").replace("typed prices", "")
+        # THE `failed=None` BRANCH CARRIES THE SAME "typed prices" PROOF AS THE NAMED-TEXT
+        # BRANCH (the b-pricing lane's round-8 review: this check was weaker for it). An empty
+        # `want["line"]` case once skipped asking whether the failed-read note itself reached
+        # the answer at all — a case whose `text` and `behind` both mutated to empty still
+        # passed, because the None branch only asserted absences. THE NOTE RIDES ONE OF TWO
+        # PLACES: `behind` for ranks 1-6 (`unread` in standing.ts), or `text` alone for rank
+        # 7's terminal `unknown()`, whose own `behind` is always `[]` by that helper's own
+        # shape — never both, and never neither. `has_note` is asserted for every case now,
+        # named or not, so a note the mutation drops is the thing that goes red rather than
+        # the words around it.
+        has_note = "typed prices" in failed.get("text", "") or any(
+            "typed prices" in b for b in failed.get("behind", [])
+        )
         checks.ok(
             "the pricing worklist" not in failed.get("text", "")
+            and has_note
             and (
                 (
                     "send" not in spare and "price" not in spare
                     and not any("needs a price" in b or "need a price" in b for b in failed.get("behind", []))
                 )
                 if want.get("failed", want["line"]) is None
-                else (
-                    want.get("failed", want["line"]) in failed.get("text", "")
-                    and any("typed prices" in b for b in failed.get("behind", []))
-                )
+                else want.get("failed", want["line"]) in failed.get("text", "")
             ),
             f"{name}: with typed prices unread, Home still counts the worklist and names that read",
             str(failed),

@@ -2626,6 +2626,20 @@ export type PricingClearResult = {
   revision: string
 }
 
+/** Why a restore skipped one SKU — the server's own reason, never re-derived on the screen.
+ *  `answered_since`: the operator typed that SKU again since the clear. `newer_clear`: a
+ *  later kept clear holds this SKU's own, newer answer, and restoring THAT clear is the way
+ *  back for it instead. */
+export type PricingRestoreSkip = { sku: string; reason: 'answered_since' | 'newer_clear' }
+
+/** The shared answer shape for every `/pricing/restore` call. */
+export type PricingRestoreResult = {
+  ok: boolean
+  restored: string[]
+  skipped: PricingRestoreSkip[]
+  revision: string
+}
+
 export type PricingWorklist = {
   runs: RunSummary[]
   /** EVERY joined run and what it still owes — the picker's list, not the worklist's. The

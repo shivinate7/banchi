@@ -68,6 +68,7 @@ import type {
   PricingCorpus,
   PricingClearable,
   PricingClearResult,
+  PricingRestoreResult,
   PricingWorklist,
   RunSelection,
   RunSend,
@@ -2829,12 +2830,12 @@ export type KeptClear = { id?: string; count: number; at: number }
 export async function restoreClear(
   clear: string,
   revision?: string,
-): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
+): Promise<PricingRestoreResult> {
   return (await request('/pricing/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ clear, ...(revision === undefined ? {} : { revision }) }),
-  })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
+  })) as PricingRestoreResult
 }
 
 /**
@@ -2890,12 +2891,12 @@ export async function restorePricingAnswers(
   answers: PricingClearResult['cleared'],
   revision?: string,
   clear?: string,
-): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
+): Promise<PricingRestoreResult> {
   return (await request('/pricing/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ answers, ...(revision === undefined ? {} : { revision }), ...(clear === undefined ? {} : { clear }) }),
-  })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
+  })) as PricingRestoreResult
 }
 
 /**
@@ -2906,12 +2907,12 @@ export async function restorePricingAnswers(
  */
 export async function restoreLastClear(
   revision?: string,
-): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
+): Promise<PricingRestoreResult> {
   return (await request('/pricing/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(revision === undefined ? { last_clear: true } : { last_clear: true, revision }),
-  })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
+  })) as PricingRestoreResult
 }
 
 /**
