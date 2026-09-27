@@ -409,6 +409,14 @@ export type InventoryCard = {
 
   set_hint: string | null
 
+  /** THE OLD POSITION A TRANSPLANT CARRIES (`store/master.py:Card.moved_from`), ALREADY ON
+   *  THIS WIRE AND NEVER TYPED HERE UNTIL THE UX REVIEW'S GRAVEYARD RULING. Set only on the
+   *  card a move CREATED, not on the tombstone it left behind — `"box/index"`, the same key
+   *  shape `#/graveyard`'s `moved_to` carries. `null` for a card captured where it stands.
+   *  `Inventory.tsx`/`BoxBrowse.tsx` read it to say where a card was moved in from; nothing
+   *  writes it back. */
+  moved_from: string | null
+
   /** THE CATALOGUE'S OWN SET (D213), ALREADY ON THIS WIRE AND NEVER TYPED HERE UNTIL NOW.
    *  `server/capture_server.py:_card_row` and `do_inventory` both ship `asdict(card)`
    *  raw — `store/master.py:Card.set_name` has carried this field since schema 8, and it
@@ -935,14 +943,20 @@ export type BoxDeleteResult = {
   directory_removed: boolean
 }
 
-/** One row of `GET /graveyard` (D134): a card that has left inventory, whichever of the
- *  two doors it went through, drawn in one shape regardless of which.
+/** One row of `GET /graveyard` (D134, amended by the UX review's graveyard ruling,
+ *  2026-09-26, verbatim: "Move Moved out of Graveyard"): a card that TRULY LEFT the store —
+ *  sold or retired, never moved — whichever of the two doors it went through, drawn in one
+ *  shape regardless of which. A moved card is alive in another box, so it is not one of
+ *  these rows any more; `#/inventory`'s own card details say where it moved in from
+ *  (`CardHero.tsx:movedFromFact`).
  *
- *  `buried` is what tells the two sources apart. `false` means this record is a sold,
- *  retired or moved card still standing in a box nobody has deleted — the same records
- *  `#/inventory` already draws as departed. `true` means its box WAS deleted (D134): the
- *  record itself is gone, and this row is read out of the `buried` history line instead.
- *  `buried_at` is null in the first case and the burial's own timestamp in the second.
+ *  `buried` is what tells the two sources apart, and it names a FACT ABOUT THE BOX, not a
+ *  third way a card left: `false` means this record is a sold or retired card still
+ *  standing in a box nobody has deleted — the same records `#/inventory` already draws as
+ *  departed. `true` means its box WAS deleted (D134): the record itself is gone, and this
+ *  row is read out of the `buried` history line instead. `buried_at` is null in the first
+ *  case and the burial's own timestamp in the second. The screen shows this as a small,
+ *  quiet tag rather than a filter (D196: no pipeline noun on screen).
  *
  *  `box_name` and `order` are best-effort: the box may never have been named, and `order`
  *  is only ever set when `Ledger.holder_of` finds this copy pulled against one. Every other
@@ -950,7 +964,7 @@ export type BoxDeleteResult = {
  *  the record never carried that claim, not that it was withheld. */
 export type DepartedCard = {
   left_at: string | null
-  how: 'sold' | 'retired' | 'moved'
+  how: 'sold' | 'retired'
   box: number
   index: number
   box_name: string | null
@@ -961,7 +975,6 @@ export type DepartedCard = {
   sku: string | null
   condition: string | null
   retire_reason: string | null
-  moved_to: string | null
   order: string | null
   run: string | null
   captured_at: string | null
@@ -970,8 +983,8 @@ export type DepartedCard = {
   buried_at: string | null
 }
 
-/** `GET /graveyard` (D134): every departed card the store still knows about, newest
- *  departure first — the merge of what is still standing and what was buried. */
+/** `GET /graveyard` (D134): every card the store knows truly left — sold or retired —
+ *  newest departure first, the merge of what is still standing and what was buried. */
 export type GraveyardPayload = {
   departed: DepartedCard[]
 }

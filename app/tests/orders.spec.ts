@@ -176,6 +176,7 @@ function inventoryCard(over: Partial<InventoryCard> = {}): InventoryCard {
     photo: '/photo/3/21',
     photo_sha256: null,
     set_hint: null,
+    moved_from: null,
     set_name: null,
     rarity: 'Rare',
     metadata_finish: 'Normal',

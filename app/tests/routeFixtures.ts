@@ -673,7 +673,6 @@ export function departedCard(over: Partial<DepartedCard> = {}): DepartedCard {
     sku: '8937371',
     condition: 'Near Mint',
     retire_reason: null,
-    moved_to: null,
     order: 'A2FFC195-0000F4-006AC',
     run: '2026-08-24-box9-01',
     captured_at: '2026-08-22T12:34:00+00:00',
@@ -684,9 +683,10 @@ export function departedCard(over: Partial<DepartedCard> = {}): DepartedCard {
   return { ...base, ...over }
 }
 
-/** A few departed rows across the three doors D83 names — sold, retired, moved — plus one
- *  buried row from a deleted box (D134), so `#/graveyard` draws its merged list instead of
- *  "nothing has left this store yet". */
+/** A few departed rows across the two doors D134 (amended) names — sold, retired — one
+ *  standing and one buried each, so `#/graveyard` draws its merged list instead of "nothing
+ *  has left this store yet". No `moved` row: D134's amendment (2026-09-26, the owner's
+ *  ruling "Move Moved out of Graveyard") means `GET /graveyard` never answers with one. */
 export function severalDeparted(): DepartedCard[] {
   return [
     departedCard(),
@@ -706,17 +706,19 @@ export function severalDeparted(): DepartedCard[] {
     }),
     departedCard({
       left_at: '2026-09-05T09:00:00+00:00',
-      how: 'moved',
+      how: 'retired',
       box: 9,
       index: 2,
       box_name: null,
       name: 'Thievul',
       number: '090',
       sku: null,
-      moved_to: 'Box 12',
+      retire_reason: 'damaged',
       order: null,
       run: null,
       photo_sha256: 'g7h8i9',
+      buried: true,
+      buried_at: '2026-09-06T00:00:00+00:00',
     }),
     departedCard({
       left_at: '2026-08-29T08:00:00+00:00',

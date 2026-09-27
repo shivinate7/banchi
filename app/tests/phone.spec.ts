@@ -666,8 +666,12 @@ test('the drawer has no fixed foot, and every screen in it shows without a scrol
    all — so a defect in that row was invisible to every route-level sweep in this file. Five
    filter options (All/Sold/Retired/Moved/Buried, each with a count) sized to their own content
    inside a flex column bled the whole PAGE 72px wider than the viewport at 390px, with
-   "Buried" clipped at the very edge and no cue a fifth filter existed. This seeds a real,
-   populated graveyard the way `copy-budget.spec.ts` does, to put the row on screen at all. */
+   "Buried" clipped at the very edge and no cue a fifth filter existed. D134's amendment
+   (2026-09-26) dropped Moved and Buried to three tabs (All/Sold/Retired) — Moved is not a
+   departure, and Buried was a fact about the box rather than a way a card left — but the
+   overflow this case guards can still recur at a phone width with real content, so the seed
+   and the assertion below stay. This seeds a real, populated graveyard the way
+   `copy-budget.spec.ts` does, to put the row on screen at all. */
 test('graveyard filter row scrolls sideways rather than bleeding the page at 390', async ({ page }) => {
   await page.setViewportSize(PHONE)
   await seedPopulatedGraveyard(page)
