@@ -57,6 +57,7 @@ Owner rulings for N1 and N2 (2026-09-26):
 - `map should be that i enter an edit mode, in this edit mode i can drag and drop freely, and then i have to hit confirm once once im happy with the layout`
 - `using horizontal rather than vertical it seems more intuitive`
 - `i hate subtext and ur overuse of verbiage`, then `let's eliminate evne the subtitles`
+- The card-range move ("Some cards"), 2026-09-27: the owner chose `Bring it back into edit mode (Recommended)`. A card range drafts like a section, and the one Confirm saves both, all or nothing.
 
 Then: merge every lane into `ux/pr4a-integration` off main, with tsc per merge. Run one
 `make check`, open the PR, wait for green CI, and merge.
