@@ -71,6 +71,16 @@ REAL_MOVED_POINTERS = (
     "/responses//status/body/boot_id",
     "/responses//status/body/started_at",
     "/responses/POST /shipping/batches/body/batch",
+    # THE FOUR PATTERNS ADDED 2026-09-27, THE FIRST TIME THIS CHECK EVER RAN TO COMPLETION
+    # AGAINST THESE ROUTES (CI run 36325662421): `/pipeline/value` and `/pipeline/holdings-value`
+    # predate `ALLOWED_PATTERNS`' last edit by weeks, but every earlier publish failed at an
+    # unrelated step first and `make demo-determinism` is not in `make check` (D18), so
+    # nothing had ever exercised these shapes here before.
+    "/responses//pipeline/value?band=bottom&limit=5000/body/at",
+    "/responses//pipeline/holdings-value?range=annual/body/at",
+    "/responses//pipeline/value?band=top&limit=5000&box=1/body/rows/0/read_at",
+    "/responses//pipeline/value?band=gaps&limit=5000/body/sources/1/at",
+    "/responses//pipeline/runs/demo-box3/pricing/body/written_at",
 )
 
 # Pointers that must NEVER match — each one contains a key `ALLOWED_PATTERNS` legitimately

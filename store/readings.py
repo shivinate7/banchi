@@ -168,9 +168,22 @@ class Readings:
 
     def sources_payload(self) -> List[dict]:
         """The `sources` list exactly as the old live `_readings()` returned it, newest
-        first — `[{"kind", "name", "at", "skus"}, ...]`."""
+        first — `[{"kind", "name", "at", "skus"}, ...]`.
+
+        TIED ON `name` WHEN `at` TIES, NOT LEFT TO WHATEVER ORDER `self.sources` ITERATES
+        IN. `at` is a real join mtime (a second's resolution), and two runs finishing in the
+        same wall-clock second is ordinary, not rare — `make demo-determinism` caught it
+        2026-09-27: two `make demo` runs of the same fixed seed, `demo-box1` and `demo-box3`
+        joined a second apart inside each run, landed in the SAME second across the two runs
+        (`1790519549` both), and the tie broke on `Rows`' own iteration order, which is not a
+        contract this class makes — the published order moved for two runs of the identical
+        seed, `demo-freshness` blind to it exactly as `Inventory.bind_sku`'s own `at` once
+        was (this method's own docstring). A stable sort already keeps equal-`at` rows in
+        `self.sources`' iteration order; naming `name` as the second key makes that order a
+        fact about the data instead of a fact about the table's own internals.
+        """
         rows = [source._asdict() for source in self.sources.values()]
-        rows.sort(key=lambda row: row["at"], reverse=True)
+        rows.sort(key=lambda row: (row["at"], row["name"]), reverse=True)
         return rows
 
     # -------------------------------------------------------------------------- writing

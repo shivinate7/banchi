@@ -108,6 +108,20 @@ ALLOWED_PATTERNS: Tuple[Tuple[str, Pattern[str]], ...] = (
      re.compile(r"^/responses//status/body/started_at$")),
     ("shipping: the batch id this request mints",
      re.compile(r"^/responses/POST /shipping/batches/body/batch$")),
+    # FOUND BY THIS CHECK'S FIRST REAL RUN (2026-09-27, CI run 36325662421) — `/pipeline/value`
+    # and `/pipeline/holdings-value` existed weeks before `ALLOWED_PATTERNS` was last touched
+    # (`D159`), but this check had never once reached them: every
+    # earlier publish failed at an unrelated step first, and `make demo-determinism` is not
+    # wired into `make check` (D18), so nothing ran it in between. Same class as the pricing
+    # entries above, over a route this check simply never exercised before.
+    ("pipeline value: the request's own reading moment",
+     re.compile(r"^/responses//pipeline/(?:value|holdings-value)(?:\?[^/]*)?/body/at$")),
+    ("pipeline value: a row's own reading time (the same real join mtime `sources` below carries)",
+     re.compile(r"^/responses//pipeline/value(?:\?[^/]*)?/body/rows/\d+/read_at$")),
+    ("pipeline value: a source run's own real, unfaked join mtime",
+     re.compile(r"^/responses//pipeline/value(?:\?[^/]*)?/body/sources/\d+/at$")),
+    ("pipeline runs: a single run's own pricing view, the join's real write moment",
+     re.compile(r"^/responses//pipeline/runs/[^/]+/pricing/body/written_at$")),
 )
 
 
@@ -139,10 +153,22 @@ def _diff(before: Any, after: Any, pointer: str, out: List[Tuple[str, Any, Any]]
 def _run_demo(home: str) -> Path:
     """One full `make demo` into a scratch `PKMNSCAN_HOME`, returning a COPY of the bundle
     it wrote — copied out because `BUNDLE`'s path does not vary with `home`, so the next call
-    would otherwise overwrite it before this one is read."""
+    would otherwise overwrite it before this one is read.
+
+    `DEMO_RECORD_ARGS=--offline`: THE SAME FLAG `demo-mirror.py:record` ALREADY RUNS THE REAL
+    MIRROR'S OWN RECORDER WITH (D295) — a plain `make demo` never passed it, so this check
+    was comparing two recordings of a server that keeps its real network, live-warming stock
+    images from tcgcsv.com in the background (D301) the whole time. Found by CI run
+    36325662421, 2026-09-27: `/pipeline/pricing/body/skus/N/image_url` moved `None ->
+    'https://…'` on about two dozen SKUs, one run's warm finishing before the read and the
+    other's not — a real, reproducible race, not a seed bug, and one the real mirror build
+    never hits because it was already offline. Offline makes every `warm()` fetch fail the
+    same way both times (`OFFLINE_BOOT` refuses the connect, `_fetch_tcgcsv` catches the
+    resulting `PriceHistoryError` and answers `{}`), so `image_url` is `None` on both runs —
+    deterministic, and proof this check now runs the exact path the publish job does."""
     subprocess.run(
-        ["make", "demo", "DEMO_HOME=%s" % home], cwd=REPO_ROOT, check=True,
-        stdout=subprocess.DEVNULL,
+        ["make", "demo", "DEMO_HOME=%s" % home, "DEMO_RECORD_ARGS=--offline"],
+        cwd=REPO_ROOT, check=True, stdout=subprocess.DEVNULL,
     )
     if not BUNDLE.exists():
         raise SystemExit("demo determinism: `make demo DEMO_HOME=%s` wrote no bundle" % home)

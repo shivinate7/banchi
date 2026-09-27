@@ -5137,7 +5137,7 @@ COMPONENTS = [
                 # D43 is why each scratch home is its own directory rather than the
                 # checkout's real demo/ — a shared store over two runs is the data-loss shape
                 # that decision names, generalized from "the owner's store" to "either run's".
-                "governed_by": ["D16", "D18", "D43"],
+                "governed_by": ["D16", "D18", "D43", "D159", "D295", "D301"],
             },
             "demo-determinism-selftest.py": {
                 "does": "demo-determinism.py's own ALLOWED_PATTERNS matcher, proved on "

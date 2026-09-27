@@ -36,7 +36,7 @@ sys.path.insert(0, str(ROOT))
 from pipeline import readings as readings_walk  # noqa: E402
 from pipeline import tcgcsv  # noqa: E402
 from store import files  # noqa: E402
-from store.readings import KIND_LIVE, KIND_RUN, Reading  # noqa: E402
+from store.readings import KIND_LIVE, KIND_RUN, Readings, Reading, Source  # noqa: E402
 from store.session import Store  # noqa: E402
 
 PASS = 0
@@ -198,12 +198,62 @@ def assert_matches_golden(runs_dir: Path, live_dir: Path, label: str) -> None:
        f"got  {sources_as_dicts(got_sources)}\nwant {want_sources}")
 
 
+def check_sources_payload_ties_break_on_name() -> None:
+    """`Readings.sources_payload()` — found by `make demo-determinism`, 2026-09-27: two real
+    `make demo` runs of the identical seed joined `demo-box1` and `demo-box3` a second apart
+    inside each run, but their real mtimes (`at`) landed in the SAME second across the two
+    separate runs. A tie on `at` alone left the order to `Rows`' own iteration order, which
+    is not a promise this class makes — the published `sources` list moved between two runs
+    of one fixed seed. `name` is now the tiebreak, so two sources sharing an `at` sort the
+    same way every time, whatever order they were inserted in."""
+    readings = Readings()
+    readings.replace(
+        {},
+        [
+            Source(kind=KIND_RUN, name="demo-box3", at=1_700_000_000, skus=30),
+            Source(kind=KIND_RUN, name="demo-box1", at=1_700_000_000, skus=36),
+        ],
+    )
+    names = [row["name"] for row in readings.sources_payload()]
+    ok(names == ["demo-box3", "demo-box1"],
+       "a tied `at` breaks on `name`, whichever order the sources were inserted in",
+       "got %r" % names)
+
+    reversed_readings = Readings()
+    reversed_readings.replace(
+        {},
+        [
+            Source(kind=KIND_RUN, name="demo-box1", at=1_700_000_000, skus=36),
+            Source(kind=KIND_RUN, name="demo-box3", at=1_700_000_000, skus=30),
+        ],
+    )
+    reversed_names = [row["name"] for row in reversed_readings.sources_payload()]
+    ok(reversed_names == names,
+       "insertion order does not change a tied result",
+       "got %r, want %r" % (reversed_names, names))
+
+    distinct = Readings()
+    distinct.replace(
+        {},
+        [
+            Source(kind=KIND_RUN, name="demo-box1", at=1_700_000_000, skus=36),
+            Source(kind=KIND_RUN, name="demo-box3", at=1_700_000_001, skus=30),
+        ],
+    )
+    distinct_names = [row["name"] for row in distinct.sources_payload()]
+    ok(distinct_names == ["demo-box3", "demo-box1"],
+       "a real `at` difference still wins over the name tiebreak (newest first)",
+       "got %r" % distinct_names)
+
+
 # ---------------------------------------------------------------------------------- main
 
 
 def main() -> int:
     print("readings self-test — store/readings.py and pipeline/readings.py "
           "against a throwaway store\n")
+    print("  -- sources_payload()'s own tiebreak, no store needed --")
+    check_sources_payload_ties_break_on_name()
     with tempfile.TemporaryDirectory() as raw:
         home = Path(raw)
         runs_dir = home / "runs"
