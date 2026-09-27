@@ -1135,7 +1135,22 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
 
   /* THE PRESSED BUTTON'S OWN SUBTREE IS EXEMPT (its icon and label are meant to change, from
      `Mark sold` to `Undo` — D118 is about the REST of the page, never the control itself).
-     Every other geometry on the pane, including every OTHER copy's row, is measured. */
+     Every other geometry on the pane, including every OTHER copy's row, is measured.
+
+     PINNED TO scrollY=0 BEFORE EACH SNAPSHOT — diagnosed off a repeat CI red (two runs, 4x
+     locally under `--repeat-each` on this exact case): `getBoundingClientRect()` is
+     VIEWPORT-relative, and `.orders-card-pane`'s own PAGE position never moves at all (284px
+     from the document top, confirmed constant across every run, failing and passing alike).
+     What moves is the viewport's OWN scroll offset. Clicking the "Volcanion" walk row, itself
+     below the fold at 390x844, makes Playwright auto-scroll to reach it — landing near the
+     PAGE'S OWN BOTTOM often enough to matter, because the walk list sits below the card pane
+     in this stacked layout. Marking the row sold then hides it from the walk list under
+     `hideSold` (on by default, a real and correct feature, not the defect) — the page gets
+     shorter by exactly one row's height, and a browser CLAMPS a scroll position that no
+     longer fits the shorter document, without firing anything else `before`/`after` here
+     would have caught. Nothing on the pane itself ever moved; the frame the two snapshots
+     were taken through did. Pinning the frame is what D118 asks the REST OF THE PAGE to hold
+     still against — it does not ask an incidental Playwright auto-scroll to hold still too. */
   const rectsOf = () =>
     page.locator('.orders-card-pane').evaluate((el) => {
       const controls = [...el.querySelectorAll('.orders-card-thin-action, .orders-card-action')]
@@ -1146,6 +1161,7 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
           return `${r.top}:${r.left}:${r.width}:${r.height}`
         })
     })
+  await page.evaluate(() => window.scrollTo(0, 0))
   const before = await rectsOf()
 
   const action = page.getByRole('button', { name: /^Mark sold/ })
@@ -1153,6 +1169,7 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
   await expect
     .poll(async () => (await page.getByRole('button', { name: /^Undo/ }).count()) > 0)
     .toBe(true)
+  await page.evaluate(() => window.scrollTo(0, 0))
 
   /* THE CARD DID NOT ADVANCE (the rebuilt fix): Volcanion is still what the pane shows, its own
      row now reading Undo. Tricksy Tentacles stays in the walk list (it was always the next
