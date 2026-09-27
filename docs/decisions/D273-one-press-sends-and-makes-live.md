@@ -213,3 +213,34 @@ Rounds 2 to 6 of the adversarial review, each finding and its fix, are the entry
 `D283` (the send press's review record). Round 5 built the mixed send above.
 It also ordered two presses in one second by press time, and it folded the taken-back warning
 to one line on a phone. Round 6 limited the price rows to the prices the screen named.
+
+### Amended 2026-09-26: the mark-down press requires a fresh read, and checks each price
+
+The owner's words are in `docs/reviews/ux-2026-09-23/RULINGS.md`, 2026-09-26 ("Require a fresh
+read"). Before this, the mark-down press read what is live and then pushed a file judged against
+the survey, however old. On the owner's screen that survey was 17 days old.
+
+- **A day.** A read older than `pipeline/reprice.py:READ_FRESH_S` (24 hours) sends nothing. The
+  rule's window is whole days without a sale, so a card sold since the read is one the read still
+  offers. A day keeps that gap under the window's own unit. The screen reads the constant off the
+  table route. Past it, the bar offers "Read again" in place of Send, and no count or lens figure
+  is offered as current. `reprice apply --write` refuses a stale read too, so "Download the file
+  instead" cannot write one. `POST /pipeline/markdowns/<stamp>/send` refuses it as `read_stale`
+  before TCGplayer is asked anything.
+- **Each price, checked against the fresh read.** The mark-down press now runs
+  `pipeline/sendguard.py:price_changes`, the listing send's own rule. The price the screen drew
+  is the read's asking price. TCGplayer shows another price: the press refuses and names it. Under
+  the floor: refused. TCGplayer holds no copy or already shows the price: the row leaves the file
+  and is named, and the press goes on. Nothing left: `nothing_to_send`.
+
+Proof: T7 `check_live_markdown_guards`, each rule red under its own mutation.
+
+### Amended 2026-09-26, second: which stored prices a mark-down press carries
+
+The owner's words, verbatim: "if the price i've typed is higher yea". This entry's round-6 rule
+("a corpus answer the owner did not type there never rides") now reaches the Live tab with one
+exception. A price stored on an earlier visit rides a mark-down only when it is higher than the
+live price. The bar names each such card and its old and new price before the press. So a
+price the button did not name is never sent. A lower earlier price goes only when the owner
+writes it again on this visit. `reprice apply` refuses it otherwise (`earlier_lower`). The
+dollar cap is the rule's only (the owner: "Rule only").

@@ -5553,8 +5553,8 @@ COMPONENTS = [
                                 "D88", "D89", "D100", "D103", "D104", "D105", "D134", "D137",
                                 "D145", "D147", "D156", "D159", "D163", "D165", "D166", "D168",
                                 "D170", "D172", "D174", "D180", "D188", "D189", "D196", "D212",
-                                "D216", "D219", "D225", "D227", "D236", "D258", "D277", "D291",
-                                "D-set-view"],
+                                "D216", "D219", "D225", "D227", "D236", "D258", "D273", "D277",
+                                "D291", "D-set-view"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -7681,7 +7681,8 @@ COMPONENTS = [
                                                 "D100", "D101", "D103", "D105", "D107", "D109",
                                                 "D115", "D117", "D118", "D125", "D137", "D156",
                                                 "D159", "D168", "D172", "D181", "D196", "D208",
-                                                "D210", "D218", "D269", "D273", "D277", "D278"]},
+                                                "D210", "D218", "D221", "D267", "D269", "D273",
+                                                "D277", "D278", "D285"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, a kit Sheet off #/pricing's header (D168). The owner's own "
                                             "ask: typed prices go stale and there was no way to clear many at once. IT IS A "
                                             "PRESS AND NOT A POLICY: nothing here runs on a clock. The scope is the "
@@ -7707,7 +7708,7 @@ COMPONENTS = [
                                 "governed_by": ["D5", "D9", "D28", "D38", "D41", "D49", "D50",
                                                 "D54", "D56", "D62", "D78", "D79", "D85", "D86",
                                                 "D103", "D105", "D117", "D118", "D123", "D125",
-                                                "D197", "D208", "D218", "D277"]},
+                                                "D197", "D208", "D218", "D221", "D273", "D277"]},
             # D62 is the screen half of pipeline/pricehistory.py. D8 governs it because that
             # entry names the export as the pricing source: this draws a reading BESIDE that
             # figure and writes nothing, and the day it prices anything is a change to D8.
@@ -8316,7 +8317,7 @@ COMPONENTS = [
                                      "that spent nothing both render $0.00, and they are "
                                      "different sentences.",
                              # D33 is the money gate, whose receipt this now carries.
-                             "governed_by": ["D33"]},
+                             "governed_by": ["D33", "D221", "D267"]},
             "src/dates.ts": {"does": "A DATE, SAID ONE OF TWO WAYS — `relativeDate` (`5 minutes "
                                      "ago`, `yesterday`, then the absolute form past a week) and "
                                      "`absoluteDate` (`Sep 4, 2026`, no leading zero). "
@@ -9323,7 +9324,8 @@ COMPONENTS = [
                                                "the whole survey (D62). Not a harness test.",
                                                "governed_by": ["D28", "D54", "D62", "D99", "D100",
                                                                "D101", "D103", "D107", "D118",
-                                                               "D197", "D218", "D273", "D277"]},
+                                                               "D197", "D218", "D221", "D267",
+                                                               "D273", "D277"]},
             "tests/pricing.spec.ts": {"does": "the pricing screen, asserted where nothing else "
                                               "can see it. Its strongest cases are ABSENCES: a "
                                               "suggested row writes no key to the corpus, a "

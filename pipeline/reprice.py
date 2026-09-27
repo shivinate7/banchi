@@ -127,6 +127,7 @@ NO_BASIS = "no_basis"                    # the chosen basis column is blank or z
 NEAR_MARKET = "near_market"              # not far enough above `TCG Market Price`
 AT_FLOOR = "at_floor"                    # already at the store's floor; nowhere down to go
 NOT_A_MARKDOWN = "not_a_markdown"        # the rule would raise the price, or leave it
+NO_MARKET = "no_market"                  # no TCG Market Price: the owner prices it by hand
 
 SKIP_ORDER: Tuple[str, ...] = (
     HELD,
@@ -136,6 +137,7 @@ SKIP_ORDER: Tuple[str, ...] = (
     NEAR_MARKET,
     AT_FLOOR,
     NOT_A_MARKDOWN,
+    NO_MARKET,
     NO_ASKING_PRICE,
     NO_BASIS,
     NOT_THIS_STORE,
@@ -154,7 +156,33 @@ SKIP_SENTENCE: Dict[str, str] = {
     NEAR_MARKET: "not far enough above market",
     AT_FLOOR: "already at the floor",
     NOT_A_MARKDOWN: "the rule would not lower it",
+    NO_MARKET: "no market price, so the rule leaves it to you",
 }
+
+#: HOW OLD A LIVE READ MAY BE AND STILL BE SENT FROM (the owner's ruling, 2026-09-26: "require a
+#: fresh read"). A day, because the rule's own inputs move by the day: its window is whole days
+#: of no sale, and a card that sold since the read is one the read still offers. The send reads
+#: what is live again and refuses a price TCGplayer moved (`server/send_routes.py`), so this
+#: bound is what keeps the SET honest, not the price. The screen reads this constant off the
+#: table route and never types its own copy.
+READ_FRESH_S = 24 * 60 * 60
+
+
+def read_is_fresh(at: Optional[str], now: Optional[datetime] = None) -> bool:
+    """Whether a read stamped `at` is young enough to send from. An unparseable or absent stamp
+    is not fresh: a read nothing can date is a read nobody may send from."""
+    when = _parse_stamp(at)
+    if when is None:
+        return False
+    return ((now or datetime.now(timezone.utc)) - when).total_seconds() <= READ_FRESH_S
+
+
+def is_sealed(row: Mapping[str, str]) -> bool:
+    """Whether a live row is sealed product: its condition is `Unopened`, the only condition a
+    sealed product is ever listed in (`tcgcsv.SEALED_CONDITION`). Measured on the owner's live
+    export, 2026-09-12: 114 Unopened rows, every one a sealed product. A name rule ("Box",
+    "Bundle", "Tin") misfiles singles such as Tinkatink and Pack of Wonders."""
+    return str(row.get(tcgcsv.CONDITION_COLUMN, "")).strip() == tcgcsv.SEALED_CONDITION
 
 
 class UnknownBasis(ValueError):
@@ -390,6 +418,24 @@ class Plan:
         return out
 
 
+class InvalidCap(ValueError):
+    """A cap that is not a positive amount of money."""
+
+
+def check_cap(cap) -> Optional[Decimal]:
+    """The cap as money, or None for no cap. Zero or less is a refusal: a cap of nothing would
+    let no row move, and a negative one would let a row move up."""
+    if cap is None or str(cap).strip() == "":
+        return None
+    try:
+        value = Decimal(str(cap))
+    except ArithmeticError:
+        raise InvalidCap(f"the cap is {cap!r}, which is not money") from None
+    if not value.is_finite() or value <= 0 or value != value.quantize(Decimal("0.01")):
+        raise InvalidCap(f"the cap is {cap!r}; it must be more than $0, in whole cents")
+    return value
+
+
 def plan(
     export_rows: Sequence[Mapping[str, str]],
     *,
@@ -405,6 +451,7 @@ def plan(
     above_market: Optional[Decimal] = None,
     limit: Optional[int] = None,
     floor: Decimal = pricing.FLOOR,
+    cap: Optional[Decimal] = None,
 ) -> Plan:
     """Rank the live listings this store would mark down, and name every row it would not.
 
@@ -426,8 +473,17 @@ def plan(
     already at or under it is `at_floor`, and a proposal the rule drives down to it is
     `at_floor` too. The default is the module constant, for a caller with no store;
     `cli/cmd_reprice.py` passes `policy.threshold`.
+
+    `cap` IS THE MOST THE RULE MAY TAKE OFF ONE COPY, in dollars (the owner's ruling,
+    2026-09-26: "a cap cut in dollars atop the % markdown"). None is no cap. The proposal is the
+    rule's price or `asking - cap`, whichever is higher, so a cap only ever makes a cut smaller.
+
+    A ROW WITH NO MARKET PRICE IS NEVER MARKED DOWN (the owner's ruling, 2026-09-26: "Skip
+    no-market cards"). It is refused `no_market` before the rule prices it, whatever the basis:
+    a card nobody has priced is one the owner prices by hand (D49), never one a rule lowers.
     """
     rule = pricing.Rule.parse(rule if rule is not None else pricing.MATCH)
+    cap = check_cap(cap)
     check_basis(basis)
     when = now or datetime.now(timezone.utc)
     cut_off = when - timedelta(days=days)
@@ -444,6 +500,7 @@ def plan(
             "above_market": None if above_market is None else str(above_market),
             "limit": limit,
             "floor": str(floor),
+            "cap": None if cap is None else str(cap),
             "as_of": when.isoformat(timespec="milliseconds"),
             "cut_off": cut_off.isoformat(timespec="milliseconds"),
         }
@@ -512,11 +569,17 @@ def plan(
             refuse(candidate, AT_FLOOR)
             continue
 
+        if not pricing.has_market_data(candidate.market):
+            refuse(candidate, NO_MARKET)
+            continue
+
         start = basis_price(row, basis)
         if not pricing.has_market_data(start):
             refuse(candidate, NO_BASIS)
             continue
         proposed = pricing.list_price(start, rule, floor)
+        if cap is not None:
+            proposed = max(proposed, candidate.asking - cap)
         if proposed >= candidate.asking:
             refuse(candidate, AT_FLOOR if proposed <= floor else NOT_A_MARKDOWN)
             continue
@@ -546,6 +609,7 @@ NOT_IN_WORKLIST = "not_in_worklist"      # a SKU this markdown's survey never sa
 DUPLICATE = "duplicate"                  # the same SKU twice in one file (D7)
 UNREADABLE = "unreadable"                # the price cell is not a number
 BELOW_FLOOR = "below_floor"              # under the store's own floor (`policy.threshold`)
+EARLIER_LOWER = "earlier_lower"          # a lower price stored on an earlier visit, not this one
 RAISED = "raised"                        # above the live price. RETIRED as a refusal by D107 —
                                          # `read_back` lets an operator's raise through — and
                                          # kept in the vocabulary because receipts written
@@ -576,6 +640,7 @@ EDIT_SENTENCE: Dict[str, str] = {
     # receipt for 293 rows blamed a number nobody had set. The figure is printed once, on the
     # report's own `floored at` line, where it can only come from the value actually used.
     BELOW_FLOOR: "below the store's floor",
+    EARLIER_LOWER: "a lower price typed before this read, not on this visit",
     RAISED: "above the live price (a refusal until D107; kept for older receipts)",
     UNCHANGED: "the same price it is already listed at",
     # VERBATIM FROM `SKIP_SENTENCE`, not re-worded, so the survey and the apply cannot drift
@@ -675,6 +740,8 @@ def read_back(
     floor: Decimal = pricing.FLOOR,
     offered: Optional[Sequence[str]] = None,
     unpriceable: Optional[Mapping[str, str]] = None,
+    earlier: Optional[Mapping[str, Decimal]] = None,
+    proposed: Optional[Mapping[str, Decimal]] = None,
 ) -> Application:
     """The operator's edited worklist, judged against what the export reported.
 
@@ -713,7 +780,20 @@ def read_back(
     move a listing this pipeline did not create and cannot verify, and the second would edit
     nothing at all. Passing the survey's code rather than a boolean is what keeps one
     vocabulary between the row's sentence and the receipt's.
+
+    `earlier` MAPS A SKU TO THE PRICE THE CORPUS HELD FOR IT BEFORE THE READ WAS TAKEN (the
+    owner's ruling, 2026-09-26: "if the price i've typed is higher yea"). A stored answer from an
+    earlier visit goes out only when it is HIGHER than the live price. So an edit that lowers the
+    price, and is exactly that earlier answer, is refused `earlier_lower`, the row and not the
+    file. A price written after the read (typed, or "Mark down" on this visit) is stamped later
+    and is not in `earlier`. `proposed` is the read's own rule price per SKU: an edit equal to it
+    is the rule's mark-down, and the rule's price may always go.
+
+    THE DOLLAR CAP IS NOT CHECKED HERE (the owner's ruling, 2026-09-26: "Rule only"). It limits
+    the rule's proposal in `plan`. A price the owner types goes out as typed, above the floor.
     """
+    earlier = dict(earlier or {})
+    proposed = dict(proposed or {})
     out = Application()
     seen: Dict[str, Edit] = {}
     quantities = dict(live or {})
@@ -780,6 +860,10 @@ def read_back(
             continue
         if after < floor:
             edit.refusal = BELOW_FLOOR
+            out.refused.append(edit)
+            continue
+        if after < before and earlier.get(sku) == after and proposed.get(sku) != after:
+            edit.refusal = EARLIER_LOWER
             out.refused.append(edit)
             continue
         out.edits.append(edit)

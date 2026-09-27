@@ -2468,6 +2468,14 @@ export async function applyMarkdown(
      *  made. Omit to say "did not read one", which the command allows. */
     revision?: string
     write?: boolean
+    /** The Live tab's Singles / Sealed filter. The server refuses the whole request if an edit
+     *  is of the other kind (`kind_mismatch`), so the filter's word is kept. Omit for both. */
+    kind?: 'singles' | 'sealed'
+    /** SKUs the Live tab saw typed THIS VISIT (`Pricing.tsx`'s `typedHere`). A SKU named here
+     *  is never refused `earlier_lower` — the server has no other way to tell "typed again,
+     *  same value" from "typed days ago", because `stamp_answers` keeps the old `at` when the
+     *  value does not change. */
+    typed?: string[]
   } = {},
 ): Promise<MarkdownAnswer> {
   return (await request(`/pipeline/markdowns/${encodeURIComponent(stamp)}/apply`, {
@@ -2477,6 +2485,8 @@ export async function applyMarkdown(
       worklist: options.worklist,
       edits: options.edits,
       revision: options.revision,
+      kind: options.kind,
+      typed: options.typed,
       write: Boolean(options.write),
     }),
   })) as MarkdownAnswer

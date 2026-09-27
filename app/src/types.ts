@@ -3982,6 +3982,8 @@ export type MarkdownAsk = {
   above_market?: number | string
   limit?: number
   again?: boolean
+  /** The most the rule takes off one copy, in dollars (`reprice list --cap`). Omit for no cap. */
+  cap?: string
   write?: boolean
 }
 
@@ -4123,6 +4125,9 @@ export type MarkdownSku = {
   /** The export row, verbatim, all sixteen cells. What an upload's bytes are built from and
    *  what a price history's five identity cells are read out of. */
   row: Record<string, string>
+  /** Sealed product: the row's condition is `Unopened` (`pipeline/reprice.py:is_sealed`). Absent
+   *  on a survey written before 2026-09-26, which reads as a single. */
+  sealed?: boolean
 }
 
 /** The lens's whole input — `survey.json` as `GET /pipeline/markdowns/<stamp>/table` serves it. */
@@ -4140,6 +4145,9 @@ export type MarkdownTable = {
    *  enforces it and two lists would drift. */
   unpriceable: string[]
   floor: string
+  /** How old this read may be and still be sent from, in seconds (`reprice.READ_FRESH_S`).
+   *  Past it the tab offers "Read again" in place of Send (the owner's ruling, 2026-09-26). */
+  stale_after_s?: number
 }
 
 /** One markdown as the screen lists it. `files` is what the directory actually holds, so

@@ -73,6 +73,7 @@ import { forSale, soldSince } from './cardState'
 import { useCardCropWhenSeen } from './cardCrop'
 import { readUpload } from './csvUpload'
 import { absoluteDate, clockTime } from './dates'
+import { moneyField } from './money'
 import {
   Button,
   cropStyle,
@@ -94,6 +95,7 @@ import {
   Sheet,
   openSheet,
   useUndoHotkey,
+  useViewParam,
 } from './kit'
 import { toast } from './kit/toast'
 import './Pricing.css'
@@ -230,6 +232,20 @@ function cents(text: string | null | undefined): number | null {
   if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null
   return Math.round(Number(trimmed) * 100)
 }
+
+/** Money as integer cents off any money text, four places included (`349.9900`). */
+function centsOf(text: string | null | undefined): number | null {
+  return cents(moneyField(text))
+}
+
+/** THE LIVE TAB'S TWO LENSES (D103): the rule's picks (`offered`, and `deferred`, which also
+ *  qualified), and the rows it passed over. One predicate, so a lens's count and its rows agree. */
+function liveLens(standing: string | undefined): 'offered' | 'refused' {
+  return standing === 'offered' || standing === 'deferred' ? 'offered' : 'refused'
+}
+
+/** Which kind of live listing the Live tab shows (the owner's ruling, 2026-09-26): '' is both. */
+type LiveKind = '' | 'singles' | 'sealed'
 
 /** THE CHEAP-CARD PRICE AS IT STANDS ON DISK, where it is not the cut-off — `null` where the two
  *  agree. A store written under the old two-figure model can say both at once, and one press
@@ -465,6 +481,12 @@ function flagOf(row: PricingSku, standing: unknown, locked: boolean, cut: string
   return null
 }
 
+/** ON THE LIVE TAB A LISTING'S WORTH IS NOT A REASON TO LOOK (the owner's ruling, 2026-09-26):
+ *  it is already live at a price somebody chose. No market price and a typed drift still say so. */
+function liveFlag(flag: Flag | null, live: boolean): Flag | null {
+  return live && flag?.kind === 'worth' ? null : flag
+}
+
 /** Highest market first; a row with no market price is the most urgent, so it leads. */
 function byValue(a: PricingSku, b: PricingSku): number {
   const va = cents(a.snap.market) ?? Number.POSITIVE_INFINITY
@@ -482,14 +504,22 @@ function takeArrival(
   answerOf: (row: PricingSku) => unknown,
   locked: (sku: string) => string | null,
   cut: string,
+  live = false,
 ): Arrival {
   const needs = new Set<string>()
   const flagged: PricingSku[] = []
   const rest: PricingSku[] = []
   const closed: PricingSku[] = []
+  /* ON THE LIVE TAB ONLY A ROW WITH NO MARKET PRICE NEEDS THE OWNER (the owner's ruling,
+     2026-09-26, "Skip no-market cards"): the rule never lowers it, so a price there is the
+     owner's to type. A live listing worth $5 or more already carries a price somebody chose. */
+  const needsOwner = (row: PricingSku): boolean =>
+    live
+      ? row.snap.market === null && locked(row.sku) === null && !isWithheld(answerOf(row))
+      : flagOf(row, answerOf(row), locked(row.sku) !== null, cut) !== null
   for (const row of rows) {
     if (row.at_cap) closed.push(row)
-    else if (flagOf(row, answerOf(row), locked(row.sku) !== null, cut) !== null) {
+    else if (needsOwner(row)) {
       needs.add(row.sku)
       flagged.push(row)
     } else rest.push(row)
@@ -667,6 +697,14 @@ function markdownWords(asked: Record<string, unknown> | undefined): string {
   return `Not sold in ${Number.isFinite(days) ? days : 7} days, ${off} ${from}`
 }
 
+/** The read's dollar cap as a number, or null where it has none (the owner's ruling, 2026-09-26).
+ *  A `match` read takes nothing off, so it has no cap to say. */
+function markdownCap(asked: Record<string, unknown> | undefined): number | null {
+  if (asked?.['rule'] === 'match') return null
+  const cap = moneyField(typeof asked?.['cap'] === 'string' ? asked['cap'] : null)
+  return cap === null ? null : Number(cap)
+}
+
 /* ============================================================================== the screen */
 
 export function Pricing() {
@@ -747,6 +785,9 @@ export function Pricing() {
   const [filterHeld, setFilterHeld] = useState(false)
   /** WHICH LIVE LISTINGS ARE ON SCREEN (D103): a filter the owner applies, never a gate. */
   const [lens, setLens] = useState<'all' | 'offered' | 'refused'>('all')
+  /** SINGLES OR SEALED, IN THE URL (D285; the owner's ruling, 2026-09-26). '' shows both. */
+  const [kindParam, setKindParam] = useViewParam('kind')
+  const kind: LiveKind = kindParam === 'singles' || kindParam === 'sealed' ? kindParam : ''
 
   const [customDraft, setCustomDraft] = useState<CustomRule>({ kind: 'undercut', pct: '', basis: 'market' })
   const [pressedCustom, setPressedCustom] = useState(false)
@@ -1030,14 +1071,14 @@ export function Pricing() {
       setTypedHere((held) => {
         const next = new Set(held)
         for (const { sku, value } of ops) {
-          if (typeof value === 'string' && value !== 'unlisted' && source.kind === 'run') next.add(sku)
+          if (typeof value === 'string' && value !== 'unlisted') next.add(sku)
           else next.delete(sku)
         }
         return next
       })
       return id
     },
-    [book, source.kind],
+    [book],
   )
   const write = useCallback(
     (sku: string, bucket: PricingSku['bucket'], value: unknown): number => writeMany([{ sku, bucket, value }]),
@@ -1068,10 +1109,50 @@ export function Pricing() {
       }),
     [table, cut, source.repartition],
   )
-  const rows = useMemo(
-    () => (standingOf.size === 0 ? partitioned : partitioned.filter((sku) => lens === 'all' || standingOf.get(sku.sku) === lens)),
-    [partitioned, lens, standingOf],
+  const sealedOf = useMemo(() => {
+    const by = new Map<string, boolean>()
+    for (const row of sheet?.skus ?? []) by.set(row.sku, row.sealed === true)
+    return by
+  }, [sheet])
+  const kindOk = useCallback(
+    (sku: string) => kind === '' || (sealedOf.get(sku) === true) === (kind === 'sealed'),
+    [kind, sealedOf],
   )
+  const rows = useMemo(
+    () =>
+      standingOf.size === 0
+        ? partitioned
+        : partitioned.filter(
+            (sku) => kindOk(sku.sku) && (lens === 'all' || liveLens(standingOf.get(sku.sku)) === lens),
+          ),
+    [partitioned, lens, standingOf, kindOk],
+  )
+  /** THE LENS COUNTS, OFF THE ROWS THE KIND FILTER KEEPS, so All is always Not selling plus
+   *  Passed over. The survey's own `counts.refused` also counts sold-out rows it never draws. */
+  const lensCounts = useMemo(() => {
+    let offered = 0
+    let refused = 0
+    for (const row of sheet?.skus ?? []) {
+      if (!kindOk(row.sku)) continue
+      if (liveLens(row.standing) === 'offered') offered += 1
+      else refused += 1
+    }
+    return { all: offered + refused, offered, refused }
+  }, [sheet, kindOk])
+
+  /** WHETHER THIS READ IS TOO OLD TO SEND FROM (the owner's ruling, 2026-09-26: "require a fresh
+   *  read"). The limit is the server's own constant (`reprice.READ_FRESH_S`); a table that does
+   *  not carry it, or a read nothing can date, is stale. */
+  const readStale = useMemo(() => {
+    if (sheet === null) return false
+    const at = sheet.at ? Date.parse(sheet.at) : NaN
+    const limit = sheet.stale_after_s
+    return typeof limit !== 'number' || Number.isNaN(at) || Date.now() - at > limit * 1000
+  }, [sheet])
+  /* A NEW READ STARTS A NEW VISIT: what was typed over another read is not typed over this one. */
+  useEffect(() => {
+    setTypedHere(new Set())
+  }, [stamp])
 
 
   const answerFor = useCallback(
@@ -1088,21 +1169,37 @@ export function Pricing() {
   useEffect(() => {
     if (table === null || book === null) return
     if (arrival !== null && arrival.key === table) return
-    setArrival(takeArrival(table, partitioned, answerFor, source.locked, cut))
-  }, [table, book, arrival, partitioned, answerFor, source.locked, cut])
+    setArrival(takeArrival(table, partitioned, answerFor, source.locked, cut, stamp !== null))
+  }, [table, book, arrival, partitioned, answerFor, source.locked, cut, stamp])
 
-  /** THE PAIRS THE LIVE TAB WOULD SEND — a typed price on a row the survey holds, and nothing
-   *  else. A locked row is not pushable, so it is not counted. */
-  const pushable = useMemo(() => {
+  /** THE PAIRS THE LIVE TAB WOULD SEND, and nothing else. A price written ON THIS VISIT (typed,
+   *  a preset, or "Mark down") that is not the price the read showed. And a price stored on an
+   *  EARLIER visit only when it is higher than the live price (the owner's ruling, 2026-09-26:
+   *  "if the price i've typed is higher yea"). A lower earlier price never goes unless it is
+   *  written again here. A locked row is not pushable. A read older than a day offers none: its
+   *  prices are not current. The dollar cap is the rule's only ("Rule only"): a typed price goes
+   *  as typed. `earlier` is the rows that ride from an earlier visit, named on the bar (D273). */
+  const { pushable, earlierRides } = useMemo(() => {
     const out: { sku: string; price: string }[] = []
-    if (stamp === null) return out
+    const earlier: { sku: string; name: string; price: string; was: string }[] = []
+    if (stamp === null || readStale) return { pushable: out, earlierRides: earlier }
     for (const row of rows) {
       if (source.locked(row.sku) !== null) continue
       const answer = answers[row.sku]
-      if (typeof answer === 'string' && answer.trim() !== '') out.push({ sku: row.sku, price: answer.trim() })
+      if (typeof answer !== 'string' || answer.trim() === '') continue
+      const now = centsOf(answer)
+      const was = centsOf(askingOf.get(row.sku))
+      if (now !== null && was !== null && now === was) continue
+      const price = moneyField(answer) ?? answer.trim()
+      if (!typedHere.has(row.sku)) {
+        if (now === null || was === null || now < was) continue
+        earlier.push({ sku: row.sku, name: row.name, price, was: moneyField(askingOf.get(row.sku)) ?? '' })
+      }
+      /* SENT AS SHOWN: the field draws the answer to the cent, so the pair carries that string. */
+      out.push({ sku: row.sku, price })
     }
-    return out
-  }, [stamp, rows, answers, source])
+    return { pushable: out, earlierRides: earlier }
+  }, [stamp, readStale, rows, answers, source, askingOf, typedHere])
 
   /* THE LIVE TAB'S PRESS, SEQUENCED AFTER THE SAVE: `reprice apply` reads `prices.json` off disk
      and refuses a stale digest. It re-reads on success and adopts the new digest. ONE PRESS
@@ -1123,13 +1220,22 @@ export function Pricing() {
     const sending = push === 'sending'
     void (async () => {
       try {
-        const result = await applyMarkdown(stamp, { edits: pushable, revision: revision.current, write: true })
+        const result = await applyMarkdown(stamp, {
+          edits: pushable,
+          revision: revision.current,
+          write: true,
+          kind: kind === '' ? undefined : kind,
+          /* THE SKUS TYPED THIS VISIT, so the server never reads `earlier_lower` off a
+             timestamp `stamp_answers` left in the past for an unchanged value (round 8). */
+          typed: pushable.map((edit) => edit.sku).filter((sku) => typedHere.has(sku)),
+        })
         setApplied(result)
         setWroteUpload(result.wrote)
         if (result.revision) revision.current = result.revision
         setShipTrouble(null)
         if (sending && result.wrote) {
           await sendMarkdown(stamp)
+          setTypedHere(new Set())
           void load(picked, stamp, liveTab)
           toast({
             kind: 'ok',
@@ -1145,7 +1251,7 @@ export function Pricing() {
         setPush('idle')
       }
     })()
-  }, [push, stamp, pushable, dirty, saving, book, load, picked, liveTab])
+  }, [push, stamp, pushable, dirty, saving, book, load, picked, liveTab, kind, typedHere])
 
   /* A NEW WRITE IS OWED THE MOMENT A PRICE MOVES. */
   useEffect(() => {
@@ -1273,12 +1379,17 @@ export function Pricing() {
       else ready.push(row)
     }
     const groups: { head: string; rows: MergedSku[] }[] = []
-    if (needs.length > 0) groups.push({ head: 'Needs you', rows: needs })
-    if (ready.length > 0) groups.push({ head: needs.length > 0 ? 'Ready' : '', rows: ready })
+    /* ON THE LIVE TAB THE HEADS SAY WHAT THEY HOLD: the rows with no market price, which the rule
+       never lowers and the owner prices by hand, then every other live listing. */
+    const live = stamp !== null
+    if (needs.length > 0) groups.push({ head: live ? 'No market price' : 'Needs you', rows: needs })
+    if (ready.length > 0) {
+      groups.push({ head: needs.length > 0 ? (live ? 'With a market price' : 'Ready') : '', rows: ready })
+    }
     /* THE SERVER'S SENTENCE, VERBATIM (D59): the client never composes a reason. */
     for (const [why, group] of closed) groups.push({ head: why, rows: group })
     return groups
-  }, [arrival, rows, filterHeld, answerFor])
+  }, [arrival, rows, filterHeld, answerFor, stamp])
 
   const order = useMemo(() => drawn.flatMap((group) => group.rows.map((row) => row.sku)), [drawn])
 
@@ -1298,11 +1409,18 @@ export function Pricing() {
   const commit = useCallback(
     (sku: PricingSku, raw: string) => {
       if (!touched.current.has(sku.sku)) return
-      const text = raw.trim()
+      let text = raw.trim()
+      /* ON THE LIVE TAB A TYPED PRICE IS KEPT TO THE CENT (D221, D267): `17.5` is written, shown
+         and sent as `17.50`, so the field shows exactly what the press sends. */
+      if (source.kind === 'markdown' && text !== '') {
+        text = moneyField(text) ?? text
+        const input = inputs.current.get(sku.sku)
+        if (input && input.value !== text) input.value = text
+      }
       write(sku.sku, sku.bucket, text === '' ? undefined : text)
       touched.current.delete(sku.sku)
     },
-    [write],
+    [write, source.kind],
   )
 
   const snap = useCallback((sku: PricingSku, field: keyof PricingSku['snap']) => {
@@ -1314,7 +1432,7 @@ export function Pricing() {
       return
     }
     if (input) {
-      input.value = value
+      input.value = moneyField(value) ?? value
       flash(input)
     }
     touched.current.add(sku.sku)
@@ -1371,6 +1489,7 @@ export function Pricing() {
         flash(input)
         touched.current.delete(row.sku)
       }
+      setTypedHere((held) => new Set([...held, ...moving.map((row) => row.sku)]))
       setNote(null)
       toast({
         kind: 'receipt',
@@ -1414,6 +1533,81 @@ export function Pricing() {
     [rows, answers, source],
   )
 
+  /** THE ROWS THE RULE MARKS DOWN, ON SCREEN (the owner's rulings, 2026-09-26). The rule's picks
+   *  (`offered`) with the server's own proposal, which already carries the read's dollar cap and
+   *  never exists on a row with no market price. A row the owner priced away from its live price
+   *  keeps the owner's price. None off a stale read. */
+  const ruleRows = useMemo(() => {
+    if (stamp === null || readStale) return []
+    return rows.filter((row) => {
+      if (liveLens(standingOf.get(row.sku)) !== 'offered') return false
+      if (source.locked(row.sku) !== null) return false
+      const proposed = centsOf(row.rule_price)
+      if (proposed === null) return false
+      const standing = answers[row.sku]
+      if (isWithheld(standing)) return false
+      const typed = typeof standing === 'string' && standing.trim() !== '' ? centsOf(standing) : null
+      if (typed !== null && typed !== centsOf(askingOf.get(row.sku))) return false
+      return typed !== proposed
+    })
+  }, [stamp, readStale, rows, standingOf, source, answers, askingOf])
+
+  /** Write the rule's price onto those rows, in ONE press and ONE undo — the Live tab's presets'
+   *  own shape (D103): nothing moves until a press writes an answer, and a blank box keeps its
+   *  live price. The price is the server's, cut to two places, so the field shows what the send
+   *  carries. */
+  const markDown = useCallback(() => {
+    const moving = ruleRows.map((row) => ({ sku: row.sku, price: moneyField(row.rule_price) as string }))
+    if (moving.length === 0) return
+    const before = new Map(moving.map(({ sku }) => [sku, book?.skus?.[sku]]))
+    setBook((current) => {
+      if (current === null) return current
+      let next = current
+      for (const { sku, price } of moving) next = setAnswer(next, sku, price, 'price')
+      return next
+    })
+    for (const { sku, price } of moving) {
+      const input = inputs.current.get(sku)
+      if (!input) continue
+      input.value = price
+      flash(input)
+      touched.current.delete(sku)
+    }
+    setTypedHere((held) => new Set([...held, ...moving.map(({ sku }) => sku)]))
+    toast({
+      kind: 'receipt',
+      title: `${moving.length} ${moving.length === 1 ? 'listing' : 'listings'} marked down`,
+      body: 'Nothing changes at TCGplayer until you send.',
+      action: {
+        label: 'Undo',
+        onPress: () => {
+          setBook((current) => {
+            if (current === null) return current
+            const skus = { ...(current.skus ?? {}) }
+            for (const { sku } of moving) {
+              const was = before.get(sku)
+              if (was === undefined) delete skus[sku]
+              else skus[sku] = was
+            }
+            return { ...current, skus }
+          })
+          setTypedHere((held) => {
+            const next = new Set(held)
+            for (const { sku } of moving) next.delete(sku)
+            return next
+          })
+          for (const { sku } of moving) {
+            const input = inputs.current.get(sku)
+            if (!input) continue
+            const was = before.get(sku)?.value
+            input.value = typeof was === 'string' ? was : ''
+            flash(input)
+          }
+        },
+      },
+    })
+  }, [ruleRows, book])
+
   /** Write the cut-off onto every unanswered live row under it, in ONE press and ONE undo. Live
    *  tab only: a run's cheap half is priced by policy at the send (D9/D98). */
   const applyCut = useCallback(() => {
@@ -1434,6 +1628,7 @@ export function Pricing() {
       flash(input)
       touched.current.delete(sku)
     }
+    setTypedHere((held) => new Set([...held, ...moved]))
     toast({
       kind: 'receipt',
       title: `${moved.length} ${moved.length === 1 ? 'row' : 'rows'} priced at the cut-off`,
@@ -2000,7 +2195,7 @@ export function Pricing() {
   /** READ WHAT IS LIVE AGAIN: fetch the live export, then write a new read with these settings,
    *  and open it. The Mark-down sheet's two presses, as one (D277, Q6). */
   const readLive = useCallback(
-    async (ask: { days: string; percent: string; match: boolean }, file: File | null) => {
+    async (ask: LiveAsk, file: File | null) => {
       setLiveBusy(true)
       setLiveFailure(null)
       try {
@@ -2008,6 +2203,7 @@ export function Pricing() {
         if (ask.days.trim() !== '') options['days'] = Number(ask.days)
         if (ask.match) options['rule'] = 'match'
         else if (ask.percent.trim() !== '') options['percent'] = ask.percent.trim()
+        if (!ask.match && ask.cap.trim() !== '') options['cap'] = ask.cap.trim()
         let answer: MarkdownAnswer
         if (file !== null) {
           answer = await markdownListings(await readUpload(file), options)
@@ -2080,11 +2276,25 @@ export function Pricing() {
           value={lens}
           label="Which live listings to show"
           options={[
-            { value: 'all', label: `All ${(sheet?.skus ?? []).length}` },
-            { value: 'offered', label: `Not selling ${Number(sheet?.counts?.offered ?? 0)}` },
-            { value: 'refused', label: `Passed over ${Number(sheet?.counts?.refused ?? 0)}` },
+            /* A STALE READ'S COUNTS ARE NOT OFFERED AS CURRENT (the owner's ruling, 2026-09-26). */
+            { value: 'all', label: readStale ? 'All' : `All ${lensCounts.all}` },
+            { value: 'offered', label: readStale ? 'Not selling' : `Not selling ${lensCounts.offered}` },
+            { value: 'refused', label: readStale ? 'Passed over' : `Passed over ${lensCounts.refused}` },
           ]}
           onChange={setLens}
+        />
+      )}
+      {!liveTab || sheet === null ? null : (
+        <Segmented<'both' | 'singles' | 'sealed'>
+          size="sm"
+          value={kind === '' ? 'both' : kind}
+          label="Singles or sealed"
+          options={[
+            { value: 'both', label: 'Both' },
+            { value: 'singles', label: 'Singles' },
+            { value: 'sealed', label: 'Sealed' },
+          ]}
+          onChange={(next) => setKindParam(next === 'both' ? '' : next)}
         />
       )}
       {held.length === 0 && !filterHeld ? null : (
@@ -2120,21 +2330,38 @@ export function Pricing() {
         days: String(newest?.asked?.['days'] ?? '7'),
         percent: String(newest?.asked?.['percent'] ?? '10'),
         match: newest?.asked?.['rule'] === 'match',
+        cap: typeof newest?.asked?.['cap'] === 'string' ? (newest.asked['cap'] as string) : '',
       },
       null,
     )
   const ruleLine = liveTab ? (
     <p className="pricing-rule-line">
       <span>
-        {newest === null ? 'Nothing read from TCGplayer yet.' : `${markdownWords(newest.asked)}.`}{' '}
+        {newest === null ? (
+          'Nothing read from TCGplayer yet.'
+        ) : markdownCap(newest.asked) === null ? (
+          `${markdownWords(newest.asked)}.`
+        ) : (
+          /* THE CAP IS A DOLLAR FIGURE, SO IT IS DRAWN IN THE MONEY FACE (D221). */
+          <>
+            {markdownWords(newest.asked)}, at most <Money value={markdownCap(newest.asked)} /> off a card.
+          </>
+        )}{' '}
         {newest?.at ? <span className="pricing-rule-when">Read {clockTime(newest.at)}, {absoluteDate(newest.at)}.</span> : null}
       </span>
+      {ruleRows.length === 0 ? null : (
+        <Button size="sm" icon="trendDown" onClick={markDown}>
+          {`Mark down ${ruleRows.length}`}
+        </Button>
+      )}
       <Button size="sm" variant="quiet" onClick={() => setLiveSettings(true)}>
         Change
       </Button>
-      <Button size="sm" icon="refresh" busy={liveBusy} disabled={liveBusy} onClick={readAgain}>
-        Read again
-      </Button>
+      {readStale ? null : (
+        <Button size="sm" icon="refresh" busy={liveBusy} disabled={liveBusy} onClick={readAgain}>
+          Read again
+        </Button>
+      )}
       <span className="bn-sr" role="status">
         {liveBusy ? 'Reading what is live at TCGplayer…' : ''}
       </span>
@@ -2206,11 +2433,41 @@ export function Pricing() {
           onSent={afterSend}
         />
       </aside>
+    ) : liveTab && stamp !== null && readStale ? (
+      <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send these prices">
+        <p className="pricing-bar-says">
+          {sheet?.at ? `This read is from ${absoluteDate(sheet.at)}, more than a day ago. ` : 'This read has no date. '}
+          Read again to see what would change.
+        </p>
+        <div className="send-card">
+          <div className="send-act">
+            <Button variant="primary" size="lg" icon="refresh" className="send-press" busy={liveBusy} disabled={liveBusy} onClick={readAgain}>
+              Read again
+            </Button>
+          </div>
+        </div>
+      </aside>
     ) : liveTab && stamp !== null ? (
       <aside className="pricing-bar" ref={measureBar} role="region" aria-label="Send these prices">
         <p className="pricing-bar-says">
           {pushable.length === 0 ? 'Type a price on a listing to change it.' : `${pushable.length} new ${pushable.length === 1 ? 'price' : 'prices'} ready`}
         </p>
+        {/* A PRICE THE BUTTON DID NOT NAME IS NEVER SENT (D273): the earlier prices that ride are
+            named here, card by card, before the press. */}
+        {earlierRides.length === 0 ? null : (
+          <details className="pricing-earlier">
+            <summary>
+              {`${earlierRides.length} of them ${earlierRides.length === 1 ? 'is a price' : 'are prices'} you typed before, above the live price`}
+            </summary>
+            <ul>
+              {earlierRides.map((row) => (
+                <li key={row.sku}>
+                  {row.name}: <Money value={Number(row.was)} /> to <Money value={Number(row.price)} />
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         <div className="send-card">
           <div className="send-act">
             <Button
@@ -2423,7 +2680,7 @@ export function Pricing() {
                     index={index}
                     source={source}
                     standing={answerFor(sku)}
-                    flag={flagOf(sku, answerFor(sku), source.locked(sku.sku) !== null, cut)}
+                    flag={liveFlag(flagOf(sku, answerFor(sku), source.locked(sku.sku) !== null, cut), liveTab)}
                     suggestion={suggestionFor(sku)}
                     asking={liveTab ? (askingOf.get(sku.sku) ?? null) : undefined}
                     note={note !== null && note.sku === sku.sku ? note.text : null}
@@ -2784,9 +3041,23 @@ function PricingRow({
               /* THE GHOST IS WHAT YOU ARE ASKING NOW, on the Live tab: a placeholder, so the first
                  digit replaces it and nothing is written by looking at it. A run opens FILLED with
                  the rule's answer, which is a value (D109). */
-              placeholder={sku.bucket === 'no_market_data' ? '' : source.proposes ? undefined : (sku.snap.now ?? suggestion ?? undefined)}
+              placeholder={
+                sku.bucket === 'no_market_data'
+                  ? ''
+                  : source.proposes
+                    ? undefined
+                    : (moneyField(sku.snap.now) ?? moneyField(suggestion) ?? undefined)
+              }
               aria-label={`Price for ${sku.name}`}
-              defaultValue={typeof standing === 'string' ? standing : source.proposes ? suggestion : ''}
+              defaultValue={
+                typeof standing === 'string'
+                  ? source.kind === 'markdown'
+                    ? (moneyField(standing) ?? standing)
+                    : standing
+                  : source.proposes
+                    ? suggestion
+                    : ''
+              }
               ref={registerInput}
               onFocus={(event) => event.currentTarget.select()}
               onBeforeInput={(event) => {
@@ -3046,6 +3317,9 @@ function RuleSheet({
   )
 }
 
+/** What a read is asked for: the Live tab's settings. `cap` is dollars, '' for no cap. */
+type LiveAsk = { days: string; percent: string; match: boolean; cap: string }
+
 /** THE LIVE TAB'S SETTINGS (D277, Q6): the Mark-down sheet's form, as one short sheet. */
 function LiveSheet({
   open,
@@ -3070,16 +3344,19 @@ function LiveSheet({
   note: string | null
   onApplyCut: (() => void) | null
   onPreset: ((key: string) => void) | null
-  onRead: (ask: { days: string; percent: string; match: boolean }, file: File | null) => void
+  onRead: (ask: LiveAsk, file: File | null) => void
 }) {
   const [days, setDays] = useState('7')
   const [percent, setPercent] = useState('10')
+  const [cap, setCap] = useState('')
   const [match, setMatch] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   useEffect(() => {
     if (!open) return
     setDays(String(asked?.['days'] ?? '7'))
     setPercent(String(asked?.['percent'] ?? '10'))
+    /* NO CAP UNLESS THE LAST READ HAD ONE (the owner's ruling, 2026-09-26). */
+    setCap(typeof asked?.['cap'] === 'string' ? (moneyField(asked['cap'] as string) ?? '') : '')
     setMatch(asked?.['rule'] === 'match')
     setFile(null)
   }, [open, asked])
@@ -3090,7 +3367,7 @@ function LiveSheet({
       title="What to mark down"
       icon="trendDown"
       footer={
-        <Button variant="primary" icon="refresh" busy={busy} disabled={busy} onClick={() => onRead({ days, percent, match }, file)}>
+        <Button variant="primary" icon="refresh" busy={busy} disabled={busy} onClick={() => onRead({ days, percent, match, cap }, file)}>
           {file === null ? 'Read what is live' : 'Read this file'}
         </Button>
       }
@@ -3114,6 +3391,21 @@ function LiveSheet({
           <label className="bn-field">
             <span className="bn-field-label">Percent under</span>
             <input className="bn-input" inputMode="decimal" value={percent} onChange={(event) => setPercent(event.currentTarget.value.replace(/[^0-9.]/g, ''))} />
+          </label>
+        )}
+        {match ? null : (
+          <label className="bn-field">
+            <span className="bn-field-label">At most this much off a card, in dollars</span>
+            <input
+              className="bn-input pricing-cap-field"
+              inputMode="decimal"
+              placeholder="No limit"
+              value={cap}
+              onChange={(event) => {
+                const next = event.currentTarget.value.replace(/[^0-9.]/g, '')
+                if (/^\d{0,6}(\.\d{0,2})?$/.test(next)) setCap(next)
+              }}
+            />
           </label>
         )}
         <label className="bn-field">

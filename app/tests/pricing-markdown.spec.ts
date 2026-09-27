@@ -94,10 +94,21 @@ async function open(
     /** HOLD THE SEND OPEN THIS LONG, so a case can measure the bar while the press runs
      *  (round 9, D118). */
     sendDelayMs?: number
+    /** When the read was taken. Default: a minute ago, a fresh read (the owner's ruling,
+     *  2026-09-26: "require a fresh read"). */
+    at?: string
+    /** The read's settings, as `survey.json`'s `asked` carries them. */
+    asked?: Record<string, unknown>
+    /** Where the case opens. Default: the read itself. */
+    route?: string
+    /** The answers `prices.json` already holds, SKU -> answer. Default: none. */
+    answers?: Record<string, { value: string; at?: string }>
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
   const skus = options.skus ?? [live()]
+  const at = options.at ?? new Date(Date.now() - 60_000).toISOString()
+  const asked = options.asked ?? { days: 7, rule: 'undercut:10' }
 
   await page.route(/\/pipeline\/markdowns\/[^/]+\/send$/, async (route) => {
     wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
@@ -151,8 +162,8 @@ async function open(
       contentType: 'application/json',
       body: JSON.stringify({
         stamp: STAMP,
-        at: '2026-09-06T00:00:00.000+00:00',
-        asked: { days: 7, rule: 'undercut:10' },
+        at,
+        asked,
         counts: options.counts ?? { considered: skus.length, offered: 1, deferred: 0, refused: 0 },
         source: {},
         skus,
@@ -163,6 +174,8 @@ async function open(
            one key for both. This said '0.40' beside a threshold of '0.49' — a wire shape that had
            stopped being producible, which is the way a stub quietly stops testing the product. */
         floor: '0.49',
+        /* `reprice.READ_FRESH_S`, which the server sends so the screen never types its own. */
+        stale_after_s: 86400,
       }),
     })
   })
@@ -184,7 +197,7 @@ async function open(
         corpus: {
           version: 1,
           policy: { rule: 'match', basis: 'market', sub_threshold: { flat: '0.49' }, threshold: '0.49' },
-          skus: {},
+          skus: options.answers ?? {},
         },
         path: '/tmp/prices.json',
         revision: 'rev-1',
@@ -198,7 +211,7 @@ async function open(
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        markdowns: [{ stamp: STAMP, at: '2026-09-06T00:00:00.000+00:00', asked: { days: 7, percent: '10' }, source: null, skus: skus.length, files: [] }],
+        markdowns: [{ stamp: STAMP, at, asked: { percent: '10', ...asked }, source: null, skus: skus.length, files: [] }],
       }),
     }),
   )
@@ -207,7 +220,7 @@ async function open(
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runs: [] }) }),
   )
 
-  await page.goto(ROUTE)
+  await page.goto(options.route ?? ROUTE)
   await page.locator(VIEW).waitFor()
   await page.locator('.pricing-row').first().waitFor()
   return wire
@@ -492,7 +505,8 @@ test('an untouched lens field ghosts the price the listing is live at', async ({
   await open(page, { skus: [live({ sku: '8608859', asking: '20.0000' })] })
   const field = page.locator('.pricing-input').first()
   await expect(field).toHaveValue('')
-  await expect(field).toHaveAttribute('placeholder', '20.0000')
+  /* TO THE CENT (D221, D267): the export's `20.0000` is drawn `20.00`, never four places. */
+  await expect(field).toHaveAttribute('placeholder', '20.00')
 })
 
 test('a preset writes answers on a lens, and never the standing rule', async ({ page }) => {
@@ -796,4 +810,169 @@ test('the Live tab’s Download keeps its words and its place while it writes', 
   for (const side of ['x', 'y', 'width', 'height'] as const) {
     expect(Math.abs((during?.[side] ?? 0) - (before?.[side] ?? 0)), side).toBeLessThanOrEqual(0.5)
   }
+})
+
+
+/* ---- THE OWNER'S RULINGS, 2026-09-26: a fresh read, no mark-down without a market price, a
+ * dollar cap on top of the percentage, and Singles / Sealed on their own. ------------------------ */
+
+test('a read older than a day offers Read again in place of Send, and no count as if current', async ({ page }) => {
+  await open(page, { at: new Date(Date.now() - 3 * 86_400_000).toISOString() })
+  const bar = page.getByRole('region', { name: 'Send these prices' })
+  await expect(bar).toContainText('more than a day ago')
+  await expect(bar.getByRole('button', { name: 'Read again' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Send/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Download/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Mark down/ })).toHaveCount(0)
+  /* THE LENSES DROP THEIR NUMBERS: a stale read's counts are not offered as current. */
+  await expect(page.getByRole('button', { name: 'All', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Not selling', exact: true })).toBeVisible()
+
+  /* A TYPED PRICE OFF A STALE READ OFFERS NO SEND EITHER. */
+  const field = page.locator('.pricing-input').first()
+  await field.click()
+  await field.fill('17.50')
+  await field.blur()
+  await expect(page.getByRole('button', { name: /^Send/ })).toHaveCount(0)
+})
+
+test('Mark down fills the rule price to the cent, and Send counts and sends exactly those', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno', asking: '20.0000', proposed: '18.00' }),
+      live({ sku: '8608464', name: 'Dunsparce', asking: '5.0000', proposed: '4.5' }),
+      live({ sku: '8608000', name: 'Kled', standing: 'refused', skip: 'too_young', proposed: null }),
+    ],
+    counts: { considered: 3, offered: 2, deferred: 0, refused: 1 },
+  })
+  await page.getByRole('button', { name: 'Mark down 2' }).click()
+  await expect(page.getByRole('textbox', { name: 'Price for Articuno' })).toHaveValue('18.00')
+  await expect(page.getByRole('textbox', { name: 'Price for Dunsparce' })).toHaveValue('4.50')
+  await expect(page.getByRole('textbox', { name: 'Price for Kled' })).toHaveValue('')
+  await page.getByRole('button', { name: 'Send 2 prices to TCGplayer' }).click()
+  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
+  const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
+  /* THE VALUE SENT IS THE VALUE SHOWN, to the cent. */
+  expect(sent.edits).toEqual([
+    { sku: '8608859', price: '18.00' },
+    { sku: '8608464', price: '4.50' },
+  ])
+  expect(sent.kind).toBeUndefined()
+})
+
+test('a card with no market price is never marked down, and leads the list for the owner to price', async ({ page }) => {
+  await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno' }),
+      live({
+        sku: '9000001',
+        name: 'Kai Sa',
+        asking: '6000.0000',
+        market: null,
+        standing: 'refused',
+        skip: 'no_market',
+        proposed: null,
+        row: { 'TCG Market Price': '' },
+      }),
+    ],
+    counts: { considered: 2, offered: 1, deferred: 0, refused: 1 },
+  })
+  const groups = page.locator('.pricing-group-head')
+  await expect(groups.first()).toContainText('No market price')
+  await expect(page.getByRole('textbox', { name: 'Price for Kai Sa' })).toHaveAttribute('placeholder', '6000.00')
+  await page.getByRole('button', { name: 'Mark down 1' }).click()
+  await expect(page.getByRole('textbox', { name: 'Price for Kai Sa' })).toHaveValue('')
+  await expect(page.getByRole('button', { name: 'Send 1 price to TCGplayer' })).toBeVisible()
+})
+
+test('the counts add up: All is Not selling plus Passed over, whatever the survey counted sold out', async ({ page }) => {
+  await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno' }),
+      live({ sku: '8608464', name: 'Dunsparce', standing: 'refused', skip: 'too_young', proposed: null }),
+      live({ sku: '8608000', name: 'Kled', standing: 'refused', skip: 'sold_recently', proposed: null }),
+    ],
+    /* THE SURVEY'S OWN TALLY COUNTS SOLD-OUT ROWS IT NEVER DRAWS: this is how "Passed over 727"
+       sat beside "All 408". */
+    counts: { considered: 400, offered: 1, deferred: 0, refused: 399 },
+  })
+  await expect(page.getByRole('button', { name: 'All 3' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Not selling 1' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Passed over 2' })).toBeVisible()
+})
+
+test('the dollar cap is said on the rule line, and it is the rule\'s only: a typed price goes as typed', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [live({ sku: '8608859', name: 'Articuno', asking: '20.0000', proposed: '18.50' })],
+    asked: { days: 7, rule: 'undercut:10', cap: '1.50' },
+  })
+  await expect(page.locator('.pricing-rule-line')).toContainText('at most $1.50 off a card')
+  /* "RULE ONLY" (the owner's ruling, 2026-09-26): $5 under the live price, past the cap, goes. */
+  const field = page.getByRole('textbox', { name: 'Price for Articuno' })
+  await field.click()
+  await field.fill('15')
+  await field.blur()
+  await expect(field).toHaveValue('15.00')
+  await expect(page.locator(VIEW)).not.toContainText('More than')
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
+  const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
+  expect(sent.edits).toEqual([{ sku: '8608859', price: '15.00' }])
+})
+
+test('Singles and Sealed filter the tab from the URL, and the send carries the kind', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno' }),
+      live({ sku: '7000001', name: 'Booster Box', condition: 'Unopened', sealed: true, row: { Condition: 'Unopened' } }),
+    ],
+    counts: { considered: 2, offered: 2, deferred: 0, refused: 0 },
+    route: `/#/pricing?markdown=${STAMP}&kind=sealed`,
+  })
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+  await expect(page.locator('.pricing-name').first()).toContainText('Booster Box')
+  await expect(page.getByRole('button', { name: 'All 1' })).toBeVisible()
+  await page.getByRole('button', { name: 'Mark down 1' }).click()
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
+  const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
+  expect(sent.kind).toBe('sealed')
+  expect(sent.edits).toEqual([{ sku: '7000001', price: '18.00' }])
+
+  await page.getByRole('button', { name: 'Singles', exact: true }).click()
+  await expect(page).toHaveURL(/kind=singles/)
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+  await expect(page.locator('.pricing-name').first()).toContainText('Articuno')
+})
+
+test('an earlier stored price rides only when it is above the live price, and is named before the press', async ({ page }) => {
+  /* THE "280" ON THE OWNER'S SCREEN counted every stored answer on a surveyed row. The owner's
+     ruling, 2026-09-26: "if the price i've typed is higher yea". Equal: nothing to send. Lower:
+     never, unless written again on this visit. Higher: it rides, and the bar names it (D273). */
+  const wire = await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno', asking: '20.0000' }),
+      live({ sku: '8608464', name: 'Dunsparce', asking: '5.0000' }),
+      live({ sku: '8608000', name: 'Kled', asking: '3.0000' }),
+    ],
+    answers: { '8608859': { value: '20.00' }, '8608464': { value: '4.75' }, '8608000': { value: '3.5' } },
+  })
+  const bar = page.getByRole('region', { name: 'Send these prices' })
+  await expect(bar.getByRole('button', { name: 'Send 1 price to TCGplayer' })).toBeVisible()
+  await expect(bar).toContainText('1 of them is a price you typed before, above the live price')
+  await bar.locator('.pricing-earlier summary').click()
+  await expect(bar.locator('.pricing-earlier li')).toHaveText(['Kled: $3.00 to $3.50'])
+
+  /* THE LOWER ONE GOES ONCE IT IS TYPED AGAIN, ON THIS VISIT. */
+  const field = page.getByRole('textbox', { name: 'Price for Dunsparce' })
+  await field.click()
+  await field.fill('4.60')
+  await field.blur()
+  await bar.getByRole('button', { name: 'Send 2 prices to TCGplayer' }).click()
+  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
+  const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
+  expect(sent.edits).toEqual([
+    { sku: '8608464', price: '4.60' },
+    { sku: '8608000', price: '3.50' },
+  ])
 })
