@@ -215,3 +215,12 @@ Both are pinned in T7's `check_send_matrix`, and each check went red on the old 
   line at every rank. Ranks 5 and 6 draw their own list, and they dropped it. They keep it now.
 - **A row that owes nothing, on a failed read.** Home may name the failed read, and nothing
   else. It never asks for a send or a price, and nothing behind it counts a card owing a price.
+
+**The matrix's own `failed=None` check was weaker than its named-text sibling** (PR 3's round-8 review, pricing/undo lane). A case with no specific failed-read text
+(`want["line"] is None`) only asserted what was ABSENT: no "send" word, no "price" word. It
+never asserted the note itself had reached the answer. A mutant that dropped "typed prices"
+from rank 7's terminal `unknown()` message still passed. Fixed in `check_send_matrix`. Every
+case now asserts the note rides in `behind` (ranks 1-6), or in `text` alone (rank 7's
+`unknown()`, whose `behind` is always empty by that helper's own shape). It goes red on the
+mutant first. No product code changed. `standing.ts` already carried the note on every
+`bookFailed` case. Only the check was catching up to it.

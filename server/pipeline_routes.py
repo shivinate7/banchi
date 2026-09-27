@@ -5627,7 +5627,10 @@ def do_pricing_restore(payload: dict) -> dict:
     the operator who cleared 269 answers, priced three cards, and then pressed Undo gets their
     266 back and keeps the three. Those three are named in `skipped` rather than silently
     dropped, because a way back that quietly does less than it says is worse than one that
-    refuses.
+    refuses. EACH ROW IN `skipped` CARRIES WHY: `{"sku", "reason"}`, `reason` one of
+    `"answered_since"` (the operator typed it again) or `"newer_clear"` (a later kept clear
+    holds this SKU's own, newer answer — see below). The screen's toast used to say every
+    skip was an answer typed again, which was wrong for the second reason.
 
     IT WRITES `at` AND `from_run` VERBATIM AND DOES NOT STAMP. `corpus.stamp_answers` is for an
     answer somebody just gave; a restore is the assertion that an answer given five days ago
@@ -5722,13 +5725,22 @@ def do_pricing_restore(payload: dict) -> dict:
     # B keeps it.
     kept = corpus.read_clears()
     ids = [row["id"] for row in kept]
-    newer = {
-        sku
-        for row in kept[ids.index(stored["id"]) + 1:] if stored["id"] in ids
-        for sku in row["cleared"]
-    }
+    if stored["id"] in ids:
+        newer = {
+            sku
+            for row in kept[ids.index(stored["id"]) + 1:]
+            for sku in row["cleared"]
+        }
+    else:
+        # A CONCURRENT REQUEST DROPPED THIS CLEAR BETWEEN THE EARLIER READ THAT CHOSE `stored`
+        # AND THIS ONE. `drop_clear` only runs once every SKU the clear held is already back
+        # (see below), and `book`, read just above, already carries that request's write — so
+        # there is nothing "newer" left to name here. The per-SKU loop finds each SKU already
+        # in `book.answers` and skips it under that same name, never a crash over an id
+        # `ids.index` can no longer find.
+        newer = set()
     restored: List[str] = []
-    skipped: List[str] = []
+    skipped: List[dict] = []
     for sku, row in sorted(answers.items()):
         key = str(sku)
         if not isinstance(row, dict) or "value" not in row:
@@ -5737,8 +5749,16 @@ def do_pricing_restore(payload: dict) -> dict:
                 "restore_invalid",
                 f"{key}: each answer must be an object carrying a `value`.",
             )
-        if key in book.answers or key in newer:
-            skipped.append(key)
+        if key in newer:
+            # A LATER CLEAR HOLDS THIS SKU'S OWN, NEWER ANSWER. That clear is its way back,
+            # not this one.
+            skipped.append({"sku": key, "reason": "newer_clear"})
+            continue
+        if key in book.answers:
+            # THE OPERATOR TYPED THIS SKU AGAIN SINCE THE CLEAR (or, on the race above, a
+            # concurrent restore already put it back). Either way the corpus already holds
+            # the answer that counts.
+            skipped.append({"sku": key, "reason": "answered_since"})
             continue
         book.answers[key] = corpus.Answer(
             value=row["value"],

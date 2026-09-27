@@ -42,6 +42,7 @@ import type {
   PricingCorpus,
   PricingClearable,
   PricingClearResult,
+  PricingRestoreSkip,
   MarkdownAnswer,
   MarkdownSummary,
   MarkdownTable,
@@ -329,6 +330,23 @@ const HOLD_SHORT: Record<WithholdReason, string> = {
 
 function heldReason(value: WithheldRecord | 'unlisted'): string {
   return value === 'unlisted' ? '' : String(value.withheld ?? '')
+}
+
+/** The Undo toast's body, off the server's own reason per skipped SKU — never re-guessed on
+ *  the screen. A SKU the operator priced again since the clear reads differently from one a
+ *  later kept clear already holds; the old string called both "answered again since", which
+ *  was wrong for the second case. */
+function restoreSkipBody(skipped: PricingRestoreSkip[]): string {
+  if (skipped.length === 0) return 'Each one carries the date it was first typed on.'
+  const answered = skipped.filter((row) => row.reason === 'answered_since').length
+  const newer = skipped.length - answered
+  if (newer === 0) {
+    return `${answered} had been answered again since, and ${answered === 1 ? 'that answer was' : 'those answers were'} kept.`
+  }
+  if (answered === 0) {
+    return `${newer} ${newer === 1 ? 'is' : 'are'} held by a later clear instead.`
+  }
+  return `${answered} answered again since, ${newer} held by a later clear.`
 }
 
 /** What TCGplayer holds of a row NOW: the newest live export on disk (`live_now`, round 7), or
@@ -2099,10 +2117,7 @@ export function Pricing() {
       toast({
         kind: 'ok',
         title: `${back.restored.length} price${back.restored.length === 1 ? '' : 's'} undone`,
-        body:
-          back.skipped.length === 0
-            ? 'Each one carries the date it was first typed on.'
-            : `${back.skipped.length} had been answered again since, and those answers were kept.`,
+        body: restoreSkipBody(back.skipped),
       })
     } catch (err) {
       const trouble = describeFailure(err)
@@ -2162,10 +2177,7 @@ export function Pricing() {
                 toast({
                   kind: 'ok',
                   title: `${back.restored.length} price${back.restored.length === 1 ? '' : 's'} undone`,
-                  body:
-                    back.skipped.length === 0
-                      ? 'Each one carries the date it was first typed on.'
-                      : `${back.skipped.length} had been answered again since, and those answers were kept.`,
+                  body: restoreSkipBody(back.skipped),
                 })
               } catch (err) {
                 toast({ kind: 'refusal', title: describeFailure(err).message })
