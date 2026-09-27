@@ -297,6 +297,27 @@ class Unreachable(PriceHistoryError):
     """The network refused, timed out, or answered something that is not JSON."""
 
 
+class Offline(Unreachable):
+    """A SUBCLASS, NOT A SIBLING — every `Offline` IS an `Unreachable` and every existing
+    `except Unreachable` catches it exactly as before. It is raised ONLY for a connection
+    that never happened at all: `urllib.error.URLError`, a raw `OSError` (DNS failure,
+    connection refused) or `TimeoutError` reaching the socket layer, never an `HTTPError` —
+    the host answering with a bad status IS a connection, and a second product on the same
+    host may still answer normally. `Market.get` uses this distinction: once ONE `Offline`
+    has been seen, every socket attempt after it will fail the identical way, for the
+    identical reason, so `Market` treats the network as down for the rest of THIS instance's
+    life rather than re-attempting (and re-sleeping the courtesy delay) once per product.
+
+    MEASURED, 2026-09-27, on a real demo-mirror recording. 387 SKUs over a run,
+    `readings_for_rows` batched by product (D79) but resolved 325 distinct
+    (product, range) pairs, one `history()` fetch each — every one refused by the
+    recording's offline network guard, and NONE of it cached (`Market.get` only stores a
+    SUCCESSFUL fetch). 613 of those repeated the 0.15s courtesy delay for a connection that
+    was never going to succeed: 95.85s of a measured 102.2s total, `cProfile` isolating
+    `time.sleep` as the one line responsible.
+    """
+
+
 class Blocked(PriceHistoryError):
     """A host answered HTTP 403 to a request it once answered — a client refused BY NAME.
 
@@ -932,7 +953,10 @@ def fetch_json(
             ) from exc
         raise Unreachable(f"{url} answered HTTP {exc.code}: {detail}") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
-        raise Unreachable(f"{url} could not be reached: {exc}") from exc
+        # `Offline`, NOT THE PLAIN `Unreachable` ABOVE — no HTTP response arrived at all, so
+        # every socket attempt after this one is heading for the identical failure. See
+        # `Offline`'s own docstring for what a caller does with that distinction.
+        raise Offline(f"{url} could not be reached: {exc}") from exc
     try:
         return json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -1006,6 +1030,12 @@ class Market:
         self._memory: Dict[str, Tuple[float, Dict]] = {}
         self._indexes: Dict[Tuple[int, int], ProductIndex] = {}
         self.requests = 0
+        # SET ONCE, BY THE FIRST `Offline` (never a plain `Unreachable` — see that class's
+        # docstring), and read by every `get()` after it for the rest of THIS instance's
+        # life. A batch that has already learned the socket cannot be reached does not
+        # sleep the courtesy delay or try again before answering the identical failure —
+        # see `get`'s own paragraph for the measurement this answers.
+        self._offline: Optional[Offline] = None
 
     # ------------------------------------------------------------------------ caching
 
@@ -1057,10 +1087,20 @@ class Market:
         payload = self._cached(slug, ttl)
         if payload is not None:
             return payload
+        if self._offline is not None:
+            # FAIL FAST, NEVER RE-ATTEMPT. The socket has already failed once with no
+            # response at all this instance's life — a second, distinct URL over the same
+            # dead network fails the identical way, so there is nothing to wait politely
+            # before, and no reason to spend the syscall finding that out again.
+            raise self._offline
         if self.requests and self._courtesy_delay:
             time.sleep(self._courtesy_delay)
         self.requests += 1
-        payload = self._fetch(url)
+        try:
+            payload = self._fetch(url)
+        except Offline as exc:
+            self._offline = exc
+            raise
         self._store(slug, payload)
         return payload
 

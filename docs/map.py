@@ -1607,8 +1607,8 @@ COMPONENTS = [
                                         "that mirror's current /prices, which are per product per "
                                         "PRINTING and never per SKU.",
                                 "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49",
-                                                "D55", "D62", "D64", "D171", "D216", "D234",
-                                                "D240", "D254"],
+                                                "D55", "D62", "D64", "D79", "D171", "D216",
+                                                "D234", "D240", "D254"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D62) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "
@@ -3204,6 +3204,21 @@ COMPONENTS = [
                         "the real `prices()` method does not. 6 assertions. Not wired into "
                         "`make check`.",
                 "governed_by": ["D216", "D219", "D234"],
+            },
+            "pricehistory-offline-selftest.py": {
+                "does": "proves `pipeline/pricehistory.py:Market` fails fast once the "
+                        "network is genuinely unreachable, no network, no real sleep. A "
+                        "counting fetcher that always raises the new `Offline` (a subclass "
+                        "of `Unreachable`, never a plain HTTP-status failure) is called "
+                        "exactly ONCE across 50 distinct slugs — every call after the first "
+                        "raises immediately, with no courtesy delay. A sibling arm proves a "
+                        "plain `Unreachable` is NOT sticky: the fetcher is called once per "
+                        "distinct slug, since a bad HTTP status from one product says "
+                        "nothing about the next (D62). Measured 2026-09-27: a real "
+                        "demo-mirror trends request over 387 SKUs went from 102.2s "
+                        "(95.85s of it `time.sleep`, per `cProfile`) to 0.78s. Not wired "
+                        "into `make check`.",
+                "governed_by": ["D18", "D62"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
