@@ -1623,6 +1623,69 @@ def _check_number_fold(c, sv09: join.Catalog) -> None:
         "fold that merged them would mis-list an $8.89 showcase as a $1.18 rare",
     )
 
+    # --- whitespace is folded away too, everywhere in the cell -----------------------
+    # The owner's ruling, 2026-09-27, "Fold in the shared key (Recommended)". Measured on
+    # the real store: 2 of 3,510 cards carry a space in their number, `019 / 166` (Renekton,
+    # now retired) among them — a real card the un-folded key would have missed.
+    c.equal(
+        join.number_index_key("019 / 166"),
+        join.number_index_key("019/166"),
+        "a spaced number folds onto the unspaced spelling of the same card",
+    )
+    renekton = riftbound.rows_for_key("019 / 166")
+    c.equal(
+        sorted({row[tcgcsv.NAME_COLUMN] for row in renekton}),
+        ["Renekton, Rage Fueled"],
+        "and the spaced query reaches the real fixture row through the catalog, not just "
+        "through the bare function",
+    )
+
+    # Riftbound's Token SKUs print a real interior space ON PURPOSE (`T02 // T03`), so
+    # collapsing a whitespace run to one space would not be enough — the fold has to
+    # remove it entirely and still keep two double-sided tokens apart.
+    c.equal(
+        join.number_index_key("T1A 001/005"),
+        join.number_index_key("T1A001/005"),
+        "a synthetic interior space folds the same way on either side of the comparison",
+    )
+    c.ok(
+        join.number_index_key("T02 // T03") not in {
+            join.number_index_key(n)
+            for n in [
+                "T01", "T01 // T02", "T01 // T05", "T02", "T02 // T04", "T02 // T05",
+                "T03", "T03 // T04", "T05 // T06", "T06 // T04", "T06 // T05",
+                "T07 // T04", "T07 // T05", "T08 // T04", "T08 // T05",
+            ]
+        },
+        "T02 // T03 stays distinct from every other Token number in the committed "
+        "Riftbound fixture — the fold drops the space without merging two tokens",
+    )
+
+    # No two DISTINCT `Number` cells in any of the four committed fixtures collapse onto
+    # one key. A real assertion, not a description: build the key -> cell-set map for each
+    # fixture and fail on any key holding more than one distinct cell spelling.
+    for fixture_path, label in (
+        (SOURCE_FIXTURE, "SV09"),
+        (WIDE_FIXTURE, "the wide Pokemon export"),
+        (RIFTBOUND_FIXTURE, "Riftbound"),
+        (ONEPIECE_FIXTURE, "One Piece"),
+    ):
+        cells = {
+            row[tcgcsv.NUMBER_COLUMN].strip()
+            for row in tcgcsv.read_export(REPO_ROOT / fixture_path).rows
+            if row[tcgcsv.NUMBER_COLUMN].strip()
+        }
+        by_key: dict = {}
+        for cell in cells:
+            by_key.setdefault(join.number_index_key(cell), set()).add(cell)
+        collisions = {key: spellings for key, spellings in by_key.items() if len(spellings) > 1}
+        c.equal(
+            collisions,
+            {},
+            f"no two distinct `Number` cells in {label} land on one key after the "
+            "whitespace fold",
+        )
+
 
 def run() -> Result:
     c = Checks()
