@@ -257,16 +257,20 @@ test.describe('the published demo draws what reviewers grade', () => {
     // more — `OrdersWalkPane.tsx:WalkList`'s list is now "The cards to pick, in the order
     // the boxes are walked". Press "Walk all N buyers" first (the demo-mirror-data-build
     // lane's walk-plan fix records exactly this "walk all" set), then read the current list.
+    //
+    // THE PRIOR FIX (CI run 36314954311) RAISED THE WRONG TIMEOUT. Pressing "Walk all"
+    // over this mirror's full 71 open orders (70 buyers) runs `useOrderWalk`'s solve
+    // client-side, over every one of them plus the whole inventory already in memory —
+    // a real cost, confirmed by reproducing the click with console/pageerror logging: no
+    // error, the walk pane renders correctly, just slower than a toggle. Raising only the
+    // assertion's own wait (to 45s) did nothing, because Playwright's own PER-TEST timeout
+    // (30s, this file's config sets none of its own) killed the whole test first — CI run
+    // 36316345981's own error names it: "Test timeout of 30000ms exceeded." `test.setTimeout`
+    // is the knob that actually needed raising.
+    test.setTimeout(60_000)
     await visit(page, 'Orders')
     await page.getByRole('button', { name: /^Walk all \d+ buyers?$/ }).first().click()
     const walk = page.getByRole('list', { name: /cards to pick/i })
-    // A LONGER TIMEOUT, NAMED WHY (2026-09-27, CI run 36314954311): pressing "Walk all"
-    // over this mirror's full 71 open orders (70 buyers) runs `useOrderWalk`'s solve
-    // client-side, over every one of them plus the whole inventory already in memory.
-    // The default 15s cleared this locally in ~1-2s every time, but timed out on CI's
-    // slower runner with the list never appearing at all — a real cost, not a missing
-    // wait: `expect(walk).toBeVisible()` was already the correct web-first assertion, it
-    // was only ever given too little time for this one, heavier case.
     await expect(walk).toBeVisible({ timeout: 45_000 })
     // DEBT23's shape: the list container appearing does not mean its rows have. A bare
     // count() right after does not retry, so it can read zero while the rows are still
