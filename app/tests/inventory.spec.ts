@@ -4685,7 +4685,17 @@ test('UN-14 — a move gets an undo, the same fast path a sale gets, and it neve
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ moved: '2/1', to: '2/1', box: 2, index: 1, undone: true }),
+        /* `card` is required on `MoveUndoResult` (`types.ts`) — `doUndo` reads
+         * `result.card.place?.label` unconditionally. This fixture omitted it entirely,
+         * throwing client-side before the "Move undone" toast could ever show. */
+        body: JSON.stringify({
+          moved: '2/1',
+          to: '2/1',
+          box: 2,
+          index: 1,
+          undone: true,
+          card: { capture_id: 'cap-14', place: { label: 'Box 2, Section 1, Card 1' } },
+        }),
       })
       return
     }
@@ -4709,6 +4719,10 @@ test('UN-14 — a move gets an undo, the same fast path a sale gets, and it neve
   await expect(dialog).toBeVisible()
   await dialog.locator('.bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  /* D-sections-are-sub-boxes, no auto default: the section is the caller's own pick, never
+   * omitted, so Move stays disabled until this box's one section is checked too. This test
+   * predates that ruling and only ever picked the box. */
+  await dialog.locator('.bn-section-pick-item').click()
   await dialog.getByRole('button', { name: 'Move', exact: true }).click()
 
   const toast = page.locator('.bn-toast', { hasText: 'Moved to ME01 spares' })
@@ -4788,6 +4802,10 @@ test('UN-14 — a move built on is refused, and "Move back" is an ordinary move 
   await expect(dialog).toBeVisible()
   await dialog.locator('.bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
+  /* D-sections-are-sub-boxes, no auto default: the section is the caller's own pick, never
+   * omitted, so Move stays disabled until this box's one section is checked too. This test
+   * predates that ruling and only ever picked the box. */
+  await dialog.locator('.bn-section-pick-item').click()
   await dialog.getByRole('button', { name: 'Move', exact: true }).click()
 
   const toast = page.locator('.bn-toast', { hasText: 'Moved to ME01 spares' })

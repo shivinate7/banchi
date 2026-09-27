@@ -1422,8 +1422,16 @@
        forward. THE FLOOR GOES THE OTHER WAY, 214px to 210px (the PR 3 integration): at 390x667
        with the 34px inset the rows around the stage now total about 354.77px, so the stage has
        569 - 354.77 = 214.23px. A floor of 218px pushed the shutter 4px into the tab bar
-       (`phone.spec.ts`). 210px keeps the same ~4px cushion. */
-    height: clamp(210px, calc(100dvh - 370px - var(--bn-tabbar-h)), 560px);
+       (`phone.spec.ts`). 210px keeps the same ~4px cushion.
+
+       +42px, 2026-09-26 (the sub-box capture merge, this integration branch): "Sub-box
+       capture, Lane B" added the Section row to the run card, ALWAYS drawn beside the Box row
+       (D118 — pinned open, never a fold that could move the shutter). `.capture-section-slot`
+       is 40px plus the card's own 2px row gap, 42px the budget above never re-measured for —
+       confirmed against the CI failure this constant fixes: shutter bottom 610.765625 at
+       390x667 with the 34px inset, 41.77px into a tab bar starting at 569. 412px (370 + 42)
+       and a 168px floor (210 - 42) restore the same ~4px cushion with the new row counted. */
+    height: clamp(168px, calc(100dvh - 412px - var(--bn-tabbar-h)), 560px);
     max-height: none;
     align-self: stretch;
   }
