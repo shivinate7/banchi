@@ -7127,8 +7127,8 @@ COMPONENTS = [
                         "patchViewQuery call, a same-path query change and so a REPLACE, never "
                         "a push (D201). Kit primitives only: Section, .bn-list/.bn-list-row, "
                         "EmptyState/Notice/Loading for the three states a fetch can be in.",
-                "governed_by": ["D31", "D67", "D172", "D196", "D201", "D258", "D264", "D285",
-                                "D293", "D301"],
+                "governed_by": ["D31", "D67", "D172", "D196", "D201", "D221", "D258", "D264",
+                                "D285", "D293", "D301"],
             },
             "src/InventorySets.css": {
                 "does": "layout for the set view's rows — the card number column, the "
