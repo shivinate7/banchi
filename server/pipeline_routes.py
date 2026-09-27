@@ -6531,13 +6531,38 @@ def _trends_for_entries(
             continue
         rows.append(row)
 
+    # THE ARCHIVE'S ALREADY-VERIFIED PRODUCT IDS, SKIPPING `product_id_for_row` FOR EVERY
+    # SKU IT COVERS (D254) — the same lookup `do_pipeline_price_now` already makes, over the
+    # same per-SKU index (`store/pricearchive.py:PriceArchive.for_sku`, O(1) since the
+    # 2026-09-27 review). Measured without this: 400 SKUs with no known id cost ~63s of
+    # courtesy delay ALONE (`pipeline/pricehistory.py:Market.get` never caches a FAILED
+    # fetch, so `category_id()`/`group_id()` re-fetch and re-sleep on every row) — a real
+    # demo-mirror recording timed out here at the client's 30s GET timeout
+    # (`scripts/demo-record.py`), 2026-09-27. Most rows in a store that has ever run
+    # `pkmnscan archive sweep` (D219) already carry a verified id and need no network call
+    # at all.
+    product_ids: Dict[str, int] = {}
+    try:
+        snapshot = Store().read()
+    except (files.StoreError, OSError, ValueError, TypeError):
+        snapshot = None
+    if snapshot is not None:
+        for row in rows:
+            sku = str(row.get(tcgcsv.SKU_COLUMN, "")).strip()
+            if not sku or sku in product_ids:
+                continue
+            for bucket in snapshot.archive.for_sku(sku):
+                if bucket.product_id:
+                    product_ids[sku] = bucket.product_id
+                    break
+
     market = pricehistory.Market(cache_dir=market_cache_dir(), user_agent=_history_user_agent())
     # THE WALK ITSELF NEVER RAISES PAST HERE. `readings_for_rows` catches every
     # `PriceHistoryError` per product and answers refusals alongside readings, which is the
     # right shape for a batch: one unresolvable card must not cost the other forty-five their
     # reading, and a mirror having a bad day is reported per SKU rather than as one 502 that
     # says nothing about which rows were affected.
-    readings, walked = market.readings_for_rows(rows)
+    readings, walked = market.readings_for_rows(rows, product_ids=product_ids)
     refused.update(walked)
 
     return {

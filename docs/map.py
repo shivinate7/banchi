@@ -3011,6 +3011,21 @@ COMPONENTS = [
                 "governed_by": ["D21", "D25", "D36", "D54", "D63", "D64", "D87", "D104",
                                 "D137", "D166", "D172", "D213", "D253"],
             },
+            "pipeline-trends-archive-ids-selftest.py": {
+                "does": "proves `server/pipeline_routes.py:_trends_for_entries` passes the "
+                        "archive's already-verified productId per SKU "
+                        "(`store/pricearchive.py:PriceArchive.for_sku`, D254) into "
+                        "`Market.readings_for_rows`, by poisoning `category_id`/`group_id` to "
+                        "raise if either is ever called for a SKU the archive already "
+                        "resolves. Measured 2026-09-27: a real demo-mirror recording's "
+                        "`/pipeline/runs/<name>/trends` request over ~400 SKUs timed out at "
+                        "the recorder's 30s GET timeout — reproduced in isolation as 62.79s "
+                        "for 400 failed `Market.category_id()` calls, because a FAILED fetch "
+                        "is never cached (`Market.get` only stores on success) and the 0.15s "
+                        "courtesy delay repeats before every one. Not wired into `make check` "
+                        "(D18: this fix is scoped to the single incident it answers).",
+                "governed_by": ["D18", "D219", "D254"],
+            },
             "pricearchive-selftest.py": {
                 "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "
                         "throwaway store, no network (D219). A "
@@ -5619,8 +5634,8 @@ COMPONENTS = [
                                 "D88", "D89", "D100", "D103", "D104", "D105", "D134", "D137",
                                 "D145", "D147", "D156", "D159", "D163", "D165", "D166", "D168",
                                 "D170", "D172", "D174", "D180", "D188", "D189", "D196", "D212",
-                                "D216", "D219", "D225", "D227", "D236", "D258", "D273", "D277",
-                                "D291", "D293", "D301"],
+                                "D216", "D219", "D225", "D227", "D236", "D254", "D258", "D273",
+                                "D277", "D291", "D293", "D301"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
