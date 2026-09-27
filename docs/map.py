@@ -5065,7 +5065,7 @@ COMPONENTS = [
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
                 "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D96", "D159",
-                                "D172", "D183", "D213", "D216", "D220", "D227", "D295"],
+                                "D172", "D183", "D213", "D216", "D220", "D227", "D269", "D295"],
             },
             "demo-record-selftest.py": {
                 "does": "Server's stdout-drain, proved on a bare subprocess rather than by "
@@ -5080,6 +5080,18 @@ COMPONENTS = [
                 # `make check` — no target here asked for that, and this fix is scoped to the
                 # single incident it answers.
                 "governed_by": ["D18"],
+            },
+            "demo-record-walkplan-selftest.py": {
+                "does": "`record_walk_plans`, proved on the failure a real 71-open-order "
+                        "rebuild hit (2026-09-27): the OLD rule recorded every SUBSET of "
+                        "the ticked open orders (`2^n` sets), refusing outright past 7 — "
+                        "shown here to reach an astronomical count at 71 and to have been "
+                        "refused by the real recorder's own message. The NEW rule records "
+                        "every SINGLE open order plus the one full \"walk all\" set "
+                        "(`n + 1` recordings, linear), proved at n=0, 1, 7, 71 and 834 — "
+                        "every single order its own recording, the one full set recorded "
+                        "whole. Not wired into `make check`.",
+                "governed_by": ["D18", "D96", "D220", "D269", "D295"],
             },
             "demo_scrub.py": {
                 "does": "strips machine-local absolute paths out of the bundle before it is "

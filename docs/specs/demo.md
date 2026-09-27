@@ -140,8 +140,9 @@ reviewer could not tell a demo gap from a product defect. `sweep_coverage` adds 
 - `/pipeline/holdings-value` for each range, and `/pipeline/price-now` for each SKU.
 - `/pipeline/products/<sku>/history` for each SKU, when the server can answer it.
 - Three POST routes that only read: `/inventory/copies` per SKU, `/orders/picks` per order,
-  and `/orders/walk-plan` for every set of orders a person can tick. Seven orders give 127
-  sets. The recorder refuses more than seven.
+  and `/orders/walk-plan` for every SINGLE open order, plus the one full "walk all" set
+  (2026-09-27, resolving §13's open question below). The full powerset never fit a real
+  store. Any other ticked combination is refused honestly (D269/TXT-46), never a wrong plan.
 
 Measured 2026-09-24, with the recorded price histories: 786 recorded routes, 9.0 MB of JSON on
 disk. The walk plans are 1.5 MB of it. The built `demoServer` chunk is 5.3 MB, and 364 KB after
@@ -460,10 +461,13 @@ orders, measured 2026-09-26. Recording every subset of 834 orders is not a numbe
 can reach by raising a constant. The fix narrows the question instead. Only an OPEN order
 can ever be ticked: every caller of `walkPlan` sends open keys alone (`Fulfillment.tsx`,
 `Orders.tsx`, D96/D220). So the sweep now reads the recorded `/orders` GET. It keeps the
-open keys only. It records every subset of those keys alone. The recorder still refuses
-outright past seven open orders. A future rebuild may cross that line. If it does, the fix
-is a different recording strategy for the walk plan. Raising the constant is not that fix.
-This is left as an open question, unmeasured as of this entry.
+open keys only. THE OPEN QUESTION IS NOW ANSWERED (2026-09-27): a real 71-open-order rebuild
+hit the refusal (`2^71` sets, not `2^7`). The recorder now records every SINGLE open order.
+It also records the one full "walk all" set every screen asks for whole — never a merge,
+and never a subset in between. `demoServer.ts:walkPlan` already refused an unrecorded set
+with the demo's one honest notice (D269/TXT-46). It never fabricates a plan, so no client
+change was needed. A partial selection (some orders, not all, not one) is the one gap this
+recording leaves on purpose.
 
 **What is left open.** `ux/stock-images` is a separate lane. It is meant to put stock image
 URLs on route responses, so a recording can carry them. This section does not depend on it
