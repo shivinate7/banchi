@@ -3,6 +3,7 @@ import type { GameRegistry, ResolvedOrder } from '../src/types'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 import { settled, whatMoved } from './motionSettled'
+import { iconTip } from './iconTooltip'
 
 /* THE OWNER'S ONE VIEW OF STORED CARDS, asserted where nothing else can reach it.
  *
@@ -1680,7 +1681,7 @@ test('one press marks a copy sold, with no panel in between', async ({ page }) =
      slot resizes it, which is the shake D118 ended. The SENTENCE is still asserted, on the two
      surfaces that draw it: the toast (below, and in `the sale posts a receipt to the toast
      stack`) and the phone's action bar. */
-  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
+  await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
   const sales = wire.filter((call) => call.path.endsWith('/sold'))
   expect(sales.map((call) => [call.method, call.path, call.body])).toEqual([
     ['POST', '/inventory/2/1/sold', {}],
@@ -1691,6 +1692,68 @@ test('one press marks a copy sold, with no panel in between', async ({ page }) =
      that is not rendered has to be deliberately re-added. */
   await expect(page.locator('.bn-scrim')).toHaveCount(0)
   await expect(page.locator('[role="dialog"]')).toHaveCount(0)
+})
+
+/* THE OWNER'S REPORT, verbatim: "if i hover icons on the inventory on the first row they'll go
+ * above the height of the box (works on later rows though)". Two separate defects, both
+ * traced to `kit/index.tsx`'s block comment above `IconButton`: `.card-locations-rows`
+ * (`CardLocations.css`) is a rounded, scrolling panel with `overflow: hidden`, and its own
+ * ancestor `.inventory-detail` (`Inventory.css`) sets `container-type: inline-size` for the
+ * `copies` query container — that makes `.inventory-detail`, not the viewport, the containing
+ * block for the tip's old `position: fixed`, so the panel clips it again. AND `.card-
+ * locations-row` carries its own entrance `animation`, which makes each row its own stacking
+ * context permanently, so a tip flipped below the first row — still a DOM descendant of that
+ * row — painted BEHIND the next row regardless of z-index. Portalling the tip to `<body>`
+ * (round 3) fixes both: no ancestor of `<body>` re-anchors `position: fixed`, and the tip is a
+ * plain sibling of the app root in the root stacking context, where its own z-index wins fairly.
+ * This is a `#/inventory` case, not a kit-gallery one, because the gallery's specimen page
+ * carries no `container-type` ancestor and no row siblings, so neither defect reaches it. */
+test('the first copy row draws its icon tooltip clear of the panel above it (owner report)', async ({ page }) => {
+  await open(page, BOXES, STORE)
+
+  const row = page.locator('.card-locations-owner .card-locations-row').first()
+  await expect(row).toBeVisible()
+  const btn = row.locator('.bn-icon-btn').first()
+  await btn.hover()
+  const tip = await iconTip(btn)
+  await expect(tip).toHaveCSS('opacity', '1')
+
+  const tipRect = await tip.evaluate((e) => e.getBoundingClientRect())
+  const viewport = page.viewportSize()
+  expect(viewport, 'the page reported no viewport size').not.toBeNull()
+  const vp = viewport as NonNullable<typeof viewport>
+  expect(tipRect.top, 'the tooltip top is off-screen').toBeGreaterThanOrEqual(0)
+  expect(tipRect.left, 'the tooltip runs off the left edge').toBeGreaterThanOrEqual(0)
+  expect(tipRect.right, 'the tooltip runs off the right edge').toBeLessThanOrEqual(vp.width)
+  expect(tipRect.bottom, 'the tooltip runs off the bottom edge').toBeLessThanOrEqual(vp.height)
+
+  /* `elementsFromPoint` AT EDGE MIDPOINTS, never the geometric corner: `.bn-icon-tip` has its
+   * own `border-radius`, which rounds away the literal corner pixel even when the tip is fully
+   * visible and unclipped. The tip is deliberately `pointer-events: none` (so it is never what
+   * a click lands on) — hit-testing APIs skip a point's non-hit-testable elements entirely in
+   * Chromium regardless of the plural form, so `pointerEvents` is set to `auto` for the
+   * duration of this one measurement and restored immediately after; it never repaints (the
+   * property only changes hit-testing, not paint) and no click reaches it in between. A clipped
+   * or occluded tip is then the only thing that keeps it out of the paint stack at its own
+   * edge — the way the owner's screenshot showed a black sliver of the tip and the page's own
+   * text above it, not the tip itself. */
+  const edges = await tip.evaluate((e) => {
+    const r = e.getBoundingClientRect()
+    const midX = r.left + r.width / 2
+    const midY = r.top + r.height / 2
+    const points = [
+      [midX, r.top + 1],
+      [midX, r.bottom - 1],
+      [r.left + 1, midY],
+      [r.right - 1, midY],
+    ] as const
+    const restore = e.style.pointerEvents
+    e.style.pointerEvents = 'auto'
+    const found = points.map(([x, y]) => document.elementsFromPoint(x, y).includes(e))
+    e.style.pointerEvents = restore
+    return found
+  })
+  expect(edges, 'an edge of the tooltip is painted over by something else — it is clipped').toEqual([true, true, true, true])
 })
 
 /* ---------------------------------------------------------------------- the stability floor
@@ -1758,7 +1821,7 @@ test('the press that sells a copy moves nothing outside the panel it lands in', 
   const rowBox = await row.boundingBox()
 
   await press.click()
-  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
+  await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
 
   /* AND THE RE-READ, WAITED FOR RATHER THAN ASSUMED. The receipt is optimistic — it is drawn from
      `soldKeys` in the same continuation as the write — so measuring on it alone measures a frame
@@ -1824,7 +1887,7 @@ test('the press that sells a copy does not shift while the re-read is in flight'
   const topsBefore = Math.round((await locations.boundingBox())?.y ?? -1)
 
   await press.click()
-  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
+  await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
 
   /* SAMPLE THROUGH THE GAP, not only before and after it. `data-gone` only ever reads `true`
      once the re-read has landed, so waiting on it alone (as the sweep above does) would let
@@ -1923,7 +1986,7 @@ test('the slot column is already as wide as the key the sale will write into it'
   await press.click()
   /* `Undo` and not `Marked sold.`: the row's receipt is the clock and the button since D119, and
      the sentence is the toast's — the case at the top of this file says why. */
-  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
+  await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
   /* The re-read, waited for rather than assumed — the same sync point the case above uses, and
      for the same reason: the receipt is optimistic and the lens turning departed is the answer
      landing, which is the state this measurement is about. */
@@ -2129,7 +2192,7 @@ test('the receipt is the undo that survives the rows being replaced', async ({ p
 
   await copyRow(page, CARD_1).getByRole('button', { name: 'Mark sold' }).click()
   sell('2/1')
-  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
+  await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
 
   /* STEP THE WALK. The copies panel is drawn for whichever card the walk points at, so this
      unmounts the row and its `Undo` with it — and the clock does not stop for that. This is the
@@ -4060,7 +4123,7 @@ test('the sections of a box are drawn once, by the walk that can open them', asy
   await expect(first).toContainText('cards')
 })
 
-test('the box lives in the walk\'s column, and the run line lives in the header', async ({
+test('the box lives in the walk\'s column, and it is the only thing in that header', async ({
   page,
 }) => {
   await open(page)
@@ -4095,38 +4158,13 @@ test('the box lives in the walk\'s column, and the run line lives in the header'
   await expect(page.getByRole('button', { name: /^Register/ })).toHaveCount(0)
   await expect(page.locator('.boxops-new')).toHaveCount(0)
 
-  /* THE RUNS HAD A THIRD COLUMN UNTIL 2026-08-26, THE LAST ROW UNTIL 2026-08-29, AND NOW A ROUTE.
-     The slot survives and what sits in it is one status line — `BoxRuns`, which says whether
-     anything is running over this box and hands the ticked selection to `#/runs`. Every
-     assertion here is the one it always was, re-pointed: the box is not in that slot, the slot
-     is not inside the card's guard, and it is a direct child of the body. The ordering below
-     stays a MEASUREMENT rather than a class name, because a class assertion goes green the
-     moment somebody reintroduces a tall sibling in row 1 under a different name, and a tall
-     sibling in row 1 is the entire defect this layout was rebuilt to remove. */
-  /* THE RUN LINE LEFT THE CONTENT COLUMN FOR THE HEADER ON 2026-08-29, and the assertion moves
-     with it rather than being dropped. What it guarded was that the line is about the SHELF and
-     is not a sibling the card can push around; in the header that is structural — its y is set
-     by the header, which is the same on every card. The old ordering check (`runs` after
-     `copies`) is replaced by the stronger one the move buys: the line is ABOVE the card band, so
-     nothing about the selection can move it at all. */
-  /* THE RUN LINE IS THE BOX'S, SO IT SITS WITH THE BOX. It moved into the box's own header at
-     the top of the walk's column — not into the card's column, and not below the card band —
-     which is the same guarantee stated against the layout that exists: nothing about the
-     SELECTION can move it. */
-  await expect(page.locator('.browse-map .boxruns')).toHaveCount(1)
-  await expect(page.locator('.browse-side .boxruns')).toHaveCount(0)
-  await expect(page.locator('.browse-card .boxruns')).toHaveCount(0)
-
-  const runs = await page.locator('.boxruns').boundingBox()
-  const band0 = await page.locator('.browse-card').first().boundingBox()
-  if (runs === null || band0 === null) throw new Error('the content column did not render')
-  expect(runs.y).toBeLessThan(band0.y + band0.height)
-
+  /* THE RUN STATUS LINE (`BoxRuns.tsx`) IS DELETED, on the owner's word ("Remove it").
+     Inventory no longer mentions runs at all — a card is identified from Review's own
+     identify strip instead. `docs/reviews/ux-2026-09-23/RULINGS.md` records the ruling. What
+     is left to assert is that its slot leaves no hole: the box's own header holds only its
+     identity strip and the Manage control now. */
   /* AND THE SCREEN CLEARS `docs/DESIGN.md`'s OWN FIRST-CONTENT FLOOR: "the first row of real
-     content sits within 150px of the top of the viewport". The run line is not that row any
-     more — it sits under the box it is about, in the box's column — so the floor is measured
-     where it applies, on the first thing the operator can use. It missed that floor by
-     1014-1422px in the content column once, which is why it is measured at all. */
+     content sits within 150px of the top of the viewport". */
   const firstUse = await page.locator('.search-field-input').boundingBox()
   if (firstUse === null) throw new Error('the search field did not render')
   expect(firstUse.y).toBeLessThan(150)
@@ -4208,41 +4246,6 @@ test('the copies of a card cannot be positioned by the pipeline console', async 
      to like any other; what may never come back is the answer itself starting below the fold. */
   await expect(page.locator('.card-locations-row.is-current')).toBeInViewport({ ratio: 1 })
   await expect(page.locator('.card-locations-rows')).toBeVisible()
-})
-
-test('the ticked selection is handed to the runs screen, and never lost silently', async ({
-  page,
-}) => {
-  await open(page)
-  /* COLLAPSED IS THE RESTING STATE (D31), so there are no rows to tick until the sections are
-     open. The same two lines every mass-select case in this file opens with. */
-  await expandAll(page)
-
-  /* THE CAPABILITY THIS PROTECTS IS OLDER THAN THE SCREEN IT NOW CROSSES. `RunPanel` can scope a
-     run to a ticked subset — a real server route that builds a symlink directory — and the ONE
-     mass-select in the product is on this screen. When the panel moved to `#/runs` on 2026-08-29
-     that capability was one edit away from being reachable from nowhere, which is exactly
-     `CLAUDE.md`'s route-is-not-a-feature rule pointing at the change that caused it.
-
-     ASSERTED AT THE SEAM RATHER THAN END TO END, deliberately: what `#/runs` does with a handoff
-     is `run-panel.spec.ts`'s subject, and what this file owns is that the selection leaves here
-     with the right box and the right count on it. */
-  const first = page.locator('.browse-rowtick').first()
-  await expect(first).toBeVisible()
-  await first.check()
-
-  const go = page.locator('.boxruns-go')
-  /* `Run 1 ticked` — the count of what is ticked, on the control that carries it. The wording
-     changed; the promise is the one this case was written for and is unchanged: the scope of the
-     next run is stated where the press is. */
-  await expect(go).toContainText('1 ticked')
-  await expect(go).toHaveAttribute('href', '#/runs')
-
-  /* AND UNTICKING PUTS THE WHOLE BOX BACK ON THE CONTROL. The label is the only place the scope
-     of the next run is stated on this screen, so a stale count here is a person pressing a link
-     that says 1 card and arriving at a screen that says the whole box — or worse, the reverse. */
-  await first.uncheck()
-  await expect(go).toContainText('Run this box')
 })
 
 /* D30's NEIGHBOURS, WHICH NOTHING IN THIS FILE HAD EVER RENDERED.
@@ -5279,10 +5282,10 @@ test('a photo the store has lost gets a sentence, never a card-shaped hole', asy
   await expect(remedy).toBeInViewport()
 })
 
-test('the box and the runs survive a query that selects no card', async ({ page }) => {
+test('the box survives a query that selects no card', async ({ page }) => {
   await open(page)
 
-  /* Both are about the SHELF, not the selection. Before the merge that was a prose promise on
+  /* It is about the SHELF, not the selection. Before the merge that was a prose promise on
      `{boxPanel}`; a query matching nothing is what actually tests it, and it is the same input
      `.browse-side`'s own comment names as the repro for a receipt vanishing mid-undo. */
   await page.locator('.search-field-input').fill('zzzz-no-such-card')
@@ -5299,24 +5302,9 @@ test('the box and the runs survive a query that selects no card', async ({ page 
   await expect(page.getByText(/^Nothing matches/)).toHaveCount(1)
   await expect(page.getByRole('button', { name: 'Clear the search' })).toHaveCount(1)
 
-  await expect(page.locator('.boxruns')).toBeVisible()
   await expect(page.locator('.browse-map .boxops-identity')).toHaveCount(1)
   await expect(page.locator('.browse-map').getByRole('button', { name: 'Manage' })).toBeVisible()
 
-  /* AND THE ROWS THEY LEAVE BEHIND COST NOTHING. The card and the copies are grid rows above the
-     console, and `grid-template-rows` is declared explicitly because the sticky map needs it — so
-     the rows exist whether or not anything is in them, and a `row-gap` is drawn between declared
-     rows even when both items are `display: none`. Measured before the fix: 48px of white above
-     the console for two rows holding nothing. The row gap is a margin on the items now, so it
-     leaves with them.
-
-     24 RATHER THAN 0, and that is the console's own margin — one interval, which is what any
-     first item on this page sits below. */
-  /* THE ROWS THEY LEAVE BEHIND STILL COST NOTHING, and the check is re-pointed rather than
-     dropped: the run line is in the header now, so what has to be true is that it sits ABOVE the
-     body entirely and that the empty content rows collapse. `.browse-boxrun` is `display: none`
-     when it holds no pooled/unplaced note, which is every numbered shelf — so it has no box, and
-     asking for one is how this case would silently stop testing anything. */
   /* AND THE ROWS THEY LEAVE BEHIND COST NOTHING: with no card selected the card column draws
      nothing at all rather than an empty frame with a row gap under it. */
   await expect(page.locator('.browse-card')).toHaveCount(0)
@@ -7258,7 +7246,7 @@ test('a sale leaves every other row where it was, and the sold row in its own pl
   /* Sell the row the list leads with. Its section drops from three to two and TIES box 2's
      pair, so a live re-rank would move box 2's two copies above the two box 7 has left. */
   await copyRow(page, 'Box 7, Section 1, Card 38').getByRole('button', { name: 'Mark sold' }).click()
-  await expect(page.locator('.inventory-receipt')).toContainText('Undo')
+  await expect(page.locator('.inventory-receipt').getByRole('button', { name: 'Undo' })).toBeVisible()
 
   /* WAIT FOR THE RE-READ AND NOT FOR THE OPTIMISM. `.is-gone` lands off `soldKeys` before any
      request goes out, so an assertion gated on it measures the list the press has not yet
@@ -8006,8 +7994,8 @@ test('D218: this lane\'s own facts draw the separator, never type it', async ({ 
      that a screen may only SHOW one, drawn by CSS beside a fact that is its own element
      (`.bn-facts` in `app/src/kit.css`) — never type one into text a component holds.
 
-     SCOPED TO WHAT THIS LANE (`BoxOps.tsx`, `BoxBrowse.tsx`, `Inventory.tsx`, `BoxRuns.tsx`,
-     `CardHero.tsx`) DRAWS, never the whole `.bn-view`: this route's own `.position-bar-text`
+     SCOPED TO WHAT THIS LANE (`BoxOps.tsx`, `BoxBrowse.tsx`, `Inventory.tsx`, `CardHero.tsx`)
+     DRAWS, never the whole `.bn-view`: this route's own `.position-bar-text`
      (`PositionBar.tsx`, D41's accessible-name territory, a different file this sweep does not
      touch) still types one today, so a blanket assertion cannot pass until every lane on this
      route has landed. `.bn-filtercount` is the rail's store-wide count line (BoxBrowse.tsx);

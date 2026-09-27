@@ -456,20 +456,19 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   text-align: center;
 }
 
-/* The tooltip: `label` (and `kbd`), never `name`, which is for a screen reader alone. It
-   stays a DOM child of the button (never a portal — `app/tests/icon-button.spec.ts` reads it
-   with `button.querySelector`), but its POSITION is `position: fixed`, set by
-   `IconButton`'s own `reposition()` on pointer-enter, focus and the long-press timer.
-   `position: fixed` is computed against the true viewport regardless of an ancestor's
-   `overflow` — no ancestor here carries a `transform`, which is the one thing that would
-   re-anchor it — so `.bn-sheet`'s own `overflow: hidden` no longer clips the overlay Close
-   tooltip the way it did before round 2 (measured: the tip's top landed at -14px). The
-   `left`/`top` this file leaves as `0` are the pre-position fallback, overwritten before the
-   fade-in starts. `pointer-events: none` so it is never what a click lands on. `:hover` is
-   wrapped in `@media (hover: hover)`, so a touchscreen tap does not leave a phantom hover
-   once the finger lifts (round 2's own finding) — `:focus-visible` (never a plain mouse
-   `:focus`, so a click does not leave it stuck open) and `[data-tip-open]` (the long-press,
-   set by `IconButton`'s own timer) still show it everywhere. */
+/* The tooltip: `label` (and `kbd`), never `name`, which is for a screen reader alone.
+   PORTALLED TO `<body>` (round 3, D288 — `#/inventory`'s first row, see `kit/index.tsx`'s
+   block comment above `IconButton` for why a DOM-child tip with `position: fixed` was not
+   enough: an ancestor with `container-type` re-anchors the fixed containing block, AND a
+   sibling row's own entrance `animation` outranks it in paint order regardless of `z-index`).
+   As a `<body>` child it is a plain sibling of the app root, so `z-index: 90` here compares
+   fairly against everything else and `position: fixed` always means the true viewport — no
+   ancestor of `<body>` can re-anchor it or clip it. `IconButton`'s own `reposition()` sets
+   `left`/`top` on pointer-enter, focus and the long-press timer, before the fade-in starts;
+   the values this file leaves as `0` are only the pre-position fallback. `pointer-events:
+   none` so it is never what a click lands on. VISIBILITY IS `data-tip-visible`, set from
+   React state (`kit/index.tsx`) rather than a CSS pseudo-class, because a portal breaks the
+   descendant selectors (`.bn-icon-btn:hover .bn-icon-tip`) those pseudo-classes need. */
 .bn-icon-tip {
   position: fixed;
   left: 0;
@@ -490,15 +489,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   transition: opacity var(--bn-t-fast) var(--bn-ease);
 }
 .bn-icon-tip .bn-kbd { color: inherit; background: color-mix(in srgb, currentColor 18%, transparent); border-color: transparent; }
-@media (hover: hover) {
-  .bn-icon-btn:hover .bn-icon-tip { opacity: 1; }
-}
-.bn-icon-btn:focus-visible .bn-icon-tip, .bn-icon-btn[data-tip-open='true'] .bn-icon-tip { opacity: 1; }
-/* A click dismisses its own tooltip (`kit/index.tsx`'s `dismissed` state) — same specificity
-   as the hover/focus rules above, so it wins on being LAST when both apply: the mouse has not
-   moved off the button, so `:hover` alone would keep reading a tooltip the press already
-   acted on. */
-.bn-icon-btn[data-tip-dismissed='true'] .bn-icon-tip { opacity: 0; }
+.bn-icon-tip[data-tip-visible='true'] { opacity: 1; }
 
 .bn-btn[data-busy='true'] { color: transparent; pointer-events: none; }
 /* Busy is one state whether or not the screen also passed disabled: the ring is drawn full-strength. */
