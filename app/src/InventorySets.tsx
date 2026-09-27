@@ -175,7 +175,14 @@ export function InventorySets({ reloadToken = 0 }: { readonly reloadToken?: numb
     return () => {
       live = false
     }
-  }, [current?.key])
+    // `current` IS A STABLE REFERENCE ACROSS RENDERS, never a fresh object every render:
+    // `options` is memoized on `[report]` above, and `.find` returns one of ITS elements, so
+    // `current`'s identity only changes when `report` or `setParam` actually changes which
+    // set is picked — never merely on a re-render. Depending on the whole object (rather
+    // than `current?.key` alone) is therefore exactly as safe and is what lets this effect
+    // also react to `current.cards` changing under the same key (a same-set re-fetch that
+    // landed a different card list), which `?.key` alone would have missed.
+  }, [current])
 
   if (failure !== null) {
     return <Notice tone="danger" title={failure.message} code={failure.code} />
