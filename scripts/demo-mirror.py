@@ -264,6 +264,60 @@ def record(home: Path) -> None:
     )
 
 
+def drop_stale_positions(bundle: Path, home: Path) -> int:
+    """A `positions` entry whose (box, index) no longer holds ANY card is dropped, in place.
+
+    THE GAP THIS CLOSES. `server/pipeline_routes.py:_relabel_positions`'s own docstring says
+    it plainly: a pricing run's `box`/`index` "travel exactly as stored" and are never
+    re-bound — only the CAPTION is re-rendered. A run whose box was later fully emptied (or
+    renumbered) still carries the old position, and `Pricing.tsx`/`Fulfillment.tsx` build an
+    `<img src={photoUrl(box, index)}>` for it unconditionally. On a LIVE store this is a real,
+    pre-existing gap `pkmnscan rescue` exists to close by hand — but nobody can run `rescue`
+    against a frozen demo bundle, so a stale position here is a 404 a reviewer sees FOREVER.
+
+    MEASURED, 2026-09-27: `2026-09-01-box5-01`'s pricing table names 98 positions in box 5,
+    which the current store holds zero cards in at all (fully emptied since that run). One
+    of them, box 5 index 88, is what a real demo build 404'd on.
+
+    NEVER TOUCHES A LIVE STORE — this runs once, here, over the recorded bundle.json a demo
+    build is about to publish, never over `server/pipeline_routes.py`'s own live response.
+    """
+    from store import Store  # imported late: needs PKMNSCAN_HOME, already set by build()
+
+    existing = {
+        (int(card.box), int(card.index)) for card in Store().read().inventory.cards.values()
+    }
+    payload = json.loads(bundle.read_text("utf-8"))
+    dropped = 0
+
+    def walk(value):
+        nonlocal dropped
+        if isinstance(value, dict):
+            positions = value.get("positions")
+            if isinstance(positions, list):
+                kept = [
+                    at for at in positions
+                    if not (
+                        isinstance(at, dict)
+                        and isinstance(at.get("box"), int)
+                        and isinstance(at.get("index"), int)
+                    )
+                    or (int(at["box"]), int(at["index"])) in existing
+                ]
+                dropped += len(positions) - len(kept)
+                value["positions"] = kept
+            for item in value.values():
+                walk(item)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item)
+
+    walk(payload)
+    if dropped:
+        bundle.write_text(json.dumps(payload), "utf-8")
+    return dropped
+
+
 def assert_scrubbed(bundle: Path, shipping: Path) -> None:
     """THE ONE CHECK: every name is "Jane Doe N" and every address is "123 Demo Way"."""
     bad: List[str] = []
@@ -339,6 +393,10 @@ def main() -> int:
     home = (REPO_ROOT / args.home).resolve()
     build(home, args.jobs)
     record(home)
+    dropped = drop_stale_positions(APP_BUNDLE, home)
+    if dropped:
+        print("positions %d stale (box, index) pair(s) dropped, no longer any card there"
+              % dropped)
     assert_scrubbed(APP_BUNDLE, home / "shipping-export.csv")
     commit_output()
     return 0
