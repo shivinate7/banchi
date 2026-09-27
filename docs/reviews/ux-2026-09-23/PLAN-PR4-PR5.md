@@ -182,7 +182,9 @@ Owner: `The sonnet review will come after PR4 lands in its entirety`.
 
 Owner, 2026-09-27: `just add the decision and debt cleanup as a PR5 item to come after we do a sonnet review which came after pr4`.
 
-It starts only after the Sonnet review above. The owner asked whether a Haiku agent could delete
+**Brought forward (owner, 2026-09-27, second session):** `The G and T interview will encompass our work that's meant for PR5 (we're bringing it up)`.
+So step 1 below runs now, inside the G and T cross-check, and step 2 is part of that
+interview. Steps 3 and 4 follow the owner's rulings. The owner asked whether a Haiku agent could delete
 solved entries in place. The orchestrator advised against it. Deciding "solved" is a judgment,
 and many entries are amended rather than retired. Also, other records cite each entry by its
 number. The plan:
