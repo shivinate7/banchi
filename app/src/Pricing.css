@@ -11,6 +11,16 @@
      under another with a ragged edge. */
 }
 .pricing-tabs { flex: none; }
+/* THE LOCK GLYPH'S OWN WEIGHT SITS LOW IN ITS BOX (the owner's review, 2026-09-26: "the lock
+   icon and label look off-center"). Its bounding box is centered against the label already —
+   measured, the icon's box and the button's are both exactly centered — but the shape a person
+   READS as "the lock" is the solid body, and that body sits in the LOWER half of the glyph's
+   own square (kit/Icon.tsx's `lock` path), with only a thin open shackle above it. A person
+   weighs the solid shape, not the empty one, so the icon reads as sitting low against "Held N"
+   even though geometry says otherwise. Nudged here, scoped to this one control, rather than in
+   the shared glyph every lock icon in the app draws from (14 call sites, `Icon.tsx`) — this
+   lane owns Pricing alone. */
+.pricing-held-filter .bn-icon { transform: translateY(-1px); }
 
 .pricing-body {
   display: flex;
@@ -77,7 +87,12 @@
 }
 
 /* ONE TEMPLATE FOR THE CAPTION AND EVERY ROW, so the two cannot drift. The trend column is
-   always reserved, so loading trends lays nothing out again (UX-070). */
+   always reserved, so loading trends lays nothing out again (UX-070). QTY, PRICE (OR HELD)
+   AND THE LOCK ARE EACH THEIR OWN FIXED-WIDTH TRACK (the owner's review, 2026-09-26: "the row
+   controls misalign") — CSS Grid reserves a track's width whether or not a row has anything to
+   put in it, so a row with no qty box still keeps the qty column's place rather than the price
+   column sliding over to fill it, and `align-items: center` below centers every track to the
+   row's own height independently, whatever that row's other columns run to. */
 .pricing-caption,
 .pricing-row {
   display: grid;
@@ -157,7 +172,6 @@
 
 .pricing-id { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .pricing-name-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-0-5) var(--bn-2); min-width: 0; min-height: var(--bn-6); }
-/* The chip never makes its line taller than a line without one: rows stand equally tall (D118). */
 .pricing-name {
   min-width: 0;
   font-size: var(--bn-fs-base);
@@ -169,8 +183,12 @@
 /* A PLAIN REASON, NEVER A PILL (the owner's review and add-on, 2026-09-26): colour marks a real
    problem only. A row worth pricing, or one with no market price at all, carries none here —
    the Market column already says both — so `data-tone` only ever reaches `warn` (a typed price
-   adrift). See `flagOf` in Pricing.tsx. */
-.pricing-flag { flex: none; font-weight: 600; }
+   adrift). See `flagOf` in Pricing.tsx.
+   ITS OWN LINE, AT THE SAME X ON EVERY ROW (the owner's review, 2026-09-26: "i dislike not
+   having uniform centering" — inline after the name, its x moved with the name's own length).
+   `display: block` puts it under the name rather than beside it, so it always starts at the
+   id column's left edge, whatever the row above it says. */
+.pricing-flag { display: block; font-size: var(--bn-fs-sm); font-weight: 600; }
 .pricing-flag[data-tone='warn'] { color: var(--bn-warn); }
 /* EVERY FACT THAT CHANGES A PRICE DECISION READS AT 4.5:1 OR BETTER (UX-026): the meta line is
    `--bn-ink-3`, never the non-text `--bn-ink-4`. */
@@ -301,9 +319,23 @@
 }
 .pricing-locked { background: var(--bn-surface-2); color: var(--bn-ink-3); }
 .pricing-held { background: var(--bn-warn-tint); color: var(--bn-ink-2); font-weight: 600; }
+/* THE NOTE NEVER MOVES THE PILL (D118, and the owner's review, 2026-09-26): `.pricing-price`
+   reserves ONE FIXED HEIGHT for every answer state — locked, held, typed, suggested — so the
+   pill (or the field) always starts at the same top edge whether or not a note draws under
+   it. See `.pricing-list .pricing-price` above: `justify-content: flex-start` inside that
+   fixed box, never `center`, is what keeps a state with no note from sitting any lower than
+   one that has one. */
 .pricing-state { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pricing-state-ok { color: var(--bn-ok); }
 .pricing-state-warn { color: var(--bn-warn); }
+/* ONE LOCK TREATMENT IN EITHER STATE (the owner's review, 2026-09-26: "the lock is a tinted
+   square in one state and bare in the other"). `IconButton`'s shared `aria-pressed` style
+   (kit.css) tints a toggle's pressed state everywhere else in the app, and that reads fine on
+   its own — but here it sits right beside a Held pill that ALREADY carries the tint, so the
+   held row draws two matching tinted chips in a row and the ready row draws none, and the
+   control itself looks like a different shape depending on the card. Bare in both states; the
+   icon alone (lock vs unlock) already says which one this is. */
+.pricing-row .pricing-hold[aria-pressed='true'] { background: transparent; color: var(--bn-ink-2); }
 
 /* ---- the popovers and sheets ----------------------------------------------------------------- */
 .pricing-runs { display: flex; flex-direction: column; gap: var(--bn-2); min-width: 18rem; padding: var(--bn-2); }

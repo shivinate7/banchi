@@ -7736,9 +7736,9 @@ COMPONENTS = [
                                                 "D78", "D79", "D85", "D86", "D89", "D98", "D99",
                                                 "D100", "D101", "D103", "D105", "D107", "D109",
                                                 "D115", "D117", "D118", "D125", "D137", "D156",
-                                                "D159", "D168", "D172", "D181", "D196", "D208",
-                                                "D210", "D218", "D221", "D267", "D269", "D273",
-                                                "D277", "D278", "D285", "D301"]},
+                                                "D159", "D165", "D168", "D172", "D181", "D196",
+                                                "D208", "D210", "D218", "D221", "D267", "D269",
+                                                "D273", "D277", "D278", "D285", "D301"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, a kit Sheet off #/pricing's header (D168). The owner's own "
                                             "ask: typed prices go stale and there was no way to clear many at once. IT IS A "
                                             "PRESS AND NOT A POLICY: nothing here runs on a clock. The scope is the "
