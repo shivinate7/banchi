@@ -787,8 +787,8 @@ function InventoryWalk({
     /* THE KIT'S PAGE (D275): the one h1 off the route, the one width and top gap. */
     <Page
       icon="box"
-      /* SILENT WITH NO BOX: the empty state says "No boxes yet" once, not the lede too. */
-      lede={boxRecords.length === 0 ? undefined : 'Sell, retire or move any card.'}
+      /* NO SUBTITLE (owner, 2026-09-26: "let's eliminate even the subtitles"). The tab strip
+         (`ShelfSwitch`) already names the view: List, Map or Sets. */
       /* THE ONE VIEW SWITCH (D264, D293): List, Map and Sets, the owner's labels. In
          the header's actions slot, beside the h1, so a switch moves nothing else (D118). */
       actions={<ShelfSwitch view={view} onView={onView} />}

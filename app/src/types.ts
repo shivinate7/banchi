@@ -1804,6 +1804,61 @@ export type SectionMoveResult = {
   boxes: BoxRecord[]
 }
 
+/** What `POST /boxes/sections/move-batch` answers (D264, the Map's edit-mode Confirm,
+ *  2026-09-26): the whole draft's one move id for Undo, one combined physical instruction,
+ *  and every box the draft touched, as `GET /boxes` draws them. `created` is the box a split
+ *  inside the draft made — a single number where the draft made exactly one, an array where
+ *  it made more than one, null where it made none. There is no single `box`/`to_box`: a
+ *  batch spans however many boxes the draft's moves touched. */
+export type SectionMoveBatchResult = {
+  move: string
+  created: number | number[] | null
+  moved: number
+  receipt: {
+    heading: string
+    steps: string[]
+    renumbered: string[]
+  }
+  boxes: BoxRecord[]
+}
+
+/** One queued SECTION move of the Map's edit-mode draft (D264): the same shape a single
+ *  move sends, minus `aim` and `layoutToken` — a later move in the same draft may target a
+ *  box an earlier move in the SAME draft already changed, so only the draft-open freshness
+ *  check (`SectionMoveBatchInput.digests`) answers whether anything moved out from under
+ *  it. */
+export type SectionMoveBatchStep = {
+  kind: 'section'
+  box: number
+  first: number
+  last: number
+  toBox: number | 'new'
+  before: number | null
+}
+
+/** One queued CARD RANGE move of the same draft (owner's ruling, 2026-09-27: card ranges
+ *  rejoin edit mode) — the same shape a single range move sends, minus `aim` and
+ *  `layoutToken` for the same reason. */
+export type RangeMoveBatchStep = {
+  kind: 'range'
+  box: number
+  indices: readonly number[]
+  toBox: number
+  beforeCard: number | null
+  sectionEnd: number | null
+}
+
+export type MoveBatchStep = SectionMoveBatchStep | RangeMoveBatchStep
+
+/** What `POST /boxes/sections/move-batch` sends: every box the draft saw, by its
+ *  `content_digest` (`BoxRecord.content_digest`, read with `with_digest: true`) when the
+ *  owner pressed Edit layout, and the ordered moves — sections and ranges both — it
+ *  queued. */
+export type SectionMoveBatchInput = {
+  digests: Record<string, string>
+  moves: readonly MoveBatchStep[]
+}
+
 /** Where a section move lands: in front of a section of `toBox`, or at its near end (null). */
 export type SectionMoveTarget = {
   toBox: number | 'new'
@@ -1847,6 +1902,14 @@ export type BoxRecord = {
    *  because an older server, or a fixture that predates the field, sends none — a screen
    *  with no token falls back the same way a stale pick does (§9, Q2's fallback). */
   layout_token?: string
+
+  /** THE BOX'S CONTENT DIGEST (the strict review's finding, 2026-09-27) — `_box_digest`
+   *  over the box's own record AND every card in it, not only its dividers. `layout_token`
+   *  alone is blind to a card: a capture into a section, or a sale out of one, changes no
+   *  divider, so a freshness check against the token alone can miss it. Present only when
+   *  `GET /boxes` was asked with `with_digest=1` — the Map's Edit-layout fetch, and nothing
+   *  else, since it costs a card-by-card read every box pays for. */
+  content_digest?: string
 
   /** THE TRUE INDEX OF THIS DRAWER — allocated once at its creation, never reused, and never
    *  rendered (D145). The owner said the last part twice: *"a box needs an index # not visible
