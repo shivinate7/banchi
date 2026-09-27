@@ -48,6 +48,7 @@
     "043-the-merge-speed-guard-cannot-see-python-work.md",
     "044-pokemontcg-io-is-deprecated-and-this-repo-does-not-call-it.md",
     "045-no-page-lists-what-each-test-protects.md",
-    "046-a-search-with-a-typo-finds-nothing.md"
+    "046-a-search-with-a-typo-finds-nothing.md",
+    "047-the-demo-network-guard-blocks-the-images-it-should-allow.md"
   ]
 }
