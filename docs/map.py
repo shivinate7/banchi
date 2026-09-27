@@ -1456,7 +1456,26 @@ COMPONENTS = [
                                     "206 SKUs.",
                             "governed_by": ["D7", "D9", "D49", "D59", "D86", "D87", "D99", "D115", "D156"],
                             "tested_by": ["T7"]},
-            "selection.py": {"does": "WHICH CARDS A PRESS IS OVER — one object, read by the "
+            "stockimages.py": {"does": "`(game, set_name, number) -> a hotlinked stock photo "
+                                       "URL, or None` (D-stock-images). Riftbound and One "
+                                       "Piece resolve through `pricehistory.py:Market`'s own "
+                                       "tcgcsv walk, a second small index over `imageUrl` "
+                                       "because `ProductIndex` does not carry it. Pokemon "
+                                       "resolves through the vendored `vendor/"
+                                       "pokemon-tcg-data/` tree (D15), never the live "
+                                       "`api.pokemontcg.io` — that API answered HTTP 500/502 "
+                                       "on the day this was measured, and the vendored tree "
+                                       "already carries the same CDN URLs with no network "
+                                       "call. `server/pipeline_routes.py:STOCK_IMAGES` is the "
+                                       "one process-lifetime instance; `do_pipeline_sets` and "
+                                       "`do_pipeline_worklist` take it as an optional "
+                                       "parameter, `None` by default, so no harness test "
+                                       "opens a socket. Never raises: a join miss or an "
+                                       "unreachable catalogue both answer `None`.",
+                               "governed_by": ["D-stock-images", "D8", "D15", "D25", "D35",
+                                               "D49", "D62", "D254"],
+                               "tested_by": []},
+            "selection.py": {"does": "WHICH CARDS A PRESS IS OVER — one object, read by the"
                                      "wire and the CLI alike, and the drawer is a TERM in it "
                                      "rather than the unit of work. Terms: paths, state, box[], "
                                      "bid[], section, game, since, keys[], run. Every one "
@@ -5554,7 +5573,7 @@ COMPONENTS = [
                                 "D145", "D147", "D156", "D159", "D163", "D165", "D166", "D168",
                                 "D170", "D172", "D174", "D180", "D188", "D189", "D196", "D212",
                                 "D216", "D219", "D225", "D227", "D236", "D258", "D273", "D277",
-                                "D291", "D-set-view"],
+                                "D291", "D-set-view", "D-stock-images"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -6513,7 +6532,8 @@ COMPONENTS = [
                                              "D134", "D142", "D145", "D147", "D156", "D159", "D165",
                                              "D166", "D168", "D172", "D174", "D180", "D183", "D193",
                                              "D196", "D212", "D213", "D225", "D227", "D236", "D252",
-                                             "D264", "D265", "D273", "D-sealed-boxes-removed"]},
+                                             "D264", "D265", "D273", "D-sealed-boxes-removed",
+                                             "D-stock-images"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -7075,7 +7095,7 @@ COMPONENTS = [
                         "a push (D201). Kit primitives only: Section, .bn-list/.bn-list-row, "
                         "EmptyState/Notice/Loading for the three states a fetch can be in.",
                 "governed_by": ["D31", "D67", "D172", "D196", "D201", "D258", "D264", "D285",
-                                "D-set-view"],
+                                "D-set-view", "D-stock-images"],
             },
             "src/InventorySets.css": {
                 "does": "layout for the set view's rows — the card number column, the "
@@ -7682,7 +7702,7 @@ COMPONENTS = [
                                                 "D115", "D117", "D118", "D125", "D137", "D156",
                                                 "D159", "D168", "D172", "D181", "D196", "D208",
                                                 "D210", "D218", "D221", "D267", "D269", "D273",
-                                                "D277", "D278", "D285"]},
+                                                "D277", "D278", "D285", "D-stock-images"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, a kit Sheet off #/pricing's header (D168). The owner's own "
                                             "ask: typed prices go stale and there was no way to clear many at once. IT IS A "
                                             "PRESS AND NOT A POLICY: nothing here runs on a clock. The scope is the "
@@ -9353,7 +9373,8 @@ COMPONENTS = [
                                                       "D62", "D68", "D78", "D79", "D85", "D86",
                                                       "D92", "D98", "D99", "D103", "D115", "D117",
                                                       "D118", "D156", "D168", "D181", "D196",
-                                                      "D208", "D218", "D269", "D273", "D277", "D278"]},
+                                                      "D208", "D218", "D269", "D273", "D277", "D278",
+                                                      "D-stock-images"]},
             "tests/boxmap.spec.ts": {
                 "does": "the Shelf (`D264`), stubbed: the map draws counts and no money, a "
                         "gap press sends the section, the gap and the aim, U sends the undo, the "
@@ -9531,7 +9552,7 @@ COMPONENTS = [
                         "Like its siblings it is NOT a harness test: it starts a browser, so "
                         "it runs under `make design-check` and is deliberately off the commit "
                         "path.",
-                "governed_by": ["D172", "D201", "D264", "D285", "D-set-view"],
+                "governed_by": ["D172", "D201", "D264", "D285", "D-set-view", "D-stock-images"],
             },
             "tests/correct-answer.spec.ts": {
                 "does": "`CardHero.tsx:ListingCorrection` is reachable on `#/inventory` for a "

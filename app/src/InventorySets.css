@@ -7,6 +7,15 @@
   justify-content: flex-start;
   cursor: pointer;
 }
+.sets-card-img {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 44px;
+  border-radius: var(--bn-r-sm);
+  object-fit: cover;
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+  background: var(--bn-surface-2);
+}
 .sets-card-number {
   flex: 0 0 auto;
   min-width: 4.5em;

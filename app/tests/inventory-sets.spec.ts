@@ -25,6 +25,14 @@ type SetCard = {
   name: string | null
   number_display: string | null
   qty: number
+  image_url: string | null
+  printing: string | null
+}
+
+/** A `SetCard` with `image_url`/`printing` defaulted, so the cases above this one — written
+ *  before `D-stock-images` — keep reading exactly as they did. */
+function setCard(over: Partial<SetCard> & Pick<SetCard, 'sku' | 'cid' | 'box' | 'name' | 'number_display' | 'qty'>): SetCard {
+  return { image_url: null, printing: null, ...over }
 }
 
 /** The whole `GET /pipeline/sets` shape, one group out of natural-sort order on purpose in
@@ -40,25 +48,25 @@ const SETS_PAYLOAD = {
       game: 'pokemon',
       set_name: 'ME01: Mega Evolution',
       cards: [
-        { sku: '8937200', cid: 'cid-charmander', box: 2, name: 'Charmander', number_display: '004/132', qty: 2 },
-        { sku: '8937370', cid: 'cid-thievul', box: 2, name: 'Thievul', number_display: '090/132', qty: 1 },
-      ] as SetCard[],
+        setCard({ sku: '8937200', cid: 'cid-charmander', box: 2, name: 'Charmander', number_display: '004/132', qty: 2 }),
+        setCard({ sku: '8937370', cid: 'cid-thievul', box: 2, name: 'Thievul', number_display: '090/132', qty: 1 }),
+      ],
     },
     {
       game: 'riftbound',
       set_name: 'Origins',
       cards: [
-        { sku: '8811100', cid: 'cid-darius', box: 5, name: 'Darius, Blade of Origin', number_display: '001/298', qty: 3 },
+        setCard({ sku: '8811100', cid: 'cid-darius', box: 5, name: 'Darius, Blade of Origin', number_display: '001/298', qty: 3 }),
         // A REAL ROW WITH NO BOX (D-set-view): a record whose position will not coerce.
         // `box=<n>&card=<cid>` cannot aim the walk at it, so a tap here falls back to the
         // OTHER existing deep link, `?q=<name>`.
-        { sku: '8811101', cid: 'cid-unplaced', box: null, name: 'Unplaced Card', number_display: '005/298', qty: 1 },
-      ] as SetCard[],
+        setCard({ sku: '8811101', cid: 'cid-unplaced', box: null, name: 'Unplaced Card', number_display: '005/298', qty: 1 }),
+      ],
     },
   ],
   no_set: [
-    { sku: null, cid: 'cid-blank', box: 2, name: null, number_display: null, qty: 1 },
-  ] as SetCard[],
+    setCard({ sku: null, cid: 'cid-blank', box: 2, name: null, number_display: null, qty: 1 }),
+  ],
 }
 
 /** A minimal `InventoryCard`, close kin to `shell.ts`'s own private `card()` but carrying
@@ -160,6 +168,66 @@ test.describe('the set view', () => {
     await expect(noSet).toContainText('No set on file')
     await expect(noSet.locator('.sets-card-row')).toHaveCount(1)
     await expect(noSet).toContainText('Not identified yet')
+  })
+
+  test('the stock image is the main view, and two variants sharing one keep their own label', async ({ page }) => {
+    // `D-stock-images`: several SKUs (a foil and a normal printing) may resolve to the SAME
+    // photo — the owner's own addition, mid-build — and this asserts the two rows stay
+    // distinguishable by `printing` while sharing that one `image_url`. Removing the `<img>`
+    // (or the `printing` pill) from `InventorySets.tsx` turns this red.
+    const STOCK_URL = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
+    // THE BROWSER MUST NEVER REACH TCGCSV OR ANY OTHER OUTSIDE HOST — `sealEveryTest`'s own
+    // `sealOutside` refuses every request that is not this checkout's two ports, so the
+    // fixture's own `image_url` is answered from a route stub.
+    await page.route(STOCK_URL, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'image/svg+xml',
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>',
+      }),
+    )
+    await page.route(/\/pipeline\/sets$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          at: '2026-09-26T00:00:00+00:00',
+          groups: [
+            {
+              game: 'riftbound',
+              set_name: 'Vendetta',
+              cards: [
+                setCard({
+                  sku: '705996-normal', cid: 'cid-ahri-normal', box: 5, name: 'Ahri, Inquisitive',
+                  number_display: 'SP3/006', qty: 1, image_url: STOCK_URL, printing: null,
+                }),
+                setCard({
+                  sku: '705996-foil', cid: 'cid-ahri-foil', box: 5, name: 'Ahri, Inquisitive',
+                  number_display: 'SP3/006', qty: 1, image_url: STOCK_URL, printing: 'Foil',
+                }),
+              ],
+            },
+          ],
+          no_set: [],
+        }),
+      }),
+    )
+    await page.goto(VIEW_ROUTE)
+
+    const rows = page.locator('.sets-card-row')
+    await expect(rows).toHaveCount(2)
+    // BOTH ROWS DRAW THE SAME PHOTO — never merged or deduped into one row.
+    await expect(rows.nth(0).locator('.sets-card-img')).toHaveAttribute('src', STOCK_URL)
+    await expect(rows.nth(1).locator('.sets-card-img')).toHaveAttribute('src', STOCK_URL)
+    // AND EACH KEEPS ITS OWN LABEL — the normal print names none, the foil says so.
+    await expect(rows.nth(0)).not.toContainText('Foil')
+    await expect(rows.nth(1)).toContainText('Foil')
+  })
+
+  test('a join miss draws no image, never a guess', async ({ page }) => {
+    await page.goto(VIEW_ROUTE)
+    // Every row in the default fixture carries `image_url: null` (`setCard`'s own default).
+    await expect(page.locator('.sets-card-img')).toHaveCount(0)
   })
 
   test('an empty store draws the empty state, not a blank page', async ({ page }) => {

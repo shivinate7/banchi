@@ -138,6 +138,7 @@ function sku(over: Partial<PricingSku> = {}): PricingSku {
     condition: 'Near Mint Holofoil',
     set_name: 'SV: Prismatic Evolutions',
     name: 'Articuno - 161/159',
+    image_url: null,
     snap: {
       market: '22.03',
       direct_low: null,
@@ -1051,6 +1052,45 @@ test('an unknown card count is still warned about, and a known zero is not', asy
 })
 
 // -------------------------------------------------- the suggestion writes nothing
+
+// -------------------------------------------------- the stock image (`D-stock-images`)
+
+test('the stock image is the main view, and two SKUs sharing one keep their own condition label', async ({ page }) => {
+  // The owner's own addition, mid-build: several SKUs (a foil and a normal printing) may
+  // resolve to the SAME `image_url`. This never merges the two rows, and each keeps its own
+  // `condition` label. Removing the `<img>` from `Pricing.tsx:PricingThumb`, or the fallback
+  // to `condition`, turns this red.
+  const STOCK_URL = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
+  // THE BROWSER MUST NEVER REACH TCGCSV OR ANY OTHER OUTSIDE HOST — `sealEveryTest`'s own
+  // `sealOutside` refuses every request that is not this checkout's two ports, so the
+  // fixture's own `image_url` is answered from a route stub, exactly like `/photo/` above.
+  await page.route(STOCK_URL, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>',
+    }),
+  )
+  const normal = sku({ sku: '8608859', image_url: STOCK_URL, condition: 'Near Mint' })
+  const foil = sku({ sku: '8608860', image_url: STOCK_URL, condition: 'Near Mint Holofoil' })
+  await open(page, { skus: [normal, foil] })
+
+  const rows = page.locator('.pricing-row')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0).locator('.pricing-thumb img.pricing-stock-img')).toHaveAttribute('src', STOCK_URL)
+  await expect(rows.nth(1).locator('.pricing-thumb img.pricing-stock-img')).toHaveAttribute('src', STOCK_URL)
+  await expect(rows.nth(0).locator('.pricing-cond')).toHaveText('Near Mint')
+  await expect(rows.nth(1).locator('.pricing-cond')).toHaveText('Near Mint Holofoil')
+})
+
+test('a join miss falls back to the owner\'s own photograph, never a broken-image icon', async ({ page }) => {
+  await open(page, { skus: [sku({ image_url: null })] })
+  await expect(page.locator('.pricing-thumb img.pricing-stock-img')).toHaveCount(0)
+  // `sku()`'s own fixture carries a position, so the fallback is the cropped photograph —
+  // `PricingThumb`'s existing `.bn-crop` <img>, not the icon (that draws only with no
+  // position at all).
+  await expect(page.locator('.pricing-thumb img.bn-crop')).toHaveCount(1)
+})
 
 test('a suggested row carries the rule price and writes no key at all', async ({ page }) => {
   const wire = await open(page)
