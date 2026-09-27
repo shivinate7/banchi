@@ -818,6 +818,96 @@ export function Segmented<T extends string>({
   )
 }
 
+/* ---- SectionPicker ------------------------------------------------------------------------- */
+/** One item of a box's `sections_detail`, the part `SectionPicker` needs. */
+export type SectionPickerOption = {
+  readonly div: string
+  readonly section: number
+  readonly name: string | null
+  readonly count: number
+}
+
+/**
+ * A box has no auto default (D-sections-are-sub-boxes, the owner's ruling: "i need to
+ * specify where it goes there no auto default"). Every Move-to-box path shows this list once
+ * a destination box is chosen — a box with one section still shows its single choice, so the
+ * owner confirms it rather than a screen deciding quietly. `value` is a divider key
+ * (`sections_detail[].div`), never an index or an ordinal — the same key a capture, an S, a
+ * U and a Move-to-box all aim with (`docs/specs/subbox-capture.md` 1). The first row is
+ * tagged "back" and the last "front" (D260: card 1 sits at the far back).
+ */
+export function SectionPicker({
+  sections,
+  value,
+  onChange,
+  label = 'Section',
+}: {
+  readonly sections: readonly SectionPickerOption[]
+  readonly value: string | null
+  readonly onChange: (div: string) => void
+  readonly label?: string
+}) {
+  /* F7 — A REAL RADIO GROUP, THE ARIA ROVING-TABINDEX PATTERN: one Tab stop for the whole
+   * group, and the arrow keys both move focus and pick (the native behaviour a real
+   * `<input type="radio">` group already has). Only the checked row is a Tab stop; with
+   * nothing checked yet, the first row is, so a first Tab always lands somewhere real. */
+  const refs = useRef<Array<HTMLButtonElement | null>>([])
+  const checkedIndex = sections.findIndex((option) => option.div === value)
+  const tabbableIndex = checkedIndex >= 0 ? checkedIndex : 0
+  const focusAndPick = (index: number) => {
+    const at = sections[index]
+    if (at === undefined) return
+    refs.current[index]?.focus()
+    onChange(at.div)
+  }
+  return (
+    <div className="bn-section-pick" role="radiogroup" aria-label={label}>
+      {sections.map((option, i) => (
+        <button
+          key={option.div}
+          ref={(el) => {
+            refs.current[i] = el
+          }}
+          type="button"
+          role="radio"
+          aria-checked={option.div === value}
+          tabIndex={i === tabbableIndex ? 0 : -1}
+          className="bn-section-pick-item"
+          onClick={() => onChange(option.div)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+              event.preventDefault()
+              focusAndPick((i + 1) % sections.length)
+            } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+              event.preventDefault()
+              focusAndPick((i - 1 + sections.length) % sections.length)
+            } else if (event.key === 'Home') {
+              event.preventDefault()
+              focusAndPick(0)
+            } else if (event.key === 'End') {
+              event.preventDefault()
+              focusAndPick(sections.length - 1)
+            }
+          }}
+        >
+          <span className="bn-section-pick-main">
+            <span className="bn-section-pick-num">Section {option.section}</span>
+            {option.name ? <span className="bn-section-pick-name">{option.name}</span> : null}
+          </span>
+          <span className="bn-section-pick-meta">
+            {/* F4 — A BOX OF ONE SECTION NAMES NO EDGE: "back" and "front" (D260) distinguish
+                one section from another, and there is nothing to distinguish it from. */}
+            {sections.length > 1 && i === 0 ? <span className="bn-section-pick-tag">back</span> : null}
+            {sections.length > 1 && i === sections.length - 1 ? <span className="bn-section-pick-tag">front</span> : null}
+            <span className="bn-section-pick-count">{option.count === 1 ? '1 card' : `${option.count} cards`}</span>
+          </span>
+          {option.div === value ? <Icon name="check" size={16} /> : <span className="bn-section-pick-spacer" />}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /* ---- Stat ------------------------------------------------------------------------------------ */
 export function Stat({
   value,

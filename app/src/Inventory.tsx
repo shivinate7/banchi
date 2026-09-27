@@ -11,7 +11,7 @@ import type {
   SearchGroup,
   SectionDetail,
 } from './types'
-import type { Failure } from './server'
+import type { Failure, MoveSection } from './server'
 import {
   ServerError,
   describeFailure,
@@ -44,6 +44,7 @@ import {
   Page,
   Pill,
   Select,
+  SectionPicker,
   UNDO_KEY_LABEL,
   boxesMostRecentFirst,
   useUndoHotkey,
@@ -88,6 +89,7 @@ const ALREADY_SOLD = 'already_sold'
 const NOT_SOLD = 'not_sold'
 const ALREADY_RETIRED = 'already_retired'
 const NOT_RETIRED = 'not_retired'
+/* UN-14: "already undone" for a move, the same shape `not_sold`/`not_retired` answer. */
 const NOT_MOVED = 'not_moved'
 
 const NO_LAYOUTS: ReadonlyMap<number, readonly SectionDetail[]> = new Map()
@@ -333,6 +335,13 @@ function InventoryWalk({
   const [retiring, setRetiring] = useState<SearchCopy | null>(null)
   /* The copy waiting on the move panel, or null (UX-244). */
   const [moving, setMoving] = useState<SearchCopy | null>(null)
+  /* A stale-section refusal's own sentence — `section_gone` or `section_required`
+   * (D-sections-are-sub-boxes) — kept on the dialog rather than tossed as a toast, so the
+   * owner re-picks in place. Cleared whenever the panel opens or closes. */
+  const [moveRefused, setMoveRefused] = useState<string | null>(null)
+  /* F2 — the server's own words, behind "What the server said" rather than the sentence
+   * above, which never names a divider key (D196). */
+  const [moveTrouble, setMoveTrouble] = useState<Failure | null>(null)
 
   /* One write in flight at a time, by copy key. */
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -532,20 +541,29 @@ function InventoryWalk({
    * into the SAME receipt list, so `U` and the toast's own Undo reach whichever write, sale,
    * retirement or move, was pressed last. `undoMove` is aimed at the TOMBSTONE (the source
    * `box`/`index` this call sent), never the new one — the card comes back to its own index,
-   * and nothing else in either box moves. */
+   * and nothing else in either box moves.
+   *
+   * THE OWNER'S RULING, NO AUTO DEFAULT (D-sections-are-sub-boxes): the section is the
+   * caller's own pick, never omitted. A stale pick — the section closed, filled, or the
+   * server refusing an old caller's silence outright with `section_required` — is not a
+   * generic failure: the dialog stays open, on the same box, with one plain sentence and a
+   * fresh section list rather than a toast the owner has to reopen the whole flow to answer. */
   const doMove = useCallback(
-    async (copy: SearchCopy, toBox: number) => {
+    async (copy: SearchCopy, toBox: number, section: MoveSection, sectionLabel: string) => {
       if (busyKey !== null) return
       setBusyKey(copy.key)
       const seat = { key: copy.key, box: copy.place.box, index: copy.place.index }
+      setMoveRefused(null)
+      setMoveTrouble(null)
       try {
-        const result = await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox)
+        const result = await moveCard(copy.place.box, copy.place.index, copy.capture_id, toBox, section)
         setMoving(null)
         holdRank(copy.key)
         const where = boxRecords.find((record) => record.box === toBox)?.name ?? UNNAMED_BOX
+        const landed = result.card.place?.label ?? null
         remember({
           ...seat,
-          place: sayPlace(copy.place.label ?? copy.key),
+          place: sayPlace(landed ?? copy.place.label ?? copy.key),
           kind: 'move',
           said: `Moved to ${where}`,
           canUndo: true,
@@ -554,6 +572,21 @@ function InventoryWalk({
         })
         setReloads((n) => n + 1)
       } catch (err) {
+        const code = refusalCode(err)
+        if (code === 'section_gone' || code === 'section_required' || code === 'layout_token_required') {
+          /* F2 — THE SENTENCE NAMES WHAT THE OWNER SAW, NEVER A DIVIDER KEY (D196). The
+           * server's own words go behind "What the server said" instead. `layout_token_required`
+           * should never fire from this screen (the token always rides beside `section`), but
+           * it gets the same re-read rather than a bare toast if a race ever produces it. */
+          setMoveRefused(
+            code === 'section_gone'
+              ? `${sectionLabel} is gone. Read the box again and choose a section.`
+              : 'Choose a section — there is no default place inside the box.',
+          )
+          setMoveTrouble(describeFailure(err))
+          setReloads((n) => n + 1)
+          return
+        }
         report(describeFailure(err))
       } finally {
         setBusyKey(null)
@@ -572,10 +605,18 @@ function InventoryWalk({
        * — the copy's place from BEFORE the original move — names the wrong shelf once this
        * runs. `result.card.label` is the server's own answer to the move-back itself. */
       let movedBackTo: string | null = null
+      /* N2 — THE TOAST NAMES WHERE THE CARD LANDED BACK, NEVER WHERE IT HAD GONE.
+       * `receipt.place` is the destination `doMove` recorded when it moved OUT — reusing it
+       * here would say "Moved to ME01 spares" a second time about a press that undid exactly
+       * that. Only the move undo's own response carries the restored place. */
+      let restoredPlace: string | null = null
       try {
         if (receipt.kind === 'sale') await undoSale(receipt.box, receipt.index)
         else if (receipt.kind === 'retirement') await undoRetire(receipt.box, receipt.index)
-        else await undoMove(receipt.box, receipt.index)
+        else {
+          const result = await undoMove(receipt.box, receipt.index)
+          restoredPlace = result.card.place?.label ?? null
+        }
       } catch (err) {
         /* `not_sold` / `not_retired` / `not_moved` is success — the copy is not in the state
          * the press asked to leave. Anything else keeps the receipt standing, EXCEPT
@@ -630,7 +671,11 @@ function InventoryWalk({
             : receipt.kind === 'retirement'
               ? 'Retirement undone'
               : 'Move undone',
-        body: movedBack ? (movedBackTo ?? receipt.place) : receipt.place,
+        body: movedBack
+          ? (movedBackTo ?? receipt.place)
+          : receipt.kind === 'move'
+            ? sayPlace(restoredPlace ?? receipt.place)
+            : receipt.place,
         ttlMs: 4000,
       })
       setReloads((n) => n + 1)
@@ -695,6 +740,11 @@ function InventoryWalk({
     setRetiring(copy)
   }, [])
 
+  const openMove = useCallback((copy: SearchCopy) => {
+    setMoveRefused(null)
+    setMoving(copy)
+  }, [])
+
   const actionFor = (copy: SearchCopy, primary: boolean): ReactNode => (
     <Action
       copy={copy}
@@ -707,7 +757,7 @@ function InventoryWalk({
       onSell={sell}
       onUndo={undo}
       onRetire={openRetire}
-      onMove={setMoving}
+      onMove={openMove}
     />
   )
 
@@ -776,8 +826,14 @@ function InventoryWalk({
           copy={moving}
           boxes={boxRecords}
           busy={busyKey !== null}
-          onMove={(toBox) => void doMove(moving, toBox)}
-          onCancel={() => setMoving(null)}
+          refused={moveRefused}
+          refusedDetail={moveTrouble}
+          onMove={(toBox, section, sectionLabel) => void doMove(moving, toBox, section, sectionLabel)}
+          onCancel={() => {
+            setMoving(null)
+            setMoveRefused(null)
+            setMoveTrouble(null)
+          }}
         />
       )}
     </Page>
@@ -1109,36 +1165,76 @@ function Action({
   )
 }
 
-/* THE MOVE PANEL (UX-244, D83): one copy, one destination, one press. The other boxes by name,
- * most recent first as everywhere (the owner's box-order ruling). */
+/* THE MOVE PANEL (UX-244, D83, amended by D-sections-are-sub-boxes): one copy, one
+ * destination box, one destination SECTION, one press. NO AUTO DEFAULT — the owner's own
+ * ruling, "i need to specify where it goes there no auto default" — so Move stays disabled
+ * until both are picked, and picking a new box clears whatever section was picked for the
+ * last one. The other boxes are named most recent first, the same primitive the rail sorts
+ * by. */
 function MovePanel({
   copy,
   boxes,
   busy,
+  refused,
+  refusedDetail,
   onMove,
   onCancel,
 }: {
   copy: SearchCopy
   boxes: readonly BoxRecord[]
   busy: boolean
-  onMove: (toBox: number) => void
+  /** A stale-section refusal's plain sentence (`section_gone`, `section_required`), or null. */
+  refused: string | null
+  /** F2 — the server's own words, behind "What the server said" rather than in the sentence
+   *  above (D196: no divider key on screen). */
+  refusedDetail: Failure | null
+  onMove: (toBox: number, section: MoveSection, sectionLabel: string) => void
   onCancel: () => void
 }) {
   const [to, setTo] = useState<string | null>(null)
+  const [section, setSection] = useState<string | null>(null)
   /* S4: MOST RECENT FIRST, the same primitive the rail sorts by — `others` used to be the
      server's own `GET /boxes` order (box number), which said nothing about which box the hand
      was likeliest to reach for. */
   const others = boxesMostRecentFirst(
     boxes.filter((record) => record.box !== copy.place.box),
   )
+  const target = to === null ? null : (others.find((record) => String(record.box) === to) ?? null)
+  const targetSections = (target?.sections_detail ?? []).filter(
+    (detail): detail is SectionDetail & { div: string } => typeof detail.div === 'string',
+  )
+  const pickedSection = section === null ? null : (targetSections.find((detail) => detail.div === section) ?? null)
+  /* The box's own layout token (`docs/specs/subbox-capture.md` 1.1, 1.5): required beside
+   * `section` on every Move-to-box. Absent from an older server, same as `div`. */
+  const layoutToken = target?.layout_token ?? null
+  /* (a) THE ENABLEMENT NEVER TRUSTS A BARE non-null `section`: a box's own sections can
+   * change under an open dialog (another device's S or U, or this box's own stale-section
+   * retry), and a picker that keeps its LAST div after the list moved on draws no row
+   * checked while the state is still non-null. Move must read as disabled exactly when
+   * nothing is visibly checked, and never without the token the write now requires. */
+  const sectionStillThere = pickedSection !== null && layoutToken !== null
+  /* N1 — A STALE-SECTION REFUSAL CLEARS THE PICK ONCE, ON ITS OWN ARRIVAL, NEVER ON EVERY
+   * RENDER WHILE ITS SENTENCE STAYS ON SCREEN. `refusedDetail` is a fresh object each real
+   * failure (`describeFailure(err)`), so this fires exactly once per refusal — keying it on
+   * `refused` (a plain string the owner's own next pick never changes) kept re-firing on
+   * the SAME dependency value and wiping every re-pick the instant it landed, because the
+   * OR below never itself went false while the sentence stood. */
+  useEffect(() => {
+    if (refusedDetail !== null) setSection((held) => (held === null ? held : null))
+  }, [refusedDetail])
+  /* (a) THE SECOND, INDEPENDENT NET: a pick can also go stale with no refusal at all, from
+   * an ambient `boxes` refresh while the dialog sat open (another device's S or U). */
+  useEffect(() => {
+    if (!sectionStillThere) setSection((held) => (held === null ? held : null))
+  }, [sectionStillThere])
   return (
     <Overlay kind="dialog" label={`Move: ${sayPlace(copy.place.label ?? copy.key)}`} onClose={onCancel} className="inventory-confirm">
       <div className="inv-dialog-head">
         <span className="bn-eyebrow">Move</span>
-        <h2 className="inv-dialog-title">Which box does this copy go to?</h2>
+        <h2 className="inv-dialog-title">Which box, and which section, does this copy go to?</h2>
       </div>
       <div className="inv-dialog-body">
-        <p className="bn-muted">It goes to the front of that box. No other card changes box.</p>
+        <p className="bn-muted">It goes to the end of the section you pick. No other card changes box.</p>
         {others.length === 0 ? (
           <Notice tone="info" title="There is no other open box." />
         ) : (
@@ -1147,15 +1243,36 @@ function MovePanel({
             value={to}
             placeholder="Choose a box"
             options={others.map((record) => ({ value: String(record.box), label: record.name ?? UNNAMED_BOX }))}
-            onChange={setTo}
+            onChange={(next) => {
+              setTo(next)
+              setSection(null)
+            }}
           />
+        )}
+        {target === null ? null : targetSections.length === 0 || layoutToken === null ? (
+          <Notice tone="warn" title="Its sections could not be drawn. Read the box again and choose a section." />
+        ) : (
+          <SectionPicker sections={targetSections} value={section} onChange={setSection} />
+        )}
+        {refused === null ? null : (
+          <Notice tone="warn" title={refused} detail={refusedDetail?.message} code={refusedDetail?.code} />
         )}
       </div>
       <div className="inv-dialog-foot">
         <Button variant="ghost" onClick={onCancel} data-autofocus="">
           Cancel
         </Button>
-        <Button variant="primary" icon="package" busy={busy} disabled={to === null} onClick={() => to !== null && onMove(Number(to))}>
+        <Button
+          variant="primary"
+          icon="package"
+          busy={busy}
+          disabled={to === null || !sectionStillThere}
+          onClick={() => {
+            if (to === null || pickedSection === null || layoutToken === null) return
+            const label = `Section ${pickedSection.section}${pickedSection.name ? ` (${pickedSection.name})` : ''}`
+            onMove(Number(to), { div: pickedSection.div, layoutToken }, label)
+          }}
+        >
           Move
         </Button>
       </div>

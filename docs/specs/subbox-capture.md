@@ -474,4 +474,62 @@ Measured 2026-09-26 on a `.backup` copy of the owner's store, never the live one
 |---|---|---|
 | A | `store/master.py`, `server/capture_server.py`, `harness/tests/t7_box_map.py`, the decision entry and the amendments to D10, D265, capture-app.md 5.6 and undo.md 11.1 | BUILT |
 | B | `CaptureScreen.tsx`, `deviceMemory.ts`, `server.ts`, `types.ts`, `App.tsx` `CAPTURE_KEYS`, `demoServer.ts`, the capture specs | BUILT on `ux/subbox-capture` |
-| C | The Move-to-box section choice on `#/inventory` | NOT BUILT |
+| C | The Move-to-box section choice on `#/inventory` | BUILT |
+
+## 11. Lane C — the Move-to-box section choice, built
+
+Every path on `#/inventory` that moves a card into a box, with no exact drop spot, now asks
+the owner to pick a destination section. This is Q3's ruling: no default. The two Move-to-box
+routes (1.5) are the whole surface. `Inventory.tsx`'s `MovePanel` moves one copy, from its
+own row. `BoxOps.tsx`'s "Move to box" moves a ticked selection, or the whole box — D83's
+range move and the merge are the same one write. The Map's own drag
+(`moveSections`/`moveRange`, `POST /boxes/<box>/sections/move` and `/boxes/<box>/cards/move`)
+is untouched. It already names an exact gap and was never in scope.
+
+- **The picker.** `kit/index.tsx:SectionPicker` is one new kit primitive
+  (`.bn-section-pick` in `kit.css`). Both screens reuse it. It reads a box's own
+  `sections_detail` (typed with `div?: string | null` in `types.ts`, matching 1.1). Each row shows
+  a section's number, name and count. The first row says "back" and the last says "front"
+  (D260). A picked row gets a check mark. A box with one section still shows that one row,
+  so the owner presses it. No code path treats "the only choice" as a default.
+- **No default, enforced on the screen.** Both dialogs' Move press stays disabled until a
+  box AND a section are picked. `server.ts:moveCard` and `moveCards` both take an optional
+  `MoveSection` (a divider key AND the destination box's own `layout_token`, always sent
+  together — 1.5's own airtight-key argument). The disabled check reads whether the picked
+  div is still a real row in the box's CURRENT `sections_detail`. It never trusts a bare
+  non-null flag. A box that changes under an open dialog cannot leave Move enabled with
+  nothing checked.
+- **A stale section re-opens the pick.** `section_gone` (409), `section_required` (400) and
+  `layout_token_required` (400) are handled the same way. The dialog stays open. The
+  server's own sentence shows in place, behind "What the server said" (D196). The section
+  pick clears. The box stays chosen. Neither closes the dialog into a toast the owner has to
+  reopen the whole flow to answer.
+- **The receipt and the undo.** A single-card move's toast reads the destination's own
+  `place.label` off the response (`MoveResult.card`). That field already composes
+  "Section N" — the one renderer every screen uses, never composed twice. `moveCards`'s
+  batched response carries no per-card place. `BoxOps.tsx` names the section from the pick
+  it sent instead, the one fact the batch is guaranteed to have landed at. The underlying
+  move's own undo (`{"undo": true}` on the tombstone, UN-14) ignores `section` — it returns
+  to the source index, not to a section. **UN-14's screen half was missing, and this round
+  built it**: no route on this branch or on main ever called `undoMove` before. The
+  single-card move's receipt now carries Undo (`docs/specs/undo.md` §11.3, its own note).
+  `BoxOps.tsx`'s batched move has no undo, and UN-14 never asked for one.
+- **The demo.** Neither Move-to-box route was ever matched in `demoServer.ts`'s routing
+  table. Both already fell through to `demo_read_only`. Move already refused in the demo's
+  own way, so no change was needed there. Reviewed against a fresh `make demo` build
+  (2026-09-26): the recorded `GET /boxes` carries `div` for every section, because
+  `make demo-record` runs the live server code, never a frozen fixture. The demo picker
+  draws real sections. Pressing Move answers "Not in this demo." The earlier sentence
+  here — that the fixture predates `div` — was wrong, and is corrected.
+- **Verified.** `cd app && npx tsc --noEmit` is clean. `make design-check
+  PW_ARGS="tests/inventory tests/boxmap"` passes: 162 of 164, 2 pre-existing skips, 0 failed.
+  Screenshots were taken by hand at 1440, 820 and 390, both themes. No horizontal scroll.
+  The Move button and every section row are full-width touch targets, well over 40px.
+  `boxmap.spec.ts`, the Map's own drag, stayed untouched and green. A D118 rect-diff
+  assertion covers picking a section: nothing outside the dialog moves.
+- **An observation, not a change requested.** A box with exactly one section still needs a
+  press to confirm it. The brief said to build it as stated, even where a single choice
+  might read as safe to default, and this stays true to Q3: "no auto default," full stop.
+  A one-section box can grow a second section at any time (an S). A screen that special-cased
+  "only one" would be the same silent default the ruling forbids, gated on a count that can
+  change under it.

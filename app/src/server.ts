@@ -1965,16 +1965,34 @@ export async function removeCardInPlace(
  * that, the fix is this same call again, aimed at the transplant, in the other direction.
  * It lands at a fresh index in the original box rather than reclaiming the tombstoned one.
  */
+/** A destination section for a Move-to-box (`docs/specs/subbox-capture.md` 1.5): the
+ *  divider key AND `toBox`'s own layout token from `GET /boxes`, always sent together — a
+ *  key alone can name the wrong section after a re-space, and the token is what tells an
+ *  old key from a new section reusing it. */
+export type MoveSection = { readonly div: string; readonly layoutToken: string }
+
+/**
+ * `section` is a destination-box divider key (`sections_detail[].div`,
+ * D-sections-are-sub-boxes): the card lands at that section's tail. The owner ruled "no
+ * auto default" — a screen never omits this field on a Move-to-box press. It stays
+ * optional here only so an older caller (and a Map drag, which names an exact gap through
+ * a different route entirely) keeps compiling.
+ */
 export async function moveCard(
   box: number,
   index: number,
   captureId: string | null,
   toBox: number,
+  section?: MoveSection,
 ): Promise<MoveResult> {
   return (await request(`/inventory/${box}/${index}/move`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ capture_id: captureId, to_box: toBox }),
+    body: JSON.stringify({
+      capture_id: captureId,
+      to_box: toBox,
+      ...(section === undefined ? {} : { section: section.div, layout_token: section.layoutToken }),
+    }),
   })) as MoveResult
 }
 
@@ -2012,15 +2030,22 @@ export async function undoMove(box: number, index: number): Promise<MoveUndoResu
  * rather than leaving it half migrated. Order is preserved at the destination: cards
  * arrive in the order their indices were sent, landing contiguously.
  */
+/** `section` — same rule as `moveCard`'s: a destination divider key, the owner's own pick,
+ *  no auto default. */
 export async function moveCards(
   box: number,
   indices: number[] | null,
   toBox: number,
+  section?: MoveSection,
 ): Promise<MoveCardsResult> {
   return (await request(`/inventory/${box}/move`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ indices, to_box: toBox }),
+    body: JSON.stringify({
+      indices,
+      to_box: toBox,
+      ...(section === undefined ? {} : { section: section.div, layout_token: section.layoutToken }),
+    }),
   })) as MoveCardsResult
 }
 
