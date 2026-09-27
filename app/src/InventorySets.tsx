@@ -43,19 +43,6 @@ function qtyOf(cards: readonly SetGroupCard[]): number {
   return cards.reduce((sum, card) => sum + card.qty, 0)
 }
 
-/* A catalogue set name sometimes carries its own code before a colon ("ME01: Mega
- * Evolution") — the SAME shape `pipeline/stockimages.py:_CODE_PREFIX` strips before its own
- * second lookup try. That resolver runs server-side, over the name it uses to find an
- * image; this is the same shape read for display, the one place this file needs it, so it
- * is not read twice — never sent over the wire stripped, because `do_pipeline_sets` ships
- * the catalogue's own name verbatim and a display-only trim is this screen's job. */
-const CODE_PREFIX = /^[^:]+:\s*/
-
-function stripSetCode(setName: string): string {
-  const stripped = setName.replace(CODE_PREFIX, '')
-  return stripped === '' ? setName : stripped
-}
-
 /** Walk to this card, the way Review's place pill already does — no new mechanism.
  *
  *  `box: null` IS A REAL ROW, not a fault: `do_pipeline_sets` still ships it (never a
@@ -114,14 +101,19 @@ function SetCardTile({ card, market }: { readonly card: SetGroupCard; readonly m
 /** One set the store holds a card of, plus the group's own cards — the picker's own list and
  *  the grid's own source, built once from `GET /pipeline/sets`' groups and its `no_set` list
  *  (a card with no set is a choice here too, never a silent drop, D196: the sentence is the
- *  client's own since the route composes no prose). */
+ *  client's own since the route composes no prose). `label` is the SERVER's own name
+ *  VERBATIM — `do_pipeline_sets` already resolves a community code prefix ("ME01: Mega
+ *  Evolution") against the vendored catalogue the same way the image join does, trying the
+ *  unstripped name first, so this file has no regex of its own to keep in step with it (the
+ *  review round, 2026-09-27: a client-side blind strip once turned a REAL colon-bearing set
+ *  name, "Celebrations: Classic Collection", into "Classic Collection"). */
 type SetOption = { readonly key: string; readonly game: string | null; readonly label: string; readonly count: number; readonly cards: readonly SetGroupCard[] }
 
 function setOptionsOf(groups: readonly SetGroup[], noSet: readonly SetGroupCard[]): SetOption[] {
   const options: SetOption[] = groups.map((group) => ({
     key: `${group.game ?? ''}:${group.set_name}`,
     game: group.game,
-    label: stripSetCode(group.set_name),
+    label: group.set_name,
     count: qtyOf(group.cards),
     cards: group.cards,
   }))

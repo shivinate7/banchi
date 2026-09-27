@@ -38504,7 +38504,15 @@ def check_stock_images(checks: Checks) -> None:
         sets_dir.mkdir(parents=True)
         cards_dir.mkdir(parents=True)
         (sets_dir / "en.json").write_text(
-            json.dumps([{"id": "me1", "name": "Mega Evolution"}]), "utf-8"
+            json.dumps([
+                {"id": "me1", "name": "Mega Evolution"},
+                # A REAL SET WHOSE OWN NAME CARRIES A COLON — the review round's own
+                # regression: a client-side `^[^:]+:\s*` strip, run unconditionally, turned
+                # this into "Classic Collection". The unstripped name must hit HERE, on the
+                # first try, before any stripping is ever considered.
+                {"id": "cel", "name": "Celebrations: Classic Collection"},
+            ]),
+            "utf-8",
         )
         (cards_dir / "me1.json").write_text(
             json.dumps([
@@ -38512,6 +38520,7 @@ def check_stock_images(checks: Checks) -> None:
             ]),
             "utf-8",
         )
+        (cards_dir / "cel.json").write_text(json.dumps([]), "utf-8")
         pokemon = stockimages._PokemonImages(root=vendor_root)
 
         # `SetGroupCard`/`PricingSku` both carry the store's OWN `set_name` cell, which for
@@ -38536,6 +38545,49 @@ def check_stock_images(checks: Checks) -> None:
             pokemon.url_for("ME99: No Such Set", "1"),
             None,
             "an unknown set, prefix stripped or not, is a miss and never raises",
+        )
+
+        # `display_name` — THE REVIEW ROUND'S FIX: `do_pipeline_sets` sends this, not the
+        # store's raw `set_name`, so the client carries no regex of its own to keep in step
+        # with the resolver's own two-try order.
+        checks.equal(
+            pokemon.display_name("ME01: Mega Evolution"),
+            "Mega Evolution",
+            "the code prefix is stripped for display too, resolved through the SAME "
+            "two-try lookup as the photo — not a second, independent regex",
+        )
+        checks.equal(
+            pokemon.display_name("Mega Evolution"),
+            "Mega Evolution",
+            "a set_name with no prefix still resolves on its first try",
+        )
+        checks.equal(
+            pokemon.display_name("Celebrations: Classic Collection"),
+            "Celebrations: Classic Collection",
+            "THE REGRESSION THIS CASE GUARDS: a REAL set name that carries its own colon "
+            "must hit the catalogue UNSTRIPPED and come back whole — a blind "
+            "`^[^:]+:\\s*` strip run unconditionally on this string answers 'Classic "
+            "Collection' instead, which is exactly the defect a client-side copy of the "
+            "regex committed",
+        )
+        checks.equal(
+            pokemon.display_name("ME99: No Such Set"),
+            None,
+            "a join miss answers None, never a guess at a stripped name",
+        )
+
+        images_for_names = stockimages.StockImages(pokemon=pokemon)
+        checks.equal(
+            images_for_names.display_name("pokemon", "ME01: Mega Evolution"),
+            "Mega Evolution",
+            "StockImages.display_name delegates to the Pokemon resolver",
+        )
+        checks.equal(
+            images_for_names.display_name("riftbound", "SFD: Spiritforged"),
+            None,
+            "NEVER FOR RIFTBOUND OR ONE PIECE — the community code-prefix convention this "
+            "exists to strip was measured on Pokemon rows alone; a non-Pokemon game answers "
+            "None so the caller keeps the store's own name rather than guessing at one",
         )
 
     def make_fetcher():
@@ -38620,6 +38672,48 @@ def check_stock_images(checks: Checks) -> None:
         threaded_row["image_url"],
         "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
         "a resolver handed in, and the warmed cache answers it, threaded onto the row",
+    )
+
+    # THE DISPLAY-NAME FIX, END TO END, THROUGH `do_pipeline_sets` ITSELF (the review round,
+    # 2026-09-27): a colon-bearing store `set_name` — one that IS a code prefix, and one that
+    # ISN'T — must come back through the route resolved the same way the image already is,
+    # never a client-side regex the caller has to keep in step with this route.
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="display-name box")
+            coded, _ = inventory.allocate_capture(1, cid=fake_cid("display-name-1"))
+            coded.sku = "8930001"
+            coded.name = "Charmander"
+            coded.number = "1"
+            coded.printed_total = "1"
+            coded.set_name = "ME01: Mega Evolution"
+            coded.game = "pokemon"
+            coded.state = master.IDENTIFIED
+            colon, _ = inventory.allocate_capture(1, cid=fake_cid("display-name-2"))
+            colon.sku = "8930002"
+            colon.name = "Pikachu"
+            colon.number = "1"
+            colon.printed_total = "1"
+            colon.set_name = "Celebrations: Classic Collection"
+            colon.game = "pokemon"
+            colon.state = master.IDENTIFIED
+
+        bare_names = pipeline_routes.do_pipeline_sets()
+        named = pipeline_routes.do_pipeline_sets(images=images)
+
+    checks.equal(
+        sorted(g["set_name"] for g in bare_names["groups"]),
+        ["Celebrations: Classic Collection", "ME01: Mega Evolution"],
+        "no resolver handed in, the store's own set_name ships verbatim, prefix and all",
+    )
+    checks.equal(
+        sorted(g["set_name"] for g in named["groups"]),
+        ["Celebrations: Classic Collection", "Mega Evolution"],
+        "A RESOLVER HANDED IN: the code prefix is gone from 'ME01: Mega Evolution', and "
+        "'Celebrations: Classic Collection' — a REAL colon, not a code — is untouched. "
+        "This is the exact regression a client-side blind strip committed: it would have "
+        "answered 'Classic Collection' here, which this line goes red on without the fix.",
     )
 
 
