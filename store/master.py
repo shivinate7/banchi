@@ -67,6 +67,7 @@ is rather than as coverage of everything below.
 from __future__ import annotations
 
 import bisect
+import hashlib
 
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
@@ -843,6 +844,16 @@ class SectionEmpty(ValueError):
     """
 
 
+class SectionGone(ValueError):
+    """A request named a section, by its divider key, that the box does not have now.
+
+    The capture screen, S with `after` and a Move-to-box all aim at a
+    section by its key (`docs/specs/subbox-capture.md` section 1). A key the box no longer
+    has means another write changed the box after the screen read it. Filing the card
+    anywhere else would be a silent misfile, so the request is refused and writes nothing.
+    """
+
+
 class DividerBuiltOn(ValueError):
     """`close_section` was asked to take out a divider that is no longer S's own to undo: it
     is not the box's last divider any more, or a card on hand stands behind it (UN-15)."""
@@ -905,6 +916,32 @@ def check_sections(sections) -> Tuple[int, ...]:
     if len(set(out)) != len(out):
         raise BadSections(f"{list(out)} repeats an index — two dividers in one slot")
     return out
+
+
+def layout_before_s(made: Optional[dict], layout, div) -> Optional[List]:
+    """The layout from before the S that added divider `div`, or None when `made` does not
+    prove that S wrote `layout`. THE ONE READER OF A `resectioned` LINE for the capture
+    screen's U (UN-15, and D-sections-are-sub-boxes' I9).
+
+    `made` is the box's newest `resectioned` event. It proves S added `div` when its
+    `sections_to` is `layout` and its `sections_from` is `layout` less `div`. S on an
+    undeclared box writes `[1, at]` from `[]`, so `[]` also counts where `layout` less `div`
+    is `[1]`, and the undo writes `[]` back. An event this cannot read proves nothing."""
+    if not isinstance(made, dict):
+        return None
+    try:
+        to = [float(v) for v in made.get("sections_to") or []]
+        was = [float(v) for v in made.get("sections_from") or []]
+    except (TypeError, ValueError):
+        return None
+    now = [float(v) for v in layout]
+    less = list(now)
+    if float(div) not in less or to != now:
+        return None
+    less.remove(float(div))
+    if was == less or (not was and less == [1.0]):
+        return [as_order(v) for v in was]
+    return None
 
 
 def divider_key(value) -> str:
@@ -1937,6 +1974,112 @@ class Inventory:
             return float(layout[-1])
         return key
 
+    # ---------------------------------------------- a section as a sub-box (subbox-capture)
+
+    def dividers_of(self, box) -> List[float]:
+        """The box's dividers as `layout_of` draws them, read off two indexed columns only.
+
+        The front is `front_of_box`'s: the stored first divider, lowered to the lowest card
+        key. A box with no declared dividers is one section, at 1 or at that lowest key.
+        No `Card` is built, because a capture calls this inside the store lock."""
+        lowest = min((float(k) for _, k in self.box_order(box).pairs), default=None)
+        return [float(d) for d in front_of_box(self.sections_for(box), lowest)]
+
+    def layout_token(self, box) -> str:
+        """A short hash of the box's divider keys, in order (`docs/specs/subbox-capture.md` 1).
+
+        THE OPUS REVIEW'S FIRST FINDING, 2026-09-26: a re-space gives every divider a new
+        key, and an old key can then equal another section's new key. So a key alone can
+        name the wrong section with no error. Every aim sends this token beside its key, and
+        `section_ordinal` refuses a token that is not the box's now. Two equal tokens mean two
+        equal divider lists, so a key names the same interval, and a re-space keeps each card
+        in its section."""
+        text = ",".join(divider_key(d) for d in self.dividers_of(box))
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+    def section_ordinal(self, box, div, token) -> int:
+        """The 1-based section whose divider key is `div`, or `SectionGone`.
+
+        `token` is the `layout_token` the screen read beside `div`. A different token, or no
+        token, is `SectionGone` before the key is read: the box changed after the screen
+        read it, and the key may now name another section.
+
+        `div` is the string `divider_key` writes, which `GET /boxes` sends as
+        `sections_detail[].div`. The stored first divider also names section 1, because
+        the front may be drawn lower than it is stored (`front_of_box`)."""
+        if token != self.layout_token(box):
+            raise SectionGone(
+                f"The sections of {self.box_title(box)} changed after the screen read them. "
+                f"Read the box again and choose a section."
+            )
+        try:
+            want = divider_key(div)
+        except (TypeError, ValueError):
+            raise SectionGone(f"{div!r} is not a divider key") from None
+        for n, d in enumerate(self.dividers_of(box), 1):
+            if divider_key(d) == want:
+                return n
+        stored = self.sections_for(box)
+        if stored and divider_key(stored[0]) == want:
+            return 1
+        raise SectionGone(
+            f"{self.box_title(box)} has no section at divider {want} now. Read the box again "
+            f"and choose a section."
+        )
+
+    def section_tail_key(self, box, div, token, count: int = 1) -> Tuple[List[float], int, bool]:
+        """The keys `count` cards filed at the tail of section `div` take, in order:
+        `(keys, ordinal, last)`. One read of the box for the whole batch (the review's fourth
+        finding): a whole-box move reads the tail once and steps each next key from the last.
+
+        THE OWNER'S RULING, 2026-09-26: a picked section fills "kinda like a subbox". The
+        card goes to the near end of its section, directly behind the next divider, and no
+        other card or divider is written.
+
+        - The last section: `next_key`, today's rule, F1's empty-section rule included.
+        - An empty section: the divider's own key, as F1 gives the last section.
+        - Otherwise `int(lo) + 1` while that is below the next divider. WHOLE NUMBERS FIRST,
+          because `pipeline/join.py:Position` counts the unfilled slots before a planned
+          divider as whole numbers: `[1, 51]` on 5 cards keeps section 2 at card 51 only if
+          a capture into section 1 takes 6, not 5.0009765625.
+        - Otherwise `lo + (hi - lo) / 1024`. A halving step, which `place` uses, reaches
+          `KEY_EPSILON` after about 20 captures. This step gives about 7,000 at a gap of 1.
+          Below `KEY_EPSILON` the box is re-spaced once, and the key is read again.
+
+        `lo` is the highest key of any record in the section, a departed one too, so no two
+        records share a key. Each next key is the same rule over the key before it. Raises
+        `SectionGone` for a token or a key that is not the box's now."""
+        box = _as_position_int(box, "box")
+        ordinal = self.section_ordinal(box, div, token)
+        for _ in range(2):
+            divs = self.dividers_of(box)
+            last = ordinal >= len(divs)
+            hi = float("inf") if last else divs[ordinal]
+            if last:
+                out = [self.next_key(box)]
+            else:
+                floor = divs[ordinal - 1]
+                keys = [float(k) for _, k in self.box_order(box).pairs if floor <= float(k) < hi]
+                out = [] if keys else [floor]
+            lo = out[-1] if out else max(keys)
+            while len(out) < count:
+                if int(lo) + 1 < hi:
+                    lo = float(int(lo) + 1)
+                elif (hi - lo) / 1024 >= KEY_EPSILON:
+                    lo = lo + (hi - lo) / 1024
+                else:
+                    break
+                out.append(lo)
+            if len(out) >= count:
+                return out[:count], ordinal, last
+            self._respace(box)
+        raise BadSections("the gap stayed too narrow after the box was re-spaced")
+
+    def section_div_of(self, box, key) -> str:
+        """The divider key of the section a card with order key `key` stands in."""
+        divs = self.dividers_of(box)
+        return divider_key(divs[max(0, bisect.bisect_right(divs, float(key)) - 1)])
+
     def _on_hand(self, box, index) -> bool:
         card = self.cards.get(position_key(box, index))
         return card is not None and card.state not in TERMINAL_STATES
@@ -2168,6 +2311,8 @@ class Inventory:
         *,
         capture_id: Optional[str] = None,
         cid: Optional[str] = None,
+        section=None,
+        layout_token: Optional[str] = None,
         **claims,
     ) -> Tuple[Card, bool]:
         """Assign the next index in `box` and record the card. Returns `(card, created)`.
@@ -2196,6 +2341,13 @@ class Inventory:
         incumbent, returning it with no log and nothing reported — a physical card gone
         from inventory. That branch is right for a re-record and wrong for an allocation,
         so this path refuses to reach it.
+
+        `section` IS A DIVIDER KEY (`docs/specs/subbox-capture.md`). The card is filed at the
+        tail of that section (`section_tail_key`). It is resolved BEFORE the index is
+        allocated and before the box is registered, so a key the box does not have
+        (`SectionGone`) writes nothing. The last section, or no section, is today's capture
+        exactly: `record_capture` gives the key, so a box nothing was placed into stays the
+        identity.
         """
         box = _as_position_int(box, "box")
 
@@ -2215,6 +2367,11 @@ class Inventory:
             if replay is not None:
                 return replay, False
 
+        order = None
+        if section is not None:
+            keys, _ordinal, last = self.section_tail_key(box, section, layout_token)
+            order = None if last else keys[0]
+
         self.ensure_box(box)
 
         index = self.next_index(box)
@@ -2232,7 +2389,7 @@ class Inventory:
         # re-record must neither invent it nor replace it. Passing it through the claims
         # would make it correctable from the capture screen, which is the one thing it must
         # never be.
-        card = Card(box=box, index=index, capture_id=capture_id, cid=cid, **claims)
+        card = Card(box=box, index=index, capture_id=capture_id, cid=cid, order=order, **claims)
         return self.record_capture(card), True
 
     def card_by_capture_id(self, capture_id: str) -> Optional[Card]:
@@ -2931,10 +3088,15 @@ class Inventory:
         card.cid = f"{MOVED_CID_PREFIX}{card.cid}@{key}" if card.cid else None
 
         self._log(MOVED, key, moved_to=new_key, run=card.run, cid=transplant.cid)
-        self._log(str(transplant.state), new_key, moved_from=key, run=transplant.run)
+        # THE LAYOUT THE CARD ARRIVED IN, so its undo can ask whether a divider went in behind
+        # it after the move (the review's third finding), not only whether one stands there.
+        self._log(
+            str(transplant.state), new_key, moved_from=key, run=transplant.run,
+            sections=[as_order(v) for v in self.sections_for(to_box)],
+        )
         return card, transplant
 
-    def unmove_card(self, key: str) -> Tuple[Card, str]:
+    def unmove_card(self, key: str, sections_at_move=None) -> Tuple[Card, str]:
         """Undo `move_card`: the card goes back to `key`, and the transplant is deleted.
 
         UN-14 (`docs/specs/undo.md` section 11.3). Returns `(card, transplant key)`. The
@@ -2974,9 +3136,21 @@ class Inventory:
         # is an order key, so it is compared with the transplant's order key, never its
         # stored index (the divider proof's F3).
         registered = self.boxes.get(str(transplant.box))
-        if registered is not None and any(
-            float(start) > float(transplant.order_key) for start in registered.sections
-        ):
+        # A DIVIDER PUT IN BEHIND THE TRANSPLANT AFTER THE MOVE builds on the move. The question
+        # is when it went in, so `sections_at_move` (the layout the move's own arrival line
+        # recorded) answers it: a divider behind the card that the box did not have then.
+        # A divider that was already there (the next section's, or an empty last section's,
+        # as boxes 4 and 6 have) does not refuse. A move recorded before the arrival line
+        # carried a layout has no answer, so any divider behind the card refuses: the undo
+        # is lost, never guessed.
+        behind = [
+            float(start) for start in (registered.sections if registered is not None else [])
+            if float(start) > float(transplant.order_key)
+        ]
+        if sections_at_move is not None:
+            had = {float(v) for v in sections_at_move}
+            behind = [start for start in behind if start not in had]
+        if behind:
             raise CardDeparted(f"a divider was put in after {new_key}")
 
         # THE ORDER KEY COMES BACK FROM THE TOMBSTONE TOO (D265). The transplant holds the
@@ -3468,7 +3642,7 @@ class Inventory:
             )
         return after
 
-    def open_section(self, number) -> Tuple[int, ...]:
+    def open_section(self, number, after=None, layout_token=None) -> Tuple[int, ...]:
         """Put a divider in front of the next card. The capture screen's `S`.
 
         THE ACT AND THE RECORD ARE THE SAME GESTURE, which is the whole of D10's amendment
@@ -3501,6 +3675,21 @@ class Inventory:
         (`D-sealed-boxes-removed`), so nothing refuses a section for a seal.
         """
         entry = self.ensure_box(number)
+        if after is not None:
+            # S AFTER A PICKED SECTION (the owner's Q1 ruling, 2026-09-26: "Right after section
+            # 2"). The divider goes at that section's tail key, between its last record and
+            # the next divider, so no card key changes and the later sections move up one.
+            ordinal = self.section_ordinal(entry.box, after, layout_token)
+            divs = self.dividers_of(entry.box)
+            if ordinal < len(divs):
+                floor, hi = divs[ordinal - 1], divs[ordinal]
+                if not any(floor <= float(k) < hi for _, k in self.box_order(entry.box).pairs):
+                    raise SectionEmpty(
+                        f"section {ordinal} of {self.box_title(entry.box)} holds nothing yet. "
+                        f"Capture a card into it before starting another after it."
+                    )
+                keys, _, _ = self.section_tail_key(entry.box, after, layout_token)
+                return self.set_sections(entry.box, sorted(list(entry.layout()) + keys))
         # IN KEY SPACE (D265): the divider goes where the next card's KEY is, the back.
         at = self.next_key(entry.box)
         layout = list(entry.layout()) or [1]
@@ -3538,7 +3727,29 @@ class Inventory:
         entry = self.ensure_box(number)
         layout = list(entry.layout())
         title = self.box_title(entry.box)
-        if len(layout) < 2 or float(layout[-1]) != as_order(div):
+        # WHAT S WROTE, if `made` proves S added `div` (`layout_before_s`, the one reader of
+        # the `resectioned` line). None when it does not.
+        want = as_order(div)
+        before = layout_before_s(made, layout, want)
+        # U AFTER A MID-BOX S (D-sections-are-sub-boxes, I9): S with `after` puts its divider
+        # in front of a later one, so S's own divider may not be the last. It goes when
+        # `made` proves that S added it, it is a stored divider past the first, and no card
+        # on hand stands in its section. A divider that an editor save put a later one
+        # behind is not S's to undo, so it keeps `DividerBuiltOn`, below (the stale U).
+        middle = [n for n, d in enumerate(layout[1:-1], 1) if float(d) == float(want)]
+        if middle and before is not None:
+            n = middle[0]
+            sections = self.layout_of(entry.box)
+            held = len(sections) != len(layout) or any(
+                self._on_hand(entry.box, i) for i in sections[n]["slots"]
+            )
+            if held:
+                raise DividerBuiltOn(
+                    f"A card is already behind the divider you added in {title}, so it stays. "
+                    f"Edit the dividers instead."
+                )
+            return self.set_sections(entry.box, before)
+        if len(layout) < 2 or float(layout[-1]) != float(want):
             raise DividerBuiltOn(
                 f"The divider you added is no longer the last one in {title}, so it stays. "
                 f"Edit the dividers instead."
@@ -3549,13 +3760,7 @@ class Inventory:
                 f"A card is already behind the divider you added in {title}, so it stays. "
                 f"Edit the dividers instead."
             )
-        kept = layout[:-1]
-        if made is not None:
-            to = [float(v) for v in made.get("sections_to") or []]
-            was = [float(v) for v in made.get("sections_from") or []]
-            if to == [float(v) for v in layout] and not was and kept == [1]:
-                kept = []
-        return self.set_sections(entry.box, kept)
+        return self.set_sections(entry.box, before if before is not None else layout[:-1])
 
     def box_fill(self, number) -> int:
         """The highest index this box holds. `next_index` minus one, and DISPLAY ONLY."""
@@ -3593,11 +3798,13 @@ class Inventory:
 
     def positions_for_sku(self, sku: str) -> List[Card]:
         """Every copy holding this SKU, in box-walk order (D7's SKU -> positions map)."""
-        return sorted(self.cards.where(sku=sku), key=lambda c: (c.box, c.index))
+        # BY THE ORDER KEY (D265): a card placed or captured mid-box has a high index and a
+        # middle key, so the index is not the walk.
+        return sorted(self.cards.where(sku=sku), key=lambda c: (c.box, c.order_key, c.index))
 
     def in_state(self, state: str) -> List[Card]:
         check_state(state)
-        return sorted(self.cards.where(state=state), key=lambda c: (c.box, c.index))
+        return sorted(self.cards.where(state=state), key=lambda c: (c.box, c.order_key, c.index))
 
     def counts(self) -> Dict[str, int]:
         counts = {state: 0 for state in STATES}

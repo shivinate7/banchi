@@ -84,3 +84,11 @@ three repros as named cases, then 6 seeds of 150 random writes. A store error on
 write fails it too. Eight mutations each turn it red. Four undo the fixes. The others slide
 order keys on a remove, use `bisect_left` in `layout_of`, drop `take_div` in `_try_place`, and
 drop the front re-anchor in `drop_sections`. `app/tests/capture-undo.spec.ts` holds F2's client half.
+
+### A capture takes a key too, 2026-09-26
+
+D-sections-are-sub-boxes lets a capture and a Move-to-box file a card at the tail of a picked
+section. So a new card can have the highest index and a middle key. That is this entry's
+premise again: index order is not box order. `Inventory.section_tail_key` is the key rule.
+It takes a whole number first and then a 1/1024 step, because halving the gap re-spaces the box
+too often. `Inventory.positions_for_sku` and `Inventory.in_state` sort by the key now.
