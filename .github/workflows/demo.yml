@@ -130,7 +130,15 @@ jobs:
         working-directory: app
         env:
           DEMO_REQUIRED: '1'
-        run: npx playwright test tests/demo-coverage.spec.ts --reporter=line
+        # --workers=2, THE SAME NUMBER check.yml's OWN design-check JOB ALREADY PINS TO
+        # THIS RUNNER'S REAL CORE COUNT (2026-09-27, CI runs 36314954311 and 36316345981):
+        # "Orders draws a walk" solves a client-side walk over this mirror's full 71 open
+        # orders plus the whole 3,510-card inventory already in memory -- real, measured
+        # work. Reproduced locally: the SAME test passes in ~5s run alone, but timed out
+        # under Playwright's own default (unbounded) worker count competing for CPU with
+        # the other 17 cases in this file. Fewer workers is less contention for the one
+        # case that is actually CPU-bound, not a longer wait for a hang.
+        run: npx playwright test tests/demo-coverage.spec.ts --reporter=line --workers=2
 
       # RUNS NOWHERE ELSE (D173: a rule with no reader is advice). `demo-freshness` proves
       # the bundle still fits the WIRE SHAPE; it cannot see the seed rewriting its own DATA
