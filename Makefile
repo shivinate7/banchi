@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-histories demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -320,7 +320,11 @@ help:
 	@echo "                    owner's Mac only, with PKMNSCAN_TCG_USER_AGENT set. Never CI."
 	@echo "  make demo-seed    the store alone, built on the curated photographs."
 	@echo "  make demo-record  the bundle alone — sweep every GET the client can build."
-	@echo "  make demo-static  the two above, then a static build to dist-demo/."
+	@echo "  make demo-mirror  THE PUBLISHED SOURCE (D-demo-mirror): scrub a real store copy."
+	@echo "                    Owner's Mac only. SOURCE=<checkout>. Commits only the scrub."
+	@echo "  make demo-mirror-rebuild  re-scrub the existing snapshot, no real store read."
+	@echo "  make demo-mirror-install  CI's step: install the committed scrub. No store, no net."
+	@echo "  make demo-static  demo-mirror-install, then a static build to dist-demo/."
 	@echo "                    DEMO_BASE=<path> is where it will be served from."
 	@echo "  make demo-preview serve dist-demo/ exactly as a static host would."
 	@echo "  make demo-freshness  whether the bundle still matches the wire it recorded."
@@ -1941,6 +1945,32 @@ demo-photos:
 	@$(PYTHON) scripts/demo-photos.py --source "$(SOURCE)" \
 	  --count $(DEMO_PHOTO_COUNT) --joinable $(DEMO_PHOTO_JOINABLE)
 
+# THE PUBLISHED DEMO IS THE OWNER'S REAL STORE, SCRUBBED (owner's ruling, 2026-09-26,
+# `D-demo-mirror`, docs/specs/demo.md §13 — supersedes `demo-seed`'s invented one below as
+# what `demo-static` publishes). `scripts/demo-mirror.py` reads a store COPY into gitignored
+# `demo-mirror/` and writes the scrubbed output to the tracked `demo-assets/mirror/`: every
+# buyer "Jane Doe N", every address "123 Demo Way", a shipping export rebuilt from the
+# ledger, and every photograph QR-cleared and cropped under a 512 MB cap. THE OWNER'S STORE
+# NEVER LEAVES THIS MAC — only `demo-assets/mirror/` is committed, and CI never runs this
+# target at all: it has no store to read, and installs that committed output instead
+# (`demo-mirror-install`).
+demo-mirror:
+	@[ -n "$(SOURCE)" ] || { \
+		echo "SOURCE=<checkout> is required — the real store to snapshot and scrub."; \
+		echo "  e.g. make demo-mirror SOURCE=~/Developer/pkmnscan"; \
+		exit 1; }
+	@$(PYTHON) scripts/demo-mirror.py --source "$(SOURCE)" --home $(DEMO_HOME)
+
+# Re-scrub from the existing gitignored snapshot, no SOURCE and no re-read of the real store —
+# for iterating on the scrub or the recorder without paying the snapshot cost again.
+demo-mirror-rebuild:
+	@$(PYTHON) scripts/demo-mirror.py --home $(DEMO_HOME)
+
+# CI's own step: the committed scrub, installed into app/demo/ and app/public/demo/photos/.
+# Reads no store and contacts no network. `demo-static` builds from this.
+demo-mirror-install:
+	@$(PYTHON) scripts/demo-mirror.py --install
+
 # Record the demo's price histories into NEW committed fixtures, on the owner's Mac only.
 #
 # The history host refuses the honest User-Agent (D216), and the owner allows the browser
@@ -1976,8 +2006,7 @@ demo-record:
 # shows the recording moving with the contract it was recorded against.
 demo: demo-seed demo-record
 
-demo-static: export PKMNSCAN_DEMO_EXTRA_REAL := 1
-demo-static: demo
+demo-static: demo-mirror-install
 	$(NPM_GUARD)
 	@cd app && VITE_DEMO=1 DEMO_BASE=$(DEMO_BASE) npx vite build --outDir ../dist-demo --emptyOutDir
 	@echo ""
