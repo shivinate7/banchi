@@ -66,6 +66,18 @@ ADDRESS_KEYS = {"address", "address1", "address2", "street"}
 SIDE_FILES = ("prices.json",)
 SIDE_DIRS = (".exports", ".live")
 
+# `cli/cmd_pricearchive.py`'s own cache directory, `inventory/.market-cache` — the freshest,
+# most complete tcgcsv cache on the owner's Mac, since the archive sweep runs often. Copied
+# to `.cache/market` at the HOME ROOT (`server/pipeline_routes.py:market_cache_dir()`,
+# D-demo-stock-images), which is where `STOCK_IMAGES`' own `Market` looks — the same
+# directory `scripts/demo-record.py:warm_history_cache` already treats as the demo home's
+# one Market cache, for price histories.
+# Copying it is what lets the offline recorder answer Riftbound/One Piece `image_url` at
+# all, with no network call (D295 stays true: nothing here fetches, this only copies what
+# the owner's own `archive sweep` already fetched).
+MARKET_CACHE_SOURCE = "inventory/.market-cache"
+MARKET_CACHE_DEST = ".cache/market"
+
 
 # ------------------------------------------------------------------------------ snapshot
 
@@ -94,6 +106,8 @@ def snapshot(source: Path) -> None:
     for name in SIDE_DIRS:
         if (source / "inventory" / name).is_dir():
             shutil.copytree(source / "inventory" / name, SNAPSHOT / "inventory" / name)
+    if (source / MARKET_CACHE_SOURCE).is_dir():
+        shutil.copytree(source / MARKET_CACHE_SOURCE, SNAPSHOT / MARKET_CACHE_DEST)
     if (source / "runs").is_dir():
         shutil.copytree(
             source / "runs", SNAPSHOT / "runs", ignore=shutil.ignore_patterns("*.pid"),
@@ -196,6 +210,8 @@ def build(home: Path, jobs: int) -> None:
     shutil.copytree(SNAPSHOT / "inventory", home / "inventory")
     if (SNAPSHOT / "runs").is_dir():
         shutil.copytree(SNAPSHOT / "runs", home / "runs")
+    if (SNAPSHOT / MARKET_CACHE_DEST).is_dir():
+        shutil.copytree(SNAPSHOT / MARKET_CACHE_DEST, home / MARKET_CACHE_DEST)
 
     os.environ["PKMNSCAN_HOME"] = str(home)
     from store import Store, photos
@@ -350,28 +366,98 @@ def assert_scrubbed(bundle: Path, shipping: Path) -> None:
         len(bad), ", ".join(sorted(set(bad))))
 
 
+# THE OWNER'S CHOICE, 2026-09-27: GitHub refuses a blob over 100 MB outright, and the
+# recording's own `responses` map had already grown past that on its own (measured: 101.3 MB
+# pretty-printed, 72.5 MB compact). `chunk_responses` splits it into files a plain `git push`
+# accepts with real margin — never a fixed file COUNT, which would either waste chunks on a
+# small demo or silently stop being enough once the store grows again. `app/src/demoServer.ts`
+# reads every chunk back with `import.meta.glob`, which needs no manifest and no fixed count:
+# it matches whatever files are on disk at build time.
+CHUNK_BYTES = 40 * 1024 * 1024
+BUNDLE_DIRNAME = "bundle"
+APP_BUNDLE_DIR = APP_BUNDLE.parent / BUNDLE_DIRNAME
+
+
+def chunk_bundle(bundle_path: Path, out_dir: Path) -> List[str]:
+    """`bundle_path`'s `responses`, repacked as compact JSON files each under `CHUNK_BYTES`.
+
+    `wire` rides in `chunk-0.json` only — the one field `demoServer.ts` also reads, and
+    small enough that duplicating it into every chunk would buy nothing. `photos` and
+    `routes` are the RECORDER's own report (this script's stdout already prints them) and
+    are not shipped: no reader in `app/` names either key, and repeating a store-sized
+    figure once per chunk would cost real bytes for a number the app never asks for.
+    """
+    data = json.loads(bundle_path.read_text("utf-8"))
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True)
+    chunks: List[Dict[str, object]] = [{}]
+    sizes = [0]
+    for key, value in data["responses"].items():
+        size = len(json.dumps({key: value}, separators=(",", ":")))
+        if sizes[-1] + size > CHUNK_BYTES and chunks[-1]:
+            chunks.append({})
+            sizes.append(0)
+        chunks[-1][key] = value
+        sizes[-1] += size
+    names: List[str] = []
+    for index, chunk in enumerate(chunks):
+        payload: Dict[str, object] = {"responses": chunk}
+        if index == 0:
+            payload["wire"] = data.get("wire", "")
+        name = "chunk-%d.json" % index
+        (out_dir / name).write_text(json.dumps(payload, separators=(",", ":")), "utf-8")
+        names.append(name)
+    return names
+
+
+def merge_chunks(chunk_dir: Path) -> Dict[str, object]:
+    """The inverse of `chunk_bundle` — every chunk's `responses` folded into one dict, for
+    the readers that still want a single file (`app/tests/demo-coverage.spec.ts`,
+    `scripts/demo-freshness.py`, `scripts/demo-determinism.py`): none of them need to learn
+    the chunked shape, only `app/src/demoServer.ts` does.
+    """
+    merged: Dict[str, object] = {"responses": {}, "wire": ""}
+    for name in sorted(p.name for p in chunk_dir.glob("chunk-*.json")):
+        chunk = json.loads((chunk_dir / name).read_text("utf-8"))
+        merged["responses"].update(chunk.get("responses") or {})  # type: ignore[attr-defined]
+        if chunk.get("wire"):
+            merged["wire"] = chunk["wire"]
+    return merged
+
+
 def commit_output() -> None:
     """The recorder's output, into the one tracked place CI installs it from."""
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
-    shutil.copyfile(APP_BUNDLE, OUT / "bundle.json")
+    names = chunk_bundle(APP_BUNDLE, OUT / BUNDLE_DIRNAME)
     shutil.copytree(APP_PHOTOS, OUT / "photos")
     total = sum(p.stat().st_size for p in (OUT / "photos").rglob("*.jpg"))
     if total > PHOTO_BUDGET:
         raise SystemExit("refusing: %.1f MB of photographs is over the 512 MB cap"
                          % (total / 1048576.0))
-    print("committed-ready  %s  (bundle %.1f MB, photos %.1f MB)" % (
-        OUT.relative_to(REPO_ROOT), (OUT / "bundle.json").stat().st_size / 1048576.0,
+    bundle_bytes = sum((OUT / BUNDLE_DIRNAME / name).stat().st_size for name in names)
+    print("committed-ready  %s  (bundle %d chunk(s), %.1f MB, photos %.1f MB)" % (
+        OUT.relative_to(REPO_ROOT), len(names), bundle_bytes / 1048576.0,
         total / 1048576.0))
 
 
 def install() -> None:
     """CI: the committed mirror, into where the build reads it. Reads no store."""
-    if not (OUT / "bundle.json").is_file():
+    chunk_dir = OUT / BUNDLE_DIRNAME
+    if not chunk_dir.is_dir() or not any(chunk_dir.glob("chunk-*.json")):
         raise SystemExit("no committed mirror at %s" % OUT.relative_to(REPO_ROOT))
     APP_BUNDLE.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(OUT / "bundle.json", APP_BUNDLE)
+    if APP_BUNDLE_DIR.exists():
+        shutil.rmtree(APP_BUNDLE_DIR)
+    shutil.copytree(chunk_dir, APP_BUNDLE_DIR)
+    # RECONSTRUCTED, NEVER THE SOURCE OF TRUTH — `app/src/demoServer.ts` reads the chunks
+    # directly (`import.meta.glob`). This single file exists only because
+    # `app/tests/demo-coverage.spec.ts`, `scripts/demo-freshness.py` and
+    # `scripts/demo-determinism.py` already read one path and do not need to learn the
+    # chunked shape too.
+    APP_BUNDLE.write_text(json.dumps(merge_chunks(chunk_dir)), "utf-8")
     if APP_PHOTOS.exists():
         shutil.rmtree(APP_PHOTOS)
     shutil.copytree(OUT / "photos", APP_PHOTOS)
