@@ -38,6 +38,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -99,6 +100,26 @@ class Server:
         self.base = "http://127.0.0.1:%d" % port
         self.process: Optional[subprocess.Popen] = None
         self.offline = offline
+        # THE HANG THIS ONCE WAS. `CaptureHandler.log_message` prints one line per request,
+        # unconditionally, to this pipe. A `subprocess.PIPE` nobody reads deadlocks the
+        # writer once the OS buffer (macOS: 64KB) fills — the child's own `print()` blocks
+        # inside `write()`, and every OTHER thread's next `print()` blocks too, behind
+        # CPython's stdout stream lock, not the pipe (measured on a real hung build,
+        # 2026-09-26: `sample <pid>` showed one thread in `write()` and the rest of
+        # `REQUEST_SLOTS` in `PyThread_acquire_lock_timed`). A full sweep prints thousands
+        # of these lines, so this pipe WILL fill on every real run. `_log` is drained
+        # continuously on its own thread for the process's whole life, never just once at
+        # startup.
+        self._log: List[bytes] = []
+        self._drain_thread: Optional[threading.Thread] = None
+
+    def _drain_stdout(self) -> None:
+        assert self.process is not None and self.process.stdout is not None
+        for line in self.process.stdout:
+            self._log.append(line)
+            if len(self._log) > 500:
+                del self._log[:250]
+        self.process.stdout.close()
 
     def __enter__(self) -> "Server":
         env = dict(os.environ)
@@ -114,10 +135,12 @@ class Server:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )
+        self._drain_thread = threading.Thread(target=self._drain_stdout, daemon=True)
+        self._drain_thread.start()
         deadline = time.time() + 30
         while time.time() < deadline:
             if self.process.poll() is not None:
-                out = self.process.stdout.read().decode("utf-8", "replace")
+                out = b"".join(self._log).decode("utf-8", "replace")
                 raise SystemExit("capture server exited before answering:\n%s" % out)
             try:
                 urllib.request.urlopen(self.base + "/status", timeout=1).read()
@@ -134,6 +157,8 @@ class Server:
             self.process.wait(timeout=45)
         except subprocess.TimeoutExpired:
             self.process.kill()
+        if self._drain_thread is not None:
+            self._drain_thread.join(timeout=5)
 
     def post(self, path: str, payload: dict):
         """One POST, as (status, parsed body). Two uses, and neither writes the store.
@@ -163,8 +188,18 @@ class Server:
                 return response.status, json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             return exc.code, None
-        except Exception:
-            return None, None
+        except Exception as exc:
+            # LOUD, NEVER SWALLOWED. An `HTTPError` is the server answering (a 404 is data,
+            # per `get`'s own docstring) — anything else is the request never completing at
+            # all: a timeout, a reset, a refused connect. Treating that the same as a miss is
+            # exactly the hang that once made a wedged server look like a slow one for 25
+            # minutes (2026-09-26): every failed request silently recorded nothing and the
+            # sweep just kept issuing the next one. Recorded evidence, not this file's own
+            # guess, is `docs/debts/` — see the fix commit this paragraph landed in.
+            raise SystemExit(
+                "POST %s never completed: %s. This is a network failure, not a miss — "
+                "the recording is stopped rather than silently skipping it." % (path, exc)
+            ) from exc
 
     def get(self, path: str):
         """One GET, as (status, parsed body). A 404 is data, not a crash — the sweep asks
@@ -178,7 +213,11 @@ class Server:
             body = exc.read().decode("utf-8", "replace")
             status = exc.code
         except Exception as exc:
-            return None, {"error": str(exc)}
+            # LOUD, NEVER SWALLOWED — see `post`'s own paragraph, the same failure mode.
+            raise SystemExit(
+                "GET %s never completed: %s. This is a network failure, not a miss — "
+                "the recording is stopped rather than silently skipping it." % (path, exc)
+            ) from exc
         try:
             return status, json.loads(body)
         except ValueError:

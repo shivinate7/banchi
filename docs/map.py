@@ -5037,6 +5037,20 @@ COMPONENTS = [
                 "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D96", "D159",
                                 "D172", "D183", "D213", "D216", "D220", "D227", "D295"],
             },
+            "demo-record-selftest.py": {
+                "does": "Server's stdout-drain, proved on a bare subprocess rather than by "
+                        "spending a full sweep: a child that floods stdout past the OS pipe "
+                        "buffer with nobody reading it does not exit in time (the mechanism "
+                        "behind a real hung build, 2026-09-26, diagnosed with `sample <pid>`); "
+                        "the same child DOES exit once Server's own drain thread is reading "
+                        "it. Also proves get()/post() now raise on a network failure "
+                        "(timeout, reset, refused) instead of returning it as a silent miss.",
+                # D18: writes nothing, spends nothing (a subprocess printing to its own pipe,
+                # never the network or the store), so it is safe on any path. Not wired into
+                # `make check` — no target here asked for that, and this fix is scoped to the
+                # single incident it answers.
+                "governed_by": ["D18"],
+            },
             "demo_scrub.py": {
                 "does": "strips machine-local absolute paths out of the bundle before it is "
                         "published, and audits its own output for anything that still looks "
