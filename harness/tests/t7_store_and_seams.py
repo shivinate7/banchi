@@ -6745,13 +6745,62 @@ def check_undo_until_built_on(checks: Checks) -> None:
         book.write()
         b = pipeline_routes.do_pricing_clear({"skus": ["4000", "4001"]})
         first = answers(checks, lambda: pipeline_routes.do_pricing_restore({"clear": a["clear_id"]}), "clear A's restore answers")
-        checks.equal(field(first, "skipped"), ["4000"], "A skips X, because the newer clear B holds X's later answer")
+        checks.equal(
+            field(first, "skipped"),
+            [{"sku": "4000", "reason": "newer_clear"}],
+            "A skips X, because the newer clear B holds X's later answer, and says why",
+        )
         checks.ok("4000" not in corpus.Corpus.read().answers, "and A does not put 5.00 back")
         checks.equal([row["id"] for row in corpus.read_clears()], [b["clear_id"]], "A is done: its X is B's to bring back")
         second = answers(checks, lambda: pipeline_routes.do_pricing_restore({"clear": b["clear_id"]}), "clear B's restore answers")
         checks.equal(sorted(field(second, "restored") or []), ["4000", "4001"], "B brings back X and Y")
         back = corpus.Corpus.read().answers.get("4000")
         checks.equal(back and back.value, "6.00", "and X is 6.00, the later answer, never the 5.00 A took")
+
+    # ------------------------------------------------ a concurrent drop is a named skip, never a 500
+    # `do_pricing_restore` reads `corpus.read_clears()` twice: once to resolve the named clear,
+    # once more (below) to find every clear kept AFTER it. Between those two reads, a second
+    # request for the SAME clear can finish first and drop it — `drop_clear` only runs once
+    # every SKU the clear held is back, so the drop itself proves the SKU is already restored.
+    # The old code built the "newer" slice with `kept[ids.index(stored["id"]) + 1:]`, which
+    # calls `.index()` on the FULL LIST before its own `if stored["id"] in ids` guard ever
+    # runs — a `ValueError` and a 500, not a refusal. Forced deterministically: the FIRST read
+    # is answered with the pre-drop snapshot (so the named clear still resolves), the SECOND
+    # with the real, post-drop list — the exact gap the race lands in, no thread needed.
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers = {"9000": corpus.Answer(value="4.50")}
+        book.write()
+        one = pipeline_routes.do_pricing_clear({"skus": ["9000"]})
+        clear_id = one["clear_id"]
+        stale_kept = corpus.read_clears()  # still holds clear_id, the pre-drop snapshot
+        # the concurrent request: it finishes first, restores "9000", and drops the clear.
+        pipeline_routes.do_pricing_restore({"clear": clear_id})
+        checks.equal(corpus.read_clears(), [], "the concurrent restore drops the clear entirely")
+        checks.ok("9000" in corpus.Corpus.read().answers, "and puts the price back")
+
+        real_read_clears = corpus.read_clears
+        calls = {"n": 0}
+
+        def racing_read_clears():
+            calls["n"] += 1
+            return stale_kept if calls["n"] == 1 else real_read_clears()
+
+        corpus.read_clears = racing_read_clears
+        try:
+            back = answers(
+                checks,
+                lambda: pipeline_routes.do_pricing_restore({"clear": clear_id}),
+                "T7-RACE: a second restore of a clear another request just dropped never raises",
+            )
+        finally:
+            corpus.read_clears = real_read_clears
+        checks.equal(
+            field(back, "skipped"),
+            [{"sku": "9000", "reason": "answered_since"}],
+            "and names the skip rather than crashing on a stale id",
+        )
+        checks.equal(field(back, "restored"), [], "nothing restored twice")
 
     # ------------------------------------------------ UN-14: a move, until either box changes
     with isolated_home():
@@ -24303,9 +24352,9 @@ def check_pricing_clear(checks: Checks) -> None:
         )
         checks.equal(
             back["skipped"],
-            ["1000"],
-            "and REFUSES the one answered again since the clear, naming it — an undo that "
-            "quietly overwrote newer work would be worse than one that refuses",
+            [{"sku": "1000", "reason": "answered_since"}],
+            "and REFUSES the one answered again since the clear, naming it and why — an undo "
+            "that quietly overwrote newer work would be worse than one that refuses",
         )
         after = corpus.Corpus.read()
         checks.equal(
@@ -38250,18 +38299,29 @@ def check_send_matrix(checks: Checks) -> None:
         # note b). R8-1 lets the line say "typed prices", because the line is about that read. It
         # never asks for a send or a price, and nothing behind it counts a card owing a price.
         spare = failed.get("text", "").replace("typed prices", "")
+        # THE `failed=None` BRANCH CARRIES THE SAME "typed prices" PROOF AS THE NAMED-TEXT
+        # BRANCH (the b-pricing lane's round-8 review: this check was weaker for it). An empty
+        # `want["line"]` case once skipped asking whether the failed-read note itself reached
+        # the answer at all — a case whose `text` and `behind` both mutated to empty still
+        # passed, because the None branch only asserted absences. THE NOTE RIDES ONE OF TWO
+        # PLACES: `behind` for ranks 1-6 (`unread` in standing.ts), or `text` alone for rank
+        # 7's terminal `unknown()`, whose own `behind` is always `[]` by that helper's own
+        # shape — never both, and never neither. `has_note` is asserted for every case now,
+        # named or not, so a note the mutation drops is the thing that goes red rather than
+        # the words around it.
+        has_note = "typed prices" in failed.get("text", "") or any(
+            "typed prices" in b for b in failed.get("behind", [])
+        )
         checks.ok(
             "the pricing worklist" not in failed.get("text", "")
+            and has_note
             and (
                 (
                     "send" not in spare and "price" not in spare
                     and not any("needs a price" in b or "need a price" in b for b in failed.get("behind", []))
                 )
                 if want.get("failed", want["line"]) is None
-                else (
-                    want.get("failed", want["line"]) in failed.get("text", "")
-                    and any("typed prices" in b for b in failed.get("behind", []))
-                )
+                else want.get("failed", want["line"]) in failed.get("text", "")
             ),
             f"{name}: with typed prices unread, Home still counts the worklist and names that read",
             str(failed),
@@ -38504,7 +38564,15 @@ def check_stock_images(checks: Checks) -> None:
         sets_dir.mkdir(parents=True)
         cards_dir.mkdir(parents=True)
         (sets_dir / "en.json").write_text(
-            json.dumps([{"id": "me1", "name": "Mega Evolution"}]), "utf-8"
+            json.dumps([
+                {"id": "me1", "name": "Mega Evolution"},
+                # A REAL SET WHOSE OWN NAME CARRIES A COLON — the review round's own
+                # regression: a client-side `^[^:]+:\s*` strip, run unconditionally, turned
+                # this into "Classic Collection". The unstripped name must hit HERE, on the
+                # first try, before any stripping is ever considered.
+                {"id": "cel", "name": "Celebrations: Classic Collection"},
+            ]),
+            "utf-8",
         )
         (cards_dir / "me1.json").write_text(
             json.dumps([
@@ -38512,6 +38580,7 @@ def check_stock_images(checks: Checks) -> None:
             ]),
             "utf-8",
         )
+        (cards_dir / "cel.json").write_text(json.dumps([]), "utf-8")
         pokemon = stockimages._PokemonImages(root=vendor_root)
 
         # `SetGroupCard`/`PricingSku` both carry the store's OWN `set_name` cell, which for
@@ -38536,6 +38605,49 @@ def check_stock_images(checks: Checks) -> None:
             pokemon.url_for("ME99: No Such Set", "1"),
             None,
             "an unknown set, prefix stripped or not, is a miss and never raises",
+        )
+
+        # `display_name` — THE REVIEW ROUND'S FIX: `do_pipeline_sets` sends this, not the
+        # store's raw `set_name`, so the client carries no regex of its own to keep in step
+        # with the resolver's own two-try order.
+        checks.equal(
+            pokemon.display_name("ME01: Mega Evolution"),
+            "Mega Evolution",
+            "the code prefix is stripped for display too, resolved through the SAME "
+            "two-try lookup as the photo — not a second, independent regex",
+        )
+        checks.equal(
+            pokemon.display_name("Mega Evolution"),
+            "Mega Evolution",
+            "a set_name with no prefix still resolves on its first try",
+        )
+        checks.equal(
+            pokemon.display_name("Celebrations: Classic Collection"),
+            "Celebrations: Classic Collection",
+            "THE REGRESSION THIS CASE GUARDS: a REAL set name that carries its own colon "
+            "must hit the catalogue UNSTRIPPED and come back whole — a blind "
+            "`^[^:]+:\\s*` strip run unconditionally on this string answers 'Classic "
+            "Collection' instead, which is exactly the defect a client-side copy of the "
+            "regex committed",
+        )
+        checks.equal(
+            pokemon.display_name("ME99: No Such Set"),
+            None,
+            "a join miss answers None, never a guess at a stripped name",
+        )
+
+        images_for_names = stockimages.StockImages(pokemon=pokemon)
+        checks.equal(
+            images_for_names.display_name("pokemon", "ME01: Mega Evolution"),
+            "Mega Evolution",
+            "StockImages.display_name delegates to the Pokemon resolver",
+        )
+        checks.equal(
+            images_for_names.display_name("riftbound", "SFD: Spiritforged"),
+            None,
+            "NEVER FOR RIFTBOUND OR ONE PIECE — the community code-prefix convention this "
+            "exists to strip was measured on Pokemon rows alone; a non-Pokemon game answers "
+            "None so the caller keeps the store's own name rather than guessing at one",
         )
 
     def make_fetcher():
@@ -38591,6 +38703,16 @@ def check_stock_images(checks: Checks) -> None:
         [],
         "a fresh entry schedules nothing a second time",
     )
+    # SPACED-SLASH LOOKUP (measured on a real-store copy: 9 of 1913 on-hand Riftbound
+    # misses, of which this shape — a raw number like `019 / 166`, not `019/166` — was the
+    # one that was a spacing defect and not a genuine absence). `join.number_index_key`
+    # itself is untouched: it keeps a space verbatim by design, so this is a lookup-only
+    # fold ahead of it, proved red on a `.bak` copy of the real fixture before the fix.
+    checks.equal(
+        images.url_for("riftbound", "Vendetta", "SP3 / 006"),
+        "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+        "a raw number with spaces around the slash still resolves against a clean index",
+    )
 
     # THE ROUTE THREADING: `do_pipeline_sets`/`do_pipeline_worklist` carry `image_url` only
     # when handed a resolver, and never open a socket when they are not (every OTHER T7
@@ -38620,6 +38742,48 @@ def check_stock_images(checks: Checks) -> None:
         threaded_row["image_url"],
         "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
         "a resolver handed in, and the warmed cache answers it, threaded onto the row",
+    )
+
+    # THE DISPLAY-NAME FIX, END TO END, THROUGH `do_pipeline_sets` ITSELF (the review round,
+    # 2026-09-27): a colon-bearing store `set_name` — one that IS a code prefix, and one that
+    # ISN'T — must come back through the route resolved the same way the image already is,
+    # never a client-side regex the caller has to keep in step with this route.
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="display-name box")
+            coded, _ = inventory.allocate_capture(1, cid=fake_cid("display-name-1"))
+            coded.sku = "8930001"
+            coded.name = "Charmander"
+            coded.number = "1"
+            coded.printed_total = "1"
+            coded.set_name = "ME01: Mega Evolution"
+            coded.game = "pokemon"
+            coded.state = master.IDENTIFIED
+            colon, _ = inventory.allocate_capture(1, cid=fake_cid("display-name-2"))
+            colon.sku = "8930002"
+            colon.name = "Pikachu"
+            colon.number = "1"
+            colon.printed_total = "1"
+            colon.set_name = "Celebrations: Classic Collection"
+            colon.game = "pokemon"
+            colon.state = master.IDENTIFIED
+
+        bare_names = pipeline_routes.do_pipeline_sets()
+        named = pipeline_routes.do_pipeline_sets(images=images)
+
+    checks.equal(
+        sorted(g["set_name"] for g in bare_names["groups"]),
+        ["Celebrations: Classic Collection", "ME01: Mega Evolution"],
+        "no resolver handed in, the store's own set_name ships verbatim, prefix and all",
+    )
+    checks.equal(
+        sorted(g["set_name"] for g in named["groups"]),
+        ["Celebrations: Classic Collection", "Mega Evolution"],
+        "A RESOLVER HANDED IN: the code prefix is gone from 'ME01: Mega Evolution', and "
+        "'Celebrations: Classic Collection' — a REAL colon, not a code — is untouched. "
+        "This is the exact regression a client-side blind strip committed: it would have "
+        "answered 'Classic Collection' here, which this line goes red on without the fix.",
     )
 
 

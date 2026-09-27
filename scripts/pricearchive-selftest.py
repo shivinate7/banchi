@@ -34,10 +34,11 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -54,7 +55,7 @@ from pipeline.pricehistory import Series  # noqa: E402
 from store import files  # noqa: E402
 from store.master import Card  # noqa: E402
 from store.orders import OrderLine, OrderRecord  # noqa: E402
-from store.pricearchive import Bucket, PriceArchive, Source, _key  # noqa: E402
+from store.pricearchive import RANGE_WIDTH_DAYS, Bucket, PriceArchive, Source, _key  # noqa: E402
 from store.session import Store  # noqa: E402
 from store.skus import SkuRow  # noqa: E402
 
@@ -250,6 +251,95 @@ def main() -> int:
     payload = {s["range"]: s for s in archive2.sources_payload()}
     ok(set(payload) == {"month", "annual"},
        "a pass over one range never erases another range's own accounting row", payload)
+
+    # ------------------------------------------------- for_sku: an index, not a full scan
+    print("\n-- store/pricearchive.py: for_sku reads a per-SKU index, never a full scan --")
+
+    def _old_for_sku(archive: PriceArchive, sku: str) -> List[Bucket]:
+        """THE SCAN THIS FIX REPLACES — kept here ONLY as this test's own reference, never
+        called by anything else. Byte-for-byte the old method body: filter every row this
+        archive holds by `.sku`, then sort by `(range, start)`."""
+        found = [b for b in archive.entries.values() if b.sku == str(sku)]
+        found.sort(key=lambda b: (b.range, b.start))
+        return found
+
+    # A SYNTHETIC ARCHIVE, ~150K ROWS, NEVER THE OWNER'S OWN STORE — `PriceArchive()` with
+    # no `source` is fully in-memory (`store/rows.py:Rows`, `source=None`), so this touches
+    # no file anywhere. 500 SKUs x 300 rows each is the review's own measured scale (300
+    # SKUs, ~159k rows on the real store).
+    SKU_COUNT = 500
+    ROWS_PER_SKU = 300
+    ranges = ("month", "quarter", "semiannual", "annual")
+    synthetic_skus = [f"synthetic-{i}" for i in range(SKU_COUNT)]
+    synthetic_payload: Dict[str, Bucket] = {}
+    for sku in synthetic_skus:
+        for j in range(ROWS_PER_SKU):
+            range_ = ranges[j % len(ranges)]
+            start = date.fromordinal(date(2020, 1, 1).toordinal() + j).isoformat()
+            market = f"{(j % 500) / 10 + 0.1:.2f}"
+            synthetic_payload[_key(sku, range_, start)] = Bucket(
+                sku=sku, product_id=1, range=range_, width_days=RANGE_WIDTH_DAYS[range_],
+                start=start, market=market, quantity=1, transactions=1,
+                low=market, high=market, at=1,
+            )
+    row_total = SKU_COUNT * ROWS_PER_SKU
+    ok(len(synthetic_payload) == row_total,
+       f"the synthetic fixture is {row_total} distinct (sku, range, start) keys, "
+       f"{SKU_COUNT} skus x {ROWS_PER_SKU} rows each")
+
+    sample = synthetic_skus[:300]
+
+    # THE OLD SCAN, timed on its own instance so building the new index never gets counted
+    # against it.
+    old_archive = PriceArchive()
+    old_archive.upsert(synthetic_payload)
+    old_started = time.time()
+    old_answers = {sku: _old_for_sku(old_archive, sku) for sku in sample}
+    old_elapsed = time.time() - old_started
+
+    # A FRESH instance from the SAME rows — the new `for_sku`'s index is built cold, on its
+    # own first call, exactly as it would be in a real request.
+    new_archive = PriceArchive()
+    new_archive.upsert(synthetic_payload)
+    new_started = time.time()
+    new_answers = {sku: new_archive.for_sku(sku) for sku in sample}
+    new_elapsed = time.time() - new_started
+
+    print(
+        f"    for_sku timing, {len(sample)} skus over {len(synthetic_payload)} archive rows: "
+        f"BEFORE (full scan) {old_elapsed*1000:.0f}ms -> "
+        f"AFTER (per-sku index) {new_elapsed*1000:.0f}ms"
+    )
+    ok(old_answers == new_answers,
+       "IDENTICAL OUTPUT: the index-backed for_sku answers exactly what the full-table scan "
+       "it replaces did, same buckets, same order, for every one of 300 skus")
+    ok(new_elapsed * 5 < old_elapsed,
+       f"the index answers at least 5x faster than the scan it replaces "
+       f"({new_elapsed*1000:.0f}ms against {old_elapsed*1000:.0f}ms over {len(sample)} skus)")
+
+    # upsert KEEPS THE INDEX IN STEP once it has been built — a re-read of an existing key
+    # replaces that bucket in the index too, not only in `entries`, and a brand-new key for a
+    # sku the index has never seen is found on the very next `for_sku`, no rebuild needed.
+    live_key = _key(sample[0], "month", date(2020, 1, 1).isoformat())
+    refreshed = new_archive.entries[live_key]._replace(market="999.99", at=2)
+    new_archive.upsert({live_key: refreshed})
+    after_refresh = [b for b in new_archive.for_sku(sample[0]) if b.range == "month" and b.start == date(2020, 1, 1).isoformat()]
+    ok(len(after_refresh) == 1 and after_refresh[0].market == "999.99",
+       "a re-read of an already-indexed key is visible on the very next for_sku, with no "
+       "duplicate row and no rebuild", after_refresh)
+
+    brand_new_sku = "synthetic-brand-new"
+    ok(new_archive.for_sku(brand_new_sku) == [],
+       "a sku the index has never seen answers empty, never a KeyError")
+    new_archive.upsert({
+        _key(brand_new_sku, "month", "2020-01-01"): Bucket(
+            sku=brand_new_sku, product_id=1, range="month", width_days=1, start="2020-01-01",
+            market="3.00", quantity=1, transactions=1, low="3.00", high="3.00", at=1,
+        ),
+    })
+    ok(len(new_archive.for_sku(brand_new_sku)) == 1,
+       "and a sku ADDED after the index was built is found on the next for_sku, without a "
+       "full rescan")
 
     # ---------------------------------------------- pipeline: parse_ledger_name (sealed subjects)
     print("\n-- pipeline/pricearchive.py: parse_ledger_name, pure, no store, no network --")

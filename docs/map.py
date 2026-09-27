@@ -6465,13 +6465,12 @@ COMPONENTS = [
                                               "D43", "D46", "D48", "D49", "D52", "D53", "D58",
                                               "D59", "D61", "D62", "D63", "D64", "D65", "D68",
                                               "D69", "D70", "D73", "D76", "D79", "D83", "D86",
-                                              "D87", "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D104", "D113", "D116", "D132", "D134", "D159",
-                                              "D165", "D168", "D172", "D174", "D180", "D189",
-                                              "D192", "D193", "D203", "D207", "D213", "D219",
-                                              "D225", "D227", "D236", "D252", "D264", "D268",
-                                              "D273", "D291", "D298",
-                                              "D299", "D300"]},
+                                              "D87", "D88", "D89", "D90", "D91", "D92", "D100",
+                                              "D103", "D104", "D113", "D116", "D132", "D134",
+                                              "D159", "D165", "D168", "D172", "D174", "D180",
+                                              "D189", "D192", "D193", "D203", "D207", "D213",
+                                              "D219", "D225", "D227", "D236", "D252", "D264",
+                                              "D268", "D273", "D291", "D298", "D299", "D300"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -7127,8 +7126,8 @@ COMPONENTS = [
                         "patchViewQuery call, a same-path query change and so a REPLACE, never "
                         "a push (D201). Kit primitives only: Section, .bn-list/.bn-list-row, "
                         "EmptyState/Notice/Loading for the three states a fetch can be in.",
-                "governed_by": ["D31", "D67", "D172", "D196", "D201", "D258", "D264", "D285",
-                                "D293", "D301"],
+                "governed_by": ["D31", "D67", "D172", "D196", "D201", "D221", "D258", "D264",
+                                "D285", "D293", "D301"],
             },
             "src/InventorySets.css": {
                 "does": "layout for the set view's rows — the card number column, the "
@@ -7736,9 +7735,9 @@ COMPONENTS = [
                                                 "D78", "D79", "D85", "D86", "D89", "D98", "D99",
                                                 "D100", "D101", "D103", "D105", "D107", "D109",
                                                 "D115", "D117", "D118", "D125", "D137", "D156",
-                                                "D159", "D168", "D172", "D181", "D196", "D208",
-                                                "D210", "D218", "D221", "D267", "D269", "D273",
-                                                "D277", "D278", "D285", "D301"]},
+                                                "D159", "D165", "D168", "D172", "D181", "D196",
+                                                "D208", "D210", "D218", "D221", "D267", "D269",
+                                                "D273", "D277", "D278", "D285", "D301"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, a kit Sheet off #/pricing's header (D168). The owner's own "
                                             "ask: typed prices go stale and there was no way to clear many at once. IT IS A "
                                             "PRESS AND NOT A POLICY: nothing here runs on a clock. The scope is the "
@@ -8297,8 +8296,8 @@ COMPONENTS = [
                                          "stand side by side; a pointer drag, a tap or Enter on a "
                                          "gap moves it through `moveSections`. The receipt is the "
                                          "server's physical instruction, with Undo on U.",
-                                  "governed_by": ["D31", "D50", "D117", "D118", "D264", "D265",
-                                                  "D285", "D293"]},
+                                  "governed_by": ["D31", "D50", "D88", "D117", "D118", "D260",
+                                                  "D264", "D265", "D275", "D285", "D293"]},
             "src/BoxShelf.css": {"does": "the Shelf's blocks, gaps, lift bar and receipt. A "
                                          "block's height follows its count with a 44px floor; a "
                                          "gap is 40px, the thumb floor.",

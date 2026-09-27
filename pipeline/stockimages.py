@@ -79,6 +79,24 @@ POKEMON_KEY = "pokemon"
 # on its first try.
 _CODE_PREFIX = re.compile(r"^[^:]+:\s*")
 
+# A RAW ON-HAND NUMBER SOMETIMES CARRIES SPACES AROUND THE SLASH ("019 / 166"), WHICH
+# `join.number_index_key` DOES NOT FOLD (measured on a real-store copy: 9 Riftbound misses
+# out of 1913, of which this is the one that is a spacing defect rather than a genuine
+# absence — see `docs/specs/stock-images.md`). `number_index_key` strips leading zeros from
+# each digit run and keeps every other character verbatim, including a space, by design —
+# it is the shared join key and `join.py`'s behavior is not this module's to change. So the
+# fold happens here, once, as a lookup-only step: collapse whitespace touching the slash
+# before the shared key function ever sees the string.
+_SLASH_SPACING = re.compile(r"\s*/\s*")
+
+
+def _lookup_key(number: str) -> str:
+    """The one key every stock-image LOOKUP goes through — never the catalog side, which
+    already indexes clean numbers. `join.number_index_key` still does the real fold; this
+    only removes a spacing defect the store's own `number` cell can carry, ahead of it.
+    """
+    return join.number_index_key(_SLASH_SPACING.sub("/", str(number or "")))
+
 
 class _PokemonImages:
     """`set_name` -> `number` -> image URL, off the vendored pokemon-tcg-data tree (D15).
@@ -93,6 +111,10 @@ class _PokemonImages:
     def __init__(self, root: Path = VENDOR_ROOT) -> None:
         self._root = root
         self._set_ids: Optional[Dict[str, str]] = None
+        # `id -> the catalogue's own name`, loaded in the same pass as `_set_ids` — the
+        # reverse of that mapping, so `display_name` answers the vendored tree's OWN
+        # string rather than re-deriving one from whatever the store happened to send.
+        self._names_by_id: Dict[str, str] = {}
         self._numbers: Dict[str, Dict[str, str]] = {}
         self._numbers_mtime: Dict[str, float] = {}
 
@@ -103,11 +125,16 @@ class _PokemonImages:
                 rows = json.loads(path.read_text("utf-8"))
             except (OSError, ValueError):
                 rows = []
-            self._set_ids = {
-                join.normalize_set(str(row.get("name") or "")): str(row["id"])
-                for row in rows
-                if row.get("id") and row.get("name")
-            }
+            ids: Dict[str, str] = {}
+            names: Dict[str, str] = {}
+            for row in rows:
+                if not row.get("id") or not row.get("name"):
+                    continue
+                set_id = str(row["id"])
+                ids[join.normalize_set(str(row["name"]))] = set_id
+                names[set_id] = str(row["name"])
+            self._set_ids = ids
+            self._names_by_id = names
         return self._set_ids
 
     def _numbers_for(self, set_id: str) -> Dict[str, str]:
@@ -145,7 +172,27 @@ class _PokemonImages:
         set_id = self._set_id_for(set_name)
         if set_id is None:
             return None
-        return self._numbers_for(set_id).get(join.number_index_key(number))
+        return self._numbers_for(set_id).get(_lookup_key(number))
+
+    def display_name(self, set_name: str) -> Optional[str]:
+        """The vendored tree's OWN name for `set_name`, resolved the SAME two-try order
+        `_set_id_for` already uses for the photo: the unstripped name first, and the
+        community code prefix stripped only when the unstripped name has already missed.
+
+        THIS IS WHY A BLIND STRIP IS WRONG, AND WHY THIS METHOD EXISTS (the review round,
+        2026-09-27): a store's own `set_name` is sometimes a real name that HAPPENS to
+        carry a colon — "Celebrations: Classic Collection" is a real Pokemon set — and a
+        client that stripped `^[^:]+:\\s*` unconditionally turned it into "Classic
+        Collection". Trying the unstripped name against the catalogue FIRST, exactly as
+        the image join does, means a colon that is not a code prefix never gets touched;
+        the stripped form is only ever consulted once the direct name has already missed.
+
+        `None` on a join miss — the caller keeps the store's own name, never a guess."""
+        set_id = self._set_id_for(set_name)
+        if set_id is None:
+            return None
+        self._set_ids_by_name()  # ensures `_names_by_id` is loaded
+        return self._names_by_id.get(set_id)
 
 
 class StockImages:
@@ -259,7 +306,7 @@ class StockImages:
         self.warm([(game, set_name)])
         if entry is None:
             return None
-        return entry[1].get(join.number_index_key(number))
+        return entry[1].get(_lookup_key(number))
 
     def url_for(self, game: str, set_name: str, number: str) -> Optional[str]:
         """The image for one card, or `None` on a join miss, a cold cache, or an
@@ -274,3 +321,16 @@ class StockImages:
         if game == POKEMON_KEY:
             return self._pokemon.url_for(set_name, number)
         return self._tcgcsv_lookup(game, set_name, number)
+
+    def display_name(self, game: str, set_name: str) -> Optional[str]:
+        """The catalogue's own clean name for a set, when this resolver can name one.
+
+        POKEMON ONLY: the community code-prefix convention this exists to strip
+        ("ME01: Mega Evolution") was measured on Pokemon rows alone; Riftbound and One
+        Piece set names already arrive clean, so there is nothing here for them to
+        resolve — the same asymmetry `url_for` already has between `_pokemon.url_for`
+        and `_tcgcsv_lookup`. `None` on a join miss or an unnamed game, never a guess —
+        the caller (`do_pipeline_sets`) keeps the store's own `set_name` in that case."""
+        if not game or not set_name or game != POKEMON_KEY:
+            return None
+        return self._pokemon.display_name(set_name)

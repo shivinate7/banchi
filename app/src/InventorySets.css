@@ -1,31 +1,71 @@
-/* THE OWNER'S "BY SET" VIEW (D293) — one section per game/set, cards inside in
- * printed order. Every color is a `--bn-*` token; nothing here names one. */
+/* THE OWNER'S "BY SET" VIEW (D293), rebuilt 2026-09-26: a picker for the set on screen, its
+ * header, and a grid of card images — never a text list any more. Every color is a
+ * `--bn-*` token; nothing here names one. */
 
-.inventory-sets { display: flex; flex-direction: column; gap: var(--bn-6); }
+.inventory-sets { display: flex; flex-direction: column; gap: var(--bn-4); }
 
-.sets-card-row {
-  justify-content: flex-start;
-  cursor: pointer;
+.sets-picker { max-width: 22rem; }
+
+.sets-header {
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
 }
+
+/* ABOUT 6-8 ACROSS AT 1440, 2 AT 390 (the brief's own floor) — a fluid column count off one
+ * tile width rather than a hand-typed breakpoint, so the count follows the column the shell
+ * actually gave this page rather than the window. */
+.sets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--bn-4);
+}
+
+.sets-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--bn-1);
+  padding: var(--bn-3);
+  border-radius: var(--bn-r-lg);
+  background: var(--bn-surface);
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+  text-align: left;
+  cursor: pointer;
+  min-height: 40px;
+}
+
 .sets-card-img {
-  flex: 0 0 auto;
-  width: 32px;
-  height: 44px;
+  width: 100%;
+  aspect-ratio: 63 / 88;
   border-radius: var(--bn-r-sm);
   object-fit: cover;
   box-shadow: inset 0 0 0 1px var(--bn-line);
   background: var(--bn-surface-2);
 }
-.sets-card-number {
-  flex: 0 0 auto;
-  min-width: 4.5em;
+
+.sets-tile-number {
   color: var(--bn-ink-3);
   font-size: var(--bn-fs-sm);
 }
-.sets-card-name {
-  flex: 1 1 auto;
-  min-width: 0;
+
+.sets-tile-name {
+  font-weight: 600;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.sets-tile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bn-1);
+}
+
+.sets-tile-price {
+  font-size: var(--bn-fs-lg);
+}
+
+@media (max-width: 767px) {
+  .sets-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
 }

@@ -132,6 +132,17 @@ def _drag_sections(box: int, body: dict) -> dict:
     return capture_server.do_move_sections(box, _drawn(body))
 
 
+def _digests(boxes: List[int]) -> dict:
+    """The Confirm gate's own freshness snapshot: `_layout_digest`, ONLY LAYOUT (the owner's
+    ruling, 2026-09-27), not `layout_token` alone (the strict review's first finding,
+    2026-09-27 — a card arriving or leaving a section changes no divider, so a token-only
+    check cannot see it) and not `_box_digest` either (the re-review's finding, 2026-09-28 —
+    every field of every record is too much: a note or a photo edit changes nothing a layout
+    move reads, and refusing the draft over it was the defect)."""
+    inv = Store().read().inventory
+    return {str(b): capture_server._layout_digest(inv, b) for b in boxes}
+
+
 def _shelf() -> None:
     """Two boxes of named sections, in whatever isolated home is current.
 
@@ -1865,10 +1876,280 @@ def check_capture_into_section(checks: Checks) -> None:
     )
 
 
+def check_layout_batch(checks: Checks) -> None:
+    """The Map's Confirm (D264, the owner's edit-mode ruling, 2026-09-26): a draft of many
+    section moves applies as ONE store transaction, or none of it does (D88).
+
+    Red before `do_move_sections_batch` existed: the route answered nothing. Proved red
+    again on a `.bak` mutation of the route (see `docs/debts/` or the lane's own report):
+    with the second move's failure moved to AFTER a commit-per-move loop instead of one
+    transaction, this case's "nothing moved" assertion fails, because the first move lands
+    on disk before the second one is even tried.
+    """
+    checks.note("")
+    checks.note("BOX MAP — the Confirm batch, all-or-nothing, one undo (D264)")
+
+    with isolated_home():
+        _shelf()
+        before = {b: capture_server._box_digest(Store().read().inventory, b) for b in (1, 2)}
+        digests = _digests([1, 2])
+        refusal(
+            checks,
+            lambda: capture_server.do_move_sections_batch({
+                "digests": digests,
+                "moves": [
+                    {"box": 1, "first": 2, "last": 2, "to_box": 2, "before": 2},
+                    {"box": 1, "first": 1, "last": 1, "to_box": 9999},
+                ],
+            }),
+            "box_not_found",
+            "a batch whose second move names a box that does not exist refuses",
+        )
+        checks.equal(
+            {b: capture_server._box_digest(Store().read().inventory, b) for b in (1, 2)},
+            before,
+            "ALL OR NOTHING: the first move's own effect did not survive the second one's failure",
+        )
+
+        body = capture_server.do_move_sections_batch({
+            "digests": digests,
+            "moves": [
+                {"box": 1, "first": 2, "last": 2, "to_box": 2, "before": 2},
+                {"box": 1, "first": 1, "last": 1, "to_box": 1},
+            ],
+        })
+        checks.equal(
+            _sections(2), [("Singles", 2), ("Uncommons", 4), ("Promos", 2)],
+            "the first queued move landed",
+        )
+        checks.equal(
+            _sections(1), [("Rares", 2), ("Commons", 3)],
+            "and the second, reordering what the first left behind, landed too",
+        )
+        checks.equal(
+            len(Store().named_events("sections_moved")), 1,
+            "two section moves queued in the draft, and ONE event for the whole batch, never one per move",
+        )
+
+        capture_server.do_undo_section_move({"move": body["move"]})
+        checks.equal(
+            {b: capture_server._box_digest(Store().read().inventory, b) for b in (1, 2)},
+            before,
+            "ONE UNDO PUTS BACK THE WHOLE LAYOUT: both boxes, exactly as the draft found them",
+        )
+
+    with isolated_home():
+        _shelf()
+        digests = _digests([1, 2])
+        _drag_sections(1, {"first": 1, "last": 1, "to_box": 2})
+        walk_before = (_walk(1), _walk(2))
+        refusal(
+            checks,
+            lambda: capture_server.do_move_sections_batch({
+                "digests": digests,
+                "moves": [{"box": 1, "first": 2, "last": 2, "to_box": 1, "before": 1}],
+            }),
+            "draft_stale",
+            "a draft opened before a box changed is refused whole, never applied on stale ground",
+        )
+        checks.equal(
+            (_walk(1), _walk(2)), walk_before,
+            "and nothing from the stale draft moved",
+        )
+
+    with isolated_home():
+        _shelf()
+        body = capture_server.do_move_sections_batch({
+            "digests": _digests([1, 2]),
+            "moves": [{"box": 1, "first": 2, "last": 3, "new_box": True}],
+        })
+        created = body["created"]
+        checks.equal(
+            _sections(created), [("Uncommons", 4), ("Rares", 2)],
+            "a split reached through the batch route lands exactly as the single-move route's does",
+        )
+        capture_server.do_undo_section_move({"move": body["move"]})
+        checks.ok(
+            Store().read().inventory.box(created) is None,
+            "and undoing a batch that split a box removes the box it made",
+        )
+
+    # THE STRICT REVIEW'S FAILURE (2026-09-27): `layout_token` hashes the dividers alone, so
+    # a card arriving in — or leaving — a section changes no token, and the Confirm gate read
+    # only tokens. The fix is `_layout_digest`, over the box's cards too (identity, order,
+    # section, state), sent as `digests`.
+    with isolated_home():
+        _shelf()
+        digests = _digests([1, 2])
+        # A card captured into the very section a queued move targets, after the draft was
+        # read: the layout_token of box 1 is UNCHANGED (a capture adds no divider), but the
+        # box's cards did change, and the digest must see it.
+        before_token = Store().read().inventory.layout_token(1)
+        capture_server.do_capture(capture_payload(1, **aim_at(1, _divs(1)[1])))
+        checks.equal(
+            Store().read().inventory.layout_token(1), before_token,
+            "setup check: a capture into an existing section leaves the layout_token alone",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_move_sections_batch({
+                "digests": digests,
+                "moves": [{"box": 1, "first": 2, "last": 2, "to_box": 2, "before": 2}],
+            }),
+            "draft_stale",
+            "a card CAPTURED into a section the draft targets, after the draft was opened, "
+            "refuses the whole batch — the token alone would have missed it",
+        )
+        checks.equal(
+            _walk(1), [f"o{i}" for i in range(1, 8)] + [None, "o8", "o9"],
+            "and nothing moved",
+        )
+
+    with isolated_home():
+        _shelf()
+        digests = _digests([1, 2])
+        # A card sold out of the section a queued move targets, after the draft was read: the
+        # layout_token of box 1 is again unchanged, and the digest must still catch it.
+        capture_server.do_mark_sold(1, 4, {})
+        refusal(
+            checks,
+            lambda: capture_server.do_move_sections_batch({
+                "digests": digests,
+                "moves": [{"box": 1, "first": 2, "last": 2, "to_box": 2, "before": 2}],
+            }),
+            "draft_stale",
+            "a card SOLD out of a section the draft targets, after the draft was opened, "
+            "refuses the whole batch the same way",
+        )
+        checks.ok(
+            Store().read().inventory.cards["1/4"].state == master.SOLD,
+            "and the sale itself was not touched by the refused batch",
+        )
+
+    # THE RE-REVIEW'S FINDING (2026-09-28), the owner's ruling of the same day: "Only layout
+    # changes". `_box_digest` hashed every field, so a note or a photo edit refused a draft
+    # over a fact no layout move reads. `_layout_digest` must NOT catch either.
+    with isolated_home():
+        _shelf()
+        digests = _digests([1, 2])
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["1/4"].note = "Corner ding, still gradeable"
+        body = capture_server.do_move_sections_batch({
+            "digests": digests,
+            "moves": [{"box": 1, "first": 2, "last": 2, "to_box": 2, "before": 2}],
+        })
+        checks.ok(
+            body["move"] is not None,
+            "a NOTE edit between the draft and Confirm does not refuse: it is not a layout fact",
+        )
+
+    with isolated_home():
+        _shelf()
+        digests = _digests([1, 2])
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["1/4"].photo = "a-different-photo.jpg"
+        body = capture_server.do_move_sections_batch({
+            "digests": digests,
+            "moves": [{"box": 1, "first": 2, "last": 2, "to_box": 2, "before": 2}],
+        })
+        checks.ok(
+            body["move"] is not None,
+            "a PHOTO field edit between the draft and Confirm does not refuse either",
+        )
+
+    with isolated_home():
+        _shelf()
+        digests = _digests([1, 2])
+        capture_server.do_remove_card(1, 4, {"capture_id": None})
+        error = None
+        try:
+            capture_server.do_move_sections_batch({
+                "digests": digests,
+                "moves": [{"box": 1, "first": 2, "last": 2, "to_box": 2, "before": 2}],
+            })
+        except capture_server.BadRequest as caught:
+            error = caught
+        checks.ok(
+            error is not None and error.code == "draft_stale" and "cards changed" in str(error),
+            "a card REMOVED between the draft and Confirm still refuses, and the message "
+            "names the cards, never a layout change that did not happen",
+            str(error),
+        )
+
+    with isolated_home():
+        _shelf()
+        digests = _digests([1, 2])
+        capture_server.do_remove_card(2, 1, {"capture_id": None})
+        refusal(
+            checks,
+            lambda: capture_server.do_move_sections_batch({
+                "digests": digests,
+                "moves": [{"box": 1, "first": 2, "last": 2, "to_box": 2, "before": 2}],
+            }),
+            "draft_stale",
+            "a card removed from a DIFFERENT box the draft also saw still refuses the whole batch",
+        )
+
+    # THE OWNER'S RULING (2026-09-27): card ranges rejoin edit mode, drafted and confirmed
+    # the same way sections are — a mixed batch, all or nothing, one undo.
+    with isolated_home():
+        _shelf()
+        before = {b: capture_server._box_digest(Store().read().inventory, b) for b in (1, 2)}
+        digests = _digests([1, 2])
+        body = capture_server.do_move_sections_batch({
+            "digests": digests,
+            "moves": [
+                {"kind": "range", "box": 1, "indices": [5, 6], "to_box": 2, "before_card": 2},
+                {"kind": "section", "box": 1, "first": 3, "last": 3, "to_box": 1, "before": 1},
+            ],
+        })
+        checks.equal(
+            _walk(2), ["m1", "o5", "o6", "m2", "m3", "m4"],
+            "the queued range landed, in front of the card named",
+        )
+        checks.equal(
+            _walk(1), ["o8", "o9", "o1", "o2", "o3", "o4", "o7"],
+            "and the queued section reorder, over what the range left behind, landed too",
+        )
+        checks.equal(
+            len(Store().named_events("sections_moved")), 1,
+            "a mixed range-and-section draft is still ONE event for the whole batch",
+        )
+        capture_server.do_undo_section_move({"move": body["move"]})
+        checks.equal(
+            {b: capture_server._box_digest(Store().read().inventory, b) for b in (1, 2)},
+            before,
+            "one undo reverses a mixed batch exactly, range and section together",
+        )
+
+    with isolated_home():
+        _shelf()
+        before = {b: capture_server._box_digest(Store().read().inventory, b) for b in (1, 2)}
+        digests = _digests([1, 2])
+        refusal(
+            checks,
+            lambda: capture_server.do_move_sections_batch({
+                "digests": digests,
+                "moves": [
+                    {"kind": "range", "box": 1, "indices": [5, 6], "to_box": 2, "before_card": 2},
+                    {"kind": "range", "box": 1, "indices": [99], "to_box": 2, "before_card": 1},
+                ],
+            }),
+            "range_invalid",
+            "a mixed draft whose second range names a card not on hand refuses whole",
+        )
+        checks.equal(
+            {b: capture_server._box_digest(Store().read().inventory, b) for b in (1, 2)},
+            before,
+            "ALL OR NOTHING over a range too: the first queued range's own effect did not survive",
+        )
+
+
 CHECKS = (
     check_box_map_safety, check_section_moves, check_order_key_migration,
     check_per_card_order, check_card_moves, check_delete_after_placement,
     check_undo_keeps_paid_answers, check_front_of_box, check_card_move_refusals,
     check_divider_editor_keys, check_delete_keeps_dividers, check_merge_speed,
     check_r5_links_and_empty_sections, check_divider_anchor, check_capture_into_section,
+    check_layout_batch,
 )

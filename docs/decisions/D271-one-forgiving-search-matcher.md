@@ -52,8 +52,12 @@ server and in a browser spec for the client.
 
 ### What is still open
 
-- **Typos and a near match.** FLT-05 asked for the closest name on a miss. Not ruled.
-- **Speed at the owner's scale.** Measure before and after on a store of 2,500 cards or more.
+- **Typos and a near match.** FLT-05 asked for the closest name on a miss. Not ruled. A
+  product decision, not a matcher defect — see ROUND 12, below.
+- ~~Speed at the owner's scale.~~ CLOSED. Rounds 4-11 measured the owner's own real store
+  (~3,510 cards) directly, repeatedly, on every query shape this entry names. Every shape
+  stays under 240ms p95 on a quiet machine. This bullet was stale by round 5 and is struck
+  here rather than left to contradict the file's own later measurements.
 
 Accents are settled by an orchestrator call, not an owner ruling. The matcher folds them, because the
 "forgiving" ruling covers them. The owner can reverse that call.
@@ -745,3 +749,34 @@ the `match.py` mutation above are what prove the rule itself.
 
 Seeded fuzz re-run after every fix: 0 false positives, 640 queries (`_FUZZ_QUERIES`
 plus 200 card-sampled).
+
+**ROUND 12, INVENTORY PASS, LANE `ux/pr4-search`, 2026-09-26.** Briefed to close the gaps
+`docs/reviews/ux-2026-09-23/RULINGS.md` still names as open: "`#` forms, composed forms
+with a letter or an extra zero, and a digit word in name text," and N4 (`B.F` and `bf`
+disagreeing on the 1-2 character floor). Verified each against the code and a run, per the
+brief's own instruction, never trusting the prose alone.
+
+**ALL FOUR WERE ALREADY CLOSED, before this lane opened, in rounds 8-11 above.** `RULINGS.md`
+is a dated review record. It stays as it was, evidence of the review, never a live status
+page. This round's own verification:
+
+- The `#`-prefixed and letter/extra-zero composed shapes, and the digit word in name text:
+  closed by F1 (round 9, item 5), through `_number_candidate_forms` and
+  `_text_digit_word_matches`. Re-run here: `case_do_search_number_widening_mirrors_
+  canonical_number` (covers `24a/219`, `#24a`, `0027/166`, and the digit-word `004`
+  finding "spent 4" in name text) passes.
+- N4 (the `bf`/`B.F` floor disagreement): closed by ruling 2 (round 11), through
+  `_is_floor_query` folding on `match.compact_text` and `_fts_letter_pair_alternative`.
+  Re-run here: `case_is_floor_query_classifies_by_the_fold` and
+  `case_do_search_dotted_initials_are_brought_back` both pass.
+
+`make match-selftest` re-run whole: 241 of 241 cases pass, both matchers, no change. T7
+(`harness/tests/t7_store_and_seams.py`) passes inside `make harness`. Neither matcher was
+touched — there was no open gap left with a clear right answer still unfixed. This entry's
+own "still open" list, above, is corrected: the stale "speed at scale" bullet is struck,
+and "typos and a near match" is confirmed as the one remaining open item.
+
+**FLT-05 (typos and a near match) is reported to the owner, not decided here.** It asks for
+a real algorithm choice (an edit-distance threshold, a "did you mean" surface, whether a
+near match returns rows or only a suggestion) that the matcher's own "one matcher, both
+sides" rule does not settle by itself. Left as a disclosed, unruled gap.

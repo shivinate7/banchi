@@ -33,6 +33,7 @@ contradict a settled decision on purpose. The owner weighs that.
 | `BUILD-BRIEF.md` | The shared brief every builder lane reads before it starts |
 | `REAL-TEST.md` | The owner's first real TCGplayer test, step by step, after the overhaul reaches main |
 | `STATE.md` | The orchestrating session's durable state: role, sources of truth, what merged, what remains, peers, lessons |
+| `PLAN-PR4-PR5.md` | The plan after PR 3: PR 4A, PR 4B, the post-PR 4 checks and PR 5, with the rulings each carries |
 | `boxmap-deliberation.md` | The box map's sizing estimate and the options each owner question weighed, beyond `docs/specs/box-map.md` |
 | `pricing-deliberation.md` | The Pricing re-interview's questions and the options weighed |
 | `product-deliberation.md` | The product-view hybrid deliberation |

@@ -43,7 +43,7 @@ BOTH ARE ORDINARY D88 TABLES: bound into `Snapshot` like `readings`, flushed ins
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, NamedTuple, Optional
+from typing import Dict, List, NamedTuple, Optional, Tuple
 
 from store.rows import Rows, TableSpec
 
@@ -151,6 +151,16 @@ def _parse_source(key: str, record: dict) -> Optional[Source]:
 class PriceArchive:
     entries: "Rows" = field(default_factory=lambda: Rows(PriceArchive.ENTRIES))
     sources: "Rows" = field(default_factory=lambda: Rows(PriceArchive.SOURCES))
+    # A PER-SKU INDEX, BUILT ONCE, NEVER SERIALIZED (the review round, 2026-09-27):
+    # `for_sku` used to scan every row this archive holds, ON EVERY CALL — measured at 10.8s
+    # for 300 SKUs against ~159k rows, because `do_pipeline_price_now` calls it once per named
+    # SKU over the SAME `PriceArchive` instance. `None` until the first `for_sku` (or the
+    # first `upsert`, if that runs first) needs it. `store/rows.py:Rows` is untouched — every
+    # OTHER reader of `entries` (`__iter__`, `values()`, `sources_payload`) is unaffected, and
+    # `entries` stays the one thing this table persists.
+    _by_sku: Optional[Dict[str, Dict[Tuple[str, str], "Bucket"]]] = field(
+        default=None, init=False, repr=False, compare=False,
+    )
 
     ENTRIES = TableSpec(
         "price_history",
@@ -202,11 +212,28 @@ class PriceArchive:
         rows.sort(key=lambda row: row["at"], reverse=True)
         return rows
 
+    def _index(self) -> Dict[str, Dict[Tuple[str, str], Bucket]]:
+        """Build the per-SKU index on first use — the ONE full walk of `entries`, ever, per
+        instance. Every subsequent `for_sku` or `upsert` call reads or updates this dict
+        directly and never re-scans."""
+        if self._by_sku is None:
+            index: Dict[str, Dict[Tuple[str, str], Bucket]] = {}
+            for bucket in self.entries.values():
+                index.setdefault(bucket.sku, {})[(bucket.range, bucket.start)] = bucket
+            self._by_sku = index
+        return self._by_sku
+
     def for_sku(self, sku: str) -> List[Bucket]:
         """Every bucket this archive holds for one SKU, across every range — ASCENDING by
         `(range, start)` so a caller can print or chart one range's own run of buckets by
-        slicing on `range` without a second sort."""
-        found = [b for b in self.entries.values() if b.sku == str(sku)]
+        slicing on `range` without a second sort.
+
+        READS THE PER-SKU INDEX, NEVER A FULL SCAN (the review round, 2026-09-27) —
+        `do_pipeline_price_now` calls this once per named SKU over the same instance, and
+        the scan this replaced cost 10.8s over 300 SKUs against ~159k rows. Same filter,
+        same sort, same answer — `scripts/pricearchive-selftest.py` proves it identical
+        against the scan it replaces."""
+        found = list(self._index().get(str(sku), {}).values())
         found.sort(key=lambda b: (b.range, b.start))
         return found
 
@@ -224,9 +251,15 @@ class PriceArchive:
         `Rows`'s diff is baseline-based, so a bucket whose reading is byte-identical to what
         is already stored costs nothing in the transaction — only a new key or one whose
         reading actually changed reaches disk.
+
+        KEEPS THE PER-SKU INDEX IN STEP, when one has already been built — never a rebuild,
+        just the same `(range, start)`-keyed replace `_index` itself does, so a `for_sku`
+        called on THIS instance after a write sees it without re-scanning `entries`.
         """
         for key, bucket in buckets.items():
             self.entries[key] = bucket
+            if self._by_sku is not None:
+                self._by_sku.setdefault(bucket.sku, {})[(bucket.range, bucket.start)] = bucket
 
     def record_pass(self, sources: List[Source]) -> None:
         """One row per range this pass swept, replacing that range's own prior accounting

@@ -42,6 +42,7 @@ import type {
   PricingCorpus,
   PricingClearable,
   PricingClearResult,
+  PricingRestoreSkip,
   MarkdownAnswer,
   MarkdownSummary,
   MarkdownTable,
@@ -331,6 +332,23 @@ function heldReason(value: WithheldRecord | 'unlisted'): string {
   return value === 'unlisted' ? '' : String(value.withheld ?? '')
 }
 
+/** The Undo toast's body, off the server's own reason per skipped SKU — never re-guessed on
+ *  the screen. A SKU the operator priced again since the clear reads differently from one a
+ *  later kept clear already holds; the old string called both "answered again since", which
+ *  was wrong for the second case. */
+function restoreSkipBody(skipped: PricingRestoreSkip[]): string {
+  if (skipped.length === 0) return 'Each one carries the date it was first typed on.'
+  const answered = skipped.filter((row) => row.reason === 'answered_since').length
+  const newer = skipped.length - answered
+  if (newer === 0) {
+    return `${answered} had been answered again since, and ${answered === 1 ? 'that answer was' : 'those answers were'} kept.`
+  }
+  if (answered === 0) {
+    return `${newer} ${newer === 1 ? 'is' : 'are'} held by a later clear instead.`
+  }
+  return `${answered} answered again since, ${newer} held by a later clear.`
+}
+
 /** What TCGplayer holds of a row NOW: the newest live export on disk (`live_now`, round 7), or
  *  the join's own figures where no live export was ever fetched. */
 function liveOf(row: PricingSku): { copies: number; price: string | null } {
@@ -428,18 +446,29 @@ function usePhone(): boolean {
   return phone
 }
 
-/** THE NUMBER READS AS ITS OWN TOKEN AT THE END OF THE NAME, never a stray digit inside a
- *  longer word (the coordinator's review, 2026-09-26, catching a defect in the first cut of
- *  this same lane: a plain `name.includes(number)` hid the chip on any name that happened to
- *  CONTAIN the number's characters anywhere, with nothing marking it as the same fact). The two
- *  real forms this repo's names take are parenthesised ("Calm Rune (R02a)") and a trailing
- *  "- " ("Garganacl - 084/132"), both anchored at the end of the string — never a bare
- *  substring match. */
-function nameRepeatsNumber(name: string, number: string): boolean {
+/** THE NUMBER'S OWN TRAILING FORM IN A NAME, never a stray digit inside a longer word (the
+ *  coordinator's review, 2026-09-26, catching a defect in the first cut of this same lane: a
+ *  plain `name.includes(number)` hid the chip on any name that happened to CONTAIN the
+ *  number's characters anywhere, with nothing marking it as the same fact). The two real
+ *  forms this repo's names take are parenthesised ("Calm Rune (R02a)") and a trailing "- "
+ *  ("Garganacl - 084/132"), both anchored at the end of the string — never a bare substring
+ *  match. */
+function numberSuffix(number: string): RegExp | null {
   const trimmed = number.trim()
-  if (trimmed === '') return false
+  if (trimmed === '') return null
   const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`(\\(${escaped}\\)|-\\s*${escaped})\\s*$`).test(name)
+  return new RegExp(`\\s*(\\(${escaped}\\)|-\\s*${escaped})\\s*$`)
+}
+
+/** THE NUMBER LIVES IN ONE PLACE ON A ROW, THE META LINE, NEVER BOTH THERE AND IN THE NAME (the
+ *  owner's review, 2026-09-26: "Garganacl - 084/132" carried it in the name while every other
+ *  row carried it in the meta line — the same fact stated two ways, in two different spots,
+ *  depending on which name happened to already hold it). The meta line always draws the
+ *  number when the row has one; this strips a trailing repeat off the DISPLAYED name only —
+ *  the stored name is never touched. */
+function displayName(name: string, number: string): string {
+  const pattern = numberSuffix(number)
+  return pattern === null ? name : name.replace(pattern, '')
 }
 
 /* ------------------------------------------------------------------- the needs-you flags */
@@ -2099,10 +2128,7 @@ export function Pricing() {
       toast({
         kind: 'ok',
         title: `${back.restored.length} price${back.restored.length === 1 ? '' : 's'} undone`,
-        body:
-          back.skipped.length === 0
-            ? 'Each one carries the date it was first typed on.'
-            : `${back.skipped.length} had been answered again since, and those answers were kept.`,
+        body: restoreSkipBody(back.skipped),
       })
     } catch (err) {
       const trouble = describeFailure(err)
@@ -2162,10 +2188,7 @@ export function Pricing() {
                 toast({
                   kind: 'ok',
                   title: `${back.restored.length} price${back.restored.length === 1 ? '' : 's'} undone`,
-                  body:
-                    back.skipped.length === 0
-                      ? 'Each one carries the date it was first typed on.'
-                      : `${back.skipped.length} had been answered again since, and those answers were kept.`,
+                  body: restoreSkipBody(back.skipped),
                 })
               } catch (err) {
                 toast({ kind: 'refusal', title: describeFailure(err).message })
@@ -2329,6 +2352,7 @@ export function Pricing() {
           variant={filterHeld ? 'primary' : 'default'}
           aria-pressed={filterHeld}
           onClick={() => setFilterHeld((on) => !on)}
+          className="pricing-held-filter"
         >
           {`Held ${held.length}`}
         </Button>
@@ -2944,34 +2968,36 @@ function PricingRow({
       <div className="pricing-id">
         <span className="pricing-name-line">
           <ProductLink sku={sku.sku} name={sku.name} className="pricing-name">
-            {sku.name}
+            {displayName(sku.name, sku.row['Number'] ?? '')}
           </ProductLink>
-          {/* A REASON ONLY WHERE IT TELLS THE OWNER SOMETHING THE ROW DOES NOT ALREADY SHOW (the
-              owner's review, 2026-09-26, and the add-on that followed it). "Worth $5 or more"
-              repeats the Market figure two columns over. "No market price" repeats the Market
-              column's own "—". Neither draws here — the row's place in "Needs you" already says
-              it matters, and the empty Market cell already says why. A typed price adrift from
-              market is the one real comparison nothing else on the row states, so it is the one
-              case left, in plain words and never a coloured pill: colour marks a problem, never
-              "this is worth money" or "this has no listing". */}
-          {flag === null || flag.kind !== 'drift' ? null : (
-            <span className="pricing-flag" data-tone={flag.tone}>
-              {flag.text}
-            </span>
-          )}
         </span>
+        {/* A REASON ONLY WHERE IT TELLS THE OWNER SOMETHING THE ROW DOES NOT ALREADY SHOW (the
+            owner's review, 2026-09-26, and the add-on that followed it). "Worth $5 or more"
+            repeats the Market figure two columns over. "No market price" repeats the Market
+            column's own "—". Neither draws here — the row's place in "Needs you" already says
+            it matters, and the empty Market cell already says why. A typed price adrift from
+            market is the one real comparison nothing else on the row states, so it is the one
+            case left, in plain words and never a coloured pill: colour marks a problem, never
+            "this is worth money" or "this has no listing".
+            ITS OWN LINE, NEVER INLINE AFTER THE NAME (the owner's review, 2026-09-26: "i
+            dislike not having uniform centering" — inline after a name of variable length put
+            the chip at a different x on every row). Every row's flag, when it has one, starts
+            at the same x: the id column's own left edge. */}
+        {flag === null || flag.kind !== 'drift' ? null : (
+          <span className="pricing-flag" data-tone={flag.tone}>
+            {flag.text}
+          </span>
+        )}
         <span className="pricing-meta">
           {/* "NEAR MINT" STAYS ON EVERY ROW (the owner's ruling, D137). */}
           <span className="pricing-cond">{sku.condition}</span>
           <span>{sku.set_name}</span>
-          {/* THE NUMBER DOES NOT REPEAT WHAT THE NAME ALREADY SAYS (the owner's review,
-              2026-09-26): a variant name like "Calm Rune (R02a)" already carries its own
-              number, and drawing "R02a" again beside it stated the one fact twice. Suppressed
-              only when the name holds it as its own token (`nameRepeatsNumber`), never on a
-              bare substring — a stray digit inside a longer name is not the same fact. */}
-          {sku.row['Number'] && !nameRepeatsNumber(sku.name, sku.row['Number']) ? (
-            <span className="pricing-number">{sku.row['Number']}</span>
-          ) : null}
+          {/* THE NUMBER ALWAYS DRAWS HERE, NEVER IN THE NAME (the owner's review, 2026-09-26:
+              "Garganacl - 084/132" carried its number in the name while every other row carried
+              it here — one fact, stated in two different places depending on the name). The
+              name strips its own trailing copy of the number instead (`displayName`), so this
+              is the one place the number reads, on every row alike. */}
+          {sku.row['Number'] ? <span className="pricing-number">{sku.row['Number']}</span> : null}
           {sku.row['Rarity'] ? <span className="pricing-rarity">{sku.row['Rarity']}</span> : null}
         </span>
         {/* HOW MANY, IN ONE FACT (the owner's review, 2026-09-26): the single BOX/SECTION/CARD
@@ -3526,14 +3552,19 @@ function UnreachableLine({ at }: { at: Unreachable | null }) {
         {unjoinedRuns.length} {unjoinedRuns.length === 1 ? 'reading' : 'readings'} not matched
       </a>,
     )
+  /* "OVER A DELETED BOX" NAMED NO ACTION AND SOUNDED LIKE A LOSS (the owner's review,
+     2026-09-26: "gives me anxiety unnecessarily"). It is neither: D36's `bid` means the box
+     was only renumbered, and every one of these runs already has its fix — `#/runs` offers a
+     Rebind press the moment it opens a stranded run (`RunPanel.tsx`, D165). So this reads as
+     the other unreachable reasons do, a link straight to that action. */
   const strandedRuns = heldBack(at.reallocated)
   const stranded = strandedRuns.reduce((n, one) => n + (one.cards ?? 0), 0)
   if (strandedRuns.length > 0)
     parts.push(
-      <span key="reallocated">
+      <a key="reallocated" href="#/runs">
         {stranded > 0 ? `${stranded} in ` : ''}
-        {strandedRuns.length} {strandedRuns.length === 1 ? 'reading' : 'readings'} over a deleted box
-      </span>,
+        {strandedRuns.length} {strandedRuns.length === 1 ? 'reading' : 'readings'} need a rebind
+      </a>,
     )
   if (parts.length === 0) return null
   return (

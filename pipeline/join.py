@@ -875,6 +875,18 @@ def number_index_key(text) -> str:
     two different `Number` cells anywhere in them land on one key. That is the check to
     re-run before widening it.
 
+    WHITESPACE IS ALSO FOLDED AWAY, EVERYWHERE IN THE CELL — the owner's ruling, 2026-09-27,
+    "Fold in the shared key (Recommended)". This no longer keeps every space by design.
+    Measured against the owner's own store: 2 of 3,510 cards carry a space in their number,
+    `019 / 166` among them, and it was a spacing defect the key used to miss. Collapsing a
+    whitespace run to one space is NOT enough — Riftbound's Token SKUs print an interior
+    space on purpose (`T02 // T03`, `T1A 001/005`), so the fold removes whitespace entirely
+    rather than normalizing its width:
+
+        019 / 166  019/166    -> both `19/166`
+        T1A 001/005            -> `T1A1/5`, same key with or without its own interior space
+        T02 // T03             -> `T2//T3`, still distinct from every other Token number
+
     The technique is `normalize_set`'s, applied to a different string for the same reason:
     two sources spell one identity differently and neither is wrong.
     """
@@ -883,6 +895,11 @@ def number_index_key(text) -> str:
     for char in str(text or "").strip():
         if char.isdigit():
             digits.append(char)
+            continue
+        if char.isspace():
+            if digits:
+                out.append(str(int("".join(digits))))
+                digits = []
             continue
         if digits:
             out.append(str(int("".join(digits))))

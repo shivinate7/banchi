@@ -38,6 +38,8 @@ import type {
   CaptureSitting,
   MoveCardsResult,
   SectionMoveResult,
+  SectionMoveBatchResult,
+  SectionMoveBatchInput,
   SectionMoveTarget,
   CardMoveTarget,
   SectionUndoResult,
@@ -68,6 +70,7 @@ import type {
   PricingCorpus,
   PricingClearable,
   PricingClearResult,
+  PricingRestoreResult,
   PricingWorklist,
   RunSelection,
   RunSend,
@@ -1648,7 +1651,10 @@ export async function getGames(): Promise<GameRegistry> {
  *  `keep_blank_values=True` parse would then see a real but empty `game` param and filter
  *  for "no game claim" when the caller never meant to filter on game at all — the exact
  *  three-state distinction `InventoryFacetFilter`'s own comment exists to protect. */
-export async function getBoxes(filter?: InventoryFacetFilter): Promise<BoxSummary> {
+export async function getBoxes(
+  filter?: InventoryFacetFilter,
+  opts?: { readonly withDigest?: boolean },
+): Promise<BoxSummary> {
   const params = new URLSearchParams()
   if (filter) {
     for (const [key, value] of Object.entries(filter)) {
@@ -1656,6 +1662,11 @@ export async function getBoxes(filter?: InventoryFacetFilter): Promise<BoxSummar
       params.set(key, value ?? '')
     }
   }
+  /* THE MAP'S EDIT-LAYOUT SNAPSHOT ONLY (D264, the strict review's finding, 2026-09-27): a
+   *  per-box `content_digest` over its cards, not only its dividers, so the batch Confirm's
+   *  freshness check can see a card arriving or leaving between the draft and the write.
+   *  Every other caller of this route omits it and pays nothing for it. */
+  if (opts?.withDigest) params.set('with_digest', '1')
   const query = params.toString()
   return (await request(`/boxes${query ? `?${query}` : ''}`, NO_CACHE)) as BoxSummary
 }
@@ -2096,6 +2107,43 @@ export async function moveRange(
       aim,
     }),
   })) as SectionMoveResult
+}
+
+/**
+ * The Map's Confirm (D264, the owner's edit-mode ruling, 2026-09-26): the whole edit-mode
+ * draft, applied as one store transaction or not at all (D88). `input.tokens` is every box
+ * the draft touched, by its `layout_token` when the owner pressed Edit layout — a change to
+ * any of them refuses the WHOLE draft (409 `draft_stale`), and nothing in it is applied.
+ * The same one write, receipt and undo as a single move (`undoSectionMove`), spanning every
+ * box the draft touched.
+ */
+export async function moveSectionsBatch(input: SectionMoveBatchInput): Promise<SectionMoveBatchResult> {
+  return (await request('/boxes/sections/move-batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      digests: input.digests,
+      moves: input.moves.map((m) =>
+        m.kind === 'section'
+          ? {
+              kind: 'section',
+              box: m.box,
+              first: m.first,
+              last: m.last,
+              ...(m.toBox === 'new' ? { new_box: true } : { to_box: m.toBox }),
+              before: m.before,
+            }
+          : {
+              kind: 'range',
+              box: m.box,
+              indices: m.indices,
+              to_box: m.toBox,
+              before_card: m.beforeCard,
+              section_end: m.sectionEnd,
+            },
+      ),
+    }),
+  })) as SectionMoveBatchResult
 }
 
 /** Put a section move back exactly, while neither box has changed since (D264). A box that
@@ -2829,12 +2877,12 @@ export type KeptClear = { id?: string; count: number; at: number }
 export async function restoreClear(
   clear: string,
   revision?: string,
-): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
+): Promise<PricingRestoreResult> {
   return (await request('/pricing/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ clear, ...(revision === undefined ? {} : { revision }) }),
-  })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
+  })) as PricingRestoreResult
 }
 
 /**
@@ -2890,12 +2938,12 @@ export async function restorePricingAnswers(
   answers: PricingClearResult['cleared'],
   revision?: string,
   clear?: string,
-): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
+): Promise<PricingRestoreResult> {
   return (await request('/pricing/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ answers, ...(revision === undefined ? {} : { revision }), ...(clear === undefined ? {} : { clear }) }),
-  })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
+  })) as PricingRestoreResult
 }
 
 /**
@@ -2906,12 +2954,12 @@ export async function restorePricingAnswers(
  */
 export async function restoreLastClear(
   revision?: string,
-): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
+): Promise<PricingRestoreResult> {
   return (await request('/pricing/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(revision === undefined ? { last_clear: true } : { last_clear: true, revision }),
-  })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
+  })) as PricingRestoreResult
 }
 
 /**

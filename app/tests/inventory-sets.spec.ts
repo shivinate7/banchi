@@ -4,13 +4,21 @@ import { sealEveryTest } from './shell'
 
 /* THE OWNER'S "BY SET" VIEW (D293). Read D293 first.
  *
- * `GET /pipeline/sets` IS ALREADY AGGREGATED — grouping, quantities and printed-number order
- * are all server work (`server/pipeline_routes.py:do_pipeline_sets`), verified against a
- * `.backup` copy of the owner's own store in that route's own header. What this file can see,
- * that the server-side check cannot, is the CLIENT half: a group renders in the order the
- * server sent it, a quantity reads off `qty` rather than off the row count, and a tap lands on
- * the ordinary box walk through the URL `BoxBrowse.tsx` already reads (`box`/`card`), never a
- * walk this view invents.
+ * `GET /pipeline/sets` IS ALREADY AGGREGATED — grouping, quantities, printed-number order
+ * and (as of the 2026-09-27 review) the display name itself are all server work
+ * (`server/pipeline_routes.py:do_pipeline_sets`), verified against a `.backup` copy of the
+ * owner's own store in that route's own header. What this file can see, that the server-side
+ * check cannot, is the CLIENT half: one set on screen at a time, a picker that switches it, a
+ * quantity that reads off `qty` rather than off the row count, and a tap that lands on the
+ * ordinary box walk through the URL `BoxBrowse.tsx` already reads (`box`/`card`), never a walk
+ * this view invents.
+ *
+ * REBUILT 2026-09-27, TWICE OVER. First for the owner's grid-of-photos rebuild (a picker
+ * replaces every set rendering at once under `.bn-section`) — this is the "a set picker"
+ * ruling the old "groups by set" case predates, and it is retired below rather than patched,
+ * per that ruling. Second for the review round's own fix: the client no longer strips a
+ * "CODE: Name" prefix itself, so this file no longer asserts a stripped string — the fixture
+ * IS the server's own answer, and it is asserted verbatim.
  *
  * NOT A HARNESS TEST AND MUST NOT BECOME ONE. `docs/GATES.md`'s contract is Python tests at
  * the Stop hook; this starts a browser, alongside `inventory.spec.ts` and `nav.spec.ts`.
@@ -40,7 +48,9 @@ function setCard(over: Partial<SetCard> & Pick<SetCard, 'sku' | 'cid' | 'box' | 
  *  happened to send the right order. A rendering that re-sorted, re-grouped, or dropped a
  *  card would show up here; the SORT ITSELF is the server's own subject, checked against the
  *  owner's real store in `do_pipeline_sets`'s own header (2,455 cards, 6 sets, 771 rows, 4
- *  with no set). */
+ *  with no set). `set_name` here is what the SERVER would already have resolved (D-review,
+ *  2026-09-27) — this file no longer strips anything of its own, so the fixture carries
+ *  whatever string a case wants asserted, unstripped or already clean. */
 const SETS_PAYLOAD = {
   at: '2026-09-25T00:00:00+00:00',
   groups: [
@@ -125,6 +135,15 @@ const BOX_2_CARDS = {
   '2/2': boxCard({ box: 2, index: 2, name: 'Thievul', sku: '8937370', cid: 'cid-thievul' }),
 }
 
+/** Open the set picker and choose one option by its visible label — the one interaction
+ *  every case below needs before it can see a set that is not the default (the first array
+ *  entry). `.bn-pick`/`.bn-pick-opt` are the kit's own `Select` classes (`app/src/kit/data.tsx`),
+ *  the same ones `inventory.spec.ts`'s box-claim cases already drive. */
+async function pickSet(page: import('@playwright/test').Page, label: string): Promise<void> {
+  await page.locator('.sets-picker .bn-pick').click()
+  await page.locator('.bn-pick-opt', { hasText: label }).click()
+}
+
 test.describe('the set view', () => {
   /* `{ store: true }`: `Inventory.tsx` calls `getOrders()` on mount regardless of which view
    * is showing, and the box-walk case below also needs `getBoxes()`/`getQueues()` answered —
@@ -136,38 +155,67 @@ test.describe('the set view', () => {
     await page.route(/\/pipeline\/sets$/, (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SETS_PAYLOAD) }),
     )
+    // THE MARKET FIGURE ON EACH TILE (`getSoldPrices`, `GET /pipeline/price-now?sku=...`) —
+    // fired for every set the picker shows, scoped to that set's own SKUs. Answering none is
+    // itself a legal, empty response (`do_pipeline_price_now`'s own "absent, never null"
+    // contract), so a tile with no priced answer simply draws no figure; this file's own
+    // subject is the picker and the tap, not the number in the corner.
+    await page.route(/\/pipeline\/price-now/, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ prices: {} }) }),
+    )
   })
 
-  test('groups by set, in the order the server sent, with a quantity per card', async ({ page }) => {
+  test('one set is on screen at a time, and the picker switches it', async ({ page }) => {
+    // SUPERSEDES the old "groups by set, in the order the server sent" case — the owner's
+    // own ruling, "a set picker" (2026-09-26), so every set is no longer rendered at once.
+    // Every assertion that case made is still made here, just against one set on screen
+    // rather than three at once.
     await page.goto(VIEW_ROUTE)
     await expect(page.getByRole('heading', { name: 'Inventory' })).toBeVisible()
 
-    const groups = page.locator('.bn-section')
-    await expect(groups).toHaveCount(3) // two named sets, plus "No set on file"
+    // THE PICKER ITSELF LISTS EVERY SET, WITH ITS GAME AND COUNT — the owner's ask, "list
+    // every set held, with its game and card count."
+    await page.locator('.sets-picker .bn-pick').click()
+    const options = page.locator('.bn-pick-opt')
+    await expect(options).toHaveCount(3) // two named sets, plus "No set on file"
+    await expect(options.nth(0)).toContainText('ME01: Mega Evolution')
+    await expect(options.nth(0)).toContainText('3') // qty 2 + qty 1
+    await expect(options.nth(1)).toContainText('Origins')
+    await expect(options.nth(1)).toContainText('4') // qty 3 + qty 1
+    await expect(options.nth(2)).toContainText('No set on file')
+    await expect(options.nth(2)).toContainText('1')
+    await page.keyboard.press('Escape')
 
-    const first = groups.nth(0)
-    await expect(first).toContainText('Pokemon')
-    await expect(first).toContainText('ME01: Mega Evolution')
-    const firstRows = first.locator('.sets-card-row')
-    await expect(firstRows).toHaveCount(2)
+    // THE DEFAULT IS THE FIRST SET THE SERVER SENT, AND ONLY ITS OWN CARDS DRAW.
+    await expect(page.locator('.sets-header')).toContainText('Pokemon')
+    await expect(page.locator('.sets-header')).toContainText('ME01: Mega Evolution')
+    const tiles = page.locator('.sets-tile')
+    await expect(tiles).toHaveCount(2)
     // ORDER, AS SENT — Charmander before Thievul, the array's own order.
-    await expect(firstRows.nth(0)).toContainText('Charmander')
-    await expect(firstRows.nth(0)).toContainText('004/132')
-    await expect(firstRows.nth(0)).toContainText('2 copies')
-    await expect(firstRows.nth(1)).toContainText('Thievul')
-    await expect(firstRows.nth(1)).toContainText('1 copy')
+    await expect(tiles.nth(0)).toContainText('Charmander')
+    await expect(tiles.nth(0)).toContainText('004/132')
+    await expect(tiles.nth(0)).toContainText('2 copies')
+    await expect(tiles.nth(1)).toContainText('Thievul')
+    await expect(tiles.nth(1)).toContainText('1 copy')
+    // THE OTHER SET'S CARDS ARE NOT ON SCREEN AT ALL — the whole point of the picker.
+    await expect(page.getByText('Darius, Blade of Origin')).toHaveCount(0)
 
-    const second = groups.nth(1)
-    await expect(second).toContainText('Riftbound')
-    await expect(second).toContainText('Origins')
-    await expect(second).toContainText('Darius, Blade of Origin')
-    await expect(second).toContainText('3 copies')
+    // SWITCH TO THE SECOND SET.
+    await pickSet(page, 'Origins')
+    await expect(page.locator('.sets-header')).toContainText('Riftbound')
+    await expect(page.locator('.sets-header')).toContainText('Origins')
+    const originsTiles = page.locator('.sets-tile')
+    await expect(originsTiles).toHaveCount(2)
+    await expect(originsTiles.nth(0)).toContainText('Darius, Blade of Origin')
+    await expect(originsTiles.nth(0)).toContainText('3 copies')
+    // THE FIRST SET'S CARDS ARE GONE NOW — one set at a time, never a merge of both.
+    await expect(page.getByText('Charmander')).toHaveCount(0)
 
-    // A CARD WITH NO SET IS A GROUP, NEVER A SILENT DROP.
-    const noSet = groups.nth(2)
-    await expect(noSet).toContainText('No set on file')
-    await expect(noSet.locator('.sets-card-row')).toHaveCount(1)
-    await expect(noSet).toContainText('Not identified yet')
+    // A CARD WITH NO SET IS A CHOICE IN THE PICKER TOO, NEVER A SILENT DROP.
+    await pickSet(page, 'No set on file')
+    await expect(page.locator('.sets-header')).toContainText('No set on file')
+    await expect(page.locator('.sets-tile')).toHaveCount(1)
+    await expect(page.locator('.sets-tile')).toContainText('Not identified yet')
   })
 
   test('the stock image is the main view, and two variants sharing one keep their own label', async ({ page }) => {
@@ -214,14 +262,14 @@ test.describe('the set view', () => {
     )
     await page.goto(VIEW_ROUTE)
 
-    const rows = page.locator('.sets-card-row')
-    await expect(rows).toHaveCount(2)
-    // BOTH ROWS DRAW THE SAME PHOTO — never merged or deduped into one row.
-    await expect(rows.nth(0).locator('.sets-card-img')).toHaveAttribute('src', STOCK_URL)
-    await expect(rows.nth(1).locator('.sets-card-img')).toHaveAttribute('src', STOCK_URL)
+    const tiles = page.locator('.sets-tile')
+    await expect(tiles).toHaveCount(2)
+    // BOTH TILES DRAW THE SAME PHOTO — never merged or deduped into one row.
+    await expect(tiles.nth(0).locator('.sets-card-img')).toHaveAttribute('src', STOCK_URL)
+    await expect(tiles.nth(1).locator('.sets-card-img')).toHaveAttribute('src', STOCK_URL)
     // AND EACH KEEPS ITS OWN LABEL — the normal print names none, the foil says so.
-    await expect(rows.nth(0)).not.toContainText('Foil')
-    await expect(rows.nth(1)).toContainText('Foil')
+    await expect(tiles.nth(0)).not.toContainText('Foil')
+    await expect(tiles.nth(1)).toContainText('Foil')
   })
 
   test('a join miss draws no image, never a guess', async ({ page }) => {
@@ -260,11 +308,16 @@ test.describe('the set view', () => {
     )
 
     await page.goto(VIEW_ROUTE)
-    await page.locator('.sets-card-row', { hasText: 'Thievul' }).click()
+    // Thievul's set (ME01: Mega Evolution) is already the default, chosen explicitly anyway
+    // so this case does not depend on which set the picker happens to open on.
+    await pickSet(page, 'ME01: Mega Evolution')
+    await page.locator('.sets-tile', { hasText: 'Thievul' }).click()
 
     // THE URL IS THE WALK'S OWN DEEP LINK (Review's place pill uses the identical shape) —
-    // `view` is gone, `box`/`card` are the pair `BoxBrowse.tsx:wantedCard` already reads.
+    // `view` and `set` are gone, `box`/`card` are the pair `BoxBrowse.tsx:wantedCard` already
+    // reads.
     await expect(page).toHaveURL(/#\/inventory\?box=2&card=cid-thievul/)
+    await expect(page).not.toHaveURL(/[?&]set=/)
 
     // THE VIEW SWITCH FOLLOWED THE URL, because it reads the same `view` param. One switch
     // serves the walk, the box map (D264) and Sets since the PR 3 integration. Its labels are
@@ -280,7 +333,10 @@ test.describe('the set view', () => {
 
   test('a card with no resolvable box is searched by name, never left with nothing to open', async ({ page }) => {
     await page.goto(VIEW_ROUTE)
-    await page.locator('.sets-card-row', { hasText: 'Unplaced Card' }).click()
+    // "Unplaced Card" sits in the SECOND set (Origins), never the default — the picker has
+    // to switch there before this row exists to click.
+    await pickSet(page, 'Origins')
+    await page.locator('.sets-tile', { hasText: 'Unplaced Card' }).click()
 
     // NO box/card PAIR — there is no row this row's own `box: null` could aim the walk at
     // (D293). `q=<name>` is the OTHER existing deep link, D285's own key for a
@@ -288,6 +344,7 @@ test.describe('the set view', () => {
     await expect(page).toHaveURL(/#\/inventory\?q=Unplaced(\+|%20)Card/)
     await expect(page).not.toHaveURL(/[?&]box=/)
     await expect(page).not.toHaveURL(/[?&]card=/)
+    await expect(page).not.toHaveURL(/[?&]set=/)
 
     // AND THE SEARCH FIELD CARRIES THAT TEXT — `BoxBrowse.tsx:qParam`, seeded once on
     // mount, the same store-wide search a person typing the name would have run.

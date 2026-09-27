@@ -1,18 +1,41 @@
-/* THE SHELF (D264): every box from above, card 1 at the far back, at the top. */
+/* THE SHELF (D264, the owner's horizontal ruling 2026-09-26): every box is one row, its
+   sections running left (the far back, card 1) to right (the near end), so the map scales by
+   growing DOWN as boxes are added rather than by shrinking every section sideways. */
 
 .shelf-boxes {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  display: flex;
+  flex-direction: column;
   gap: var(--bn-4);
-  align-items: start;
 }
 
-/* The two boxes a move is between, side by side at every width (box-map.md 5.3). */
+/* The two boxes a move is between, stacked at every width (the horizontal ruling leaves no
+   room for two full-width rows side by side without one of them going unreadably narrow). */
 .shelf-pair {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: var(--bn-3);
-  align-items: start;
+}
+
+/* Back / Front: the sentence that began "N boxes, drawn from above…" is gone (the owner's
+   verbosity ruling). Two small edge labels over the row area say which way the shelf reads. */
+.shelf-edges {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 calc(var(--bn-1) * -1);
+  padding: 0 var(--bn-1);
+  font-size: var(--bn-fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bn-ink-3);
+}
+
+.shelf-mode-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--bn-3);
 }
 
 .shelf-box {
@@ -54,38 +77,48 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* THE ROW: sections run left to right, back to front. It scrolls WITHIN ITSELF on a narrow
+   column — a long box never widens the page (no horizontal page scroll at 390). */
 .shelf-box-body {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
   gap: var(--bn-1);
   margin: 0;
-  padding: 0;
+  padding: 0 0 var(--bn-1);
   list-style: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .shelf-slot {
   display: flex;
   flex-direction: column;
   gap: var(--bn-1);
+  flex: 0 0 auto;
 }
 
-/* One section. Its height follows its count against the fullest section on the shelf, with a
-   44px floor so a small section is still a target. The cards are a pattern, never an element
-   each. */
+/* One section. Its WIDTH follows its count against the fullest section on the shelf (the
+   horizontal counterpart of the old height rule), with a floor so a small section is still a
+   target and a ceiling so one huge section cannot push every other row off screen. */
 .shelf-block {
   --shelf-share: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--bn-2);
+  justify-content: center;
+  gap: var(--bn-1);
+  min-width: 7rem;
+  width: clamp(7rem, calc(7rem + var(--shelf-share) * 9rem), 16rem);
+  height: 100%;
   min-height: calc(var(--bn-8) + var(--bn-1));
-  height: calc(var(--bn-8) + var(--bn-1) + var(--shelf-share) * var(--bn-10) * 2);
-  padding: var(--bn-1) var(--bn-1) var(--bn-1) var(--bn-3);
+  padding: var(--bn-2) var(--bn-1);
   border: 1px solid var(--bn-line-strong);
   border-radius: var(--bn-r);
   background:
     repeating-linear-gradient(
-      180deg,
+      90deg,
       transparent 0,
       transparent var(--bn-1),
       var(--bn-line) var(--bn-1),
@@ -101,7 +134,7 @@
   border-color: var(--bn-accent);
   background:
     repeating-linear-gradient(
-      180deg,
+      90deg,
       transparent 0,
       transparent var(--bn-1),
       var(--bn-accent-tint-2) var(--bn-1),
@@ -113,8 +146,8 @@
 
 /* A divider with no card behind it: the plastic is still in the box. */
 .shelf-block[data-empty='true'] {
-  min-height: var(--bn-6);
-  height: var(--bn-6);
+  min-width: 3rem;
+  width: 3rem;
   border-style: dashed;
   background: transparent;
   color: var(--bn-ink-3);
@@ -123,7 +156,9 @@
 .shelf-block-text {
   display: flex;
   flex-direction: column;
+  align-items: center;
   min-width: 0;
+  text-align: center;
 }
 
 .shelf-block-name {
@@ -138,9 +173,11 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* A gap a section can drop into. 40px, the thumb floor. */
+/* A gap a section can drop into. 40px, the thumb floor. Narrow: it sits BETWEEN sections in
+   the row, not the full row width the vertical layout had room for. */
 .shelf-gap.bn-btn {
-  width: 100%;
+  flex: 0 0 auto;
+  width: var(--bn-8);
   min-height: var(--bn-8);
   border: 1px dashed var(--bn-accent);
   color: var(--bn-accent);
@@ -151,7 +188,7 @@
 }
 
 .shelf-gap-text {
-  font-size: var(--bn-fs-sm);
+  display: none;
 }
 
 .shelf-lift {
@@ -218,69 +255,8 @@
   align-items: center;
 }
 
-/* THE NEXT SLICE: a lifted section's cards, and a gap in front of every card of a box. */
-.shelf-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
-  gap: var(--bn-1);
-  margin: 0 0 var(--bn-4);
-  padding: 0;
-  list-style: none;
-}
-
-.shelf-card.bn-btn {
-  width: 100%;
-  min-height: var(--bn-8);
-  justify-content: flex-start;
-  gap: var(--bn-2);
-}
-
-.shelf-card-number {
-  min-width: var(--bn-6);
-  color: var(--bn-ink-3);
-  font-variant-numeric: tabular-nums;
-}
-
-/* On a picked card the number takes the button's own ink, never a faint grey on the accent. */
-.shelf-card[aria-pressed='true'] .shelf-card-number {
-  color: inherit;
-}
-
 /* "What moves" wraps inside the lift bar on a narrow column, never past it. */
 .shelf-lift .bn-seg {
   flex-wrap: wrap;
   max-width: 100%;
-}
-
-.shelf-card-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shelf-cards-empty {
-  margin: 0 0 var(--bn-4);
-  color: var(--bn-ink-3);
-}
-
-.shelf-card-gaps {
-  display: flex;
-  flex-direction: column;
-  gap: var(--bn-1);
-  padding: var(--bn-2);
-  border: 1px solid var(--bn-line);
-  border-radius: var(--bn-r);
-}
-
-.shelf-card-row {
-  display: flex;
-  flex-direction: column;
-  gap: var(--bn-1);
-}
-
-.shelf-card-line {
-  padding: 0 var(--bn-2);
-  font-size: var(--bn-fs-sm);
-  color: var(--bn-ink);
-  overflow-wrap: anywhere;
 }
