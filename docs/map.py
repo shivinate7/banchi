@@ -9516,7 +9516,8 @@ COMPONENTS = [
                         "red on the previous `demoServer.ts` with no photographs. SKIPS BY NAME "
                         "with no `dist-demo/`; `DEMO_REQUIRED=1` makes that a failure, and "
                         "`.github/workflows/demo.yml` runs it that way before it publishes.",
-                "governed_by": ["D52", "D126", "D183", "D213", "D227", "D295"],
+                "governed_by": ["D52", "D126", "D183", "D213", "D227", "D271", "D277", "D282",
+                                "D295"],
             },
             "tests/product-history.spec.ts": {
                 "does": "`#/product`'s own hard rule (D227): the market "
