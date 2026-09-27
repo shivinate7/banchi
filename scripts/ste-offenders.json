@@ -40,44 +40,6 @@
         "64406ccfa3 Two subagents died mid-flight; their work was recovered or confirmed em…"
       ]
     },
-    "README.md": {
-      "lane": "docs-sweep",
-      "STE001": [
-        "05ae3e7a7f It prints the link, **restarts itself whenever you edit Python** under…",
-        "05d14fb723 The one part of the app the redesign did not touch is the Fulfiller's f…",
-        "12e45e3170 **Gate B ran these screens on 2026-08-22** and most of the doubt about…",
-        "1ecfb02439 `make server` runs the capture server in the foreground, watching nothi…",
-        "207b11f558 `make status` first, especially after time away: it prints what has shi…",
-        "27741de0bb `#/runs` is the pipeline on a screen: a free preflight that prints the…",
-        "40304b8472 `make dev` runs Vite with hot reload on `:5173` **alongside** `make up`…",
-        "5597af6118 Every color, size, radius, shadow and duration in the app is a `--bn-*`…",
-        "6799e05d2a It is nine tests now — the batch script added T5 (pricing) and T6 (geom…",
-        "68ae731a39 Two things are still unexercised and `docs/specs/capture-app.md`'s STAT…",
-        "70e8ace1b2 **`#/orders` and `#/shipping` are two stages of one hub** — `Orders.tsx…",
-        "9e2a8d71a1 With the server up, open `http://localhost:8000` in Chrome and use *Ins…",
-        "ad55ab22dd It had two until 2026-09-02: `--bypass` let the capture-time finish cla…",
-        "ae2dc481e7 `inventory/prices.json` holds every listing answer for the whole store,…",
-        "b83c5f2845 The published screen count in this file, in CLAUDE.md and in `docs/map.…",
-        "b8c5a05ce9 The repository, the CLI (`./pkmnscan`), the Python packages, the store…",
-        "dc45c2d0c6 `make screenshot` renders `scripts/views.txt` into `captures/ui/`, and…",
-        "e0ca9ae85c **The shell** is a sidebar that collapses to a 64px rail on wide window…",
-        "e0d8522f21 `core.hooksPath` lives in `.git/config`, which is never pushed — so a f…",
-        "f207fea025 The build goes into a sibling directory and is renamed in, because `vit…"
-      ],
-      "STE006": [
-        "40304b8472 `make dev` runs Vite with hot reload on `:5173` **alongside** `make up`…",
-        "40ea66d0cc A run's `decisions.json` is a legacy file that `join` and `emit` refuse…",
-        "64aabab15a It refuses rather than queues and names the tree holding the lock; `ARG…",
-        "a3d24991e1 A screen crash is caught per route; the Fulfiller's crash page has one…",
-        "b55d50276f `make down` stops it; `make launch-agent` starts it at login, from the…",
-        "df011cbdfe Deleting a run directory costs nothing; deleting the store costs every…",
-        "ed037b31a5 Light is the default; `:root[data-theme='dark']` redefines every surfac…"
-      ],
-      "STE008": [
-        "cd6fb7ac7d Keep going until we've covered everything, then write a spec to docs/sp…",
-        "f08e95335f Ask about edge cases, UI/UX, and tradeoffs — don't ask obvious question…"
-      ]
-    },
     "docs/ADVANCES.md": {
       "lane": "docs-sweep",
       "STE001": [
