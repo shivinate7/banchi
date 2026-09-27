@@ -289,6 +289,12 @@ type UndoTarget = {
   label: string | null
   cid: string | null
   captureId: string | null
+  /** THE SECTION THIS CARD LANDED IN, carried so `undoBack` and `doRemoveOne` can decrement
+   *  `patchSectionCount` the same way the capture handler increments it (D260's own count).
+   *  Null for a pooled card and for the blind arm (no capture response to read one from) — an
+   *  undo or a remove that finds no section here patches nothing, and the next `GET /boxes`
+   *  is what settles it, same as always. */
+  sectionDiv: string | null
 }
 
 /** What to call a position on screen — the server's own rendered label, or the record's own
@@ -2640,7 +2646,7 @@ export function CaptureScreen() {
       // is no `cid` to address its photograph by. `photoSrc` draws it off the slot.
       return serverNewest < 1
         ? []
-        : [{ box, index: serverNewest, label: null, cid: null, captureId: null }]
+        : [{ box, index: serverNewest, label: null, cid: null, captureId: null, sectionDiv: null }]
     }
 
     /* THE WHOLE SITTING, NEWEST FIRST — UN-1, the owner's own example: from capture 36, the
@@ -2656,6 +2662,7 @@ export function CaptureScreen() {
         // The capture response's own name for the photograph it just wrote (D172).
         cid: shot.card.cid ?? null,
         captureId: shot.card.capture_id,
+        sectionDiv: shot.card.section_div ?? null,
       }))
   }, [box, nextForBox, sitting])
 
@@ -3001,6 +3008,12 @@ export function CaptureScreen() {
              * counted number after this undo, off the same response. */
             const undone = await undoCapture(target.box, target.index)
             patchOnHand(target.box, undone.on_hand)
+            // THE CAUSE, NOT THE SYMPTOM (reviewer's finding): the capture handler increments
+            // this same section's count on the way in (line ~2865); an undo removes exactly
+            // that card, so it decrements it back on the way out. Left undone, the Section
+            // row's own "next card N" stayed one too high until the next `GET /boxes` — the
+            // number every other "next card" on this screen now also reads (D118's one number).
+            if (target.sectionDiv !== null) patchSectionCount(target.box, target.sectionDiv, -1)
           } catch (err) {
             // STOP, do not carry on down the plan. The next card is only undoable because
             // this one was going to be gone, so continuing would aim at a card that is no
@@ -3063,7 +3076,7 @@ export function CaptureScreen() {
         setBusy(false)
       }
     },
-    [patchOnHand, undoStack],
+    [patchOnHand, patchSectionCount, undoStack],
   )
 
   /** UN-15: takes the divider back out through `closeSection`, by its own key — the keyed
@@ -3176,6 +3189,9 @@ export function CaptureScreen() {
         setNextIndex((prev) => ({ ...prev, [String(target.box)]: result.next_index }))
         // D58, R1d: same as the undo path — the box's counted number after this remove.
         patchOnHand(target.box, result.on_hand)
+        // THE SAME FIX AS `undoBack`'s: this card also leaves its section, so the section's
+        // own count comes back down with it.
+        if (target.sectionDiv !== null) patchSectionCount(target.box, target.sectionDiv, -1)
         setRevision((prev) => prev + 1)
         setReplayed(null)
         setUndoNote({
@@ -3209,7 +3225,7 @@ export function CaptureScreen() {
         setRemoveBusy(false)
       }
     },
-    [patchOnHand],
+    [patchOnHand, patchSectionCount],
   )
 
 
