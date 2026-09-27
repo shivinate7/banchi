@@ -355,17 +355,47 @@ server's own response always carries a fresh token. `layoutToken` reads `undefin
 an older one. The aim is then sent with no token at all — the same fallback a stale div
 takes, below.
 
-**A 409 `section_gone` or a 400 `layout_token_required` on a capture** is handled by
-`handleSectionMismatch`. The picked section may simply be gone — another device's U or S. Or
-a re-space moved on since the token was read. Then the OLD key can name a different section,
-with no error the key alone could catch. Nothing was written either way (the wire contract's
-own promise). The pick reverts at once, the same fallback a stale restore takes. The stored
-entry is forgotten, the pick falls back to the last section, and one plain sentence says so.
-The screen then re-reads `GET /boxes`. It checks whether a section still stands at the SAME
-ORDINAL the operator picked. Found: a toast OFFERS TO UNDO the revert, named by its own text
-("Keep Rares?"). Pressing Keep re-arms the pick at the fresh key. Left alone, or no section
-survives at that ordinal: the revert already said all there is to say. Either way the
-capture itself still halts. The operator's next press is the one that lands.
+**A 409 `section_gone` or a 400 `layout_token_required` on a capture HALTS the run** (the Opus
+review's second finding, 2026-09-26). This replaces the toast this section used to describe.
+Nothing was written (the wire contract's own promise). The halt's copy says that plainly. It
+never uses the generic server-halt sentence ("check whether that card was recorded"). That
+sentence would be a false hedge here. `handleSectionMismatch` forgets the stale stored pick at
+once. It then re-reads `GET /boxes`. It checks whether a section still stands at the SAME
+ORDINAL the operator picked. The halt offers one or two named actions, never a bare "Resume".
+"Keep section N" appears only when one still stands at that ordinal. "Use the last section"
+always appears. Pressing either is the only way past the halt. There is no capture until one
+of them is pressed. Both actions re-check the box and bid the operator is looking at. They
+check it against the box and bid the halt was raised for. A box switch while the halt sits on
+screen must not apply its answer to the wrong box (the review's sixth finding).
+
+**A re-space that lands DURING a capture that itself succeeds** is caught a different way.
+The response's own `layout_token` and `section_div` are read back. If the token moved, the
+pick is re-pointed at `section_div`. That is the one key the wire contract guarantees still
+names where the card actually went. `GET /boxes` is re-read to refresh the rest of
+`sections_detail`. This is never an incremental patch of `layout_token` alone. That patch
+would leave every other key in `sections_detail` unreconciled against the new layout
+(finding 1).
+
+**A stored pick's own `token`** (`SectionPick.token` in `deviceMemory.ts`) is read at pick
+time. It is checked again at restore, and on every capture into the pick. A `div` that is
+still a real key in `sections_detail` can name a DIFFERENT section after a re-space. Membership
+alone cannot see that. The token can. A token mismatch reads exactly like a missing key. The
+pick is gone, not merely expired (finding 1). Separately, a pick past `GAP_MINUTES` (D164,
+"until the sitting ends") reads as EXPIRED, a different sentence. This is now checked live, on
+every capture attempt, not only when the screen (re)mounts (finding 5). A capture into a
+picked section also refreshes that pick's own clock. A sitting that keeps capturing into one
+section never expires mid-stream, even past 30 minutes since the pick was first made.
+
+**`undoDivider` (U undoing an S) restores the pick the operator had immediately BEFORE that
+S.** It never restores the divider key U just removed. It never falls back blindly to the
+last section (finding 3). `pendingDivider` now carries that prior pick. It sits alongside the
+divider's own key and open time.
+
+**The three trigger refs (`fireCaptureRef`, `fireUndoRef`, `fireSectionRef`) are assigned in a
+layout effect, not a passive one** (finding 4, D128's own pattern). An S immediately followed
+by a U could otherwise run the trigger seam's STALE closures. This is true with no round trip
+between the two keypresses. A passive effect can still be pending when the next keypress
+arrives. `app/tests/capture-section.spec.ts` proves the tight sequence directly.
 
 **`demoServer.ts`** refuses `after` on `POST /boxes/<box>/sections`, with the demo's own
 refusal sentence. The frozen store carries no order keys to re-space, and its fixtures predate

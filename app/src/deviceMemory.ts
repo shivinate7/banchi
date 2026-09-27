@@ -500,17 +500,19 @@ export function forgetCaptureSetup(): void {
  */
 const CAPTURE_SECTIONS_KEY = 'banchi.capture.sections'
 
-export type SectionPick = { readonly div: string; readonly at: number }
-
-function isSectionPick(value: unknown): value is SectionPick {
-  if (typeof value !== 'object' || value === null) return false
-  const held = value as Record<string, unknown>
-  return typeof held.div === 'string' && held.div !== '' && typeof held.at === 'number'
-}
+/** `token` (the Opus review's first finding, 2026-09-26) is the box's `layout_token` at the
+ *  moment `div` was picked — a re-space changes the token even when the DIVIDER LIST is the
+ *  same length, because a token is a hash of the divider KEYS in order, and D258's own class
+ *  of bug (a stale key that still resolves, to the wrong row) is exactly what a bare `div`
+ *  string cannot catch on its own. `null` only for a server old enough to send no token at
+ *  all — the one case a restore falls back to `sectionsDetail`'s own membership check alone. */
+export type SectionPick = { readonly div: string; readonly at: number; readonly token: string | null }
 
 /** Every box's own pick, keyed by the string this screen builds from `bid` (or `box`, where
  *  no `bid` exists) — `keyFor` in `CaptureScreen.tsx`. Malformed entries are dropped rather
- *  than failing the whole map, the same salvage `readList` applies to a claim above. */
+ *  than failing the whole map, the same salvage `readList` applies to a claim above. An entry
+ *  written before `token` existed reads back as `token: null` (`??`), which restores exactly
+ *  like a pick made against a tokenless server — a membership check, no token match. */
 export function storedSectionPicks(): Readonly<Record<string, SectionPick>> {
   try {
     const raw = localStorage.getItem(CAPTURE_SECTIONS_KEY)
@@ -519,7 +521,15 @@ export function storedSectionPicks(): Readonly<Record<string, SectionPick>> {
     if (typeof parsed !== 'object' || parsed === null) return {}
     const out: Record<string, SectionPick> = {}
     for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-      if (isSectionPick(value)) out[key] = { div: value.div, at: value.at }
+      const held = value as Record<string, unknown>
+      if (
+        typeof held?.div === 'string' &&
+        held.div !== '' &&
+        typeof held.at === 'number' &&
+        (held.token === undefined || held.token === null || typeof held.token === 'string')
+      ) {
+        out[key] = { div: held.div, at: held.at, token: (held.token as string | undefined) ?? null }
+      }
     }
     return out
   } catch {

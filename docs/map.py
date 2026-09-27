@@ -6517,7 +6517,7 @@ COMPONENTS = [
                                             "— and nothing else",
                                     "governed_by": ["D13", "D27", "D91", "D94", "D95", "D114",
                                                     "D132", "D142", "D145", "D153", "D164", "D193",
-                                                    "D208"],
+                                                    "D208", "D258"],
                                     "note": "IT EXISTS BECAUSE OF A LINT RULE, which is the "
                                             "rule working rather than being worked around. "
                                             "`app/eslint.config.js` bans the STORE and not the "

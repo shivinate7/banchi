@@ -228,9 +228,15 @@ async function open(
       next.push({ ...s, section: s.section + 1 })
     }
     // The new divider's own key: the card number right after the picked section's last one —
-    // a whole number while there is room, exactly `section_tail_key`'s own rule.
+    // a whole number while there is room, exactly `section_tail_key`'s own rule. A divider
+    // inserted right where an already-empty later section starts lands on that section's OWN
+    // number — divs are opaque strings (subbox-capture.md 1), never required to be numerically
+    // distinct, so a real server would still hand back two different strings for two different
+    // sections. This mock's `-2`/`-3`/… suffix is that same "make it distinct" step, nothing
+    // this fixture would otherwise need to model.
     const picked = next.find((s) => s.section === afterOrdinal)!
-    const newDiv = String(picked.start + picked.count)
+    const wanted = String(picked.start + picked.count)
+    const newDiv = next.some((s) => s.div === wanted) ? `${wanted}-${afterOrdinal}` : wanted
     next.push({ section: afterOrdinal + 1, start: picked.start + picked.count, end: null, count: 0, name: null, div: newDiv })
     next.sort((a, b) => a.section - b.section)
     spans = next
@@ -315,7 +321,7 @@ test('every capture sends the picked section, and the placed label reads it back
   await expect(sectionRow(page)).toContainText('next card 12')
 })
 
-test('a re-space under the pick offers to keep the section by ordinal, and a Keep re-arms it', async ({
+test('a re-space under the pick halts and offers to keep the section by ordinal (finding 2)', async ({
   page,
 }) => {
   const wire = await open(page)
@@ -329,18 +335,21 @@ test('a re-space under the pick offers to keep the section by ordinal, and a Kee
 
   await page.keyboard.press('c')
 
-  // The refusal writes nothing, and still halts the run like any other server refusal
-  // (subbox-capture.md §5, "the capture itself still halts") — it also offers the confirm.
-  await expect(page.locator('.bn-toast')).toContainText('Keep Rares?')
-  await page.locator('.bn-toast').getByRole('button', { name: 'Keep' }).click()
+  // NOTHING WAS WRITTEN, so the halt names that certainty rather than hedging — and there
+  // is no bare "Resume captures" for this halt, only its own two named actions.
+  await expect(page.locator('.capture-halt')).toContainText('section 2 (Rares) changed after a re-space')
+  await expect(page.locator('.capture-halt')).toContainText('Nothing was written')
+  await expect(page.getByRole('button', { name: 'Resume captures' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Keep Rares' }).click()
 
   // The pick is re-armed at the SAME ordinal (its div would differ after a real re-space;
-  // this fixture only bumps the token, so the row still names the same section).
+  // this fixture only bumps the token, so the row still names the same section), and the
+  // halt is gone — the press answered it.
+  await expect(page.locator('.capture-halt')).toHaveCount(0)
   await expect(sectionRow(page)).toContainText('Section 2 of 3')
   await expect(sectionRow(page)).toContainText('Rares')
 
-  // Resume the halted run, and it captures cleanly next press, with the fresh token.
-  await page.getByRole('button', { name: 'Resume captures' }).click()
+  // It captures cleanly next press, with the fresh token.
   await page.keyboard.press('c')
   await expect(page.locator('.capture-undo-row').first()).toHaveAttribute(
     'aria-label',
@@ -348,7 +357,7 @@ test('a re-space under the pick offers to keep the section by ordinal, and a Kee
   )
 })
 
-test('a re-space under the pick with nothing kept falls back to the last section', async ({
+test('a re-space under the pick with "Use the last section" falls back, and the halt names no fate for the card', async ({
   page,
 }) => {
   const wire = await open(page)
@@ -357,13 +366,10 @@ test('a re-space under the pick with nothing kept falls back to the last section
 
   wire.bumpToken()
   await page.keyboard.press('c')
-  await expect(page.locator('.bn-toast')).toContainText('Keep Rares?')
+  await expect(page.locator('.capture-halt')).toContainText('section 2 (Rares) changed after a re-space')
 
-  // Left alone: the pick falls back on its own, the same plain sentence a gone key gives.
-  await expect(page.locator('.capture-section-slot .capture-refused')).toContainText(
-    'Back to the last section',
-    { timeout: 10_000 },
-  )
+  await page.getByRole('button', { name: 'Use the last section' }).click()
+  await expect(page.locator('.capture-halt')).toHaveCount(0)
   await expect(sectionRow(page)).toContainText('Section 3 of 3')
 })
 
@@ -605,4 +611,226 @@ test('an older server with no sections_detail[].div still lets U reach the divid
   // The fallback read `record.sections`' own last entry — "4" — and named it, exactly as a
   // current server's own `div` would have.
   await expect.poll(() => wire.closes).toEqual([{ div: '4' }])
+})
+
+/* THE SIX SPECS THE OPUS REVIEW ASKED FOR, 2026-09-26 (findings 1, 2, 3, 4, 5). */
+
+test('S then U then capture: the prior pick is restored, not the removed divider (finding 3)', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await sectionRow(page).click()
+  await page.locator('.capture-opt').filter({ hasText: /Section 2 of 3/ }).click()
+  await expect(sectionRow(page)).toContainText('Rares')
+
+  await page.keyboard.press('s')
+  expect(wire.opens).toEqual([{ box: '5', after: '6' }])
+  await expect(sectionRow(page)).toContainText('Section 3 of 4')
+
+  await page.keyboard.press('u')
+  await expect.poll(() => wire.closes).toHaveLength(1)
+
+  // NOT THE STALE KEY U JUST REMOVED, AND NOT THE LAST SECTION — the pick the operator had
+  // BEFORE the S, restored exactly.
+  await expect(sectionRow(page)).toContainText('Section 2 of 3')
+  await expect(sectionRow(page)).toContainText('Rares')
+
+  // The very next capture lands cleanly — a stale key here would halt it on `section_gone`.
+  await page.keyboard.press('c')
+  await expect(page.locator('.capture-halt')).toHaveCount(0)
+  await expect(page.locator('.capture-undo-row').first()).toHaveAttribute(
+    'aria-label',
+    /Box 5, Section 2, Card 11$/,
+  )
+})
+
+test('a capture that changes the token and section_div takes the response as the new pick (finding 1)', async ({
+  page,
+}) => {
+  await open(page)
+  await sectionRow(page).click()
+  await page.locator('.capture-opt').filter({ hasText: /Section 2 of 3/ }).click()
+  await expect(sectionRow(page)).toContainText('Rares')
+
+  // THE CAPTURE ITSELF RE-SPACED THE BOX (another writer landed between the pick and this
+  // press) — the response's own `layout_token`/`section_div` say so, and neither matches
+  // what the screen sent. An incremental patch of `layout_token` alone would leave
+  // `selectedDiv` naming "6", a key `sectionsDetail` may now resolve to a DIFFERENT section.
+  let sawSecondCapture: { section?: string; layout_token?: string } | null = null
+  await page.route(/\/capture$/, async (route, request) => {
+    const asked = request.postDataJSON() as { section?: string; layout_token?: string }
+    if (sawSecondCapture === null && asked.section === '6') {
+      sawSecondCapture = asked
+      return route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          box: 5,
+          index: 11,
+          key: '5/11',
+          label: 'Box 5, Section 2, Card 6',
+          section: 2,
+          card: 6,
+          // THE RE-SPACED KEY AND TOKEN — not "6" and not "tok1".
+          section_div: '7',
+          layout_token: 'tok-respaced',
+          new_box: false,
+          created: true,
+          photo: '/tmp/5-11.jpg',
+          capture_id: null,
+          place: { box_total: 11, located: true, label: 'Box 5, Section 2, Card 6' },
+        }),
+      })
+    }
+    return route.fallback()
+  })
+  await page.route(/\/boxes$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        boxes: [{ ...BOX, sections_detail: threeSections().map((s) => (s.div === '6' ? { ...s, div: '7' } : s)), layout_token: 'tok-respaced' }],
+      }),
+    }),
+  )
+
+  await page.keyboard.press('c')
+  await expect.poll(() => sawSecondCapture).not.toBeNull()
+
+  // THE PICK MOVED TO THE RESPONSE'S OWN `section_div` — "7", never the stale "6" the
+  // request went out with — and the STORED pick carries the fresh token beside it, so a
+  // restore later requires THAT token, not the one the pick was originally made against
+  // (finding 1's own restore half, proved separately below).
+  await expect.poll(() =>
+    page.evaluate(() => {
+      // eslint-disable-next-line no-restricted-syntax -- READING THE KEY UNDER TEST (finding 1's own token field).
+      return JSON.parse(localStorage.getItem('banchi.capture.sections') ?? '{}') as Record<string, unknown>
+    }),
+  ).toMatchObject({ 'bid:15': { div: '7', token: 'tok-respaced' } })
+})
+
+test('a restore after a re-space requires the stored token to still match (finding 1)', async ({ page }) => {
+  await open(page)
+  // A PICK STORED BEFORE THE BOX WAS RE-SPACED: the key "6" is still a real
+  // `sections_detail[].div` on THIS box (membership alone would pass), but the token it was
+  // made against is not the box's current one — a re-space can leave a key resolving to a
+  // DIFFERENT section, which membership can never see.
+  await page.evaluate(() => {
+    // eslint-disable-next-line no-restricted-syntax -- SEEDING THE KEY UNDER TEST (finding 1's own token field).
+    localStorage.setItem(
+      'banchi.capture.sections',
+      JSON.stringify({ 'bid:15': { div: '6', at: Date.now(), token: 'tok-old' } }),
+    )
+  })
+  await page.reload()
+  await expect(page.locator('.capture-row').filter({ hasText: /Finish/ })).toBeVisible()
+  await expect(async () => {
+    await page.keyboard.press('b')
+    await expect(page.locator('.capture-opt').filter({ hasText: /Sub-box test/ })).toBeVisible({ timeout: 1_000 })
+  }).toPass({ timeout: 15_000 })
+  await page.keyboard.type('5')
+  await page.keyboard.press('Enter')
+
+  // THE TOKEN MISMATCH IS TREATED LIKE A GONE KEY, never silently adopted — the box's own
+  // token is "tok1" (the fixture's default), not "tok-old".
+  await expect(sectionRow(page)).toContainText('Section 3 of 3')
+  await expect(page.locator('.capture-section-slot .capture-refused')).toContainText('That section is gone')
+})
+
+test('a capture refreshes the pick\'s clock, so 30+ minutes since the PICK does not expire it (finding 5)', async ({
+  page,
+}) => {
+  await page.clock.install()
+  await open(page)
+  await sectionRow(page).click()
+  await page.locator('.capture-opt').filter({ hasText: /Section 2 of 3/ }).click()
+  await expect(sectionRow(page)).toContainText('Rares')
+
+  // 25 minutes in — still fresh — a capture lands and touches the pick's own clock.
+  await page.clock.runFor(25 * 60_000)
+  await page.keyboard.press('c')
+  await expect(page.locator('.capture-halt')).toHaveCount(0)
+  await expect(page.locator('.capture-undo-row').first()).toHaveAttribute(
+    'aria-label',
+    /Box 5, Section 2, Card 11$/,
+  )
+
+  // 25 MORE MINUTES (50 since the pick, but 25 since the capture that touched it) — a
+  // reload restores the SAME pick, because the capture reset its clock. Without finding 5's
+  // fix this would have expired at the 30-minute mark from the ORIGINAL pick.
+  await page.clock.runFor(25 * 60_000)
+  await page.reload()
+  await expect(page.locator('.capture-row').filter({ hasText: /Finish/ })).toBeVisible()
+  await expect(async () => {
+    await page.keyboard.press('b')
+    await expect(page.locator('.capture-opt').filter({ hasText: /Sub-box test/ })).toBeVisible({ timeout: 1_000 })
+  }).toPass({ timeout: 15_000 })
+  await page.keyboard.type('5')
+  await page.keyboard.press('Enter')
+  await expect(sectionRow(page)).toContainText('Section 2 of 3')
+  await expect(sectionRow(page)).toContainText('Rares')
+})
+
+test('U right after S, with no settle time beyond the S round trip, undoes the divider it just made (finding 4, D128)', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await sectionRow(page).click()
+  await page.locator('.capture-opt').filter({ hasText: /Section 2 of 3/ }).click()
+
+  // WAIT ONLY FOR S'S OWN ROUND TRIP TO LAND (the request the mock answers), NEVER FOR A
+  // SETTLED DOM TEXT OR AN ARBITRARY PAUSE — `expect.poll` on `wire.opens` resolves the
+  // moment the response is back and `doSection`'s state updates are queued, which is the
+  // EARLIEST point 'u' can mean anything. From there to `pendingDivider` actually being set
+  // and `fireUndoRef` actually being re-armed is exactly the gap a passive `useEffect` leaves
+  // open — the same gap this file's "older server" test names as "about one run in five"
+  // without it. A layout effect closes that gap; a passive one does not.
+  await page.keyboard.press('s')
+  await expect.poll(() => wire.opens).toHaveLength(1)
+  await page.keyboard.press('u')
+
+  // THE DIVIDER S JUST OPENED IS THE ONE U JUST CLOSED — not a plain capture-undo (there is
+  // no capture yet to undo), and not a no-op.
+  // THE NEW DIVIDER'S OWN KEY, not the picked div "6" that named where it went — the fixture's
+  // own S handler suffixes it ("11-2") only because it would otherwise collide with the
+  // already-empty section 3's div in this exact fixture; a real server's opaque key would
+  // simply differ (subbox-capture.md 1).
+  await expect.poll(() => wire.closes).toEqual([{ box: '5', div: '11-2' }])
+  await expect.poll(() => wire.opens).toEqual([{ box: '5', after: '6' }])
+  await expect(sectionRow(page)).toContainText('Section 2 of 3')
+  await expect(sectionRow(page)).toContainText('Rares')
+})
+
+test('a capture after a 409 with Keep unanswered does not fire — nothing was written stays true (finding 2)', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await sectionRow(page).click()
+  await page.locator('.capture-opt').filter({ hasText: /Section 2 of 3/ }).click()
+  wire.bumpToken()
+
+  await page.keyboard.press('c')
+  await expect(page.locator('.capture-halt')).toContainText('Nothing was written')
+
+  // THE HALT SITS UNANSWERED — no Keep, no "Use the last section", no Resume (there is
+  // none for this halt). A second press must not reach the server at all.
+  let capturesSinceHalt = 0
+  await page.route(/\/capture$/, (route) => {
+    capturesSinceHalt += 1
+    return route.fallback()
+  })
+  await page.keyboard.press('c')
+  await page.keyboard.press('c')
+  await expect(page.locator('.capture-halt')).toBeVisible()
+  // THE DEFINITIVE PROOF: no request reached the server for either press — not merely that
+  // the undo strip looks unchanged, which it would anyway (it falls back to the box's own
+  // pre-existing newest card whenever this sitting has captured nothing, with or without a
+  // halt in the way).
+  expect(capturesSinceHalt).toBe(0)
+
+  // Answering it is still the only way through, and it works.
+  await page.getByRole('button', { name: 'Use the last section' }).click()
+  await expect(page.locator('.capture-halt')).toHaveCount(0)
+  await page.keyboard.press('c')
+  await expect(page.locator('.capture-undo-row').first()).toBeVisible()
 })

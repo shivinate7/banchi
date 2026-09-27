@@ -281,9 +281,18 @@
    `.capture-box-val` with no scope beyond the class and would hit both rows' empty state at
    once (subbox-capture.md §5). Same shape, at the regular row's own scale rather than the
    Box row's large one — this is not the screen's headline field. */
-.capture-section-val { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; align-items: flex-end; text-align: right; }
-.capture-section-val strong { font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.capture-section-val span { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* FINDING 8: `align-items: flex-end` LEFT `strong`/`span` UN-STRETCHED — the CROSS axis of a
+   COLUMN flex container (here, width) sizes a non-stretched item to its own preferred
+   (max-content) size, ignoring the container's own squeezed width entirely; `overflow:hidden`
+   and `text-overflow:ellipsis` only clip once an element HAS a definite width smaller than its
+   content, which a fit-content, non-stretched item never gets. `align-items: stretch` makes
+   both lines take the CONTAINER's own (grid-constrained) width, and `text-align: right` then
+   right-aligns whatever they got left over. Before this, a long section name did not clip: it
+   overflowed the LEFT of its own right-anchored box, over the keycap and the "Section" label
+   — measured at 390, and reachable at 1440 with a name long enough. */
+.capture-section-val { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; align-items: stretch; text-align: right; }
+.capture-section-val strong { min-width: 0; font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.capture-section-val span { min-width: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .capture-section-val.is-empty strong,
 .capture-section-val.is-default strong { color: var(--bn-ink-3); font-weight: 400; }
 .capture-row-lg:has(.is-empty) { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1.5px var(--bn-accent); }
@@ -313,6 +322,20 @@
    flow and sizes it, and its own open field overlays it without moving the shutter or the
    blocker list below (docs/specs/subbox-capture.md §5). */
 .capture-section-slot { position: relative; min-height: 40px; }
+/* FINDING 7 (D118): the stale-pick fallback sentence overlays the space below the row rather
+   than adding to the slot's own flow height — matching `.capture-open-pinned`'s own trick just
+   above, an appearing/clearing note must never move `.capture-controls` under the operator's
+   hand. Opaque for the same reason that class is: it sits OVER what would otherwise show
+   through, not beside it. */
+.capture-section-note {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  background: var(--bn-surface);
+  padding-top: var(--bn-2);
+}
 /* The closed row while the field is open: still in flow (it is what sizes the slot), but
    invisible and out of the tab order — the pinned overlay above it is what the operator
    sees and reaches. `visibility`, not `display: none`, is the whole trick: a hidden element
