@@ -13,7 +13,9 @@ carries are quoted in backticks.
   - Each lane gets one review. A re-review happens only after a FAIL.
   - A reviewer never re-runs a suite that the builder ran green at the same head.
   - A lane merge into the integration branch gets only `cd app && npx tsc --noEmit`.
-  - ONE `make check` runs on the final head. Then open the PR, wait for green CI, and merge.
+  - On the final head, run `make vale` only, the one part of `make check` that CI skips. Then
+    open the PR, wait for green CI, and merge. Owner, 2026-09-27: `Agreed and proceed`. This
+    replaced one full `make check` at the end, because CI's `check` job runs `make ci-check`.
   - CI is the only browser gate before main.
 - **A stale test:** a test that asserts a superseded rule is flagged to the owner. Nobody
   rewrites it silently. Owner: `let me know if the rule in ci itself is bad/stale`.
@@ -66,8 +68,8 @@ Owner rulings for N1 and N2 (2026-09-26):
 
 Owner, 2026-09-27: `the few  changes i pullled forward from PR4B btw  that were made rn btw are gonna join PR4A`.
 
-Then: merge every lane into `ux/pr4a-integration` off main, with tsc per merge. Run one
-`make check`, open the PR, wait for green CI, and merge.
+Then: merge every lane into `ux/pr4a-integration` off main, with tsc per merge. Run
+`make vale`, open the PR, wait for green CI, and merge.
 
 ## PR 4B lanes (rewritten 2026-09-27)
 
