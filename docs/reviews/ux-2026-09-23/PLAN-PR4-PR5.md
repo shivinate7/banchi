@@ -9,6 +9,13 @@ carries are quoted in backticks.
 - The orchestrator plans, briefs, verifies and merges. It never builds product code.
 - **Model cap (owner, 2026-09-26):** `going forward no subagent is allowed to be above sonnet in this session`.
 - **Merge grant:** it is session-bound. A new session asks the owner for it again.
+- **Autonomous run (owner, 2026-09-27, process-only, this session):** after PR 4A merges on
+  green, the session does the PR 3B demo work alone, then stops. Grants for that run:
+  - Merge PR 3B on green, once the scrub check, the 512 MB cap and a leak check pass.
+  - A product question from a review or CI: take the orchestrator's recommendation. Owner:
+    `your recommendation is fine, note it explicitly at the end of your FINAL autonomous turn of this session`.
+  - A CI red on a test that a recorded owner ruling clearly supersedes: a builder may rewrite
+    it. The commit names the ruling, and a reviewer confirms no guard got weaker.
 - **Cadence (owner, 2026-09-26):**
   - Each lane gets one review. A re-review happens only after a FAIL.
   - A reviewer never re-runs a suite that the builder ran green at the same head.
