@@ -225,7 +225,9 @@ test.describe('the published demo draws what reviewers grade', () => {
     await page.keyboard.press('Escape')
     const rows = page.locator('button:has-text("match")')
     await expect(rows.first()).toBeVisible()
-    expect(await rows.count()).toBeGreaterThanOrEqual(4)
+    // Same DEBT23 shape as the walk's own count below: the first row being visible does not
+    // mean every row has rendered, so poll the count rather than reading it once.
+    await expect.poll(() => rows.count()).toBeGreaterThanOrEqual(4)
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
 
@@ -258,8 +260,20 @@ test.describe('the published demo draws what reviewers grade', () => {
     await visit(page, 'Orders')
     await page.getByRole('button', { name: /^Walk all \d+ buyers?$/ }).first().click()
     const walk = page.getByRole('list', { name: /cards to pick/i })
-    await expect(walk).toBeVisible()
-    expect(await walk.getByRole('button').count()).toBeGreaterThan(0)
+    // A LONGER TIMEOUT, NAMED WHY (2026-09-27, CI run 36314954311): pressing "Walk all"
+    // over this mirror's full 71 open orders (70 buyers) runs `useOrderWalk`'s solve
+    // client-side, over every one of them plus the whole inventory already in memory.
+    // The default 15s cleared this locally in ~1-2s every time, but timed out on CI's
+    // slower runner with the list never appearing at all — a real cost, not a missing
+    // wait: `expect(walk).toBeVisible()` was already the correct web-first assertion, it
+    // was only ever given too little time for this one, heavier case.
+    await expect(walk).toBeVisible({ timeout: 45_000 })
+    // DEBT23's shape: the list container appearing does not mean its rows have. A bare
+    // count() right after does not retry, so it can read zero while the rows are still
+    // filling in. Wait for a row itself, web-first, before counting.
+    const walkRows = walk.getByRole('button')
+    await expect(walkRows.first()).toBeVisible()
+    expect(await walkRows.count()).toBeGreaterThan(0)
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
 
