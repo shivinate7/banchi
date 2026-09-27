@@ -302,8 +302,9 @@ test('the Section row names the pick, its count and where it physically goes', a
   await expect(sectionRow(page)).toContainText('Section 2 of 3')
   await expect(sectionRow(page)).toContainText('Rares')
   await expect(sectionRow(page)).toContainText('next card 11')
-  // NOT THE LAST SECTION: the row says where the card physically goes.
-  await expect(sectionRow(page)).toContainText('behind the section 3 divider')
+  // NOT THE LAST SECTION: the row says where the card physically goes. Cut from "behind the
+  // section N divider" (owner: "over verbiage", it truncated at 390) to "before section N".
+  await expect(sectionRow(page)).toContainText('before section 3')
 })
 
 test('every capture sends the picked section, and the placed label reads it back', async ({ page }) => {
@@ -319,6 +320,52 @@ test('every capture sends the picked section, and the placed label reads it back
   )
   // The section's own count moved, off the response — no re-fetch needed for it to show.
   await expect(sectionRow(page)).toContainText('next card 12')
+})
+
+/* REVIEWER'S FINDING (Lane J, item 2 follow-up): `patchSectionCount` moved the Section row's
+ * own count up on every capture (the test above) but nothing ever moved it back down on an
+ * undo — `undoBack` called `patchOnHand` alone. The Section row stayed at the count from a
+ * card that no longer existed until the next `GET /boxes`, and D118's own "one number
+ * everywhere" ruling (item 2 of this same batch) then fanned that stale number out to the
+ * header stat, the Box row and the stage foot too. Fixed by decrementing `patchSectionCount`
+ * from the `UndoTarget`'s own `sectionDiv`, the same field the capture handler reads to
+ * increment it. */
+test('an undo into a picked, non-last section decrements that section too, not only the box (D260)', async ({
+  page,
+}) => {
+  await open(page)
+  await sectionRow(page).click()
+  await page.locator('.capture-opt').filter({ hasText: /Section 2 of 3/ }).click()
+
+  await expect(sectionRow(page)).toContainText('next card 11')
+
+  await page.keyboard.press('c')
+  await expect(sectionRow(page)).toContainText('next card 12')
+  // THE SAME NUMBER, EVERYWHERE — item 2's own fix: the odometer's "next card" stat now
+  // follows the PICKED section, not the box's bare on-hand count.
+  await expect(page.locator('.capture-odo .bn-stat').nth(1).locator('.bn-stat-value')).toHaveText(
+    '12',
+  )
+
+  // `undoCapture`'s own route — this file's fixture never captures a real photo, so the DELETE
+  // it sends is stubbed here rather than in `open()`, which no other case in this file needs.
+  await page.route(/\/inventory\/\d+\/\d+$/, (route) => {
+    if (route.request().method() !== 'DELETE') return route.fallback()
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ deleted: '5/11', on_hand: 10 }),
+    })
+  })
+
+  await page.keyboard.press('u')
+
+  // BOTH READ 11 AGAIN — the defect's own shape was these two DISAGREEING: the section stuck
+  // at 12 (nothing had ever decremented it) while the box-derived stat already read 11.
+  await expect(sectionRow(page)).toContainText('next card 11')
+  await expect(page.locator('.capture-odo .bn-stat').nth(1).locator('.bn-stat-value')).toHaveText(
+    '11',
+  )
 })
 
 test('a re-space under the pick halts and offers to keep the section by ordinal (finding 2)', async ({
@@ -460,8 +507,8 @@ test('the row does not move the shutter below it, on a pick or an S (D118)', asy
   await page.locator('.capture-opt').filter({ hasText: /Section 2 of 3/ }).click()
   const afterPick = await place(page, '.capture-shutter')
   // THE POSITION IS D118'S OWN CONCERN, never the shutter's own rendered height — a longer
-  // label on the row above it (a section's name, or "behind the section N divider") can
-  // shift Chromium's own sub-pixel text rounding by a hair without moving anything at all.
+  // label on the row above it (a section's name, or "before section N") can shift Chromium's
+  // own sub-pixel text rounding by a hair without moving anything at all.
   expect(afterPick.top).toBe(withListOpen.top)
   expect(afterPick.top).toBe(atRest.top)
 
