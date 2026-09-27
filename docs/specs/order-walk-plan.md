@@ -1105,3 +1105,61 @@ It never filtered `sku_unknown`. "Tick all" and "Untick all" are now "Tick shown
 "Untick shown", matching `#/inventory`'s own wording for the same reach. "Untick shown" now
 reads the ticked set for its disabled state, not the shown set. The step-through hint no
 longer renders below phone width, where its arrow-key handler is gated off.
+
+## 14. The screen's own arithmetic, one formula, one unit — the UX review, 2026-09-26
+
+**Every count `#/orders` draws over one open order's lines reconciles in one unit: copies.**
+Sum this formula line by line, over any set of open orders:
+
+```
+owed = pick + short + elsewhere
+```
+
+- `owed` — `line.owed`. What the order still wants.
+- `pick` — `line.owed - line.outstanding`, summed only where positive. What the resolver can
+  offer right now. `cardsToPull` sums this same way, over whichever set is walked.
+- `short` — `line.outstanding` where the line's reason is `no_copies_on_hand` or `short`.
+  Both reasons name the same fact: nothing is left on hand for this SKU. The split exists
+  only so `statusOf` can rank a buyer who got some of it above one who got none. A screen
+  states both as one bucket, "short", never as two words for one problem.
+- `elsewhere` — `line.outstanding` where the reason is `sku_unseen`, `sku_unknown` or
+  `not_a_single`. This store has never carried the SKU, or the line is sealed product. A
+  screen with room to spare names them apart ("not in the store", "sealed"). A compact chip
+  states only their sum. See the next paragraph for why.
+
+**The review's finding 1** named two true numbers that a reader could not reconcile: the
+header's "216 copies owed to 70 buyers", and the walk's "97 cards to pick". Both are correct.
+They answer two different questions. One counts the whole store. The other counts only the
+walked subset. Neither said which question it answered, so together they read as one
+contradicted claim.
+
+The fix is not to force the two numbers to agree — they legitimately differ whenever fewer
+than all buyers are walked. The fix gives the header its own full breakdown, stated once:
+"216 copies owed to 70 buyers — 97 to pick, 105 short, 14 not in the store"
+(`verdictOf`, `app/src/Orders.tsx`). A reader can see the header's own identity hold. It no
+longer needs the walk's number to match it.
+
+**Finding 1's second half** named a buyer chip ("7 cards none left") beside that same buyer's
+own figures ("11 short"). One buyer, one set of orders, still two disagreeing numbers. This
+half WAS a defect. `lookWords` reported only the loudest reason's own count, weighted by
+`owed`. It silently dropped every other reason. It never even mapped the `short` bucket at
+all.
+
+The fix sums every reason's `outstanding`, never `owed`, and never only the loudest one. One
+reason explains the whole total: the chip names that reason. Two or more reasons together:
+the chip reads "N cards need a look" instead. See `lookWords`'s own comment for the worked
+example.
+
+## 15. Every copy is fungible — naming it on the row, not only in the plan (finding 2)
+
+A take's slot list can outnumber what it wants. `wanted = 1` over two candidate cards
+standing in the SAME stop is not an error. It is D212 (every copy is fungible) reaching the
+row.
+
+Before this fix, the row printed both card numbers. Nothing told the operator either one
+would do. For a "Pick 1" line, that read as "take both" (the review's Allen Petlock example,
+`#61, #62 Tasty Faefolk Pick 1 of 2`).
+
+The fix is one word, `(either)`. `OrdersWalkPane.tsx` appends it only when the stop holds more
+candidates than the take wants. It never picks one for the operator — D97 still forbids
+that. It only says the choice is free.

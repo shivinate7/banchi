@@ -909,14 +909,49 @@ function joinPhrases(parts: string[]): string {
 /** The verdict, drawn once the ledger has answered: ONE fact over ONE set (UX-167). The copies
  *  owed and the buyers they are owed to are both counted over the OPEN orders. The old lede
  *  counted lines over the open orders and buyers over every order in the ledger, so a long
- *  history read "611 lines across 806 buyers". */
-function verdictOf(open: readonly OrderRow[]): ReactNode {
+ *  history read "611 lines across 806 buyers".
+ *
+ *  THE BREAKDOWN IS SAID ONCE, HERE (review finding 1: "216 copies owed" and "97 cards to
+ *  pick" read as two answers to one question with nothing connecting them). `owed` splits
+ *  three ways over the SAME open set, in the SAME unit (copies): `pick` (owed minus
+ *  outstanding, the walk's own arithmetic — `cardsToPull` runs the identical sum over the
+ *  walked subset), `short` (no copies left, whether or not this order's own line already
+ *  reads `short` because some were already recorded — the two are the same fact, see
+ *  `lookWords`), and `elsewhere` (a SKU this store has never seen, or that is sealed
+ *  product). `pick + short + elsewhere === owed`, always, because every line's `outstanding`
+ *  falls in exactly one of `resolved` (counted in `pick`), the two "none left" reasons, or
+ *  the two "needs a look" reasons. `docs/specs/order-walk-plan.md` states this identity. */
+function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]): ReactNode {
   const owed = open.reduce((sum, order) => sum + Math.max(0, order.wanted - order.recorded), 0)
   const buyers = new Set(open.map(buyerKeyOf)).size
   if (owed === 0) return 'Every open order has its copies.'
+  const byKey = new Map(resolved.map((order) => [order.key, order]))
+  let pick = 0
+  let short = 0
+  let elsewhere = 0
+  for (const order of open) {
+    for (const line of byKey.get(order.key)?.lines ?? []) {
+      pick += Math.max(0, line.owed - line.outstanding)
+      const reason = lineReason(order, line)
+      if (reason === 'short' || reason === 'no_copies_on_hand') short += line.outstanding
+      else if (reason !== 'resolved') elsewhere += line.outstanding
+    }
+  }
+  /* The breakdown adds nothing where every copy is pickable (`short` and `elsewhere` both
+   * zero, so `pick === owed`) — it would only repeat the number the sentence already gives.
+   * It is said only where it explains something the plain sentence does not. */
+  const parts = short > 0 || elsewhere > 0 ? [`${pick} to pick`] : []
+  if (short > 0) parts.push(`${short} short`)
+  if (elsewhere > 0) parts.push(`${elsewhere} not in the store`)
   return (
     <>
       <strong>{owed}</strong> {plural(owed, 'copy', 'copies')} owed to <strong>{buyers}</strong> {plural(buyers, 'buyer', 'buyers')}
+      {parts.length === 0 ? null : (
+        <>
+          {' — '}
+          {joinPhrases(parts)}
+        </>
+      )}
     </>
   )
 }
@@ -2178,7 +2213,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     <Page
       icon="cart"
       className={hub.walkLine === null ? 'orders-hub orders' : 'orders-hub orders is-walking'}
-      verdict={populated ? verdictOf(open) : undefined}
+      verdict={populated ? verdictOf(open, payload?.resolution.orders ?? []) : undefined}
       lede={populated ? undefined : 'Which copies each buyer gets, and where they are.'}
       /* THE WALK LINE (walk mode, under 1000px of column): who, how many, what is next, opening
          the buyer list, and one press out of the walk. CSS draws it only there. Out of the walk
@@ -3076,6 +3111,13 @@ function PullStage({
   const select = (key: string) => {
     walkTo(key)
     setBuyersOpen(false)
+    /* THE WALK COLUMN HAS NO SCROLL OF ITS OWN (UX-201: one scroll, the page's) — so a
+     * selection made low in a long buyer list left the page scrolled to where that list row
+     * was, with the newly selected buyer's own panel rendered above the fold (review, finding
+     * 3: "his orders draw at the top of the page... the middle column is empty where you
+     * clicked"). Only the photo pane, being sticky, still showed. Bringing the walk section
+     * back into view is the fix, not making a second element sticky. */
+    requestAnimationFrame(() => walkRef.current?.scrollIntoView({ block: 'start' }))
   }
 
   if (failure !== null && payload === null) {
@@ -3215,7 +3257,11 @@ function PullStage({
   }
 
   /* ONE CONTROL THAT SAYS WHAT IT DOES (UX-232): "Walk all 6 buyers", with the same verb the
-     checkboxes carry. It becomes "Walk one buyer" once every row is ticked. */
+     checkboxes carry. PRESSED, IT NAMES THE UNDO, NEVER A DIFFERENT FEATURE (review finding
+     4): the old label flipped to "Walk one buyer" once every row was ticked, which reads as a
+     SEPARATE control ("walk exactly one") rather than as this same toggle's own off state —
+     the operator had ticked all 70 and the button now claimed to walk one. `aria-pressed`
+     already carries the ON/OFF state; the word only needs to say what THIS PRESS does next. */
   const allTicked = tickableKeys.size > 0 && [...tickableKeys].every((key) => walkTicked.has(key))
   const walkAll =
     tickableKeys.size < 2 ? null : (
@@ -3229,7 +3275,7 @@ function PullStage({
           setWalkTicked(allTicked ? new Set() : new Set(tickableKeys))
         }}
       >
-        {allTicked ? 'Walk one buyer' : `Walk all ${tickableKeys.size} buyers`}
+        {allTicked ? 'Stop walking all' : `Walk all ${tickableKeys.size} buyers`}
       </Button>
     )
   const readyFirst = sortedReadyFirst(shownGroups, readyOf)
@@ -3486,25 +3532,48 @@ function figuresOf(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
   return { owed, sold, short: Math.min(short, owed) }
 }
 
-/** What "Needs a look" is about, in words (UX-200): the most common reason a buyer's lines
- *  cannot be pulled, counted in cards. "1 card not in the store", "2 cards sealed". */
+/** What "Needs a look" is about, in words (UX-200, review finding 1 and 5). "1 card not in
+ *  the store", "2 cards sealed" — and, where a line's own reason is `short` (some copies of
+ *  it already went to THIS order, the rest are gone too), the SAME "none left" fact `short`
+ *  and `no_copies_on_hand` share, folded into one bucket rather than a third word for the
+ *  same problem.
+ *
+ *  COUNTED IN `outstanding`, NEVER `owed` (the fix): `owed` is what the ORDER still wants,
+ *  which overstates a `short` line by the copies already recorded against it. `outstanding`
+ *  is what the resolver could not offer, the same unit `verdictOf`'s breakdown and
+ *  `figuresOf`'s `short` both use, so this chip's own number never disagrees with either.
+ *
+ *  THE PRINTED NUMBER IS THE FULL TOTAL, NEVER ONLY THE LOUDEST REASON. The old version
+ *  picked the top reason and reported ONLY its count, so a buyer short on 7 "none left" and
+ *  1 "not in the store" read "7 cards none left" beside a header reading "8 short" — two
+ *  true numbers about the same buyer that could not be reconciled by looking at the screen.
+ *  One reason explains the whole total, and the chip says so, in that reason's own words. Two
+ *  or more reasons together get the generic phrasing `STATUS_PILL.look` already carries
+ *  ("N cards need a look"), naming no single one of them wrongly. */
 function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): string {
   const words: Partial<Record<OrderLineReason, string>> = {
     sku_unseen: 'not in the store',
     sku_unknown: 'not in the store',
-    no_copies_on_hand: 'none left',
+    no_copies_on_hand: 'short',
+    short: 'short',
     not_a_single: 'sealed',
   }
   const tally = new Map<string, number>()
   for (const order of group.open) {
     for (const line of answers.get(order.key)?.lines ?? []) {
       const said = words[lineReason(order, line)]
-      if (said !== undefined) tally.set(said, (tally.get(said) ?? 0) + line.owed)
+      if (said !== undefined) tally.set(said, (tally.get(said) ?? 0) + line.outstanding)
     }
   }
-  const top = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]
-  if (top === undefined) return STATUS_PILL.look.label
-  return `${top[1]} ${plural(top[1], 'card', 'cards')} ${top[0]}`
+  const entries = [...tally.entries()].filter(([, count]) => count > 0)
+  const total = entries.reduce((sum, [, count]) => sum + count, 0)
+  if (total === 0) return STATUS_PILL.look.label
+  const only = entries.length === 1 ? entries[0] : undefined
+  if (only !== undefined) {
+    const [word, count] = only
+    return word === 'short' ? `${count} short` : `${count} ${plural(count, 'card', 'cards')} ${word}`
+  }
+  return `${total} ${plural(total, 'card', 'cards')} need a look`
 }
 
 /** The one status a buyer shows, in words. */

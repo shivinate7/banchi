@@ -7986,8 +7986,8 @@ COMPONENTS = [
                                        "rather than offered twice.",
                                "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69",
                                                "D113", "D114", "D117", "D118", "D123", "D193",
-                                               "D195", "D196", "D203", "D221",
-                                               "D270", "D274"]},
+                                               "D195", "D196", "D203", "D212", "D221", "D270",
+                                               "D274"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -8075,7 +8075,7 @@ COMPONENTS = [
                                          "unjudged lane is drawn as an answer rather than as a "
                                          "fault, because D61's third lane is a deliberate "
                                          "abstention and not a failure to route.",
-                                 "governed_by": ["D40", "D50", "D61", "D69", "D117", "D218",
+                                 "governed_by": ["D40", "D50", "D61", "D69", "D117", "D197", "D218",
                                                  "D292"]},
             "src/Revenue.tsx": {"does": "`#/revenue` (Sales): the gross-revenue "
                                         "retrospective, built on `<Page>` and Direction B "

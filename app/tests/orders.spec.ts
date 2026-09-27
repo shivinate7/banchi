@@ -2211,6 +2211,12 @@ function seededOrder(seed: {
     order_key: key,
     sku,
     reason: seed.reason,
+    /* A non-`resolved` reason means the resolver could not offer this line, which the real
+     * wire always states as `outstanding > 0` — `outstanding: 0` is the factory's `resolved`
+     * default (`routeFixtures.ts`), so a reason override without this one reads as a resolved
+     * line under a false label. `lookWords`/`verdictOf` read `outstanding`, not `owed`. */
+    outstanding: seed.reason === 'resolved' ? 0 : 1,
+    fulfilled: seed.reason === 'resolved' ? 1 : 0,
     picks: seed.reason === 'resolved' ? [pick({ capture_id: `cap-${seed.number}`, card_name: seed.buyer })] : [],
     line: { ...line().line, sku },
   })
@@ -2398,8 +2404,10 @@ test('at 390, the walk rows are on the page, and a tick from the sheet widens th
   await expect(walk).toContainText('Sunrise')
 })
 
-/* ONE CONTROL THAT SAYS WHAT IT DOES (UX-232), with the same verb the checkboxes carry. */
-test('"Walk all N buyers" ticks every row, and "Walk one buyer" clears them', async ({ page }) => {
+/* ONE CONTROL THAT SAYS WHAT IT DOES (UX-232), with the same verb the checkboxes carry.
+ * PRESSED, IT NAMES THE UNDO (review finding 4): "Walk one buyer" read as a different
+ * control, not this same toggle's own off state — fixed to "Stop walking all". */
+test('"Walk all N buyers" ticks every row, and "Stop walking all" clears them', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   const all = page.getByRole('button', { name: 'Walk all 3 buyers' })
   await expect(all).toBeVisible()
@@ -2411,7 +2419,7 @@ test('"Walk all N buyers" ticks every row, and "Walk one buyer" clears them', as
   /* SEVERAL BUYERS: the head says so, never one buyer's name (UX-230). */
   await expect(page.locator('.orders-walk-title')).toHaveText('3 buyers')
 
-  await page.getByRole('button', { name: 'Walk one buyer' }).click()
+  await page.getByRole('button', { name: 'Stop walking all' }).click()
   await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
 })
 

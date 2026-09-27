@@ -664,7 +664,15 @@ export function WalkList({
                         aria-current={current ? 'true' : undefined}
                         onClick={() => next !== undefined && walk.select(next.rowKey)}
                       >
-                        <span className="orders-walk-slot">{slots.length === 0 ? '—' : slots.map((slot) => `#${slot}`).join(', ')}</span>
+                        <span className="orders-walk-slot">
+                          {slots.length === 0 ? '—' : slots.map((slot) => `#${slot}`).join(', ')}
+                          {/* MORE CANDIDATES HERE THAN THE TAKE WANTS: every copy is fungible
+                           * (D212), so listing two card numbers for a "Pick 1" read as "take
+                           * both" (review, finding 2 — Allen's #61/#62 row named neither copy
+                           * as the one to pull). Saying so, tersely, is the fix the wording
+                           * ruling asks for over a full explanation. */}
+                          {slots.length > line.take.wanted ? <span className="orders-walk-slot-either"> (either)</span> : null}
+                        </span>
                         <span className={line.take.name === null ? 'orders-walk-name is-unnamed' : 'orders-walk-name'}>
                           {line.take.name ?? 'Not identified yet'}
                         </span>
