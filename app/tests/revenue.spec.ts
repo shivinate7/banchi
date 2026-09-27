@@ -464,10 +464,11 @@ test('a line closed for a DIFFERENT reason (shipped_elsewhere) is not excluded',
   ])
   await open(page, '?period=all')
   await expect(page.locator('.revenue-summary-figure')).toContainText('$12.50')
-  // BOTH exclusion sentences still render, stating zero plainly rather than staying silent.
-  await expect(page.locator('.revenue-verdict-refunded')).toContainText(
-    '0 lines were marked refunded or canceled during fulfilment and left out.',
-  )
+  // D225's own sentence still renders at zero (the marketplace's own word, never a habit
+  // this screen asks the owner to trust). The REFUND sentence is the one D281 overrides
+  // (review round, item 6): a note about a habit that has never once caught anything reads
+  // as a warning rather than a fact, so it draws only once the count is real.
+  await expect(page.locator('.revenue-verdict-refunded')).toHaveCount(0)
   await expect(page.locator('.revenue-verdict-canceled')).toHaveText('0 orders were canceled by the marketplace and left out.')
 })
 
@@ -494,9 +495,8 @@ test('the owner\'s real store has zero not_shipping lines today, and the screen 
   ])
   await open(page, '?period=all')
   await expect(page.locator('.revenue-verdict-canceled')).toHaveText('1 order was canceled by the marketplace and left out.')
-  await expect(page.locator('.revenue-verdict-refunded')).toContainText(
-    '0 lines were marked refunded or canceled during fulfilment and left out.',
-  )
+  // D281 (review round, item 6): the refund sentence does not draw at zero.
+  await expect(page.locator('.revenue-verdict-refunded')).toHaveCount(0)
 })
 
 /* ------------------------------------------------------------- the lead-string fix (defect) */

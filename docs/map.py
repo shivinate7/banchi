@@ -8114,9 +8114,9 @@ COMPONENTS = [
                                         "search and the active bucket all round-trip through "
                                         "the URL.",
                                 "governed_by": ["D50", "D62", "D69", "D86", "D89", "D103", "D105",
-                                                "D118", "D159", "D189", "D193", "D194", "D201",
-                                                "D214", "D217", "D219", "D225", "D236",
-                                                "D-sales-rows-by-sku"]},
+                                                "D118", "D125", "D159", "D189", "D193", "D194",
+                                                "D201", "D214", "D217", "D219", "D225", "D236",
+                                                "D281", "D285", "D-sales-rows-by-sku"]},
             "src/Revenue.css": {"does": "the summary band, podium, mix tile, board rows and "
                                         "product table's own layout, `--bn-*` only "
                                         "(D-sales-rows-by-sku's Direction B). The month bars "
@@ -8128,7 +8128,8 @@ COMPONENTS = [
                                         "nested table, and a 390px-only wrap on this screen's "
                                         "own `Segmented` instance, scoped here rather than to "
                                         "the shared kit rule.",
-                                "governed_by": ["D50", "D94", "D217", "D236", "D-sales-rows-by-sku"]},
+                                "governed_by": ["D50", "D94", "D117", "D217", "D236",
+                                                "D-sales-rows-by-sku"]},
             "src/RunFiles.tsx": {"does": "a run's files, as downloads — extracted from RunPanel on "
                                        "2026-08-30 (D54) so two screens can draw them. The `only` "
                                        "prop is the split: the import CSVs go to #/pricing with the "
@@ -9364,7 +9365,7 @@ COMPONENTS = [
                         "in its own header once a fifth period option existed. Not a harness "
                         "test; `make design-check` runs it.",
                 "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201", "D214",
-                                "D217", "D225", "D-sales-rows-by-sku"],
+                                "D217", "D225", "D281", "D-sales-rows-by-sku"],
             },
             "tests/demo-coverage.spec.ts": {
                 "does": "the BUILT public demo (`dist-demo/`), served on this checkout's own "

@@ -160,6 +160,11 @@
 @media (max-width: 639px) {
   .revenue-podium { grid-template-columns: minmax(0, 1fr); gap: var(--bn-3); }
 }
+/* THE MIX TILE NEVER STRETCHES TO THE PHOTO TILES' OWN HEIGHT (item 2, review round: "the
+   panel's empty space must fit its content"). A grid row without `align-items` stretches
+   every cell to the tallest one, and a photo tile's 4:3 art plus body is routinely taller
+   than a short rarity list — `align-self: start` lets this one tile size to what it holds. */
+.revenue-mix { align-self: start; }
 
 .revenue-tile {
   background: var(--bn-surface);
@@ -179,6 +184,28 @@
 }
 @media (max-width: 639px) { .revenue-tile-art { aspect-ratio: auto; width: 96px; flex: none; } }
 .revenue-tile-art .bn-thumb { width: 100%; height: 100%; border-radius: 0; }
+/* A TILE WITH NO PHOTOGRAPH DOES NOT SPEND THE PHOTOGRAPH'S OWN SPACE ON EMPTY GREY (item 4,
+   review round). Sealed product, and a single with every copy already gone, both draw the
+   kit's ONE "no photo" placeholder (`bn-thumb[data-missing]`) — sized for a list row by
+   default, then stretched to fill this tile's full-bleed art area by the rule above. This
+   undoes the stretch for exactly that state, so the placeholder stays the compact card shape
+   the kit already draws it at, centered in a short strip instead of a tall empty box. */
+.revenue-tile-art:has(.bn-thumb[data-missing='true']) {
+  aspect-ratio: auto;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--bn-5) 0;
+}
+.revenue-tile-art:has(.bn-thumb[data-missing='true']) .bn-thumb {
+  width: 64px;
+  height: auto;
+  aspect-ratio: 63 / 88;
+}
+@media (max-width: 639px) {
+  .revenue-tile-art:has(.bn-thumb[data-missing='true']) { width: 96px; padding: var(--bn-3) 0; }
+}
 .revenue-tile-rank {
   position: absolute;
   top: var(--bn-3);
@@ -196,12 +223,39 @@
 
 .revenue-tile-body { padding: var(--bn-4); display: grid; gap: var(--bn-1); min-width: 0; }
 .revenue-tile-l1 { display: flex; align-items: center; gap: var(--bn-2); min-width: 0; }
+/* THE KIT'S OWN THUMB-FLOOR RULE (`kit/data.css`, D117) makes `.bn-datalink` an
+   `inline-flex` under 767px so every link meets the tap-target height — and an
+   `inline-flex` box's PREFERRED width is its content's, same as a plain inline one, so it
+   grew to fit the full name again exactly at the width this screen is read on most (item 1
+   and 9a resurfaced at 390px, real-store data: a name with no product/set text to trim ran
+   the whole board row off the right edge of the phone). `max-width: 100%` caps the wrapper
+   to the column it is actually in; the name span inside (`min-width: 0`) is then free to
+   shrink under it the way a flex item already does by default. */
+.revenue-board-who .bn-datalink,
+.revenue-tile-l1 .bn-datalink { min-width: 0; max-width: 100%; }
 .revenue-tile-name {
   font: 700 var(--bn-fs-lg) / 1.25 var(--bn-font-display);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* THE MISSING HALVES OF THE ELLIPSIS RULE (item 1 and item 9a, review round, the same
+     root cause both times). This element is a plain `<span>`, inline by default, and
+     `overflow`/`ellipsis` do NOTHING on an inline box — they need a box with a bounded
+     width, which an inline element never has. Inside a flex row (the podium tile) the
+     browser blockifies a flex ITEM automatically, so it worked there by accident; inside
+     the board's plain `<div>` (`.revenue-board-who`) it stayed genuinely inline, its text
+     ran past the card's own edge with no ellipsis, and the neighbouring grid columns' text
+     drew underneath it — both the title clipping (item 9a) and part of what looked like the
+     bar's own overlap (item 1) were this one rule never applying outside a flex parent.
+     `display: block` makes it a real box everywhere, not only where its parent happens to
+     be flex; `max-width: 100%` bounds it to that box; `min-width: 0` is the flex-item half,
+     kept for the podium's own flex row, where a flex item's default min-width is its
+     content's width and would otherwise refuse to shrink at all. */
+  display: block;
+  max-width: 100%;
+  min-width: 0;
 }
+.revenue-tile-secondary { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
 .revenue-tile-meta { margin: 0; color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
 .revenue-tile-money { display: flex; align-items: baseline; justify-content: space-between; gap: var(--bn-2); margin-top: var(--bn-2); }
 .revenue-tile-money .bn-money { font-size: var(--bn-fs-2xl); font-weight: 600; }
@@ -244,9 +298,18 @@
 
 .revenue-board-wrap { background: var(--bn-surface); border-radius: var(--bn-r-lg); box-shadow: var(--bn-shadow-1); margin-bottom: var(--bn-6); }
 .revenue-board { margin: 0; padding: 0; list-style: none; }
+/* THE BAR GETS ITS OWN COLUMN, NEVER SHARED WITH THE PRICE (item 1, review round). Before
+   this, the bar (`<i>`, a percentage width) and the price sat in one flex row together, and
+   a wide bar plus a long dollar figure could ask for more room than that row had — a flex
+   item's default min-width is its own content, so the row overflowed rather than shrank, and
+   the overflow drew OVER the neighbouring columns' text (the product name to its left, the
+   copies/date to its right), unreadable on some rows. A grid column can never overlap a
+   sibling column's text at any width, which is what "give the bar its own track" means here:
+   `revenue-board-track` (the bar alone) and `revenue-board-value` (the price alone) are two
+   separate cells now, not one flex row asked to hold both. */
 .revenue-board li {
   display: grid;
-  grid-template-columns: 28px 36px minmax(160px, 1.2fr) minmax(0, 2fr) 88px 72px;
+  grid-template-columns: 28px 36px minmax(160px, 1fr) minmax(64px, 1fr) 76px 88px 72px;
   gap: var(--bn-4);
   align-items: center;
   padding: var(--bn-3) var(--bn-4);
@@ -256,20 +319,28 @@
 .revenue-board li:last-child { border-bottom: 0; }
 .revenue-board-rk { font: 700 var(--bn-fs-md) / 1 var(--bn-font-display); color: var(--bn-ink-3); text-align: right; }
 .revenue-board-who { min-width: 0; }
-.revenue-board-track { position: relative; height: 22px; display: flex; align-items: center; gap: var(--bn-2); }
-.revenue-board-track i { height: 10px; border-radius: 0 var(--bn-r-xs) var(--bn-r-xs) 0; background: var(--bn-accent); min-width: 3px; }
-.revenue-board-track .bn-money { font-weight: 600; font-size: var(--bn-fs-md); }
+.revenue-board-track {
+  position: relative;
+  display: block;
+  height: 10px;
+  min-width: 0;
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-2);
+  overflow: hidden;
+}
+.revenue-board-track i { display: block; height: 100%; border-radius: var(--bn-r-full); background: var(--bn-accent); min-width: 3px; }
+.revenue-board-value { min-width: 0; font-weight: 600; font-size: var(--bn-fs-md); text-align: right; white-space: nowrap; }
 .revenue-board-c, .revenue-board-d { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); text-align: right; white-space: nowrap; }
 .revenue-showall { display: flex; justify-content: center; padding: var(--bn-4); border-top: 1px solid var(--bn-line); }
 
 @media (max-width: 899px) {
-  .revenue-board li { grid-template-columns: 24px 36px minmax(0, 1fr) minmax(0, 1fr) 64px; }
+  .revenue-board li { grid-template-columns: 24px 36px minmax(0, 1fr) minmax(48px, 90px) 64px 64px; }
   .revenue-board-d { display: none; }
 }
 @media (max-width: 639px) {
   .revenue-board li { grid-template-columns: 20px 36px minmax(0, 1fr) auto; gap: var(--bn-3); padding: var(--bn-3); min-height: 64px; }
-  .revenue-board-track { grid-column: 3 / 4; grid-row: 2; height: 12px; }
-  .revenue-board-track .bn-money { display: none; }
+  .revenue-board-track { grid-column: 3 / 4; grid-row: 2; }
+  .revenue-board-value { display: none; }
   .revenue-board-who { grid-column: 3; grid-row: 1; }
   .revenue-board-rk { grid-row: 1 / 3; }
   .revenue-board .bn-thumb { grid-row: 1 / 3; }

@@ -110,6 +110,22 @@
 - "On the shelf" loads on arrival (after one timing on the real store).
 - Thumbnails: yes, a server lookup by SKU for another copy's photo, with a plain tile fallback.
 
+## Sales preview review, round 2 (owner, 2026-09-26)
+- Owner's words, verbatim: "singles sealed switch with default to singles". Best sellers gets
+  a Singles/Sealed/All switch. It defaults to Singles. It stays in the URL (D285).
+- Sealed is decided from the data, never guessed off a product name. The rule: `kind ===
+  'sealed'` where the feed declares it. Or `condition` reads `pipeline/tcgcsv.py:
+  SEALED_CONDITION` ("Unopened"). That is the one condition a TCGplayer export ever lists
+  sealed product under.
+- Measured on the owner's real store: `kind` is `'sealed'` on zero of 1,406 lines. The
+  operator never declares it on a paste. 256 lines carry `Unopened` instead. That condition
+  is where sealed product actually shows up.
+- Board bar overlap, no-photo tiles, long raw product titles, uncropped thumbnails, "0% of
+  gross", and "Best sellers" naming a Latest/A-to-Z sort were all real bugs. They came from
+  the same screenshot round (items 1-4, 9a-9d). See `docs/specs/revenue.md` for the fixes and
+  the measurements behind them. Finish and rarity now resolve from the `skus` table: 0 to
+  1,373 of 1,406 lines resolve a condition. 0 to 1,117 resolve a rarity, on the real store.
+
 ## Pricing re-interview (pricing-deliberation.md)
 - Q1 first view: EVERY ROW, the rows that need the owner on top, then the rest by value. (Not the fold-into-a-count proposal.)
 - Q2 needs-you rows: no market price, OR worth $5+, OR typed price 25%+ away from today's market. Count these on the owner's store first.

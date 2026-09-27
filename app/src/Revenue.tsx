@@ -11,6 +11,7 @@ import {
 } from './kit'
 import { moneyGrouped } from './money'
 import { absoluteDate, monthOf, saleDate, weekOf } from './dates'
+import { useCardCropWhenSeen } from './cardCrop'
 import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
 import './Revenue.css'
@@ -56,6 +57,16 @@ import './Revenue.css'
  *  folds its own vocabulary, but for exactly one status rather than that whole terminal set. */
 function isCanceled(status: string | null): boolean {
   return (status ?? '').trim().toLowerCase() === 'canceled'
+}
+
+/** `"None"` IS TCGPLAYER'S OWN LITERAL STRING FOR A PRODUCT WITH NO RARITY
+ *  (`pipeline/games.py`'s own `rarities_not_claimed` entry, both Riftbound and One Piece):
+ *  73 sealed products and 12 rarity-less tokens in Riftbound alone carry it verbatim in the
+ *  `Rarity` column, never blank. Read as `null` here so it never draws as though "None" were
+ *  a real rarity a card was identified under — the same normalisation `pipeline/games.py`
+ *  already names for exactly this string. */
+function realRarity(raw: string | null): string | null {
+  return raw === 'None' ? null : raw
 }
 
 type Period = '3m' | '6m' | 'ytd' | 'all' | 'custom'
@@ -123,6 +134,16 @@ type Sale = {
   readonly gross: number
   readonly condition: string | null
   readonly rarity: string | null
+  /** `OrderLineWire.kind` verbatim — `'sealed'` is the one value this screen reads on its own
+   *  (item 5, item 2 of the review round): a sealed line never has a rarity, and it is never
+   *  drawn as though one is simply unread. */
+  readonly kind: string | null
+  /** THE `skus` TABLE'S OWN PRODUCT/SET TEXT FOR THIS SKU (`OrderLineWire.product_line`/
+   *  `set_name`), never the feed's own line fields — carried through so a short display name
+   *  can be built off a long TCGplayer product title (item 3, review round) without this
+   *  screen inventing product taxonomy of its own. `null` where the SKU is not in that table. */
+  readonly productLine: string | null
+  readonly setName: string | null
 }
 
 /** `true` where the OPERATOR closed this line as never shipping — a refund or a
@@ -193,7 +214,10 @@ function salesOf(
         priceKnown,
         gross: priceKnown ? price * line.quantity : 0,
         condition: line.condition,
-        rarity: line.rarity,
+        rarity: realRarity(line.rarity),
+        kind: line.kind,
+        productLine: line.product_line ?? null,
+        setName: line.set_name ?? null,
       })
     }
   }
@@ -204,6 +228,72 @@ function salesOf(
  *  foil printing is one whose condition names it — never a guess off the card's own name. */
 function isFoil(condition: string | null): boolean {
   return condition !== null && condition.toLowerCase().includes('foil')
+}
+
+/** THE SEALED RULE (item 5, review round), TWO REAL FACTS, NEVER A GUESS AT THE PRODUCT NAME:
+ *
+ *  1. `kind === 'sealed'` — `pipeline/orders.py`'s own declared vocabulary, `LINE_KIND_SEALED`,
+ *     trusted first where the feed (or the operator's paste) carries it.
+ *  2. `condition` reads `pipeline/tcgcsv.py:SEALED_CONDITION` ("Unopened") — the ONE condition
+ *     a TCGplayer export ever lists sealed product under, that module's own header states it
+ *     plainly (a graded play condition is a reading of a card this product sells at Near Mint
+ *     and nothing else; sealed product carries no grade at all). MEASURED on the owner's own
+ *     store, review round: `kind` is `'sealed'` on zero of 1,406 real order lines — the
+ *     operator has never once declared it on a paste — while 256 lines carry `Unopened`,
+ *     which is where sealed product actually shows up in this data. Reading the condition
+ *     text is not a guess at what the product IS, the way reading its NAME would be
+ *     (`pipeline/orders.py`'s own rule): `Unopened` is not TCGplayer's word for a rarity
+ *     nobody read, it is TCGplayer's own word for "there is no card in here to rate."
+ *
+ *  Everything else (no kind, no condition, or a graded condition) counts as a single for this
+ *  switch's purposes — sealed is the narrower, positively-evidenced claim. */
+function isSealed(kind: string | null, condition: string | null): boolean {
+  if (kind === 'sealed') return true
+  return condition !== null && condition.trim().toLowerCase() === 'unopened'
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** A SHORT DISPLAY NAME, MECHANICALLY TRIMMED, NEVER GUESSED (item 3, review round). A sealed
+ *  product's own TCGplayer title routinely repeats the game and the set ahead of the one word
+ *  that actually says what the thing IS — "Pokemon - SV: Black Bolt: Black Bolt Booster
+ *  Bundle" — and the repeated words are exactly `productLine`/`setName`, already sitting on
+ *  this line off the `skus` table (`OrderLineWire.product_line`/`set_name`). Stripping those
+ *  two known strings out of the front of `name` is not a guess at what the product is — it is
+ *  removing what this screen already knows for a fact is redundant — and a name neither string
+ *  appears in (almost every single card) comes back unchanged, `full` (the untouched name)
+ *  staying the fallback whenever the trim leaves too little to read. */
+function shortProductName(
+  name: string,
+  productLine: string | null,
+  setName: string | null,
+  condition: string | null,
+): { readonly short: string; readonly secondary: string | null; readonly full: string } {
+  let tail = name
+  // `setName` OFTEN CARRIES A GAME CODE THE PRODUCT'S OWN TITLE DROPS THE SECOND TIME IT SAYS
+  // THE SET — "SV: Prismatic Evolutions" the set, "Prismatic Evolutions Surprise Box" the
+  // product — so the set's own text AFTER ITS LAST COLON is a second, known-real string to
+  // strip, not a guess: it is the same fact TCGplayer already told this screen, spelled the
+  // way the product title repeats it. `condition` (the FEED's own word for this exact line,
+  // completed from the `skus` table the same way rarity is) is stripped too — "Near Mint
+  // Foil" repeats what the Foil pill beside the name already draws, and "Unopened" repeats
+  // what `MetaLine`'s "Sealed" already draws.
+  const setCore = setName?.split(':').pop()?.trim() ?? null
+  const strip = [productLine, setName, setCore, condition].filter((p): p is string => p !== null && p.length > 1)
+  for (const part of strip) {
+    tail = tail.replace(new RegExp(escapeRegExp(part), 'i'), ' ')
+  }
+  tail = tail.replace(/^[\s:\-–—|]+|[\s:\-–—|]+$/g, '').replace(/\s{2,}/g, ' ').trim()
+  // A BARE TRAILING "#" IS TCGPLAYER'S OWN NUMBER-PLACEHOLDER NOISE, NEVER A REAL CARD NUMBER
+  // (`pipeline/pricearchive.py:_split_ledger_tail`'s own rule: a sealed line carries no
+  // number segment at all). A real number always has digits after it ("#238/219") and is
+  // never touched by this — this only drops a "#" with nothing following it.
+  tail = tail.replace(/[\s\-–—]+#\s*$/, '').trim()
+  if (tail.length < 3 || tail === name) return { short: name, secondary: null, full: name }
+  const secondary = [setName, productLine].find((p) => p !== null && p !== tail) ?? null
+  return { short: tail, secondary, full: name }
 }
 
 function pad2(n: number): string {
@@ -404,6 +494,9 @@ type Product = {
    *  sales in practice; the last one sold is what this row shows either way. */
   readonly condition: string | null
   readonly rarity: string | null
+  readonly kind: string | null
+  readonly productLine: string | null
+  readonly setName: string | null
   /** Copies sold with NO recorded price (`Sale.priceKnown === false`) — never silently
    *  folded into `gross`, which only ever sums the priced ones. */
   readonly unpriced: number
@@ -518,6 +611,16 @@ function revenueQuery(): URLSearchParams {
   return new URLSearchParams(window.location.hash.split('?')[1] ?? '')
 }
 
+/** `singles`/`sealed`/`all` — item 5, the owner's ruling verbatim: "singles sealed switch
+ *  with default to singles" (`docs/reviews/ux-2026-09-23/RULINGS.md`). Kept in the URL like
+ *  every other lens on this screen (D285). */
+type ProductView = 'singles' | 'sealed' | 'all'
+const PRODUCT_VIEWS: readonly { readonly value: ProductView; readonly label: string }[] = [
+  { value: 'singles', label: 'Singles' },
+  { value: 'sealed', label: 'Sealed' },
+  { value: 'all', label: 'All' },
+]
+
 type UrlState = {
   readonly period: Period
   readonly q: string
@@ -526,9 +629,12 @@ type UrlState = {
   readonly bucket: string | null
   readonly from: string | null
   readonly to: string | null
+  readonly view: ProductView
 }
 
-const URL_DEFAULT: UrlState = { period: '6m', q: '', sort: 'gross', dir: 'desc', bucket: null, from: null, to: null }
+const URL_DEFAULT: UrlState = {
+  period: '6m', q: '', sort: 'gross', dir: 'desc', bucket: null, from: null, to: null, view: 'singles',
+}
 
 function readUrlState(): UrlState {
   const params = revenueQuery()
@@ -542,6 +648,8 @@ function readUrlState(): UrlState {
   const dateRe = /^\d{4}-\d{2}-\d{2}$/
   const fromRaw = params.get('from')
   const toRaw = params.get('to')
+  const viewRaw = params.get('view') ?? ''
+  const view = PRODUCT_VIEWS.some((v) => v.value === viewRaw) ? (viewRaw as ProductView) : URL_DEFAULT.view
   return {
     period,
     q: params.get('q') ?? '',
@@ -550,6 +658,7 @@ function readUrlState(): UrlState {
     bucket: bucketRaw !== null && bucketRaw !== '' ? bucketRaw : null,
     from: fromRaw !== null && dateRe.test(fromRaw) ? fromRaw : null,
     to: toRaw !== null && dateRe.test(toRaw) ? toRaw : null,
+    view,
   }
 }
 
@@ -571,6 +680,7 @@ function writeUrlState(state: UrlState): void {
     params.set('dir', state.dir)
   }
   if (state.bucket !== null) params.set('month', state.bucket)
+  if (state.view !== URL_DEFAULT.view) params.set('view', state.view)
   if (state.period === 'custom') {
     if (state.from !== null) params.set('from', state.from)
     if (state.to !== null) params.set('to', state.to)
@@ -580,19 +690,36 @@ function writeUrlState(state: UrlState): void {
   if (window.location.hash !== next) window.history.replaceState(null, '', next)
 }
 
-/** A printing's thumbnail: `photos[sku]` when the lookup answered, a plain tile otherwise —
- *  never a guess. `src`/`crop` are deliberately not the same shape `CardLocations.tsx`'s own
- *  crop-aware thumbnails use: this is ANOTHER copy's photo (D89), never the copy that sold,
- *  so there is no crop-preview rectangle to place it by. */
+/** THE SAME FOCUS `Pricing.tsx`'s own crop-aware thumbnail uses, kept in step deliberately
+ *  rather than reinvented — see `cardCrop.ts`'s header. */
+const THUMB_FOCUS = 0.34
+
+/** A printing's thumbnail: `photos[sku]` when the lookup answered, cropped to the card the
+ *  same way every other screen crops one (D125), a plain tile otherwise — never a guess.
+ *
+ *  THIS IS ANOTHER COPY'S PHOTOGRAPH (D89), never the copy that actually sold — but `POST
+ *  /pipeline/crop-preview` answers a rectangle for ANY on-hand photograph at `box/index`, not
+ *  only "the" card a screen happens to already be looking at, so the sibling copy's own
+ *  photo gets the same crop treatment as if this screen were `CardLocations.tsx` (review
+ *  round, item 9b: the podium was drawing the raw, uncropped desk photo — drawer walls and
+ *  all — instead of asking for the one rectangle every other screen already asks for). */
 function RowThumb({ sku, name, photos, size }: { readonly sku: string; readonly name: string; readonly photos: Readonly<Record<string, SkuPhotoEntry>>; readonly size: 'sm' | 'md' | 'lg' }) {
   const entry = photos[sku]
+  const at = entry === undefined ? null : { box: entry.box, index: entry.index }
+  const host = useRef<HTMLSpanElement | null>(null)
+  const crop = useCardCropWhenSeen(at, host)
   const src = entry === undefined ? null : photoUrl(entry.box, entry.index, entry.cid)
-  return <CardThumb src={src} alt={name} size={size} />
+  return (
+    <span ref={host} style={{ display: 'contents' }}>
+      <CardThumb src={src} alt={name} size={size} crop={crop} focus={THUMB_FOCUS} />
+    </span>
+  )
 }
 
 function MetaLine({ product }: { readonly product: Product }) {
-  if (product.rarity === null) return null
-  return <p className="revenue-tile-meta">{product.rarity}</p>
+  if (product.rarity !== null) return <p className="revenue-tile-meta">{product.rarity}</p>
+  if (isSealed(product.kind, product.condition)) return <p className="revenue-tile-meta">Sealed</p>
+  return null
 }
 
 export function Revenue() {
@@ -606,6 +733,7 @@ export function Revenue() {
   const [activeBucket, setActiveBucket] = useState<string | null>(() => readUrlState().bucket)
   const [customFrom, setCustomFrom] = useState<string | null>(() => readUrlState().from)
   const [customTo, setCustomTo] = useState<string | null>(() => readUrlState().to)
+  const [view, setView] = useState<ProductView>(() => readUrlState().view)
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
   const [boardExpanded, setBoardExpanded] = useState(false)
 
@@ -634,8 +762,10 @@ export function Revenue() {
   // the exact string the URL already has, so the `!==` guard inside `writeUrlState` makes it
   // a no-op rather than a redundant replace.
   useEffect(() => {
-    writeUrlState({ period, q: query, sort: sortKey, dir: sortDir, bucket: activeBucket, from: customFrom, to: customTo })
-  }, [period, query, sortKey, sortDir, activeBucket, customFrom, customTo])
+    writeUrlState({
+      period, q: query, sort: sortKey, dir: sortDir, bucket: activeBucket, from: customFrom, to: customTo, view,
+    })
+  }, [period, query, sortKey, sortDir, activeBucket, customFrom, customTo, view])
 
   // THE READER. Back/forward and a pasted link while already on this screen both fire
   // `hashchange` — `replaceState` above never does, so this cannot see its own writes.
@@ -649,6 +779,7 @@ export function Revenue() {
       setActiveBucket(next.bucket)
       setCustomFrom(next.from)
       setCustomTo(next.to)
+      setView(next.view)
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
@@ -765,6 +896,9 @@ export function Revenue() {
           lastPrice: newer ? sale.unitPrice : existing.lastPrice,
           condition: newer ? sale.condition : existing.condition,
           rarity: newer ? sale.rarity : existing.rarity,
+          kind: newer ? sale.kind : existing.kind,
+          productLine: newer ? sale.productLine : existing.productLine,
+          setName: newer ? sale.setName : existing.setName,
         })
       } else {
         by.set(sale.sku, {
@@ -778,17 +912,21 @@ export function Revenue() {
           lastPrice: sale.unitPrice,
           condition: sale.condition,
           rarity: sale.rarity,
+          kind: sale.kind,
+          productLine: sale.productLine,
+          setName: sale.setName,
         })
       }
     }
     const rows = Array.from(by.values())
+    const byView = rows.filter((row) => (view === 'all' ? true : isSealed(row.kind, row.condition) === (view === 'sealed')))
     const q = query.trim().toLowerCase()
-    const filtered = q === '' ? rows : rows.filter((row) => row.name.toLowerCase().includes(q))
+    const filtered = q === '' ? byView : byView.filter((row) => row.name.toLowerCase().includes(q))
     return filtered.slice().sort((a, b) => {
       const base = compareProducts(a, b, sortKey)
       return sortDir === 'asc' ? base : -base
     })
-  }, [scopeSales, query, sortKey, sortDir])
+  }, [scopeSales, query, sortKey, sortDir, view])
 
   // THE THUMBNAIL PRESS, ON ARRIVAL, NOT GATED. Asks only about the SKUs this screen is
   // about to draw (the podium and board window, bounded by `PHOTO_LOOKUP_CAP`), and never
@@ -865,7 +1003,12 @@ export function Revenue() {
     const byRarity = new Map<string, number>()
     for (const p of products) {
       if (isFoil(p.condition)) foilGross += p.gross
-      const label = p.rarity ?? 'Unknown rarity'
+      // SEALED PRODUCT HAS NO RARITY, EVER — it is labelled as what it is, never as an
+      // identification this screen failed to make (item 2, review round: "0% ... Unknown
+      // rarity" on a store that plainly sold foils and singles was this line reading a
+      // sealed line's blank rarity as a missing fact rather than as the correct answer for
+      // a sealed line).
+      const label = p.rarity ?? (isSealed(p.kind, p.condition) ? 'Sealed' : 'Unknown rarity')
       byRarity.set(label, (byRarity.get(label) ?? 0) + p.gross)
     }
     const rarity = Array.from(byRarity.entries())
@@ -984,8 +1127,17 @@ export function Revenue() {
   const podium = products.slice(0, 3)
   const board = products.slice(3, boardExpanded ? products.length : BOARD_SIZE)
   const boardMax = products[0]?.gross ?? 1
-  const pct = (g: number) => (total === 0 ? 0 : Math.round((g / total) * 100))
+  // ROUNDS TO A REAL SHARE, NEVER A FALSE ZERO (item 9c, review round): "0% of gross" on a
+  // $2.74 sale read as though it earned nothing, when the true figure was under a percentage
+  // point and had simply been rounded down to it. `null` share (share is `0` too) draws
+  // nothing at all — a share this small is not worth a figure, "<1%" already says it.
+  const pctLabel = (g: number): string | null => {
+    if (total === 0 || g <= 0) return null
+    const share = (g / total) * 100
+    return share < 1 ? '<1%' : `${Math.round(share)}%`
+  }
   const copyWord = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'copy' : 'copies'}`
+  const short = (p: Product) => shortProductName(p.name, p.productLine, p.setName, p.condition)
 
   return (
     <Page
@@ -1054,10 +1206,18 @@ export function Revenue() {
           <p className="revenue-verdict-canceled">
             {`${canceledOrders.toLocaleString()} ${canceledOrders === 1 ? 'order was' : 'orders were'} canceled by the marketplace and left out.`}
           </p>
-          <p className="revenue-verdict-refunded">
-            {`${refundExcluded.toLocaleString()} ${refundExcluded === 1 ? 'line was' : 'lines were'} marked refunded or canceled during fulfilment and left out.`}
-            {' Your own note, not TCGplayer’s — treat it as a habit, not a guarantee.'}
-          </p>
+          {/* D281: A NOTE ABOUT ZERO DOES NOT DRAW. "0 lines were marked ... treat it as a
+              habit, not a guarantee" reads as a warning about a habit that has never once
+              caught anything — at zero, this whole sentence is drawn only when it has
+              something to report (review round, item 6). The CANCELED sentence above stays
+              unconditional (D225): that count is the marketplace's own word, never a habit
+              this screen is asking the owner to trust. */}
+          {refundExcluded === 0 ? null : (
+            <p className="revenue-verdict-refunded">
+              {`${refundExcluded.toLocaleString()} ${refundExcluded === 1 ? 'line was' : 'lines were'} marked refunded or canceled during fulfilment and left out.`}
+              {' Your own note, not TCGplayer’s — a line only ends up here when it was marked by hand.'}
+            </p>
+          )}
         </div>
 
         <h2 className="bn-sr">{granularity === 'week' ? 'By week' : 'By month'}</h2>
@@ -1100,8 +1260,19 @@ export function Revenue() {
         </div>
       )}
 
+      {/* "BEST SELLERS" NAMED A GROSS-OR-COPIES RANKING. Sorted by "Latest" or "A to Z" it is
+          not a ranking of the best sellers at all — a bare rename to whatever the mock said
+          before this section could sort four ways (item 9d, review round). "What sold" is
+          true of the section under any sort, so it never has to change with the segmented
+          control beside it. */}
       <div className="revenue-bar-head">
-        <h2 className="bn-h2">Best sellers</h2>
+        <h2 className="bn-h2">What sold</h2>
+        <Segmented
+          label="Singles or sealed"
+          value={view}
+          options={PRODUCT_VIEWS}
+          onChange={setView}
+        />
         <Segmented
           label="Sort"
           value={sortKey}
@@ -1130,23 +1301,28 @@ export function Revenue() {
                 <div className="revenue-tile-body">
                   <div className="revenue-tile-l1">
                     <ProductLink sku={p.sku} name={p.name}>
-                      <span className="revenue-tile-name">{p.nameIsSku ? <span className="bn-mono">{p.name}</span> : p.name}</span>
+                      <span className="revenue-tile-name" title={p.nameIsSku ? undefined : short(p).full}>
+                        {p.nameIsSku ? <span className="bn-mono">{p.name}</span> : short(p).short}
+                      </span>
                     </ProductLink>
                     {isFoil(p.condition) ? <Pill size="sm">Foil</Pill> : null}
                   </div>
+                  {p.nameIsSku || short(p).secondary === null ? null : (
+                    <p className="revenue-tile-secondary">{short(p).secondary}</p>
+                  )}
                   <MetaLine product={p} />
                   <div className="revenue-tile-money">
                     {p.gross > 0 ? <Money value={p.gross} /> : <span className="revenue-no-price">no price recorded</span>}
-                    {p.gross > 0 ? <small>{`${pct(p.gross)}% of gross`}</small> : null}
+                    {pctLabel(p.gross) === null ? null : <small>{`${pctLabel(p.gross)} of gross`}</small>}
                   </div>
-                  {/* SHORT, SEPARATE BLOCKS, NEVER ONE SENTENCE (text-shape's own 6-word
-                      prose floor and 4-word repeated-sentence floor): "N copies, last
-                      sold DATE" reads as prose once it crosses six words, and three
-                      podium tiles sharing a sale date then repeat that whole sentence.
-                      Each `<p>` here is its own block and stays under both floors. */}
+                  {/* SHORT BLOCKS, NEVER ONE LONG SENTENCE (text-shape's own 6-word prose
+                      floor): copies and the sale date are each their own block. "Last
+                      sold" and the date now share ONE line (item 8, review round) — a
+                      real, accepted trade against the repeated-sentence floor when three
+                      podium tiles land on the same day; `text-shape-allow.json` lists it
+                      by route when the fixture ever produces that coincidence. */}
                   <p className="revenue-tile-foot">{copyWord(p.copies)}</p>
-                  <p className="revenue-tile-foot">Last sold</p>
-                  <p className="revenue-tile-foot">{saleDate(p.last)}</p>
+                  <p className="revenue-tile-foot">{`Last sold ${saleDate(p.last)}`}</p>
                   {p.unpriced === 0 ? null : (
                     <p className="revenue-tile-foot">{`${p.unpriced} with no price`}</p>
                   )}
@@ -1192,14 +1368,23 @@ export function Revenue() {
                     <RowThumb sku={p.sku} name={p.name} photos={photos} size="sm" />
                     <div className="revenue-board-who">
                       <ProductLink sku={p.sku} name={p.name}>
-                        <span className="revenue-tile-name">{p.nameIsSku ? <span className="bn-mono">{p.name}</span> : p.name}</span>
+                        <span className="revenue-tile-name" title={p.nameIsSku ? undefined : short(p).full}>
+                          {p.nameIsSku ? <span className="bn-mono">{p.name}</span> : short(p).short}
+                        </span>
                       </ProductLink>
                       <MetaLine product={p} />
                     </div>
-                    <div className="revenue-board-track">
+                    {/* THE BAR'S OWN TRACK, NEVER SHARED WITH THE PRICE (item 1, review
+                        round): a bar close to full width plus a long dollar figure used to
+                        overflow one flex row together and draw over the neighbouring
+                        columns' text. A dedicated grid column can never overlap a sibling
+                        column's text, at any width — that is what a grid track is. */}
+                    <span className="revenue-board-track">
                       <i style={{ width: `${p.gross === 0 ? 0 : Math.max((p.gross / boardMax) * 100, 3)}%` }} />
+                    </span>
+                    <span className="revenue-board-value">
                       {p.gross > 0 ? <Money value={p.gross} /> : <span className="revenue-no-price">no price</span>}
-                    </div>
+                    </span>
                     <span className="revenue-board-c">{copyWord(p.copies)}</span>
                     <span className="revenue-board-d">{saleDate(p.last)}</span>
                   </li>
@@ -1272,9 +1457,9 @@ export function Revenue() {
                               onClick={() => toggleExpanded(row.sku)}
                             />
                           </td>
-                          <td>
+                          <td title={row.nameIsSku ? undefined : short(row).full}>
                             <ProductLink sku={row.sku} name={row.name}>
-                              {row.nameIsSku ? <span className="bn-mono">{row.name}</span> : row.name}
+                              {row.nameIsSku ? <span className="bn-mono">{row.name}</span> : short(row).short}
                             </ProductLink>
                             {isFoil(row.condition) ? <Pill size="sm">Foil</Pill> : null}
                           </td>
