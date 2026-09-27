@@ -1075,8 +1075,6 @@ def add_extra_real_boxes() -> dict:
             name=box_name,
             sections=[1],
             section_names={},  # section 1 carries no name, on the owner's own ruling
-            state="open",
-            capacity=None,
             created_at=stamp(1.0),
         )
         counts["boxes"] += 1

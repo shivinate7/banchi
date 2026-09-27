@@ -919,6 +919,17 @@ export async function capture(input: {
    * the game named by `GameRegistry.product_game` uses it; sending it for another game is
    * refused by the server as `product_invalid` rather than ignored. */
   product?: string
+  /** THE SECTION TO FILE INTO, by its divider key (`docs/specs/subbox-capture.md` 1.2) — the
+   *  Capture screen's own picked section (UX-190, sub-box capture). Omitted, exactly like the
+   *  three claims above, is a real and different request: the store fills at the back of the
+   *  box, as every capture did before this field existed. Never an index — the store still
+   *  picks the position; this only says which section it picks it in. */
+  section?: string
+  /** THE BOX'S LAYOUT TOKEN, required alongside `section` (subbox-capture.md 1.2, the Opus
+   *  review's first finding) — read off `BoxRecord.layout_token` at the moment the pick was
+   *  made. A re-space between then and now answers 409 `section_gone` rather than risk a
+   *  stale key silently naming the wrong section. Omitted along with `section`. */
+  layoutToken?: string
 }): Promise<CardSummary> {
   const payload: Record<string, string | number | readonly string[]> = {
     box: input.box,
@@ -926,6 +937,8 @@ export async function capture(input: {
     capture_id: input.captureId,
     game: input.game,
   }
+  if (input.section !== undefined) payload.section = input.section
+  if (input.layoutToken !== undefined) payload.layout_token = input.layoutToken
 
   /* Omitted rather than sent empty, matching `sidecar_payload`'s rule on the other side:
    * the file stays a record of claims the operator actually made (D3 rung 1). The server
@@ -1769,24 +1782,45 @@ export async function updateBox(
  * section that was opened off the LAST entry of that array rather than off `sections.length`
  * — same reason `BoxOps.tsx` gives at `renderedSections`: the server renders spans and the
  * app does not do section arithmetic.
+ *
+ * `after` IS THE PICKED SECTION'S OWN DIVIDER KEY, and omitted is a real and different
+ * request (`docs/specs/subbox-capture.md` 1.3): the new divider goes at the back, as every S
+ * did before a middle pick existed. With `after` naming a section that is not the last, the
+ * new divider goes directly behind that section's last card — the owner's Q1 ruling — and is
+ * the section directly after `after` in the answer's own `sections_detail`, never the last
+ * entry any more.
+ *
+ * `layoutToken` IS REQUIRED ALONGSIDE `after` (subbox-capture.md 1.3, the same re-space
+ * guard `capture()`'s own carries) — omitted along with it.
  */
-export async function openSection(box: number): Promise<BoxRecord> {
+export async function openSection(box: number, after?: string, layoutToken?: string): Promise<BoxRecord> {
+  const payload: Record<string, string> = {}
+  if (after !== undefined) payload.after = after
+  if (layoutToken !== undefined) payload.layout_token = layoutToken
   return (await request(`/boxes/${box}/sections`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     /* `{}` and not an empty body: every write in the capture server reads its body the same
      * way and refuses an absent one as `body_required`, which `markSold` documents as the
      * convention rather than an oversight. Two characters. */
-    body: JSON.stringify({}),
+    body: JSON.stringify(payload),
   })) as BoxRecord
 }
 
 /** `DELETE /boxes/<box>/sections?div=<key>`: take out the divider `openSection` added, the
- * capture screen's `U` after `S` (UN-15). `div` is that answer's last `sections` entry. The
- * store removes that one divider and moves no other. It refuses (409 `divider_built_on`) when
- * the divider is no longer the last one, or a card stands behind it. */
-export async function closeSection(box: number, div: number): Promise<BoxRecord> {
-  return (await request(`/boxes/${box}/sections?div=${encodeURIComponent(String(div))}`, {
+ * capture screen's `U` after `S` (UN-15, subbox-capture.md 1.4, `ux/divider-fix` at
+ * `20392e87`). `div` is REQUIRED now — the route refuses 400 `div_required` without one — and
+ * is the divider key `S`'s own answer named, `sections_detail[].div` or the response's own
+ * `div` at the moment it was opened, never composed here. The store removes that one divider
+ * and moves no other. It refuses 409 `divider_built_on` when the divider is not S's own to
+ * undo any more (a dividers-editor save came between, or a card on hand stands behind it).
+ *
+ * A STRING, NOT A NUMBER — §1's own rule: "Compare keys as strings. Never parse one and
+ * never compose one." A fractional key reads as Python's `repr` (`"5.0009765625"`), and
+ * `String(numberValue)` on that value is JavaScript's OWN formatting, not Python's — the one
+ * way this call could silently name a divider the store does not have. */
+export async function closeSection(box: number, div: string): Promise<BoxRecord> {
+  return (await request(`/boxes/${box}/sections?div=${encodeURIComponent(div)}`, {
     method: 'DELETE',
   })) as BoxRecord
 }

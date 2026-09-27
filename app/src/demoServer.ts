@@ -510,8 +510,12 @@ function renameBox(box: string, body: Dict): unknown {
   return { ok: true, box: Number(box), name }
 }
 
-/** `POST /boxes/<box>/sections` — a divider goes in where the real one just did (D10). */
-function openSection(box: string): unknown {
+/** `POST /boxes/<box>/sections` — a divider goes in where the real one just did (D10). Sub-box
+ *  capture's own `after` (a middle pick) is refused rather than modelled: this store's
+ *  frozen boxes carry no order keys to re-space, and every fixture behind the demo predates
+ *  the field (subbox-capture.md §5, "demoServer.ts: refuse `after`"). */
+function openSection(box: string, body: Dict): unknown {
+  if (body.after !== undefined) refuse('section_gone', NOT_IN_DEMO)
   const inv = inventory()
   const record = ((inv?.boxes as Record<string, Dict>) ?? {})[box]
   if (record === undefined) refuse('box_unknown', NOT_IN_DEMO, 404)
@@ -780,7 +784,7 @@ export async function demoRequest(path: string, init?: RequestInit): Promise<unk
     const [box, index] = pair(match)
     return standDown(box, index, body)
   }
-  if ((match = BOX_SECTIONS.exec(path)) !== null) return openSection(match[1] ?? '')
+  if ((match = BOX_SECTIONS.exec(path)) !== null) return openSection(match[1] ?? '', body)
   if ((match = BOX.exec(path)) !== null && method === 'PUT') {
     return renameBox(match[1] ?? '', body)
   }

@@ -328,12 +328,18 @@ async function open(
       ...base,
       box: Number(box),
       sections,
+      /* `div` IS THE DIVIDER'S OWN KEY, and this fixture's own dividers are always whole
+       * numbers — `String(start)` is exactly `store/master.py:divider_key`'s answer for one
+       * (subbox-capture.md 1.1), so the real path (`opened.div`) is what these cases
+       * exercise, not `doSection`'s older-server fallback. See capture-section.spec.ts for
+       * that fallback's own case, which drops this field on purpose. */
       sections_detail: sections.map((start, at) => ({
         section: at + 1,
         start,
         end: sections[at + 1] === undefined ? start : sections[at + 1]! - 1,
         count: (sections[at + 1] ?? start) - start,
         name: null,
+        div: String(start),
       })),
     }
   }

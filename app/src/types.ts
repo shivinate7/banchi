@@ -277,6 +277,17 @@ export type CardSummary = {
    *  capture's own response already carries the count, so nothing needs to compute it
    *  again. */
   place: Place
+
+  /** THE DIVIDER KEY OF THE SECTION THIS CARD LANDED IN, read after the write
+   *  (`docs/specs/subbox-capture.md` 1.2) — correct after a re-space too. Null for a pooled
+   *  card, which has no section, and absent from an older server, which reads the same way:
+   *  the capture screen's section pick falls back to the last section. */
+  section_div?: string | null
+
+  /** THE BOX'S LAYOUT TOKEN AFTER THE WRITE — changes when this capture caused a re-space,
+   *  same field `BoxRecord.layout_token` carries. Null for a pooled card. Absent from an
+   *  older server. */
+  layout_token?: string | null
 }
 
 /** `GET /status`. Counts, the next index per box, and whether the store is healthy. */
@@ -1764,6 +1775,14 @@ export type SectionDetail = {
   last_name?: string | null
   first_cid?: string | null
   last_cid?: string | null
+  /** THE DIVIDER KEY OF THIS SECTION (`docs/specs/subbox-capture.md` 1.1) — the handle a
+   *  capture, an S, a U or a Move-to-box aims at. Section 1 of an undeclared box (no stored
+   *  dividers) still gets one — `"1"`, the box's own front (`store/master.py:front_of_box`)
+   *  — so this is real for every section a current server draws. Null or absent only for an
+   *  older server that predates the field: nothing on this side may parse or compose one
+   *  (subbox-capture.md 1, "Never parse one and never compose one") — a screen with no `div`
+   *  falls back to the box's own default, the last section. */
+  div?: string | null
 }
 
 /** What `POST /boxes/<box>/sections/move` answers (D264): the move's id for Undo, the
@@ -1819,9 +1838,14 @@ export type SectionUndoResult = {
 export type BoxRecord = {
   box: number
 
-  /** A short hash of the box's divider keys. Every aim at a section of this box sends it, and
-   *  the server refuses an aim whose token is not the box's now (409 `section_gone`): the
-   *  sections changed after this record was read. Absent from an older server. */
+  /** THE BOX'S LAYOUT TOKEN (subbox-capture.md 1, the Opus review's first finding,
+   *  2026-09-26) — a short hash of the box's divider keys, in order. Send it beside any
+   *  aim that names a section (a capture's `section`, an S's `after`) so a re-space cannot
+   *  make a stale key silently name the wrong section: two equal tokens mean two equal
+   *  divider lists, and in an equal list a key names the same section it always did. The
+   *  server refuses an aim whose token is not the box's now (409 `section_gone`). Optional
+   *  because an older server, or a fixture that predates the field, sends none — a screen
+   *  with no token falls back the same way a stale pick does (§9, Q2's fallback). */
   layout_token?: string
 
   /** THE TRUE INDEX OF THIS DRAWER — allocated once at its creation, never reused, and never
