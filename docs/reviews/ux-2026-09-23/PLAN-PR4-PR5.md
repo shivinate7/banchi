@@ -13,6 +13,10 @@ carries are quoted in backticks.
   the owner again for the merge grant and the model cap.
 - **This session's grants (owner, 2026-09-27, second session, process-only):**
   - Model cap: `Only sonnet unless if I tell you to use opus for a specific agent work (I will say so for that lane) so no Opus for Lane C.`
+  - Opus for lane A (owner, same day): `Send an opus agent for A mockups and full plan`.
+  - Order (owner, same day): E, B2 and S start now. A's design pass starts now. D, C and
+    DEBT35 wait for an interview. G and T wait for an interview and a cross-check. The
+    cross-check covers debts, deferred items, wants, CI tests, audits and rules. H waits.
   - Merge grant: the owner named this session an Orchestrator. It merges PR 4B into main with
     `make merge` once CI is green.
 - **Integration branch (2026-09-27, second session):** `ux/pr4b`. Each lane branches from it
