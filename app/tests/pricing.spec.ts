@@ -978,9 +978,9 @@ test('an emitted run with copies still unsent stays open, and the chip counts th
   const line = page.getByTestId('pricing-unreachable')
   await expect(line).toContainText('214 never identified')
   await expect(line).toContainText('1 in Review')
-  await expect(line).toContainText('99 in 1 reading over a deleted box')
+  await expect(line).toContainText('99 in 1 reading need a rebind')
   await expect(line).not.toContainText('not matched')
-  await expect(line).not.toContainText('2 readings over a deleted box')
+  await expect(line).not.toContainText('2 readings need a rebind')
   await expect(line.getByRole('link', { name: '1 in Review' })).toHaveAttribute('href', '#/review')
 })
 
@@ -1046,8 +1046,8 @@ test('an unknown card count is still warned about, and a known zero is not', asy
   await expect(line).toContainText('214 never identified')
   /* One of the two rows survives — the unknown — and it carries no figure, because there is no
      honest one to carry. The zero-card row is gone from the sentence entirely. */
-  await expect(line).toContainText('1 reading over a deleted box')
-  await expect(line).not.toContainText('in 1 reading over a deleted box')
+  await expect(line).toContainText('1 reading need a rebind')
+  await expect(line).not.toContainText('in 1 reading need a rebind')
   await expect(line).not.toContainText('2 readings')
 })
 
@@ -3862,13 +3862,15 @@ test('the focus ring on a TYPED price field is --bn-accent, not the halo alone (
   expect(border, `the typed field's focused border is ${border}, not the accent ${accent}`).toBe(accent)
 })
 
-/* THE NUMBER CHIP IS HIDDEN ONLY WHEN THE NAME CARRIES IT AS ITS OWN TOKEN, NEVER A STRAY DIGIT
- * (the coordinator's review, 2026-09-26, catching a defect in the first cut of this same lane).
- * The first cut suppressed the chip on `sku.name.includes(sku.row['Number'])`, a plain substring
- * test — so a name that happens to CONTAIN the number's digits anywhere, with no parenthesis and
- * no "- " before it, would lose its chip wrongly. The row must ask whether the number reads as
- * its own token: in parentheses, or after a trailing "- ", at the end of the name. */
-test('the card number chip hides only for its own token in the name, never a stray digit', async ({ page }) => {
+/* THE NUMBER CHIP ALWAYS DRAWS; THE NAME STRIPS ITS OWN TRAILING REPEAT (the owner's review,
+ * 2026-09-26, REVERSING the lane's first cut, which is the test this replaces: "Garganacl -
+ * 084/132" carried its number in the name while every other row carried it in the meta line —
+ * the same fact, stated in two different places depending on which name happened to already
+ * hold it, and the owner wanted ONE place. The chip stays put on every row; the name's own
+ * trailing copy of the number (parenthesised, or after a trailing "- ") is the one that goes,
+ * display-only, never the stored name. A stray digit with no parenthesis and no "- " before it
+ * — "Metal Chapter 1" — is not that form, so the name keeps it. */
+test('the name strips its own trailing number; the chip always draws it', async ({ page }) => {
   await open(page, {
     skus: [
       sku({ sku: '1', name: 'Metal Chapter 1', row: { ...sku().row, Number: '1' } }),
@@ -3877,12 +3879,15 @@ test('the card number chip hides only for its own token in the name, never a str
     ],
   })
   /* A STRAY DIGIT: "Metal Chapter 1" contains "1" as a substring, with no parenthesis and no
-     "- " before it — the number is not repeated here and the chip must stay. */
+     "- " before it — that is not the number's own trailing form, so the name is untouched. */
+  await expect(page.locator('.pricing-row', { hasText: 'Metal Chapter 1' }).locator('.pricing-name')).toHaveText('Metal Chapter 1')
   await expect(page.locator('.pricing-row', { hasText: 'Metal Chapter 1' }).locator('.pricing-number')).toHaveText('1')
-  /* THE TWO REAL FORMS: parenthesised, and trailing "- <number>". Both repeat the number as its
-     own token, so the chip is redundant and stays hidden. */
-  await expect(page.locator('.pricing-row', { hasText: 'Calm Rune' }).locator('.pricing-number')).toHaveCount(0)
-  await expect(page.locator('.pricing-row', { hasText: 'Garganacl' }).locator('.pricing-number')).toHaveCount(0)
+  /* THE TWO REAL FORMS: parenthesised, and trailing "- <number>". Both are stripped from the
+     displayed name; the chip carries the number instead, on every row alike. */
+  const calmRune = page.locator('.pricing-row', { has: page.locator('.pricing-number', { hasText: 'R02a' }) })
+  await expect(calmRune.locator('.pricing-name')).toHaveText('Calm Rune')
+  const garganacl = page.locator('.pricing-row', { has: page.locator('.pricing-number', { hasText: '084/132' }) })
+  await expect(garganacl.locator('.pricing-name')).toHaveText('Garganacl')
 })
 
 /* ============================================================================================
