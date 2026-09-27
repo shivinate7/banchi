@@ -4127,8 +4127,24 @@ def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict
             row.pop("_sort", None)
         return rows
 
+    def _display_set_name(game: str, set_name: str) -> str:
+        # THE SAME RESOLUTION THE IMAGE JOIN ALREADY DOES, reused rather than a second
+        # regex written client-side (the review round, 2026-09-27): a store's own
+        # `set_name` sometimes carries a community code the vendored tree does not
+        # ("ME01: Mega Evolution"), and a BLIND strip once broke a set genuinely named
+        # with a colon of its own ("Celebrations: Classic Collection" -> "Classic
+        # Collection", a real set on a real regression). `images.display_name` tries the
+        # unstripped name FIRST, exactly as `_set_id_for` does for the photo, and only
+        # answers the stripped form when the catalogue itself resolves it that way — so
+        # a colon that is not a code prefix never gets touched. `None` on a join miss (no
+        # resolver handed in, or the catalogue has never heard of this set either way)
+        # keeps the store's own name, never a guess.
+        if images is None:
+            return set_name
+        return images.display_name(game, set_name) or set_name
+
     payload_groups = [
-        {"game": game or None, "set_name": set_name, "cards": _cards_of(bucket)}
+        {"game": game or None, "set_name": _display_set_name(game, set_name), "cards": _cards_of(bucket)}
         for (game, set_name), bucket in sorted(groups.items(), key=lambda item: item[0])
     ]
 
