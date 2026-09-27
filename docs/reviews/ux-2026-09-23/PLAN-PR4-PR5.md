@@ -49,7 +49,9 @@ Owner, 2026-09-27: `approved on your next portion, can merge them all into an in
 | N1 | `ux/pr4a-sets` | Inventory Sets: a grid of card images, a set picker, a clean header. A tile opens the card's Inventory view | Building |
 | N2 | `ux/pr4a-map` | Inventory Map: box rows left to right, an edit mode with one Confirm that saves all or nothing, no subtitles on Inventory | Building. Needs a strict review, because it writes store data |
 | E | `ux/pr4-search` | Search: close the open gaps that D271 (one forgiving search matcher) discloses | Done. Every listed gap was already closed. D271 round 12 records it. Typo search is deferred as DEBT46 |
-| records | `ux/pr4a-records` | DEBT45, and this file | Committed |
+| records | `ux/pr4a-records` | DEBT45, DEBT46, and this file | Committed |
+| B (from 4B) | `ux/pr4b-pricing-undo` | The restore race crash, the skip reason in the toast, the matrix check | PASS. Moved into PR 4A by the owner |
+| F2 (from 4B) | `ux/pr4b-join-spacing` | The shared join key drops all whitespace | Building. Moved into PR 4A by the owner. After it merges, remove Lane F's `_lookup_key` wrapper |
 
 Owner rulings for N1 and N2 (2026-09-26):
 
@@ -58,6 +60,8 @@ Owner rulings for N1 and N2 (2026-09-26):
 - `using horizontal rather than vertical it seems more intuitive`
 - `i hate subtext and ur overuse of verbiage`, then `let's eliminate evne the subtitles`
 - The card-range move ("Some cards"), 2026-09-27: the owner chose `Bring it back into edit mode (Recommended)`. A card range drafts like a section, and the one Confirm saves both, all or nothing.
+
+Owner, 2026-09-27: `the few  changes i pullled forward from PR4B btw  that were made rn btw are gonna join PR4A`.
 
 Then: merge every lane into `ux/pr4a-integration` off main, with tsc per merge. Run one
 `make check`, open the PR, wait for green CI, and merge.
