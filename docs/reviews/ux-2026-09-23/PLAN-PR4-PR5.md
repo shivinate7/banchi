@@ -35,41 +35,18 @@ The full mirror is live at `shivinate7.github.io/banchi/`, publish run 363296431
 `b61f995e2`. PRs #467 to #474 carried it. 808 buyers are scrubbed to `Jane Doe N`, 3,510
 photos total 94.7 MB, and a leak check against a store copy found 0 real names.
 
+Stock images: #476 and #477 (2026-09-27) fill Riftbound and One Piece images in the demo.
+They come from the live server's own tcgcsv cache, offline, for 795 of 796 SKUs. The bundle is split into
+files under 50 MB for GitHub's limit. The test stubs the image host for now (DEBT47).
+
 Left for PR 4B (lane M):
-- Riftbound and One Piece stock images are blank in the demo. The demo records offline, and
-  those images come from the network. Pokemon images come from the vendored catalog, so they
-  show. The live app is not affected.
 - The demo records a walk plan for each order and for the screens' own "walk all" sets. Any
   other ticked combination shows the demo's honest refusal, by design.
 
-## PR 4A (in flight)
+## PR 4A (DONE, 2026-09-27)
 
-Owner, 2026-09-27: `approved on your next portion, can merge them all into an integration branch ... merge when green`.
-
-| Lane | Branch | What | State on 2026-09-27 |
-|---|---|---|---|
-| J | `ux/pr4a-capture` | Capture: two key caps, one next-card number, short section note, Rarity clip, one-line camera prompt, Game in Stack | Review FAIL: the next-card number stays high after an undo in a section. Builder fixing |
-| K | `ux/pr4a-pricing` | Pricing: flag on its own line, number chip, the stranded-cards line as a link, Held lock, column tint | PASS |
-| F | `ux/pr4a-stock` | Stock images: fold the spaces around the slash in a lookup number | PASS |
-| N1 | `ux/pr4a-sets` | Inventory Sets: a grid of card images, a set picker, a clean header. A tile opens the card's Inventory view | Building |
-| N2 | `ux/pr4a-map` | Inventory Map: box rows left to right, an edit mode with one Confirm that saves all or nothing, no subtitles on Inventory | Building. Needs a strict review, because it writes store data |
-| E | `ux/pr4-search` | Search: close the open gaps that D271 (one forgiving search matcher) discloses | Done. Every listed gap was already closed. D271 round 12 records it. Typo search is deferred as DEBT46 |
-| records | `ux/pr4a-records` | DEBT45, DEBT46, and this file | Committed |
-| B (from 4B) | `ux/pr4b-pricing-undo` | The restore race crash, the skip reason in the toast, the matrix check | PASS. Moved into PR 4A by the owner |
-| F2 (from 4B) | `ux/pr4b-join-spacing` | The shared join key drops all whitespace | Building. Moved into PR 4A by the owner. After it merges, remove Lane F's `_lookup_key` wrapper |
-
-Owner rulings for N1 and N2 (2026-09-26):
-
-- `i dont need location unless i click on the card itself then maybe it opens the regular inventory view of the card`
-- `map should be that i enter an edit mode, in this edit mode i can drag and drop freely, and then i have to hit confirm once once im happy with the layout`
-- `using horizontal rather than vertical it seems more intuitive`
-- `i hate subtext and ur overuse of verbiage`, then `let's eliminate evne the subtitles`
-- The card-range move ("Some cards"), 2026-09-27: the owner chose `Bring it back into edit mode (Recommended)`. A card range drafts like a section, and the one Confirm saves both, all or nothing.
-
-Owner, 2026-09-27: `the few  changes i pullled forward from PR4B btw  that were made rn btw are gonna join PR4A`.
-
-Then: merge every lane into `ux/pr4a-integration` off main, with tsc per merge. Run
-`make vale`, open the PR, wait for green CI, and merge.
+Merged as #466. It carried lanes J, K, F, N1, N2, E (search), B and F2, and the records. Every
+lane passed one review. N2 passed a strict review in three rounds.
 
 ## PR 4B lanes (rewritten 2026-09-27)
 
@@ -84,6 +61,8 @@ except where a line says otherwise.
 | D | Leftover screens and the lock glyph | Now |
 | M | Demo mirror resumability | Now |
 | G | Records and tooling | Now |
+| T | The test pass: DEBT45 and DEBT47 | Now |
+| S | Remove Lane F's redundant `_lookup_key` wrapper | Now |
 | A | Orders becomes Inventory's screen | After a mockup the owner approves |
 | H | Cyberpunk dark mode | Last, as the epilogue |
 
@@ -137,8 +116,19 @@ Owner: `is there anyway u can have it chunking so that way it's not starting fro
   none. D173 (a rule that can be enforced mechanically is enforced) governs.
 - Sync the orchestrator's scratch rulings into `RULINGS.md` in this folder.
 - Add the `STATE.md` deferred items.
-- A lane F2 builder reported one T7 failure at baseline, "Home can be read for every matrix
-  case". Confirm whether main is red there. If it is, fix it or record a DEBT.
+- The typecheck runs out of memory at Node's default heap on this Mac since the full mirror
+  landed. Measure it, then raise the limit in the Makefile or exclude the demo data from `tsc`.
+
+### T. The test pass
+
+- DEBT45: one page that says what each test protects, in plain words.
+- DEBT47: the demo coverage spec allows the TCGplayer image host by name, and the stub goes.
+- Any other test whose premise a ruling changed, found in the same pass.
+
+### S. Small cleanups
+
+- Lane F's `_lookup_key` wrapper in `pipeline/stockimages.py` is redundant since F2 folded
+  whitespace in the shared join key. Remove it.
 
 ### A. Orders: the walk becomes Inventory's screen (the biggest lane)
 
