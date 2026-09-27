@@ -14,12 +14,24 @@ life, and every `get()` after it raises immediately with no sleep and no fetch a
 ordinary `Unreachable` (a host that DID answer, just with a bad status) is NOT sticky —
 the next product may still resolve normally, which is D62's own promise that one card's bad
 day cannot cost every other card in the batch.
+
+A READ TIMEOUT IS NOT A CONNECT FAILURE (the orchestrator's finding, 2026-09-27, on an
+earlier version of this fix). `fetch_json`'s first cut caught `URLError`/`OSError`/
+`TimeoutError` in ONE branch around the whole `urlopen(...)` call, so a slow but LIVE link
+— a connection that opened, then stalled reading the body — also latched `Offline` and
+refused every other SKU in the same request, dropping readings a retry would have gotten.
+`_read_timeout_does_not_latch` proves `fetch_json` itself draws the line where the
+docstring says it does: a fake response whose `.read()` raises stays a plain, non-sticky
+`Unreachable`; a fake `urlopen` that never returns a response at all raises `Offline`.
 """
 
 from __future__ import annotations
 
+import socket
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -84,9 +96,65 @@ def _plain_unreachable_is_not_sticky() -> None:
        "called %d times, want 5" % len(calls))
 
 
+class _FakeResponse:
+    """A `urlopen` context manager whose `.read()` raises — a connection that opened, then
+    stalled reading the body. `status`/`headers` are never touched by the failing paths
+    this stands in for."""
+
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+
+    def __enter__(self) -> "_FakeResponse":
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        return None
+
+    def read(self):
+        raise self._exc
+
+
+def _read_timeout_does_not_latch() -> None:
+    """`fetch_json` itself, not `Market` — the boundary the finding was actually about."""
+    real_urlopen = urllib.request.urlopen
+
+    def urlopen_raises_on_read(*_a, **_k):
+        return _FakeResponse(socket.timeout("simulated: read timed out"))
+
+    urllib.request.urlopen = urlopen_raises_on_read
+    try:
+        try:
+            pricehistory.fetch_json("https://example.test/read-timeout")
+            ok(False, "a read timeout raises at all", "returned instead of raising")
+        except pricehistory.Offline as exc:
+            ok(False, "a read timeout is NOT Offline (it is a live, degraded link)",
+               "raised Offline: %s" % exc)
+        except pricehistory.Unreachable:
+            ok(True, "a read timeout stays a plain, non-sticky Unreachable")
+    finally:
+        urllib.request.urlopen = real_urlopen
+
+    def urlopen_never_connects(*_a, **_k):
+        raise urllib.error.URLError("simulated: connection refused")
+
+    urllib.request.urlopen = urlopen_never_connects
+    try:
+        try:
+            pricehistory.fetch_json("https://example.test/never-connects")
+            ok(False, "a connect failure raises at all", "returned instead of raising")
+        except pricehistory.Offline:
+            ok(True, "a connection that never opens still raises Offline")
+        except pricehistory.Unreachable as exc:
+            ok(False, "a connect failure raises Offline, not a plain Unreachable",
+               "raised plain Unreachable: %s" % exc)
+    finally:
+        urllib.request.urlopen = real_urlopen
+
+
 def main() -> int:
     _offline_only_fetches_once()
     _plain_unreachable_is_not_sticky()
+    _read_timeout_does_not_latch()
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0
 

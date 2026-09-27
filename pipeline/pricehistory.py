@@ -299,14 +299,21 @@ class Unreachable(PriceHistoryError):
 
 class Offline(Unreachable):
     """A SUBCLASS, NOT A SIBLING — every `Offline` IS an `Unreachable` and every existing
-    `except Unreachable` catches it exactly as before. It is raised ONLY for a connection
-    that never happened at all: `urllib.error.URLError`, a raw `OSError` (DNS failure,
-    connection refused) or `TimeoutError` reaching the socket layer, never an `HTTPError` —
-    the host answering with a bad status IS a connection, and a second product on the same
-    host may still answer normally. `Market.get` uses this distinction: once ONE `Offline`
-    has been seen, every socket attempt after it will fail the identical way, for the
-    identical reason, so `Market` treats the network as down for the rest of THIS instance's
-    life rather than re-attempting (and re-sleeping the courtesy delay) once per product.
+    `except Unreachable` catches it exactly as before. IT IS RAISED ONLY WHEN NO CONNECTION
+    WAS EVER MADE — a raw `OSError`/`URLError`/`TimeoutError` reaching `urlopen` itself: a
+    refused connection, a DNS failure, or a timeout before the socket ever opened. NEVER an
+    `HTTPError` (the host answering with a bad status IS a connection, and a second product
+    on the same host may still answer normally), and NEVER a failure reading the response
+    body once a connection succeeded — a read timeout or a reset mid-body says the LINK is
+    degraded, not gone, and the next product's own fresh connection may still succeed; that
+    stays a plain, non-sticky `Unreachable` (the owner's ruling, 2026-09-27, correcting an
+    earlier version of this class that latched on a read timeout too — see
+    `fetch_json`'s own two `try` blocks, which is where that distinction is actually drawn).
+
+    `Market.get` uses this distinction: once ONE `Offline` has been seen, every socket
+    attempt after it will fail the identical way, for the identical reason, so `Market`
+    treats the network as down for the rest of THIS instance's life rather than
+    re-attempting (and re-sleeping the courtesy delay) once per product.
 
     MEASURED, 2026-09-27, on a real demo-mirror recording. 387 SKUs over a run,
     `readings_for_rows` batched by product (D79) but resolved 325 distinct
@@ -936,7 +943,20 @@ def fetch_json(
     request = urllib.request.Request(url, headers={"User-Agent": user_agent})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            body = response.read()
+            # A SEPARATE `try` FROM THE CONNECT ABOVE. `urlopen` raising means no response
+            # ever arrived — the socket itself refused, or DNS never resolved, or the
+            # attempt timed out before a byte came back, and every OTHER request to the
+            # same dead host is heading for the identical failure (`Offline`, below).
+            # `response.read()` raising means a connection WAS made — the read that
+            # follows it stalled or the peer reset mid-body, which says nothing about
+            # whether the NEXT product's own connection will succeed. That is a plain,
+            # non-sticky `Unreachable`, caught here rather than falling into the outer
+            # `except` where it would be indistinguishable from a connection that never
+            # opened at all.
+            try:
+                body = response.read()
+            except (urllib.error.URLError, OSError, TimeoutError) as exc:
+                raise Unreachable(f"{url} could not be reached: {exc}") from exc
     except urllib.error.HTTPError as exc:
         detail = ""
         with contextlib.suppress(Exception):  # a body we cannot read is not the interesting fault
@@ -953,9 +973,11 @@ def fetch_json(
             ) from exc
         raise Unreachable(f"{url} answered HTTP {exc.code}: {detail}") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
-        # `Offline`, NOT THE PLAIN `Unreachable` ABOVE — no HTTP response arrived at all, so
-        # every socket attempt after this one is heading for the identical failure. See
-        # `Offline`'s own docstring for what a caller does with that distinction.
+        # `Offline`, NOT THE PLAIN `Unreachable` ABOVE — raised only here, from `urlopen`
+        # itself, which means no HTTP response arrived at all: a refused connection, a DNS
+        # failure, or a timeout reaching the socket in the first place. Every socket
+        # attempt after this one is heading for the identical failure. See `Offline`'s own
+        # docstring for what a caller does with that distinction.
         raise Offline(f"{url} could not be reached: {exc}") from exc
     try:
         return json.loads(body.decode("utf-8"))
