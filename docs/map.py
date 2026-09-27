@@ -1607,8 +1607,8 @@ COMPONENTS = [
                                         "that mirror's current /prices, which are per product per "
                                         "PRINTING and never per SKU.",
                                 "governed_by": ["D8", "D16", "D22", "D25", "D35", "D47", "D49",
-                                                "D55", "D62", "D64", "D171", "D216", "D234",
-                                                "D240", "D254"],
+                                                "D55", "D62", "D64", "D79", "D171", "D216",
+                                                "D234", "D240", "D254"],
                                 "tested_by": ["T7"],
                                 "note": "REACHABLE AS OF 2026-08-30 (D62) — this entry read "
                                         "RECORDED RATHER THAN BUILT for one day, and the whole "
@@ -3011,6 +3011,21 @@ COMPONENTS = [
                 "governed_by": ["D21", "D25", "D36", "D54", "D63", "D64", "D87", "D104",
                                 "D137", "D166", "D172", "D213", "D253"],
             },
+            "pipeline-trends-archive-ids-selftest.py": {
+                "does": "proves `server/pipeline_routes.py:_trends_for_entries` passes the "
+                        "archive's already-verified productId per SKU "
+                        "(`store/pricearchive.py:PriceArchive.for_sku`, D254) into "
+                        "`Market.readings_for_rows`, by poisoning `category_id`/`group_id` to "
+                        "raise if either is ever called for a SKU the archive already "
+                        "resolves. Measured 2026-09-27: a real demo-mirror recording's "
+                        "`/pipeline/runs/<name>/trends` request over ~400 SKUs timed out at "
+                        "the recorder's 30s GET timeout — reproduced in isolation as 62.79s "
+                        "for 400 failed `Market.category_id()` calls, because a FAILED fetch "
+                        "is never cached (`Market.get` only stores on success) and the 0.15s "
+                        "courtesy delay repeats before every one. Not wired into `make check` "
+                        "(D18: this fix is scoped to the single incident it answers).",
+                "governed_by": ["D18", "D219", "D254"],
+            },
             "pricearchive-selftest.py": {
                 "does": "proves store/pricearchive.py and pipeline/pricearchive.py against a "
                         "throwaway store, no network (D219). A "
@@ -3189,6 +3204,21 @@ COMPONENTS = [
                         "the real `prices()` method does not. 6 assertions. Not wired into "
                         "`make check`.",
                 "governed_by": ["D216", "D219", "D234"],
+            },
+            "pricehistory-offline-selftest.py": {
+                "does": "proves `pipeline/pricehistory.py:Market` fails fast once the "
+                        "network is genuinely unreachable, no network, no real sleep. A "
+                        "counting fetcher that always raises the new `Offline` (a subclass "
+                        "of `Unreachable`, never a plain HTTP-status failure) is called "
+                        "exactly ONCE across 50 distinct slugs — every call after the first "
+                        "raises immediately, with no courtesy delay. A sibling arm proves a "
+                        "plain `Unreachable` is NOT sticky: the fetcher is called once per "
+                        "distinct slug, since a bad HTTP status from one product says "
+                        "nothing about the next (D62). Measured 2026-09-27: a real "
+                        "demo-mirror trends request over 387 SKUs went from 102.2s "
+                        "(95.85s of it `time.sleep`, per `cProfile`) to 0.78s. Not wired "
+                        "into `make check`.",
+                "governed_by": ["D18", "D62"],
             },
             "product-history-selftest.py": {
                 "does": "proves pipeline/productview.py and "
@@ -5035,7 +5065,33 @@ COMPONENTS = [
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
                 "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D96", "D159",
-                                "D172", "D183", "D213", "D216", "D220", "D227", "D295"],
+                                "D172", "D183", "D213", "D216", "D220", "D227", "D269", "D295"],
+            },
+            "demo-record-selftest.py": {
+                "does": "Server's stdout-drain, proved on a bare subprocess rather than by "
+                        "spending a full sweep: a child that floods stdout past the OS pipe "
+                        "buffer with nobody reading it does not exit in time (the mechanism "
+                        "behind a real hung build, 2026-09-26, diagnosed with `sample <pid>`); "
+                        "the same child DOES exit once Server's own drain thread is reading "
+                        "it. Also proves get()/post() now raise on a network failure "
+                        "(timeout, reset, refused) instead of returning it as a silent miss.",
+                # D18: writes nothing, spends nothing (a subprocess printing to its own pipe,
+                # never the network or the store), so it is safe on any path. Not wired into
+                # `make check` — no target here asked for that, and this fix is scoped to the
+                # single incident it answers.
+                "governed_by": ["D18"],
+            },
+            "demo-record-walkplan-selftest.py": {
+                "does": "`record_walk_plans`, proved on the failure a real 71-open-order "
+                        "rebuild hit (2026-09-27): the OLD rule recorded every SUBSET of "
+                        "the ticked open orders (`2^n` sets), refusing outright past 7 — "
+                        "shown here to reach an astronomical count at 71 and to have been "
+                        "refused by the real recorder's own message. The NEW rule records "
+                        "every SINGLE open order plus the one full \"walk all\" set "
+                        "(`n + 1` recordings, linear), proved at n=0, 1, 7, 71 and 834 — "
+                        "every single order its own recording, the one full set recorded "
+                        "whole. Not wired into `make check`.",
+                "governed_by": ["D18", "D96", "D220", "D269", "D295"],
             },
             "demo_scrub.py": {
                 "does": "strips machine-local absolute paths out of the bundle before it is "
@@ -5605,8 +5661,8 @@ COMPONENTS = [
                                 "D88", "D89", "D100", "D103", "D104", "D105", "D134", "D137",
                                 "D145", "D147", "D156", "D159", "D163", "D165", "D166", "D168",
                                 "D170", "D172", "D174", "D180", "D188", "D189", "D196", "D212",
-                                "D216", "D219", "D225", "D227", "D236", "D258", "D273", "D277",
-                                "D291", "D293", "D301"],
+                                "D216", "D219", "D225", "D227", "D236", "D254", "D258", "D273",
+                                "D277", "D291", "D293", "D301"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
