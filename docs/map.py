@@ -1487,7 +1487,7 @@ COMPONENTS = [
                                        "opens a socket. Never raises: a join miss or an "
                                        "unreachable catalogue both answer `None`.",
                                "governed_by": ["D301", "D8", "D15", "D25", "D35",
-                                               "D49", "D62", "D254"],
+                                               "D49", "D62", "D254", "D-demo-stock-images"],
                                "tested_by": ["T7"]},
             "selection.py": {"does": "WHICH CARDS A PRESS IS OVER — one object, read by the"
                                      "wire and the CLI alike, and the drawer is a TERM in it "
@@ -5025,7 +5025,7 @@ COMPONENTS = [
                 # D70 is the QR test the photograph step reuses from demo-photos.py. D61 is
                 # why the shipping export is written fresh rather than read (the store holds
                 # no address at all). D216 is why the recording runs offline.
-                "governed_by": ["D61", "D70", "D193", "D216", "D295"],
+                "governed_by": ["D61", "D70", "D193", "D216", "D295", "D-demo-stock-images"],
             },
             "demo-histories.py": {
                 "does": "`make demo-histories`: records every demo card's price history, all "
@@ -5065,7 +5065,8 @@ COMPONENTS = [
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
                 "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D96", "D159",
-                                "D172", "D183", "D213", "D216", "D220", "D227", "D269", "D295"],
+                                "D172", "D183", "D213", "D216", "D220", "D227", "D269", "D295",
+                                "D-demo-stock-images"],
             },
             "demo-record-selftest.py": {
                 "does": "Server's stdout-drain, proved on a bare subprocess rather than by "
@@ -5151,6 +5152,19 @@ COMPONENTS = [
                         "no write — in `make check`, unlike demo-determinism.py itself "
                         "(D18: that target is a press, run by hand).",
                 "governed_by": ["D16", "D18"],
+            },
+            "stockimages-cache-selftest.py": {
+                "does": "proves `pipeline/stockimages.py`'s disk cache offline, both ways: a "
+                        "`Market` whose fetcher always raises `Offline` (the same failure "
+                        "`demo-record.py`'s `OFFLINE_BOOT` produces for a real socket), pointed "
+                        "at an empty directory, answers `url_for` as `None`; pointed at one "
+                        "seeded with a `tcgcsv/<category>/<group>/products` cache entry, "
+                        "answers the product's `imageUrl`. Proves the slug `_fetch_tcgcsv` "
+                        "reads is the one `cli/cmd_pricearchive.py`'s archive sweep already "
+                        "writes, which is what makes copying that directory into the demo "
+                        "mirror (`demo-mirror.py`'s `SIDE_DIRS`) enough on its own. No "
+                        "subprocess, no network, no write outside a `TemporaryDirectory`.",
+                "governed_by": ["D-demo-stock-images"],
             },
             "extract_real_facts.py": {
                 "does": "reads a READ-ONLY COPY of the owner's store (never the owner's own "
@@ -5662,7 +5676,7 @@ COMPONENTS = [
                                 "D145", "D147", "D156", "D159", "D163", "D165", "D166", "D168",
                                 "D170", "D172", "D174", "D180", "D188", "D189", "D196", "D212",
                                 "D216", "D219", "D225", "D227", "D236", "D254", "D258", "D273",
-                                "D277", "D291", "D293", "D301"],
+                                "D277", "D291", "D293", "D301", "D-demo-stock-images"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {

@@ -224,6 +224,17 @@ class StockImages:
         self._cache: Dict[Tuple[str, str], Tuple[float, Dict[str, str]]] = {}
         self._pending: Set[Tuple[str, str]] = set()
         self._lock = threading.Lock()
+        # `Market` (`pipeline/pricehistory.py`) documents no thread safety of its own —
+        # `_memory` and `_indexes` are plain dicts. `warm()` starts one daemon thread PER
+        # `(game, set_name)` pair, all sharing this one `_market`, so two pairs warmed at
+        # once could corrupt each other's read of it (a `RuntimeError` from a dict mutated
+        # mid-iteration, uncaught by the `except` below because it is neither
+        # `PriceHistoryError` nor `KeyError`) — found by `D-demo-stock-images`'s own build:
+        # every pair warmed at once left EVERY entry `None` forever, because a `_warm_one`
+        # that raises never reaches its own `finally`-shaped cleanup and the pair stays
+        # `_pending` (never retried). Background work only, never the request thread `warm`
+        # itself never blocks — serializing it here costs nothing `url_for` can feel.
+        self._market_lock = threading.Lock()
 
     def _fetch_tcgcsv(self, game: str, set_name: str) -> Dict[str, str]:
         """The blocking walk: category, group, products. Called ONLY from a background
@@ -231,14 +242,20 @@ class StockImages:
         point of this split.
         """
         try:
-            product_line = str(game_registry.get(game)["product_line"])
-            category_id = self._market.category_id(product_line)
-            group_id = self._market.group_id(category_id, set_name)
-            payload = self._market.get(
-                f"{CATALOG_HOST}/tcgplayer/{category_id}/{group_id}/products",
-                f"stockimages/{category_id}/{group_id}/products",
-                self._ttl,
-            )
+            with self._market_lock:
+                product_line = str(game_registry.get(game)["product_line"])
+                category_id = self._market.category_id(product_line)
+                group_id = self._market.group_id(category_id, set_name)
+                # SAME SLUG `pipeline/pricehistory.py:Market.products` ALREADY USES for
+                # this exact URL (D-demo-stock-images) — the archive sweep's own disk
+                # cache (`cli/cmd_pricearchive.py`) already answers this on the owner's
+                # Mac, so this reads that primitive rather than warming a second, private
+                # copy of it.
+                payload = self._market.get(
+                    f"{CATALOG_HOST}/tcgplayer/{category_id}/{group_id}/products",
+                    f"tcgcsv/{category_id}/{group_id}/products",
+                    self._ttl,
+                )
         except (PriceHistoryError, KeyError):
             return {}
         index: Dict[str, str] = {}
@@ -255,11 +272,19 @@ class StockImages:
         return index
 
     def _warm_one(self, game: str, set_name: str) -> None:
-        """One background fetch, and the only place `_cache`/`_pending` are written."""
-        index = self._fetch_tcgcsv(game, set_name)
-        with self._lock:
-            self._cache[(game, set_name)] = (time.time(), index)
-            self._pending.discard((game, set_name))
+        """One background fetch, and the only place `_cache`/`_pending` are written.
+
+        `_pending` IS ALWAYS CLEARED, even on an exception `_fetch_tcgcsv` did not expect —
+        a pair stuck `_pending` forever is a pair `warm()` never schedules again (D-demo-
+        stock-images: this is what turned one race into a PERMANENT cold cache).
+        """
+        index: Dict[str, str] = {}
+        try:
+            index = self._fetch_tcgcsv(game, set_name)
+        finally:
+            with self._lock:
+                self._cache[(game, set_name)] = (time.time(), index)
+                self._pending.discard((game, set_name))
 
     def warm(self, pairs: Iterable[Tuple[str, str]]) -> List[threading.Thread]:
         """Schedule a background fetch for every `(game, set_name)` pair not already fresh.

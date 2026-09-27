@@ -47,10 +47,6 @@
  * NOT reach.
  */
 
-// `#demo-bundle` is the recording when one exists and a type-only stub when it does not.
-// See src/demoBundle.stub.ts: the recording is generated and gitignored, so a static path
-// here made `tsc` — and therefore `make check` — depend on a build artifact nothing makes.
-import bundle from '#demo-bundle'
 import { filterByQuery } from './kit/match'
 import { ServerError } from './server'
 
@@ -106,18 +102,33 @@ export function postKey(path: string, body: unknown): string {
   return `POST ${path} ${JSON.stringify(sortedJson(body))}`
 }
 
+/* THE RECORDING, IN CHUNKS. `scripts/demo-mirror.py:chunk_bundle` splits the recording into
+ * files GitHub's 100 MB blob limit accepts, never a fixed count — the recording had already
+ * grown past that limit as one file (2026-09-27). `import.meta.glob` needs no manifest and no
+ * fixed count: it matches whatever chunk files are on disk at BUILD time, so it stays correct
+ * however many `chunk_bundle` writes. A checkout with no recording (`make demo` not run,
+ * `git clone` alone) matches zero files and this becomes `{}` — no stub file needed, unlike
+ * the old single-file `#demo-bundle` alias this replaces, because a glob with no matches is
+ * not a resolve error. */
+const chunks = import.meta.glob<{ responses?: Record<string, Recorded>; wire?: string }>(
+  '../demo/bundle/*.json',
+  { eager: true, import: 'default' },
+)
+
 /* The recording, as a MUTABLE map under canonical keys. Cloned on load so a write patches
  * this session's copy and a reload starts the demo over — which is the behaviour somebody
  * clicking through a shared link wants, and the reason no attempt is made to persist it. */
 const responses: Record<string, Recorded> = {}
-for (const [key, entry] of Object.entries(
-  structuredClone(bundle.responses as Record<string, Recorded>),
-)) {
-  responses[canonical(key)] = entry
+let wire = ''
+for (const chunk of Object.values(chunks)) {
+  for (const [key, entry] of Object.entries(structuredClone(chunk.responses ?? {}))) {
+    responses[canonical(key)] = entry
+  }
+  if (chunk.wire) wire = chunk.wire
 }
 
 /** The wire contract this recording was made against. Surfaced for the staleness check. */
-export const WIRE = String((bundle as { wire?: unknown }).wire ?? '')
+export const WIRE = wire
 
 // ---------------------------------------------------------------------------- documents
 

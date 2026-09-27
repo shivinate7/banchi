@@ -179,7 +179,9 @@ PID_FILE = "running.pid"
 # reaching for this name directly, so a harness test calling either function bare gets no
 # resolver and opens no socket — `server/capture_server.py`'s HTTP dispatch is the one
 # caller that passes this.
-STOCK_IMAGES = stockimages.StockImages()
+# DISK-BACKED, ONCE THE MODULE FINISHES LOADING — see the assignment beside
+# `market_cache_dir()`, below, which is what this needs and is defined after it.
+STOCK_IMAGES: "stockimages.StockImages"
 
 
 def warm_stock_images() -> None:
@@ -194,6 +196,15 @@ def warm_stock_images() -> None:
     already answers an unreadable store as a `PipelineRefusal` on the real request path;
     this is a courtesy that widens the very first request's coverage and nothing depends on
     it having run.
+
+    `PKMNSCAN_STOCK_IMAGES_SYNC` JOINS THE THREADS THIS STARTS, BEFORE RETURNING —
+    `scripts/demo-record.py` sets it (D-demo-stock-images). Nowhere else does: a LIVE
+    server must never make the first request after a restart wait on a disk read, however
+    fast, which is the whole reason `warm()` is fire-and-forget. The demo recorder is a
+    ONE-SHOT process that reads each route exactly once and never comes back — a cold
+    `url_for()` there is not "slow", it is baked into the published bundle forever. Found
+    from a real rebuild: `url_for` answering `None` on the very first read of
+    `/pipeline/pricing` (the sweep's own early ordering) with no later read to self-heal.
     """
     try:
         inventory = Store().read().inventory
@@ -205,7 +216,10 @@ def warm_stock_images() -> None:
         }
     except (files.StoreError, OSError, ValueError, TypeError):
         return
-    STOCK_IMAGES.warm(pair for pair in pairs if pair[0] and pair[1])
+    threads = STOCK_IMAGES.warm(pair for pair in pairs if pair[0] and pair[1])
+    if os.environ.get("PKMNSCAN_STOCK_IMAGES_SYNC", "").strip():
+        for thread in threads:
+            thread.join(timeout=60)
 
 
 # The free commands, and the flags each will accept from a request. An allowlist rather than
@@ -6003,6 +6017,37 @@ def market_cache_dir() -> Path:
     is a complete remedy at any moment.
     """
     return files.home() / ".cache" / "market"
+
+
+# `STOCK_IMAGES` (declared near the top of this file, where every other route reads it)
+# is built HERE, disk-backed by THIS SAME `market_cache_dir()` — the one directory every
+# other `Market` in this file already caches through, three lines above and below. Before
+# this, `StockImages()` defaulted to `Market(cache_dir=None)` (in-memory only), which is
+# why a thumbnail warmed by yesterday's price-history read still cost a fresh tcgcsv
+# request after every server restart, and why the offline demo recorder could never
+# answer a Riftbound or One Piece image at all (the owner, 2026-09-27). `_fetch_tcgcsv`'s
+# own slug is the same `"tcgcsv/<category>/<group>/products"` these other Markets already
+# write, so a fetch any of them made answers all the others with no network call.
+#
+# `PKMNSCAN_STOCK_IMAGES_SYNC` ALSO RAISES THE TTL TO `CATALOG_TTL_SECONDS`, a second
+# finding this same decision entry records (D-demo-stock-images). `StockImages`'s default
+# `TCGCSV_TTL_SECONDS` is one hour — right for a live server, where a stale answer costs one
+# more tcgcsv request. `_fetch_tcgcsv`'s
+# own disk read TREATS AN HOUR-OLD ENTRY AS A MISS, exactly like a cold one, and schedules a
+# real fetch. The demo recorder's archive-sweep cache is real, but it is not an hour old —
+# a real rebuild measured it 187 hours old and still valid. Every "it works" seen while
+# building this fix was a live machine falling through to a REAL network call once the TTL
+# rejected the cache, which is invisible until the SAME code runs under `--offline` and that
+# fallback is refused instead. `CATALOG_TTL_SECONDS` is the same "never expires" policy
+# `pipeline/pricehistory.py:Market.products()` already gives this exact URL.
+STOCK_IMAGES = stockimages.StockImages(
+    market=pricehistory.Market(cache_dir=market_cache_dir()),
+    ttl=(
+        pricehistory.CATALOG_TTL_SECONDS
+        if os.environ.get("PKMNSCAN_STOCK_IMAGES_SYNC", "").strip()
+        else stockimages.TCGCSV_TTL_SECONDS
+    ),
+)
 
 
 def _history_user_agent() -> str:

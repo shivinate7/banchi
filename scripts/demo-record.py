@@ -125,6 +125,14 @@ class Server:
         env = dict(os.environ)
         env["PKMNSCAN_HOME"] = str(self.home)
         env["PKMNSCAN_PORT"] = str(self.port)
+        # THE RECORDER NEVER COMES BACK (D-demo-stock-images). `server/pipeline_routes.py:
+        # warm_stock_images` fires its background threads and returns at once for a LIVE
+        # server on purpose — a real user's first request after a restart must never wait
+        # on a disk read. This sweep reads every route exactly once and bakes whatever it
+        # got into the published bundle forever, so a cold `url_for()` here is not "slow
+        # once", it is permanently missing. This variable makes that one call join its own
+        # threads before the server starts accepting requests.
+        env["PKMNSCAN_STOCK_IMAGES_SYNC"] = "1"
         script = str(REPO_ROOT / "server" / "capture_server.py")
         argv = [sys.executable, script]
         if self.offline:
