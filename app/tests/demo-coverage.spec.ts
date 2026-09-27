@@ -137,6 +137,56 @@ function watchPhotos(page: Page): Array<{ url: string; status: number }> {
 test.describe('the published demo draws what reviewers grade', () => {
   test.use({ viewport: { width: 1440, height: 900 } })
 
+  // EVIDENCE, TO THE JOB LOG, NEVER TO AN ARTIFACT (2026-09-27, after two rounds of
+  // guessing at CI runs 36314954311/36316345981/36317770339 with no downloadable trace —
+  // `demo.yml` uploads `test-results/` now too, but this reads without needing the
+  // download). Console/pageerror capture starts here, scoped to the one test this was
+  // written for, because `request()` (`server.ts`) calls `demoServer` directly rather than
+  // over a real fetch — there is no network response to read, so a console error or a
+  // thrown exception is the nearest thing to one.
+  const ordersConsole: string[] = []
+  test.beforeEach(async ({ page }, testInfo) => {
+    if (testInfo.title !== 'Orders draws a walk') return
+    ordersConsole.length = 0
+    page.on('console', (m) => ordersConsole.push(`[console.${m.type()}] ${m.text()}`))
+    page.on('pageerror', (e) => ordersConsole.push(`[pageerror] ${e.message}`))
+  })
+
+  // Fires only on a case that did not pass, and only for the one case this was written
+  // for — a page dump on every OTHER case's failure would be noise nobody asked for.
+  // Prints the Orders page's own visible text (trimmed), whether "Walk all" exists and
+  // its exact label, and whether the demo's one refusal notice is on screen.
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status === 'passed') return
+    if (testInfo.title !== 'Orders draws a walk') return
+    const walkAll = page.getByRole('button', { name: /^Walk all \d+ buyers?$/ })
+    const walkAllCount = await walkAll.count().catch(() => -1)
+    const walkAllLabel =
+      walkAllCount > 0
+        ? await walkAll.first().textContent({ timeout: 3_000 }).catch(() => null)
+        : null
+    const refusalCount = await page.getByText(REFUSAL).count().catch(() => -1)
+    // AN EXPLICIT, SHORT TIMEOUT ON EVERY ACTION HERE, NOT JUST `.catch()` — an action
+    // wait with no timeout of its own hangs until the ENCLOSING test timeout kills it
+    // (measured while proving this hook: a missing `main` consumed the whole 60s budget
+    // and printed "Test timeout ... exceeded while running afterEach hook" instead of any
+    // evidence at all). `.catch()` alone does nothing for a promise that never rejects.
+    const bodyText = await page
+      .locator('main')
+      .first()
+      .innerText({ timeout: 3_000 })
+      .catch((exc) => `<could not read main: ${String(exc).slice(0, 200)}>`)
+    console.log('=== Orders draws a walk: failure evidence ===')
+    console.log('"Walk all N buyers" button count:', walkAllCount)
+    console.log('"Walk all N buyers" button label:', walkAllLabel)
+    console.log(`"${REFUSAL}" count:`, refusalCount)
+    console.log('console/pageerror during this test:', ordersConsole.length === 0 ? '<none>' : '')
+    for (const line of ordersConsole) console.log(' ', line)
+    console.log('main innerText (first 4000 chars):')
+    console.log(bodyText.slice(0, 4000))
+    console.log('=== end evidence ===')
+  })
+
   test('every card in the recorded store has its photograph in the build', () => {
     const bundle = JSON.parse(readFileSync(BUNDLE, 'utf-8')) as {
       responses: Record<string, { body: { cards?: Record<string, { box: number; index: number; photo?: string | null }> } }>
