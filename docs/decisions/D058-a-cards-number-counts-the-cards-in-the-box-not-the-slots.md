@@ -126,5 +126,5 @@ Box 1 holds 133 records with 18 sold, box 3 holds 39 with 24, and neither declar
 ### Amended 2026-09-25: capacity is gone
 
 The paragraph above that keeps `capacity` for "its D20 job" is superseded. The owner removed the
-seal (D-sealed-boxes-removed), and `close_box` was the only writer of `capacity`. So a box has
+seal (D299), and `close_box` was the only writer of `capacity`. So a box has
 no capacity, and this entry's rule that every number counts the cards on hand is the only rule.

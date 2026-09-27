@@ -769,7 +769,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-seg-sm { padding: 2px; gap: 2px; }
 .bn-seg-item-sm { height: 24px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); }
 
-/* ---- section pick (D-sections-are-sub-boxes: no auto default, the owner picks) ---------- */
+/* ---- section pick (D300: no auto default, the owner picks) ---------- */
 .bn-section-pick { display: flex; flex-direction: column; gap: var(--bn-2); }
 .bn-section-pick-item {
   display: flex;

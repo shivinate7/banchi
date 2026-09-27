@@ -24,7 +24,7 @@ Built 2026-08-29. The owner asked for sectioning they could create from the capt
 - **It is `next_index` and not count+1**, which matters exactly where D10 already matters: a box with permanent gaps in it. A count would put the divider in front of a card that will never be captured.
 - **An undeclared box materializes `[1, at]`, not `[at]`.** `check_sections` requires a layout to start at index 1 and is right to — there is no card before the front of a box. Nothing is invented by that: section 1 already started at card 1, and this is the first time anything needed to write it down.
 - **It logs `resectioned` through `set_sections`**, the event the dividers editor already writes, carrying both layouts. A new event name was considered and rejected on D26's evidence: this store has already been bitten by a state and a history event sharing a word.
-- **One refusal, in its own code**: `section_empty` (pressed twice with nothing captured between — the divider you want is already there, and an empty box takes this too, since card 1 is where the first section starts). A second, `section_ahead` (a divider already declared past the next card), went on 2026-09-26 with the empty-section rule below (ruled 2026-09-25, and option (a) confirmed 2026-09-26): the next card now goes behind such a divider, so that section is empty and `section_empty` answers it. A third, `box_closed` (a sealed box took no divider), went with the seal on 2026-09-25 (D-sealed-boxes-removed).
+- **One refusal, in its own code**: `section_empty` (pressed twice with nothing captured between — the divider you want is already there, and an empty box takes this too, since card 1 is where the first section starts). A second, `section_ahead` (a divider already declared past the next card), went on 2026-09-26 with the empty-section rule below (ruled 2026-09-25, and option (a) confirmed 2026-09-26): the next card now goes behind such a divider, so that section is empty and `section_empty` answers it. A third, `box_closed` (a sealed box took no divider), went with the seal on 2026-09-25 (D299).
 - **No confirm, and `U` is the undo.** Nothing is spent and nothing is destroyed. Since UN-15, `U` takes S's divider back out while it is the last one and no card is behind it (`DELETE /boxes/<box>/sections?div=<key>`, D265). After that, the dividers editor corrects a wrong layout, and `resectioned` carries the layout it moved from. A dialog on the screen the owner shoots a box from at feeder pace is what `docs/DESIGN.md` refuses in as many words.
 
 **The set hint is `H` now, and the swap cost nothing else.** `S` was on a field an operator opens a few times a run and was wanted for an act performed at the box. The option alphabet (`docs/DESIGN.md`) is every key this screen has not spent, so it lost `s` and gained `h` — and because `h` sorts after `e`, the first thirteen option keys are `1234567890ade` before and after, which is why `app/tests/capture-claims.spec.ts` pins them and stayed green.
@@ -51,7 +51,7 @@ subbox". The real store held no such layout. Only boxes 4 and 6 end with an empt
 one S each.
 
 **Amended 2026-09-26: a capture goes on the end of its SECTION, not of the box**
-(D-sections-are-sub-boxes). The owner picks the section on Capture. The store files the card
+(D300). The owner picks the section on Capture. The store files the card
 at that section's tail, and S can go right after a picked section. No section named is the
 capture above, unchanged.
 

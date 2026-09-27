@@ -921,7 +921,7 @@ def check_sections(sections) -> Tuple[int, ...]:
 def layout_before_s(made: Optional[dict], layout, div) -> Optional[List]:
     """The layout from before the S that added divider `div`, or None when `made` does not
     prove that S wrote `layout`. THE ONE READER OF A `resectioned` LINE for the capture
-    screen's U (UN-15, and D-sections-are-sub-boxes' I9).
+    screen's U (UN-15, and D300' I9).
 
     `made` is the box's newest `resectioned` event. It proves S added `div` when its
     `sections_to` is `layout` and its `sections_from` is `layout` less `div`. S on an
@@ -1029,7 +1029,7 @@ class Box:
     named one, so it could not be created empty, named, or found by any screen but Capture,
     and a mistyped number was caught only by the `new_box` flag AFTER a photo was written.
 
-    NO LID AND NO CAPACITY (`D-sealed-boxes-removed`, 2026-09-25). D20 sealed a box to freeze
+    NO LID AND NO CAPACITY (`D299`, 2026-09-25). D20 sealed a box to freeze
     its capacity, so a "#40 of 250" figure would stay true. D58 made every number count the
     cards on hand, so capacity divided nothing, and the owner removed the seal.
     """
@@ -1079,7 +1079,7 @@ class Box:
     # (`Inventory.move_sections`, D264) carries a moved section's name to the divider it opens
     # at the destination. The plain card move (`move_cards`) carries no divider and no name.
     section_names: Dict[str, str] = field(default_factory=dict)
-    # NO LID (`D-sealed-boxes-removed`, the owner's ruling of 2026-09-25: "what was the point of
+    # NO LID (`D299`, the owner's ruling of 2026-09-25: "what was the point of
     # sealed boxes? lets kill this"). A box had `state`, `capacity` and `closed_at` for D20's
     # seal, which froze capacity so a "#40 of 53" figure would not move. D58 took the
     # denominator off capacity, so the seal protected nothing. A stored record that still
@@ -3672,7 +3672,7 @@ class Inventory:
         Refuses on a section that is still empty (`SectionEmpty`). A divider past the next
         card is no longer a refusal: the next card goes behind it (`_behind_empty_section`),
         so that section is empty too. A box has no lid any more
-        (`D-sealed-boxes-removed`), so nothing refuses a section for a seal.
+        (`D299`), so nothing refuses a section for a seal.
         """
         entry = self.ensure_box(number)
         if after is not None:
@@ -3731,7 +3731,7 @@ class Inventory:
         # the `resectioned` line). None when it does not.
         want = as_order(div)
         before = layout_before_s(made, layout, want)
-        # U AFTER A MID-BOX S (D-sections-are-sub-boxes, I9): S with `after` puts its divider
+        # U AFTER A MID-BOX S (D300, I9): S with `after` puts its divider
         # in front of a later one, so S's own divider may not be the last. It goes when
         # `made` proves that S added it, it is a stored divider past the first, and no card
         # on hand stands in its section. A divider that an editor save put a later one

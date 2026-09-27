@@ -1029,7 +1029,7 @@ const HAND_BOXES = {
    searches the picker for `2` gets a stable answer off the NUMBERS alone. */
 
 /** The same four with box 2 DELETED, for the restore that has to fail softly. A box has no
- *  seal any more (`D-sealed-boxes-removed`), so a deleted box is the case left to let go of. */
+ *  seal any more (`D299`), so a deleted box is the case left to let go of. */
 const HAND_BOXES_WITHOUT_2 = {
   boxes: HAND_BOXES.boxes.filter((row) => row.box !== 2),
 }

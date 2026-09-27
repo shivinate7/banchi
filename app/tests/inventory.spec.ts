@@ -3062,7 +3062,7 @@ test('the box panel draws its census as bn-stat figures, not the old dotted line
   await expect(stats.locator('.bn-stat-value')).toHaveText(['5', '1', '1', '7'])
   await expect(stats.locator('.bn-stat-label')).toHaveText(['on hand', 'sold', 'retired', 'captured'])
 
-  /* No state pill: a box has no lid (`D-sealed-boxes-removed`). */
+  /* No state pill: a box has no lid (`D299`). */
   await expect(page.locator('.boxops-identity .boxops-state')).toHaveCount(0)
 
   /* AND THE FOUR FIGURES SIT ON ONE ROW AT 1440 — the rail is 300px and this is the width the
@@ -3074,7 +3074,7 @@ test('the box panel draws its census as bn-stat figures, not the old dotted line
 
 // ------------------------------------------------------- the box's operations, as rows (D20)
 
-test('a box has no lid: Manage box offers no seal and no re-open (D-sealed-boxes-removed)', async ({
+test('a box has no lid: Manage box offers no seal and no re-open (D299)', async ({
   page,
 }) => {
   await open(page)
@@ -4532,7 +4532,7 @@ test('S3 — with Hide sold on, a search count excludes what the fold already hi
   await expect(page.locator('.browse-filterbar .bn-filtercount-figure')).toHaveText('0 of 3 boxes')
 })
 
-test('UX-244 — one copy moves to another box from its own row, and the receipt names the section (D-sections-are-sub-boxes)', async ({ page }) => {
+test('UX-244 — one copy moves to another box from its own row, and the receipt names the section (D300)', async ({ page }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
   const sent: { path: string; body: unknown }[] = []
   await page.route(/\/inventory\/\d+\/\d+\/move$/, async (route) => {
@@ -4581,7 +4581,7 @@ test('UX-244 — one copy moves to another box from its own row, and the receipt
   expect(sent[0]?.body).toMatchObject({ to_box: 7, section: '1' })
 })
 
-test('UX-244 — a stale section on Move re-opens the pick with one plain sentence (D-sections-are-sub-boxes)', async ({
+test('UX-244 — a stale section on Move re-opens the pick with one plain sentence (D300)', async ({
   page,
 }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
@@ -4719,7 +4719,7 @@ test('UN-14 — a move gets an undo, the same fast path a sale gets, and it neve
   await expect(dialog).toBeVisible()
   await dialog.locator('.bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
-  /* D-sections-are-sub-boxes, no auto default: the section is the caller's own pick, never
+  /* D300, no auto default: the section is the caller's own pick, never
    * omitted, so Move stays disabled until this box's one section is checked too. This test
    * predates that ruling and only ever picked the box. */
   await dialog.locator('.bn-section-pick-item').click()
@@ -4802,7 +4802,7 @@ test('UN-14 — a move built on is refused, and "Move back" is an ordinary move 
   await expect(dialog).toBeVisible()
   await dialog.locator('.bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
-  /* D-sections-are-sub-boxes, no auto default: the section is the caller's own pick, never
+  /* D300, no auto default: the section is the caller's own pick, never
    * omitted, so Move stays disabled until this box's one section is checked too. This test
    * predates that ruling and only ever picked the box. */
   await dialog.locator('.bn-section-pick-item').click()
@@ -4966,7 +4966,7 @@ test('S4 — the BoxOps "Move to box" select offers boxes most recent first, nev
   await expect(page.locator('.bn-pick-opt')).toHaveText(['Extra shelf', 'ME01 spares'])
 })
 
-test('D-sections-are-sub-boxes — BoxOps "Move to box" (the whole box or a range) also requires a section, sends it, and names it in the receipt', async ({
+test('D300 — BoxOps "Move to box" (the whole box or a range) also requires a section, sends it, and names it in the receipt', async ({
   page,
 }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
@@ -5000,7 +5000,7 @@ test('D-sections-are-sub-boxes — BoxOps "Move to box" (the whole box or a rang
   expect(sent[0]?.body).toMatchObject({ to_box: 7, section: '1' })
 })
 
-test('D-sections-are-sub-boxes — a stale section on BoxOps Move re-opens the pick with one plain sentence', async ({
+test('D300 — a stale section on BoxOps Move re-opens the pick with one plain sentence', async ({
   page,
 }) => {
   await open(page, TWO_BOXES, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
@@ -5859,7 +5859,7 @@ test("the box's census and its forecast are told apart, and the fill says which 
   await expect(censusValue(page, 'Next capture')).toHaveText('8')
   await expect(page.locator('.boxops-census-cell', { hasText: 'Next capture' })).toHaveCount(1)
 
-  /* A box has no seal (`D-sealed-boxes-removed`), so no census figure can be a frozen one. */
+  /* A box has no seal (`D299`), so no census figure can be a frozen one. */
   expect((await page.locator('.boxops-census-qual').allInnerTexts()).join(' ')).not.toMatch(/sealed/)
 
   /* And no figure wraps away from its own label at either width. */
@@ -6085,7 +6085,7 @@ test('the box fill is qualified once, on the identity line', async ({ page }) =>
   await expect(page.locator('.boxops-census-qual')).toHaveCount(0)
   await expect(censusValue(page, 'Fill')).toHaveText('7')
 
-  /* A box has no lid (`D-sealed-boxes-removed`), so the sheet's head names no lid state at all:
+  /* A box has no lid (`D299`), so the sheet's head names no lid state at all:
      every fill is a fill so far. */
   const head = await page.locator('.boxops-sheet .inv-sheet-head').innerText()
   expect(head.toLowerCase()).not.toMatch(/\bopen\b|\bsealed\b/)

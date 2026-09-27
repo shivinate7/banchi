@@ -308,7 +308,7 @@ export function BoxIdentity({
      in the boxes, live on TCGplayer — are `bn-stat` tiles: a big tabular-nums value over a
      muted label, no separators. This panel's facts are the same shape now, one `bn-stat` per
      field. `fill unread` is not a count of what is in the box, so it stays plain text, after
-     the figures. A box has no lid and no capacity (`D-sealed-boxes-removed`). */
+     the figures. A box has no lid and no capacity (`D299`). */
   const censusStats: { key: string; value: number; label: string }[] = []
   const censusNotes: string[] = []
   if (holds === null) censusNotes.push('fill unread')
@@ -323,7 +323,7 @@ export function BoxIdentity({
       <div className="boxops-identity-top">
         {/* THE NAME ALONE (D259): the number is the store's key, never
             drawn. An unnamed box has a stored default name since the locating lane. No state
-            pill: a box has no lid (`D-sealed-boxes-removed`). */}
+            pill: a box has no lid (`D299`). */}
         <div className="boxops-identity-text">
           <h2 className="boxops-identity-name">{record.name ?? UNNAMED_BOX}</h2>
         </div>
@@ -419,7 +419,7 @@ export function BoxOps({
   const [refused, setRefused] = useState<string | null>(null)
   const [claimed, setClaimed] = useState<BoxClaimResult | null>(null)
   const [moveTo, setMoveTo] = useState('')
-  /* The owner's own pick, no auto default (D-sections-are-sub-boxes): a divider key of
+  /* The owner's own pick, no auto default (D300): a divider key of
    * `moveTo`, cleared whenever `moveTo` changes. */
   const [sectionDiv, setSectionDiv] = useState<string | null>(null)
   const [moved, setMoved] = useState<MoveCardsResult | null>(null)
@@ -479,7 +479,7 @@ export function BoxOps({
    * The server's own words go behind "What the server said" instead (`sectionTrouble`). */
   const [sectionTrouble, setSectionTrouble] = useState<Failure | null>(null)
 
-  /* D83, amended by D-sections-are-sub-boxes: `indices: null` moves every on-hand card,
+  /* D83, amended by D300: `indices: null` moves every on-hand card,
    * and there is NO AUTO DEFAULT for where in the box it lands — the owner's own ruling —
    * so a section pick is required beside the box. The server's own refusals are the ones
    * with something true to say about a destination this component cannot check. */
@@ -831,7 +831,7 @@ export function BoxOps({
             {others.length > 0 ? null : (
               <Notice tone="info" title="There is no other box in the registry yet. Type its number above, then choose a section." />
             )}
-            {/* NO AUTO DEFAULT (D-sections-are-sub-boxes, the owner's own ruling): once a box
+            {/* NO AUTO DEFAULT (D300, the owner's own ruling): once a box
                 is picked, the owner picks its section too — a box with one section still
                 shows that single choice, so the owner confirms it rather than a screen
                 deciding quietly. */}

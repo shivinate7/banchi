@@ -45,7 +45,7 @@ import './Revenue.css'
  * rows once they are on screen — sort them, filter them, cross-filter by month, drill into
  * one product's own orders, and share the exact view as a link. See D217.
  *
- * ONE ROW PER PRINTING, NOT PER NAME (D-sales-rows-by-sku). A foil and a normal printing of
+ * ONE ROW PER PRINTING, NOT PER NAME (D298). A foil and a normal printing of
  * the same card share a display name and used to collapse into one row, comparing the wrong
  * printing's price half the time. `products` now groups by SKU. Direction B (the owner's
  * choice, RULINGS.md "## Sales") replaces the flat table with a summary band, a podium of the
@@ -127,7 +127,7 @@ type Sale = {
   /** `0` where `priceKnown` is false — never read on its own without checking that flag. */
   readonly unitPrice: number
   /** `false` where TCGplayer's own feed carried no usable price on this line
-   *  (D-sales-rows-by-sku, finding 1: `unit_price: ""`, not `null`, is how the feed says
+   *  (D298, finding 1: `unit_price: ""`, not `null`, is how the feed says
    *  so). */
   readonly priceKnown: boolean
   /** `0` where `priceKnown` is false. */
@@ -158,7 +158,7 @@ function isClosedNotShipping(order: OrderRow, sku: string): boolean {
 }
 
 /** `null` for a `unit_price` this screen cannot read as a real number: TCGplayer's `null`
- *  ("said nothing") and its `""` (D-sales-rows-by-sku, finding 1) read the same way — both
+ *  ("said nothing") and its `""` (D298, finding 1) read the same way — both
  *  mean the feed carried no price on this line, never a guessed one. `Number('')` is `0` in
  *  JavaScript, which is the bug this guards: an empty string must never reach `Number()`. */
 function parsePrice(raw: string | null): number | null {
@@ -480,7 +480,7 @@ function buildBuckets(sales: readonly Sale[], granularity: Granularity, forceNow
     }))
 }
 
-/** One printing (SKU), never one name (D-sales-rows-by-sku). A foil and a normal printing
+/** One printing (SKU), never one name (D298). A foil and a normal printing
  *  that share a display name draw as two of these, `name` leading both. */
 type Product = {
   readonly sku: string
@@ -808,7 +808,7 @@ export function Revenue() {
   const [pricesLoading, setPricesLoading] = useState(false)
   const [pricesFailure, setPricesFailure] = useState<string | null>(null)
 
-  // THE SKU THUMBNAIL LOOKUP (D-sales-rows-by-sku). A plain read, unlike `prices`/`holdings`
+  // THE SKU THUMBNAIL LOOKUP (D298). A plain read, unlike `prices`/`holdings`
   // above: a thumbnail is not a number a reader could mistake for live market data, so it is
   // called on arrival rather than gated behind a press. `asked` is a ref, not state — it
   // tracks which SKUs this screen has already requested so a re-render never repeats a call,

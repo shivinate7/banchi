@@ -228,11 +228,11 @@ const RECORDED = {
     'getHoldingsValue',
     // The capture strip's sitting, read back off the store (undo.md UN-2).
     'getCaptureSitting',
-    // `#/revenue`'s thumbnail lookup (D-sales-rows-by-sku): the first on-hand,
+    // `#/revenue`'s thumbnail lookup (D298): the first on-hand,
     // photographed copy of each named SKU. A plain read, called on arrival like
     // `getHoldingsValue` above rather than gated behind a press.
     'getSkuPhotos',
-    // The owner's "by set" view (D-set-view): every on-hand card, grouped by set,
+    // The owner's "by set" view (D293): every on-hand card, grouped by set,
     // aggregated server-side. A plain read, same shape as every other entry here.
     'getInventorySets',
   ],

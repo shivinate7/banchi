@@ -1,4 +1,4 @@
-## D-demo-mirror — The public demo is the owner's real store, scrubbed
+## D295 — The public demo is the owner's real store, scrubbed
 
 **What changed.** Before this entry, the published demo (`shivinate7.github.io/banchi`)
 showed an INVENTED store. `scripts/demo-seed.py` writes real catalogue rows out of

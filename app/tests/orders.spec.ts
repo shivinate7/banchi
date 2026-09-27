@@ -2510,7 +2510,7 @@ test('the filters, the search and the sort survive a reload through the URL', as
   await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('Ready to Ship')
 })
 
-/* ---- FOUR MORE SORTS (`D-orders-sorts`, the owner's pick, 2026-09-25) -------------------------
+/* ---- FOUR MORE SORTS (`D296`, the owner's pick, 2026-09-25) -------------------------
  *
  * Dollar value, Card count, Buyer name, Fewest drawers to open. Three buyers, none Ready to
  * Ship (that bucket is already asserted above and stays orthogonal to every key here): Abel

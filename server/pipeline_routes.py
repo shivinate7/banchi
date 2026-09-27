@@ -173,7 +173,7 @@ PKMNSCAN = REPO_ROOT / "pkmnscan"
 CONSOLE = "console.log"
 PID_FILE = "running.pid"
 
-# ONE RESOLVER, FOR THE PROCESS'S WHOLE LIFE (`D-stock-images`). `pipeline/stockimages.py`'s
+# ONE RESOLVER, FOR THE PROCESS'S WHOLE LIFE (`D301`). `pipeline/stockimages.py`'s
 # own header says why: its cache is only worth having if the same instance answers every
 # request. `do_pipeline_sets`/`do_pipeline_worklist` take it as a parameter rather than
 # reaching for this name directly, so a harness test calling either function bare gets no
@@ -2699,7 +2699,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
     DOES NOT, across every joined run.
 
     `images`, WHEN GIVEN, ADDS ONE MORE FIELD TO EVERY MERGED ROW: `image_url`
-    (`D-stock-images`). `None` — every direct call this module's own harness tests make —
+    (`D301`). `None` — every direct call this module's own harness tests make —
     answers `image_url: null` on every row and opens no socket; `server/capture_server.py`'s
     HTTP dispatch passes `STOCK_IMAGES`, the one instance this process keeps, so its
     in-process cache is actually worth having. See that module's own header for the tcgcsv
@@ -3178,7 +3178,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
     )
     unreachable["reallocated"] = reallocated
 
-    # THE STOCK IMAGE, RESOLVED FRESH ON EVERY READ AND NEVER PERSISTED (`D-stock-images`).
+    # THE STOCK IMAGE, RESOLVED FRESH ON EVERY READ AND NEVER PERSISTED (`D301`).
     # `sku_row`/`_pricing_table` do not carry this field — adding it there would bake a
     # hotlinked CDN URL into `pricing.json`, a file this repo otherwise never rewrites, and
     # the whole point of a resolver with its own short TTL is that the answer can change
@@ -4022,9 +4022,9 @@ def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict
     """`GET /pipeline/sets` — every on-hand card grouped by game and set, in printed-number
     order, one row per distinct card with its quantity (the owner: *"do i have anyway of
     seeing my inventory by set order? basically a view where i just know what qty of each
-    card and then can click in if interested and it pops me to inventory screen?"* — D-set-view).
+    card and then can click in if interested and it pops me to inventory screen?"* — D293).
 
-    `images`, WHEN GIVEN, ADDS `image_url` TO EVERY ROW (`D-stock-images`) — see
+    `images`, WHEN GIVEN, ADDS `image_url` TO EVERY ROW (`D301`) — see
     `do_pipeline_worklist`'s own paragraph for what `None` answers and why, and
     `pipeline/stockimages.py` for the resolver itself. `printing` rides every row too,
     off the store's own `skus` table (identity-follows-sku.md §3.2) rather than off

@@ -69,5 +69,5 @@ The owner, 2026-08-26: deleting boxes should require a confirm click, not typing
 
 The owner's ruling: "what was the point of sealed boxes? lets kill this". The seal and the
 retroactive capacity above are removed. D58 had already taken every denominator off capacity,
-so the seal protected no figure. D-sealed-boxes-removed records what went and how an existing
+so the seal protected no figure. D299 records what went and how an existing
 sealed box becomes an ordinary one. The box object, its name and its `bid` stay as argued here.

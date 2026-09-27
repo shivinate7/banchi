@@ -1,4 +1,4 @@
-## D-stock-images — A stock photo is the main view on Sets and Pricing, hotlinked, never mirrored
+## D301 — A stock photo is the main view on Sets and Pricing, hotlinked, never mirrored
 
 Owner, verbatim: *"if it'd be easy to live pull all the photos without much lag I'd be happy
 to have the stock photos show as the main view on say set view or pricing."* And, mid-build,

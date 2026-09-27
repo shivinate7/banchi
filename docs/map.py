@@ -1457,7 +1457,7 @@ COMPONENTS = [
                             "governed_by": ["D7", "D9", "D49", "D59", "D86", "D87", "D99", "D115", "D156"],
                             "tested_by": ["T7"]},
             "stockimages.py": {"does": "`(game, set_name, number) -> a hotlinked stock photo "
-                                       "URL, or None` (D-stock-images). Riftbound and One "
+                                       "URL, or None` (D301). Riftbound and One "
                                        "Piece resolve through `pricehistory.py:Market`'s own "
                                        "tcgcsv walk, a second small index over `imageUrl` "
                                        "because `ProductIndex` does not carry it — NEVER ON "
@@ -1486,7 +1486,7 @@ COMPONENTS = [
                                        "parameter, `None` by default, so no harness test "
                                        "opens a socket. Never raises: a join miss or an "
                                        "unreachable catalogue both answer `None`.",
-                               "governed_by": ["D-stock-images", "D8", "D15", "D25", "D35",
+                               "governed_by": ["D301", "D8", "D15", "D25", "D35",
                                                "D49", "D62", "D254"],
                                "tested_by": ["T7"]},
             "selection.py": {"does": "WHICH CARDS A PRESS IS OVER — one object, read by the"
@@ -1848,7 +1848,7 @@ COMPONENTS = [
                                           "D89", "D100", "D115", "D118", "D132", "D145", "D146",
                                           "D164", "D167", "D172", "D173", "D183", "D192", "D213",
                                           "D253", "D258", "D259", "D264", "D265",
-                                          "D-sealed-boxes-removed", "D-sections-are-sub-boxes"],
+                                          "D299", "D300"],
                                           "tested_by": ["T7"]},
             "queues.py": {"does": "the standing queues — the `queues` table, one mapping per queue "
                                   "name — and the cross-queue release a re-routed position needs",
@@ -2098,7 +2098,7 @@ COMPONENTS = [
                               "migration to add one to a store already on disk.",
                       "governed_by": ["D20", "D26", "D58", "D86", "D88", "D134", "D140", "D145",
                                       "D166", "D172", "D174", "D189", "D192", "D213", "D219",
-                                      "D243", "D265", "D273", "D-sealed-boxes-removed"],
+                                      "D243", "D265", "D273", "D299"],
                       "tested_by": ["T7"]},
             "photos.py": {"does": "where a card's photograph lives, and the ONLY module permitted "
                                   "to compose that path: `<home>/photos/<aa>/<cid>.jpg`, a pure "
@@ -2278,7 +2278,7 @@ COMPONENTS = [
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
                 "governed_by": ["D11", "D14", "D16", "D18", "D44", "D47", "D58", "D70", "D92",
-                                "D-demo-mirror"],
+                                "D295"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; a sibling "
                         "hook's arrival is caught by `hook roster` since 2026-09-05. "
@@ -3586,7 +3586,7 @@ COMPONENTS = [
                                 "D86", "D87", "D89", "D96", "D100", "D103", "D104", "D106", "D113",
                                 "D134", "D159", "D165", "D167", "D168", "D174", "D189", "D192",
                                 "D193", "D203", "D210", "D225", "D227", "D236", "D252", "D264",
-                                "D273", "D291", "D-sales-rows-by-sku", "D-set-view"],
+                                "D273", "D291", "D298", "D293"],
             },
             "verdict-selftest.py": {"does": "PROVES `app/design-check-reporter.ts` STILL WRITES A "
                                             "VERDICT, BY RUNNING IT. `make docs-audit`'s "
@@ -4984,7 +4984,7 @@ COMPONENTS = [
             },
             "demo-mirror.py": {
                 "does": "builds the published demo as a scrubbed mirror of the owner's real "
-                        "store (owner's ruling 2026-09-26, `D-demo-mirror`). Reads a "
+                        "store (owner's ruling 2026-09-26, `D295`). Reads a "
                         "`.backup` copy of `store.sqlite` into gitignored `demo-mirror/`, "
                         "overwrites every buyer name to `Jane Doe N` and every address to "
                         "`123 Demo Way`, crops QR-cleared photographs under a 512 MB cap, "
@@ -4995,7 +4995,7 @@ COMPONENTS = [
                 # D70 is the QR test the photograph step reuses from demo-photos.py. D61 is
                 # why the shipping export is written fresh rather than read (the store holds
                 # no address at all). D216 is why the recording runs offline.
-                "governed_by": ["D61", "D70", "D193", "D216", "D-demo-mirror"],
+                "governed_by": ["D61", "D70", "D193", "D216", "D295"],
             },
             "demo-histories.py": {
                 "does": "`make demo-histories`: records every demo card's price history, all "
@@ -5035,7 +5035,7 @@ COMPONENTS = [
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
                 "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D96", "D159",
-                                "D172", "D183", "D213", "D216", "D220", "D227", "D-demo-mirror"],
+                                "D172", "D183", "D213", "D216", "D220", "D227", "D295"],
             },
             "demo_scrub.py": {
                 "does": "strips machine-local absolute paths out of the bundle before it is "
@@ -5047,9 +5047,9 @@ COMPONENTS = [
                 # with real filesystem paths. Underscored, not hyphenated, because it is the
                 # one file here that is IMPORTED rather than run. D183 is why a real card's
                 # payload can carry a legacy `Path.home()`-rooted string at all (a pre-D183
-                # capture address); `D-demo-mirror` is why that string reaches this file for
+                # capture address); `D295` is why that string reaches this file for
                 # the first time and why its stand-in changed off `/home`.
-                "governed_by": ["D18", "D183", "D-demo-mirror"],
+                "governed_by": ["D18", "D183", "D295"],
             },
             "demo-freshness.py": {
                 "does": "whether app/demo/bundle.json still describes the wire it was recorded "
@@ -5412,8 +5412,8 @@ COMPONENTS = [
                                 "D145", "D159", "D164", "D165", "D166", "D168", "D172", "D174",
                                 "D183", "D189", "D191", "D192", "D193", "D196", "D203", "D212",
                                 "D213", "D219", "D225", "D227", "D251", "D252", "D259", "D262",
-                                "D264", "D265", "D268", "D271", "D273", "D-sales-rows-by-sku",
-                                "D-sealed-boxes-removed", "D-stock-images"],
+                                "D264", "D265", "D268", "D271", "D273", "D298",
+                                "D299", "D301"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -5606,7 +5606,7 @@ COMPONENTS = [
                                 "D145", "D147", "D156", "D159", "D163", "D165", "D166", "D168",
                                 "D170", "D172", "D174", "D180", "D188", "D189", "D196", "D212",
                                 "D216", "D219", "D225", "D227", "D236", "D258", "D273", "D277",
-                                "D291", "D-set-view", "D-stock-images"],
+                                "D291", "D293", "D301"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -6058,7 +6058,7 @@ COMPONENTS = [
                                     "unmount.",
                             "governed_by": ["D5", "D13", "D26", "D32", "D41", "D50", "D94", "D117",
                                             "D118", "D125", "D195", "D197", "D218", "D221", "D269",
-                                            "D272", "D288", "D-sections-are-sub-boxes"]},
+                                            "D272", "D288", "D300"]},
             "src/kit/markGeometry.ts": {"does": "the Banchi mark's two optical cuts as static path data, GENERATED by scripts/build-mark.mjs out of docs/specs/logo/sheets/small-cut.html. Never hand-edited: the sheet is the one implementation of the drawing, so the app cannot drift from the spec by being edited. Two cuts because a 1.7 stroke is a scratch at 32px and absent at 16px (logo.md section 3, swept in section 11) — `SMALL` is what ships, since every surface in this product is below 64px, and `DISPLAY` is what #/gallery shows. The geometry does not vary across the six marks; all six generate byte-identical paths.",
                                           "governed_by": ["D94", "D102"]},
             "src/kit/lockupGeometry.ts": {"does": "the lockup as static path data — 番地 and BANCHI OUTLINED, the bracket's arm and its two end discs, the block's dimensions and section 13's eleven settled parameters. GENERATED by scripts/build-lockup.mjs and never hand-edited. Every number is a ratio of the kanji size and the paths are drawn in a 319 x 233 box at kanji 100, so ONE geometry serves every size through a viewBox — which is not only smaller than per-size data but more correct, since a vector scaled by a viewBox cannot re-layout and live text could, and did: the width match had to be SOLVED per size. Carries no `fill`: the component's own <g> supplies it by inheritance so a stylesheet can switch section 16's dark metal, which a fill attribute on the child would make unreachable.",
@@ -6092,7 +6092,7 @@ COMPONENTS = [
                                           "deviceId (D27), and nothing about a card.",
                                   "governed_by": ["D5", "D13", "D27", "D32", "D50", "D94", "D95",
                                                   "D117", "D118", "D125", "D196", "D221", "D260",
-                                                  "D269", "D272", "D288", "D-sections-are-sub-boxes"]},
+                                                  "D269", "D272", "D288", "D300"]},
             "src/kit/Icon.tsx": {"does": "one icon set, 73 paths on a 24-unit grid at 1.75 stroke "
                                          "with round joins, drawn in the Lucide idiom so the whole "
                                          "product speaks one line weight. `currentColor` and "
@@ -6470,8 +6470,8 @@ COMPONENTS = [
                                               "D165", "D168", "D172", "D174", "D180", "D189",
                                               "D192", "D193", "D203", "D207", "D213", "D219",
                                               "D225", "D227", "D236", "D252", "D264", "D268",
-                                              "D273", "D291", "D-sales-rows-by-sku",
-                                              "D-sealed-boxes-removed", "D-sections-are-sub-boxes"]},
+                                              "D273", "D291", "D298",
+                                              "D299", "D300"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -6565,8 +6565,8 @@ COMPONENTS = [
                                              "D134", "D142", "D145", "D147", "D156", "D159", "D165",
                                              "D166", "D168", "D172", "D174", "D180", "D183", "D193",
                                              "D196", "D212", "D213", "D225", "D227", "D236", "D252",
-                                             "D264", "D265", "D273", "D-sealed-boxes-removed",
-                                             "D-stock-images"]},
+                                             "D264", "D265", "D273", "D299",
+                                             "D301"]},
             "src/deviceMemory.ts": {"does": "every `localStorage` key the shell owns — the "
                                             "theme, the rail, which order statuses this "
                                             "device bothers fetching (D114), whether the "
@@ -6778,7 +6778,7 @@ COMPONENTS = [
                             "D34", "D36", "D41", "D52", "D56", "D58", "D65", "D67", "D81", "D92",
                             "D117", "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145",
                             "D153", "D164", "D170", "D172", "D196", "D218", "D260", "D264", "D286",
-                            "D-sealed-boxes-removed"]},
+                            "D299"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -6933,7 +6933,7 @@ COMPONENTS = [
                             "D45", "D46", "D49", "D52", "D58", "D65", "D67", "D68", "D89", "D90",
                             "D92", "D94", "D99", "D118", "D119", "D125", "D132", "D159", "D172",
                             "D181", "D192", "D213", "D218", "D221", "D252", "D259", "D263",
-                            "D264", "D265", "D275", "D285", "D-set-view"]},
+                            "D264", "D265", "D275", "D285", "D293"]},
             "src/BoxBrowse.css": {"does": "its layout, and why no accent appears anywhere in it. Its list keeps an "
                                   "INSET focus ring and says so — it clips its own overflow, which is the "
                                   "case base.css's standing ring cannot serve. D38's band lives here: the "
@@ -7088,7 +7088,7 @@ COMPONENTS = [
                                 "D31", "D33", "D36", "D38", "D39", "D41", "D45", "D49", "D57",
                                 "D58", "D68", "D71", "D83", "D90", "D93", "D118", "D119", "D125",
                                 "D132", "D172", "D181", "D192", "D196", "D213", "D218", "D260",
-                                "D264", "D269", "D275", "D285", "D-sections-are-sub-boxes", "D-set-view"],
+                                "D264", "D269", "D275", "D285", "D300", "D293"],
             },
             "src/Inventory.css": {
                 "does": "its layout, at the dense owner-side end of the one system, two "
@@ -7113,10 +7113,10 @@ COMPONENTS = [
                         "copies list already drew per row. What STAYED is the receipt's "
                         "sentence, which the copy row and the phone action bar both render.",
                 "governed_by": ["D5", "D6", "D7", "D13", "D26", "D31", "D41", "D57", "D71", "D118",
-                                "D119", "D125", "D-set-view"],
+                                "D119", "D125", "D293"],
             },
             "src/InventorySets.tsx": {
-                "does": "THE OWNER'S \"BY SET\" VIEW (D-set-view), a second view inside "
+                "does": "THE OWNER'S \"BY SET\" VIEW (D293), a second view inside "
                         "#/inventory (D264's own precedent: a view switch lives inside "
                         "Inventory rather than as a fourth screen, D31). One store-wide read "
                         "(GET /pipeline/sets, server-aggregated), grouped by game and set in "
@@ -7128,14 +7128,14 @@ COMPONENTS = [
                         "a push (D201). Kit primitives only: Section, .bn-list/.bn-list-row, "
                         "EmptyState/Notice/Loading for the three states a fetch can be in.",
                 "governed_by": ["D31", "D67", "D172", "D196", "D201", "D258", "D264", "D285",
-                                "D-set-view", "D-stock-images"],
+                                "D293", "D301"],
             },
             "src/InventorySets.css": {
                 "does": "layout for the set view's rows — the card number column, the "
                         "name column, and the row's own cursor. Everything else (the section "
                         "head, the count, the list frame) is the kit's own .bn-section/"
                         ".bn-list, unrepeated here.",
-                "governed_by": ["D-set-view"],
+                "governed_by": ["D293"],
             },
             "src/BoxOps.tsx": {
                 "does": "D20's box object, made visible and editable ON THE BROWSE'S BOX HEADER "
@@ -7180,8 +7180,8 @@ COMPONENTS = [
                         "off the wire.",
                 "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
                                 "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115",
-                                "D132", "D134", "D196", "D218", "D259", "D-sealed-boxes-removed",
-                                "D-sections-are-sub-boxes"],
+                                "D132", "D134", "D196", "D218", "D259", "D299",
+                                "D300"],
             },
             "src/BoxOps.css": {
                 "does": "the box header, the section track and the editors, at the dense "
@@ -7262,7 +7262,7 @@ COMPONENTS = [
             "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server, and since 2026-09-06 that is true of its PIXELS too — `SPECIMEN_PHOTO` is a bundled data URI handed to the Fulfiller specimen through `CardLocations`'s `photoSrc` seam, the one call site of that prop in this product. It is what `make screenshot` renders and where `app/tests/pull-confirm.spec.ts` measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that spec measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
                                 "governed_by": ["D5", "D6", "D24", "D50", "D58", "D67", "D68",
                                                 "D71", "D93", "D94", "D95", "D102", "D117", "D118",
-                                                "D119", "D-sections-are-sub-boxes"],
+                                                "D119", "D300"],
                                 "note": "THE SHEET DREW FOUR REAL CARDS OUT OF THE OWNER'S STORE UNTIL 2026-09-06. Its `CardLocations` fixtures carry `has_photo: true` on keys 3/40, 7/12, 4/1 and 3/31, and the Fulfiller skin sourced each `<img>` from `photoUrl(box, index)` — so the one page whose entire purpose is being compared against a reference was the one page whose contents depended on which capture server was up and what was in boxes 3, 4 and 7 that day, and `GET /photo/<box>/<index>` serves stored bytes without knowing a code card from a Thievul (D24). The one-line fix — `has_photo: false` on all four — was NOT taken: it buys a closed sheet by deleting the photo-bearing shell from the page whose job is drawing every shell, which is the trade `app/tests/gallery.spec.ts` exists to refuse. The image names its own colors, which is the same exception `src/kit/markPalettes.ts` argues at D102: an illustration's colors, on stage ground that is dark in both themes."},
             "src/Gallery.css": {"does": "the kit page's own layout — the specimen grid and its labels. Not a product screen, and it may not introduce a look the kit does not have.",
                                 "governed_by": ["D5", "D94", "D117", "D118", "D119",
@@ -7321,7 +7321,7 @@ COMPONENTS = [
                                         "(D132).",
                                 "governed_by": ["D5", "D10", "D20", "D24", "D30", "D41", "D58",
                                                 "D68", "D118", "D132", "D155", "D194", "D218",
-                                                "D259", "D260", "D-sealed-boxes-removed"]},
+                                                "D259", "D260", "D299"]},
             "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
                                             "its fill, graduations, edge labels and crossing pin, the "
                                             "demoted box strip with the caret that replaced the "
@@ -7711,7 +7711,7 @@ COMPONENTS = [
             # every run. This is where that decision is made, per SKU, with every export cell
             # in front of it.
             "src/Pricing.tsx": {"does": "#/pricing, rebuilt to the owner's re-interview (D277, "
-                                        "D-pricing-rebuilt-to-the-reinterview). One list over every unsent copy (D156): "
+                                        "D297). One list over every unsent copy (D156): "
                                         "the rows that need the owner first (no market price, worth $5 or more, a typed "
                                         "price 25% from market), then the rest by market value, then the rows a run can "
                                         "add nothing for under the server's own sentence (D59). The order is taken once "
@@ -7738,7 +7738,7 @@ COMPONENTS = [
                                                 "D115", "D117", "D118", "D125", "D137", "D156",
                                                 "D159", "D168", "D172", "D181", "D196", "D208",
                                                 "D210", "D218", "D221", "D267", "D269", "D273",
-                                                "D277", "D278", "D285", "D-stock-images"]},
+                                                "D277", "D278", "D285", "D301"]},
             "src/ClearPrices.tsx": {"does": "THE MASS-CLEAR, a kit Sheet off #/pricing's header (D168). The owner's own "
                                             "ask: typed prices go stale and there was no way to clear many at once. IT IS A "
                                             "PRESS AND NOT A POLICY: nothing here runs on a clock. The scope is the "
@@ -7992,7 +7992,7 @@ COMPONENTS = [
                                         "the most recent order's id tail — never a typed dot "
                                         "(D218), never the full id.",
                                  "governed_by": ["D24", "D103", "D114", "D118", "D181", "D193",
-                                                 "D209", "D218", "D220", "D221", "D-orders-sorts"]},
+                                                 "D209", "D218", "D220", "D221", "D296"]},
             "src/csvUpload.ts": {"does": "the one FileReader every CSV upload in this app goes "
                                          "through, lifted out of RunPanel.tsx on 2026-08-30 so "
                                          "#/runs and #/shipping cannot carry two encodings to "
@@ -8058,7 +8058,7 @@ COMPONENTS = [
                                                "D118", "D123", "D132", "D159", "D171", "D181",
                                                "D192", "D193", "D194", "D195", "D196", "D203",
                                                "D209", "D212", "D218", "D220", "D221", "D274",
-                                               "D285", "D-orders-sorts"]},
+                                               "D285", "D296"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8158,7 +8158,7 @@ COMPONENTS = [
                                                  "D292"]},
             "src/Revenue.tsx": {"does": "`#/revenue` (Sales): the gross-revenue "
                                         "retrospective, built on `<Page>` and Direction B "
-                                        "(D-sales-rows-by-sku, RULINGS.md 'Sales'): a summary "
+                                        "(D298, RULINGS.md 'Sales'): a summary "
                                         "band (gross, month bars, 'On the shelf' loading on "
                                         "arrival), a podium of the top 3 PRINTINGS as photo "
                                         "tiles plus a foil/rarity mix tile, bar rows for "
@@ -8170,7 +8170,7 @@ COMPONENTS = [
                                         "photograph is usually reclaimed, so a row's "
                                         "thumbnail is ANOTHER copy of the same SKU). "
                                         "`products` GROUPS BY SKU, NOT NAME "
-                                        "(D-sales-rows-by-sku): a foil and a normal printing "
+                                        "(D298): a foil and a normal printing "
                                         "sharing a display name draw as two separate rows. "
                                         "`salesOf`'s own "
                                         "`parsePrice` treats `unit_price: \"\"` the same as "
@@ -8195,10 +8195,10 @@ COMPONENTS = [
                                 "governed_by": ["D50", "D62", "D69", "D86", "D89", "D103", "D105",
                                                 "D118", "D125", "D159", "D189", "D193", "D194",
                                                 "D201", "D214", "D217", "D219", "D225", "D236",
-                                                "D281", "D285", "D-sales-rows-by-sku"]},
+                                                "D281", "D285", "D298"]},
             "src/Revenue.css": {"does": "the summary band, podium, mix tile, board rows and "
                                         "product table's own layout, `--bn-*` only "
-                                        "(D-sales-rows-by-sku's Direction B). The month bars "
+                                        "(D298's Direction B). The month bars "
                                         "and the shelf spark reuse `--bn-accent` rather than "
                                         "naming a color; the search field wrapper is sized "
                                         "like every other screen's own `-search` class "
@@ -8208,7 +8208,7 @@ COMPONENTS = [
                                         "own `Segmented` instance, scoped here rather than to "
                                         "the shared kit rule.",
                                 "governed_by": ["D50", "D94", "D117", "D217", "D236",
-                                                "D-sales-rows-by-sku"]},
+                                                "D298"]},
             "src/RunFiles.tsx": {"does": "a run's files, as downloads — extracted from RunPanel on "
                                        "2026-08-30 (D54) so two screens can draw them. The `only` "
                                        "prop is the split: the import CSVs go to #/pricing with the "
@@ -8298,7 +8298,7 @@ COMPONENTS = [
                                          "gap moves it through `moveSections`. The receipt is the "
                                          "server's physical instruction, with Undo on U.",
                                   "governed_by": ["D31", "D50", "D117", "D118", "D264", "D265",
-                                                  "D285", "D-set-view"]},
+                                                  "D285", "D293"]},
             "src/BoxShelf.css": {"does": "the Shelf's blocks, gaps, lift bar and receipt. A "
                                          "block's height follows its count with a 44px floor; a "
                                          "gap is 40px, the thumb floor.",
@@ -8378,7 +8378,7 @@ COMPONENTS = [
                                      "ago`, `yesterday`, then the absolute form past a week) and "
                                      "`absoluteDate` (`Sep 4, 2026`, no leading zero). "
                                      "`saleDate`, the older padded form, stays until its two "
-                                     "callers move. `monthOf`/`weekOf` (D-sales-rows-by-sku) "
+                                     "callers move. `monthOf`/`weekOf` (D298) "
                                      "are the bucket-label formats `#/revenue`'s month strip "
                                      "needs and the other two do not cover ('Sep 2026', "
                                      "'Aug 28–Sep 3') — the ONE place either is built, so "
@@ -8392,7 +8392,7 @@ COMPONENTS = [
                                      "copy is never the fix. Both month and day are asked for "
                                      "`2-digit`, so `Sep 09, 2026` and `Sep 13, 2026` take the "
                                      "same width.",
-                             "governed_by": ["D-sales-rows-by-sku"]},
+                             "governed_by": ["D298"]},
             "src/pricingSource.ts": {"does": "WHERE `#/pricing`'s ROWS CAME FROM, AND WHAT MAY "
                                              "BE ASKED ABOUT THEM (D103). One type, two "
                                              "builders, the hash parsing, and the adapter that "
@@ -8617,7 +8617,7 @@ COMPONENTS = [
                         "the capture key. Run by `make design-check`.",
                 "governed_by": ["D3", "D20", "D22", "D23", "D27", "D56", "D65", "D101", "D118",
                                 "D142", "D145", "D153", "D205", "D211", "D218",
-                                "D-sealed-boxes-removed"],
+                                "D299"],
                 "note": "The shutter is never pressed, so no capture is ever taken — "
                         "motion-live.spec.ts's rule, for its reason. The `S` cases DO select a "
                         "box and stub the section route, because the act writes to one; "
@@ -9161,7 +9161,7 @@ COMPONENTS = [
                         "exercised by every spec that imports it.",
                 "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
                                 "D124", "D125", "D134", "D174", "D192", "D276", "D259",
-                                "D273", "D-sales-rows-by-sku"]},
+                                "D273", "D298"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -9225,7 +9225,7 @@ COMPONENTS = [
                         "harness test; `make design-check` runs it.",
                 "governed_by": ["D5", "D20", "D31", "D39", "D43", "D51", "D69", "D70", "D86", "D95",
                                 "D100", "D105", "D109", "D134", "D174", "D192", "D275", "D276",
-                                "D291", "D-sales-rows-by-sku"],
+                                "D291", "D298"],
                 "note": "ITS RING IS PINNED ON PURPOSE AND RECONCILED AT THE COMMIT. A ring "
                         "derived from App.tsx could not assert the ORDER against anything "
                         "independent, so the copy stays and carries a `ROUTE-ROSTER hotkey` "
@@ -9338,7 +9338,7 @@ COMPONENTS = [
                                                      "D114", "D118", "D123", "D132", "D171", "D181",
                                                      "D193", "D194", "D196", "D203", "D209",
                                                      "D212", "D218", "D220", "D221", "D274",
-                                                     "D285", "D-orders-sorts"]},
+                                                     "D285", "D296"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "
@@ -9424,7 +9424,7 @@ COMPONENTS = [
                                                       "D92", "D98", "D99", "D103", "D115", "D117",
                                                       "D118", "D156", "D168", "D181", "D196",
                                                       "D208", "D218", "D269", "D273", "D277", "D278",
-                                                      "D-stock-images"]},
+                                                      "D301"]},
             "tests/boxmap.spec.ts": {
                 "does": "the Shelf (`D264`), stubbed: the map draws counts and no money, a "
                         "gap press sends the section, the gap and the aim, U sends the undo, the "
@@ -9445,7 +9445,7 @@ COMPONENTS = [
                         "in its own header once a fifth period option existed. Not a harness "
                         "test; `make design-check` runs it.",
                 "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201", "D214",
-                                "D217", "D225", "D281", "D-sales-rows-by-sku"],
+                                "D217", "D225", "D281", "D298"],
             },
             "tests/demo-coverage.spec.ts": {
                 "does": "the BUILT public demo (`dist-demo/`), served on this checkout's own "
@@ -9560,8 +9560,8 @@ COMPONENTS = [
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
                                 "D136", "D142", "D155", "D159", "D172", "D181", "D192", "D194",
-                                "D196", "D213", "D218", "D259", "D-sealed-boxes-removed",
-                                "D-sections-are-sub-boxes"],
+                                "D196", "D213", "D218", "D259", "D299",
+                                "D300"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "
@@ -9592,7 +9592,7 @@ COMPONENTS = [
                 "governed_by": ["D134", "D196", "D259"],
             },
             "tests/inventory-sets.spec.ts": {
-                "does": "THE OWNER'S \"BY SET\" VIEW (D-set-view), in a browser. The grouping "
+                "does": "THE OWNER'S \"BY SET\" VIEW (D293), in a browser. The grouping "
                         "and printed-number order are server work, checked against the "
                         "owner's real store in do_pipeline_sets's own header; what this file "
                         "checks is the CLIENT half — a group renders in the order the "
@@ -9603,7 +9603,7 @@ COMPONENTS = [
                         "Like its siblings it is NOT a harness test: it starts a browser, so "
                         "it runs under `make design-check` and is deliberately off the commit "
                         "path.",
-                "governed_by": ["D172", "D201", "D264", "D285", "D-set-view", "D-stock-images"],
+                "governed_by": ["D172", "D201", "D264", "D285", "D293", "D301"],
             },
             "tests/correct-answer.spec.ts": {
                 "does": "`CardHero.tsx:ListingCorrection` is reachable on `#/inventory` for a "

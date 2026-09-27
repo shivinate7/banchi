@@ -1,6 +1,6 @@
 # The public demo, and why it is not a fork
 
-**THE STORE IS NOW A MIRROR, NOT AN INVENTION, as of 2026-09-26 (`D-demo-mirror`, §13).**
+**THE STORE IS NOW A MIRROR, NOT AN INVENTION, as of 2026-09-26 (`D295`, §13).**
 `demo-static` no longer builds from `demo-seed`/`demo-record`. It installs a scrubbed
 recording of the owner's own real store instead. Below, §§2-12 describe the flow that
 mechanism replaces. They stay accurate about the wire, the coverage sweep and the build.
@@ -416,11 +416,11 @@ the file. `PKMNSCAN_QR=off` is the bypass, in the shape every other opsec rule i
 already uses.
 
 
-## 13. The store is a mirror, not an invention (`D-demo-mirror`, 2026-09-26)
+## 13. The store is a mirror, not an invention (`D295`, 2026-09-26)
 
 **The owner's ruling.** "full mirror is fine." Photos are capped "to just 512mb." Every
-name reads "Jane Doe N." Every address reads "123 Demo Way." See `D-demo-mirror` for every
-quote in full. This section is the mechanism's own record. `D-demo-mirror` is the decision.
+name reads "Jane Doe N." Every address reads "123 Demo Way." See `D295` for every
+quote in full. This section is the mechanism's own record. `D295` is the decision.
 
 **What replaces what.** `demo-static` used to depend on `demo` — `demo-seed` then
 `demo-record`, §§2-6. It now depends on `demo-mirror-install`. The BUILD step itself did
@@ -440,7 +440,7 @@ freshness (§10). Only the bundle's SOURCE changed.
   `app/public/demo/photos/`.
 
 **The one check is the owner's own ruling, not a CI gate.** The owner ruled out a second
-check in CI (`D-demo-mirror` carries the exact words). So `assert_scrubbed()` runs once, on
+check in CI (`D295` carries the exact words). So `assert_scrubbed()` runs once, on
 the owner's own Mac, before anything is committed. It is a plain `assert` over the finished
 recording and the shipping export. Every buyer name must match `^Jane Doe \d+$`. Every
 address field must be blank or exactly "123 Demo Way." Nothing else runs this check. The

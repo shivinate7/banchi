@@ -8,7 +8,7 @@
 # same three steps `make demo-static` runs locally, from the code as it stands on main, and the
 # thing that gets published is always built from the thing it describes.
 #
-# WHAT IS SAFE TO PUBLISH, because this is the job that makes it public. AS OF `D-demo-mirror`
+# WHAT IS SAFE TO PUBLISH, because this is the job that makes it public. AS OF `D295`
 # (docs/specs/demo.md §13), what this job installs and builds is `demo-assets/mirror/` — the
 # owner's own real store, scrubbed on their own Mac by `scripts/demo-mirror.py` and committed
 # ONLY as that scrubbed output: every buyer "Jane Doe N", every address "123 Demo Way", and

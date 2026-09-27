@@ -853,7 +853,7 @@ const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconNam
   done: { label: 'Done', tone: 'default', icon: 'check' },
 }
 
-/** The five sorts (`D-orders-sorts`, the owner's pick, 2026-09-25): when the buyer's newest
+/** The five sorts (`D296`, the owner's pick, 2026-09-25): when the buyer's newest
  *  order was placed (FLT-01: a press re-sorts at once), the buyer's own order total, how many
  *  copies are still owed, the buyer's name, and the fewest drawers to open for them. Ready to
  *  Ship still leads every one of these (`orderView.ts`'s own banner on why). */
@@ -2780,7 +2780,7 @@ function PullStage({
     value === 'done' ||
     (value === MISSING_FACET ? groupMissing(group, answers).copies > 0 : statusByGroup.get(group.key) === value)
 
-  /* THE DRAWERS SORT REUSES THE WALK PLANNER'S OWN SOLVE (`D-orders-sorts`), never a second
+  /* THE DRAWERS SORT REUSES THE WALK PLANNER'S OWN SOLVE (`D296`), never a second
    *  box-counting pass: one `POST /orders/walk-plan` over every walkable order on the screen,
    *  fetched only while this sort is picked (`sort.key === 'drawers'`) — the same lazy shape
    *  `useOrderWalk` already uses for the walk itself, over the wider set here. */

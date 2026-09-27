@@ -68,7 +68,7 @@ function placedAtMs(placedAt: string | null): number {
   return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed
 }
 
-/* ---- the five sorts (`D-orders-sorts`, the owner's pick, 2026-09-25) -------------------------
+/* ---- the five sorts (`D296`, the owner's pick, 2026-09-25) -------------------------
  *
  * `placed` is the original D209 sort. The other four are the owner's own four picks, verbatim:
  * "Dollar value, Card count, Buyer name, Fewest drawers to open". Each ranks BUYERS — the group,

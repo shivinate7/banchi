@@ -1,4 +1,4 @@
-## D-set-view — Inventory gets a second view, grouped by set, and a tap is the ordinary walk
+## D293 — Inventory gets a second view, grouped by set, and a tap is the ordinary walk
 
 **The owner's request, verbatim, 2026-09-25:**
 

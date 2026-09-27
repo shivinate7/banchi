@@ -1,4 +1,4 @@
-## D-pricing-rebuilt-to-the-reinterview — Pricing is one list with the rows that need the owner on top, a slim bar, a Live tab, and the drawer folded into the product view
+## D297 — Pricing is one list with the rows that need the owner on top, a slim bar, a Live tab, and the drawer folded into the product view
 
 **What this records.** D277 holds the owner's answers to the Pricing re-interview. This entry
 records what the b-pricing lane built to those answers on 2026-09-25. It also records the calls

@@ -1,4 +1,4 @@
-## D-sections-are-sub-boxes — A picked section fills like a sub-box, and the store chooses the key
+## D300 — A picked section fills like a sub-box, and the store chooses the key
 
 **The owner's ruling, 2026-09-26**, verbatim: "if i am in section 1, and i am capturing away,
 then section 1 is continuing to expand, if i am selecting section 2, then i am capturing that

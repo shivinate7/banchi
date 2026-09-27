@@ -120,7 +120,7 @@ const NO_CLAIM_LABEL = 'No claim'
  *  registry, so `box_required`, `game_invalid` and `game_unverified` mean this device's own
  *  copy of the registry or the setup has gone stale since the page loaded — the same class of
  *  problem `store_busy` is, just caught one layer later. (A box has no seal since
- *  `D-sealed-boxes-removed`, so no capture is refused as `box_closed`.) `image_*` would
+ *  `D299`, so no capture is refused as `box_closed`.) `image_*` would
  *  mean the frame the camera handed the screen was not a usable photograph. */
 const HALT_CODE_INFO: Record<string, { headline: string; resume: string }> = {
   server_busy: {
@@ -314,7 +314,7 @@ const BOX_DIGITS = /^[0-9]+$/
  *
  *  `next` is the store's high-water mark and NOT a card count — the two disagree the moment
  *  a record is removed, which is why the row trails the server's own word for it. A box has
- *  no seal (`D-sealed-boxes-removed`), so every box here takes cards. */
+ *  no seal (`D299`), so every box here takes cards. */
 type BoxOption = {
   box: number
   /** WHICH DRAWER THIS ROW IS, as opposed to which number it wears (D145). Carried so a pick

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the public demo as a mirror of the owner's real store, with every person scrubbed.
 
-THE OWNER'S RULING (2026-09-26, D-demo-mirror): "full mirror is fine", with the photograph
+THE OWNER'S RULING (2026-09-26, D295): "full mirror is fine", with the photograph
 payload capped "to just 512mb", and "all names be Jane Doe and all addresses be 123 Demo Way".
 Names are numbered, "Jane Doe N", because `#/orders` groups by buyer. So this replaces the
 invented store (`demo-seed.py`) as what the published page shows. docs/specs/demo.md §13.

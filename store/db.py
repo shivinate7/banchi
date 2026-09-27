@@ -199,7 +199,7 @@ TABLES: Dict[str, Tuple[str, ...]] = {
         # D265: the card's order key in its box. REAL, see `_REAL`.
         "ord",
     ),
-    # No `state` since `D-sealed-boxes-removed`. A store made before keeps the column,
+    # No `state` since `D299`. A store made before keeps the column,
     # unread and unwritten; `_open_every_box` empties it.
     "boxes": ("box", "bid", "name"),
     "listings": ("condition", "pushed", "staged", "live"),
@@ -523,7 +523,7 @@ def _upgrade(
                 _add_send_claims(conn)       # D273
             if stored < 13:
                 _add_card_order(conn)        # D265, the order key
-                _open_every_box(conn)        # D-sealed-boxes-removed
+                _open_every_box(conn)        # D299
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1228,7 +1228,7 @@ def _add_card_order(conn: sqlite3.Connection) -> None:
 
 
 def _open_every_box(conn: sqlite3.Connection) -> None:
-    """Schema 13, second step: every box is an ordinary box (`D-sealed-boxes-removed`).
+    """Schema 13, second step: every box is an ordinary box (`D299`).
 
     THE OWNER'S RULING, 2026-09-25: "what was the point of sealed boxes? lets kill this".
     A sealed box kept `state = 'closed'`, a frozen `capacity` and a `closed_at` in its payload.

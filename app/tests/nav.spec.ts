@@ -173,7 +173,7 @@ async function stub(page: Page, cards: unknown[] = []) {
      is `#/pricing` since D105 — this stub is global and so did not move, but the sentence
      naming a screen had to. */
   await page.route(/\/pipeline\/markdowns$/, (route) => json(route, { markdowns: [] }))
-  /* `#/revenue` reads "On the shelf" and its thumbnails on arrival since D-sales-rows-by-sku,
+  /* `#/revenue` reads "On the shelf" and its thumbnails on arrival since D298,
      so a walk that lands there reads both. Empty answers, the shape `shell.ts:stubStore` uses. */
   await page.route(/\/skus\/photos\?/, (route) => json(route, { photos: {} }))
   await page.route(/\/pipeline\/holdings-value(\?|$)/, (route) =>

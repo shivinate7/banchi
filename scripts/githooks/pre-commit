@@ -221,7 +221,7 @@ while IFS= read -r path; do
     # are exactly the directories named. Widening either is a decision to argue, not a
     # convenience to reach for: the reason the blanket rule exists is that a live code is a
     # bearer instrument and a tracked one cannot be recalled.
-    # `demo-assets/mirror/photos/` is the fourth and newest exception (`D-demo-mirror`,
+    # `demo-assets/mirror/photos/` is the fourth and newest exception (`D295`,
     # 2026-09-26): `scripts/demo-mirror.py:prepare_photo` is its only writer, and it runs the
     # same `demo-photos.py:carries_a_qr` full-resolution check as the other two before a
     # photograph ever reaches disk. The re-decode below covers it on the curator's own

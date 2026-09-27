@@ -43,7 +43,7 @@ addresses it. It adds the freedom the owner asked for.
 ### What is open
 
 **Answered by the owner, 2026-09-25**, verbatim: "A key on each card". Every card carries its
-own order key, apart from its stored index. D-a-key-on-each-card records the form that was
+own order key, apart from its stored index. D294 records the form that was
 built from that ruling. The list below is the question as it was put.
 
 The shape of the key was not decided. The builder brings options to the owner with measurements:
@@ -60,7 +60,7 @@ The shape of the key was not decided. The builder brings options to the owner wi
 ### What is built
 
 BUILT on `ux/boxmap`, 2026-09-25. The owner answered the open question above on 2026-09-25:
-"A key on each card". D-a-key-on-each-card records the form (a fraction that starts at the
+"A key on each card". D294 records the form (a fraction that starts at the
 index), the dividers, the migration and the moves. T7's `t7_box_map.py` holds the harness
 cases: the migration changes no label, and a placement writes only the cards it moves.
 
@@ -87,7 +87,7 @@ drop the front re-anchor in `drop_sections`. `app/tests/capture-undo.spec.ts` ho
 
 ### A capture takes a key too, 2026-09-26
 
-D-sections-are-sub-boxes lets a capture and a Move-to-box file a card at the tail of a picked
+D300 lets a capture and a Move-to-box file a card at the tail of a picked
 section. So a new card can have the highest index and a middle key. That is this entry's
 premise again: index order is not box order. `Inventory.section_tail_key` is the key rule.
 It takes a whole number first and then a 1/1024 step, because halving the gap re-spaces the box

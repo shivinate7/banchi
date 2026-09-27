@@ -1053,7 +1053,7 @@ test('an unknown card count is still warned about, and a known zero is not', asy
 
 // -------------------------------------------------- the suggestion writes nothing
 
-// -------------------------------------------------- the stock image (`D-stock-images`)
+// -------------------------------------------------- the stock image (`D301`)
 
 test('the stock image is the main view, and two SKUs sharing one keep their own condition label', async ({ page }) => {
   // The owner's own addition, mid-build: several SKUs (a foil and a normal printing) may

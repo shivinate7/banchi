@@ -343,7 +343,7 @@ const LONG_ANSWER =
   'capture screen first, then press here once more. Every card already in it stays exactly ' +
   'where it is, and nothing about its sections changes until you open it.'
 
-/* THE SECTION PICKER (D-sections-are-sub-boxes): a Move-to-box's own destination, one Tab
+/* THE SECTION PICKER (D300): a Move-to-box's own destination, one Tab
  * stop and arrow keys between rows, "back"/"front" tags on either end of more than one. */
 function SectionPickSpecimen() {
   const [value, setValue] = useState<string | null>(null)
@@ -1187,7 +1187,7 @@ export function Gallery() {
             data-kit-section="section-pick"
             className="kit-section"
             title="Section pick"
-            lede="No auto default (D-sections-are-sub-boxes): the owner picks a box's section. One Tab stop, arrow keys move and pick, and a box of one section carries no back/front tag."
+            lede="No auto default (D300): the owner picks a box's section. One Tab stop, arrow keys move and pick, and a box of one section carries no back/front tag."
           >
             <div className="kit-grid">
               <Spec label="section pick">

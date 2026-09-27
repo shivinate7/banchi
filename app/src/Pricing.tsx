@@ -635,7 +635,7 @@ function PricingThumb({
   at: PricingSku['positions'][number] | null
   name: string
   onOpen: () => void
-  /** The stock photo (`D-stock-images`), the MAIN view here per the owner's own ask — "if
+  /** The stock photo (`D301`), the MAIN view here per the owner's own ask — "if
    *  it'd be easy to live pull all the photos without much lag I'd be happy to have the
    *  stock photos show as the main view". `null` on a join miss, and a load failure falls
    *  back to the owner's own photograph below exactly as if `imageUrl` had been `null` —

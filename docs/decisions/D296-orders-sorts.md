@@ -1,4 +1,4 @@
-## D-orders-sorts — Four more ways to rank the buyer list, and the Ready to Ship lead is a grouping
+## D296 — Four more ways to rank the buyer list, and the Ready to Ship lead is a grouping
 
 **The owner's request, verbatim, 2026-09-25:**
 

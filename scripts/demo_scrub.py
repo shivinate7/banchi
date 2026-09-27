@@ -37,7 +37,7 @@ def replacements(repo_root: Path, home: Path) -> List[Tuple[str, str]]:
         # NOT "/home" — that stand-in collided with this file's own `audit()` marker and
         # with the workflow's own leak grep (both scan for the literal substring
         # "/home/"), so a correctly scrubbed path was flagged as if it were still a leak.
-        # Latent until `D-demo-mirror`: the invented demo never carried a `Path.home()`-
+        # Latent until `D295`: the invented demo never carried a `Path.home()`-
         # rooted string in a card payload, and the real mirror does (a legacy pre-D183
         # capture path). `/machine` matches no marker either check scans for.
         (str(Path.home()), "/machine"),

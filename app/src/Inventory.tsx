@@ -289,7 +289,7 @@ export function Inventory() {
   return view === 'shelf' ? <BoxShelf onView={onView} /> : <InventoryWalk view={view === 'sets' ? 'sets' : 'walk'} onView={onView} />
 }
 
-/* THE WALK, AND THE OWNER'S "BY SET" VIEW OF THE SAME CARDS (D-set-view), which shares this
+/* THE WALK, AND THE OWNER'S "BY SET" VIEW OF THE SAME CARDS (D293), which shares this
    page and its header: `?view=sets` swaps the box walk for `InventorySets` inside the one
    `<Page>`. The Shelf (D264) is `?view=shelf` and draws its own page. One `view` key, three
    values, one switch (`ShelfSwitch`), so no two views can claim the same URL. */
@@ -336,7 +336,7 @@ function InventoryWalk({
   /* The copy waiting on the move panel, or null (UX-244). */
   const [moving, setMoving] = useState<SearchCopy | null>(null)
   /* A stale-section refusal's own sentence — `section_gone` or `section_required`
-   * (D-sections-are-sub-boxes) — kept on the dialog rather than tossed as a toast, so the
+   * (D300) — kept on the dialog rather than tossed as a toast, so the
    * owner re-picks in place. Cleared whenever the panel opens or closes. */
   const [moveRefused, setMoveRefused] = useState<string | null>(null)
   /* F2 — the server's own words, behind "What the server said" rather than the sentence
@@ -543,7 +543,7 @@ function InventoryWalk({
    * `box`/`index` this call sent), never the new one — the card comes back to its own index,
    * and nothing else in either box moves.
    *
-   * THE OWNER'S RULING, NO AUTO DEFAULT (D-sections-are-sub-boxes): the section is the
+   * THE OWNER'S RULING, NO AUTO DEFAULT (D300): the section is the
    * caller's own pick, never omitted. A stale pick — the section closed, filled, or the
    * server refusing an old caller's silence outright with `section_required` — is not a
    * generic failure: the dialog stays open, on the same box, with one plain sentence and a
@@ -789,7 +789,7 @@ function InventoryWalk({
       icon="box"
       /* SILENT WITH NO BOX: the empty state says "No boxes yet" once, not the lede too. */
       lede={boxRecords.length === 0 ? undefined : 'Sell, retire or move any card.'}
-      /* THE ONE VIEW SWITCH (D264, D-set-view): List, Map and Sets, the owner's labels. In
+      /* THE ONE VIEW SWITCH (D264, D293): List, Map and Sets, the owner's labels. In
          the header's actions slot, beside the h1, so a switch moves nothing else (D118). */
       actions={<ShelfSwitch view={view} onView={onView} />}
       className="inventory"
@@ -1165,7 +1165,7 @@ function Action({
   )
 }
 
-/* THE MOVE PANEL (UX-244, D83, amended by D-sections-are-sub-boxes): one copy, one
+/* THE MOVE PANEL (UX-244, D83, amended by D300): one copy, one
  * destination box, one destination SECTION, one press. NO AUTO DEFAULT — the owner's own
  * ruling, "i need to specify where it goes there no auto default" — so Move stays disabled
  * until both are picked, and picking a new box clears whatever section was picked for the

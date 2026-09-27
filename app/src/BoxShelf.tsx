@@ -53,7 +53,7 @@ function failureTitle(code: string): string {
 
 /** One view of Inventory: the walk or the shelf. The switch lives in both headers. */
 /** `#/inventory`'s three views, one `view` URL key (D285): the walk, the box map (D264) and
- *  the owner's "by set" view (D-set-view). THE LABELS ARE THE OWNER'S, 2026-09-25: "List /
+ *  the owner's "by set" view (D293). THE LABELS ARE THE OWNER'S, 2026-09-25: "List /
  *  Map / Sets". The URL values stay `walk`, `shelf` and `sets`: they are machine keys that
  *  specs and deep links already carry, and a label is free to change without them. */
 export type InventoryView = 'walk' | 'shelf' | 'sets'

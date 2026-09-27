@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 import { sealEveryTest } from './shell'
 
-/* THE OWNER'S "BY SET" VIEW (D-set-view). Read `docs/decisions/D-set-view.md` first.
+/* THE OWNER'S "BY SET" VIEW (D293). Read D293 first.
  *
  * `GET /pipeline/sets` IS ALREADY AGGREGATED — grouping, quantities and printed-number order
  * are all server work (`server/pipeline_routes.py:do_pipeline_sets`), verified against a
@@ -30,7 +30,7 @@ type SetCard = {
 }
 
 /** A `SetCard` with `image_url`/`printing` defaulted, so the cases above this one — written
- *  before `D-stock-images` — keep reading exactly as they did. */
+ *  before `D301` — keep reading exactly as they did. */
 function setCard(over: Partial<SetCard> & Pick<SetCard, 'sku' | 'cid' | 'box' | 'name' | 'number_display' | 'qty'>): SetCard {
   return { image_url: null, printing: null, ...over }
 }
@@ -57,7 +57,7 @@ const SETS_PAYLOAD = {
       set_name: 'Origins',
       cards: [
         setCard({ sku: '8811100', cid: 'cid-darius', box: 5, name: 'Darius, Blade of Origin', number_display: '001/298', qty: 3 }),
-        // A REAL ROW WITH NO BOX (D-set-view): a record whose position will not coerce.
+        // A REAL ROW WITH NO BOX (D293): a record whose position will not coerce.
         // `box=<n>&card=<cid>` cannot aim the walk at it, so a tap here falls back to the
         // OTHER existing deep link, `?q=<name>`.
         setCard({ sku: '8811101', cid: 'cid-unplaced', box: null, name: 'Unplaced Card', number_display: '005/298', qty: 1 }),
@@ -171,7 +171,7 @@ test.describe('the set view', () => {
   })
 
   test('the stock image is the main view, and two variants sharing one keep their own label', async ({ page }) => {
-    // `D-stock-images`: several SKUs (a foil and a normal printing) may resolve to the SAME
+    // `D301`: several SKUs (a foil and a normal printing) may resolve to the SAME
     // photo — the owner's own addition, mid-build — and this asserts the two rows stay
     // distinguishable by `printing` while sharing that one `image_url`. Removing the `<img>`
     // (or the `printing` pill) from `InventorySets.tsx` turns this red.
@@ -283,7 +283,7 @@ test.describe('the set view', () => {
     await page.locator('.sets-card-row', { hasText: 'Unplaced Card' }).click()
 
     // NO box/card PAIR — there is no row this row's own `box: null` could aim the walk at
-    // (D-set-view). `q=<name>` is the OTHER existing deep link, D285's own key for a
+    // (D293). `q=<name>` is the OTHER existing deep link, D285's own key for a
     // screen's search text, so the tap still lands somewhere useful.
     await expect(page).toHaveURL(/#\/inventory\?q=Unplaced(\+|%20)Card/)
     await expect(page).not.toHaveURL(/[?&]box=/)

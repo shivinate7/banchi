@@ -227,7 +227,7 @@ make demo           # seed a demo store and record the wire, a fixture bundle.
                     #   reach it. READ IT BEFORE CHANGING ANY demo-* TARGET.
 make demo-seed      # the store alone. Deterministic. Refuses with PKMNSCAN_HOME unset.
 make demo-record    # the bundle alone, on its own throwaway server and port.
-make demo-mirror SOURCE=<checkout>  # THE PUBLISHED DEMO'S REAL SOURCE as of `D-demo-mirror`
+make demo-mirror SOURCE=<checkout>  # THE PUBLISHED DEMO'S REAL SOURCE as of `D295`
                     #   (2026-09-26). Owner's Mac only. Snapshots a real store, scrubs every
                     #   name to `Jane Doe N` and every address to `123 Demo Way`, crops
                     #   QR-cleared photos under a 512 MB cap, records offline, asserts the
@@ -1329,6 +1329,15 @@ D289 The walk list is the rail's main part, and 720 is a desk
 D290 the photo reserve shrinks below the rail breakpoint
 D291 the fold's plan, D196 done, the build not yet
 D292 The lane order stays, a phone opens every lane folded, and the rule is said once
+D293 Inventory gets a second view, grouped by set, and a tap is the ordinary walk
+D294 Every card carries its own order key, a fraction that starts at its index
+D295 The public demo is the owner's real store, scrubbed
+D296 Four more ways to rank the buyer list, and the Ready to Ship lead is a grouping
+D297 Pricing is one list with the rows that need the owner on top, a slim bar, a Live tab, and the drawer folded into the product view
+D298 Sales rows are per printing, and a line with no price says so
+D299 A box has no lid and no capacity, and every sealed box becomes an ordinary box
+D300 A picked section fills like a sub-box, and the store chooses the key
+D301 A stock photo is the main view on Sets and Pricing, hotlinked, never mirrored
 ```
 
 D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.

@@ -2037,7 +2037,7 @@ def check_store_of_record(checks: Checks) -> None:
 
 
 def check_skus_photos_limit(checks: Checks) -> None:
-    """Round 2 review finding: `GET /skus/photos` (`do_skus_photos`, D-sales-rows-by-sku)
+    """Round 2 review finding: `GET /skus/photos` (`do_skus_photos`, D298)
     had no server-side bound of its own — only `Revenue.tsx:PHOTO_LOOKUP_CAP` bounded what
     the client SENDS, and a hand-typed query string could ask for any number of SKUs.
     `SKUS_PHOTOS_LIMIT` is that same value, kept in step by hand (no shared constant
@@ -2045,7 +2045,7 @@ def check_skus_photos_limit(checks: Checks) -> None:
     the same gap).
     """
     checks.note("")
-    checks.note("SKU PHOTO LOOKUP CAP — GET /skus/photos (D-sales-rows-by-sku, round 2 review)")
+    checks.note("SKU PHOTO LOOKUP CAP — GET /skus/photos (D298, round 2 review)")
 
     with isolated_home():
         at_limit = [f"sku-{n}" for n in range(capture_server.SKUS_PHOTOS_LIMIT)]
@@ -9202,7 +9202,7 @@ def check_box_routes_and_search(checks: Checks) -> None:
                 ["state" in listed[8], "capacity" in listed[8], listed[8]["sections"]],
                 [False, False, []],
                 "and it renders undeclared, with no lid and no capacity: a box has neither "
-                "since `D-sealed-boxes-removed`",
+                "since `D299`",
             )
             checks.equal(
                 [listed[8]["cards"], listed[8]["fill"], listed[8]["next_index"]],
@@ -9243,7 +9243,7 @@ def check_box_routes_and_search(checks: Checks) -> None:
             checks,
             lambda: capture_server.do_put_box(9, {"capacity": 250}),
             "field_not_settable",
-            "and PUT refuses `capacity`: a box has none (`D-sealed-boxes-removed`)",
+            "and PUT refuses `capacity`: a box has none (`D299`)",
         )
         refusal(
             checks,
@@ -9266,7 +9266,7 @@ def check_box_routes_and_search(checks: Checks) -> None:
             "so refusing here would put a dead rename control on a live row",
         )
 
-        # --- NO SEAL (`D-sealed-boxes-removed`, the owner's ruling of 2026-09-25) ----------
+        # --- NO SEAL (`D299`, the owner's ruling of 2026-09-25) ----------
         # "what was the point of sealed boxes? lets kill this". Red before the removal: the
         # PUT sealed box 8, and the capture into it was refused `box_closed`.
         refusal(
@@ -11159,7 +11159,7 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
             f"refusal: {getattr(said_sold, 'code', None)}: {said_sold}",
         )
         # A STORE REFUSAL ABOUT A BOX SAYS ITS NAME. This read the sealed-box refusal until
-        # `D-sealed-boxes-removed`; a second divider in front of nothing is the same shape.
+        # `D299`; a second divider in front of nothing is the same shape.
         said_empty = ""
         try:
             with Store().write() as snapshot:
@@ -26380,7 +26380,7 @@ def check_boxes_and_listings(checks: Checks) -> None:
     )
     checks.ok(
         not hasattr(migrated.boxes["1"], "capacity"),
-        "and no capacity: a box has none since `D-sealed-boxes-removed`",
+        "and no capacity: a box has none since `D299`",
     )
 
     # THE LABELS THEMSELVES. Literal strings, because a formula asserted against itself
@@ -26487,7 +26487,7 @@ def check_boxes_and_listings(checks: Checks) -> None:
             card, created = snapshot.inventory.allocate_capture(5, cid=fake_cid("reopened"))
             checks.ok(
                 created and card.index == 5,
-                "and the box takes the next card: a box has no lid (`D-sealed-boxes-removed`)",
+                "and the box takes the next card: a box has no lid (`D299`)",
             )
 
     # --- listings are quantities, never addresses --------------------------------------
@@ -38295,7 +38295,7 @@ def check_send_matrix(checks: Checks) -> None:
 
 
 def check_pipeline_sets(checks: Checks) -> None:
-    """`GET /pipeline/sets` — the owner's "by set order" view (D-set-view).
+    """`GET /pipeline/sets` — the owner's "by set order" view (D293).
 
     ON HAND MEANS `identified`, NARROWER THAN `do_pipeline_value`'s "not a terminal state":
     a captured-and-not-yet-identified card, a sold one, a retired one and a moved one are
@@ -38475,7 +38475,7 @@ def check_pipeline_sets(checks: Checks) -> None:
 
 
 def check_stock_images(checks: Checks) -> None:
-    """`pipeline/stockimages.py` (`D-stock-images`) — both sources stubbed, never a socket.
+    """`pipeline/stockimages.py` (`D301`) — both sources stubbed, never a socket.
 
     THREE THINGS THE REVIEW ROUND NAMED. The Pokemon "CODE: " prefix match — the store's
     own `set_name` for ME01 is "ME01: Mega Evolution" against the vendored tree's plain

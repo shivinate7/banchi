@@ -1,4 +1,4 @@
-## D-sealed-boxes-removed — A box has no lid and no capacity, and every sealed box becomes an ordinary box
+## D299 — A box has no lid and no capacity, and every sealed box becomes an ordinary box
 
 **The owner's ruling, 2026-09-25**, verbatim: "what was the point of sealed boxes? lets kill
 this".

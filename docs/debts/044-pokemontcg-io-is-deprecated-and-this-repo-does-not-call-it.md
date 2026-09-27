@@ -2,7 +2,7 @@
 
 **The finding.** `docs/specs/stock-images.md`'s own research recorded `api.pokemontcg.io
 /v2/cards?q=set.id:<id>` as the Pokemon stock-image source. It measured 100% coverage for
-ME01. A live check made while building `D-stock-images` (2026-09-26) found that endpoint
+ME01. A live check made while building `D301` (2026-09-26) found that endpoint
 answering HTTP 500 and 502 on every query tried. That included the exact query the research
 recorded working the same day. The API's own deprecation notice sets its shutdown at
 2027-03-01.

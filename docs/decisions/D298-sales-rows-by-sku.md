@@ -1,4 +1,4 @@
-## D-sales-rows-by-sku — Sales rows are per printing, and a line with no price says so
+## D298 — Sales rows are per printing, and a line with no price says so
 
 **Amends D214** (the gross-revenue retrospective) and **D217** (Sales becomes a tool: sort,
 filter, cross-filter, drill down and deep-link). Builds Direction B

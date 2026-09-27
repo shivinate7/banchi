@@ -1517,7 +1517,7 @@ export type Place = {
   section_start: number
   section_end: number | null
 
-  /** How many cards the box holds now (D58). A box has no lid (`D-sealed-boxes-removed`), so
+  /** How many cards the box holds now (D58). A box has no lid (`D299`), so
    *  this number always moves with the next capture. */
   box_total: number
 
@@ -2325,7 +2325,7 @@ export type PricingSku = {
   set_name: string
   name: string
   /** A hotlinked stock photo for this SKU's product, or `null` on a join miss
-   *  (`D-stock-images`, `pipeline/stockimages.py`). Resolved fresh on every
+   *  (`D301`, `pipeline/stockimages.py`). Resolved fresh on every
    *  `GET /pipeline/pricing`, never written into `pricing.json` — see that module's own
    *  header for why. Several SKUs (a foil and a normal printing of one card) may carry
    *  the identical URL; `condition` beside it is what still tells the rows apart. */
@@ -4362,7 +4362,7 @@ export type SetGroupCard = {
    *  is `pipeline/join.py:display_number`'s own string, already on the wire. */
   number_display: string | null
   qty: number
-  /** A hotlinked stock photo, or `null` on a join miss (`D-stock-images`,
+  /** A hotlinked stock photo, or `null` on a join miss (`D301`,
    *  `pipeline/stockimages.py`). Never downloaded or stored here — the browser loads it
    *  straight from tcgcsv's or pokemontcg.io's own CDN. Resolved server-side, fresh on
    *  every read, and never on the demo's own static wire (`make demo-record` bakes

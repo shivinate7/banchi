@@ -185,7 +185,7 @@ class Server:
             return status, None
 
 
-# THE MIRROR'S SERVER HAS NO NETWORK (D-demo-mirror). A mirror holds every SKU the owner ever
+# THE MIRROR'S SERVER HAS NO NETWORK (D295). A mirror holds every SKU the owner ever
 # stocked, and `#/product`'s history route reads TCGplayer live for any SKU its archive lacks.
 # Swept over thousands of SKUs, that is thousands of requests to a host the owner allows from
 # a browser only (D216). So the server starts with every non-loopback `connect` refused,

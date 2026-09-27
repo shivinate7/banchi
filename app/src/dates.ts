@@ -98,7 +98,7 @@ export function saleDate(d: Date): string {
 const MONTH_YEAR = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' })
 const MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
 
-/** `Sep 2026` for a `YYYY-MM` bucket key — `#/revenue`'s month strip (D-sales-rows-by-sku).
+/** `Sep 2026` for a `YYYY-MM` bucket key — `#/revenue`'s month strip (D298).
  *  The ONE place a calendar-month label is built, so a bucket label and `absoluteDate` never
  *  drift onto two different month spellings. */
 export function monthOf(key: string): string {

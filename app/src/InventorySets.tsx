@@ -6,7 +6,7 @@ import { EmptyState, Loading, Notice, Pill, Section } from './kit'
 import { patchViewQuery } from './kit/viewState'
 import './InventorySets.css'
 
-/* THE OWNER'S "BY SET ORDER" VIEW (D-set-view), a second way of walking `#/inventory`
+/* THE OWNER'S "BY SET ORDER" VIEW (D293), a second way of walking `#/inventory`
  * (D264's own precedent: a view switch lives INSIDE Inventory rather than as a fourth
  * screen — D31, one owner-side view of stored cards). `Inventory.tsx` reads `view=sets` off
  * the URL (D285) and renders this in place of the box walk; it holds no state of its own
@@ -57,7 +57,7 @@ function openInWalk(card: SetGroupCard): void {
   patchViewQuery({ view: null, box: null, card: null, q: text })
 }
 
-/** THE MAIN VIEW ON THIS SCREEN, per the owner's own ask (`D-stock-images`): "if it'd be easy
+/** THE MAIN VIEW ON THIS SCREEN, per the owner's own ask (`D301`): "if it'd be easy
  *  to live pull all the photos without much lag I'd be happy to have the stock photos show as
  *  the main view on say set view or pricing." A join miss, or a load failure, draws no image
  *  at all — this screen never carried one before, so "nothing" is the honest fallback here

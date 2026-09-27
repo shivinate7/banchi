@@ -1015,7 +1015,7 @@ BOX_POST_FIELDS = ("box", "name", "sections")
 # body that could rename a box NUMBER would be a renumber, which D10 forbids outright: every
 # position key in `inventory.json`, every photo directory and every printed label is built
 # from it.
-# No `state` since `D-sealed-boxes-removed`: a box has no lid, so a body naming one is an
+# No `state` since `D299`: a box has no lid, so a body naming one is an
 # unknown field and refused as one.
 BOX_PUT_FIELDS = ("name", "sections", "section_names")
 
@@ -1378,7 +1378,7 @@ IDENTITY_RESTORED = "identity_restored"
 # D20's five, and they differ from the route-written names above in WHO APPENDS THEM. Those are
 # written here, by `_history`, because the store has no opinion about them. These five are
 # written by `store/master.py:Inventory._log` from inside `set_sections`, `ensure_box`,
-# `set_name` and, until `D-sealed-boxes-removed`, `close_box`/`reopen_box` — the box routes call those methods and
+# `set_name` and, until `D299`, `close_box`/`reopen_box` — the box routes call those methods and
 # append nothing themselves. They are named here anyway, and the reason is the paragraph below: this tuple
 # is what the disjointness rule is stated over, and an event this server causes but does not
 # spell would be outside it.
@@ -1396,7 +1396,7 @@ IDENTITY_RESTORED = "identity_restored"
 #                 event as a known gap while a name was only a label; it is not only a
 #                 label any more.
 #   box_closed    the lid went on and capacity froze at the fill (D20). NOTHING WRITES IT
-#                 SINCE `D-sealed-boxes-removed`; the name stays because old history holds it.
+#                 SINCE `D299`; the name stays because old history holds it.
 #   box_reopened  the lid came off. Nothing writes it either, for the same reason.
 RESECTIONED = "resectioned"
 BOX_CREATED = "box_created"
@@ -11837,7 +11837,7 @@ SKUS_PHOTOS_LIMIT = 40
 
 def do_skus_photos(skus: Sequence[str]) -> dict:
     """The first on-hand copy WITH a photograph, for each named SKU — `#/revenue`'s
-    thumbnail lookup (D-sales-rows-by-sku). A sold card's own photograph is usually gone
+    thumbnail lookup (D298). A sold card's own photograph is usually gone
     (D89 reclaims it on purpose), so a sales row asks for ANOTHER copy of the same SKU
     still on the shelf. `Inventory.copies_on_hand`'s own box-walk order decides which copy
     that is; the first one carrying a real photograph wins, using the same `photo_for`
@@ -12835,7 +12835,7 @@ def do_put_box(box: int, payload: dict) -> dict:
     which D10 forbids outright: every position key, every photo directory and every label the
     operator has read off a screen is built from that number.
 
-    NO SEAL (`D-sealed-boxes-removed`, the owner's ruling of 2026-09-25). A box has no lid,
+    NO SEAL (`D299`, the owner's ruling of 2026-09-25). A box has no lid,
     so `state` is not a field here and a body that sends one is refused as unknown.
 
     RE-SECTIONING RELABELS CARDS AND MOVES NO INDEX (D10, amended). Every card behind a moved
@@ -15962,7 +15962,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # CAUGHT HERE SO IT CANNOT LEAVE AS A 500. `check_sections` names what is wrong with a
         # layout in a sentence for a person, so it is answered with its own text. It is a
         # 400: a bad layout is something the request said. (`BoxClosed`, D20's sealed-box
-        # refusal, went with the seal: `D-sealed-boxes-removed`.)
+        # refusal, went with the seal: `D299`.)
         except master.BadSections as exc:
             self._fail(HTTPStatus.BAD_REQUEST, "sections_invalid", str(exc))
         # `open_section`'s refusal, a 409 on the rule the comment above draws: the request
@@ -17283,7 +17283,7 @@ def serve(host: str = HOST, port: int = PORT) -> None:
         print(f"  WORKTREE  {ports.REPO_ROOT.name} — this is NOT the main checkout's store")
         print(f"            main tree serves :{ports.CAPTURE_BASE_PORT}")
     print("  Ctrl-C to stop.")
-    # THE STOCK-IMAGE CACHE'S OTHER TRIGGER (`D-stock-images`), never at import — a harness
+    # THE STOCK-IMAGE CACHE'S OTHER TRIGGER (`D301`), never at import — a harness
     # test imports `pipeline_routes` directly and must open no socket, which is exactly
     # what `warm_stock_images` itself refuses to do from anywhere but here. Fire-and-forget:
     # background threads, and a store this checkout cannot yet read warms nothing.

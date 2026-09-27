@@ -828,7 +828,7 @@ export type SectionPickerOption = {
 }
 
 /**
- * A box has no auto default (D-sections-are-sub-boxes, the owner's ruling: "i need to
+ * A box has no auto default (D300, the owner's ruling: "i need to
  * specify where it goes there no auto default"). Every Move-to-box path shows this list once
  * a destination box is chosen — a box with one section still shows its single choice, so the
  * owner confirms it rather than a screen deciding quietly. `value` is a divider key

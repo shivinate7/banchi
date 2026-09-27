@@ -124,7 +124,7 @@ function progressOf(over: Partial<OrderLineProgress> & { sku: string }): OrderLi
   }
 }
 
-/** `/orders`, plus the two reads this screen now fires ON ARRIVAL (D-sales-rows-by-sku):
+/** `/orders`, plus the two reads this screen now fires ON ARRIVAL (D298):
  *  the thumbnail lookup and "On the shelf" (moved off its own press, sales-directions.md
  *  finding 3). Every test stubs these through here so `sealEveryTest` sees nothing leak —
  *  neither shape matters to a case that is not testing them, so both default to "nothing
@@ -582,7 +582,7 @@ test('the archive answers first, and a name only readings has priced still draws
   await expect(pikachu).toContainText('$9.00')
 })
 
-/* --------------------------------------------------------- rows by SKU (D-sales-rows-by-sku) */
+/* --------------------------------------------------------- rows by SKU (D298) */
 
 test('a foil and a normal printing sharing a name draw as two rows, never one merged row (defect fix)', async ({ page }) => {
   await stub(page, [

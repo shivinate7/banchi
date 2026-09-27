@@ -1,4 +1,4 @@
-## D-a-key-on-each-card — Every card carries its own order key, a fraction that starts at its index
+## D294 — Every card carries its own order key, a fraction that starts at its index
 
 **The owner's ruling, 2026-09-25, on D265's open question.** Asked the form of the order key,
 the owner answered: "A key on each card". The owner did not choose runs of indices on the box

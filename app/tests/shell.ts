@@ -660,7 +660,7 @@ async function stubStore(page: Page): Promise<void> {
    *  for. `orders.spec.ts`'s own `open()` overrides this per case with real fixtures. */
   await page.route(/\/orders\/picks$/, (route) => json(route, { orders: [] }))
 
-  /* `#/revenue`'s TWO ON-ARRIVAL READS (D-sales-rows-by-sku): the thumbnail lookup and
+  /* `#/revenue`'s TWO ON-ARRIVAL READS (D298): the thumbnail lookup and
    *  "On the shelf", both plain reads this screen now fires on mount rather than behind a
    *  press. A spec testing either overrides these per case, same as `/orders/picks` above. */
   await page.route(/\/skus\/photos\?/, (route) => json(route, { photos: {} }))

@@ -231,7 +231,7 @@ a capture calls them inside the store lock. They read the `idx` and `ord` column
   `SectionGone`. It refuses a token that is not the box's now before it reads the key.
 - `Inventory.section_tail_key(box, div, token, count)`: the key rule, and the only one. It
   returns `(keys, ordinal, last)`: `count` keys, each the rule over the one before it, from
-  one read of the box. D-sections-are-sub-boxes states the rule and argues it.
+  one read of the box. D300 states the rule and argues it.
 - `Inventory.section_div_of(box, key)`: the divider key of the section a key stands in. The
   capture response reads it after the write.
 - `Inventory.allocate_capture(box, section=...)`: it resolves the section before it allocates

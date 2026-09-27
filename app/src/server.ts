@@ -1729,7 +1729,7 @@ export async function createBox(input: {
  * allowed — it is not this module's place to add the confirm D10 says to reach for *first if
  * that failure ever actually happens*, and it is worth knowing that it has not yet.
  *
- * A box has no lid (`D-sealed-boxes-removed`), so no edit here is refused for a seal.
+ * A box has no lid (`D299`), so no edit here is refused for a seal.
  */
 export async function updateBox(
   box: number,
@@ -1973,7 +1973,7 @@ export type MoveSection = { readonly div: string; readonly layoutToken: string }
 
 /**
  * `section` is a destination-box divider key (`sections_detail[].div`,
- * D-sections-are-sub-boxes): the card lands at that section's tail. The owner ruled "no
+ * D300): the card lands at that section's tail. The owner ruled "no
  * auto default" — a screen never omits this field on a Move-to-box press. It stays
  * optional here only so an older caller (and a Map drag, which names an exact gap through
  * a different route entirely) keeps compiling.
@@ -3214,7 +3214,7 @@ export type SkuPhotoEntry = { box: number; index: number; cid: string | null }
 
 /** `sku -> SkuPhotoEntry`, for exactly the SKUs asked. A SKU with no photographed copy on
  *  hand is simply ABSENT — never a guess (`GET /skus/photos?sku=<s>&sku=<s>`,
- *  D-sales-rows-by-sku). `#/revenue`'s own reason: a sold card's own photograph is usually
+ *  D298). `#/revenue`'s own reason: a sold card's own photograph is usually
  *  reclaimed on purpose (D89), so a sales row's thumbnail is ANOTHER copy of the same SKU,
  *  never the one that actually sold. A plain read, costs nothing, so this screen calls it
  *  on arrival rather than gating it behind a press. */
