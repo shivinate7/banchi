@@ -27,6 +27,7 @@ docstring says it does: a fake response whose `.read()` raises stays a plain, no
 
 from __future__ import annotations
 
+import contextlib
 import socket
 import sys
 import time
@@ -88,10 +89,8 @@ def _plain_unreachable_is_not_sticky() -> None:
 
     market = pricehistory.Market(cache_dir=None, fetcher=fetcher, courtesy_delay=0.0)
     for i in range(5):
-        try:
+        with contextlib.suppress(pricehistory.Unreachable):
             market.get("https://example.test/%d" % i, "slug-%d" % i, 3600.0)
-        except pricehistory.Unreachable:
-            pass
     ok(len(calls) == 5, "a plain Unreachable is retried per distinct slug, never sticky",
        "called %d times, want 5" % len(calls))
 
