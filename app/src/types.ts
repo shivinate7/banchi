@@ -1804,6 +1804,43 @@ export type SectionMoveResult = {
   boxes: BoxRecord[]
 }
 
+/** What `POST /boxes/sections/move-batch` answers (D264, the Map's edit-mode Confirm,
+ *  2026-09-26): the whole draft's one move id for Undo, one combined physical instruction,
+ *  and every box the draft touched, as `GET /boxes` draws them. `created` is the box a split
+ *  inside the draft made — a single number where the draft made exactly one, an array where
+ *  it made more than one, null where it made none. There is no single `box`/`to_box`: a
+ *  batch spans however many boxes the draft's moves touched. */
+export type SectionMoveBatchResult = {
+  move: string
+  created: number | number[] | null
+  moved: number
+  receipt: {
+    heading: string
+    steps: string[]
+    renumbered: string[]
+  }
+  boxes: BoxRecord[]
+}
+
+/** One queued move of the Map's edit-mode draft (D264): the same shape a single move sends,
+ *  minus `aim` and `layoutToken` — a later move in the same draft may target a box an
+ *  earlier move in the SAME draft already changed, so only the draft-open freshness check
+ *  (`SectionMoveBatchInput.tokens`) answers whether anything moved out from under it. */
+export type SectionMoveBatchStep = {
+  box: number
+  first: number
+  last: number
+  toBox: number | 'new'
+  before: number | null
+}
+
+/** What `POST /boxes/sections/move-batch` sends: every box the draft saw (by its
+ *  `layout_token` when the owner pressed Edit layout), and the ordered moves it queued. */
+export type SectionMoveBatchInput = {
+  tokens: Record<string, string>
+  moves: readonly SectionMoveBatchStep[]
+}
+
 /** Where a section move lands: in front of a section of `toBox`, or at its near end (null). */
 export type SectionMoveTarget = {
   toBox: number | 'new'

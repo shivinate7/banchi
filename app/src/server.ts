@@ -38,6 +38,8 @@ import type {
   CaptureSitting,
   MoveCardsResult,
   SectionMoveResult,
+  SectionMoveBatchResult,
+  SectionMoveBatchInput,
   SectionMoveTarget,
   CardMoveTarget,
   SectionUndoResult,
@@ -2096,6 +2098,31 @@ export async function moveRange(
       aim,
     }),
   })) as SectionMoveResult
+}
+
+/**
+ * The Map's Confirm (D264, the owner's edit-mode ruling, 2026-09-26): the whole edit-mode
+ * draft, applied as one store transaction or not at all (D88). `input.tokens` is every box
+ * the draft touched, by its `layout_token` when the owner pressed Edit layout — a change to
+ * any of them refuses the WHOLE draft (409 `draft_stale`), and nothing in it is applied.
+ * The same one write, receipt and undo as a single move (`undoSectionMove`), spanning every
+ * box the draft touched.
+ */
+export async function moveSectionsBatch(input: SectionMoveBatchInput): Promise<SectionMoveBatchResult> {
+  return (await request('/boxes/sections/move-batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tokens: input.tokens,
+      moves: input.moves.map((m) => ({
+        box: m.box,
+        first: m.first,
+        last: m.last,
+        ...(m.toBox === 'new' ? { new_box: true } : { to_box: m.toBox }),
+        before: m.before,
+      })),
+    }),
+  })) as SectionMoveBatchResult
 }
 
 /** Put a section move back exactly, while neither box has changed since (D264). A box that

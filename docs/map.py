@@ -6465,13 +6465,12 @@ COMPONENTS = [
                                               "D43", "D46", "D48", "D49", "D52", "D53", "D58",
                                               "D59", "D61", "D62", "D63", "D64", "D65", "D68",
                                               "D69", "D70", "D73", "D76", "D79", "D83", "D86",
-                                              "D87", "D89", "D90", "D91", "D92", "D100", "D103",
-                                              "D104", "D113", "D116", "D132", "D134", "D159",
-                                              "D165", "D168", "D172", "D174", "D180", "D189",
-                                              "D192", "D193", "D203", "D207", "D213", "D219",
-                                              "D225", "D227", "D236", "D252", "D264", "D268",
-                                              "D273", "D291", "D298",
-                                              "D299", "D300"]},
+                                              "D87", "D88", "D89", "D90", "D91", "D92", "D100",
+                                              "D103", "D104", "D113", "D116", "D132", "D134",
+                                              "D159", "D165", "D168", "D172", "D174", "D180",
+                                              "D189", "D192", "D193", "D203", "D207", "D213",
+                                              "D219", "D225", "D227", "D236", "D252", "D264",
+                                              "D268", "D273", "D291", "D298", "D299", "D300"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -8297,8 +8296,8 @@ COMPONENTS = [
                                          "stand side by side; a pointer drag, a tap or Enter on a "
                                          "gap moves it through `moveSections`. The receipt is the "
                                          "server's physical instruction, with Undo on U.",
-                                  "governed_by": ["D31", "D50", "D117", "D118", "D264", "D265",
-                                                  "D285", "D293"]},
+                                  "governed_by": ["D31", "D50", "D88", "D117", "D118", "D260",
+                                                  "D264", "D265", "D275", "D285", "D293"]},
             "src/BoxShelf.css": {"does": "the Shelf's blocks, gaps, lift bar and receipt. A "
                                          "block's height follows its count with a 44px floor; a "
                                          "gap is 40px, the thumb floor.",

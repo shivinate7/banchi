@@ -1,28 +1,27 @@
 import { test, expect, type Page } from '@playwright/test'
-import type { BoxRecord, SectionDetail, SectionMoveResult } from '../src/types'
+import type { BoxRecord, SectionDetail, SectionMoveBatchResult } from '../src/types'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
 
-/* THE SHELF (D264): every box from above, a section picked up, a box picked, and a gap pressed
- * or dragged to. EVERYTHING IS STUBBED: the two routes the view writes through are answered
- * here, and what the screen SENT is what each case asserts. The store is never touched. */
+/* THE SHELF (D264), horizontal, edit-mode ruling (owner, 2026-09-26): read-only until "Edit
+ * layout", every drag queues a draft move with no write, and Confirm sends the whole draft as
+ * ONE request to `/boxes/sections/move-batch`. EVERYTHING IS STUBBED: the two routes the view
+ * writes through are answered here, and what the screen SENT is what each case asserts. The
+ * store is never touched.
+ *
+ * STALE AGAINST THIS SPEC'S OWN PRIOR VERSION, flagged in the lane's report rather than
+ * silently carried over: the old file pinned an immediate per-drag save through
+ * `/boxes/<box>/sections/move` and a vertical layout, and a card-level "Some cards" range
+ * move this lane's edit-mode draft does not cover (see `BoxShelf.tsx`'s own header comment).
+ * Both are gone from this file; the single-move and card-move routes and their own harness
+ * coverage are untouched. */
 
 sealEveryTest()
 
 const ROUTE = '/#/inventory?view=shelf'
 
-function section(n: number, name: string | null, count: number, first: string): SectionDetail {
-  return {
-    section: n,
-    start: 1,
-    end: count,
-    count,
-    name,
-    first_name: `${first} first`,
-    last_name: `${first} last`,
-    first_cid: `${first}-a`,
-    last_cid: `${first}-z`,
-  }
+function section(n: number, name: string | null, count: number): SectionDetail {
+  return { section: n, start: 1, end: count, count, name }
 }
 
 function box(n: number, name: string, sections: SectionDetail[]): BoxRecord {
@@ -45,22 +44,19 @@ function box(n: number, name: string, sections: SectionDetail[]): BoxRecord {
 }
 
 const BOXES: BoxRecord[] = [
-  box(1, 'RB Origins', [section(1, 'Commons', 11, 'c'), section(2, 'Uncommons', 10, 'u'), section(3, 'Signatures', 13, 's')]),
-  box(2, 'Mixed Singles', [section(1, null, 15, 'm'), section(2, 'Promos', 4, 'p')]),
-  box(3, 'Old Box', [section(1, 'Old', 5, 'o')]),
+  box(1, 'RB Origins', [section(1, 'Commons', 11), section(2, 'Uncommons', 10), section(3, 'Signatures', 13)]),
+  box(2, 'Mixed Singles', [section(1, null, 15), section(2, 'Promos', 4)]),
+  box(3, 'Old Box', [section(1, 'Old', 5)]),
 ]
 
-const RESULT: SectionMoveResult = {
+const RESULT: SectionMoveBatchResult = {
   move: 'm1',
-  box: 1,
-  to_box: 2,
   created: null,
   moved: 10,
-  landed: [2],
   receipt: {
-    heading: 'Move 10 cards from RB Origins to Mixed Singles.',
+    heading: '1 change to make.',
     steps: [
-      'In RB Origins, find the divider Uncommons. Its first card is u first. Its last card is u last.',
+      'In RB Origins, find the divider Uncommons.',
       'Take out that divider and the 10 cards on your side of it, up to the next divider.',
       'In Mixed Singles, find the divider Promos. Put them just on the far side of it, in the same order.',
     ],
@@ -76,7 +72,7 @@ async function openShelf(page: Page): Promise<Sent[]> {
   await page.route(/\/boxes(\?.*)?$/, (route) =>
     route.fulfill({ json: { boxes: BOXES, facets: { games: [], sets: {}, rarities: {} } } }),
   )
-  await page.route(/\/boxes\/\d+\/sections\/move$/, async (route) => {
+  await page.route(/\/boxes\/sections\/move-batch$/, async (route) => {
     sent.push({ path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
     await route.fulfill({ json: RESULT })
   })
@@ -90,36 +86,61 @@ async function openShelf(page: Page): Promise<Sent[]> {
   return sent
 }
 
-test('every box is drawn from above, card 1 at the top, counts and no money', async ({ page }) => {
+test('read-only: every box is drawn horizontally, Back/Front replaces the sentence, no money, no grip', async ({ page }) => {
   await openShelf(page)
   const first = page.locator('.shelf-box').first()
   await expect(first.locator('.shelf-block-name')).toHaveText(['Commons', 'Uncommons', 'Signatures'])
   await expect(page.locator('.shelf')).not.toContainText('$')
-  /* A block's height follows its count: the 13-card section is taller than the 10-card one. */
-  const heights = await first.locator('.shelf-block').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))
-  expect(heights[2]).toBeGreaterThan(heights[1] ?? 0)
-  for (const h of heights) expect(h).toBeGreaterThanOrEqual(44)
+  await expect(page.locator('.shelf')).not.toContainText('drawn from above')
+  await expect(page.locator('.shelf-edges')).toContainText('Back')
+  await expect(page.locator('.shelf-edges')).toContainText('Front')
+  await expect(page.getByRole('button', { name: /Move section/ })).toHaveCount(0)
+  /* Sections run in one row, left to right: a block's WIDTH follows its count now, not height. */
+  const widths = await first.locator('.shelf-block').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width))
+  expect(widths[2]).toBeGreaterThan(widths[1] ?? 0)
 })
 
-test('pick up, pick the box, press a gap: the write names the gap and aims at what was seen', async ({ page }) => {
+test('Edit layout enters edit mode; a queued drop writes nothing until Confirm, which sends the whole draft once', async ({ page }) => {
   const sent = await openShelf(page)
+  await page.getByRole('button', { name: 'Edit layout' }).click()
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
-  await expect(page.getByRole('button', { name: 'Old Box', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Old Box', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
   await expect(page.locator('.shelf-pair .shelf-box')).toHaveCount(2)
   await page.getByRole('button', { name: /Put Uncommons just on the far side of Promos/ }).click()
-  await expect(page.locator('.shelf-receipt')).toContainText('Move 10 cards from RB Origins to Mixed Singles.')
+  expect(sent).toHaveLength(0)
+  await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Confirm' }).click()
+  expect(sent).toHaveLength(1)
   expect(sent[0]).toEqual({
-    path: '/boxes/1/sections/move',
-    body: { first: 2, last: 2, to_box: 2, before: 2, layout_token: 'tok-2', aim: { count: 10, first: 'u-a', last: 'u-z' } },
+    path: '/boxes/sections/move-batch',
+    body: {
+      tokens: { '1': 'tok-1', '2': 'tok-2', '3': 'tok-3' },
+      moves: [{ box: 1, first: 2, last: 2, to_box: 2, before: 2 }],
+    },
   })
+  await expect(page.locator('.shelf-receipt')).toContainText('1 change to make.')
   await page.keyboard.press('u')
   await expect(page.locator('.shelf-receipt')).toContainText('Put back.')
   expect(sent[1]).toEqual({ path: '/boxes/sections/undo', body: { move: 'm1' } })
 })
 
-test('the keyboard alone moves a section, and Esc puts it down', async ({ page }) => {
+test('Cancel throws the whole draft away: nothing is sent, and the map returns to read-only', async ({ page }) => {
   const sent = await openShelf(page)
+  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
+  await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
+  await page.getByRole('button', { name: /Put Uncommons just on the far side of Promos/ }).click()
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  expect(sent).toHaveLength(0)
+  await expect(page.getByRole('button', { name: 'Edit layout' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Move section/ })).toHaveCount(0)
+})
+
+test('the keyboard alone moves a section in edit mode, and Esc puts it down', async ({ page }) => {
+  await openShelf(page)
+  await page.getByRole('button', { name: 'Edit layout' }).click()
   const grip = page.getByRole('button', { name: 'Move section Signatures of RB Origins' })
   await grip.focus()
   await page.keyboard.press('Enter')
@@ -132,13 +153,12 @@ test('the keyboard alone moves a section, and Esc puts it down', async ({ page }
   const gap = page.getByRole('button', { name: /Put Signatures just on the far side of Commons/ })
   await gap.focus()
   await page.keyboard.press('Enter')
-  await expect.poll(() => sent.length).toBe(1)
-  expect((sent[0]?.body as { to_box: number; before: number }).before).toBe(1)
-  expect((sent[0]?.body as { to_box: number }).to_box).toBe(1)
+  await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()
 })
 
-test('a pointer drag drops the section on the gap under the pointer', async ({ page }) => {
-  const sent = await openShelf(page)
+test('a pointer drag queues a drop on the gap under the pointer', async ({ page }) => {
+  await openShelf(page)
+  await page.getByRole('button', { name: 'Edit layout' }).click()
   await page.getByRole('button', { name: 'Move section Commons of RB Origins' }).click()
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
   const block = page.locator('.shelf-pair .shelf-block[data-lifted="true"]').first()
@@ -147,26 +167,28 @@ test('a pointer drag drops the section on the gap under the pointer', async ({ p
   const from = await block.boundingBox()
   const to = await gap.boundingBox()
   if (from === null || to === null) throw new Error('nothing to drag')
-  await page.mouse.move(from.x + 20, from.y + from.height / 2)
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
   await page.mouse.down()
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 })
   await page.mouse.up()
-  await expect.poll(() => sent.length).toBe(1)
-  expect(sent[0]?.body).toMatchObject({ first: 1, last: 1, to_box: 2, before: null })
+  await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()
 })
 
-test('the whole box moves as a merge, and a new box is a split', async ({ page }) => {
+test('the whole box queues as a merge, and New box queues a split', async ({ page }) => {
   const sent = await openShelf(page)
+  await page.getByRole('button', { name: 'Edit layout' }).click()
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
   await page.getByRole('button', { name: 'This and the next' }).click()
   await page.getByRole('button', { name: 'New box' }).click()
   await page.getByRole('button', { name: /Put Uncommons into a new box/ }).click()
-  await expect.poll(() => sent.length).toBe(1)
-  expect(sent[0]?.body).toMatchObject({ first: 2, last: 3, new_box: true })
+  await page.getByRole('button', { name: 'Confirm' }).click()
+  expect(sent).toHaveLength(1)
+  expect(sent[0]?.body).toMatchObject({ moves: [{ first: 2, last: 3, new_box: true }] })
 })
 
-test('every press on the shelf is 40px or more', async ({ page }) => {
+test('every press on the map is 40px or more', async ({ page }) => {
   await openShelf(page)
+  await page.getByRole('button', { name: 'Edit layout' }).click()
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
   const sizes = await page
@@ -177,93 +199,29 @@ test('every press on the shelf is 40px or more', async ({ page }) => {
   for (const size of sizes) expect(size).toBeGreaterThanOrEqual(40)
 })
 
-/* THE NEXT SLICE (owner, 2026-09-25): one card or a range from a lifted section. */
-function inv(box: number, rows: Array<[number, string, number, number]>) {
-  const cardsOf: Record<string, unknown> = {}
-  for (const [index, name, section, order] of rows) {
-    cardsOf[`${box}/${index}`] = {
-      box, index, name, state: 'identified', cid: `${box}-${index}`,
-      place: { box, index, order, section, card: index, label: name, slot: index },
-    }
-  }
-  return { version: 2, cards: cardsOf }
-}
-
-async function stubCards(page: Page): Promise<Sent[]> {
-  const sent: Sent[] = []
-  await page.route(/\/inventory\/1$/, (route) =>
-    route.fulfill({ json: inv(1, [[1, 'c1', 1, 1], [12, 'u1', 2, 12], [13, 'u2', 2, 13], [14, 'u3', 2, 14], [30, 's1', 3, 30]]) }),
-  )
-  await page.route(/\/inventory\/2$/, (route) =>
-    route.fulfill({ json: inv(2, [[1, 'm1', 1, 1], [2, 'm2', 1, 2], [16, 'p1', 2, 16]]) }),
-  )
-  await page.route(/\/boxes\/\d+\/cards\/move$/, async (route) => {
-    sent.push({ path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
-    await route.fulfill({ json: { ...RESULT, receipt: { ...RESULT.receipt, heading: 'Move 2 cards from RB Origins to Mixed Singles.' } } })
-  })
-  return sent
-}
-
-test('a lifted section shows its cards; a range drops in front of a card of the other box', async ({ page }) => {
-  const sent = await stubCards(page)
-  await openShelf(page)
-  await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
-  await page.getByRole('button', { name: 'Some cards' }).click()
-  const list = page.getByRole('list', { name: 'The cards in this section' })
-  await expect(list.getByRole('button')).toHaveText([/u1/, /u2/, /u3/])
-  await list.getByRole('button', { name: /u2/ }).click()
-  await list.getByRole('button', { name: /u3/ }).click()
-  await expect(list.getByRole('button', { pressed: true })).toHaveCount(2)
-  await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
-  await page.getByRole('button', { name: /Put 2 cards just on the far side of m2/ }).click()
-  await expect(page.locator('.shelf-receipt')).toContainText('Move 2 cards from RB Origins to Mixed Singles.')
-  expect(sent[0]).toEqual({
-    path: '/boxes/1/cards/move',
-    body: { indices: [13, 14], to_box: 2, before_card: 2, section_end: null, layout_token: 'tok-2', aim: { count: 2, first: '1-13', last: '1-14' } },
-  })
-})
-
-test('one card drops at the end of a section, and the keyboard alone can do it', async ({ page }) => {
-  const sent = await stubCards(page)
-  await openShelf(page)
-  await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
-  await page.getByRole('button', { name: 'Some cards' }).click()
-  const u1 = page.getByRole('list', { name: 'The cards in this section' }).getByRole('button', { name: /u1/ })
-  await u1.focus()
-  await page.keyboard.press('Enter')
-  await page.getByRole('button', { name: 'Mixed Singles', exact: true }).press('Enter')
-  const gap = page.getByRole('button', { name: /Put u1 at the end of Promos, in Mixed Singles/ })
-  await gap.focus()
-  await page.keyboard.press('Enter')
-  await expect.poll(() => sent.length).toBe(1)
-  expect(sent[0]?.body).toMatchObject({ indices: [12], to_box: 2, before_card: null, section_end: 2, layout_token: 'tok-2' })
-})
-
-/* A drop onto sections that changed since the map was drawn (an S on the rig renumbers them):
-   the server refuses with `section_gone`, the map says so in one sentence and reads the boxes
-   again. */
-test('a drop onto sections that changed since the map was drawn is refused, and the map reads again', async ({ page }) => {
-  await stubCards(page)
+/* A box that changed since Edit layout was pressed (an S on the rig, another device's move):
+   the server refuses the WHOLE draft, and the map reads its boxes again. */
+test('a stale draft is refused whole, and the map reads again', async ({ page }) => {
   let reads = 0
   await page.route(/\/boxes(\?.*)?$/, (route) => {
     reads += 1
     return route.fulfill({ json: { boxes: BOXES, facets: { games: [], sets: {}, rarities: {} } } })
   })
-  const sentence = 'The sections of Mixed Singles changed since the map was drawn. The map shows them as they are now, so drop the cards again.'
-  await page.route(/\/boxes\/\d+\/cards\/move$/, (route) =>
-    route.fulfill({ status: 409, json: { error: { code: 'section_gone', message: sentence } } }),
+  const sentence = 'RB Origins changed since the map was drawn, so nothing was moved. The map shows it as it is now.'
+  await page.route(/\/boxes\/sections\/move-batch$/, (route) =>
+    route.fulfill({ status: 409, json: { error: { code: 'draft_stale', message: sentence } } }),
   )
   await page.goto(ROUTE)
   await settleFonts(page)
   await expect(page.locator('.shelf-box')).toHaveCount(3)
+  await page.getByRole('button', { name: 'Edit layout' }).click()
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
-  await page.getByRole('button', { name: 'Some cards' }).click()
-  await page.getByRole('list', { name: 'The cards in this section' }).getByRole('button', { name: /u1/ }).click()
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
+  await page.getByRole('button', { name: /Put Uncommons just on the far side of Promos/ }).click()
   const before = reads
-  await page.getByRole('button', { name: /Put u1 at the end of Promos, in Mixed Singles/ }).click()
+  await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(
-    page.getByText('That box changed since the map was drawn, so nothing moved. The map shows it as it is now.'),
+    page.getByText('A box changed since Edit layout was pressed, so nothing in the draft was applied. The map shows it as it is now.'),
   ).toBeVisible()
   await expect.poll(() => reads).toBeGreaterThan(before)
 })
