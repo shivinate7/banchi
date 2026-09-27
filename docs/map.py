@@ -7142,7 +7142,7 @@ COMPONENTS = [
             },
             "src/Graveyard.tsx": {
                 "does": "`#/graveyard` (D134, amended by the UX review's graveyard ruling, "
-                        "2026-09-23, verbatim \"Move Moved out of Graveyard\"): every card "
+                        "2026-09-26, verbatim \"Move Moved out of Graveyard\"): every card "
                         "that TRULY LEFT — sold or retired, never moved — newest departure "
                         "first. TWO SOURCES, ONE TABLE — a sold/retired record still "
                         "standing in a box nobody has deleted, the same records "
@@ -7332,7 +7332,7 @@ COMPONENTS = [
                                          "caller. `Row` also moved here; `BoxBrowse.tsx` "
                                          "re-exports it so `Inventory.tsx`'s own import keeps "
                                          "working. `movedFromFact` (the UX review's graveyard "
-                                         "ruling, 2026-09-23, \"Move Moved out of Graveyard\"): "
+                                         "ruling, 2026-09-26, \"Move Moved out of Graveyard\"): "
                                          "a moved card must still be findable from ITSELF, so "
                                          "`factGroupsOf`'s Provenance group grows one fact, "
                                          "\"Moved from\", off `card.moved_from` — the wire "
@@ -9506,6 +9506,26 @@ COMPONENTS = [
                         "that request. Neither can see the other's half. Like its siblings it "
                         "is NOT a harness test: it starts a browser, so it runs under "
                         "`make design-check` and is deliberately off the commit path.",
+            },
+            "tests/graveyard.spec.ts": {
+                "does": "`#/graveyard` and `#/inventory`'s \"Moved from\" fact, in a browser "
+                        "(D134, amended by the UX review's graveyard ruling, 2026-09-26, "
+                        "\"Move Moved out of Graveyard\"). The server-side filter that keeps "
+                        "a `moved` record off this route is Python and is proven by reading "
+                        "`do_graveyard`, not by this file; what this file proves is the "
+                        "CLIENT — given a graveyard answer shaped the way the amended route "
+                        "actually answers (sold and retired rows only, one buried), the "
+                        "screen draws exactly three filter tabs (never a fourth named Moved "
+                        "or a fifth named Buried), the counts on them are right, and a "
+                        "buried row's own tag reads \"Its box was deleted\" rather than "
+                        "typing the pipeline noun \"buried\" itself (D196). The second half, "
+                        "`CardHero.tsx:movedFromFact`, is asserted against a card moved in "
+                        "from a box that still stands (named) and one moved in from a box "
+                        "since deleted (\"another box\", `movedToName`'s own honest fallback, "
+                        "D259). Like its siblings it is NOT a harness test: it starts a "
+                        "browser, so it runs under `make design-check` and is deliberately "
+                        "off the commit path.",
+                "governed_by": ["D134", "D196", "D259"],
             },
             "tests/inventory-sets.spec.ts": {
                 "does": "THE OWNER'S \"BY SET\" VIEW (D-set-view), in a browser. The grouping "

@@ -685,7 +685,7 @@ export function departedCard(over: Partial<DepartedCard> = {}): DepartedCard {
 
 /** A few departed rows across the two doors D134 (amended) names — sold, retired — one
  *  standing and one buried each, so `#/graveyard` draws its merged list instead of "nothing
- *  has left this store yet". No `moved` row: D134's amendment (2026-09-23, the owner's
+ *  has left this store yet". No `moved` row: D134's amendment (2026-09-26, the owner's
  *  ruling "Move Moved out of Graveyard") means `GET /graveyard` never answers with one. */
 export function severalDeparted(): DepartedCard[] {
   return [

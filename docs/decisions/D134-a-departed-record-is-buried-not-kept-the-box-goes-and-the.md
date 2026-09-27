@@ -99,7 +99,7 @@ box therefore sits inert beneath a live one rather than being cleaned up — the
 D36's `refuse_reallocated` already treats as a hazard worth refusing a run over, not worth
 silently repairing.
 
-### Amendment, 2026-09-23: Move Moved out of Graveyard
+### Amendment, 2026-09-26: Move Moved out of Graveyard
 
 **The owner's report on the preview review, verbatim:** *"in graveyard, when i clikc moved
 or buried i see the same list."* Measured on a copy of the owner's real store: 1,358

@@ -17,7 +17,7 @@ import './Graveyard.css'
  * This screen is where that line is read back.
  *
  * ONLY A CARD THAT TRULY LEFT (D134, amended by the UX review's graveyard ruling,
- * 2026-09-23, verbatim: "Move Moved out of Graveyard"). A moved card is not a departure — it
+ * 2026-09-26, verbatim: "Move Moved out of Graveyard"). A moved card is not a departure — it
  * is alive in another box, exactly as sellable as it ever was — so `GET /graveyard` no
  * longer answers with one at all (`do_graveyard`'s own amendment). `#/inventory` is where a
  * moved card is found now, from the card ITSELF (`CardHero.tsx:movedFromFact`), not from a

@@ -34,7 +34,7 @@
                                            blocks the delete; it is buried instead)
     GET    /graveyard                      every card that truly left — sold or retired,
                                            still standing in a box or buried by a deleted
-                                           one (D134, amended: moved is not a departure)
+                                           one (D134, amended 2026-09-26: moved is not a departure)
     GET    /boxes/<box>/listings           what this box's SKUs are believed to be holding,
                                            and what a release would give up. FREE (D34)
     GET    /boxes/<box>/photos             what a reclaim would delete: sold cards whose
@@ -6478,7 +6478,7 @@ def do_delete_box(box: int) -> dict:
     carries, usually none). That line is what "a history log" means for a card leaving
     through a deleted box: it is no longer a row anywhere, it is not undoable, and its
     photograph goes with everything else in the box — but what it was, and how and when
-    it left, is not lost. `#/graveyard` reads these lines (D134, amended: it filters a
+    it left, is not lost. `#/graveyard` reads these lines (D134, amended 2026-09-26: it filters a
     `moved` one out — see `do_graveyard` — a moved card is alive elsewhere, not departed),
     merged with every sold/retired record still standing in a box nobody has deleted, so
     one screen answers both.
@@ -6694,7 +6694,7 @@ def _departed_row(
     line (D134) — the merge point `do_graveyard` exists to make, so the screen reads one
     kind of record rather than two.
 
-    NO `moved_to`. It was here for `how == 'moved'`, and D134's amendment (2026-09-23)
+    NO `moved_to`. It was here for `how == 'moved'`, and D134's amendment (2026-09-26)
     filters that state out before this function is ever called — see `do_graveyard`. A
     sold or retired record never carries one."""
     return {
@@ -6721,7 +6721,7 @@ def _departed_row(
 
 def do_graveyard() -> dict:
     """Every card that TRULY LEFT the store: sold or retired, newest departure first
-    (D134, amended by the UX review's graveyard ruling, 2026-09-23, verbatim: "Move Moved
+    (D134, amended by the UX review's graveyard ruling, 2026-09-26, verbatim: "Move Moved
     out of Graveyard").
 
     MOVED IS NOT A DEPARTURE. A moved record is a tombstone at its old key — the card
@@ -6763,7 +6763,7 @@ def do_graveyard() -> dict:
     inventory = snapshot.inventory
     ledger = snapshot.ledger
 
-    # D134 amended: MOVED is not a departure, so it is not one of the states this route
+    # D134 amended 2026-09-26: MOVED is not a departure, so it is not one of the states this route
     # reads — a moved card is alive elsewhere, and its own row (`#/inventory`) is where it
     # is found, not a tombstone here.
     _DEPARTED_STATES = tuple(s for s in master.TERMINAL_STATES if s != master.MOVED)
@@ -6802,7 +6802,7 @@ def do_graveyard() -> dict:
 
     for event in Store().buried():
         if event.get("state") == master.MOVED:
-            # D134 amended: a buried `moved` line is the tombstone of a card that is alive
+            # D134 amended 2026-09-26: a buried `moved` line is the tombstone of a card that is alive
             # in another box — filtered here the same way the in-box half is filtered
             # above, so a box's deletion cannot bring a moved record back into this list
             # through the one door the in-box filter does not also read.

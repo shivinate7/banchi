@@ -944,7 +944,7 @@ export type BoxDeleteResult = {
 }
 
 /** One row of `GET /graveyard` (D134, amended by the UX review's graveyard ruling,
- *  2026-09-23, verbatim: "Move Moved out of Graveyard"): a card that TRULY LEFT the store —
+ *  2026-09-26, verbatim: "Move Moved out of Graveyard"): a card that TRULY LEFT the store —
  *  sold or retired, never moved — whichever of the two doors it went through, drawn in one
  *  shape regardless of which. A moved card is alive in another box, so it is not one of
  *  these rows any more; `#/inventory`'s own card details say where it moved in from
