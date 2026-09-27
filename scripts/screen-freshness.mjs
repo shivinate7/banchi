@@ -286,6 +286,8 @@ const RECORDED = {
     'moveSections', 'undoSectionMove',        // D264, the box map's section move and its undo
     'moveRange',                              // D264, one card or a range, the next slice
     'closeSection',                           // UN-15, S's own undo
+    'moveSectionsBatch',                      // D264, the Map's edit-mode Confirm: a whole
+                                               // draft — sections and ranges — in one write
   ],
   // `previewReconcileBacklog` is the reconcile's press-nothing half and says so in its own
   // docstring — "FREE and WRITES NOTHING" — which is what earns a place on this list.
