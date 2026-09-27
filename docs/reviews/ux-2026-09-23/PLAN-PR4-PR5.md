@@ -93,6 +93,9 @@ Do a design pass first, and show the owner a mockup.
   holds the SKU.
 - The two low notes from the pricing review: the ranks 5-6 failed-read note, and the matrix
   `failed=None` check.
+- Lane B (branch `ux/pr4b-pricing-undo`, `d89839a9`) PASSED review on 2026-09-27 for the three items above.
+- Found by its reviewer, older than the lane: `do_pricing_restore` reads the corpus, then the clears, with no lock across
+  both. Two concurrent restores can lose an unrelated price edit. Fix it under the store lock, or record a DEBT.
 
 ### C. Send path (money, so an adversarial review)
 
