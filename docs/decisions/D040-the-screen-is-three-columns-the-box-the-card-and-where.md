@@ -49,6 +49,6 @@ What was missed while writing it is that the row's dead space is not in its firs
 
 **What would reopen this: a copies column wide enough for an 83px row.** That needs ~860px of container, which three columns cannot give at 1408px of body. If the owner ever works at a width where 45% exceeds 860 — a 1920px display puts it at 828, still short — the row improves on its own through the container query already there, with no change to this entry.
 
-**AMENDED 2026-09-26, ON THE OWNER'S WORD** (`docs/reviews/ux-2026-09-23/RULINGS.md`: "yeah i do"). The run line this section places is deleted, per D039's own amendment. The header holds only the box's identity strip and the Manage control now. The three-column layout, the copies column and the left-column measurements above are unaffected.
+**AMENDED 2026-09-26, ON THE OWNER'S WORD** (`docs/reviews/ux-2026-09-23/RULINGS.md`, verbatim: "Remove it"). The run line this section places is deleted, per D039's own amendment. The header holds only the box's identity strip and the Manage control now. The three-column layout, the copies column and the left-column measurements above are unaffected.
 
 ---
