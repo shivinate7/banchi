@@ -4486,7 +4486,19 @@ test('UX-244 — a stale section on Move re-opens the pick with one plain senten
      section list rather than a toast the owner has to reopen the whole flow to answer. */
   await expect(dialog).toBeVisible()
   await expect(dialog).toContainText('Read the box again and choose a section.')
-  await expect(dialog.getByRole('button', { name: 'Move', exact: true })).toBeDisabled()
+  const move = dialog.getByRole('button', { name: 'Move', exact: true })
+  await expect(move).toBeDisabled()
+
+  /* N1 — THE RE-PICK MUST ACTUALLY TAKE, AND STAY TAKEN. The sentence stays on screen (the
+   * owner has not cancelled), so a pick after the 409 is not itself a NEW refusal — it must
+   * not be wiped a beat after it lands, or the owner can never press Move again without
+   * Cancel-and-reopen. A bare post-click check can catch a MOMENTARY enabled state before
+   * an effect reverts it, so this waits out a full render pass first. */
+  await dialog.locator('.bn-section-pick-item').click()
+  await expect(move).toBeEnabled()
+  await page.waitForTimeout(300)
+  await expect(move).toBeEnabled()
+  await expect(dialog.locator('.bn-section-pick-item[aria-checked="true"]')).toHaveCount(1)
 })
 
 test('(a) — the one-card Move panel also reads the boxes again after a stale section, and Move never reads enabled with nothing checked', async ({
@@ -4748,7 +4760,14 @@ test('UN-14 — Move to box gets a real Undo, wired into the receipt like every 
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ moved: '2/1', to: '2/1', box: 2, index: 1, undone: true, card: { box: 2, index: 1 } }),
+        body: JSON.stringify({
+          moved: '2/1',
+          to: '2/1',
+          box: 2,
+          index: 1,
+          undone: true,
+          card: { box: 2, index: 1, place: { label: 'ME01 commons, Section 1, Card 1' } },
+        }),
       })
       return
     }
@@ -4780,7 +4799,11 @@ test('UN-14 — Move to box gets a real Undo, wired into the receipt like every 
   await expect(receiptToast(page)).toContainText('Moved to ME01 spares')
 
   await receiptUndo.click()
+  /* N2 — THE TOAST NAMES WHERE THE CARD CAME BACK TO, never repeating the destination it
+   * just left. The undo response's own place is the only thing that could say this right. */
   await expect(page.locator('.bn-toast-ok')).toContainText('Move undone')
+  await expect(page.locator('.bn-toast-ok')).toContainText('ME01 commons, Section 1, Card 1')
+  await expect(page.locator('.bn-toast-ok')).not.toContainText('ME01 spares')
   expect(sent.map((call) => call.body)).toEqual([
     { to_box: 7, section: '1', layout_token: 'tok-7-a' },
     { undo: true },

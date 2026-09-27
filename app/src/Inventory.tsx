@@ -589,10 +589,18 @@ function InventoryWalk({
     async (receipt: Receipt) => {
       if (busyKey !== null) return
       setBusyKey(receipt.key)
+      /* N2 — THE TOAST NAMES WHERE THE CARD LANDED BACK, NEVER WHERE IT HAD GONE.
+       * `receipt.place` is the destination `doMove` recorded when it moved OUT — reusing it
+       * here would say "Moved to ME01 spares" a second time about a press that undid exactly
+       * that. Only the move undo's own response carries the restored place. */
+      let restoredPlace: string | null = null
       try {
         if (receipt.kind === 'sale') await undoSale(receipt.box, receipt.index)
         else if (receipt.kind === 'retirement') await undoRetire(receipt.box, receipt.index)
-        else await undoMove(receipt.box, receipt.index)
+        else {
+          const result = await undoMove(receipt.box, receipt.index)
+          restoredPlace = result.card.place?.label ?? null
+        }
       } catch (err) {
         /* `not_sold` / `not_retired` / `not_moved` is success — the copy is not in the state
          * the press asked to leave. Anything else — including a move's `move_built_on` once
@@ -621,7 +629,7 @@ function InventoryWalk({
         kind: 'ok',
         icon: 'undo',
         title: receipt.kind === 'sale' ? 'Sale undone' : receipt.kind === 'retirement' ? 'Retirement undone' : 'Move undone',
-        body: receipt.place,
+        body: receipt.kind === 'move' ? sayPlace(restoredPlace ?? receipt.place) : receipt.place,
         ttlMs: 4000,
       })
       setReloads((n) => n + 1)
@@ -1179,12 +1187,20 @@ function MovePanel({
    * checked while the state is still non-null. Move must read as disabled exactly when
    * nothing is visibly checked, and never without the token the write now requires. */
   const sectionStillThere = pickedSection !== null && layoutToken !== null
-  /* A stale-section refusal, or the section it named no longer existing, clears the pick —
-   * the box stays chosen, the section does not, so the press cannot retry the same dead key
-   * and cannot go on reading as enabled with nothing checked. */
+  /* N1 — A STALE-SECTION REFUSAL CLEARS THE PICK ONCE, ON ITS OWN ARRIVAL, NEVER ON EVERY
+   * RENDER WHILE ITS SENTENCE STAYS ON SCREEN. `refusedDetail` is a fresh object each real
+   * failure (`describeFailure(err)`), so this fires exactly once per refusal — keying it on
+   * `refused` (a plain string the owner's own next pick never changes) kept re-firing on
+   * the SAME dependency value and wiping every re-pick the instant it landed, because the
+   * OR below never itself went false while the sentence stood. */
   useEffect(() => {
-    if (refused !== null || !sectionStillThere) setSection((held) => (held === null ? held : null))
-  }, [refused, sectionStillThere])
+    if (refusedDetail !== null) setSection((held) => (held === null ? held : null))
+  }, [refusedDetail])
+  /* (a) THE SECOND, INDEPENDENT NET: a pick can also go stale with no refusal at all, from
+   * an ambient `boxes` refresh while the dialog sat open (another device's S or U). */
+  useEffect(() => {
+    if (!sectionStillThere) setSection((held) => (held === null ? held : null))
+  }, [sectionStillThere])
   return (
     <Overlay kind="dialog" label={`Move: ${sayPlace(copy.place.label ?? copy.key)}`} onClose={onCancel} className="inventory-confirm">
       <div className="inv-dialog-head">
