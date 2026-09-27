@@ -665,14 +665,17 @@ test('the drawer has no fixed foot, and every screen in it shows without a scrol
    store, where `rows.length === 0` renders "Nothing has left yet" and never the filter row at
    all — so a defect in that row was invisible to every route-level sweep in this file. Five
    filter options (All/Sold/Retired/Moved/Buried, each with a count) sized to their own content
-   inside a flex column bled the whole PAGE 72px wider than the viewport at 390px, with
+   inside a flex column once bled the whole PAGE 72px wider than the viewport at 390px, with
    "Buried" clipped at the very edge and no cue a fifth filter existed. D134's amendment
    (2026-09-26) dropped Moved and Buried to three tabs (All/Sold/Retired) — Moved is not a
-   departure, and Buried was a fact about the box rather than a way a card left — but the
-   overflow this case guards can still recur at a phone width with real content, so the seed
-   and the assertion below stay. This seeds a real, populated graveyard the way
-   `copy-budget.spec.ts` does, to put the row on screen at all. */
-test('graveyard filter row scrolls sideways rather than bleeding the page at 390', async ({ page }) => {
+   departure, and Buried was a fact about the box rather than a way a card left. THREE TABS FIT
+   AT 390 WITHOUT OVERFLOWING AT ALL (measured, not assumed): the owner's call, once the CI run
+   this branch shipped found the row no longer overflows, was to stop forcing that scenario —
+   what this case must hold is that the row NEVER bleeds the page, whether it happens to fit or
+   to scroll. This still seeds a real, populated graveyard the way `copy-budget.spec.ts` does,
+   to put the row on screen at all — a future filter set wider than three tabs is exactly what
+   this case is still here to catch. */
+test('graveyard filter row never bleeds the page at 390, whether it fits or scrolls', async ({ page }) => {
   await page.setViewportSize(PHONE)
   await seedPopulatedGraveyard(page)
   /* A template literal, not a quoted literal: this is one route this case is about, not a
@@ -697,9 +700,11 @@ test('graveyard filter row scrolls sideways rather than bleeding the page at 390
     el.clientWidth,
     getComputedStyle(el).overflowX,
   ])
-  /* Five options with counts do not fit at 390 — this is real, internal overflow, not a
-     rendering fault — so what matters is that the row itself absorbs it with a scroller
-     rather than pushing the page. */
-  expect(scrollW, 'the filter row fits at 390 without overflowing at all — nothing to scroll').toBeGreaterThan(clientW)
-  expect(overflowX, 'the filter row overflows but is not a scroll region').toBe('auto')
+  /* NEVER A FORCED OVERFLOW: the row may fit its container outright (three tabs at 390,
+     measured) or overflow it — either is fine. What is never fine is the row pushing the
+     PAGE sideways instead of absorbing its own overflow, so a row that DOES overflow must be
+     a real scroller, never a rendering fault. */
+  if (scrollW > clientW) {
+    expect(overflowX, 'the filter row overflows but is not a scroll region').toBe('auto')
+  }
 })
