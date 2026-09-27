@@ -20,17 +20,20 @@ carries are quoted in backticks.
 - **Order:** PR 4A, then PR 4B, then the post-PR 4 checks, then PR 5. PR 4A and PR 4B merge
   independently.
 
-## PR 3B: the demo data follow-up (in flight)
+## PR 3B: the demo data follow-up (waits for PR 4A)
 
 - The full-store mirror build runs detached in worktree
-  `.claude/worktrees/agent-a184b2e3f6b4fe201`. It survives a session restart.
-- The first detached run hung. The cause was an unread server output pipe that filled, so
-  every server thread blocked on a write. Commit `36d2f796` on `ux/demo-mirror-data-build`
-  fixes it. The recorder now drains the pipe, and a failed request stops the build loudly.
-  A new recorder self-test on that branch proves both. This fix needs its one review before it
-  merges.
-- The build is done when `demo-mirror-build.exit` exists at that worktree's root. The log is
-  `demo-mirror-build.log` beside it.
+  `.claude/worktrees/agent-a184b2e3f6b4fe201`, branch `ux/demo-mirror-data-build`.
+- Run 1 hung on an unread server output pipe. Commit `36d2f796` fixes it, with a self-test:
+  the recorder drains the pipe, and a failed request stops the build loudly. This fix needs
+  its one review before it merges.
+- Run 2 failed loudly on 2026-09-27. The snapshot, the scrub and the photos passed: 3,510
+  photos, 94.7 MB, 0 refused for a QR. One price-trends request for about 400 SKUs timed out.
+  The likely cause, not yet proved, is the archive's per-SKU full scan. Lane N1 in PR 4A fixes
+  that scan (10.8s to 72ms for 300 SKUs).
+- After PR 4A merges: rebase the build branch on main, then run `make demo-mirror-rebuild`.
+  It reuses the snapshot and does not read the store again. The build is done when
+  `demo-mirror-build.exit` exists at that worktree's root.
 - Then:
   1. Check the scrub. Every buyer matches `^Jane Doe \d+$`, and every address is `123 Demo Way`.
   2. Check that the photos total 512 MB or less.
@@ -66,44 +69,47 @@ Owner, 2026-09-27: `the few  changes i pullled forward from PR4B btw  that were 
 Then: merge every lane into `ux/pr4a-integration` off main, with tsc per merge. Run one
 `make check`, open the PR, wait for green CI, and merge.
 
-## PR 4B lanes
+## PR 4B lanes (rewritten 2026-09-27)
 
-### A. Orders: the walk becomes Inventory's screen (the biggest lane)
+Lanes B and F2 moved into PR 4A. This is what PR 4B still holds. The lanes are independent,
+except where a line says otherwise.
 
-D220 (Orders is Inventory's screen, and the walk is a mode of it) governs. The built screen
-drifted from it. The owner's final direction:
+| Lane | What | Starts |
+|---|---|---|
+| E | The Orders jump, unpinned | Now |
+| B2 | The restore lost-update race | Now |
+| C | The send path (money) | Now |
+| D | Leftover screens and the lock glyph | Now |
+| M | Demo mirror resumability | Now |
+| G | Records and tooling | Now |
+| A | Orders becomes Inventory's screen | After a mockup the owner approves |
+| H | Cyberpunk dark mode | Last, as the epilogue |
 
-1. Inventory's left rail becomes the Orders buyer list, with checkboxes and "Walk all N buyers".
-2. The walk list keeps its style: grouped by section in the solver's order, with "Pick N of M".
-   Sort by box NAME, then section. Today `walkplan.Stop.walk_order` sorts by the hidden box
-   number, so "WB1 R3" can come before "WB1 R1". D259 (a box is shown only by its name)
-   governs.
-3. Every pick row carries Inventory's location detail. That detail is the box, section and
-   card, the section strip, the back-to-front ruler, and the neighbor names. Mark sold works
-   on the row. Reuse Inventory's own components. Never fork them.
-4. A click on a row fills the right pane with the photo and the card facts. Below them goes
-   EVERY on-hand copy, in Inventory's copies list, with the walk's chosen copy first. D212
-   (every copy is fungible) governs.
-5. The sold-row jump is its own lane, E, below. Lane A must not undo that fix.
-6. On a phone, the buyer shows before the photo.
+### E. The Orders jump, unpinned
 
-Do a design pass first, and show the owner a mockup.
+Owner, 2026-09-27: `save it in the markdown as an item for PR4B, ironically rpelcaing the current E you have in there since we solved that now`.
 
-### B. Pricing and undo follow-ups
+- The defect: in an Orders walk, Mark sold hides the row at once under `hideSold`. The page
+  shrinks, and the view jumps about 48px. `OrdersWalkPane.tsx` does this, on main since
+  `fc58ca3f`. D118 (a press never moves the rest of the screen) forbids it.
+- PR 3 made CI green with a bandaid. A `scrollTo` pin in `app/tests/orders.spec.ts` UN-6 hides
+  the jump from the test. The test no longer guards the real behavior.
+- The fix: a sold walk row stays in place until the next load, as D263 (a sold row folds on
+  the next load) already rules for Inventory. Remove the pin. Prove UN-6 red on the old
+  behavior, then green. Add a DEBT for the jump first, and close it in the same lane.
 
-- `pipeline_routes.do_pricing_restore`: `kept[ids.index(...)]` raises `ValueError` when a
-  concurrent request drops the clear.
-- The restore skip toast says "answered again since". The text is wrong when a newer clear
-  holds the SKU.
-- The two low notes from the pricing review: the ranks 5-6 failed-read note, and the matrix
-  `failed=None` check.
-- Lane B (branch `ux/pr4b-pricing-undo`, `d89839a9`) PASSED review on 2026-09-27 for the three items above.
-- Found by its reviewer, older than the lane: `do_pricing_restore` reads the corpus, then the clears, with no lock across
-  both. Two concurrent restores can lose an unrelated price edit. Fix it under the store lock, or record a DEBT.
+### B2. The restore lost-update race
 
-### C. Send path (money, so an adversarial review)
+- Found by lane B's reviewer, older than lane B. `do_pricing_restore` reads the corpus, then
+  the clears, with no lock across both. Two concurrent restores can lose an unrelated price
+  edit.
+- Fix it under the store lock, with a harness case that forces the interleaving. If the fix is
+  larger than it looks, record a DEBT and ask the owner.
 
-- The `--cap` plus `--live-guard` defect.
+### C. The send path (money, so an adversarial review)
+
+- The `--cap` plus `--live-guard` defect. The owner's ruling (2026-09-25) is in `RULINGS.md`:
+  the cap counts the larger of the guard's live count and the store's own count.
 - The DEBT35 exit split for `emit`.
 
 ### D. Leftover screens
@@ -121,28 +127,6 @@ Owner: `is there anyway u can have it chunking so that way it's not starting fro
   already recorded.
 - The build log already moved out of `demo-mirror/` in PR 3B.
 
-### E. The Orders jump, unpinned (replaces the search item, which is done)
-
-Owner, 2026-09-27: `save it in the markdown as an item for PR4B, ironically rpelcaing the current E you have in there since we solved that now`.
-
-- The defect: in an Orders walk, Mark sold hides the row at once under `hideSold`. The page
-  shrinks, and the view jumps about 48px. `OrdersWalkPane.tsx` does this, on main since
-  `fc58ca3f`. D118 (a press never moves the rest of the screen) forbids it.
-- PR 3 made CI green with a bandaid. A `scrollTo` pin in `app/tests/orders.spec.ts` UN-6 hides
-  the jump from the test. The test no longer guards the real behavior.
-- The fix: a sold walk row stays in place until the next load, as D263 (a sold row folds on
-  the next load) already rules for Inventory. Remove the pin. Prove UN-6 red on the old
-  behavior, then green. Add a DEBT for the jump first, and close it in the same lane.
-
-### F2. The spacing gap in the real join (in flight)
-
-- Measured on a store copy, 2026-09-27: 2 of 3,510 cards carry a space in their number. The
-  real risk is the 155 Riftbound Token SKUs whose printed number has an interior space.
-- The owner chose `Fold in the shared key (Recommended)`. `join.number_index_key` drops all
-  whitespace, for every caller. Branch `ux/pr4b-join-spacing`.
-- After PR 4A merges, remove Lane F's `_lookup_key` wrapper in `pipeline/stockimages.py`,
-  because it becomes redundant.
-
 ### G. Records and tooling
 
 - `claim-selftest` reads gitignored demo build output. So a lane that built the demo goes red.
@@ -151,6 +135,29 @@ Owner, 2026-09-27: `save it in the markdown as an item for PR4B, ironically rpel
   none. D173 (a rule that can be enforced mechanically is enforced) governs.
 - Sync the orchestrator's scratch rulings into `RULINGS.md` in this folder.
 - Add the `STATE.md` deferred items.
+- A lane F2 builder reported one T7 failure at baseline, "Home can be read for every matrix
+  case". Confirm whether main is red there. If it is, fix it or record a DEBT.
+
+### A. Orders: the walk becomes Inventory's screen (the biggest lane)
+
+D220 (Orders is Inventory's screen, and the walk is a mode of it) governs. The built screen
+drifted from it. The owner's final direction:
+
+1. Inventory's left rail becomes the Orders buyer list, with checkboxes and "Walk all N buyers".
+2. The walk list keeps its style: grouped by section in the solver's order, with "Pick N of M".
+   Sort by box NAME, then section. Today `walkplan.Stop.walk_order` sorts by the hidden box
+   number, so "WB1 R3" can come before "WB1 R1". D259 (a box is shown only by its name)
+   governs.
+3. Every pick row carries Inventory's location detail. That detail is the box, section and
+   card, the section strip, the back-to-front ruler, and the neighbor names. Mark sold works
+   on the row. Reuse Inventory's own components. Never fork them.
+4. A click on a row fills the right pane with the photo and the card facts. Below them goes
+   EVERY on-hand copy, in Inventory's copies list, with the walk's chosen copy first. D212
+   (every copy is fungible) governs.
+5. Lane E fixes the sold-row jump. Lane A must not undo that fix.
+6. On a phone, the buyer shows before the photo.
+
+Do a design pass first, and show the owner a mockup.
 
 ### H. Epilogue: cyberpunk dark mode
 
