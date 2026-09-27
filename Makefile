@@ -1921,6 +1921,14 @@ typecheck:
 # no `.git`, or a clone with no `origin`. It is the current name, so it is right until the
 # next rename and wrong in exactly the way this comment describes — override it there.
 DEMO_HOME ?= demo
+# Extra flags for `scripts/demo-record.py`, past what `demo-record` already passes. Empty by
+# default (an ordinary `make demo` keeps its real network — the same "best effort" reads
+# every other price-history route already makes, D216). `make demo-determinism` sets this to
+# `--offline`, the SAME flag `demo-mirror.py:record` already runs the real mirror's own
+# recorder with (D295) — see its own comment for why: two recordings of a server with a
+# live-network stock-image warmer race each other (D301), which the real mirror build never
+# hits because it is already offline and this check was not.
+DEMO_RECORD_ARGS ?=
 DEMO_REPO := $(shell n=$$(basename -s .git "$$(git config --get remote.origin.url 2>/dev/null)" 2>/dev/null); [ -n "$$n" ] && echo "$$n" || echo banchi)
 DEMO_BASE ?= /$(DEMO_REPO)/
 
@@ -2000,7 +2008,7 @@ demo-seed:
 # chain through `demo` to `demo-seed` carries it, and a bare `make demo-seed` never does.
 demo-record: export PKMNSCAN_DEMO_EXTRA_REAL := 1
 demo-record:
-	@PKMNSCAN_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-record.py
+	@PKMNSCAN_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-record.py $(DEMO_RECORD_ARGS)
 
 # The bundle without the build — what to run after changing a wire shape, so `git status`
 # shows the recording moving with the contract it was recorded against.
