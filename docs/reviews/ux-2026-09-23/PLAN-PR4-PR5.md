@@ -7,15 +7,12 @@ carries are quoted in backticks.
 ## How to resume
 
 - The orchestrator plans, briefs, verifies and merges. It never builds product code.
-- **Model cap (owner, 2026-09-26):** `going forward no subagent is allowed to be above sonnet in this session`.
-- **Merge grant:** it is session-bound. A new session asks the owner for it again.
-- **Autonomous run (owner, 2026-09-27, process-only, this session):** after PR 4A merges on
-  green, the session does the PR 3B demo work alone, then stops. Grants for that run:
-  - Merge PR 3B on green, once the scrub check, the 512 MB cap and a leak check pass.
-  - A product question from a review or CI: take the orchestrator's recommendation. Owner:
-    `your recommendation is fine, note it explicitly at the end of your FINAL autonomous turn of this session`.
-  - A CI red on a test that a recorded owner ruling clearly supersedes: a builder may rewrite
-    it. The commit names the ruling, and a reviewer confirms no guard got weaker.
+- **Session grants lapse with their session.** The 2026-09-26 model cap (`no subagent ... above
+  sonnet in this session`), the merge grant, and the 2026-09-27 autonomous-run grants all
+  ended with that session. The run finished: PR 3B merged (#467 to #477). A new session asks
+  the owner again for the merge grant and the model cap.
+- **Integration branch (2026-09-27, second session):** `ux/pr4b`. Each lane branches from it
+  and merges back into it. PR 4B is one PR from it.
 - **Cadence (owner, 2026-09-26):**
   - Each lane gets one review. A re-review happens only after a FAIL.
   - A reviewer never re-runs a suite that the builder ran green at the same head.
