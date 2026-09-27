@@ -409,7 +409,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
       const before = gap === 'end' ? null : Number(gap.slice(2))
       queue({ kind: 'section', box: source.box, first: range.first, last: range.last, toBox: dest, before })
     },
-    [source, range, dest, cardMode, chosen, destCards, lifted, queue],
+    [source, range, dest, cardMode, chosen, destCards, lifted, dirtied, queue],
   )
 
   /* Esc puts the section down, and yields to typing. */

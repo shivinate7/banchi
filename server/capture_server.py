@@ -6098,7 +6098,7 @@ def do_move_sections_batch(payload: dict) -> dict:
             created=None, moved=moved_total, undo=undo, after=after, touched=sorted(touched),
         )
         heading = (
-            f"1 change to make." if len(moves) == 1 else f"{len(moves)} changes to make."
+            "1 change to make." if len(moves) == 1 else f"{len(moves)} changes to make."
         )
         rows = [_box_row(inventory, n) for n in sorted(touched) if inventory.box(n) is not None]
         return {
