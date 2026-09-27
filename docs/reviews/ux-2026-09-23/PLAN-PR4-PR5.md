@@ -127,12 +127,14 @@ Owner, 2026-09-27: `save it in the markdown as an item for PR4B, ironically rpel
   the next load) already rules for Inventory. Remove the pin. Prove UN-6 red on the old
   behavior, then green. Add a DEBT for the jump first, and close it in the same lane.
 
-### F2. The spacing gap in the real join
+### F2. The spacing gap in the real join (in flight)
 
-- `join.number_index_key` keeps a space verbatim, by design. So a stored number like
-  `019 / 166` can also miss in the pricing and identity join. Lane F fixed only the stock
-  images.
-- Measure it first on a store copy. Then ask the owner before anyone changes the shared key.
+- Measured on a store copy, 2026-09-27: 2 of 3,510 cards carry a space in their number. The
+  real risk is the 155 Riftbound Token SKUs whose printed number has an interior space.
+- The owner chose `Fold in the shared key (Recommended)`. `join.number_index_key` drops all
+  whitespace, for every caller. Branch `ux/pr4b-join-spacing`.
+- After PR 4A merges, remove Lane F's `_lookup_key` wrapper in `pipeline/stockimages.py`,
+  because it becomes redundant.
 
 ### G. Records and tooling
 
