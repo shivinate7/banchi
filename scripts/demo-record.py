@@ -569,40 +569,57 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
     for key in orders:
         take_post("/orders/picks", {"keys": [key]})
 
-    # ONLY AN OPEN ORDER CAN BE TICKED. Every caller of `walkPlan` sends open keys alone:
-    # `Fulfillment.tsx` filters `order.open`, and `Orders.tsx` walks `walkableKeysAll`. So a set
-    # that holds a closed order is a question no screen asks. Counted, a mirror of the owner's
-    # whole ledger (834 orders, 2026-09-26) could never be recorded.
+    # TWO SCREENS TICK TWO DIFFERENT "WALK ALL" SETS, NOT ONE. `Fulfillment.tsx` sends
+    # `order.open` alone. `Orders.tsx` sends `walkableKeysAll`, built from `ownsAWalkableBody`
+    # (`app/src/Orders.tsx:840`) — `open` OR (`terminal` and still owed a copy). A prior version
+    # of this comment claimed the two callers "are both exactly this same open-order list."
+    # Measured on the real mirror, 2026-09-27: 71 open orders against 305 walkable ones — 234
+    # terminal-but-owing orders `Orders.tsx` ticks that `Fulfillment.tsx` never does. Recording
+    # only the open set left every "Walk all N buyers" press on `#/orders` asking for a 305-key
+    # set nothing had recorded, so `demoServer.ts:walkPlan` refused it every time (the
+    # `walk.failure !== null` defect). Both sets are now recorded, by name.
     listed = (recorded.get("/orders", {}).get("body") or {}).get("orders") or []
-    orders = sorted(
+
+    def owns_a_walkable_body(entry: dict) -> bool:
+        if entry.get("open"):
+            return True
+        return bool(entry.get("terminal")) and (entry.get("wanted") or 0) > (entry.get("recorded") or 0)
+
+    open_orders = sorted(
         str(entry["key"]) for entry in listed
         if isinstance(entry, dict) and entry.get("open") and entry.get("key")
     )
+    walkable_orders = sorted(
+        str(entry["key"]) for entry in listed
+        if isinstance(entry, dict) and entry.get("key") and owns_a_walkable_body(entry)
+    )
 
-    record_walk_plans(orders, take_post)
+    record_walk_plans(open_orders, walkable_orders, take_post)
 
 
-def record_walk_plans(orders: Sequence[str], take_post) -> None:
-    """The walk-plan subject list: every SINGLE open order, plus the one full "walk all" set.
+def record_walk_plans(open_orders: Sequence[str], walkable_orders: Sequence[str], take_post) -> None:
+    """The walk-plan subject list: every SINGLE walkable order, plus each screen's own
+    full "walk all" set.
 
     THE WALK PLAN DOES NOT MERGE — it is a solver over the whole ticked set, so a RECORDED
     SET must be exactly the set a screen sends, never a merge of smaller ones. THE FULL
     POWERSET WAS THE BUG (the orchestrator's ruling, 2026-09-27): 2^n plans fits a 60-card
     sample and NEVER a real store — measured, 71 open orders is 2^71 sets, not 2^7. Recorded
-    instead: every SINGLE order (the finest grain a screen ever ticks alone) plus the one
-    largest set every screen actually asks for whole — `Orders.tsx`'s `walkableKeysAll` and
-    `Fulfillment.tsx`'s `openKeys` are both exactly this same open-order list, so one
-    recording answers both callers' "walk all" case. `demoServer.ts:walkPlan` already
-    refuses ANY OTHER ticked combination with the demo's one honest notice (D269/TXT-46)
-    rather than fabricate a plan for it — a partial selection (some, not all, not one) is
-    the one gap this recording leaves on purpose, named rather than hidden. LINEAR IN THE
-    ORDER COUNT, unlike the powerset it replaces: `n + 1` recordings for `n` open orders,
-    whatever `n` is.
+    instead: every SINGLE walkable order (the finest grain a screen ever ticks alone — a
+    superset of `open_orders`, so one loop covers both callers' singles) plus the two distinct
+    "walk all" sets `Fulfillment.tsx` and `Orders.tsx` actually send (see the caller's own
+    comment for why they differ). `demoServer.ts:walkPlan` already refuses ANY OTHER ticked
+    combination with the demo's one honest notice (D269/TXT-46) rather than fabricate a plan
+    for it — a partial selection (some, not all, not one) is the one gap this recording leaves
+    on purpose, named rather than hidden. LINEAR IN THE ORDER COUNT, unlike the powerset it
+    replaces: `n + 2` recordings for `n` walkable orders, whatever `n` is.
     """
-    for key in orders:
+    for key in walkable_orders:
         take_post("/orders/walk-plan", {"keys": [key]})
-    if orders:
-        take_post("/orders/walk-plan", {"keys": list(orders)})
+    if open_orders:
+        take_post("/orders/walk-plan", {"keys": list(open_orders)})
+    if walkable_orders and list(walkable_orders) != list(open_orders):
+        take_post("/orders/walk-plan", {"keys": list(walkable_orders)})
 
 
 HISTORIES_ROOT = REPO_ROOT / "fixtures" / "demo-price-history"
