@@ -324,7 +324,7 @@ a.home-deck { pointer-events: auto; }
 .home-box-name, .home-run-box { font-weight: 600; font-size: var(--bn-fs-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* D218: the box's number and its name are sibling spans; the seam is CSS. */
 .home-run-box > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-3); }
-.home-box-meta, .home-run-name { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-box-meta { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* D218: on hand, sold and sealed are sibling spans; the seam is CSS. */
 .home-box-meta > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
 .home-box-bar { width: 96px; height: 6px; border-radius: 3px; background: var(--bn-surface-2); overflow: hidden; flex: none; }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Icon } from './kit'
+import { Icon, IconButton } from './kit'
 import './Runs.css'
 
 /* A COMMAND'S STDOUT, VERBATIM, in a well: a mono log that follows its tail, counts its
@@ -49,9 +49,10 @@ export function LogWell({
             {lines} line{lines === 1 ? '' : 's'}
           </span>
         </button>
-        <Button size="sm" variant="ghost" icon={copied ? 'check' : 'copy'} onClick={() => void copy()}>
-          {copied ? 'Copied' : 'Copy'}
-        </Button>
+        <IconButton size="sm" icon={copied ? 'check' : 'copy'} label="Copy" name={`Copy ${label.toLowerCase()}`} onClick={() => void copy()} />
+        <span className="bn-sr" role="status">
+          {copied ? 'Copied' : ''}
+        </span>
       </div>
       {open ? (
         <pre

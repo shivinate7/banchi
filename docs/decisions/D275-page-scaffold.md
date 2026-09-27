@@ -17,6 +17,69 @@
 
 **The Fulfiller's screen has a named exemption, not an allow entry.** An allow entry is a debt that a lane must pay. An exemption is a ruling that an assertion does not apply. D5 gives the Fulfiller a screen with no shell and no brand, and `docs/DESIGN.md` sets its own floors. So a `persona: 'fulfiller'` route is exempt from `width`, `top` and `title`. It is still held to `page`, `h1` and `scroll`. The exemption is `EXEMPT` in the spec, with each reason beside it. The spec refuses an allow entry for an exempt assertion.
 
+**AMENDED 2026-09-25: Home's h1 stays the greeting, and the Fulfiller's screen gets a `Page` variant instead of an allow entry.**
+
+*Home's h1.* Home's hero draws the greeting ("Good morning.") as its h1. The route's own title
+is "Home". So `scaffold.spec.ts`'s text match failed at every width, and the allow list carried
+an entry for it (lane `home`). The follow-up lane after PR 2 raised the question. It named D121,
+the hero's own greeting, as the reason a quick fix was not safe. The owner's ruling, 2026-09-25:
+"yeah just keep the greeting". The lane also proposed a hidden "Home" h1 beside the visible
+greeting. That option was declined in the same round. The document title already reads "番地
+home". No screen reader here depends on a second, unseen h1.
+
+The text match is now a named exemption. It is `H1_TEXT_EXEMPT` in `app/tests/scaffold.spec.ts`,
+keyed by route path, not by persona. Home still draws exactly one visible h1, the same rule
+every route holds to. Only the comparison against `title ?? label` is skipped for Home.
+`h1Failure`, the pure judge behind the assertion, carries its own unit test. It checks a
+non-Home mismatch, an empty h1, and a doubled h1. Each stays red, so the exemption cannot widen
+to cover a defect on another screen.
+
+The allow list's `"/" -> "h1"` entry is deleted. It is no longer a debt: the assertion no longer
+expects Home's h1 to equal its title. The `"/" -> "top"` entry is a separate question and stays.
+The hero pushes the h1 well past `--bn-page-top`, and the owner has not ruled on the hero's own
+layout.
+
+*The Fulfiller's screen.* `#/fulfillment` carried three allow entries. `R1`: it rendered its own
+`<main>`, never `<Page>`. `R2-class`: it wrote the kit-reserved `bn-empty-art`/`bn-empty-well`
+class names raw. The 2026-09-20 system review had promoted those two classes out of this same
+screen. `page`: no `[data-bn-page]` reached the browser at all.
+
+The ruling keeps the screen's own header and its own h1. D5 gives it no shell, so a second h1
+inside `Page`'s own header would be a duplicate. The ruling exempts the screen from the kit's
+page width and top gap, which `EXEMPT` already covered for it.
+
+`Page` gained two props for this. `header={false}` skips `Page`'s own `<header>`, so the
+screen's own header and h1 in `children` are the only ones drawn. `width={false}` skips the
+kit's width, top gap and enter animation. It sets `data-bn-page-width="auto"`, read by a new
+rule in `kit.css`. The enter animation moves by `transform`. This screen's sheet and zoomed
+photo are `position: fixed` children of the page element. A transformed ancestor would break
+their reach past the page. `Page` still renders `data-bn-page=""` either way, so the `page`
+assertion holds.
+
+Fulfillment's two reserved-class usages became local `ff-empty-art`/`ff-empty-well` classes,
+with the same CSS declarations. A screen outside the kit may not write a kit-reserved name
+(R2-class). D5's whole point is that this screen owns its own chrome. Un-sharing these two
+classes back into `Fulfillment.css` follows that ruling, rather than working around it.
+
+The `R1`, `R2-class` and `page` entries are deleted from `scripts/kit-adoption-allow.json`, in
+the same commit as the fix. That is D275's own rule.
+
+*Capture's top gap.* `#/capture` also carried a `top` entry. The screen keeps its own page pad
+smaller than the kit's, so the viewfinder stays above the fold. A layout exists that keeps
+both. `.capture.bn-page`'s padding-top moved from a flat 12px to `var(--bn-page-top)`. That
+token is 24px on a desktop window and 16px on a phone, the same drop `tokens.css` already gives
+every other screen below 768px.
+
+Two places tracked the old flat value, and both moved with it. `--cap-chrome`, the calc() this
+screen's own desktop stage height reads, had `var(--bn-3)` as its first term. It now reads
+`var(--bn-page-top)`. The fold math this screen already carries for `--cap-head-h` stays exact.
+The phone layout's own `.capture-stage` height is a separate, hand-measured `clamp()` budget,
+built from real DOM rects rather than a formula. Its two constants (366px, 218px) moved by the
+same 4px the phone pad grew by. This was confirmed against the real DOM at 390x754, 390x667,
+390x844, 720x900 and 820x1180. No width in that set overflows the fold, and the shutter stays
+clear of the fixed tab bar in each. The `top` entry is deleted from
+`scripts/kit-adoption-allow.json`.
+
 **What neither check can see.** A class name, role or type that reaches JSX through a variable. A view that picks its component at run time (`const V = a ? A : B`). A view that renders `<Page>` on one branch and something else on another. R1 asks only whether the view reaches `<Page>`. The spec measures only the state that its fixtures build.
 
 **Where they run.** Both write nothing (D18). The self-test builds its fixtures as in-memory maps. It also reads the repository: one case runs `git merge-base` and `git show` to read the committed list and rules at HEAD. Those reads write nothing. `kit-adoption` and `kit-adoption-selftest` are in `make check` and `make ci-check`, not the git hook, because they need `app/node_modules`. Neither is on the `guard-scope.py` roster. D247 says that a new guard self-test is not scoped until someone adds it by hand. It also says that which targets to gate is a product judgement. This self-test takes under a second, so there is no reason to gate it.

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'
+import { iconTip } from './iconTooltip'
 
 declare global {
   interface Window {
@@ -100,7 +101,7 @@ test('the 40px hit area extends past the visual face, and clicking the extension
 test('the tooltip shows on hover and on keyboard focus, and hides after a mouse click', async ({ page }) => {
   const section = page.locator('[data-kit-section="icon-button"]')
   const btn = section.getByRole('button', { name: 'Retire' })
-  const tip = btn.locator('.bn-icon-tip')
+  const tip = await iconTip(btn)
   await expect(tip).toHaveCSS('opacity', '0')
   await btn.hover()
   await expect(tip).toHaveCSS('opacity', '1')
@@ -115,16 +116,17 @@ test('showing the tooltip moves nothing else on the page (D118)', async ({ page 
   const section = page.locator('[data-kit-section="icon-button"]')
   const btn = section.getByRole('button', { name: 'Retire' })
   await btn.scrollIntoViewIfNeeded()
+  /* The tip is portalled to `<body>` (round 3), so `section.querySelectorAll('*')` never
+   * finds it — no filter is needed to keep it out of this "moved" comparison, unlike round 2's
+   * DOM-child shape. */
   const before = await section.evaluate((el) =>
     [...el.querySelectorAll('*')]
-      .filter((n) => !n.classList.contains('bn-icon-tip') && !n.closest('.bn-icon-tip'))
       .map((n) => { const r = n.getBoundingClientRect(); return `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}` }),
   )
   await btn.hover()
-  await expect(btn.locator('.bn-icon-tip')).toHaveCSS('opacity', '1')
+  await expect(await iconTip(btn)).toHaveCSS('opacity', '1')
   const after = await section.evaluate((el) =>
     [...el.querySelectorAll('*')]
-      .filter((n) => !n.classList.contains('bn-icon-tip') && !n.closest('.bn-icon-tip'))
       .map((n) => { const r = n.getBoundingClientRect(); return `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}` }),
   )
   const moved = before.filter((v, i) => v !== after[i])
@@ -147,7 +149,7 @@ test('the overlay Close tooltip is not clipped by the sheet, at 1440 and at 390'
     // comment names the same shape of reading). settleMotion first, like that file does.
     await settleMotion(page)
     await close.hover()
-    const tip = close.locator('.bn-icon-tip')
+    const tip = await iconTip(close)
     await expect(tip).toHaveCSS('opacity', '1')
     const r = await tip.evaluate((e) => e.getBoundingClientRect())
     expect(r.top, `the tooltip's own top is off-screen at ${width}px`).toBeGreaterThanOrEqual(0)
@@ -165,7 +167,7 @@ test('the tooltip stays inside the viewport at 390, for the first icon button on
   await section.scrollIntoViewIfNeeded()
   const first = section.locator('.bn-icon-btn').first()
   await first.hover()
-  const tip = first.locator('.bn-icon-tip')
+  const tip = await iconTip(first)
   await expect(tip).toHaveCSS('opacity', '1')
   const r = await tip.evaluate((e) => e.getBoundingClientRect())
   expect(r.left, 'the tooltip runs off the left edge at 390px').toBeGreaterThanOrEqual(0)
@@ -274,7 +276,7 @@ test('the anchor form draws the same face, hit area and tooltip as the button fo
   await link.scrollIntoViewIfNeeded()
   // The tooltip, the same accessible name and text as the label passed to it — read BEFORE
   // the click below, which opens a new tab and leaves this one backgrounded.
-  const tip = link.locator('.bn-icon-tip')
+  const tip = await iconTip(link)
   await expect(tip).toHaveCSS('opacity', '0')
   await link.hover()
   await expect(tip).toHaveCSS('opacity', '1')

@@ -155,6 +155,7 @@ from server import tcg_import  # noqa: E402
 from pipeline import pricehistory  # noqa: E402
 from pipeline import productview  # noqa: E402
 from pipeline import holdings  # noqa: E402
+from pipeline import stockimages  # noqa: E402
 from store.pricearchive import RANGE_WIDTH_DAYS  # noqa: E402
 # THE SAME RULE, AND IT IS WHY THE RATES MOVED OUT OF `cli/cmd_identify.py`. `identify/cost.py`
 # reaches `decimal` and nothing else, and `identify/__init__.py` is a docstring with no imports
@@ -163,6 +164,7 @@ from store.pricearchive import RANGE_WIDTH_DAYS  # noqa: E402
 from identify import cost  # noqa: E402
 from identify import sidecar  # noqa: E402
 from store import Store, files, master  # noqa: E402
+from store import db as store_db  # noqa: E402
 from store import readings as store_readings  # noqa: E402
 from store import submissions as claims  # noqa: E402
 from store.session import Snapshot  # noqa: E402
@@ -170,6 +172,41 @@ from store.session import Snapshot  # noqa: E402
 PKMNSCAN = REPO_ROOT / "pkmnscan"
 CONSOLE = "console.log"
 PID_FILE = "running.pid"
+
+# ONE RESOLVER, FOR THE PROCESS'S WHOLE LIFE (`D301`). `pipeline/stockimages.py`'s
+# own header says why: its cache is only worth having if the same instance answers every
+# request. `do_pipeline_sets`/`do_pipeline_worklist` take it as a parameter rather than
+# reaching for this name directly, so a harness test calling either function bare gets no
+# resolver and opens no socket — `server/capture_server.py`'s HTTP dispatch is the one
+# caller that passes this.
+STOCK_IMAGES = stockimages.StockImages()
+
+
+def warm_stock_images() -> None:
+    """Prime `STOCK_IMAGES` with every `(game, set_name)` pair the store holds — the
+    background-warm's other trigger, called once by `server/capture_server.py:serve` at
+    process start (never at import: a harness test imports this module directly and must
+    open no socket, `STOCK_IMAGES`'s own docstring).
+
+    A STORE THAT CANNOT BE READ WARMS NOTHING, SILENTLY. This runs before the server has
+    accepted a single request, so there is nobody to report a refusal to, and a store this
+    checkout has never seeded (a fresh worktree, D43) is not a fault — `do_pipeline_sets`
+    already answers an unreadable store as a `PipelineRefusal` on the real request path;
+    this is a courtesy that widens the very first request's coverage and nothing depends on
+    it having run.
+    """
+    try:
+        inventory = Store().read().inventory
+        pairs = {
+            (str(game or ""), str(set_name or "").strip())
+            for _key, (game, set_name) in inventory.cards.select(
+                ("game", "set_name"), state=master.IDENTIFIED
+            )
+        }
+    except (files.StoreError, OSError, ValueError, TypeError):
+        return
+    STOCK_IMAGES.warm(pair for pair in pairs if pair[0] and pair[1])
+
 
 # The free commands, and the flags each will accept from a request. An allowlist rather than
 # a passthrough: a request that could append arbitrary argv to `./pkmnscan` would be a shell
@@ -1325,6 +1362,39 @@ def do_pipeline_preflight(payload: dict) -> dict:
     return _preflight(_resolve_send(payload))
 
 
+def do_pipeline_waiting(payload: dict) -> dict:
+    """`POST /pipeline/waiting` — the cards a spend over this selection would buy. FREE.
+
+    THE ANSWER REVIEW'S IDENTIFY STRIP COUNTS, PRICES AND SPENDS (D291). A card state is not
+    what the spend counts: the spend counts PHOTOGRAPHS, and a card a live run has already
+    claimed is refused at the press (D174). So this answers the one list both halves read —
+    every photographed card the selection names, minus the ones a live claim holds — and the
+    screen then sends exactly that list as a `keys` selection (D180). A capture in another tab
+    after this answer cannot grow the spend, because the spend names its cards.
+
+    CHEAP ON PURPOSE, AND NOT THE PREFLIGHT. This is `_selection_captures` (a sidecar scan,
+    and the store where a term needs it) and `_send_keys`, the same two reads the spend route
+    makes before it spawns. It decodes no photograph, spawns nothing and writes nothing.
+    """
+    send = _resolve_send(payload)
+    try:
+        keys = _send_keys(_selection_captures(send.selection))
+    except PipelineRefusal as exc:
+        # A selection that names no photograph is an empty answer here, not a refusal: nothing
+        # is waiting. Every other refusal (a malformed term, a store that will not open) stands.
+        if exc.status != HTTPStatus.NOT_FOUND:
+            raise
+        keys = []
+    held: set = set()
+    try:
+        for _, shared in Store().read().submissions.overlap(keys):
+            held.update(shared)
+    except Exception:  # noqa: BLE001 — no claims readable is no claims, the press still refuses
+        pass
+    free = sorted(key for key in set(keys) if key not in held)
+    return {"keys": free, "claimed": len(set(keys)) - len(free)}
+
+
 # ------------------------------------------------------------------- the crop preview
 
 # The band is JPEG at this quality. High, because the whole point of the strip is whether
@@ -2193,7 +2263,29 @@ def _run_is_open(manifest: dict, pricing: dict, answers: Optional[dict]) -> bool
     return bool(_run_owes(manifest, pricing, answers))
 
 
-def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[str]:  # noqa: D401
+#: THE MACHINE CODE FOR EACH `owes` REASON, SENT BESIDE THE SENTENCE AS `owed` (R4, the
+#: coordinator's ruling). A screen reads the code and never the sentence, so the words may
+#: change freely. `app/src/types.ts:OweCode` is the same list, and `make readiness-agreement`
+#: reconciles the two both ways.
+#:   sub_threshold_unset  the cut-off price is unset, and `emit` refuses the whole run
+#:   needs_price          cards with no market price and no answer, left out of a send
+#:   never_emitted        the run has never written a file
+#:   unreadable           the run's files or answers cannot be read
+OWE_CODES = ("sub_threshold_unset", "needs_price", "never_emitted", "unreadable")
+
+
+def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[str]:
+    """`_run_owed`'s sentences alone, for every caller that only asks whether a run owes."""
+    return [reason["text"] for reason in _run_owed(manifest, pricing, answers)]
+
+
+def _owe(code: str, text: str, count: Optional[int] = None) -> dict:
+    """One `owes` reason: its code, its sentence, and the count the sentence carries."""
+    assert code in OWE_CODES, code
+    return {"code": code, "text": text, "count": count}
+
+
+def _run_owed(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[dict]:  # noqa: D401
     """Why this run still has pricing work in it, in the words `emit` would refuse it with.
 
     THE PICKER DRAWS A REMAINDER RATHER THAN A TOTAL BECAUSE OF THIS FUNCTION. Every chip used
@@ -2214,19 +2306,46 @@ def _run_owes(manifest: dict, pricing: dict, answers: Optional[dict]) -> List[st
     try:
         answered = decisions.Decisions.parse(answers or {})
     except decisions.MalformedDecisions:
-        return ["answers file cannot be read"]
+        return [_owe("unreadable", "answers file cannot be read")]
     below = [
         row.get("sku")
         for row in pricing.get("skus") or []
         if row.get("bucket") == "sub_threshold"
     ]
-    owes = list(answered.blocking(below))
+    # `blocking` HAS ONE REASON, the cut-off price unset. A second one fails
+    # `make readiness-agreement`'s reason count, which is where its code gets added.
+    owes = [_owe("sub_threshold_unset", reason, len(below)) for reason in answered.blocking(below)]
+    # A PRICE OWED THAT NO LONGER BLOCKS THE SEND (D277 Q3, the delta review R3-2). A card with
+    # no market price and no answer is left out of a send rather than refusing it, so
+    # `blocking` no longer names it. The run still owes that price, and the screens must say
+    # so, by its code, `needs_price`, which keeps it apart from a reason that stops the whole
+    # run. Read off this run's own rows, because the corpus holds no entry for a card nobody
+    # answered.
+    unpriced = (answers or {}).get("no_market_data") or {}
+    held = (answers or {}).get("overrides") or {}
+    waiting = sum(
+        1
+        for row in pricing.get("skus") or []
+        if row.get("bucket") == "no_market_data"
+        and int(row.get("add_to_quantity") or 0) > 0
+        and unpriced.get(str(row.get("sku"))) is None
+        and str(row.get("sku")) not in held
+    )
+    if waiting:
+        owes.append(
+            _owe(
+                "needs_price",
+                f"{waiting} card{'' if waiting == 1 else 's'} with no market price "
+                f"need{'s' if waiting == 1 else ''} a price",
+                waiting,
+            )
+        )
     if not manifest.get("emitted"):
         # NEVER EMITTED IS WORK, AND IT IS THE COMMON CASE. Nothing has been shipped out of
         # this run, so it is open whatever its answers say — but it is listed AFTER the
         # blocking reasons, because a refusal names something to fix and this names something
         # to press.
-        owes.append("never emitted")
+        owes.append(_owe("never_emitted", "never emitted"))
     return owes
 
 
@@ -2574,10 +2693,18 @@ def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> 
     }
 
 
-def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
+def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.StockImages"] = None) -> dict:
     """`GET /pipeline/pricing` — one pricing worklist over several runs (D86), and since
     D156 the standing list of EVERY COPY THE STORE HOLDS THAT TCGPLAYER
     DOES NOT, across every joined run.
+
+    `images`, WHEN GIVEN, ADDS ONE MORE FIELD TO EVERY MERGED ROW: `image_url`
+    (`D301`). `None` — every direct call this module's own harness tests make —
+    answers `image_url: null` on every row and opens no socket; `server/capture_server.py`'s
+    HTTP dispatch passes `STOCK_IMAGES`, the one instance this process keeps, so its
+    in-process cache is actually worth having. See that module's own header for the tcgcsv
+    and vendored-Pokemon walk this resolves through, and D16 for why a route that can now
+    reach `tcgcsv.com` says so here in as many words.
 
     THE WORKLIST SPANS RUNS, AND SO DOES THE ANSWER. D48's resolution — a send is a cart of
     boxes and a run is still one box, because a run carries a reading that is a property of
@@ -2724,9 +2851,17 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
                 else None
             )
         except (OSError, ValueError, decisions.MalformedDecisions):
-            owed_by_run[entry.name] = ["run files cannot be read"]
+            # THROUGH `_owe`, like every other reason (R6-7), so its code is checked.
+            unreadable = [_owe("unreadable", "run files cannot be read")]
+            owed_by_run[entry.name] = [reason["text"] for reason in unreadable]
             roster.append(
-                {**summary, "owes": owed_by_run[entry.name], "open": True, "unsent": 0}
+                {
+                    **summary,
+                    "owes": owed_by_run[entry.name],
+                    "owed": [{"code": reason["code"], "count": reason["count"]} for reason in unreadable],
+                    "open": True,
+                    "unsent": 0,
+                }
             )
             continue
         if summary.get("box_former"):
@@ -2754,14 +2889,23 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
                     "rescued_by": [rescue["run"] for rescue in rescues],
                 }
             )
-            roster.append({**summary, "owes": [], "open": False, "unsent": 0})
+            roster.append({**summary, "owes": [], "owed": [], "open": False, "unsent": 0})
             continue
-        owes = _run_owes(manifest, parsed, answers)
+        owed = _run_owed(manifest, parsed, answers)
+        owes = [reason["text"] for reason in owed]
         owed_by_run[entry.name] = owes
         parsed_by_run[entry.name] = parsed
         if parsed:
             tables.append((run_files.open_run(entry), parsed))
-        roster.append({**summary, "owes": owes, "open": bool(owes), "unsent": 0})
+        roster.append(
+            {
+                **summary,
+                "owes": owes,
+                "owed": [{"code": reason["code"], "count": reason["count"]} for reason in owed],
+                "open": bool(owes),
+                "unsent": 0,
+            }
+        )
 
     ledger: Optional[UnsentLedger] = None
     if snapshot is not None and tables:
@@ -3024,11 +3168,33 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
             row["at_cap"] = False
 
     unreachable = (
-        _unreachable(snapshot.inventory, len(snapshot.review), root)
+        _unreachable(
+            snapshot.inventory,
+            len(snapshot.review.owed_entries(snapshot.inventory.cards)),
+            root,
+        )
         if snapshot is not None
         else {"captured": 0, "in_review": 0, "unjoined": []}
     )
     unreachable["reallocated"] = reallocated
+
+    # THE STOCK IMAGE, RESOLVED FRESH ON EVERY READ AND NEVER PERSISTED (`D301`).
+    # `sku_row`/`_pricing_table` do not carry this field — adding it there would bake a
+    # hotlinked CDN URL into `pricing.json`, a file this repo otherwise never rewrites, and
+    # the whole point of a resolver with its own short TTL is that the answer can change
+    # without a re-join. `row["row"]` is the export cell dict `sku_row` already put on the
+    # wire verbatim (D49); its own `Number` cell is what a photo is keyed on, same as the
+    # join.
+    for row in merged.values():
+        row["image_url"] = (
+            None
+            if images is None
+            else images.url_for(
+                str(row.get("game") or ""),
+                str(row.get("set_name") or ""),
+                str((row.get("row") or {}).get(tcgcsv.NUMBER_COLUMN, "")),
+            )
+        )
 
     # WHAT TCGPLAYER HOLDS NOW, OFF THE NEWEST LIVE EXPORT ON DISK (round 7, R6-1). Every send
     # and every check writes one, so this is minutes old where the join's export can be days.
@@ -3835,6 +4001,144 @@ def do_pipeline_value_page(
     }
 
 
+# A DIGIT RUN COMPARED AS AN INT, EVERYTHING ELSE AS A LOWERED STRING — a natural sort over
+# the RAW `number` column, never a per-game rule. `pipeline/games.py` dispatches a join key
+# by game (`number_and_printed_total` for Pokemon, `printed_code` for One Piece and
+# Riftbound) because MATCHING one spelling against another needs to know which game it is;
+# ORDERING them does not, and re-deriving that dispatch here for a job that only needs
+# monotonic order would be the workaround this repo's "check the primitive first" rule
+# warns against. `198` sorts after `99` because the digit run is read as one integer, not
+# character by character (`"99" < "198"` as text, wrongly); `OP1-1` sorts before `OP1-10`
+# for the same reason.
+_NUMBER_RUN = re.compile(r"(\d+)")
+
+
+def _natural_number_key(number: object) -> Tuple[object, ...]:
+    text = str(number or "")
+    return tuple(int(part) if part.isdigit() else part.lower() for part in _NUMBER_RUN.split(text))
+
+
+def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict:
+    """`GET /pipeline/sets` — every on-hand card grouped by game and set, in printed-number
+    order, one row per distinct card with its quantity (the owner: *"do i have anyway of
+    seeing my inventory by set order? basically a view where i just know what qty of each
+    card and then can click in if interested and it pops me to inventory screen?"* — D293).
+
+    `images`, WHEN GIVEN, ADDS `image_url` TO EVERY ROW (`D301`) — see
+    `do_pipeline_worklist`'s own paragraph for what `None` answers and why, and
+    `pipeline/stockimages.py` for the resolver itself. `printing` rides every row too,
+    off the store's own `skus` table (identity-follows-sku.md §3.2) rather than off
+    `images`: two SKUs sharing one stock image is exactly the case this field exists
+    for, so a foil and a normal printing of one card still read apart.
+
+    ON HAND MEANS STATE `identified`, NARROWER THAN `do_pipeline_value`'s "not a terminal
+    state": a captured-and-not-yet-identified card carries no name, set or number to group
+    by, so it is not a "card on hand" this view can show anything about.
+
+    AGGREGATED HERE, NEVER SHIPPED PER COPY (the owner's own store: 2,455 on-hand cards
+    behind 771 distinct rows across 6 sets). The grouping key is the SKU where the card has
+    one; a `sku_unknown` card (D258) groups on its own name and displayed number instead, so
+    two unidentified physical copies of the same card still count as one row with `qty: 2`
+    rather than vanishing for having no SKU to key on.
+
+    ORDER IS THE SET'S OWN PRINTED NUMBER, `_natural_number_key` OVER THE RAW `number`
+    COLUMN. `number_display` (D67) is what ships for the eye — the same composed form every
+    other screen already draws, off the same stored column `store/master.py:_card_columns`
+    fills — the raw column is read only to sort by.
+
+    A CARD WITH NO SET IS NOT DROPPED (the hard rule against a silent drop): `no_set` is one
+    more list, on this same payload, named in a plain sentence by the client rather than by
+    this route (D196 — no user-visible string is composed server-side).
+
+    ONE REPRESENTATIVE COPY'S `box` AND `cid` IS ALL A TAP NEEDS. `#/inventory?box=<n>&
+    card=<cid>` is `BoxBrowse.tsx`'s existing deep link (`wantedCard`, built for Review's
+    place pill) — this route builds no new walk, and lands on a row whose `CopiesPanel`
+    already shows every other on-hand copy of the same SKU.
+
+    A PLAIN READ, `do_pipeline_value`'s posture: no socket, no write, no lock.
+    """
+    try:
+        snapshot = Store().read()
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        raise PipelineRefusal(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            "store_unreadable",
+            f"The store could not be read, so nothing can be grouped: {exc}",
+        ) from None
+    inventory = snapshot.inventory
+
+    groups: Dict[Tuple[str, str], Dict[str, dict]] = {}
+    no_set: Dict[str, dict] = {}
+
+    for _key, (box_raw, _idx_raw, sku_raw, name, set_name, number, number_display, game, cid) in (
+        inventory.cards.select(
+            ("box", "idx", "sku", "name", "set_name", "number", "number_display", "game", "cid"),
+            state=master.IDENTIFIED,
+        )
+    ):
+        sku = str(sku_raw) if sku_raw else None
+        # THREE GROUPING RUNGS, NARROWEST WINS. A SKU is a confirmed identity, so every
+        # copy of it is one row. Failing that, a name or a number is still SOMETHING to
+        # group two physical copies on. Failing THAT — a card with no SKU, no name and no
+        # number, `sku_unknown` at its bluntest — nothing here can tell it apart from
+        # another blank card, so grouping on a shared blank key would silently MERGE two
+        # distinct physical cards into one row a tap can reach only one of (caught against
+        # the owner's own store: 4 such cards, one box, would have collapsed to a single
+        # `qty: 4` row). `_key` (`box/idx`, always present) is the fallback that keeps
+        # every blank card its own row.
+        if sku:
+            row_key = sku
+        elif name or number_display:
+            row_key = f"name:{name or ''}|number:{number_display or ''}"
+        else:
+            row_key = f"blank:{cid or _key}"
+        set_label = str(set_name).strip() if set_name else ""
+        bucket = no_set if set_label == "" else groups.setdefault((str(game or ""), set_label), {})
+        row = bucket.get(row_key)
+        if row is None:
+            try:
+                box = int(box_raw)
+            except (TypeError, ValueError):
+                box = None
+            sku_entry = snapshot.skus.entries.get(sku) if sku else None
+            row = {
+                "sku": sku,
+                "cid": cid or None,
+                "box": box,
+                "name": name or None,
+                "number_display": number_display or None,
+                "qty": 0,
+                # NULL FOR A `sku_unknown` ROW, WHICH HAS NO SKU TO HOLD THE FACT — the
+                # store's own table, never re-derived from a condition string here.
+                "printing": sku_entry.printing if sku_entry is not None else None,
+                "image_url": (
+                    None
+                    if images is None
+                    else images.url_for(str(game or ""), set_label, str(number or ""))
+                ),
+                "_sort": _natural_number_key(number),
+            }
+            bucket[row_key] = row
+        row["qty"] += 1
+
+    def _cards_of(bucket: Dict[str, dict]) -> List[dict]:
+        rows = sorted(bucket.values(), key=lambda row: row["_sort"])
+        for row in rows:
+            row.pop("_sort", None)
+        return rows
+
+    payload_groups = [
+        {"game": game or None, "set_name": set_name, "cards": _cards_of(bucket)}
+        for (game, set_name), bucket in sorted(groups.items(), key=lambda item: item[0])
+    ]
+
+    return {
+        "at": master.now(),
+        "groups": payload_groups,
+        "no_set": _cards_of(no_set),
+    }
+
+
 # ---------------------------------------------------------------- the store-wide reconcile
 
 
@@ -4158,6 +4462,12 @@ def _markdown_flags(payload: dict) -> List[str]:
     limit = payload.get("limit")
     if limit is not None:
         argv += ["--limit", str(_positive(limit, "limit"))]
+    cap = payload.get("cap")
+    if cap is not None and str(cap).strip() != "":
+        try:
+            argv += ["--cap", str(reprice.check_cap(cap))]
+        except reprice.InvalidCap as exc:
+            raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "cap_invalid", str(exc)) from None
     if payload.get("again"):
         argv.append("--again")
     return argv
@@ -4436,6 +4746,7 @@ def do_markdown_apply(stamp: str, payload: dict) -> dict:
     if isinstance(upload, dict):
         worklist = _store_upload(directory, upload, "edited-")
     elif edits is not None:
+        _check_kind(directory, edits, payload.get("kind"))
         worklist = _write_edits(directory, edits)
     if not worklist.is_file():
         raise PipelineRefusal(
@@ -4450,6 +4761,15 @@ def do_markdown_apply(stamp: str, payload: dict) -> dict:
     revision = payload.get("revision")
     if isinstance(revision, str) and revision:
         argv += ["--corpus-revision", revision]
+    # THE SKUS THE LIVE TAB SAW TYPED THIS VISIT (`app/src/Pricing.tsx`'s `typedHere`, D273).
+    # `corpus.stamp_answers` keeps an answer's old `at` when its value is unchanged, so a
+    # retyped-but-identical price cannot be told from an old one by its timestamp alone — the
+    # screen is the one witness that saw the keystroke. See `cli/cmd_reprice.py:_apply`.
+    typed = payload.get("typed")
+    if isinstance(typed, list) and typed:
+        skus = ",".join(str(sku).strip() for sku in typed if str(sku).strip())
+        if skus:
+            argv += ["--typed", skus]
     if payload.get("write"):
         argv.append("--write")
     code, console = _run_sync(argv, STEP_TIMEOUT_S)
@@ -4470,6 +4790,41 @@ def do_markdown_apply(stamp: str, payload: dict) -> dict:
         # very next keystroke is refused `corpus_moved` for a write they just made themselves.
         "revision": corpus.revision(),
     }
+
+
+#: The Live tab's Singles / Sealed filter (the owner's ruling, 2026-09-26), as the apply reads it.
+KINDS = ("singles", "sealed")
+
+
+def _check_kind(directory: Path, edits: object, kind: object) -> None:
+    """Refuse the whole request when the screen was filtered to one kind and an edit is the other.
+
+    THE FILTER IS THE SCREEN'S, AND THIS IS WHAT HOLDS IT TO ITS WORD. The Live tab sends the
+    prices of the rows it shows, so a filter to Singles must never carry a sealed price. `kind`
+    absent is "both", which is the unfiltered tab. The survey's own `sealed` flag decides, and
+    a SKU the survey never saw is left to `read_back`'s `not_in_worklist`.
+    """
+    if kind is None:
+        return
+    if kind not in KINDS:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST, "kind_invalid", f"{kind!r} is not one of {', '.join(KINDS)}."
+        )
+    survey = _survey(directory)
+    wrong = sorted(
+        str(entry.get("sku"))
+        for entry in (edits if isinstance(edits, list) else [])
+        if isinstance(entry, dict)
+        and str(entry.get("sku") or "") in survey
+        and bool(survey[str(entry.get("sku"))].get("sealed")) != (kind == "sealed")
+    )
+    if wrong:
+        raise PipelineRefusal(
+            HTTPStatus.BAD_REQUEST,
+            "kind_mismatch",
+            f"The list shows {kind} only, and {len(wrong)} of these prices are for the other "
+            f"kind ({', '.join(wrong[:5])}). Nothing was written.",
+        )
 
 
 def _write_edits(directory: Path, edits: object) -> Path:
@@ -4545,6 +4900,14 @@ def _survey(directory: Path) -> Dict[str, dict]:
     }
 
 
+def _survey_envelope(directory: Path) -> Optional[dict]:
+    """`survey.json` whole, or None where it is absent or unreadable. The send reads its `at`."""
+    try:
+        return json.loads((directory / cmd_reprice.SURVEY).read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def _markdown_floor() -> str:
     """The store's cut-off, which is the floor a markdown may not price below.
 
@@ -4613,6 +4976,10 @@ def do_markdown_table(stamp: str) -> dict:
         # against $0.40 on a store set to $0.29, so the sheet drew the wrong figure and the
         # receipt named it.
         "floor": _markdown_floor(),
+        # HOW OLD THIS READ MAY BE AND STILL BE SENT FROM, the constant itself (the owner's
+        # ruling, 2026-09-26: "require a fresh read"). The screen offers "Read again" in place
+        # of Send past it, and the apply and the send refuse past it.
+        "stale_after_s": reprice.READ_FRESH_S,
     }
 
 
@@ -4891,7 +5258,60 @@ def do_pricing_corpus() -> dict:
         "path": str(files.prices_path()),
         "revision": _corpus_revision(),
         "clearable": _clearable_block(book),
+        "last_clear": _last_clear_block(),
+        "clears": _clears_block(),
     }
+
+
+def _last_clear_block() -> Optional[dict]:
+    """The newest kept clear a restore can still undo, or None (UN-11).
+
+    ONE, THE NEWEST, even when several are kept. The notice is one line on the screen, and an
+    older clear keeps its way back through its own toast's Undo until a send builds on it. A
+    clear a send has built on is never offered: the fix after it is to type the prices again.
+    The server decides this, never the screen.
+    """
+    stored = _newest_restorable()
+    if stored is None:
+        return None
+    return {"count": len(stored["cleared"]), "at": stored["at"], "id": stored["id"]}
+
+
+def _clears_block() -> List[dict]:
+    """EVERY kept clear a restore can still undo, newest first (the owner's standing undo
+    ruling, "Anytime, from a history"). A kept clear with no control on the screen is not
+    reachable, so the notice draws each one with its own Restore. A clear a send has built on
+    is left out."""
+    return [
+        {"count": len(stored["cleared"]), "at": stored["at"], "id": stored["id"]}
+        for stored in reversed(corpus.read_clears())
+        if not _clear_built_on(stored)
+    ]
+
+
+def _newest_restorable() -> Optional[dict]:
+    """The newest kept clear no send has built on, or None."""
+    for stored in reversed(corpus.read_clears()):
+        if not _clear_built_on(stored):
+            return stored
+    return None
+
+
+def _clear_built_on(stored: dict) -> List[str]:
+    """The cleared SKUs a send has posted since the clear. Empty means the undo still holds.
+
+    `>=`, because a posting and a clear in the same second cannot be ordered, and a restore
+    over a price that may already have gone out is the wrong way to be wrong.
+    """
+    conn = store_db.connect(files.inventory_dir())
+    try:
+        return sorted(
+            sku
+            for sku in stored["cleared"]
+            if any(int(row["at"]) >= stored["at"] for row in store_db.postings_for_sku(conn, sku))
+        )
+    finally:
+        conn.close()
 
 
 def _clearable_block(book: corpus.Corpus) -> dict:
@@ -5180,10 +5600,15 @@ def do_pricing_clear(payload: dict) -> dict:
         for sku in plan.skus:
             del book.answers[sku]
         book.write()
+        # THE UNDO OUTLIVES THE TOAST (UN-11). The answers go to a side file, so a reload
+        # can still restore them. A clear that removes nothing leaves the older one alone.
+        clear_id = corpus.write_last_clear(cleared, int(time.time()))
 
     return {
         "ok": True,
         "cleared": cleared,
+        # WHICH KEPT CLEAR THIS IS, so its toast's Undo names it and no other.
+        **({"clear_id": clear_id} if plan.skus else {}),
         "count": len(plan.skus),
         "holds": len(plan.holds),
         "unknown": len(plan.unknown),
@@ -5210,12 +5635,45 @@ def do_pricing_restore(payload: dict) -> dict:
     re-pricing on the next markdown survey, refusing every restored SKU `priced_recently` —
     D103's ratchet, inverted by the one press whose entire job is to change nothing.
 
-    IT IS NOT A GENERAL WRITE PATH. A hold cannot arrive through it — `Corpus.parse` is not
-    reached and the shape is `{value, at?, from_run?}` — and a SKU the corpus already answers
-    is refused per row. The general write is `PUT /pricing` and it is unchanged.
+    IT IS NOT A GENERAL WRITE PATH, AND THE STORED CLEAR IS WHAT MAKES THAT TRUE. Every row
+    it is sent must be a row the server's own stored last clear holds, with the same value,
+    date and run: the toast's map is only a copy of that file. Anything else (a SKU the clear
+    did not take, a forged date, a hold, which a clear never takes) refuses the whole press
+    with `restore_not_cleared` and writes nothing. A client could otherwise store any value
+    and date here, a hold with a forged `before.at` among them. A SKU the corpus already
+    answers is still refused per row. The general write is `PUT /pricing` and it is unchanged.
     """
     _clear_revision_guard(payload)
     answers = payload.get("answers")
+    stored = None
+    if payload.get("last_clear") is True and answers is None:
+        # THE NEWEST CLEAR NO SEND HAS BUILT ON, READ BACK OFF THE SERVER (UN-11), so a reload
+        # or an expired toast does not lose the way back.
+        kept = corpus.read_clears()
+        if not kept:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "no_clear_to_restore",
+                "There is no cleared price to put back.",
+            )
+        stored = _newest_restorable()
+        if stored is None:
+            _refuse_built_on(kept[-1])
+        answers = stored["cleared"]
+    elif answers is None and payload.get("clear") is not None:
+        # ONE KEPT CLEAR, BY ITS ID, off the server's own copy: the notice's row for it.
+        stored = next(
+            (row for row in corpus.read_clears() if row["id"] == str(payload["clear"])), None
+        )
+        if stored is None:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "no_clear_to_restore",
+                "That clear is not kept any more, so there is nothing to put back.",
+            )
+        if _clear_built_on(stored):
+            _refuse_built_on(stored)
+        answers = stored["cleared"]
     if not isinstance(answers, dict):
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
@@ -5230,6 +5688,27 @@ def do_pricing_restore(payload: dict) -> dict:
             f"{len(answers)} answers is more than one press can restore ({MAX_CLEAR_SKUS}).",
         )
 
+    # ONLY WHAT A KEPT CLEAR TOOK COMES BACK, verbatim, before anything is read or written.
+    # The request names its clear (`clear`, the id its clear answered with). With no name, the
+    # newest kept clear that holds every row sent is the one meant.
+    if stored is None:
+        named = payload.get("clear")
+        candidates = [
+            row for row in corpus.read_clears() if named is None or row["id"] == str(named)
+        ]
+        stored = next(
+            (row for row in reversed(candidates) if _clear_holds(row, answers)), None
+        )
+        if stored is None:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT,
+                "restore_not_cleared",
+                "These prices are not the ones a kept clear took, so nothing was put back.",
+            )
+        # UNTIL IT IS BUILT ON, the one test every undo here uses, for the toast's door too.
+        if _clear_built_on(stored):
+            _refuse_built_on(stored)
+
     try:
         book = corpus.Corpus.read()
     except (decisions.MalformedDecisions, ValueError) as exc:
@@ -5237,6 +5716,17 @@ def do_pricing_restore(payload: dict) -> dict:
             HTTPStatus.CONFLICT, "corpus_unreadable", str(exc)
         ) from None
 
+    # A NEWER KEPT CLEAR THAT TOOK THE SAME SKU HOLDS THE LATER ANSWER ("until it's built
+    # on"). Clear A took 5.00, the owner typed 6.00, clear B took 6.00: restoring A first must
+    # not put 5.00 back, or B's restore then skips it and the 6.00 is lost. So A skips it, and
+    # B keeps it.
+    kept = corpus.read_clears()
+    ids = [row["id"] for row in kept]
+    newer = {
+        sku
+        for row in kept[ids.index(stored["id"]) + 1:] if stored["id"] in ids
+        for sku in row["cleared"]
+    }
     restored: List[str] = []
     skipped: List[str] = []
     for sku, row in sorted(answers.items()):
@@ -5247,7 +5737,7 @@ def do_pricing_restore(payload: dict) -> dict:
                 "restore_invalid",
                 f"{key}: each answer must be an object carrying a `value`.",
             )
-        if key in book.answers:
+        if key in book.answers or key in newer:
             skipped.append(key)
             continue
         book.answers[key] = corpus.Answer(
@@ -5259,6 +5749,11 @@ def do_pricing_restore(payload: dict) -> dict:
 
     if restored:
         book.write()
+    # THE STORED CLEAR GOES ONCE EVERY ANSWER IT HOLDS IS BACK, whichever door restored
+    # them: the toast's own map, or the stored one. A price typed since counts as back, and
+    # so does one a newer kept clear holds: that clear is its way back.
+    if all(sku in book.answers or sku in newer for sku in stored["cleared"]):
+        corpus.drop_clear(stored["id"])
 
     return {
         "ok": True,
@@ -5267,6 +5762,28 @@ def do_pricing_restore(payload: dict) -> dict:
         "answers": len(book.answers),
         "revision": _corpus_revision(),
     }
+
+
+def _clear_holds(stored: dict, answers: dict) -> bool:
+    """Whether a kept clear took every row sent, verbatim: value, date and run."""
+    held = stored["cleared"]
+    return all(
+        isinstance(row, dict)
+        and str(sku) in held
+        and {k: row.get(k) for k in ("value", "at", "from_run")}
+        == {k: held[str(sku)].get(k) for k in ("value", "at", "from_run")}
+        for sku, row in answers.items()
+    )
+
+
+def _refuse_built_on(stored: dict) -> None:
+    sent = _clear_built_on(stored)
+    raise PipelineRefusal(
+        HTTPStatus.CONFLICT,
+        "clear_built_on",
+        f"A send has gone out since the clear, carrying {len(sent)} of the cleared "
+        f"cards, so the clear can no longer be undone. Type those prices again.",
+    )
 
 
 def _cap_flag(payload: dict) -> list:

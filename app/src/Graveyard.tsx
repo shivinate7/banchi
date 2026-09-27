@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 
-import { describeFailure, getBoxes, getGraveyard, type Failure } from './server'
-import type { BoxRecord, DepartedCard } from './types'
+import { describeFailure, getGraveyard, type Failure } from './server'
+import type { DepartedCard } from './types'
 import { Button, EmptyState, Notice, Page, Pill, ReloadButton, Segmented, type PillTone } from './kit'
 import { readingAgo, readingExact, stateLabel, stateTone } from './cardState'
 import { reasonWord } from './Inventory'
@@ -10,16 +10,24 @@ import './Graveyard.css'
 
 /* GRAVEYARD — D134's whole reason for existing.
  *
- * A box goes when its cards have left it, sold or retired or moved — and until D134 that box
- * could never be deleted at all, because a departed record was the one thing `do_delete_box`
- * refused to touch. It no longer refuses: a sold, retired or moved record is BURIED, one
- * `buried` line per record in the store's own event log, before the box and everything in it
- * goes. This screen is where that line is read back.
+ * A box goes when its cards have left it, sold or retired — and until D134 that box could
+ * never be deleted at all, because a departed record was the one thing `do_delete_box`
+ * refused to touch. It no longer refuses: a sold or retired record is BURIED, one `buried`
+ * line per record in the store's own event log, before the box and everything in it goes.
+ * This screen is where that line is read back.
+ *
+ * ONLY A CARD THAT TRULY LEFT (D134, amended by the UX review's graveyard ruling,
+ * 2026-09-26, verbatim: "Move Moved out of Graveyard"). A moved card is not a departure — it
+ * is alive in another box, exactly as sellable as it ever was — so `GET /graveyard` no
+ * longer answers with one at all (`do_graveyard`'s own amendment). `#/inventory` is where a
+ * moved card is found now, from the card ITSELF (`CardHero.tsx:movedFromFact`), not from a
+ * tombstone this screen used to also list.
  *
  * TWO SOURCES, ONE TABLE. A departed card is either still standing in a box nobody has
  * deleted — the same records `#/inventory` already draws as departed — or its box was deleted
- * and it survives only as a `buried` line. `GET /graveyard` merges both and this screen never
- * has to ask which door a row came from beyond the one pill that says so.
+ * and it survives only as a `buried` line. `GET /graveyard` merges both. `buried` is a FACT
+ * ABOUT THE BOX, never a third way a card left, so it draws as a small quiet tag on the row
+ * rather than a filter tab (D196: no pipeline noun on screen).
  *
  * WHAT IS LOST AND WHAT IS NOT (D134). A buried record cannot be undone — there is no route
  * back from a deleted box — and its photograph is gone with it. What survives is the record
@@ -28,18 +36,15 @@ import './Graveyard.css'
  *
  * THE BOX SHOWS BY ITS NAME, NEVER ITS NUMBER (D259, superseding D68's
  * "Box 3 · departed · B3 #96" form and the store-key exemption D92 gave it). The Where column
- * reads `row.box_name` straight off the payload; the "Moved to" text resolves the destination
- * through `getBoxes()`. Neither draws the store key any more.
+ * reads `row.box_name` straight off the payload.
  */
 
-type HowFilter = 'all' | 'sold' | 'retired' | 'moved' | 'buried'
+type HowFilter = 'all' | 'sold' | 'retired'
 
 const FILTERS: readonly { readonly value: HowFilter; readonly label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'sold', label: 'Sold' },
   { value: 'retired', label: 'Retired' },
-  { value: 'moved', label: 'Moved' },
-  { value: 'buried', label: 'Buried' },
 ]
 
 /** The same fallback `cardState.ts:stateLabel` uses for a word this table has no map for —
@@ -50,21 +55,7 @@ function gameLabel(game: string | null): string | null {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
-/** The box named in a `"box/index"` store key — `D259`: the number
- *  the key carries is never drawn, only the name it resolves to. A box the registry no longer
- *  has (deleted, or the list has not answered yet) falls back to "another box" rather than the
- *  number — the honest answer where there is genuinely no name to read. */
-function movedToName(key: string, boxes: BoxRecord[] | null): string {
-  const boxN = Number(key.split('/')[0])
-  if (!Number.isFinite(boxN)) return 'another box'
-  const name = boxes?.find((b) => b.box === boxN)?.name
-  return typeof name === 'string' && name.trim() !== '' ? name : 'another box'
-}
-
-function howIt(row: DepartedCard, boxes: BoxRecord[] | null): ReactNode {
-  if (row.how === 'moved') {
-    return row.moved_to === null ? 'Moved' : `Moved to ${movedToName(row.moved_to, boxes)}`
-  }
+function howIt(row: DepartedCard): ReactNode {
   if (row.how === 'retired' && row.retire_reason) {
     // D218: the reason is its own span; the seam is CSS. The word itself reads Inventory's
     // own label table (UX review, 2026-09-20) rather than the raw enum — "Retired · pulled"
@@ -96,8 +87,6 @@ export function Graveyard() {
   const [filter, setFilter] = useState<HowFilter>('all')
   const [query, setQuery] = useState('')
   const [shown, setShown] = useState(ROW_WINDOW)
-  // Names the "Moved to" text alone — read-only, so a stale list between reloads costs nothing.
-  const [boxes, setBoxes] = useState<BoxRecord[] | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -113,12 +102,6 @@ export function Graveyard() {
     void load()
   }, [load])
 
-  useEffect(() => {
-    getBoxes()
-      .then((summary) => setBoxes(summary.boxes))
-      .catch(() => undefined)
-  }, [])
-
   const retry = useCallback(async () => {
     setRetrying(true)
     try {
@@ -129,12 +112,11 @@ export function Graveyard() {
   }, [load])
 
   const counts = useMemo(() => {
-    const base = { all: 0, sold: 0, retired: 0, moved: 0, buried: 0 }
+    const base = { all: 0, sold: 0, retired: 0 }
     if (rows === null) return base
     for (const row of rows) {
       base.all += 1
       base[row.how] += 1
-      if (row.buried) base.buried += 1
     }
     return base
   }, [rows])
@@ -143,7 +125,7 @@ export function Graveyard() {
     if (rows === null) return []
     const needle = query.trim().toLowerCase()
     return rows.filter((row) => {
-      if (filter === 'buried' ? !row.buried : filter !== 'all' && row.how !== filter) return false
+      if (filter !== 'all' && row.how !== filter) return false
       if (needle === '') return true
       const haystack = [row.name, row.number, row.sku, row.box_name, row.order]
         .filter((v): v is string => v !== null)
@@ -168,7 +150,7 @@ export function Graveyard() {
       title="Graveyard"
       icon="history"
       className="graveyard"
-      lede="Sold, retired and moved cards."
+      lede="Sold and retired cards."
       actions={<ReloadButton onReload={() => void load()} busy={retrying} />}
       loading={rows === null && failure === null}
       status={
@@ -265,11 +247,8 @@ export function Graveyard() {
                       {row.sku ?? <span className="bn-faint">—</span>}
                       {row.condition ? <span className="graveyard-condition">{row.condition}</span> : null}
                     </td>
-                    <td
-                      data-th="How"
-                      title={row.how === 'moved' && row.moved_to !== null ? `Moved to ${movedToName(row.moved_to, boxes)}` : undefined}
-                    >
-                      <Pill tone={cardTone(row.how)}>{howIt(row, boxes)}</Pill>
+                    <td data-th="How">
+                      <Pill tone={cardTone(row.how)}>{howIt(row)}</Pill>
                     </td>
                     <td data-th="Where">
                       <span className="graveyard-where">
@@ -277,7 +256,11 @@ export function Graveyard() {
                             store key (D68's superseded "B3 #96" form) — a box with no
                             stored name yet is the honest "—" rather than the number. */}
                         <span className="graveyard-where-name">{row.box_name ?? <span className="bn-faint">—</span>}</span>
-                        {row.buried ? <Pill tone="default" outline>Buried</Pill> : null}
+                        {/* A QUIET FACT ABOUT THE BOX, NOT A THIRD WAY THE CARD LEFT
+                            (D134 amended). Plain words, no pipeline noun (D196) — the
+                            owner's own report named "buried" as the thing that read
+                            wrong on screen. */}
+                        {row.buried ? <Pill tone="default" outline>Its box was deleted</Pill> : null}
                       </span>
                     </td>
                     <td data-th="Order" className="graveyard-mono" data-empty={row.order ? undefined : ''}>

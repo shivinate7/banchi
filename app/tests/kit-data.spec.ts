@@ -397,12 +397,16 @@ test('the sort control says what it sorts by and which way, and reverses', async
   await open(page, 1440, 'light')
   const sort = page.locator('[data-specimen="Sort"]')
   await expect(sort.locator('.bn-pick-value')).toHaveText('Captured')
-  await expect(sort.locator('.bn-sort-dir')).toHaveText('Newest first')
+  /* D288 (round 2, see the comment beside `.bn-sort-dir` further down this file) converted the
+   * direction toggle to an icon-only IconButton — its words moved from a visible span to the
+   * accessible name (`filters.spec.ts` already reads it the same way). This assertion lagged
+   * that conversion and still expected visible text. */
+  await expect(sort.locator('.bn-sort-dir')).toHaveAccessibleName('Order: Newest first. Press to reverse.')
   await sort.locator('.bn-sort-dir').click()
-  await expect(sort.locator('.bn-sort-dir')).toHaveText('Oldest first')
+  await expect(sort.locator('.bn-sort-dir')).toHaveAccessibleName('Order: Oldest first. Press to reverse.')
   await sort.locator('.bn-pick').click()
   await page.getByRole('listbox', { name: 'Sort' }).getByRole('option', { name: 'Name' }).click()
-  await expect(sort.locator('.bn-sort-dir')).toHaveText('A to Z')
+  await expect(sort.locator('.bn-sort-dir')).toHaveAccessibleName('Order: A to Z. Press to reverse.')
 })
 
 test('an empty search press says what to type, and moves nothing below it', async ({ page }) => {

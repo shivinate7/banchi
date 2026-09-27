@@ -136,8 +136,8 @@ const ORDER_FILTER_KEY = 'banchi.orders.fetch-filter'
 /** The buyer list's own standing view — status, sort, whether an unresolved SKU is folded
  *  out — added to this SAME document rather than a new key. The owner's ruling for the six
  *  capture values above is the same habit here: "the view I work the list in" is one fact a
- *  person sets and clears together, and `app/src/orderView.ts:DEFAULT_ORDER_VIEW` is what a
- *  device that has never touched these controls gets — every row shown, newest first. */
+ *  person sets and clears together, and `DEFAULT_VIEW` below is what a device that has never
+ *  touched these controls gets — every row shown, newest first. */
 export type OrderView = {
   readonly status: string | null
   readonly sort: 'newest' | 'oldest'
@@ -480,6 +480,87 @@ export function forgetCaptureSetup(): void {
   }
 }
 
+/* ---------------------------------------------------------- the capture screen's section pick */
+
+/**
+ * WHICH SECTION EACH BOX WAS LAST CAPTURING INTO — sub-box capture's own device memory
+ * (`docs/specs/subbox-capture.md` §5, the owner's Q2 ruling, 2026-09-26).
+ *
+ * A SEPARATE KEY FROM `CAPTURE_SETUP_KEY` ON PURPOSE, because it is not one fact but a MAP: a
+ * pick per box, keyed by `bid` (D145/D153) so a reused box number cannot inherit a stale pick.
+ * `CaptureSetup` is one document restored once at mount; this one is read again every time the
+ * box changes.
+ *
+ * "UNTIL THE SITTING ENDS" (the owner, verbatim) REPLACES A PER-DEVICE-FOREVER DEFAULT — this
+ * is an amendment to what the plan proposed, not to D142 or D27. Each entry carries `at`, the
+ * moment it was picked, and `CaptureScreen.tsx` reads a pick older than `GAP_MINUTES`
+ * (`storeHistory.ts`'s own 30-minute sitting gap, D164) as gone. This file does not know that
+ * rule — it holds the shape, exactly as `storedCaptureSetup`'s own note argues, and the reader
+ * decides freshness.
+ */
+const CAPTURE_SECTIONS_KEY = 'banchi.capture.sections'
+
+/** `token` (the Opus review's first finding, 2026-09-26) is the box's `layout_token` at the
+ *  moment `div` was picked — a re-space changes the token even when the DIVIDER LIST is the
+ *  same length, because a token is a hash of the divider KEYS in order, and D258's own class
+ *  of bug (a stale key that still resolves, to the wrong row) is exactly what a bare `div`
+ *  string cannot catch on its own. `null` only for a server old enough to send no token at
+ *  all — the one case a restore falls back to `sectionsDetail`'s own membership check alone. */
+export type SectionPick = { readonly div: string; readonly at: number; readonly token: string | null }
+
+/** Every box's own pick, keyed by the string this screen builds from `bid` (or `box`, where
+ *  no `bid` exists) — `keyFor` in `CaptureScreen.tsx`. Malformed entries are dropped rather
+ *  than failing the whole map, the same salvage `readList` applies to a claim above. An entry
+ *  written before `token` existed reads back as `token: null` (`??`), which restores exactly
+ *  like a pick made against a tokenless server — a membership check, no token match. */
+export function storedSectionPicks(): Readonly<Record<string, SectionPick>> {
+  try {
+    const raw = localStorage.getItem(CAPTURE_SECTIONS_KEY)
+    if (raw === null) return {}
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) return {}
+    const out: Record<string, SectionPick> = {}
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const held = value as Record<string, unknown>
+      if (
+        typeof held?.div === 'string' &&
+        held.div !== '' &&
+        typeof held.at === 'number' &&
+        (held.token === undefined || held.token === null || typeof held.token === 'string')
+      ) {
+        out[key] = { div: held.div, at: held.at, token: (held.token as string | undefined) ?? null }
+      }
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+export function rememberSectionPick(key: string, pick: SectionPick): void {
+  try {
+    localStorage.setItem(
+      CAPTURE_SECTIONS_KEY,
+      JSON.stringify({ ...storedSectionPicks(), [key]: pick }),
+    )
+  } catch {
+    /* Quota or a blocked origin — the pick still holds for this box, this render, and the
+       next restore starts from nothing, same as every device that never wrote this key. */
+  }
+}
+
+/** A stored key the box no longer has, or a pick past the sitting: dropped rather than left
+ *  to answer for a section that is gone or no longer meant. */
+export function forgetSectionPick(key: string): void {
+  try {
+    const rest = { ...storedSectionPicks() }
+    delete rest[key]
+    localStorage.setItem(CAPTURE_SECTIONS_KEY, JSON.stringify(rest))
+  } catch {
+    /* storage unavailable — nothing was held to begin with. */
+  }
+}
+
 /* ------------------------------------------------------- how loud the spend confirm gets */
 
 /**
@@ -542,54 +623,5 @@ export function rememberSpendNotice(dollars: number): void {
   } catch {
     /* Quota or a blocked origin. The figure still holds for this tab, which is the press that
        was made — only the next visit is asked again. */
-  }
-}
-
-/* -------------------------------------------------------- the pricing worklist's Compare */
-
-/**
- * WHETHER THIS BROWSER SHOWS THE REFERENCE COLUMNS ON `#/pricing`, PER SECTION
- * (D208, amending the ruling that shipped Compare as component state).
- *
- * THE COORDINATOR'S CATCH: as first built, the toggle was `useState` and forgot itself on
- * every reload — an operator who wanted Low/+Ship/Direct visible had to press Compare again,
- * per section, every time they opened the screen, and this is the screen a person prices
- * hundreds of rows on in one sitting. That is friction charged to exactly the operator who
- * liked the old density, which is the opposite of what progressive disclosure was for.
- *
- * IT IS THE SAME KIND OF FACT AS `banchi.inventory.hide-sold` ABOVE: how THIS browser is
- * dressed, not anything about a card, a price or a run. Losing it costs one press per section
- * of a control that is on screen, and the store stays the one truth about every card D13
- * actually protects.
- *
- * ONE KEY, A SET OF SECTION BUCKETS THAT ARE ON — never a full map with `false` entries,
- * because the ruling's own default is all-off: an absent key, an empty array, or a bucket
- * missing from the array all read as off, and a fresh browser or a bucket this build has
- * never seen (a game added a new section) is off exactly as the ruling specifies. No
- * migration from an old spelling, D27's own rule — there isn't one; this key is new.
- */
-const PRICING_COMPARE_KEY = 'banchi.pricing.compare'
-
-/** Which sections THIS browser has asked to see Low/+Ship/Direct on. Absent, malformed, or a
- *  bucket never named all read as off — the ruling's default. */
-export function storedPricingCompare(): ReadonlySet<string> {
-  try {
-    const raw = localStorage.getItem(PRICING_COMPARE_KEY)
-    if (raw === null) return new Set()
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return new Set()
-    return new Set(parsed.filter((one): one is string => typeof one === 'string'))
-  } catch {
-    return new Set()
-  }
-}
-
-/** Record which sections are on for this browser, as the full set — not a single toggle, so a
- *  clear (an empty set) is expressible and a stale bucket cannot linger past a rename. */
-export function rememberPricingCompare(on: ReadonlySet<string>): void {
-  try {
-    localStorage.setItem(PRICING_COMPARE_KEY, JSON.stringify([...on]))
-  } catch {
-    /* storage unavailable — the choice still holds for this tab */
   }
 }

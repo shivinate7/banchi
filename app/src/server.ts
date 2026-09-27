@@ -12,7 +12,6 @@ import type {
   StandDownReason,
   StandDownResult,
   BoxRecord,
-  BoxState,
   BoxSummary,
   CardSummary,
   Finish,
@@ -35,7 +34,13 @@ import type {
   BoxClaimResult,
   RemoveResult,
   MoveResult,
+  MoveUndoResult,
+  CaptureSitting,
   MoveCardsResult,
+  SectionMoveResult,
+  SectionMoveTarget,
+  CardMoveTarget,
+  SectionUndoResult,
   BoxDeleteResult,
   GraveyardPayload,
   BoxListingPlan,
@@ -64,6 +69,7 @@ import type {
   PricingClearable,
   PricingClearResult,
   PricingWorklist,
+  RunSelection,
   RunSend,
   RunPreflight,
   RunStarted,
@@ -96,6 +102,7 @@ import type {
   ReconcileBacklogResult,
   ValueTable,
   ValueCopy,
+  SetsReport,
   SubmissionClaims,
   ClaimRelease,
   HoldingsRange,
@@ -912,6 +919,17 @@ export async function capture(input: {
    * the game named by `GameRegistry.product_game` uses it; sending it for another game is
    * refused by the server as `product_invalid` rather than ignored. */
   product?: string
+  /** THE SECTION TO FILE INTO, by its divider key (`docs/specs/subbox-capture.md` 1.2) — the
+   *  Capture screen's own picked section (UX-190, sub-box capture). Omitted, exactly like the
+   *  three claims above, is a real and different request: the store fills at the back of the
+   *  box, as every capture did before this field existed. Never an index — the store still
+   *  picks the position; this only says which section it picks it in. */
+  section?: string
+  /** THE BOX'S LAYOUT TOKEN, required alongside `section` (subbox-capture.md 1.2, the Opus
+   *  review's first finding) — read off `BoxRecord.layout_token` at the moment the pick was
+   *  made. A re-space between then and now answers 409 `section_gone` rather than risk a
+   *  stale key silently naming the wrong section. Omitted along with `section`. */
+  layoutToken?: string
 }): Promise<CardSummary> {
   const payload: Record<string, string | number | readonly string[]> = {
     box: input.box,
@@ -919,6 +937,8 @@ export async function capture(input: {
     capture_id: input.captureId,
     game: input.game,
   }
+  if (input.section !== undefined) payload.section = input.section
+  if (input.layoutToken !== undefined) payload.layout_token = input.layoutToken
 
   /* Omitted rather than sent empty, matching `sidecar_payload`'s rule on the other side:
    * the file stays a record of claims the operator actually made (D3 rung 1). The server
@@ -1421,11 +1441,11 @@ export async function answerReviewGroup(
  * `restores_to` COMES BACK WITH THE ANSWER AND IS THE CALLER'S TO ACT ON. See `SaleResult` in
  * types.ts for what it means and for the two casts that used to discard it.
  */
-async function sale(box: number, index: number, undo: boolean): Promise<SaleResult> {
+async function sale(box: number, index: number, undo: boolean, stillHere = false): Promise<SaleResult> {
   return (await request(`/inventory/${box}/${index}/sold`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(undo ? { undo: true } : {}),
+    body: JSON.stringify(stillHere ? { still_here: true } : undo ? { undo: true } : {}),
   })) as SaleResult
 }
 
@@ -1463,6 +1483,16 @@ export function markSold(box: number, index: number): Promise<SaleResult> {
  */
 export function undoSale(box: number, index: number): Promise<SaleResult> {
   return sale(box, index, true)
+}
+
+/**
+ * "This card is still here" (`docs/specs/undo.md` UN-7). The fix after a sale is built on:
+ * `undoSale` refuses `sale_built_on` once the card's photo is cleared or its order has
+ * shipped or closed, and this puts the card back anyway. A shipped order keeps its count:
+ * the card's id comes off the line as a hand-fill, so `order_released` stays null.
+ */
+export function saleStillHere(box: number, index: number): Promise<SaleResult> {
+  return sale(box, index, true, true)
 }
 
 // ---------------------------------------------------------------------------- retire, both ways
@@ -1699,16 +1729,13 @@ export async function createBox(input: {
  * allowed — it is not this module's place to add the confirm D10 says to reach for *first if
  * that failure ever actually happens*, and it is worth knowing that it has not yet.
  *
- * `box_closed` IS A REFUSAL ABOUT THE BOX, NOT ABOUT THIS CALL BEING WRONG. It means the box
- * is closed and the edit asked for is one a closed box does not take. Branch on it if a screen
- * can offer to reopen; do not paraphrase it into "something went wrong".
+ * A box has no lid (`D299`), so no edit here is refused for a seal.
  */
 export async function updateBox(
   box: number,
   patch: {
     name?: string
     sections?: number[]
-    state?: BoxState
     /** Section names by ORDINAL, as the screen numbers them (D132). A blank clears one. */
     section_names?: Record<number, string>
   },
@@ -1720,7 +1747,6 @@ export async function updateBox(
   const payload: Record<string, string | number[] | Record<number, string>> = {}
   if (patch.name !== undefined) payload.name = patch.name
   if (patch.sections !== undefined) payload.sections = patch.sections
-  if (patch.state !== undefined) payload.state = patch.state
   if (patch.section_names !== undefined) payload.section_names = patch.section_names
 
   return (await request(`/boxes/${box}`, {
@@ -1745,27 +1771,57 @@ export async function updateBox(
  * box already has and append to it, so two devices editing one box last-writer-wins the way
  * that function's own note describes. This one appends, in the store, from the physical act.
  *
- * REFUSALS WORTH BRANCHING ON, all three of them facts about the box rather than about the
- * request. `section_empty`: the last section was opened and nothing has been captured into
- * it yet, so the divider asked for is already there — the two-presses-in-a-row case, and the
- * one an operator will actually hit. `section_ahead`: a divider is already declared past the
- * next card, so this one cannot go in front of it; the remedy is the dividers editor.
- * `box_closed`: a sealed box takes no more cards. Show the server's sentence — each names
- * the divider or the box that is in the way, and this module has nothing to add to it.
+ * THE REFUSAL WORTH BRANCHING ON is a fact about the box rather than about the request.
+ * `section_empty`: the last section was opened and nothing has been captured into it yet,
+ * so the divider asked for is already there — the two-presses-in-a-row case. A divider
+ * typed past the last card is the same case now, because the next card goes behind it.
+ * Show the server's sentence — it names the divider that is in the way, and this module
+ * has nothing to add to it.
  *
  * Answers with the whole `BoxRecord`, so `sections_detail` comes back with it. Read the
  * section that was opened off the LAST entry of that array rather than off `sections.length`
  * — same reason `BoxOps.tsx` gives at `renderedSections`: the server renders spans and the
  * app does not do section arithmetic.
+ *
+ * `after` IS THE PICKED SECTION'S OWN DIVIDER KEY, and omitted is a real and different
+ * request (`docs/specs/subbox-capture.md` 1.3): the new divider goes at the back, as every S
+ * did before a middle pick existed. With `after` naming a section that is not the last, the
+ * new divider goes directly behind that section's last card — the owner's Q1 ruling — and is
+ * the section directly after `after` in the answer's own `sections_detail`, never the last
+ * entry any more.
+ *
+ * `layoutToken` IS REQUIRED ALONGSIDE `after` (subbox-capture.md 1.3, the same re-space
+ * guard `capture()`'s own carries) — omitted along with it.
  */
-export async function openSection(box: number): Promise<BoxRecord> {
+export async function openSection(box: number, after?: string, layoutToken?: string): Promise<BoxRecord> {
+  const payload: Record<string, string> = {}
+  if (after !== undefined) payload.after = after
+  if (layoutToken !== undefined) payload.layout_token = layoutToken
   return (await request(`/boxes/${box}/sections`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     /* `{}` and not an empty body: every write in the capture server reads its body the same
      * way and refuses an absent one as `body_required`, which `markSold` documents as the
      * convention rather than an oversight. Two characters. */
-    body: JSON.stringify({}),
+    body: JSON.stringify(payload),
+  })) as BoxRecord
+}
+
+/** `DELETE /boxes/<box>/sections?div=<key>`: take out the divider `openSection` added, the
+ * capture screen's `U` after `S` (UN-15, subbox-capture.md 1.4, `ux/divider-fix` at
+ * `20392e87`). `div` is REQUIRED now — the route refuses 400 `div_required` without one — and
+ * is the divider key `S`'s own answer named, `sections_detail[].div` or the response's own
+ * `div` at the moment it was opened, never composed here. The store removes that one divider
+ * and moves no other. It refuses 409 `divider_built_on` when the divider is not S's own to
+ * undo any more (a dividers-editor save came between, or a card on hand stands behind it).
+ *
+ * A STRING, NOT A NUMBER — §1's own rule: "Compare keys as strings. Never parse one and
+ * never compose one." A fractional key reads as Python's `repr` (`"5.0009765625"`), and
+ * `String(numberValue)` on that value is JavaScript's OWN formatting, not Python's — the one
+ * way this call could silently name a divider the store does not have. */
+export async function closeSection(box: number, div: string): Promise<BoxRecord> {
+  return (await request(`/boxes/${box}/sections?div=${encodeURIComponent(div)}`, {
+    method: 'DELETE',
   })) as BoxRecord
 }
 
@@ -1905,21 +1961,61 @@ export async function removeCardInPlace(
  *
  * No listing-hold guard: a card carrying an active listing stage is free to move (D7 —
  * which physical copy backs a stage is deliberately unrecorded, so a box change cannot
- * disagree with it). Undo is this same call again, aimed at the transplant, in the other
- * direction — it lands at a fresh index in the original box rather than reclaiming the
- * tombstoned one.
+ * disagree with it). The undo is `undoMove` (UN-14), until either box changes. After
+ * that, the fix is this same call again, aimed at the transplant, in the other direction.
+ * It lands at a fresh index in the original box rather than reclaiming the tombstoned one.
+ */
+/** A destination section for a Move-to-box (`docs/specs/subbox-capture.md` 1.5): the
+ *  divider key AND `toBox`'s own layout token from `GET /boxes`, always sent together — a
+ *  key alone can name the wrong section after a re-space, and the token is what tells an
+ *  old key from a new section reusing it. */
+export type MoveSection = { readonly div: string; readonly layoutToken: string }
+
+/**
+ * `section` is a destination-box divider key (`sections_detail[].div`,
+ * D300): the card lands at that section's tail. The owner ruled "no
+ * auto default" — a screen never omits this field on a Move-to-box press. It stays
+ * optional here only so an older caller (and a Map drag, which names an exact gap through
+ * a different route entirely) keeps compiling.
  */
 export async function moveCard(
   box: number,
   index: number,
   captureId: string | null,
   toBox: number,
+  section?: MoveSection,
 ): Promise<MoveResult> {
   return (await request(`/inventory/${box}/${index}/move`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ capture_id: captureId, to_box: toBox }),
+    body: JSON.stringify({
+      capture_id: captureId,
+      to_box: toBox,
+      ...(section === undefined ? {} : { section: section.div, layout_token: section.layoutToken }),
+    }),
   })) as MoveResult
+}
+
+/**
+ * The newest sitting, off the store (UN-2). The capture strip reads this on load, so a reload
+ * keeps the sitting and its undo. See `CaptureSitting` for what `open` means.
+ */
+export async function getCaptureSitting(): Promise<CaptureSitting> {
+  return (await request('/capture/sitting', NO_CACHE)) as CaptureSitting
+}
+
+/**
+ * Undo a move (UN-14): the card goes back to its own index, and nothing else in either box
+ * moves. Aim it at the TOMBSTONE, the `moved` key of the `MoveResult`. It holds until either
+ * box changes. After that it refuses `move_built_on`, and the fix is an ordinary `moveCard`
+ * back. `not_moved` means it was already undone.
+ */
+export async function undoMove(box: number, index: number): Promise<MoveUndoResult> {
+  return (await request(`/inventory/${box}/${index}/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ undo: true }),
+  })) as MoveUndoResult
 }
 
 /**
@@ -1934,16 +2030,82 @@ export async function moveCard(
  * rather than leaving it half migrated. Order is preserved at the destination: cards
  * arrive in the order their indices were sent, landing contiguously.
  */
+/** `section` — same rule as `moveCard`'s: a destination divider key, the owner's own pick,
+ *  no auto default. */
 export async function moveCards(
   box: number,
   indices: number[] | null,
   toBox: number,
+  section?: MoveSection,
 ): Promise<MoveCardsResult> {
   return (await request(`/inventory/${box}/move`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ indices, to_box: toBox }),
+    body: JSON.stringify({
+      indices,
+      to_box: toBox,
+      ...(section === undefined ? {} : { section: section.div, layout_token: section.layoutToken }),
+    }),
   })) as MoveCardsResult
+}
+
+/**
+ * Move touching sections of one box as objects (D264): dividers, names and cards together.
+ * `first`..`last` are the source sections; the target is a gap in front of a section of a box
+ * (the same box reorders it), its near end, or a new box. `aim` is what the screen saw, so a
+ * box changed on another device refuses `section_changed` and nothing moves.
+ */
+export async function moveSections(
+  box: number,
+  first: number,
+  last: number,
+  target: SectionMoveTarget,
+  aim: { count: number; first: string | null; last: string | null } | null,
+): Promise<SectionMoveResult> {
+  const where =
+    target.toBox === 'new'
+      ? { new_box: true }
+      : { to_box: target.toBox, before: target.before, layout_token: target.layoutToken }
+  return (await request(`/boxes/${box}/sections/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ first, last, ...where, aim }),
+  })) as SectionMoveResult
+}
+
+/**
+ * Move one card, or a range of cards from one section, to a gap in a box (D264): in front of
+ * a card, or at a section's end. No divider moves. The same one write, receipt and undo as a
+ * section move (`undoSectionMove`).
+ */
+export async function moveRange(
+  box: number,
+  indices: number[],
+  target: CardMoveTarget,
+  aim: { count: number; first: string | null; last: string | null } | null,
+): Promise<SectionMoveResult> {
+  return (await request(`/boxes/${box}/cards/move`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      indices,
+      to_box: target.toBox,
+      before_card: target.beforeCard,
+      section_end: target.sectionEnd,
+      layout_token: target.layoutToken,
+      aim,
+    }),
+  })) as SectionMoveResult
+}
+
+/** Put a section move back exactly, while neither box has changed since (D264). A box that
+ *  changed refuses `box_changed_since`; then the way back is a new move. */
+export async function undoSectionMove(move: string): Promise<SectionUndoResult> {
+  return (await request('/boxes/sections/undo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ move }),
+  })) as SectionUndoResult
 }
 
 /**
@@ -2099,6 +2261,17 @@ export async function preflightRun(send: RunSend): Promise<RunPreflight> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(onTheWire(send)),
   })) as RunPreflight
+}
+
+/** The cards a spend over this selection would buy: photographed, and held by no live claim.
+ *  FREE, decodes nothing, and writes nothing. Review's Identify strip counts, prices and spends this one list
+ *  (D291), so the press can never buy a card the strip did not name. */
+export async function waitingCards(selection: RunSelection): Promise<{ keys: string[]; claimed: number }> {
+  return (await request('/pipeline/waiting', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(onTheWire({ selection })),
+  })) as { keys: string[]; claimed: number }
 }
 
 /** ONE PRESS IN THE SHAPE THE ROUTE READS, and the selection is the payload rather than a field
@@ -2355,6 +2528,14 @@ export async function applyMarkdown(
      *  made. Omit to say "did not read one", which the command allows. */
     revision?: string
     write?: boolean
+    /** The Live tab's Singles / Sealed filter. The server refuses the whole request if an edit
+     *  is of the other kind (`kind_mismatch`), so the filter's word is kept. Omit for both. */
+    kind?: 'singles' | 'sealed'
+    /** SKUs the Live tab saw typed THIS VISIT (`Pricing.tsx`'s `typedHere`). A SKU named here
+     *  is never refused `earlier_lower` — the server has no other way to tell "typed again,
+     *  same value" from "typed days ago", because `stamp_answers` keeps the old `at` when the
+     *  value does not change. */
+    typed?: string[]
   } = {},
 ): Promise<MarkdownAnswer> {
   return (await request(`/pipeline/markdowns/${encodeURIComponent(stamp)}/apply`, {
@@ -2364,6 +2545,8 @@ export async function applyMarkdown(
       worklist: options.worklist,
       edits: options.edits,
       revision: options.revision,
+      kind: options.kind,
+      typed: options.typed,
       write: Boolean(options.write),
     }),
   })) as MarkdownAnswer
@@ -2617,13 +2800,41 @@ export async function getPricingCorpus(): Promise<{
      here instead would be `pipeline/corpus.py:clearable` written a second time in TypeScript,
      against the one file in this product that holds money. */
   clearable?: PricingClearable
+  /* THE NEWEST CLEAR THAT CAN STILL BE UNDONE (UN-11), or null. The server keeps it beside
+     the corpus, so the undo outlives the toast and a reload. Null once a send has carried a
+     cleared SKU: the server decides that, and `restoreLastClear` is the press. */
+  last_clear?: { count: number; at: number; id?: string } | null
+  /* EVERY KEPT CLEAR THAT CAN STILL BE UNDONE, newest first (the owner's standing undo ruling,
+     "Anytime, from a history"). Each has its own Restore, `restoreClear`. Absent from an older
+     server, which offers `last_clear` alone. */
+  clears?: KeptClear[]
 }> {
   return (await request('/pricing', NO_CACHE)) as {
     corpus: PricingCorpus
     path: string
     revision: string
     clearable?: PricingClearable
+    last_clear?: { count: number; at: number; id?: string } | null
+    clears?: KeptClear[]
   }
+}
+
+/** One kept clear a restore can still undo: its id, how many prices it took, and the unix
+ *  second it took them. */
+export type KeptClear = { id?: string; count: number; at: number }
+
+/** Put back ONE kept clear, by its id, off the server's own copy. It refuses
+ *  `clear_built_on` once a send has carried one of its SKUs, and `no_clear_to_restore` once it
+ *  is gone. A price typed since is kept and named in `skipped`. */
+export async function restoreClear(
+  clear: string,
+  revision?: string,
+): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
+  return (await request('/pricing/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clear, ...(revision === undefined ? {} : { revision }) }),
+  })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
 }
 
 /**
@@ -2678,11 +2889,28 @@ export async function clearPricingAnswers(options: {
 export async function restorePricingAnswers(
   answers: PricingClearResult['cleared'],
   revision?: string,
+  clear?: string,
 ): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
   return (await request('/pricing/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(revision === undefined ? { answers } : { answers, revision }),
+    body: JSON.stringify({ answers, ...(revision === undefined ? {} : { revision }), ...(clear === undefined ? {} : { clear }) }),
+  })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
+}
+
+/**
+ * Put back the newest clear, read off the server rather than the toast (UN-11). It holds
+ * until a send carries a cleared SKU. After that it refuses `clear_built_on`, and the fix is
+ * to type the prices again. `no_clear_to_restore` means there is nothing kept. The answer has
+ * `restorePricingAnswers`'s shape, and a price typed since is kept and named in `skipped`.
+ */
+export async function restoreLastClear(
+  revision?: string,
+): Promise<{ ok: boolean; restored: string[]; skipped: string[]; revision: string }> {
+  return (await request('/pricing/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(revision === undefined ? { last_clear: true } : { last_clear: true, revision }),
   })) as { ok: boolean; restored: string[]; skipped: string[]; revision: string }
 }
 
@@ -2978,6 +3206,30 @@ export async function getHoldingsValue(range: HoldingsRange = 'month'): Promise<
     `/pipeline/holdings-value?range=${encodeURIComponent(range)}`,
     NO_CACHE,
   )) as HoldingsValuePayload
+}
+
+/** One SKU's answer from `getSkuPhotos` — the first on-hand copy of that SKU that still
+ *  carries a photograph, exactly `photoUrl`'s own `(box, index, cid)` triple. */
+export type SkuPhotoEntry = { box: number; index: number; cid: string | null }
+
+/** `sku -> SkuPhotoEntry`, for exactly the SKUs asked. A SKU with no photographed copy on
+ *  hand is simply ABSENT — never a guess (`GET /skus/photos?sku=<s>&sku=<s>`,
+ *  D298). `#/revenue`'s own reason: a sold card's own photograph is usually
+ *  reclaimed on purpose (D89), so a sales row's thumbnail is ANOTHER copy of the same SKU,
+ *  never the one that actually sold. A plain read, costs nothing, so this screen calls it
+ *  on arrival rather than gating it behind a press. */
+export async function getSkuPhotos(skus: string[]): Promise<Record<string, SkuPhotoEntry>> {
+  if (skus.length === 0) return {}
+  const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
+  const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as { photos: Record<string, SkuPhotoEntry> }
+  return body.photos
+}
+
+/** Every on-hand card, grouped by set, one row per distinct card with its quantity — the
+ *  owner's "by set order" view (`#/inventory?view=sets`). A read; costs nothing, holds
+ *  nothing, aggregates server-side. */
+export async function getInventorySets(): Promise<SetsReport> {
+  return (await request('/pipeline/sets', NO_CACHE)) as SetsReport
 }
 
 /** Every run, newest first. A read; costs nothing and holds nothing, so a run started from

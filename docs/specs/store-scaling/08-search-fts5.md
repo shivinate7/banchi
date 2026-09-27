@@ -11,7 +11,14 @@ Replace `do_search`'s full walk over `inventory.cards.values()`
 today. The owner chose FTS5 over `LIKE` explicitly, for multi-word-any-order matching and
 best-match-first ranking, and explicitly accepted losing mid-word substring matching
 (`izard` -> Charizard) — traded for **prefix matching**, which must be built in so a
-partial word typed from the start of a word (`chariz`) still hits. The walk is **deleted**,
+partial word typed from the start of a word (`chariz`) still hits.
+
+**SUPERSEDED 2026-09-25 on the mid-word point (the owner's own ruling, verbatim: "Add
+mid-word search"). D271 carries the supersession and the mechanism.** It also carries
+measurements taken before shipping, re-measured by the round-4 Opus review at 3,000 and
+10,000 cards. `do_search("izard")` finds Charizard now, at a known cost ceiling D271
+records. The rest of this file is the record of the original trade-off, kept for its own
+history. The walk is **deleted**,
 not kept as a fallback: the index is built by the schema migration on first open, so no
 store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without it. There is no
 `PKMNSCAN_*=off` escape hatch for this one; there is nothing to fall back to.
@@ -667,6 +674,9 @@ assertions already do this structurally — see Tests).
    explicitly, so a future session does not "fix" it back into a regression against the
    owner's own decision. Cite this playbook and the owner's 2026-09-12 acceptance in the
    assertion's message.
+
+   SUPERSEDED 2026-09-25 on the mid-word point (see the top of this file, and D271). The
+   harness check named here is `check_search_fts5`, and it now asserts the FOUND direction instead.
 3. `check_index_stays_in_sync_across_the_four_write_shapes` — the triggers are the whole
    argument for D88 compliance here, so prove them directly rather than trusting the DDL:
    capture a card (`do_capture`), assert it is findable by name; sell it

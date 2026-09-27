@@ -39,7 +39,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from harness.tests import Checks, Result
-from pipeline import decisions, join, pricing, tcgcsv
+from pipeline import corpus, decisions, join, pricing, tcgcsv
 
 NAME = "T5"
 DESCRIPTION = "Pricing rules, rounding, floor clamp, and the no-market-data refusal"
@@ -403,6 +403,12 @@ def run() -> Result:
         lambda: join.prices_for(report, sub_threshold=pricing.flat_floor()),
         "a run-wide sub-threshold choice does not answer for an unpriced SKU",
     )
+    left = join.prices_for(report, sub_threshold=pricing.flat_floor(), leave_unanswered=True)
+    c.ok(
+        ARTICUNO not in left and ACCELGOR not in left,
+        "a SEND leaves an unanswered no-price SKU out rather than refusing (D277 Q3) — and "
+        "never prices it at a guess: it is absent, not floored",
+    )
     priced = join.prices_for(
         report,
         sub_threshold=pricing.flat_floor(),
@@ -422,6 +428,89 @@ def run() -> Result:
         [r[tcgcsv.SKU_COLUMN] for r in rows],
         [ARTICUNO],
         "an unlisted SKU never reaches the import file",
+    )
+
+    # --- a held SKU with no market price, as `#/pricing` stores it ---------------------------
+    #
+    # THE SCREEN'S OWN SHAPE, THROUGH THE CORPUS. A hold is one answer on the `price` channel on
+    # every row, and it carries the answer it replaced in `before` (the owner's ruling, "Bring
+    # back $5.16"). `join.prices_for` must skip the held SKU before it reads `no_market_data`,
+    # and still list the control. A release writes `before` back, and the SKU lists again.
+    def _through_corpus(answers):
+        book = corpus.Corpus.parse({"version": 1, "skus": answers})
+        choice = book._decisions(None, [ARTICUNO, ACCELGOR], [ARTICUNO, ACCELGOR])
+        return join.prices_for(
+            report,
+            sub_threshold=pricing.flat_floor(),
+            sku_dispositions=choice.dispositions(),
+            no_market_data=choice.no_market_data,
+            withheld=set(choice.withheld()),
+        )
+
+    # NO `leave_unanswered`: an unanswered no-price SKU refuses here, so a held one passing
+    # proves the hold is what answered it, not the send's leave-out rule.
+    hold = {"withheld": "bullish", "note": "rotation", "before": {"value": "22.00", "channel": "price"}}
+    on_hold = _through_corpus({ARTICUNO: {"value": hold}, ACCELGOR: {"value": "4.00"}})
+    c.ok(
+        ARTICUNO not in on_hold,
+        "a held SKU with no market price is withheld, and its `before` field is not read as a price",
+    )
+    c.equal(on_hold.get(ACCELGOR), Decimal("4.00"), "the control, a typed price with no market price, still lists")
+    released = _through_corpus({ARTICUNO: {"value": "22.00"}, ACCELGOR: {"value": "4.00"}})
+    c.equal(released.get(ARTICUNO), Decimal("22.00"), "a release writes `before` back, and the SKU lists at it")
+
+    # --- a release keeps the first date (the owner's ruling, "Keep the first date") ----------
+    #
+    # `corpus.stamp_answers` dates every NEW price answer, because D100's markdown ratchet reads
+    # `at`. A price returning from a hold is not new: the hold kept it in `before`, date and all,
+    # and a release sends that same answer back with that same date. Only an exact return keeps
+    # the date. A new price, or the same price with no matching date, is dated today.
+    first, now = "2026-09-01T10:00:00+00:00", "2026-09-26T12:00:00+00:00"
+    held_book = corpus.Corpus.parse({"version": 1, "skus": {
+        ARTICUNO: {"value": {"withheld": "bullish", "before": {"value": "22.00", "channel": "price", "at": first}}},
+    }})
+
+    def _stamped(value, at=None):
+        after = corpus.Corpus.parse({"version": 1, "skus": {ARTICUNO: {"value": value, **({"at": at} if at else {})}}})
+        corpus.stamp_answers(held_book, after, now)
+        return after.answers[ARTICUNO].at
+
+    c.equal(_stamped("22.00", first), first, "a release that sends back the hold's own answer and date keeps the first date")
+    c.equal(_stamped("22.0", first), first, "the value folds as the ratchet folds it: 22.0 is 22.00")
+    c.equal(_stamped("23.00", first), now, "a new price after a hold dates today, whatever date it carries")
+    c.equal(_stamped("22.00"), now, "the same price with no date is a new typing, and dates today")
+    c.equal(_stamped("22.00", "2026-09-20T00:00:00+00:00"), now, "a date that is not the hold's own is not kept")
+    fresh = corpus.Corpus.parse({"version": 1, "skus": {ARTICUNO: {"value": "22.00", "at": first}}})
+    corpus.stamp_answers(corpus.Corpus(), fresh, now)
+    c.equal(fresh.answers[ARTICUNO].at, now, "a price with no hold before it dates today, as it always has")
+
+    # THE SERVER SETS A HOLD'S `before.at`, NEVER THE CLIENT (the Opus review, HIGH). A screen
+    # can hold a stale date for a price typed this visit. A forged date must not be kept.
+    forged = "2026-01-01T00:00:00+00:00"
+
+    def _held_date(stored, sent_before):
+        prior = corpus.Corpus.parse({"version": 1, "skus": {ARTICUNO: stored}})
+        after = corpus.Corpus.parse({"version": 1, "skus": {ARTICUNO: {"value": {"withheld": "bullish", "before": sent_before}}}})
+        corpus.stamp_answers(prior, after, now)
+        return after.answers[ARTICUNO].value["before"].get("at")
+
+    c.equal(
+        _held_date({"value": "22.00", "at": first}, {"value": "22.00", "channel": "price", "at": forged}),
+        first,
+        "a hold takes `before.at` from the stored answer it replaces, and a forged date is dropped",
+    )
+    c.equal(
+        _held_date({"value": "23.00", "at": first}, {"value": "22.00", "channel": "price", "at": forged}),
+        None,
+        "a `before` that is not the stored answer keeps no date, so its release dates today",
+    )
+    c.equal(
+        _held_date(
+            {"value": {"withheld": "bullish", "before": {"value": "22.00", "channel": "price", "at": first}}},
+            {"value": "22.00", "channel": "price", "at": forged},
+        ),
+        first,
+        "a hold saved again keeps the date the server gave it the first time, never the client's",
     )
 
     # --- withholding: an answer that is not a price (D49) ------------------------------------
@@ -518,8 +607,9 @@ def run() -> Result:
     c.equal(choice.unanswered, [ACCELGOR], "a null no_market_data entry is unanswered")
     c.equal(
         len(choice.blocking([ARTICUNO])),
-        2,
-        "an unset sub_threshold and an unanswered SKU both block emit",
+        1,
+        "an unset sub_threshold blocks emit, and an unanswered no-price SKU does NOT any more "
+        "(D277 Q3): the send leaves it out and sends every other ready copy",
     )
     c.equal(
         len(decisions.Decisions.parse(

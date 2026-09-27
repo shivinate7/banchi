@@ -42,7 +42,11 @@ addresses it. It adds the freedom the owner asked for.
 
 ### What is open
 
-The shape of the key is not decided. The builder brings options to the owner with measurements:
+**Answered by the owner, 2026-09-25**, verbatim: "A key on each card". Every card carries its
+own order key, apart from its stored index. D294 records the form that was
+built from that ruling. The list below is the question as it was put.
+
+The shape of the key was not decided. The builder brings options to the owner with measurements:
 
 - **The form.** A sortable fraction between two neighbors, integers with gaps, or an order
   within the section object. Each costs something different on a long box.
@@ -55,6 +59,36 @@ The shape of the key is not decided. The builder brings options to the owner wit
 
 ### What is built
 
-RECORDED as a proposal, NOT BUILT. The owner's word on the design comes before the build. It comes before the box map's placement slice. It needs two harness cases.
-A key migration changes no label. A placement between two sections renumbers only the cards it
-should.
+BUILT on `ux/boxmap`, 2026-09-25. The owner answered the open question above on 2026-09-25:
+"A key on each card". D294 records the form (a fraction that starts at the
+index), the dividers, the migration and the moves. T7's `t7_box_map.py` holds the harness
+cases: the migration changes no label, and a placement writes only the cards it moves.
+
+### The divider anchor, 2026-09-26
+
+The divider proof ran random writes against a physical model of each box. It found three
+defects where a card could stand on the wrong side of a divider. All three are fixed, and each
+compares keys with keys:
+
+- **F1.** `next_key` and `_birth_key` did not read the dividers. The next card now goes into
+  an empty last section (the owner's ruling, D10: "Into the empty section (Recommended)").
+- **F2.** The capture screen's divider undo (UN-15) sent stored order keys to `PUT
+  /boxes/<box>`, which reads card counts. So every divider whose key was not its count moved.
+  It calls `DELETE /boxes/<box>/sections` now. `Inventory.close_section` removes the empty
+  last divider by its own key, and moves no other.
+- **F3.** `Inventory.unmove_card` compared a divider's key with the transplant's stored index.
+  It compares it with the transplant's order key now.
+
+`harness/tests/t7_box_map.py:check_divider_anchor` lands the proof as a permanent check: the
+three repros as named cases, then 6 seeds of 150 random writes. A store error on a well-aimed
+write fails it too. Eight mutations each turn it red. Four undo the fixes. The others slide
+order keys on a remove, use `bisect_left` in `layout_of`, drop `take_div` in `_try_place`, and
+drop the front re-anchor in `drop_sections`. `app/tests/capture-undo.spec.ts` holds F2's client half.
+
+### A capture takes a key too, 2026-09-26
+
+D300 lets a capture and a Move-to-box file a card at the tail of a picked
+section. So a new card can have the highest index and a middle key. That is this entry's
+premise again: index order is not box order. `Inventory.section_tail_key` is the key rule.
+It takes a whole number first and then a 1/1024 step, because halving the gap re-spaces the box
+too often. `Inventory.positions_for_sku` and `Inventory.in_state` sort by the key now.

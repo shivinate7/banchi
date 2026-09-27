@@ -75,8 +75,6 @@ from store.files import (  # noqa: F401
 )
 from store.cache import Cache, CacheEntry  # noqa: F401
 from store.master import (  # noqa: F401
-    BOX_CLOSED,
-    BOX_OPEN,
     CAPTURED,
     IDENTIFIED,
     LISTING_STAGES,

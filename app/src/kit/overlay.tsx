@@ -58,6 +58,28 @@ function focusables(root: HTMLElement): HTMLElement[] {
 /* The open layers, innermost last, blocking and not. */
 const stack: HTMLElement[] = []
 
+/* A LAYER DRAWN INSIDE ANOTHER LAYER SITS ABOVE IT, EVEN WHEN BOTH OPEN IN ONE COMMIT (the runs
+ * fold, D291). React runs a child's layout effects before its parent's, so a Dialog mounted in
+ * the same commit as the Sheet around it joined the stack FIRST, and the Sheet then painted over
+ * it and took its clicks, its Escape and its focus. Every layer's panel ref is handed down to the
+ * layers drawn inside it (`LayerParent`), and a layer that joins late is inserted UNDER any layer
+ * already open that names it as parent. `scrimOf` keeps each layer's scrim so the z-indices can
+ * be recomputed after an insertion. */
+const LayerParent = createContext<RefObject<HTMLElement | null> | null>(null)
+const parentOf = new WeakMap<HTMLElement, RefObject<HTMLElement | null> | null>()
+const scrimOf = new WeakMap<HTMLElement, HTMLElement | null>()
+
+/** Re-applies `layerZ` to every open layer from `from` up, after an insertion moved them. */
+function restack(from: number): void {
+  for (let at = from; at < stack.length; at += 1) {
+    const root = stack[at] as HTMLElement
+    const { scrim: scrimZ, panel: panelZ } = layerZ(at)
+    root.style.zIndex = String(panelZ)
+    const scrimEl = scrimOf.get(root) ?? null
+    if (scrimEl !== null) scrimEl.style.zIndex = String(scrimZ)
+  }
+}
+
 function isTop(root: HTMLElement): boolean {
   return stack[stack.length - 1] === root
 }
@@ -138,6 +160,7 @@ export type OverlayLayerOptions = {
  *  `Modal` and `Popover`, and the shell's own palette, keys sheet and drawer. Only the top layer
  *  traps focus and takes Escape, and nothing beneath it sees that Escape. */
 export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, onEscape, trap = true, scrim }: OverlayLayerOptions): void {
+  const parent = useContext(LayerParent)
   useLayoutEffect(() => {
     const root = ref.current
     if (!active || root === null) return
@@ -164,8 +187,16 @@ export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, on
         'kit/overlay.tsx: a third scrimmed layer opened. layerZ has no pair left for it and is reusing the ceiling pair — dimming may land on the wrong layer.',
       )
     }
-    stack.push(root)
-    if (scrimEl !== null) scrimmedStack.push(root)
+    /* Under the first open layer drawn inside this one, or on top when there is none. */
+    const child = stack.findIndex((open) => parentOf.get(open) === ref)
+    const at = child < 0 ? stack.length : child
+    stack.splice(at, 0, root)
+    parentOf.set(root, parent)
+    scrimOf.set(root, scrimEl)
+    if (scrimEl !== null) {
+      const sChild = scrimmedStack.findIndex((open) => parentOf.get(open) === ref)
+      scrimmedStack.splice(sChild < 0 ? scrimmedStack.length : sChild, 0, root)
+    }
     /* WHICHEVER OPENED LAST PAINTS ON TOP. `.bn-dialog`/`.bn-sheet`/`.bn-popover`/`.bn-scrim`'s
      * own static z-index (kit.css) ties two layers that are not siblings in DOM paint order —
      * a portalled panel and a plain fixed-position overlay elsewhere in the tree (Fulfillment's
@@ -177,9 +208,7 @@ export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, on
      * compares layers that are open AT THE SAME TIME — a layer that closed and reopened later
      * still lands above whatever was already open, without the count ever growing unbounded
      * across a long session. */
-    const { scrim: scrimZ, panel: panelZ } = layerZ(stack.length - 1)
-    root.style.zIndex = String(panelZ)
-    if (scrimEl !== null) scrimEl.style.zIndex = String(scrimZ)
+    restack(at)
     return () => {
       const at = stack.lastIndexOf(root)
       if (at >= 0) stack.splice(at, 1)
@@ -190,7 +219,7 @@ export function useOverlayLayer(ref: RefObject<HTMLElement | null>, { active, on
       root.style.zIndex = ''
       if (scrimEl !== null) scrimEl.style.zIndex = ''
     }
-  }, [ref, active, scrim])
+  }, [ref, active, scrim, parent])
 
   /* BOTH ARE LAYOUT EFFECTS, SO A LAYER THAT IS PAINTED ALREADY HEARS ITS KEYS (D128, applied
      here at the PR 2 integration). As passive effects they attached after paint, so an Escape
@@ -332,6 +361,8 @@ function useFirstFocus(ref: RefObject<HTMLElement | null>, active: boolean): voi
     const frame = window.requestAnimationFrame(() => {
       const root = ref.current
       if (root === null || root.contains(document.activeElement)) return
+      /* A layer drawn inside this one already holds focus: it is on top, and keeps it. */
+      if (stack.includes(root) && !isTop(root)) return
       const marked = root.querySelector<HTMLElement>('[data-autofocus]')
       ;(marked ?? root).focus({ preventScroll: true })
     })
@@ -444,7 +475,7 @@ export function Dialog({
             onClick={() => close.current()}
           />
         ) : null}
-        {children}
+        <LayerParent.Provider value={panel}>{children}</LayerParent.Provider>
       </div>
     </>,
     document.body,
@@ -462,14 +493,14 @@ type OverlayProps = {
   readonly footer?: ReactNode
   readonly children?: ReactNode
   readonly className?: string
+  /** False while the layer must not close: its Close is disabled, and Escape and the scrim do
+   *  nothing. A confirm is not dismissible while it writes. */
+  readonly dismissible?: boolean
 }
 
 type FrameProps = OverlayProps & {
   readonly kind: 'sheet' | 'modal'
   readonly role?: 'dialog' | 'alertdialog'
-  /** False while the layer must not close: its Close is disabled, and Escape and the scrim do
-   *  nothing. A confirm is not dismissible while it writes. */
-  readonly dismissible?: boolean
 }
 
 function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose, title, icon, footer, children, className }: FrameProps) {
@@ -532,7 +563,9 @@ function OverlayFrame({ kind, role = 'dialog', dismissible = true, open, onClose
           )}
         </div>
         <OverlayContext.Provider value>
-          <div className="bn-overlay-body">{children}</div>
+          <LayerParent.Provider value={panel}>
+            <div className="bn-overlay-body">{children}</div>
+          </LayerParent.Provider>
         </OverlayContext.Provider>
         {footer ? <div className="bn-overlay-foot">{footer}</div> : null}
       </div>

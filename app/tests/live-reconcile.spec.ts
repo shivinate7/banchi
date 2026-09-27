@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
+import { settleMotion } from './motionSettled'
 import { sealEveryTest } from './shell'
 
 /* THE FOURTH COMMAND, OVER THE WHOLE STORE — asserted where nothing else can see it (D87).
@@ -339,7 +340,6 @@ test('no typed interpunct reaches the reconcile sheet', async ({ page }) => {
   expect(text).not.toMatch(/[·•]/)
 })
 
-
 /* F3, THE PR 2 INTEGRATION REVIEW: THIS SHEET'S SCRIM COVERS THE RUNS SHEET IT WAS OPENED FROM.
  * Review opens Runs in a kit `Sheet`, and this sheet opens from there. Its scrim used to keep the
  * stylesheet's static z-index, under the Runs sheet, so about 580px of Runs stayed bright and
@@ -370,3 +370,30 @@ test('the reconcile sheet dims the Runs sheet it was opened from, and a press th
   await expect(panel(page)).toBeHidden()
   await expect(page.locator('.review-runs-sheet')).toBeVisible()
 })
+
+/* THE FETCH PRESS KEEPS ITS WORDS AND ITS BOX WHILE IT RUNS (D118, the busy-press list from
+   b-runs round 9). It read "Asking TCGplayer…" while busy, so it changed size under the finger.
+   Held open by a delayed stub and measured before and during. Nothing reaches TCGplayer. */
+test('the fetch press keeps its place and size while it runs', async ({ page }) => {
+  await page.route(/\/pipeline\/live-export$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'tcg_cookie_missing', message: 'No session.' } }),
+    })
+  })
+  await open(page)
+  /* THE SHEET SLIDES IN; a box measured mid-slide is the slide, not the press. */
+  await settleMotion(page)
+  const press = panel(page).getByRole('button', { name: 'Fetch my live listings' })
+  const before = await press.boundingBox()
+  await press.click()
+  await expect(press).toHaveAttribute('data-busy', 'true')
+  await expect(press).toHaveText('Fetch my live listings')
+  const during = await press.boundingBox()
+  for (const side of ['x', 'y', 'width', 'height'] as const) {
+    expect(Math.abs((during?.[side] ?? 0) - (before?.[side] ?? 0)), side).toBeLessThanOrEqual(0.5)
+  }
+})
+

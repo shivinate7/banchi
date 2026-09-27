@@ -1,9 +1,10 @@
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { settleMotion } from './motionSettled'
 
 import type { MarkdownSku } from '../src/types'
 
-/* `#/pricing` AS A LENS OVER LIVE TCGPLAYER LISTINGS (D103).
+/* `#/pricing` AS A LENS OVER LIVE TCGPLAYER LISTINGS (D103): the Live tab (D277, Q6).
  *
  * ITS OWN FILE, AND `pricing.spec.ts` IS NOT TOUCHED. That suite is the gate the source seam
  * was built against: the run path had to keep passing it UNEDITED through every commit of this
@@ -93,10 +94,21 @@ async function open(
     /** HOLD THE SEND OPEN THIS LONG, so a case can measure the bar while the press runs
      *  (round 9, D118). */
     sendDelayMs?: number
+    /** When the read was taken. Default: a minute ago, a fresh read (the owner's ruling,
+     *  2026-09-26: "require a fresh read"). */
+    at?: string
+    /** The read's settings, as `survey.json`'s `asked` carries them. */
+    asked?: Record<string, unknown>
+    /** Where the case opens. Default: the read itself. */
+    route?: string
+    /** The answers `prices.json` already holds, SKU -> answer. Default: none. */
+    answers?: Record<string, { value: string; at?: string }>
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
   const skus = options.skus ?? [live()]
+  const at = options.at ?? new Date(Date.now() - 60_000).toISOString()
+  const asked = options.asked ?? { days: 7, rule: 'undercut:10' }
 
   await page.route(/\/pipeline\/markdowns\/[^/]+\/send$/, async (route) => {
     wire.push({ method: 'POST', path: new URL(route.request().url()).pathname, body: route.request().postDataJSON() })
@@ -150,8 +162,8 @@ async function open(
       contentType: 'application/json',
       body: JSON.stringify({
         stamp: STAMP,
-        at: '2026-09-06T00:00:00.000+00:00',
-        asked: { days: 7, rule: 'undercut:10' },
+        at,
+        asked,
         counts: options.counts ?? { considered: skus.length, offered: 1, deferred: 0, refused: 0 },
         source: {},
         skus,
@@ -162,6 +174,8 @@ async function open(
            one key for both. This said '0.40' beside a threshold of '0.49' — a wire shape that had
            stopped being producible, which is the way a stub quietly stops testing the product. */
         floor: '0.49',
+        /* `reprice.READ_FRESH_S`, which the server sends so the screen never types its own. */
+        stale_after_s: 86400,
       }),
     })
   })
@@ -183,7 +197,7 @@ async function open(
         corpus: {
           version: 1,
           policy: { rule: 'match', basis: 'market', sub_threshold: { flat: '0.49' }, threshold: '0.49' },
-          skus: {},
+          skus: options.answers ?? {},
         },
         path: '/tmp/prices.json',
         revision: 'rev-1',
@@ -191,11 +205,22 @@ async function open(
     })
   })
 
+  /* THE LIVE TAB READS THE LIST OF READS (D277, Q6): it names the newest one on its line. */
+  await page.route(/\/pipeline\/markdowns$/, async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        markdowns: [{ stamp: STAMP, at, asked: { percent: '10', ...asked }, source: null, skus: skus.length, files: [] }],
+      }),
+    }),
+  )
+
   await page.route(/\/pipeline\/runs$/, async (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runs: [] }) }),
   )
 
-  await page.goto(ROUTE)
+  await page.goto(options.route ?? ROUTE)
   await page.locator(VIEW).waitFor()
   await page.locator('.pricing-row').first().waitFor()
   return wire
@@ -219,18 +244,18 @@ test('the lens draws every live listing the survey saw, and no run-shaped cell e
      asks for and what `display: none` would not give. */
   await expect(page.locator('.pricing-thumb')).toHaveCount(0)
   await expect(page.locator('.pricing-qty')).toHaveCount(0)
-  await expect(page.locator('.pricing-caption-qty')).toHaveCount(0)
+  await expect(page.locator('.pricing-caption .pricing-col-qty')).toHaveCount(0)
 
-  /* AND THE GRID FOLLOWS, which is the half that a conditional render alone does not buy: the
-     caption and the rows share one template off the same `<section>`, so a cell removed from
-     one and not the other would shear every column after it. */
-  const cols = await page
-    .locator('.pricing-section')
-    .first()
-    .evaluate((node) => getComputedStyle(node).getPropertyValue('--pricing-cols').trim())
-  expect(cols.startsWith('36px')).toBe(false)
+  /* AND THE GRID FOLLOWS: the list says it holds no copies, and the caption and the rows share
+     one template, so a cell removed from one and not the other would shear every column. */
+  await expect(page.locator('.pricing-list')).toHaveAttribute('data-copies', 'none')
+  const [row, caption] = await Promise.all([
+    page.locator('.pricing-row').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+    page.locator('.pricing-caption').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+  ])
+  expect(row).toBe(caption)
 
-  await expect(page.locator(`${VIEW} .pricing-caption-price`)).toHaveText('New price')
+  await expect(page.locator(`${VIEW} .pricing-caption .pricing-col-price`)).toHaveText('New price')
 })
 
 /* NO TYPED MIDDLE DOT OR BULLET REACHES THE LENS (D218). `Live listings, read <date>` and the
@@ -288,7 +313,7 @@ test('the trends press asks about the rows on screen, not about the whole survey
   })
 
   await page.getByRole('button', { name: /Not selling/ }).click()
-  await page.locator('.pricing-trend-btn').click()
+  await page.getByRole('button', { name: 'Load trends' }).click()
   await expect.poll(() => wire.filter((row) => row.path.includes('/trends')).length).toBeGreaterThan(0)
 
   const asked = wire
@@ -317,13 +342,9 @@ test('a raise is named on the row and sent, not refused', async ({ page }) => {
   await field.blur()
   await expect(page.locator('.pricing-state').first()).toHaveText('Above the live price')
 
-  /* THE DECK SAYS WHAT WILL HAPPEN, and this is the assertion that would have caught the copy
-     going stale: it promised a refusal that no longer exists. */
-  const deck = page.locator('.pricing-verdict')
-  await expect(deck).toContainText('priced above the live price')
-  await expect(deck).toContainText('sent as typed')
-  await expect(deck).not.toContainText('only lowers')
-  await expect(deck).not.toContainText('refuses the whole upload')
+  /* NO REFUSAL IS PROMISED ANYWHERE: the raise is sent as typed (D107). */
+  await expect(page.locator(VIEW)).not.toContainText('only lowers')
+  await expect(page.locator(VIEW)).not.toContainText('refuses the whole upload')
 
   await field.click()
   await field.fill('')
@@ -414,7 +435,7 @@ test('a refused write sends nothing and says so', async ({ page }) => {
   await field.blur()
   await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
 
-  await expect(page.locator('.pricing-ship-trouble')).toContainText('These prices could not be written, so nothing was sent.')
+  await expect(page.getByRole('region', { name: 'Send these prices' })).toContainText('These prices could not be written, so nothing was sent.')
   expect(wire.filter((row) => row.path.endsWith('/send'))).toHaveLength(0)
 })
 
@@ -447,14 +468,14 @@ test('the cut-off is the run\'s own control, and on a lens it is spent by a pres
     counts: { considered: 2, offered: 2, deferred: 0, refused: 0 },
   })
 
-  await expect(page.getByRole('region', { name: 'The cut-off' })).toHaveCount(1)
-  /* AND NOT THE RUN'S OVERRIDE. An override belongs to one lot and a lens is not a lot — it is
-     the whole live book out of one export — so there is no run to pick and the control that
-     would offer one is not drawn (D101: never a control this door cannot honour). */
-  await expect(page.getByRole('button', { name: 'Pick a run' })).toHaveCount(0)
+  /* THE PRESS LIVES IN THE LIVE TAB'S ONE SHEET (D277, Q5 and Q6). No run's own cut-off is
+     offered here: a lens is not a lot, so there is no run to give one (D101). */
+  await page.getByRole('button', { name: 'Change' }).click()
+  const sheet = page.getByRole('dialog', { name: 'What to mark down' })
+  await expect(sheet.getByRole('button', { name: 'Give this run its own cut-off' })).toHaveCount(0)
 
-  const press = page.getByRole('button', { name: /under the line/ })
-  await expect(press).toContainText('Price 1 under the line')
+  const press = sheet.getByRole('button', { name: /at the cut-off/ })
+  await expect(press).toHaveText('Price 1 at the cut-off')
 
   /* ADDRESSED BY CARD AND NEVER BY INDEX: the cut-off MOVES a row between the sections, which
      is the whole point of the partition, so an index here would assert against wherever the
@@ -467,13 +488,14 @@ test('the cut-off is the run\'s own control, and on a lens it is spent by a pres
      untouched: a press that priced the whole book would be a bulk write nobody asked for. */
   await expect(cheap).toHaveValue('0.49')
   await expect(dear).toHaveValue('')
-  await expect(press).toContainText('Nothing under the line to price')
+  await expect(press).toHaveText('Price 0 at the cut-off')
+  await expect(press).toBeDisabled()
 
-  /* ONE ACT, ONE REVERSAL. The per-SKU undo stack is ten deep (D28), so a press moving ninety
-     rows could not be undone through it at all. */
-  await page.getByRole('button', { name: 'Undo' }).click()
+  /* ONE ACT, ONE REVERSAL, on the receipt. The per-SKU undo stack is ten deep (D28), so a press
+     moving ninety rows could not be undone through it at all. */
+  await sheet.getByRole('button', { name: 'Close' }).click()
+  await page.locator('.bn-toasts').getByRole('button', { name: 'Undo' }).click()
   await expect(cheap).toHaveValue('')
-  await expect(press).toContainText('Price 1 under the line')
 })
 
 test('an untouched lens field ghosts the price the listing is live at', async ({ page }) => {
@@ -483,7 +505,8 @@ test('an untouched lens field ghosts the price the listing is live at', async ({
   await open(page, { skus: [live({ sku: '8608859', asking: '20.0000' })] })
   const field = page.locator('.pricing-input').first()
   await expect(field).toHaveValue('')
-  await expect(field).toHaveAttribute('placeholder', '20.0000')
+  /* TO THE CENT (D221, D267): the export's `20.0000` is drawn `20.00`, never four places. */
+  await expect(field).toHaveAttribute('placeholder', '20.00')
 })
 
 test('a preset writes answers on a lens, and never the standing rule', async ({ page }) => {
@@ -506,7 +529,9 @@ test('a preset writes answers on a lens, and never the standing rule', async ({ 
     counts: { considered: 2, offered: 2, deferred: 0, refused: 0 },
   })
 
-  await page.getByRole('button', { name: 'Market −5%' }).click()
+  await page.getByRole('button', { name: 'Change' }).click()
+  await page.getByRole('dialog', { name: 'What to mark down' }).getByRole('button', { name: 'Market −5%' }).click()
+  await page.getByRole('dialog', { name: 'What to mark down' }).getByRole('button', { name: 'Close' }).click()
 
   /* BOTH ROWS TAKE THE PRESET'S OWN FIGURE — server-priced, so the client performs no
      arithmetic on money and the two doors cannot compute a different number for one card. */
@@ -523,8 +548,8 @@ test('a preset writes answers on a lens, and never the standing rule', async ({ 
   }
 
   /* ONE ACT, ONE REVERSAL — the per-SKU undo stack is ten deep (D28) and a press over a real
-     book moves hundreds. */
-  await page.getByRole('button', { name: 'Undo' }).click()
+     book moves hundreds. The receipt carries it. */
+  await page.locator('.bn-toasts').getByRole('button', { name: 'Undo' }).click()
   await expect(page.getByRole('textbox', { name: 'Price for Articuno' })).toHaveValue('')
   await expect(page.getByRole('textbox', { name: 'Price for Dunsparce' })).toHaveValue('')
 })
@@ -541,7 +566,9 @@ test('a preset leaves a row it cannot price, and says how many', async ({ page }
     counts: { considered: 2, offered: 2, deferred: 0, refused: 0 },
   })
 
-  await page.getByRole('button', { name: 'TCG Low −1%' }).click()
+  await page.getByRole('button', { name: 'Change' }).click()
+  await page.getByRole('dialog', { name: 'What to mark down' }).getByRole('button', { name: 'TCG Low −1%' }).click()
+  await page.getByRole('dialog', { name: 'What to mark down' }).getByRole('button', { name: 'Close' }).click()
   await expect(page.getByRole('textbox', { name: 'Price for Dunsparce' })).toHaveValue('1.90')
   await expect(page.getByRole('textbox', { name: 'Price for Articuno' })).toHaveValue('')
 })
@@ -591,7 +618,7 @@ test('the row and caption tracks agree at the table tier, and the price is not c
   await page.setViewportSize({ width: 1440, height: 900 })
   await open(page)
   await expect(page.locator(VIEW)).toBeVisible()
-  await expect(page.locator('.pricing-section')).toHaveAttribute('data-copies', 'none')
+  await expect(page.locator('.pricing-list')).toHaveAttribute('data-copies', 'none')
   await expect(page.locator('.pricing-thumb')).toHaveCount(0) // the absence this screen's own header states
 
   const [row, caption] = await Promise.all([
@@ -607,29 +634,21 @@ test('the row and caption tracks agree at the table tier, and the price is not c
   await legible(page, 'Price for Articuno')
 })
 
-test('the compact-tier price and actions land in their own tracks, not an implicit fourth column, at 700px (data-copies=none)', async ({
+test('at 700 the row and caption tracks still agree, and the price is not clipped (data-copies=none)', async ({
   page,
 }) => {
+  /* 700 IS THE OWNER'S HALF-SCREEN DESK (D197's 720 width, minus a scrollbar): the column is
+     under the 900px step, so Lowest and the trend leave the row, and both the caption and the
+     rows drop them together. */
   await page.setViewportSize({ width: 700, height: 900 })
   await open(page)
-  await expect(page.locator(VIEW)).toBeVisible()
-  await expect(page.locator('.pricing-section')).toHaveAttribute('data-copies', 'none')
-  await expect(page.locator('.pricing-caption')).toBeHidden() // the compact tier, confirmed
-
-  /* THE GEOMETRIC PROOF, MEASURED RATHER THAN GUESSED: the row's OWN width does not overflow
-     even when broken, because `minmax(0, 1fr)` (the id/facts column) absorbs the deficit by
-     shrinking — the defect is a GAP, not a scrollbar. Measured on origin/main's CSS before
-     this fix: the empty reserved 132px track plus the column-gap left 156px of dead space
-     between `.pricing-facts` and `.pricing-price`, against `column-gap: var(--bn-3)` (12px)
-     plus `.pricing-price`'s own `margin-left: var(--bn-2)` (8px) — 20px, measured with the
-     fix in place — the row asks for everywhere else. The floor is comfortably under 156px and
-     comfortably over the 20px the fix itself measures. */
-  const gap = await page.evaluate(() => {
-    const facts = document.querySelector('.pricing-facts')!.getBoundingClientRect()
-    const price = document.querySelector('.pricing-price')!.getBoundingClientRect()
-    return price.x - facts.right
-  })
-  expect(gap, `${gap}px of dead space sits between the facts column and the price field`).toBeLessThanOrEqual(24)
+  await expect(page.locator('.pricing-list')).toHaveAttribute('data-copies', 'none')
+  await expect(page.locator('.pricing-caption .pricing-col-low')).toBeHidden()
+  const [row, caption] = await Promise.all([
+    page.locator('.pricing-row').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+    page.locator('.pricing-caption').first().evaluate((el) => getComputedStyle(el).gridTemplateColumns),
+  ])
+  expect(row, `row tracks "${row}" disagree with caption tracks "${caption}"`).toBe(caption)
 
   const field = page.getByRole('textbox', { name: 'Price for Articuno' })
   await field.click()
@@ -701,7 +720,7 @@ for (const width of [390, 820]) {
     await field.type('17.50')
     await field.blur()
     const bar = page.getByRole('region', { name: 'Send these prices' })
-    await bar.getByRole('button', { name: 'Download the file instead' }).click()
+    await bar.getByRole('button', { name: /^Download/ }).click()
     await expect(bar.getByRole('link', { name: 'import.csv' })).toBeVisible()
     const press = bar.locator('.pricing-emit')
     const locators = { press, door: bar.getByRole('button', { name: /Download/ }), link: bar.getByRole('link', { name: 'import.csv' }) }
@@ -713,3 +732,247 @@ for (const width of [390, 820]) {
   })
 }
 
+
+/* THE LIVE TAB (D277, Q6): the Mark-down sheet is gone, and the lens is a tab on Pricing. */
+
+test('the Live tab with no read yet says so and offers the read, and nothing is fetched by itself', async ({ page }) => {
+  const wire: Wire[] = []
+  await page.route(/\/pipeline\/markdowns$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ markdowns: [] }) }),
+  )
+  await page.route(/\/pipeline\/live-export$/, async (route) => {
+    wire.push({ method: 'POST', path: '/pipeline/live-export', body: null })
+    await route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":{"code":"tcg_cookie_missing","message":"No session."}}' })
+  })
+  await page.route(/\/pipeline\/runs$/, async (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runs: [] }) }),
+  )
+  await page.goto('/#/pricing?live')
+  await expect(page.getByText('Nothing read from TCGplayer yet').first()).toBeVisible()
+  await expect(page.locator('.pricing-tabs').getByRole('button', { name: 'Live' })).toHaveAttribute('aria-pressed', 'true')
+  /* THE READ IS A PRESS (D62's rule for anything that asks a remote host): opening the tab
+     asks TCGplayer for nothing. */
+  expect(wire).toHaveLength(0)
+  await page.getByRole('button', { name: 'Read what is live' }).first().click()
+  await expect(page.getByRole('dialog', { name: 'What to mark down' })).toBeVisible()
+  expect(wire).toHaveLength(0)
+})
+
+test('the Live tab opens the newest read, and its line says how the read was taken', async ({ page }) => {
+  await open(page)
+  await page.goto('/#/pricing?live')
+  /* THE TAB WITH NO STAMP LANDS ON THE NEWEST READ, which is the only one `open` lists. */
+  await expect(page).toHaveURL(new RegExp(`markdown=${STAMP}`))
+  await expect(page.locator('.pricing-rule-line')).toContainText('Not sold in 7 days, 10% under your asking price')
+})
+
+test('Read again keeps its words and its place while it reads', async ({ page }) => {
+  await page.route(/\/pipeline\/live-export$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":{"code":"tcg_cookie_missing","message":"No session."}}' })
+  })
+  await open(page)
+  await settleMotion(page)
+  const press = page.getByRole('button', { name: 'Read again' })
+  const before = await press.boundingBox()
+  await press.click()
+  await expect(press).toHaveAttribute('data-busy', 'true')
+  await expect(press).toHaveText('Read again')
+  const during = await press.boundingBox()
+  for (const side of ['x', 'y', 'width', 'height'] as const) {
+    expect(Math.abs((during?.[side] ?? 0) - (before?.[side] ?? 0)), side).toBeLessThanOrEqual(0.5)
+  }
+})
+
+test('the Live tab’s Download keeps its words and its place while it writes', async ({ page }) => {
+  await open(page)
+  await page.route(/\/pipeline\/markdowns\/[^/]+\/apply$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, exit_code: 0, wrote: true, console: 'wrote import.csv', stamp: STAMP, revision: 'rev-after' }),
+    })
+  })
+  await settleMotion(page)
+  const field = page.locator('.pricing-input').first()
+  await field.click()
+  await field.fill('')
+  await field.type('17.50')
+  await field.blur()
+  const press = page.getByRole('region', { name: 'Send these prices' }).getByRole('button', { name: /^Download/ })
+  await expect(press).toBeEnabled()
+  const before = await press.boundingBox()
+  await press.click()
+  await expect(press).toHaveAttribute('data-busy', 'true')
+  await expect(press).not.toContainText('Writing')
+  const during = await press.boundingBox()
+  for (const side of ['x', 'y', 'width', 'height'] as const) {
+    expect(Math.abs((during?.[side] ?? 0) - (before?.[side] ?? 0)), side).toBeLessThanOrEqual(0.5)
+  }
+})
+
+
+/* ---- THE OWNER'S RULINGS, 2026-09-26: a fresh read, no mark-down without a market price, a
+ * dollar cap on top of the percentage, and Singles / Sealed on their own. ------------------------ */
+
+test('a read older than a day offers Read again in place of Send, and no count as if current', async ({ page }) => {
+  await open(page, { at: new Date(Date.now() - 3 * 86_400_000).toISOString() })
+  const bar = page.getByRole('region', { name: 'Send these prices' })
+  await expect(bar).toContainText('more than a day ago')
+  await expect(bar.getByRole('button', { name: 'Read again' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Send/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Download/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Mark down/ })).toHaveCount(0)
+  /* THE LENSES DROP THEIR NUMBERS: a stale read's counts are not offered as current. */
+  await expect(page.getByRole('button', { name: 'All', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Not selling', exact: true })).toBeVisible()
+
+  /* A TYPED PRICE OFF A STALE READ OFFERS NO SEND EITHER. */
+  const field = page.locator('.pricing-input').first()
+  await field.click()
+  await field.fill('17.50')
+  await field.blur()
+  await expect(page.getByRole('button', { name: /^Send/ })).toHaveCount(0)
+})
+
+test('Mark down fills the rule price to the cent, and Send counts and sends exactly those', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno', asking: '20.0000', proposed: '18.00' }),
+      live({ sku: '8608464', name: 'Dunsparce', asking: '5.0000', proposed: '4.5' }),
+      live({ sku: '8608000', name: 'Kled', standing: 'refused', skip: 'too_young', proposed: null }),
+    ],
+    counts: { considered: 3, offered: 2, deferred: 0, refused: 1 },
+  })
+  await page.getByRole('button', { name: 'Mark down 2' }).click()
+  await expect(page.getByRole('textbox', { name: 'Price for Articuno' })).toHaveValue('18.00')
+  await expect(page.getByRole('textbox', { name: 'Price for Dunsparce' })).toHaveValue('4.50')
+  await expect(page.getByRole('textbox', { name: 'Price for Kled' })).toHaveValue('')
+  await page.getByRole('button', { name: 'Send 2 prices to TCGplayer' }).click()
+  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
+  const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
+  /* THE VALUE SENT IS THE VALUE SHOWN, to the cent. */
+  expect(sent.edits).toEqual([
+    { sku: '8608859', price: '18.00' },
+    { sku: '8608464', price: '4.50' },
+  ])
+  expect(sent.kind).toBeUndefined()
+})
+
+test('a card with no market price is never marked down, and leads the list for the owner to price', async ({ page }) => {
+  await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno' }),
+      live({
+        sku: '9000001',
+        name: 'Kai Sa',
+        asking: '6000.0000',
+        market: null,
+        standing: 'refused',
+        skip: 'no_market',
+        proposed: null,
+        row: { 'TCG Market Price': '' },
+      }),
+    ],
+    counts: { considered: 2, offered: 1, deferred: 0, refused: 1 },
+  })
+  const groups = page.locator('.pricing-group-head')
+  await expect(groups.first()).toContainText('No market price')
+  await expect(page.getByRole('textbox', { name: 'Price for Kai Sa' })).toHaveAttribute('placeholder', '6000.00')
+  await page.getByRole('button', { name: 'Mark down 1' }).click()
+  await expect(page.getByRole('textbox', { name: 'Price for Kai Sa' })).toHaveValue('')
+  await expect(page.getByRole('button', { name: 'Send 1 price to TCGplayer' })).toBeVisible()
+})
+
+test('the counts add up: All is Not selling plus Passed over, whatever the survey counted sold out', async ({ page }) => {
+  await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno' }),
+      live({ sku: '8608464', name: 'Dunsparce', standing: 'refused', skip: 'too_young', proposed: null }),
+      live({ sku: '8608000', name: 'Kled', standing: 'refused', skip: 'sold_recently', proposed: null }),
+    ],
+    /* THE SURVEY'S OWN TALLY COUNTS SOLD-OUT ROWS IT NEVER DRAWS: this is how "Passed over 727"
+       sat beside "All 408". */
+    counts: { considered: 400, offered: 1, deferred: 0, refused: 399 },
+  })
+  await expect(page.getByRole('button', { name: 'All 3' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Not selling 1' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Passed over 2' })).toBeVisible()
+})
+
+test('the dollar cap is said on the rule line, and it is the rule\'s only: a typed price goes as typed', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [live({ sku: '8608859', name: 'Articuno', asking: '20.0000', proposed: '18.50' })],
+    asked: { days: 7, rule: 'undercut:10', cap: '1.50' },
+  })
+  await expect(page.locator('.pricing-rule-line')).toContainText('at most $1.50 off a card')
+  /* "RULE ONLY" (the owner's ruling, 2026-09-26): $5 under the live price, past the cap, goes. */
+  const field = page.getByRole('textbox', { name: 'Price for Articuno' })
+  await field.click()
+  await field.fill('15')
+  await field.blur()
+  await expect(field).toHaveValue('15.00')
+  await expect(page.locator(VIEW)).not.toContainText('More than')
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
+  const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
+  expect(sent.edits).toEqual([{ sku: '8608859', price: '15.00' }])
+})
+
+test('Singles and Sealed filter the tab from the URL, and the send carries the kind', async ({ page }) => {
+  const wire = await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno' }),
+      live({ sku: '7000001', name: 'Booster Box', condition: 'Unopened', sealed: true, row: { Condition: 'Unopened' } }),
+    ],
+    counts: { considered: 2, offered: 2, deferred: 0, refused: 0 },
+    route: `/#/pricing?markdown=${STAMP}&kind=sealed`,
+  })
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+  await expect(page.locator('.pricing-name').first()).toContainText('Booster Box')
+  await expect(page.getByRole('button', { name: 'All 1' })).toBeVisible()
+  await page.getByRole('button', { name: 'Mark down 1' }).click()
+  await page.getByRole('button', { name: 'Send 1 price to TCGplayer' }).click()
+  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
+  const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
+  expect(sent.kind).toBe('sealed')
+  expect(sent.edits).toEqual([{ sku: '7000001', price: '18.00' }])
+
+  await page.getByRole('button', { name: 'Singles', exact: true }).click()
+  await expect(page).toHaveURL(/kind=singles/)
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+  await expect(page.locator('.pricing-name').first()).toContainText('Articuno')
+})
+
+test('an earlier stored price rides only when it is above the live price, and is named before the press', async ({ page }) => {
+  /* THE "280" ON THE OWNER'S SCREEN counted every stored answer on a surveyed row. The owner's
+     ruling, 2026-09-26: "if the price i've typed is higher yea". Equal: nothing to send. Lower:
+     never, unless written again on this visit. Higher: it rides, and the bar names it (D273). */
+  const wire = await open(page, {
+    skus: [
+      live({ sku: '8608859', name: 'Articuno', asking: '20.0000' }),
+      live({ sku: '8608464', name: 'Dunsparce', asking: '5.0000' }),
+      live({ sku: '8608000', name: 'Kled', asking: '3.0000' }),
+    ],
+    answers: { '8608859': { value: '20.00' }, '8608464': { value: '4.75' }, '8608000': { value: '3.5' } },
+  })
+  const bar = page.getByRole('region', { name: 'Send these prices' })
+  await expect(bar.getByRole('button', { name: 'Send 1 price to TCGplayer' })).toBeVisible()
+  await expect(bar).toContainText('1 of them is a price you typed before, above the live price')
+  await bar.locator('.pricing-earlier summary').click()
+  await expect(bar.locator('.pricing-earlier li')).toHaveText(['Kled: $3.00 to $3.50'])
+
+  /* THE LOWER ONE GOES ONCE IT IS TYPED AGAIN, ON THIS VISIT. */
+  const field = page.getByRole('textbox', { name: 'Price for Dunsparce' })
+  await field.click()
+  await field.fill('4.60')
+  await field.blur()
+  await bar.getByRole('button', { name: 'Send 2 prices to TCGplayer' }).click()
+  await expect.poll(() => wire.filter((row) => row.path.includes('/apply')).length).toBe(1)
+  const sent = wire.find((row) => row.path.includes('/apply'))?.body as Record<string, unknown>
+  expect(sent.edits).toEqual([
+    { sku: '8608464', price: '4.60' },
+    { sku: '8608000', price: '3.50' },
+  ])
+})

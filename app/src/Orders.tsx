@@ -17,6 +17,7 @@ import {
   Stat,
   useFacetParams,
   useSortParam,
+  useUndoHotkey,
   useViewFlag,
   useViewParam,
   type FilterFacet,
@@ -31,19 +32,26 @@ import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
 import { rememberHideSold, rememberOrderFilter, storedHideSold, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
 import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore'
-import { isEditableTarget } from './keys'
 import { PositionLabel } from './PositionLabel'
 import { sayPlace } from './position'
 import { buyerKeyOf, groupBuyers, groupForOrderKey, groupMissing, lineReason, MISSING_FACET, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
+  applyTake,
   buyerLabel,
-  orderBuyerLabel,
+  drawerCountsFromPlan,
+  groupCardsOwed,
   groupHasUnseenLine,
   groupIsReadyToShip,
+  groupOrderValue,
+  orderBuyerLabel,
   passesHideUnknown,
   sortedReadyFirst,
   sortGroups,
   statusVocabulary,
+  takeOrder,
+  type GroupTake,
+  type OrderSortInputs,
+  type OrderSortKey,
 } from './orderView'
 import {
   closeLines,
@@ -64,6 +72,7 @@ import {
   reopenOrders,
   undoFill,
   undoPull,
+  walkPlan,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -88,6 +97,7 @@ import type {
   ResolvedLine,
   ResolvedOrder,
   ShippingLane,
+  WalkPlan,
 } from './types'
 import './Orders.css'
 
@@ -843,10 +853,16 @@ const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconNam
   done: { label: 'Done', tone: 'default', icon: 'check' },
 }
 
-/** The one sort: when the buyer's newest order was placed (FLT-01: a press re-sorts at once). */
-type OrderSortKey = 'placed'
+/** The five sorts (`D296`, the owner's pick, 2026-09-25): when the buyer's newest
+ *  order was placed (FLT-01: a press re-sorts at once), the buyer's own order total, how many
+ *  copies are still owed, the buyer's name, and the fewest drawers to open for them. Ready to
+ *  Ship still leads every one of these (`orderView.ts`'s own banner on why). */
 const SORT_OPTIONS: readonly SortOption<OrderSortKey>[] = [
   { key: 'placed', label: 'Placed', desc: 'Newest first', asc: 'Oldest first', first: 'desc' },
+  { key: 'value', label: 'Dollar value', desc: 'High to low', asc: 'Low to high', first: 'desc' },
+  { key: 'cards', label: 'Card count', desc: 'Most first', asc: 'Fewest first', first: 'desc' },
+  { key: 'buyer', label: 'Buyer name', desc: 'Z to A', asc: 'A to Z', first: 'asc' },
+  { key: 'drawers', label: 'Fewest drawers to open', desc: 'Most first', asc: 'Fewest first', first: 'asc' },
 ]
 const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'desc' }
 
@@ -893,17 +909,57 @@ function joinPhrases(parts: string[]): string {
 /** The verdict, drawn once the ledger has answered: ONE fact over ONE set (UX-167). The copies
  *  owed and the buyers they are owed to are both counted over the OPEN orders. The old lede
  *  counted lines over the open orders and buyers over every order in the ledger, so a long
- *  history read "611 lines across 806 buyers". */
-function verdictOf(open: readonly OrderRow[]): ReactNode {
+ *  history read "611 lines across 806 buyers".
+ *
+ *  THE BREAKDOWN IS SAID ONCE, HERE (review finding 1: "216 copies owed" and "97 cards to
+ *  pick" read as two answers to one question with nothing connecting them). `owed` splits
+ *  three ways over the SAME open set, in the SAME unit (copies): `pick` (owed minus
+ *  outstanding, the walk's own arithmetic — `cardsToPull` runs the identical sum over the
+ *  walked subset), `short` (no copies left, whether or not this order's own line already
+ *  reads `short` because some were already recorded — the two are the same fact, see
+ *  `lookWords`), and `elsewhere` (a SKU this store has never seen, or that is sealed
+ *  product). `pick + short + elsewhere === owed`, always, because every line's `outstanding`
+ *  falls in exactly one of `resolved` (counted in `pick`), the two "none left" reasons, or
+ *  the two "needs a look" reasons. `docs/specs/order-walk-plan.md` states this identity. */
+function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]): ReactNode {
   const owed = open.reduce((sum, order) => sum + Math.max(0, order.wanted - order.recorded), 0)
   const buyers = new Set(open.map(buyerKeyOf)).size
   if (owed === 0) return 'Every open order has its copies.'
+  const byKey = new Map(resolved.map((order) => [order.key, order]))
+  let pick = 0
+  let short = 0
+  let elsewhere = 0
+  for (const order of open) {
+    for (const line of byKey.get(order.key)?.lines ?? []) {
+      pick += Math.max(0, line.owed - line.outstanding)
+      const reason = lineReason(order, line)
+      if (reason === 'short' || reason === 'no_copies_on_hand') short += line.outstanding
+      else if (reason !== 'resolved') elsewhere += line.outstanding
+    }
+  }
+  /* The breakdown adds nothing where every copy is pickable (`short` and `elsewhere` both
+   * zero, so `pick === owed`) — it would only repeat the number the sentence already gives.
+   * It is said only where it explains something the plain sentence does not. */
+  const parts = short > 0 || elsewhere > 0 ? [`${pick} to pick`] : []
+  if (short > 0) parts.push(`${short} short`)
+  if (elsewhere > 0) parts.push(`${elsewhere} not in the store`)
   return (
     <>
       <strong>{owed}</strong> {plural(owed, 'copy', 'copies')} owed to <strong>{buyers}</strong> {plural(buyers, 'buyer', 'buyers')}
+      {parts.length === 0 ? null : (
+        <>
+          {' — '}
+          {joinPhrases(parts)}
+        </>
+      )}
     </>
   )
 }
+
+/** The ledger has no record of this pull — it was already reversed some other way, never a
+ *  failure this press could retry (finding #8, the Opus review round). `Fulfillment.tsx`
+ *  carries the same constant for its own fallback. */
+const PULL_NOT_RECORDED = 'pull_not_recorded'
 
 /** The undo, pressed on a toast after the hub may have unmounted. It sends the target and
  *  nothing else — the server finds whoever holds the `capture_id` — and bumps the hub so any
@@ -914,10 +970,24 @@ async function undoFromToast(target: PullTarget, place: string, name: string): P
   setHub({ busy: `undo/${target.capture_id}` })
   try {
     await undoPull([target])
-    toast({ kind: 'ok', icon: 'undo', title: `Put ${name} back`, body: `${place} holds it again.` })
+    toast({ kind: 'ok', icon: 'undo', title: 'Pull undone', body: `${place} holds ${name} again.` })
+    /* `undoneTarget`/`undoneAt` are how a MOUNTED walk's own tally hears about this — this
+       write never goes through `useOrderWalk` at all, so without this the walk kept believing
+       the copy this pull put back was still recorded (the review round's finding 2, D171).
+       `PullStage` watches `undoneAt` and calls `walk.noteExternalUndo`, which is a no-op for
+       a copy the walk never recorded in the first place. */
+    setHub((current) => ({ undoneTarget: target, undoneAt: current.undoneAt + 1 }))
   } catch (err) {
-    const trouble = describeFailure(err)
-    toast({ kind: 'refusal', title: 'The card was not put back', body: `${trouble.message} (${trouble.code})` })
+    /* FINDING #8 (the Opus review round): `pull_not_recorded` means the ledger no longer
+     * holds this pull — it was already reversed some other way (the server's own message
+     * names #/inventory as one) — never a failure this press could retry its way out of.
+     * The old "not put back" refusal was actively wrong here: the card WAS already back. */
+    if (describeFailure(err).code === PULL_NOT_RECORDED) {
+      toast({ kind: 'ok', icon: 'undo', title: 'Already undone', body: `${place} holds it, from somewhere else.` })
+    } else {
+      const trouble = describeFailure(err)
+      toast({ kind: 'refusal', title: 'The card was not put back', body: trouble.message })
+    }
   } finally {
     /* Clear `lastPull` only if this is still the pull it names — a later pull may already
        have replaced it, and undoing THIS one must not erase THAT one's own way back. */
@@ -1285,30 +1355,21 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     }
   }, [])
 
-  /* `U` IS THE ONE KEY FOR THE NEWEST REVERSIBLE WRITE (`docs/specs/undo.md` §3) — here, the
-   * newest pull this screen made that `hub.lastPull` still holds. Read live off `hubState()`
-   * rather than a closed-over value, so a listener registered once on mount never goes stale;
-   * `undoFromToast` is the same function the toast's own Undo button calls, so a key press and
-   * a mouse click do exactly the same write. Scoped to the Pull stage — `U` on `#/shipping`
-   * does nothing, because nothing is pulled there. Yields to typing, and to a write already in
-   * flight. Where there is nothing to undo, or the receipt has expired, it does nothing and
-   * says nothing. */
-  useEffect(() => {
-    if (stage !== 'pull') return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat) return
-      if (event.metaKey || event.ctrlKey || event.altKey) return
-      if (isEditableTarget(event.target)) return
-      if (event.key.toLowerCase() !== 'u') return
-      const pull = hubState().lastPull
-      if (pull === null || pull.until <= Date.now()) return
-      if (hubState().busy !== null) return
-      event.preventDefault()
-      void undoFromToast(pull.target, pull.place, pull.name)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [stage])
+  /* THE SHARED HOOK (`docs/specs/undo.md` §11.3, UN-10) — the newest pull this screen made
+   * that `hub.lastPull` still holds. Read live off `hubState()` rather than a closed-over
+   * value, the same reason the hook itself keeps a ref: a listener registered once on mount
+   * never goes stale; `undoFromToast` is the same function the toast's own Undo button calls,
+   * so a key press and a mouse click do exactly the same write. Scoped to the Pull stage — `U`
+   * on `#/shipping` does nothing, because nothing is pulled there. Yields to a write already in
+   * flight, and NO CLOCK (UN-5): rank, not a deadline — `lastPull` holds until the next pull or
+   * its own undo clears it. */
+  useUndoHotkey(() => {
+    if (stage !== 'pull') return null
+    const pull = hubState().lastPull
+    if (pull === null) return null
+    if (hubState().busy !== null) return null
+    return () => void undoFromToast(pull.target, pull.place, pull.name)
+  })
 
   /* ONE CALL FOR BOTH HALVES. Every write ends by calling this again, because a pull changes the
      resolution of every OTHER line that wanted the same SKU. */
@@ -1765,7 +1826,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         /* THE NEWEST PULL THIS SCREEN MADE THAT IS STILL UNDOABLE — `docs/specs/undo.md` §3's
            fast path, reached by `U`. Overwrites whatever `lastPull` held before, because a
            second pull inside the first one's window makes the first one the slow path's job. */
-        setHub({ lastPull: { target, place, name, until: Date.now() + UNDO_WINDOW_MS } })
+        setHub({ lastPull: { target, place, name } })
         /* BOTH READS, because the card this press sold has to leave every other line's map at the
            same moment it leaves this one. The undo goes the other way through `touchHub`, which
            bumps the version the effect above watches, so it re-reads both as well. */
@@ -1811,7 +1872,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
         ttlMs: UNDO_WINDOW_MS,
         action: { label: 'Undo', onPress: () => void undoFromToast(target, resolvedPlace, name) },
       })
-      setHub({ lastPull: { target, place: resolvedPlace, name, until: Date.now() + UNDO_WINDOW_MS } })
+      setHub({ lastPull: { target, place: resolvedPlace, name } })
       await Promise.all([reread(), rereadStore()])
       return { ok: true, place: resolvedPlace, refreshed: done.refreshed ?? [] }
     } catch (err) {
@@ -1832,12 +1893,18 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
       /* The copy goes back in the drawer, so the rows still ahead of it take their old
          numbers back too — the same `refresh` list the pull sent, answered the other way. */
       const done = await undoPull([target], refresh)
-      toast({ kind: 'ok', icon: 'undo', title: `Put ${name} back`, body: `${place} holds it again.` })
+      toast({ kind: 'ok', icon: 'undo', title: 'Pull undone', body: `${place} holds ${name} again.` })
       await Promise.all([reread(), rereadStore()])
       return { ok: true, refreshed: done.refreshed ?? [] }
     } catch (err) {
+      /* FINDING #8: the same "already reversed elsewhere" case `undoFromToast` reads. */
+      if (describeFailure(err).code === PULL_NOT_RECORDED) {
+        toast({ kind: 'ok', icon: 'undo', title: 'Already undone', body: `${place} holds it, from somewhere else.` })
+        await Promise.all([reread(), rereadStore()])
+        return { ok: true, refreshed: [] }
+      }
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', title: 'The card was not put back', body: `${trouble.message} (${trouble.code})` })
+      toast({ kind: 'refusal', title: 'The card was not put back', body: trouble.message })
       return { ok: false }
     } finally {
       setHub((current) => ({ busy: null, lastPull: current.lastPull?.target.capture_id === target.capture_id ? null : current.lastPull }))
@@ -2146,7 +2213,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
     <Page
       icon="cart"
       className={hub.walkLine === null ? 'orders-hub orders' : 'orders-hub orders is-walking'}
-      verdict={populated ? verdictOf(open) : undefined}
+      verdict={populated ? verdictOf(open, payload?.resolution.orders ?? []) : undefined}
       lede={populated ? undefined : 'Which copies each buyer gets, and where they are.'}
       /* THE WALK LINE (walk mode, under 1000px of column): who, how many, what is next, opening
          the buyer list, and one press out of the walk. CSS draws it only there. Out of the walk
@@ -2713,12 +2780,88 @@ function PullStage({
     value === 'done' ||
     (value === MISSING_FACET ? groupMissing(group, answers).copies > 0 : statusByGroup.get(group.key) === value)
 
-  const base = allGroups.filter(show === 'done' ? inDoneBase : inOpenBase)
-  const shownGroups = sortGroups(
-    base.filter((group) => passesFeed(group) && passesSearch(group) && passesHide(group) && passesShow(group, show)),
-    sort.dir === 'asc' ? 'oldest' : 'newest',
-    readyOf,
+  /* THE DRAWERS SORT REUSES THE WALK PLANNER'S OWN SOLVE (`D296`), never a second
+   *  box-counting pass: one `POST /orders/walk-plan` over every walkable order on the screen,
+   *  fetched only while this sort is picked (`sort.key === 'drawers'`) — the same lazy shape
+   *  `useOrderWalk` already uses for the walk itself, over the wider set here. */
+  const orderToGroup = useMemo(() => {
+    const out = new Map<string, string>()
+    for (const group of allGroups) for (const order of group.orders) out.set(order.key, group.key)
+    return out
+  }, [allGroups])
+  const walkableKeysAll = useMemo(
+    () => allGroups.flatMap((group) => group.orders.filter(ownsAWalkableBody).map((order) => order.key)),
+    [allGroups],
   )
+  const walkableKeysSig = useMemo(() => [...walkableKeysAll].sort().join(' '), [walkableKeysAll])
+  const [drawerPlan, setDrawerPlan] = useState<WalkPlan | null>(null)
+  const drawerAsked = useRef<string | null>(null)
+  useEffect(() => {
+    if (sort.key !== 'drawers' || walkableKeysAll.length === 0) {
+      setDrawerPlan(null)
+      drawerAsked.current = null
+      return
+    }
+    if (drawerAsked.current === walkableKeysSig) return
+    const asked = walkableKeysSig
+    drawerAsked.current = asked
+    walkPlan(walkableKeysAll)
+      .then((got) => {
+        if (drawerAsked.current === asked) setDrawerPlan(got)
+      })
+      .catch(() => {
+        /* A refusal here is this ONE SORT gone stale, not the screen gone dark: every
+           `drawersOf` call falls back to `null` (below), which the comparator already treats
+           as "not yet known" — an honest degrade over the placed-date tiebreak alone. */
+      })
+  }, [sort.key, walkableKeysAll, walkableKeysSig])
+  const drawerCounts = useMemo(
+    () => (drawerPlan === null ? new Map<string, number>() : drawerCountsFromPlan(drawerPlan, orderToGroup)),
+    [drawerPlan, orderToGroup],
+  )
+  const sortInputs: OrderSortInputs = useMemo(
+    () => ({
+      valueOf: groupOrderValue,
+      cardsOf: groupCardsOwed,
+      drawersOf: (group) => (drawerPlan === null ? null : (drawerCounts.get(group.key) ?? 0)),
+    }),
+    [drawerPlan, drawerCounts],
+  )
+
+  const base = allGroups.filter(show === 'done' ? inDoneBase : inOpenBase)
+  const freshShownGroups = sortGroups(
+    base.filter((group) => passesFeed(group) && passesSearch(group) && passesHide(group) && passesShow(group, show)),
+    sort,
+    readyOf,
+    sortInputs,
+  )
+
+  /* THE POSITION FREEZE (D181, D118): "Dollar value", "Card count" and "Fewest drawers" all
+   *  read fields a Mark Sold or an Undo changes mid-view, so sorting `payload`'s live numbers
+   *  on every render would re-rank the list under the operator's hand the moment a write
+   *  lands. `take` is `freshShownGroups`' own order the last time an EXPLICIT input changed
+   *  it (the sort control, a facet, a search keystroke) — retaken here, during render, the
+   *  same "adjust state during render" idiom `finished` above already uses, never in an
+   *  effect (the same race that idiom exists to avoid). A write's own re-render changes
+   *  `payload` and re-derives `freshShownGroups`' live figures, but not `basisSig`, so the
+   *  freeze holds; `applyTake` still draws a genuinely new arrival, appended after every
+   *  known row in `freshShownGroups`' own order. */
+  /* `drawerPlan !== null` RETAKES ONCE THE ASKED-FOR PLAN LANDS — without it, picking "Fewest
+     drawers" would freeze the guess `drawersOf`'s null fallback makes on the render before the
+     fetch resolves, and the real answer would never draw. This is the fetch this EXPLICIT
+     press asked for finishing, not a background write, so it retakes; a later pull does not
+     change `drawerPlan`'s own identity (only a widened walkable set refetches it), so the
+     freeze still holds against one. Always `false` outside `sort.key === 'drawers'`
+     (`drawerPlan` is nulled the moment another key is picked), so this term is inert for
+     every other sort. */
+  const basisSig = [sort.key, sort.dir, show ?? '', statuses.join(','), query, hideUnknown, drawerPlan !== null].join('\u0000')
+  const [takeSig, setTakeSig] = useState<string | null>(null)
+  const [take, setTake] = useState<GroupTake>(new Map())
+  if (takeSig !== basisSig) {
+    setTakeSig(basisSig)
+    setTake(takeOrder(freshShownGroups))
+  }
+  const shownGroups = applyTake(freshShownGroups, take)
 
   /* EACH OPTION'S COUNT IS THE ROWS IT WOULD SHOW, under the other facets (FilterChips' rule). */
   const facets: readonly FilterFacet[] = [
@@ -2894,6 +3037,21 @@ function PullStage({
 
   const walk = useOrderWalk({ walkedKeys, ordersByKey, rawCards, onPull: onWalkPull, onUndo: onWalkUndo })
 
+  /* A TOAST OR `U` UNDO REACHES THIS MOUNTED WALK — the review round's finding 2. Neither
+   *  path calls `walk.undoCopy` (they write through `undoFromToast`, module-level, with no
+   *  access to this hook's state), so without this the walk's own tally never learned that a
+   *  copy it recorded is no longer held, and the NEXT press against that order silently did
+   *  nothing (D171: a refusal that reaches nobody did not happen). `hub.undoneAt` is a
+   *  counter rather than the target itself, so a repeat undo of the same copy still fires
+   *  this effect. `noteExternalUndo` is itself a no-op for a copy this walk never recorded. */
+  const seenUndoAt = useRef(hub.undoneAt)
+  useEffect(() => {
+    if (hub.undoneAt === seenUndoAt.current) return
+    seenUndoAt.current = hub.undoneAt
+    if (hub.undoneTarget !== null) walk.noteExternalUndo(hub.undoneTarget)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hub.undoneAt, hub.undoneTarget])
+
   /* THE SKIP LINK'S LANDING SPOT (interaction review, "32 tab stops"). A Tab-only pass has to
    *  cross the filter bar and the buyer list before it reaches the walk. A skip link, one press
    *  that focuses a landmark already there, is the standard fix and needs no new key. */
@@ -2953,6 +3111,13 @@ function PullStage({
   const select = (key: string) => {
     walkTo(key)
     setBuyersOpen(false)
+    /* THE WALK COLUMN HAS NO SCROLL OF ITS OWN (UX-201: one scroll, the page's) — so a
+     * selection made low in a long buyer list left the page scrolled to where that list row
+     * was, with the newly selected buyer's own panel rendered above the fold (review, finding
+     * 3: "his orders draw at the top of the page... the middle column is empty where you
+     * clicked"). Only the photo pane, being sticky, still showed. Bringing the walk section
+     * back into view is the fix, not making a second element sticky. */
+    requestAnimationFrame(() => walkRef.current?.scrollIntoView({ block: 'start' }))
   }
 
   if (failure !== null && payload === null) {
@@ -3092,7 +3257,11 @@ function PullStage({
   }
 
   /* ONE CONTROL THAT SAYS WHAT IT DOES (UX-232): "Walk all 6 buyers", with the same verb the
-     checkboxes carry. It becomes "Walk one buyer" once every row is ticked. */
+     checkboxes carry. PRESSED, IT NAMES THE UNDO, NEVER A DIFFERENT FEATURE (review finding
+     4): the old label flipped to "Walk one buyer" once every row was ticked, which reads as a
+     SEPARATE control ("walk exactly one") rather than as this same toggle's own off state —
+     the operator had ticked all 70 and the button now claimed to walk one. `aria-pressed`
+     already carries the ON/OFF state; the word only needs to say what THIS PRESS does next. */
   const allTicked = tickableKeys.size > 0 && [...tickableKeys].every((key) => walkTicked.has(key))
   const walkAll =
     tickableKeys.size < 2 ? null : (
@@ -3106,7 +3275,7 @@ function PullStage({
           setWalkTicked(allTicked ? new Set() : new Set(tickableKeys))
         }}
       >
-        {allTicked ? 'Walk one buyer' : `Walk all ${tickableKeys.size} buyers`}
+        {allTicked ? 'Stop walking all' : `Walk all ${tickableKeys.size} buyers`}
       </Button>
     )
   const readyFirst = sortedReadyFirst(shownGroups, readyOf)
@@ -3146,7 +3315,20 @@ function PullStage({
   )
   const owedBySku = new Map<string, number>()
   for (const key of walkedKeys) {
-    for (const line of answers.get(key)?.lines ?? []) owedBySku.set(line.sku, (owedBySku.get(line.sku) ?? 0) + line.owed)
+    // A stood-down line owes zero on the walk (`pipeline/walkplan.py:demand`'s own filter,
+    // the owner's ruling 2026-09-17) — `ResolvedLine.owed` does not know this, so it is
+    // read here off the same `OrderLineProgress.closed_at` the ledger stores. `!= null`
+    // (loose) rather than `!== null`: the review round's finding 1 was `undefined !== null`
+    // reading true for a wire that omitted the key, so every line looked stood down. The
+    // server now always sends it (`server/capture_server.py:_order_progress`), and this
+    // stays loose as the second, cheaper line of defence should that ever regress again.
+    const closedSkus = new Set(
+      (ordersByKey.get(key)?.progress ?? []).filter((row) => row.closed_at != null).map((row) => row.sku),
+    )
+    for (const line of answers.get(key)?.lines ?? []) {
+      if (closedSkus.has(line.sku)) continue
+      owedBySku.set(line.sku, (owedBySku.get(line.sku) ?? 0) + line.owed)
+    }
   }
   const cardsToPull = [...walkedKeys].reduce(
     (sum, key) => sum + (answers.get(key)?.lines ?? []).reduce((s, line) => s + Math.max(0, line.owed - line.outstanding), 0),
@@ -3350,25 +3532,48 @@ function figuresOf(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
   return { owed, sold, short: Math.min(short, owed) }
 }
 
-/** What "Needs a look" is about, in words (UX-200): the most common reason a buyer's lines
- *  cannot be pulled, counted in cards. "1 card not in the store", "2 cards sealed". */
+/** What "Needs a look" is about, in words (UX-200, review finding 1 and 5). "1 card not in
+ *  the store", "2 cards sealed" — and, where a line's own reason is `short` (some copies of
+ *  it already went to THIS order, the rest are gone too), the SAME "none left" fact `short`
+ *  and `no_copies_on_hand` share, folded into one bucket rather than a third word for the
+ *  same problem.
+ *
+ *  COUNTED IN `outstanding`, NEVER `owed` (the fix): `owed` is what the ORDER still wants,
+ *  which overstates a `short` line by the copies already recorded against it. `outstanding`
+ *  is what the resolver could not offer, the same unit `verdictOf`'s breakdown and
+ *  `figuresOf`'s `short` both use, so this chip's own number never disagrees with either.
+ *
+ *  THE PRINTED NUMBER IS THE FULL TOTAL, NEVER ONLY THE LOUDEST REASON. The old version
+ *  picked the top reason and reported ONLY its count, so a buyer short on 7 "none left" and
+ *  1 "not in the store" read "7 cards none left" beside a header reading "8 short" — two
+ *  true numbers about the same buyer that could not be reconciled by looking at the screen.
+ *  One reason explains the whole total, and the chip says so, in that reason's own words. Two
+ *  or more reasons together get the generic phrasing `STATUS_PILL.look` already carries
+ *  ("N cards need a look"), naming no single one of them wrongly. */
 function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): string {
   const words: Partial<Record<OrderLineReason, string>> = {
     sku_unseen: 'not in the store',
     sku_unknown: 'not in the store',
-    no_copies_on_hand: 'none left',
+    no_copies_on_hand: 'short',
+    short: 'short',
     not_a_single: 'sealed',
   }
   const tally = new Map<string, number>()
   for (const order of group.open) {
     for (const line of answers.get(order.key)?.lines ?? []) {
       const said = words[lineReason(order, line)]
-      if (said !== undefined) tally.set(said, (tally.get(said) ?? 0) + line.owed)
+      if (said !== undefined) tally.set(said, (tally.get(said) ?? 0) + line.outstanding)
     }
   }
-  const top = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]
-  if (top === undefined) return STATUS_PILL.look.label
-  return `${top[1]} ${plural(top[1], 'card', 'cards')} ${top[0]}`
+  const entries = [...tally.entries()].filter(([, count]) => count > 0)
+  const total = entries.reduce((sum, [, count]) => sum + count, 0)
+  if (total === 0) return STATUS_PILL.look.label
+  const only = entries.length === 1 ? entries[0] : undefined
+  if (only !== undefined) {
+    const [word, count] = only
+    return word === 'short' ? `${count} short` : `${count} ${plural(count, 'card', 'cards')} ${word}`
+  }
+  return `${total} ${plural(total, 'card', 'cards')} need a look`
 }
 
 /** The one status a buyer shows, in words. */

@@ -110,6 +110,22 @@
 - "On the shelf" loads on arrival (after one timing on the real store).
 - Thumbnails: yes, a server lookup by SKU for another copy's photo, with a plain tile fallback.
 
+## Sales preview review, round 2 (owner, 2026-09-26)
+- Owner's words, verbatim: "singles sealed switch with default to singles". Best sellers gets
+  a Singles/Sealed/All switch. It defaults to Singles. It stays in the URL (D285).
+- Sealed is decided from the data, never guessed off a product name. The rule: `kind ===
+  'sealed'` where the feed declares it. Or `condition` reads `pipeline/tcgcsv.py:
+  SEALED_CONDITION` ("Unopened"). That is the one condition a TCGplayer export ever lists
+  sealed product under.
+- Measured on the owner's real store: `kind` is `'sealed'` on zero of 1,406 lines. The
+  operator never declares it on a paste. 256 lines carry `Unopened` instead. That condition
+  is where sealed product actually shows up.
+- Board bar overlap, no-photo tiles, long raw product titles, uncropped thumbnails, "0% of
+  gross", and "Best sellers" naming a Latest/A-to-Z sort were all real bugs. They came from
+  the same screenshot round (items 1-4, 9a-9d). See `docs/specs/revenue.md` for the fixes and
+  the measurements behind them. Finish and rarity now resolve from the `skus` table: 0 to
+  1,373 of 1,406 lines resolve a condition. 0 to 1,117 resolve a rarity, on the real store.
+
 ## Pricing re-interview (pricing-deliberation.md)
 - Q1 first view: EVERY ROW, the rows that need the owner on top, then the rest by value. (Not the fold-into-a-count proposal.)
 - Q2 needs-you rows: no market price, OR worth $5+, OR typed price 25%+ away from today's market. Count these on the owner's store first.
@@ -569,3 +585,161 @@
   2. DEBT35 records it (emit exits differently on one run and several runs).
 - Demo box name (owner, 2026-09-25, verbatim): "Demo Box". No "owner" wording about these
   cards appears anywhere on the public page.
+
+## Undo session (owner, 2026-09-25)
+
+The plan that applies these rulings is `docs/specs/undo.md` section 11. The owner's process
+ask and the interview answers, verbatim:
+
+```
+The process: "send an opus agent at first blindly just through our screens with no context
+of our upbringing/decisions/building-process, and have it basically analyze all the
+mechanisms we have of undo from an end user perspective. then have another agent with our
+context distill those findings and create action items. Interview me for my perspective too
+as maybe what's been written down for undo isn't how i feel about it anymore too."
+How long: "Anytime, from a history".
+A press that cannot be undone: "Never ask".
+Where undo lives: "hmm how would i for example, undo the 24th capture in my capturing run
+when i'm on capture 36? currently i'd have to undo 12 captures, i imagine there's a way to
+yes undo all the way to 24, but also to just undo 24 -- does that make
+sense in what im
+trying to have u think about? marking something sold on inventory though is much more
+straight forward.. etc.."
+What hurts: "capture mistakes 50%, marking the wrong card sold 30%, wrong review answer 20%".
+Refinement: "I do imagine that at a certain point inventory needs to lose its undo (or more
+like i would never use it), it's not that I relaly need undo forever, it's just a couple
+seconds isn't enough, and that a day feels arbitrary."
+On expiry: "Yes, until it's built on (Recommended)".
+```
+
+- "Never ask" means no confirms. Every press is made undoable instead.
+- Capture needs two acts: undo back to a card, and undo just that card.
+- RULING: an undo has no clock. It lasts until the next step depends on the action. After
+  that step, the fix is an ordinary action, not an undo. This refines "Anytime, from a
+  history". The plan defines that step for each action.
+- Measured for the plan, not a ruling: `sold_origin_unknown` (HOR-07) is seed-only. The
+  owner's store has 0 sold or retired cards with no earlier state. So the owner need not
+  test HOR-07 on the real store.
+- Q1, the five sentences that set a clock or a cap on undo (owner, 2026-09-25, verbatim):
+  "Switch all five (Recommended)". D164, D28 and D57 carry amendments. Sections 4 and 7 of
+  `docs/specs/undo.md` are amended. A move is undoable (UN-14).
+- Q2, "undo just N" on the capture strip (owner, 2026-09-25, verbatim): "Keep the confirm
+  here only". It keeps its confirm and stays permanent. It is the one exception to "Never
+  ask". The confirm's words say plainly that the removal is permanent and deletes the photo
+  (UN-3).
+- "This card is still here" on a shipped order (owner, 2026-09-25, verbatim): "Card back,
+  order re-points". The card goes back. The order line keeps its count and becomes a
+  `sold_separately` hand-fill, and the SKU's `sold_here` falls by one (UN-7,
+  `docs/specs/undo.md` 11.8).
+
+## Search, send and Home calls for PR 3 (2026-09-25)
+- Search (orchestrator): 8 different mid-word terms of 3 or more letters measured over 500ms
+  p95 on the copy of the real store. That is not inside the accepted "fast on a real-sized
+  store" call. The fix walks the rows once. A timing guard must count work, not only wall
+  time, so that it does not go red when nothing is wrong.
+- Defect found (the b-pricing R7 builder, older than the lane, on main):
+  `emit --cap N --live-guard F` does not count live copies. So TCGplayer can hold 2 copies
+  against a cap of 1. D7 says `--cap N` holds a SKU to at most N copies live, so D7 already
+  calls this a defect. It touches the send path, so it gets its own item with an Opus review
+  and a send matrix row. The send-fixes lane owns the fix.
+- Carried PR 2 items (orchestrator, option a): five items go to one follow-up lane after PR
+  2. They are the Home h1 greeting, the capture top gap, the Fulfillment `<Page>` variant,
+  Runs R2, and 6 icon entries.
+- Search (orchestrator): `#` forms, composed forms with a letter or an extra zero, and a digit
+  word in name text are older than the lane. D271 discloses them as known gaps, with rows in
+  its case table. They do not block.
+- Home "Cannot be filled" (owner, 2026-09-25, the owner's chosen option, verbatim): "New
+  \"missing a copy\" filter". Orders gets a show facet for every buyer who is missing a copy,
+  and Home opens it. So the number on Home and the list on Orders always agree.
+  D287 and D285 record the build.
+- Home's h1 (owner, 2026-09-25, verbatim): "yeah just keep the greeting". Home's h1 stays the
+  greeting (D121). The scaffold check learns it as a deliberate exception, not as an
+  allow-list entry. A hidden "Home" h1 was declined, because the document title already says
+  Home. The layout follow-up lane lands this as an amendment to D275.
+- The cap count under `--live-guard` (owner, 2026-09-25, the owner's chosen option,
+  verbatim): "Take the larger (Recommended)". The cap counts the larger of the guard's live
+  count and the store's pending copies, never their sum. That is right in the usual case,
+  where the pending copy has landed. In the rare case, the send can go over the cap by up to
+  the number of pending copies. That is a known limit. The send-fixes lane lands this in D7's
+  amendment, with its own debt entry.
+- Inventory's view switch (owner, 2026-09-25, verbatim): "List / Map / Sets". The box walk
+  is "List", the box map is "Map", and the by-set view is "Sets", on one switch. The URL
+  values stay `walk`, `shelf` and `sets` (the integration builder's call, process-only: a
+  label changes, a machine key does not). D264 and D293 record the build.
+- A typed price on a card whose market went blank (owner, 2026-09-26, the owner's chosen
+  option, verbatim): "Screen shows $5.16 (Recommended)". Pricing shows the typed price in
+  the field, with a short "No market price" mark, and never "Needs a price". Home counts
+  that copy as ready. The screen follows what the send already lists. The send, the files
+  it writes and the stored prices do not change. DEBT42 records the gap and its close.
+- Release after a hold (owner, 2026-09-26, the owner's chosen option, verbatim): "Bring back
+  $5.16 (Recommended)". A release puts back the answer the hold replaced, value and
+  channel. So the card goes out on the next send, as the toast says. The hold keeps that
+  answer in its own `before` field, and a send never reads it. A hold with no earlier answer
+  releases to none, as before. Its home is `docs/specs/undo.md` §11.1, the Hold row.
+- The date of a price that returns from a hold (owner, 2026-09-26, the owner's chosen
+  option, verbatim): "Keep the first date (Recommended)". A release, and U on a hold, bring
+  the price back with its first date, as the clear's Restore does. The hold keeps that date
+  in `before`. `corpus.stamp_answers` keeps it only on an exact return: the same value, the
+  same channel and the same date. Every other answer is dated as before, because the
+  markdown ratchet (D100) reads these dates. Its home is `docs/specs/undo.md` §11.1, the Hold
+  row.
+
+## Re-synced from the session record, 2026-09-26
+
+- LIVE STORE (owner, 2026-09-25, paraphrase: the live store is not precious). The owner is not using the app now. Either the live server or better demo seed data is fine. Orchestrator use: measure on a COPY of the live store first (no cost, no risk). The live server still has 4 request slots (DEBT11), so one agent at a time. Nothing contacts TCGplayer or spends money: that still needs the owner present (REAL-TEST).
+- MEASURED on a copy of the owner's store, 2026-09-25 (livecopy/MEASUREMENTS.md): 3,510 cards, 2,455 on hand, 916 SKUs, 5 boxes, 13 runs. Q2 "Needs you" = 9 of 33 unsent SKU rows (0 no market, 4 worth $5+, 5 typed 25%+ away). Q9: no single rule fits (best: market + $0.23, 16.9%), so "Make this the rule" has little to offer. Sales $0 lines: 0 of 1,406. Sealed boxes: 1 (ME01 C/UC). Box-name backfill: nothing to do, every box has a name (item CLOSED).
+- Demo seed shape (owner, 2026-09-25, paraphrase: copy in some of the owner's own data so demo is not empty, and touch nothing else). The test seed stays unchanged. Real cards are added as extra boxes, only in the published build, behind an opt-in flag.
+- Existing off-by-one places (owner, 2026-09-25, paraphrase: not worth fixing today's data, but prevention matters going forward). No repair of existing data. Prevention is the box map lane's fix: dividers stay with their physical card after a delete. PR 3's checkpoint must also prove two things. A plain "Move to box" (D83) cannot shift a divider or a label. Neither can a mid-box delete on today's code.
+- DEFECT FOUND (b-pricing R7 builder, pre-existing on main): `emit --cap N --live-guard F` does not count live copies, so TCGplayer can hold 2 against a cap of 1. D7 says "--cap N hold this SKU to at most N copies LIVE", so D7 already decides it: a defect. It touches the send path, so it gets its own Opus-reviewed item plus a matrix row. It lands as a DEBT entry in the PR 3 integration.
+- OWNER RULINGS (2026-09-25):
+  - PR 3 and PR 4 become ONE combined PR, to save review. The owner asked "can we merge pr3 and pr 4 into one larger pr to save on review?".
+  - Runs fold: "Build it now, in this PR (Recommended)". The D291 fold plan is built in the combined PR by an Opus builder.
+  - The "002-64" search: "No, a hyphen splits (Recommended)". A hyphen splits the number, so "002-64" must not match 264. This holds in both matchers, match.py and match.ts.
+  - The "bf" search: "Bring it back (Recommended)". Letters that spell a dotted name match it again, so "bf" and "B.F" behave the same and find B.F. Sword.
+- OWNER (2026-09-25): a by-set Inventory view. Asked for: "do i have anyway of seeing my inventory by set order? basically a view where i just know what qty of each card ...". Then: "send a sonnet builder on it now ...". The set view joins the combined PR. Undo joins too if it is ready in time.
+- OWNER (2026-09-25), the undo process, paraphrase: send an Opus agent blind, with no context of the repo's history, to read every screen and list its undo mechanisms. Then send a second agent, with full context, to distill those findings into action items. Interview the owner too, since the owner's own feel for undo may have moved past what earlier docs say.
+- OWNER UNDO INTERVIEW (2026-09-25), the answers:
+  - How long: "Anytime, from a history".
+  - A press that cannot be undone: "Never ask". No confirms, so make every press undoable instead.
+  - Where undo lives, paraphrase: undoing capture 24 from capture 36 means undoing every capture between them, not just one. Marking a card sold on Inventory is simpler.
+    - Orchestrator note: two acts, rewind-to-N and remove-just-N. The capture stack today is capped at ten, so capture 24 is out of reach from 36.
+  - What hurts: "capture mistakes 50%, marking the wrong card sold 30%, wrong review answer 20%".
+- OWNER, undo refinement (2026-09-25), paraphrase: at some point the owner may stop using undo on Inventory, since seconds are too short and a day feels arbitrary as a limit. On expiry, paraphrase: continue until the feature is built on (Recommended).
+  - RULING: an undo has no clock. It lasts until the next step depends on the action. Examples: a sale lasts until it is shipped or its order closes. A capture lasts until its sitting ends or it is identified. A Review answer lasts until it is listed.
+  - After that step, the fix is an ordinary action, not an undo. This REFINES the earlier answer "Anytime, from a history". The distiller defines that step for each action.
+- OWNER, the identify strip on Review (2026-09-25): "i should be able to pick whether i want to wait and get the free pre-check or if i wanna just go right through to the bill". Then, on what "Identify now" does: "Spend immediately".
+  - RULING: the strip offers two presses. "Check first" runs the existing free pre-check flow. "Identify now" starts the paid run at once, with no pre-check and no confirm.
+  - The strip's ~$X is the store's past cost per card times N. This amends the two-step money gate for this press only, and it sits in line with the owner's 2026-09-12 ruling "if I want to run everything, then I get to run everything".
+- OWNER, undo plan (2026-09-25):
+  - Q1: "Switch all five (Recommended)". These five sentences change to "until it is built on": D164's cap of ten, the twenty seconds in D28 and D57, the undo spec's "Moved is excluded" (section 4), and the Fulfiller's twenty seconds (section 7). UN-14, move undo, is in.
+  - Q2: "Keep the confirm here only". "Undo just capture N", which removes one card mid-sitting, keeps its confirm and stays permanent. It is the one exception to "Never ask".
+- OWNER (2026-09-25), a defect: "i notice sections can pass the width of their container (wb1 R2 has 12 sections but only 11 show on a card's locator)". It goes to lane ux/section-ruler.
+- OWNER (2026-09-25), the Inventory card locator block, paraphrase: the locators waste space, the icons are small, and the card locator should sit below the section locator. The screenshot shows BACK/THIS/FRONT neighbours, three small icon buttons (sell, retire, move), "Section 1 · card 17 of 39" over a card ruler, a section ruler, and BACK / "Section 1 of 12" / FRONT. It goes to lane ux/section-ruler as expanded scope.
+- OWNER (2026-09-25), Orders sort: "on orders, on its filters, under the sort category, you can only pick placed by newest and placed by oldest, we could have more there? dollar value? etc?". Then picked all four: "Dollar value,Card count,Buyer name,Fewest drawers to open". It goes to lane ux/orders-sort, which joins the combined PR.
+- OWNER (2026-09-25), the combined-order walk:
+  - A card that is short on hand: "i'd say just flag as too few on hand orsomething but yea if we were to give it to someone whoever it completes". The walk flags the card as too few on hand, and the copy goes to the order it would complete.
+  - The wording, paraphrase: say what is short, without wordiness.
+  - Bug confirmed by diagnosis: `pickOrderFor` in OrdersWalkPane.tsx falls back to a full order (for[0]), so the server refuses the press with over_fulfilled. The spec (§8) says "first order not filled". It goes to lane ux/walk-fix.
+- LESSON: a PW_ARGS glob like "tests/capture*.spec.ts" is a REGEX to Playwright and matches nothing, so the run is a false green. My briefs used it for capture, fulfillment and orders. Use "tests/capture" (a prefix) instead. The final full design-check on the integration branch is the real proof.
+- OWNER (2026-09-25), the locator redesign, paraphrase: if cheaper, build boldly. Otherwise, record findings. Orchestrator call: now is cheaper, because the lane holds the context and undo-screens is the critical path anyway. The same builder does a design-led pass with 2 mockups for the owner to pick from.
+- OWNER (2026-09-25), BACK/FRONT in the locator: "Keep it on each ruler". D260 stands, and each ruler keeps its own BACK/FRONT.
+- OWNER (2026-09-25), the locator direction: "B, large ruler (Recommended)". The card ruler is the dominant element (64px), with 48px icons and one identity line. BACK/FRONT stays on each ruler. The build uses CSS separators (D218) and keeps $ as the sell icon.
+- OWNER (2026-09-25), an empty last section: "Into the empty section (Recommended)". When a box ends with an empty section, the next captured or moved-in card goes INTO that section, behind the divider. This is fix (a): `next_key`/`_birth_key` read the last divider. It is the divider proof's F1.
+- DIVIDER PROOF (Opus, on 5915ad0a): FAIL, with 3 defects in this PR. F1: an orphaned empty last divider. F2: the UN-15 divider undo sends order keys where `do_put_box` reads card counts. F3: the `unmove_card` guard mixes key and index spaces. The owner's existing data: box 2 "ME01 C/UC" has 4 boundaries each reading one card late, from the 2026-08-25 mid-box delete under the old model. 264 cards were moved before this PR with no origin recorded. 10 dividers start at a departed card. Boxes 4 and 6 have an empty last section. Report only, no correction (the owner: "not worth correcting").
+- Owner, 2026-09-26, sections as sub-boxes, verbatim: "if i am in section 1, and i am capturing away, then section 1 is continuing to expand, if i am selecting section 2, then i am capturing that fills in section 2, kinda like a subbox". Divider-fix takes option (a): a divider typed ahead of the fill takes the next captures. The section picker is in THIS PR: "in this pr, but i think we need to properly plan it out before just building off these few lines, come with a plan".
+## Session rulings, 2026-09-26
+
+- Owner, 2026-09-26, sub-box plan (SUBBOX-PLAN.md): Q1 "Right after section 2 (Recommended)". Q2 "Until the sitting ends". Q3 on Move to box: "i need to specify where it goes there no auto default".
+- Owner, 2026-09-26, Pricing "Needs you" rows (preview review). On the reason pill, paraphrase: the pill states a value the row already shows further right, so the badge earns no place there. On the location line, paraphrase: one location for one copy tells the owner nothing when pricing every copy. Items 4-7, 10 and 11 were confirmed "correct"/"yup". Lane ux/pricing-rows.
+- Owner, 2026-09-26, the Inventory run strip ("Nothing running · Run this box"), verbatim choice: "Remove it". Inventory no longer mentions runs. Lane ux/tooltip-clip, add-on 2. Also on that lane: the Details hint "identity · claims · provenance" is removed. Paraphrase: the owner asked what that hint meant.
+- Owner, 2026-09-26, Graveyard, verbatim choice: "Move Moved out of Graveyard". Tabs become All / Sold / Retired, and a deleted box is a tag. Lane ux/graveyard.
+- Owner, 2026-09-26, Sales best sellers, verbatim: "singles sealed switch with default to singles". Also: "Fix Sales items 1-4 and 6-8 as bugs" (the overlapping bars, foil/rarity unread, raw titles, empty photo tiles, a note about zero, date format, the Last sold layout). Lane ux/sales-fixes.
+- Owner, 2026-09-26, Live markdown guards, verbatim: "I think we already decided to require a fresh read beforehand? also, allow for a cap cut in dollars atop the % markdown, and allow for sealed product to be filtered independently if needed". The owner also picked "Require a fresh read" and "Skip no-market cards". D273 already reads fresh at the press, but the screen offered stale counts. Opus lane ux/live-markdown. The column label "CARD" is wrong for sealed product, so it goes to the pricing-rows lane.
+- Owner, 2026-09-26, dark mode: "shelve the contrast work for dark mode to be done after we land everything else make a note that im thinking i ask for a cyberpunk themed dark mode". DEFERRED until after this PR merges. The proposals are on branch ux/dark-palette. Measured causes: a surface separation of 3.7 dL*. An accent and status lightness of 55-78%. Three variants exist, A, B and C, and C is the recommendation. The owner is considering asking for a CYBERPUNK-themed dark mode instead, so ask them before picking one. The docs sweep puts this in the review folder's deferred items.
+- Owner, 2026-09-26, process-only, paraphrase: skip the design check and the screen pass before merging to main. The docs sweep can run now, on Haiku or Sonnet if needed. Then open the PR. Merge once CI is green. The final Opus integration review and the screen pass run AFTER the merge to main, for the owner's feedback. Sonnet is used for the sweep because Haiku fabricated verbatim quotes on 2026-09-26.
+- OWNER (2026-09-26), the run status strip on `#/inventory`, verbatim: "Remove it". Delete `BoxRuns.tsx`/`BoxRuns.css` and its render slot under the box ruler. Inventory no longer mentions runs. A card's identity now comes from Review's own identify strip. `runHandoff.ts:carryScope`/`cardKey` retire with it, since neither has another caller. `carriedScope`/`carriedByBox`/`parseKey`/`clearCarriedScope` stay. `Runs.tsx`, `RunsComposer.tsx` and `ReviewQueue.tsx` still read them.
+- OWNER (2026-09-26), the comma-chord panel (`WhichKey`, `App.tsx`/`App.css`), verbatim: "yeah i do". Light mode inverted the panel: `--bn-ink` background, `--bn-bg` text. It gets a light raised surface in light mode, the kit's own popover/palette treatment. Dark mode stays as it is.
+- OWNER (2026-09-26), the graveyard report, verbatim: "in graveyard, when i clikc moved or buried i see the same list". Measured on a copy of the owner's store: 1,358 departed rows, 264 `moved` (all out of box 5, deleted afterward, so all 264 also `buried`), 38 sold+buried, 1 retired+buried, 1,050 sold, 5 retired. The owner's ruling, verbatim: "Move Moved out of Graveyard". `#/graveyard` keeps three tabs, All/Sold/Retired, and never lists a moved row. "Buried" becomes a small quiet tag on the Where cell ("Its box was deleted"), not a filter. It is a fact about the box, never a third way a card left. A moved card is found from the card itself on `#/inventory`, off `card.moved_from`. That field was already on the wire, unread until now. D134 is amended with this ruling, dated and quoted verbatim.
+- OWNER (2026-09-26), a name shaped like rules text, reported without a fix: box 3 index 987 (moved from 5/105) is named "While you control this battefield, when you play a spell, if you spent 4 or more, PREDICT: ..." — rules text read as the name. `pipeline/identity_checks.py:flag_long_names` (`cards checks`, class 1) ALREADY FLAGS THIS: measured, that name is 94 characters against the 60-character `LONG_NAME_THRESHOLD`. So this card is already a `long_name` finding waiting in `cards checks`' own output, not a gap in the checker. Not fixed here — graveyard's own fence is rendering and the read route only.
+- OWNER (2026-09-26), the Live tab's mark-down and its send guards, verbatim: "I think we already decided to require a fresh read beforehand? also, allow for a cap cut in dollars atop the % markdown, and allow for sealed product to be filtered independently if needed". The owner chose "Require a fresh read" and "Skip no-market cards". Lane ux/live-markdown builds all four. The homes are the dated 2026-09-26 amendments in D100 (the cap and the no-market skip), D103 (the sealed filter and the counts) and D273 (the fresh read).
+- OWNER (2026-09-26), two answers on the Live tab, verbatim. On a price stored on an earlier visit going out with a Live send: "if the price i've typed is higher yea". So an earlier answer rides only when it is higher than the live price, and the bar names each one. A lower one goes only when the owner types it again or presses "Mark down" on this visit. On the dollar cap's scope: "Rule only". The cap limits the rule's mark-down, and a typed price goes out as typed. The floor still applies to every price. The homes are the second dated 2026-09-26 amendments in D100, D103 and D273.

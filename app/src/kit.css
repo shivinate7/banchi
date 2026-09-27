@@ -172,6 +172,15 @@
   container-type: inline-size;
   container-name: bn-page;
 }
+/* `<Page width={false}>`: the Fulfiller's screen sizes its own column (D5) and never the kit's
+   width or top gap. The enter animation goes too — it moves via `transform`, and this element's
+   sheet and zoomed photo are FIXED children of it, so a transformed ancestor would pin them to
+   the page instead of the screen. */
+.bn-page[data-bn-page][data-bn-page-width='auto'] {
+  max-width: none;
+  padding-top: 0;
+  animation: none;
+}
 .bn-page-head { margin-bottom: var(--bn-4); }
 .bn-page-head .bn-head-actions { margin-top: 0; }
 [data-bn-page-title]:focus { outline: none; }
@@ -182,6 +191,19 @@
   font-weight: 600;
   line-height: var(--bn-lh-base);
   color: var(--bn-ink);
+}
+/* THE ONE UNDO SLOT (`docs/specs/undo.md` §11.3, UN-10), its own row between the verdict and
+   the toolbar — never inside `.bn-head-actions`, so it can never land beside a screen's own
+   Send or Fetch. UNRESERVED, UNLIKE `StatusSlot`: measured on `#/review`, reserving this
+   slot's height on every load pushed the document 54px past a floor with no slack in it
+   (`answering a card costs no scrolling`) — a permanent cost paid on every visit for a control
+   that stands only after a write. It exists for a screen with no OTHER door onto the same
+   write (Review's below-the-fold receipt, UN-9); a screen with a row-level Undo already
+   (Inventory, Orders) has no need of it and does not pass one. */
+.bn-page-undo { display: flex; justify-content: flex-end; margin-bottom: var(--bn-4); }
+@container bn-page (max-width: 640px) {
+  .bn-page-undo { justify-content: stretch; }
+  .bn-page-undo > .bn-btn { width: 100%; }
 }
 /* THE TOOLBAR FOLDS AS ONE UNIT, at ONE CONTROL HEIGHT. A wide column draws one row: the field
    takes the room that is left, up to a reading width. A narrow column gives the field the whole
@@ -434,20 +456,19 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   text-align: center;
 }
 
-/* The tooltip: `label` (and `kbd`), never `name`, which is for a screen reader alone. It
-   stays a DOM child of the button (never a portal — `app/tests/icon-button.spec.ts` reads it
-   with `button.querySelector`), but its POSITION is `position: fixed`, set by
-   `IconButton`'s own `reposition()` on pointer-enter, focus and the long-press timer.
-   `position: fixed` is computed against the true viewport regardless of an ancestor's
-   `overflow` — no ancestor here carries a `transform`, which is the one thing that would
-   re-anchor it — so `.bn-sheet`'s own `overflow: hidden` no longer clips the overlay Close
-   tooltip the way it did before round 2 (measured: the tip's top landed at -14px). The
-   `left`/`top` this file leaves as `0` are the pre-position fallback, overwritten before the
-   fade-in starts. `pointer-events: none` so it is never what a click lands on. `:hover` is
-   wrapped in `@media (hover: hover)`, so a touchscreen tap does not leave a phantom hover
-   once the finger lifts (round 2's own finding) — `:focus-visible` (never a plain mouse
-   `:focus`, so a click does not leave it stuck open) and `[data-tip-open]` (the long-press,
-   set by `IconButton`'s own timer) still show it everywhere. */
+/* The tooltip: `label` (and `kbd`), never `name`, which is for a screen reader alone.
+   PORTALLED TO `<body>` (round 3, D288 — `#/inventory`'s first row, see `kit/index.tsx`'s
+   block comment above `IconButton` for why a DOM-child tip with `position: fixed` was not
+   enough: an ancestor with `container-type` re-anchors the fixed containing block, AND a
+   sibling row's own entrance `animation` outranks it in paint order regardless of `z-index`).
+   As a `<body>` child it is a plain sibling of the app root, so `z-index: 90` here compares
+   fairly against everything else and `position: fixed` always means the true viewport — no
+   ancestor of `<body>` can re-anchor it or clip it. `IconButton`'s own `reposition()` sets
+   `left`/`top` on pointer-enter, focus and the long-press timer, before the fade-in starts;
+   the values this file leaves as `0` are only the pre-position fallback. `pointer-events:
+   none` so it is never what a click lands on. VISIBILITY IS `data-tip-visible`, set from
+   React state (`kit/index.tsx`) rather than a CSS pseudo-class, because a portal breaks the
+   descendant selectors (`.bn-icon-btn:hover .bn-icon-tip`) those pseudo-classes need. */
 .bn-icon-tip {
   position: fixed;
   left: 0;
@@ -468,15 +489,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   transition: opacity var(--bn-t-fast) var(--bn-ease);
 }
 .bn-icon-tip .bn-kbd { color: inherit; background: color-mix(in srgb, currentColor 18%, transparent); border-color: transparent; }
-@media (hover: hover) {
-  .bn-icon-btn:hover .bn-icon-tip { opacity: 1; }
-}
-.bn-icon-btn:focus-visible .bn-icon-tip, .bn-icon-btn[data-tip-open='true'] .bn-icon-tip { opacity: 1; }
-/* A click dismisses its own tooltip (`kit/index.tsx`'s `dismissed` state) — same specificity
-   as the hover/focus rules above, so it wins on being LAST when both apply: the mouse has not
-   moved off the button, so `:hover` alone would keep reading a tooltip the press already
-   acted on. */
-.bn-icon-btn[data-tip-dismissed='true'] .bn-icon-tip { opacity: 0; }
+.bn-icon-tip[data-tip-visible='true'] { opacity: 1; }
 
 .bn-btn[data-busy='true'] { color: transparent; pointer-events: none; }
 /* Busy is one state whether or not the screen also passed disabled: the ring is drawn full-strength. */
@@ -755,6 +768,39 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
    intact, so `-sm` still grows to the touch floor under 767px or a coarse pointer. */
 .bn-seg-sm { padding: 2px; gap: 2px; }
 .bn-seg-item-sm { height: 24px; padding: 0 var(--bn-2); font-size: var(--bn-fs-xs); }
+
+/* ---- section pick (D300: no auto default, the owner picks) ---------- */
+.bn-section-pick { display: flex; flex-direction: column; gap: var(--bn-2); }
+.bn-section-pick-item {
+  display: flex;
+  align-items: center;
+  gap: var(--bn-3);
+  min-height: 48px;
+  padding: var(--bn-2) var(--bn-3);
+  border-radius: var(--bn-r);
+  background: var(--bn-surface-2);
+  text-align: left;
+  color: var(--bn-ink);
+}
+.bn-section-pick-item:hover { background: var(--bn-hover); }
+.bn-section-pick-item[aria-checked='true'] { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1px var(--bn-accent); }
+.bn-section-pick-main { display: flex; flex-direction: column; gap: var(--bn-0-5); flex: 1 1 auto; min-width: 0; }
+.bn-section-pick-num { font-size: var(--bn-fs-sm); font-weight: 700; }
+.bn-section-pick-name { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.bn-section-pick-meta { display: flex; align-items: center; gap: var(--bn-2); flex: 0 0 auto; }
+.bn-section-pick-tag {
+  padding: 1px var(--bn-2);
+  border-radius: var(--bn-r-full);
+  background: var(--bn-surface-3);
+  font-size: var(--bn-fs-2xs);
+  font-weight: 600;
+  letter-spacing: var(--bn-tracking-caps);
+  text-transform: uppercase;
+  color: var(--bn-ink-3);
+}
+.bn-section-pick-count { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); white-space: nowrap; }
+.bn-section-pick-spacer { width: 16px; flex: 0 0 auto; }
+.bn-section-pick-item .bn-icon { flex: 0 0 auto; color: var(--bn-accent); }
 
 /* ---- tabs (underline) -------------------------------------------------------- */
 .bn-tabs { display: flex; gap: var(--bn-1); border-bottom: 1px solid var(--bn-line); }
@@ -1571,7 +1617,9 @@ img.bn-crop[data-cropped='true'] {
    `BoxBrowse.css` did the same for `.bn-menu-item`. Both patches are deleted; every screen gets
    these rather than the two that happened to notice. */
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
-  .bn-seg-item { height: var(--bn-control-h-sm); }
+  /* The width too (the PR 3 integration): a short label, "Map" or "List", drew a 35px-wide
+     segment whose neighbour caught a thumb 19px off its centre. */
+  .bn-seg-item { height: var(--bn-control-h-sm); min-width: var(--bn-control-h-sm); }
   .bn-tab { height: var(--bn-control-h); }
   .bn-menu-item { min-height: var(--bn-control-h-sm); padding: var(--bn-2) var(--bn-3); }
   .bn-list-row { min-height: 48px; }

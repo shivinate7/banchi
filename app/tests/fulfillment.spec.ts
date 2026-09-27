@@ -87,7 +87,6 @@ function pooledPlace(card: FixtureCard) {
     section_start: null,
     section_end: null,
     box_total: 0,
-    box_closed: false,
     fraction: null,
     game: 'pokemon_code',
     game_display: 'Pokémon code cards',
@@ -355,7 +354,6 @@ function searchAnswer(q: string, states: Store, soldHere = 0) {
                   section_start: 1,
                   section_end: 25,
                   box_total: 25,
-                  box_closed: true,
                   fraction: card.index / 25,
                 },
         }
@@ -604,7 +602,6 @@ const ORDER_COPY_PLACE = {
   section_start: 1,
   section_end: 25,
   box_total: 25,
-  box_closed: true,
   fraction: 0.28,
   neighbors: null,
   section_gaps: 0,
@@ -718,7 +715,6 @@ function multiCopy(key: string, box: number, section: number, card: number, sect
       section_start: 1,
       section_end: sectionEnd,
       box_total: sectionEnd,
-      box_closed: true,
       fraction: 0.4,
       neighbors: null,
       section_gaps: 0,
@@ -1263,6 +1259,18 @@ async function noThinContrast(page: Page, where: string): Promise<void> {
  *  the size and spacing assertions below run either way, and defaulting to true keeps a
  *  screen that has quietly lost its controls failing. */
 async function fatTargets(page: Page, where: string, hasControls = true): Promise<void> {
+  /* EVERY FINITE ANIMATION ENDS BEFORE THE RULER. A receipt that is still in its entry
+     animation (`bn-pop` scales it) read its 44px dismiss button at 43.99997 under load. The
+     floor does not move. Only the moment of the read does. A looping shimmer never ends, so
+     it is left out. */
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  )
   const found = await targets(page)
   if (hasControls) expect(found.length, `${where}: no control on screen`).toBeGreaterThan(0)
 
@@ -1868,7 +1876,7 @@ const WALK_ORDER_PLAN = {
           place: {
             label: 'Box 5, Section 1, Card 1', located: true, box: 5, index: 1, slot: 1,
             section: 1, card: 1, box_name: null, section_start: 1, section_end: 10,
-            box_total: 10, box_closed: true, fraction: 0.1, neighbors: null, section_gaps: 0,
+            box_total: 10, fraction: 0.1, neighbors: null, section_gaps: 0,
           },
           here: true,
         }],
@@ -1888,7 +1896,7 @@ const WALK_ORDER_PLAN = {
           place: {
             label: 'Box 1, Section 1, Card 1', located: true, box: 1, index: 1, slot: 1,
             section: 1, card: 1, box_name: null, section_start: 1, section_end: 10,
-            box_total: 10, box_closed: true, fraction: 0.1, neighbors: null, section_gaps: 0,
+            box_total: 10, fraction: 0.1, neighbors: null, section_gaps: 0,
           },
           here: true,
         }],
@@ -1930,7 +1938,7 @@ const UNCOUNTED_SECTION_PLAN = {
           place: {
             label: 'Box 6 · departed', located: true, box: 6, index: 9, slot: null,
             section: null, card: null, box_name: null, section_start: 1, section_end: null,
-            box_total: 0, box_closed: false, fraction: null, neighbors: null, section_gaps: null,
+            box_total: 0, fraction: null, neighbors: null, section_gaps: null,
           },
           here: true,
         }],
@@ -1950,7 +1958,7 @@ const UNCOUNTED_SECTION_PLAN = {
           place: {
             label: 'Box 6, Section 1, Card 2', located: true, box: 6, index: 2, slot: 2,
             section: 1, card: 2, box_name: null, section_start: 1, section_end: 10,
-            box_total: 10, box_closed: true, fraction: 0.2, neighbors: null, section_gaps: 0,
+            box_total: 10, fraction: 0.2, neighbors: null, section_gaps: 0,
           },
           here: true,
         }],
@@ -2133,12 +2141,13 @@ test('a zoomed photo and the "?" sheet share one Escape and one order, and each 
  * OWN first column, and the two rows' sentences landed about 18px apart (612 vs 594 at
  * 1440px). `.ff-keys-key`'s fixed `width` is the fix; this is what proves it, at both a
  * width where the dialog is centered (1440) and one where it is a full-bleed bottom sheet
- * (390) — the two layouts this sheet actually draws. */
+ * (390) — the two layouts this sheet actually draws. THREE ROWS SINCE UN-10
+ * (`docs/specs/undo.md` §11.3): `U`, undo the newest sale, joined `Esc` and `?`. */
 async function keysSentenceXs(page: Page): Promise<number[]> {
   await page.keyboard.press('?')
   // Unscoped: the kit's `Modal` portals `.ff-keys` to `document.body`, not into `main.fulfillment`.
   const rows = page.locator('.ff-keys-list li .fulfillment-say')
-  await expect(rows).toHaveCount(2)
+  await expect(rows).toHaveCount(3)
   // The Modal's own entrance animation transforms the whole panel; an x read mid-scale is a
   // transient one, not the settled layout this test is about (see the comment beside the
   // other `settleMotion` call above).
@@ -2146,22 +2155,22 @@ async function keysSentenceXs(page: Page): Promise<number[]> {
   return rows.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().x))
 }
 
-test('the keyboard sheet\'s two rows start their sentences at the same x — 1440px', async ({
+test('the keyboard sheet\'s three rows start their sentences at the same x — 1440px', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await openList(page)
   const xs = await keysSentenceXs(page)
-  expect(Math.abs(xs[1]! - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
+  for (const x of xs.slice(1)) expect(Math.abs(x - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
 })
 
-test('the keyboard sheet\'s two rows start their sentences at the same x — 390px', async ({
+test('the keyboard sheet\'s three rows start their sentences at the same x — 390px', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await openList(page)
   const xs = await keysSentenceXs(page)
-  expect(Math.abs(xs[1]! - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
+  for (const x of xs.slice(1)) expect(Math.abs(x - xs[0]!), `sentence x per row: ${xs.join(', ')}`).toBeLessThan(1)
 })
 
 test(`every text node is at least ${BODY_FLOOR}px, on the list and on the card`, async ({
@@ -2485,6 +2494,12 @@ test(`undo is offered on every mark-sold and stays for at least ${UNDO_FLOOR_MS 
  */
 
 test('a second sale does not take the first sale undo away', async ({ page }) => {
+  /* THE OPUS REVIEW ROUND, FINDING #1: standing BOTH receipts in the SHEET at once is the
+   * defect it caught — the sheet grew one panel per sale and covered the next card, forever,
+   * since there is no clock to end it. What this case still asks for is unchanged: neither
+   * sale's Undo may vanish. The rebuilt door for the older one is `ff-done`, "Pulled today" —
+   * every sale but the newest stands there, each with its own Undo, which is where this case
+   * now looks for the first sale's. */
   const wire: Wire[] = []
   await openList(page, wire)
 
@@ -2495,22 +2510,51 @@ test('a second sale does not take the first sale undo away', async ({ page }) =>
   await openCard(page, 'Iono')
   await sellOpenCard(page)
 
-  // Both receipts stand, each with its own Undo. One slot held one of these and dropped the
-  // other with no trace, on a screen whose only other route to recovery is the owner.
-  const first = receiptFor(page, 'Box 3, Section 1, Card 7')
+  // The sheet draws only the newest. The older one's own Undo did not vanish — it moved to
+  // "Pulled today", the door the sheet's own comment always named.
+  const doneRow = view(page).locator('.ff-done-row', { hasText: 'Charizard ex' })
   const second = receiptFor(page, 'Box 1, Section 1, Card 3')
-  await expect(first.getByRole('button', { name: 'Undo' })).toBeVisible()
+  await expect(doneRow.getByRole('button', { name: 'Undo' })).toBeVisible()
   await expect(second.getByRole('button', { name: 'Undo' })).toBeVisible()
 
   // The older one still works, and reaches the server for the card it names rather than for
   // the most recent sale.
-  await first.getByRole('button', { name: 'Undo' }).click()
+  await doneRow.getByRole('button', { name: 'Undo' }).click()
   await expect(page.getByRole('button', { name: 'Charizard ex' })).toBeVisible()
   expect(wire.at(-1)!.undo, 'the last call was a reversal').toBe(true)
   expect(wire.at(-1)!.url, 'the reversal named the older card').toContain('/inventory/3/7/sold')
   // And the newer sale is untouched: still sold, still offering its own undo.
   await expect(page.getByRole('button', { name: 'Iono' })).toHaveCount(0)
   await expect(second.getByRole('button', { name: 'Undo' })).toBeVisible()
+})
+
+test('finding #1 (the delta review round, low item 7) — the sheet holds exactly one receipt, and it can be dismissed', async ({
+  page,
+}) => {
+  /* NO CASE GUARDED THIS DIRECTLY BEFORE — the reviewer read it live instead ("the sheet now
+   * holds one receipt, 315px tall, and it can be closed"). Two sales in a row, and the sheet
+   * itself (`.ff-receipt`, never the "Pulled today" rail) still holds exactly one panel. */
+  const wire: Wire[] = []
+  await openList(page, wire)
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await expect(view(page).locator('.ff-receipt')).toHaveCount(1)
+
+  await openCard(page, 'Iono')
+  await sellOpenCard(page)
+  await expect(view(page).locator('.ff-receipt')).toHaveCount(1)
+
+  /* AND IT CAN BE CLOSED (the reviewer's own live read). Dismissing the newest receipt
+   * reveals the next one in line if there is one — 'sales' loses only the dismissed entry,
+   * so Charizard's own (older) receipt takes the sheet's one slot next, never zero while a
+   * second sale still stands. */
+  await expect(view(page).locator('.ff-receipt-name')).toHaveText('Iono')
+  await page.getByRole('button', { name: 'Dismiss this receipt' }).click()
+  await expect(view(page).locator('.ff-receipt')).toHaveCount(1)
+  await expect(view(page).locator('.ff-receipt-name')).toHaveText('Charizard ex')
+  await page.getByRole('button', { name: 'Dismiss this receipt' }).click()
+  await expect(view(page).locator('.ff-receipt')).toHaveCount(0)
 })
 
 test('the undo is still there after walking into another card', async ({ page }) => {
@@ -2893,8 +2937,12 @@ test('a failed re-read keeps the cards he has and says the list may have moved',
   await expect(view(page)).not.toContainText('These cards may have changed')
 })
 
-test('the failed-undo message leaves with the undo it tells him to press', async ({ page }) => {
-  test.setTimeout(90_000)
+test('the failed-undo message and its Undo live and die together, and neither leaves on a clock (UN-5)', async ({ page }) => {
+  /* THE CLOCK IS FAKED AND ONLY ADVANCED (D136): there is no longer a timer here to wait out —
+   * that is the whole point — so a real sleep would buy nothing a jump does not, and D136's own
+   * rule against a sleep standing in for an assertion applies even more directly to proving an
+   * ABSENCE of a timer than to outlasting one. Installed before the first navigation. */
+  await page.clock.install()
   const wire: Wire[] = []
   const mood: Mood = {
     sold: (undo, key) =>
@@ -2909,16 +2957,40 @@ test('the failed-undo message leaves with the undo it tells him to press', async
   const receipt = receiptFor(page, 'Box 3, Section 1, Card 7')
   await receipt.getByRole('button', { name: 'Undo' }).click()
 
-  /* Held in screen-wide state, this sentence outlived the control it named: the window closed,
-   * the panel went, and the instruction stayed on screen pointing at a button that was no
-   * longer there. The structural half of the fix is asserted first — the sentence is INSIDE
-   * the panel that carries the Undo, so neither can outlive the other by construction. */
+  /* Held in screen-wide state, this sentence once outlived the control it named: a clock
+   * closed the panel out from under it, leaving the instruction on screen pointing at a button
+   * that was no longer there. The structural half of the fix is asserted first — the sentence
+   * is INSIDE the panel that carries the Undo, so neither can outlive the other by
+   * construction. */
   await expect(receipt).toContainText('The card did not come back. Press Undo again.')
   await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
 
-  // And then the window really closes, in real time, and they go together.
-  await expect(view(page).locator('.fulfillment-panel')).toHaveCount(0, { timeout: 60_000 })
-  await expect(view(page)).not.toContainText('The card did not come back')
+  /* NO CLOCK (UN-5, `docs/specs/undo.md` §11.1, D28/D57 amended 2026-09-25): a faked minute —
+   * well past the old twenty-second window this panel used to close on — passes and BOTH
+   * stand, together, exactly as before. What the prior draft of this case proved was the
+   * opposite: that a clock eventually took them. That premise is gone; this is its
+   * replacement. */
+  await page.clock.runFor(60_000)
+  await expect(receipt).toContainText('The card did not come back. Press Undo again.')
+  await expect(receipt.getByRole('button', { name: 'Undo' })).toBeVisible()
+})
+
+test('finding #11 (the Opus review round) — `U` itself still undoes the newest sale a minute later, not only the button', async ({
+  page,
+}) => {
+  /* `useUndoHotkey` reads no clock (`kit/undo.ts`) — this is the shared hook's own proof on
+   * this screen, pressing the key rather than only checking the button stayed visible. */
+  await page.clock.install()
+  const wire: Wire[] = []
+  await openList(page, wire)
+
+  await openCard(page, 'Charizard ex')
+  await sellOpenCard(page)
+  await expect(receiptFor(page, 'Box 3, Section 1, Card 7').getByRole('button', { name: 'Undo' })).toBeVisible()
+
+  await page.clock.runFor(60_000)
+  await page.keyboard.press('u')
+  await expect.poll(() => wire.filter((w) => w.undo).length).toBe(1)
 })
 
 /* ------------------------------------------------------------------ finding a card by name

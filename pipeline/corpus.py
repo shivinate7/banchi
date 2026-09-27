@@ -368,9 +368,10 @@ class Corpus:
             # open on the one nobody named" — and it was written after a dry-run interceptor
             # built from the wrong names let 100 real rows reach TCGplayer. The same shape was
             # sitting on the file that decides what every card lists at. An unrecognised
-            # channel now falls to `no_market_data`, which `pipeline/decisions.py:blocking`
-            # reads as "this card is not answered" and refuses the emit over: the safe
-            # direction is the one that stops rather than the one that prices.
+            # channel now falls to `no_market_data`, which never outranks the rule for a card
+            # that has a market price. Where that answer is empty, a send leaves the card out
+            # (D277 Q3) rather than pricing it: the safe direction is the one that does not
+            # price.
             (prices if answer.channel == "price" else unknown)[sku] = answer.value
         for sku in unpriced:
             if sku not in prices and sku not in unknown:
@@ -425,6 +426,83 @@ class Corpus:
         rather than by weakening the check, because the check is what catches a real typo.
         """
         return self._decisions(run_name, skus, unpriced)
+
+
+# ------------------------------------------------------------------ the kept clears (UN-11)
+
+#: Every mass-clear not yet restored, kept beside `prices.json` so its undo outlives the toast
+#: and a reload. EVERY ONE, NOT ONLY THE NEWEST (the owner's standing undo rule, "until it's
+#: built on"): a second clear must not take away the first one's way back. A restore removes
+#: the clear it restored. A send that carries a cleared SKU builds on that clear, and the
+#: route refuses it from then on.
+LAST_CLEAR_FILENAME = "prices-cleared.json"
+
+
+def last_clear_path() -> Path:
+    from store import files
+
+    return files.prices_path().with_name(LAST_CLEAR_FILENAME)
+
+
+def read_clears() -> List[dict]:
+    """Every kept clear, oldest first, each `{id, at, cleared}`. A file that will not parse is
+    no clears: the undo is lost, and nothing in `prices.json` is at risk. A file in the older
+    one-clear shape `{at, cleared}` reads as one clear whose id is its `at`."""
+    target = last_clear_path()
+    if not target.is_file():
+        return []
+    try:
+        data = json.loads(target.read_text("utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(data, dict):
+        return []
+    rows = data.get("clears")
+    if rows is None and "cleared" in data:
+        rows = [{"id": str(data.get("at")), **data}]
+    out = []
+    for row in rows if isinstance(rows, list) else []:
+        if isinstance(row, dict) and isinstance(row.get("cleared"), dict) and isinstance(row.get("at"), int):
+            out.append({"id": str(row.get("id") or row["at"]), "at": row["at"], "cleared": row["cleared"]})
+    return out
+
+
+def _write_clears(clears: List[dict]) -> None:
+    from store import files
+
+    if not clears:
+        last_clear_path().unlink(missing_ok=True)
+        return
+    files.write_json(last_clear_path(), {"clears": clears})
+
+
+def write_last_clear(cleared: dict, at: int) -> str:
+    """Keep the answers a clear removed, verbatim, and the unix second it removed them, beside
+    every clear kept before it. Returns the new clear's id.
+
+    `at` is on the posted-price clock (`store/postings.py`), because a send is what builds
+    on a clear, and the two stamps must compare.
+    """
+    clears = read_clears()
+    taken = {row["id"] for row in clears}
+    ident, n = str(int(at)), 1
+    while ident in taken:
+        n += 1
+        ident = f"{int(at)}-{n}"
+    clears.append({"id": ident, "at": int(at), "cleared": dict(cleared)})
+    _write_clears(clears)
+    return ident
+
+
+def read_last_clear() -> Optional[dict]:
+    """The newest kept clear, or None."""
+    clears = read_clears()
+    return clears[-1] if clears else None
+
+
+def drop_clear(ident: str) -> None:
+    """Remove one kept clear, by id. The others stay."""
+    _write_clears([row for row in read_clears() if row["id"] != ident])
 
 
 # ------------------------------------------------------------------ provenance and the digest
@@ -499,6 +577,13 @@ def stamp_answers(before: "Corpus", after: "Corpus", at: str) -> List[str]:
     to the migration and refuse the whole corpus as `priced_recently` on the next survey.
     """
     stamped: List[str] = []
+    # A HOLD'S `before.at` IS THE SERVER'S, NEVER THE CLIENT'S (the Opus review of the first-date
+    # ruling, HIGH). A screen can hold a stale date for a price it typed this visit, and the
+    # release below trusts `before.at`. So every hold's `before.at` is set here, from what the
+    # store holds now, before any release is judged against it.
+    for sku, answer in after.answers.items():
+        if answer.is_hold and isinstance(answer.value, dict) and isinstance(answer.value.get("before"), dict):
+            _seal_hold_date(answer.value["before"], before.answers.get(sku))
     for sku, answer in after.answers.items():
         if answer.channel != "price" or answer.is_hold:
             continue
@@ -514,9 +599,56 @@ def stamp_answers(before: "Corpus", after: "Corpus", at: str) -> List[str]:
         ):
             answer.at = previous.at
             continue
+        # A PRICE RETURNING FROM A HOLD KEEPS ITS FIRST DATE (the owner's ruling, "Keep the first
+        # date (Recommended)"). A hold carries the answer it replaced in `before`, date and all.
+        # A release, or U on the hold, sends that same answer back with that same `at`. It is
+        # the assertion that an answer given earlier was never withdrawn, as a restore is
+        # (`do_pricing_restore`), so it is not re-dated. Every part must match: the value, the
+        # channel, and the date. Anything else is a new answer, and dates today.
+        returning = _hold_before(previous)
+        if (
+            returning is not None
+            and returning.get("at")
+            and answer.at == returning.get("at")
+            and str(returning.get("channel") or "price") == answer.channel
+            and _token(returning.get("value")) == _token(answer.value)
+        ):
+            continue
         answer.at = at
         stamped.append(sku)
     return stamped
+
+
+def _seal_hold_date(kept: dict, previous: Optional["Answer"]) -> None:
+    """Set a hold's `before.at` from the stored answer the hold replaces, in place.
+
+    ANY DATE THE CLIENT SENT IS DROPPED FIRST. The date is kept only when the stored answer is
+    the one `before` names, by value and channel: a stored price gives its own `at`, and a
+    stored hold over the same answer gives the `before.at` this function set when that hold
+    was first stored. Anything else leaves no date, so a release dates today.
+    """
+    kept.pop("at", None)
+    if previous is None:
+        return
+    channel = str(kept.get("channel") or "price")
+    source = _hold_before(previous) if previous.is_hold else {
+        "value": previous.value, "channel": previous.channel, "at": previous.at,
+    }
+    if (
+        source is not None
+        and source.get("at")
+        and str(source.get("channel") or "price") == channel
+        and _token(source.get("value")) == _token(kept.get("value"))
+    ):
+        kept["at"] = source["at"]
+
+
+def _hold_before(previous: Optional["Answer"]) -> Optional[dict]:
+    """The answer a stored hold replaced (`#/pricing` keeps it in `before`), or None."""
+    if previous is None or not previous.is_hold or not isinstance(previous.value, dict):
+        return None
+    before = previous.value.get("before")
+    return before if isinstance(before, dict) else None
 
 
 # ------------------------------------------------------------------- clearing typed prices

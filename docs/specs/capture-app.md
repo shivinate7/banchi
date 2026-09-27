@@ -389,6 +389,8 @@ never composes a second one.
 
 ### 5.2 — Box selection
 
+**Superseded 2026-09-25: a box has no seal and no capacity (D299).**
+
 **OVERTAKEN 2026-08-25 — the box field is one control, and the number is no longer typed.**
 D20's amendment carries the argument. The two inputs this section describes (a list to pick
 from, and a separate typed number to start a new box) are one free-text field that searches
@@ -514,16 +516,23 @@ one number across a round trip and sending it back, and at the feeder's measured
 cadence that race is real: one capture in between and the divider lands behind the card it
 was meant to be in front of.
 
-**It refuses rather than guessing, in three named cases**: a second press with nothing
-captured between (`section_empty` — the divider you want is already there), a divider
-already declared past the next card (`section_ahead`), and a sealed box (`box_closed`, the
-same refusal a capture gets, for the same reason). Each is a sentence beside the control and
+**Amended 2026-09-26 (D300).** A capture can name a section, and S can
+name the section it goes after. Each names the section by its divider key, never by an
+index. So the sentence above still holds, and the store chooses the place inside the lock.
+`docs/specs/subbox-capture.md` has the wire contract.
+
+**Superseded 2026-09-25: a box has no seal and no capacity (D299).**
+
+**It refuses rather than guessing**: a second press with nothing captured between
+(`section_empty` — the divider you want is already there). A divider already declared past
+the next card was `section_ahead` until 2026-09-26. The next card goes behind it now, so
+`section_empty` answers it (D10). A sealed box (`box_closed`) went with the seal. Each is a sentence beside the control and
 never a halt: §5.5 stops the run when a card may have gone past unrecorded, and a refused
 divider changed nothing.
 
-**No undo, and no dialog.** The remedy is the dividers editor on `#/inventory`, which is
-where a wrong layout is corrected anyway, and a `resectioned` history line carries the
-layout it moved from. A confirm on the screen the owner shoots a box from at feeder pace is
+**No dialog, and `U` is the undo.** `U` takes S's divider back out while it is the last one
+and no card is behind it (UN-15). After that, the remedy is the dividers editor on
+`#/inventory`, and a `resectioned` history line carries the layout it moved from. A confirm on the screen the owner shoots a box from at feeder pace is
 what `docs/DESIGN.md` refuses in as many words.
 
 ## 6. trigger-seam

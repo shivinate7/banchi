@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 
 import type {
   BoxClaimResult,
@@ -32,7 +32,7 @@ import {
 import { spansOf } from './position'
 import { ReadingAge } from './CardLocations'
 import { readingAgo } from './cardState'
-import { Button, Icon, IconButton, Notice, Pill, Select, Stat, boxesMostRecentFirst, type IconName } from './kit'
+import { Button, Icon, IconButton, Notice, Pill, Select, SectionPicker, Stat, boxesMostRecentFirst, type IconName } from './kit'
 import { UNNAMED_BOX } from './kit/data'
 import { toast } from './kit/toast'
 import { Dialog as Overlay } from './kit/overlay'
@@ -49,7 +49,6 @@ import './BoxOps.css'
  */
 
 /** The word `state` carries when the lid is on. */
-const CLOSED = 'closed'
 
 /** No listing records handed down. Not the same as "this store has listed nothing". */
 const NO_LISTINGS: Readonly<Record<string, Listing>> = {}
@@ -252,7 +251,6 @@ function trackPlace(record: BoxRecord, total: number): Place {
     section_start: 1,
     section_end: null,
     box_total: total,
-    box_closed: record.state === CLOSED,
     fraction: null,
   }
 }
@@ -302,22 +300,15 @@ export function BoxIdentity({
   at?: number | null
   actions?: ReactNode
 }) {
-  const sealed = record.state === CLOSED
   const holds = known(record.on_hand)
   const total = denominator(record)
   const spans = spansOf(trackPlace(record, total), record.sections_detail)
 
-  /* The copies are on hand and the BOX is sealed: `sealed at 543` closes the line and the pill
-     beside it carries the state, so no count is ever called sealed. The captured figure is
-     dropped only where it would repeat the seal. */
-  const sealedAt = sealed && record.capacity !== null ? record.capacity : null
-
   /* THE CENSUS TRIAD (D41), BROUGHT TO THIS PANEL. `CardLocations`' own three figures — copies,
      in the boxes, live on TCGplayer — are `bn-stat` tiles: a big tabular-nums value over a
      muted label, no separators. This panel's facts are the same shape now, one `bn-stat` per
-     field. `fill unread` and `sealed at N` are not counts of what is in the box — the first is
-     an unread state, the second is D20's frozen capacity, a denominator rather than a fourth
-     thing IN the box — so both stay plain text, after the figures. */
+     field. `fill unread` is not a count of what is in the box, so it stays plain text, after
+     the figures. A box has no lid and no capacity (`D299`). */
   const censusStats: { key: string; value: number; label: string }[] = []
   const censusNotes: string[] = []
   if (holds === null) censusNotes.push('fill unread')
@@ -325,25 +316,17 @@ export function BoxIdentity({
   if (record.sold > 0) censusStats.push({ key: 'sold', value: record.sold, label: 'sold' })
   if (record.retired > 0) censusStats.push({ key: 'retired', value: record.retired, label: 'retired' })
   if (record.moved > 0) censusStats.push({ key: 'moved', value: record.moved, label: 'moved' })
-  if (sealedAt !== record.cards) censusStats.push({ key: 'captured', value: record.cards, label: 'captured' })
-  if (sealedAt !== null) censusNotes.push(`sealed at ${sealedAt}`)
+  censusStats.push({ key: 'captured', value: record.cards, label: 'captured' })
 
   return (
     <div className="boxops-identity">
       <div className="boxops-identity-top">
         {/* THE NAME ALONE (D259): the number is the store's key, never
-            drawn. An unnamed box has a stored default name since the locating lane. THE STATE
-            PILL ONLY FOR THE EXCEPTION, ON THE NAME'S LINE (UX-269, UX-221's rule): on the
-            figures' line an "open" pill sat inline for one box and wrapped alone for another,
-            and nearly every box is open, so the word told the hand nothing. Sealed is drawn. */}
+            drawn. An unnamed box has a stored default name since the locating lane. No state
+            pill: a box has no lid (`D299`). */}
         <div className="boxops-identity-text">
           <h2 className="boxops-identity-name">{record.name ?? UNNAMED_BOX}</h2>
         </div>
-        {sealed ? (
-          <Pill tone="default" icon="lock" className="boxops-state boxops-state-sealed">
-            sealed
-          </Pill>
-        ) : null}
         {actions}
       </div>
 
@@ -418,10 +401,15 @@ export function BoxOps({
   onClose: () => void
 }) {
   const { busy, trouble, write } = useBoxWrite(onChanged)
+  /* F1 — a stale-section refusal reads the boxes again, the way the one-card Move panel
+   * already does, so the re-pick offers live sections rather than looping on a dead key. A
+   * ref, not a dependency, so the effect below fires once per NEW refusal and never merely
+   * because `onChanged` (an inline callback at the call site) changed identity. */
+  const onChangedRef = useRef(onChanged)
+  onChangedRef.current = onChanged
   const onWrite = (patch: {
     name?: string
     sections?: number[]
-    state?: 'open' | 'closed'
     section_names?: Record<number, string>
   }) => write(() => updateBox(record.box, patch))
   /* D132 — one draft per section, keyed by ordinal, seeded from what the wire says now. */
@@ -431,11 +419,39 @@ export function BoxOps({
   const [refused, setRefused] = useState<string | null>(null)
   const [claimed, setClaimed] = useState<BoxClaimResult | null>(null)
   const [moveTo, setMoveTo] = useState('')
+  /* The owner's own pick, no auto default (D300): a divider key of
+   * `moveTo`, cleared whenever `moveTo` changes. */
+  const [sectionDiv, setSectionDiv] = useState<string | null>(null)
   const [moved, setMoved] = useState<MoveCardsResult | null>(null)
+  /* S4: MOST RECENT FIRST — the same rule `Inventory.tsx:MovePanel` and the rail sort by.
+     `boxes` arrives in the server's own order (box number), which said nothing about which
+     box the hand was likeliest to reach for. */
+  const others = boxesMostRecentFirst(boxes.filter((candidate) => candidate.box !== record.box))
+
+  /* The chosen destination's own sections, for the picker beside it. `moveTo` is free text
+   * (the no-registry fallback above), so this looks it up by number rather than reading
+   * `others`'s own list directly. */
+  const moveToNumber = moveTo.trim() === '' ? null : Number.parseInt(moveTo.trim(), 10)
+  const moveTarget =
+    moveToNumber === null || !Number.isInteger(moveToNumber)
+      ? null
+      : (boxes.find((candidate) => candidate.box === moveToNumber) ?? null)
+  const moveTargetSections = (moveTarget?.sections_detail ?? []).filter(
+    (detail): detail is SectionDetail & { div: string } => typeof detail.div === 'string',
+  )
+  /* The section a completed move landed in, for the receipt below — read while `moveTo` and
+   * `sectionDiv` still name it, before the next `startEdit` clears either. */
+  const movedSection = moveTargetSections.find((detail) => detail.div === sectionDiv)
+  /* The box's own layout token (`docs/specs/subbox-capture.md` 1.1, 1.5): required beside
+   * `section` on every Move-to-box. Absent from an older server, same as `div`. */
+  const moveTargetToken = moveTarget?.layout_token ?? null
+  /* (a) THE ENABLEMENT NEVER TRUSTS A BARE non-null `sectionDiv`: `boxes` can refresh under an
+   * open sheet (another device's S or U, or this lane's own F1 retry), and a stale div that
+   * no longer names a real section must read as unpicked, not as a live choice nothing draws
+   * checked for — and never without the token the write now requires. */
+  const sectionStillThere =
+    sectionDiv !== null && moveTargetToken !== null && moveTargetSections.some((detail) => detail.div === sectionDiv)
   const [proposed, setProposed] = useState<number[] | null>(null)
-  /* Which direct-write op was pressed, so the row that fired says so rather than the whole
-     list going quietly grey. */
-  const [firing, setFiring] = useState<'lid' | null>(null)
   const moveId = useId()
   const readAt = oldestReading(listings)
   /* Said in full once, so the note and its hover cannot drift apart. */
@@ -459,25 +475,79 @@ export function BoxOps({
     }
   }
 
-  /* D83. `indices: null` moves every on-hand card. The server's own refusals are the ones
-     with something true to say about a destination this component cannot check. */
+  /* F2 — the sentence names what the owner saw ("Section 2"), never a divider key (D196).
+   * The server's own words go behind "What the server said" instead (`sectionTrouble`). */
+  const [sectionTrouble, setSectionTrouble] = useState<Failure | null>(null)
+
+  /* D83, amended by D300: `indices: null` moves every on-hand card,
+   * and there is NO AUTO DEFAULT for where in the box it lands — the owner's own ruling —
+   * so a section pick is required beside the box. The server's own refusals are the ones
+   * with something true to say about a destination this component cannot check. */
   const doMove = async () => {
     const toBox = Number.parseInt(moveTo.trim(), 10)
     if (!Number.isInteger(toBox) || toBox < 1) {
       setRefused('Choose a destination box.')
       return
     }
+    if (!sectionStillThere) {
+      setRefused('Choose a section — there is no default place inside the box.')
+      return
+    }
+    setRefused(null)
+    setSectionTrouble(null)
     const result = await write(() =>
-      moveCards(record.box, selection.length > 0 ? [...selection] : null, toBox),
+      moveCards(record.box, selection.length > 0 ? [...selection] : null, toBox, {
+        div: sectionDiv as string,
+        layoutToken: moveTargetToken as string,
+      }),
     )
     if (result !== null) {
       setMoved(result)
       setEditing(null)
     }
+    /* A failure's own sentence is composed in the effect below, never read HERE: `trouble`
+     * is this RENDER's own snapshot, from before `write()` set it, and reading it in this
+     * same async continuation would see the value it held before the write ever ran. The
+     * effect fires off the state update itself, once it has actually landed. */
   }
 
-  const sealed = record.state === CLOSED
-  const fill = known(record.fill)
+  /* F1 — a stale section (closed, filled, or an old caller's silence refused outright)
+   * reads the boxes again, the same as the one-card Move panel, so the re-pick offers live
+   * sections rather than looping on a dead key. F2's sentence names what the owner saw —
+   * `movedSection`, read from THIS render, before the clear below reaches the next one —
+   * never a divider key, and the server's own words go behind "What the server said"
+   * (`sectionTrouble`) rather than in the sentence itself. (a) The pick is cleared
+   * UNCONDITIONALLY on any section-code refusal — never left standing merely because its
+   * div still numerically exists in the last-read list, which is what let Move go on
+   * reading enabled with nothing checked. */
+  useEffect(() => {
+    if (
+      trouble === null ||
+      (trouble.code !== 'section_gone' && trouble.code !== 'section_required' && trouble.code !== 'layout_token_required')
+    ) {
+      return
+    }
+    const label =
+      movedSection === undefined
+        ? 'That section'
+        : `Section ${movedSection.section}${movedSection.name ? ` (${movedSection.name})` : ''}`
+    setRefused(
+      trouble.code === 'section_gone'
+        ? `${label} is gone. Read the box again and choose a section.`
+        : 'Choose a section — there is no default place inside the box.',
+    )
+    setSectionTrouble(trouble)
+    setSectionDiv(null)
+    onChangedRef.current()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- movedSection is read once, from the render this failure landed on
+  }, [trouble])
+  /* (a) — THE SECOND, INDEPENDENT NET: a pick can also go stale with no refusal at all, from
+   * an ambient `boxes` refresh while the sheet sat open (another device's S or U). This
+   * clears it even when no move was ever attempted against it. */
+  useEffect(() => {
+    if (!sectionStillThere) setSectionDiv((held) => (held === null ? held : null))
+  }, [sectionStillThere])
+
 
   const startEdit = (which: Exclude<Editing, null>) => {
     setRefused(null)
@@ -485,6 +555,7 @@ export function BoxOps({
     setClaimed(null)
     setMoved(null)
     setMoveTo('')
+    setSectionDiv(null)
     setEditing(which)
     setDraft(which === 'name' ? (record.name ?? '') : writeIndices(record))
     setSectionNames(
@@ -527,16 +598,11 @@ export function BoxOps({
 
   if (!open) return null
 
-  /* S4: MOST RECENT FIRST — the same rule `Inventory.tsx:MovePanel` and the rail sort by.
-     `boxes` arrives in the server's own order (box number), which said nothing about which
-     box the hand was likeliest to reach for. */
-  const others = boxesMostRecentFirst(boxes.filter((candidate) => candidate.box !== record.box))
-
   return (
     <Overlay kind="sheet" label={`Manage ${record.name ?? UNNAMED_BOX}`} onClose={onClose} className="boxops-sheet">
       <header className="inv-sheet-head">
         <div className="inv-sheet-head-text">
-          <span className="bn-eyebrow">{sealed ? 'Sealed box' : 'Open box'}</span>
+          <span className="bn-eyebrow">Box</span>
           <h2 className="inv-sheet-title">{record.name ?? UNNAMED_BOX}</h2>
         </div>
         <IconButton icon="x" label="Close" onClick={onClose} />
@@ -578,7 +644,6 @@ export function BoxOps({
                     for what it is to the owner, never the store's "index" (D196). */}
                 <Census label="Fill" value={known(record.fill)} help="The highest card position ever captured in this box." />
                 <Census label="Next capture" value={known(record.next_index)} help="Where the next card captured into this box lands." />
-                {sealed ? <Census label="Sealed at" value={known(record.capacity)} /> : null}
               </dl>
             </section>
 
@@ -619,33 +684,6 @@ export function BoxOps({
                   disabled={record.sections_detail.length === 0}
                   onClick={() => startEdit('section-names')}
                 />
-                {sealed ? (
-                  <Op
-                    icon="unlock"
-                    label="Re-open box"
-                    detail="capacity clears"
-                    busy={busy}
-                    running={firing === 'lid'}
-                    onClick={() => {
-                      setFiring('lid')
-                      void onWrite({ state: 'open' }).finally(() => setFiring(null))
-                    }}
-                  />
-                ) : (
-                  /* The number is on the control: sealing freezes capacity at the fill and every
-                     fraction in the product then divides by it. */
-                  <Op
-                    icon="lock"
-                    label="Seal box"
-                    detail={fill === null ? 'fill unreadable' : `freezes at ${fill}`}
-                    busy={busy || fill === null}
-                    running={firing === 'lid'}
-                    onClick={() => {
-                      setFiring('lid')
-                      void onWrite({ state: 'closed' }).finally(() => setFiring(null))
-                    }}
-                  />
-                )}
               </div>
             </section>
 
@@ -695,7 +733,11 @@ export function BoxOps({
             {moved === null ? null : (
               <Notice
                 tone="ok"
-                title={`Moved ${count(moved.moved, 'card', 'cards')} from ${record.name ?? UNNAMED_BOX} to ${boxName(boxes, moved.to_box)}.`}
+                title={`Moved ${count(moved.moved, 'card', 'cards')} from ${record.name ?? UNNAMED_BOX} to ${boxName(boxes, moved.to_box)}${
+                  movedSection === undefined
+                    ? ''
+                    : `, Section ${movedSection.section}${movedSection.name ? ` (${movedSection.name})` : ''}`
+                }.`}
               >
                 The {count(moved.moved, 'position', 'positions')} left behind
                 {moved.moved === 1 ? ' stays' : ' stay'} permanently empty — the same gap a sale
@@ -754,12 +796,13 @@ export function BoxOps({
                   value={moveTo === '' ? null : moveTo}
                   placeholder="Choose a box…"
                   options={others.map((candidate) => ({
-                    // The name and the sealed state fold into one parenthetical rather than a
-                    // typed separator (D218).
                     value: String(candidate.box),
-                    label: `${candidate.name ?? UNNAMED_BOX}${candidate.state === CLOSED ? ' (sealed)' : ''}`,
+                    label: candidate.name ?? UNNAMED_BOX,
                   }))}
-                  onChange={setMoveTo}
+                  onChange={(next) => {
+                    setMoveTo(next)
+                    setSectionDiv(null)
+                  }}
                 />
               ) : (
                 <input
@@ -770,7 +813,10 @@ export function BoxOps({
                   placeholder="e.g. 7"
                   autoComplete="off"
                   value={moveTo}
-                  onChange={(event) => setMoveTo(event.target.value)}
+                  onChange={(event) => {
+                    setMoveTo(event.target.value)
+                    setSectionDiv(null)
+                  }}
                 />
               )}
               <p className="bn-field-hint">
@@ -779,8 +825,27 @@ export function BoxOps({
                   : `Moves all ${count(record.on_hand ?? 0, 'card', 'cards')} on hand in ${record.name ?? UNNAMED_BOX} — the same operation a merge is, from this side.`}
               </p>
             </div>
-            {refused === null ? null : <Notice tone="warn">{refused}</Notice>}
-            <Trouble failure={trouble} />
+            {/* F6 — SAY WHY MOVE IS DISABLED. With no other registered box, nothing below
+                this field will ever draw, so a box and a section have to come from
+                somewhere else on screen — this is the one sentence saying so. */}
+            {others.length > 0 ? null : (
+              <Notice tone="info" title="There is no other box in the registry yet. Type its number above, then choose a section." />
+            )}
+            {/* NO AUTO DEFAULT (D300, the owner's own ruling): once a box
+                is picked, the owner picks its section too — a box with one section still
+                shows that single choice, so the owner confirms it rather than a screen
+                deciding quietly. */}
+            {moveTarget === null ? null : moveTargetSections.length === 0 || moveTargetToken === null ? (
+              <Notice tone="warn" title="Its sections could not be drawn. Read the box again and choose a section." />
+            ) : (
+              <SectionPicker sections={moveTargetSections} value={sectionDiv} onChange={setSectionDiv} />
+            )}
+            {/* F2 — the sentence names the section the owner saw, never a divider key
+                (D196). The server's own words, if any, sit behind "What the server said". */}
+            {refused === null ? null : (
+              <Notice tone="warn" title={refused} detail={sectionTrouble?.message} code={sectionTrouble?.code} />
+            )}
+            {sectionTrouble === null ? <Trouble failure={trouble} /> : null}
             <div className="boxops-actions">
               {/* THE PANEL'S FOCUS LANDS HERE, not the kit Select (round 2's own convention,
                   Inventory.tsx's MovePanel): `Select` is a button of its own with no
@@ -788,7 +853,12 @@ export function BoxOps({
               <Button variant="ghost" onClick={closeEdit} data-autofocus="">
                 Cancel
               </Button>
-              <Button variant="primary" busy={busy} onClick={() => void doMove()}>
+              <Button
+                variant="primary"
+                busy={busy}
+                disabled={moveTo.trim() === '' || !sectionStillThere}
+                onClick={() => void doMove()}
+              >
                 Move
               </Button>
             </div>

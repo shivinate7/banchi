@@ -94,6 +94,7 @@ const CAPTURE_KEYS: ScreenKeys = {
     { keys: ['Space'], does: 'Pause motion, or resume it', when: 'not while typing' },
     { keys: ['S'], does: 'Put a divider in, at the card you are about to shoot' },
     { keys: ['U'], does: 'Undo the newest capture' },
+    { keys: ['[', ']'], does: 'Pick the section toward the back, or toward the front', when: 'not while typing' },
     { keys: ['B'], does: 'Open or close the Box field' },
     { keys: ['H'], does: 'Open or close the Set hint field' },
     { keys: ['G'], does: 'Open or close the Game field' },
@@ -133,15 +134,13 @@ const PRICING_KEYS: ScreenKeys = {
   where: 'Only while Pricing is open. Most keys work inside a price field.',
   rows: [
     { keys: ['R'], does: 'Reload the worklist', when: 'not on a phone' },
-    { keys: ['T'], does: 'Hold to read the price history of the row under the pointer' },
+    { keys: ['T'], does: 'Open the product view of the row under the pointer, or the focused row' },
     { keys: ['M'], does: 'Snap the price to Market' },
-    { keys: ['L'], does: 'Snap the price to Low' },
-    { keys: ['S'], does: 'Snap the price to Low with shipping' },
-    { keys: ['D'], does: 'Snap the price to Direct low' },
+    { keys: ['L'], does: 'Snap the price to Lowest' },
     { keys: ['N'], does: 'Snap the price to what it is now', when: 'when the card is already listed' },
     { keys: ['H'], does: 'Hold this card back instead of pricing it' },
     { keys: ['P'], does: 'Show the photograph of this card' },
-    { keys: ['U'], does: 'Undo the last answer' },
+    { keys: ['U'], does: 'Undo the last answer, hold, or cut-off change', when: 'anywhere on the screen but a text field' },
     { keys: ['↵'], does: 'Write this price and drop to the next card' },
     { keys: ['⇧↵'], does: 'Write this price and go back up one' },
     { keys: ['↑', '↓'], does: 'Write this price and move' },
@@ -155,7 +154,7 @@ const PRICING_KEYS: ScreenKeys = {
 }
 
 const ORDERS_KEYS: ScreenKeys = {
-  where: 'Only while Orders is open, on a wide window.',
+  where: 'Only while Orders is open.',
   rows: [
     { keys: ['/'], does: 'Jump into the search field' },
     { keys: ['↓'], does: 'Select the next buyer' },
@@ -178,7 +177,9 @@ const INVENTORY_KEYS: ScreenKeys = {
     { keys: ['Home', 'End'], does: 'Go to the first or last card', when: 'with the card list focused' },
     { keys: ['X'], does: 'Tick the selected card', when: 'with the card list focused' },
     { keys: ['Esc'], does: 'Close the open sheet or panel' },
-    { keys: ['U'], does: 'Undo the newest sale or retirement' },
+    { keys: ['U'], does: 'Undo the newest sale, retirement, or move' },
+    { keys: ['U'], does: 'Undo the section move', when: 'on the Shelf, while its receipt is open' },
+    { keys: ['Esc'], does: 'Put the picked-up section down', when: 'on the Shelf' },
   ],
 }
 
@@ -188,7 +189,10 @@ const CODES_KEYS: ScreenKeys = {
 
 const FULFILLMENT_KEYS: ScreenKeys = {
   where: 'On that screen, where ? lists its own keys.',
-  rows: [{ keys: ['Esc'], does: 'Close the enlarged photograph' }],
+  rows: [
+    { keys: ['Esc'], does: 'Close the enlarged photograph' },
+    { keys: ['U'], does: 'Undo the newest sale' },
+  ],
 }
 
 /* THE ONE REGISTRATION POINT (D275). A new screen is one row here plus a view that

@@ -56,6 +56,7 @@ from __future__ import annotations
 
 from harness.tests import Checks, Result
 from pipeline import walkplan
+from server import capture_server
 from store import master
 from store import orders as order_store
 
@@ -141,8 +142,174 @@ def run() -> Result:
     _exact(c)
     _cost_name(c)
     _take_order(c)
+    _wire_owed(c)
+    _walk_pick_all_accepted(c)
+    _walk_pick_short_completes_smallest(c)
+    _progress_wire_carries_closed_fields(c)
 
     return c.result()
+
+
+def _pick_ref_for(refs, tally):
+    """The client's OWN rule, mirrored — `app/src/OrdersWalkPane.tsx:pickOrderFor` — since a
+    Python harness cannot call TypeScript: the ref whose remaining (`owed` minus this pass's
+    own `tally`) is smallest and still positive, ties broken by placement order (earliest
+    first, which the fixtures below express as list order since neither carries `placed_at`
+    here). `None` when every ref is already filled — never a fallback to `refs[0]`, which is
+    the diagnosed defect (`docs/specs/order-walk-plan.md` §8, amended)."""
+    best = None
+    best_remaining = None
+    for ref in refs:
+        remaining = ref["owed"] - tally.get(ref["key"], 0)
+        if remaining <= 0:
+            continue
+        if best is None or remaining < best_remaining:
+            best, best_remaining = ref, remaining
+    return best
+
+
+def _two_order_ledger(sku, wanted_a, wanted_b):
+    """Two open orders over one SKU, wanting `wanted_a` and `wanted_b` copies of it."""
+    ledger = order_store.Ledger()
+    ledger.ingest(
+        [
+            order_store.OrderRecord(
+                source="tcg", number="1", placed_at="2026-09-25T00:00:00Z",
+                lines=[order_store.OrderLine(sku=sku, quantity=wanted_a)],
+            ),
+            order_store.OrderRecord(
+                source="tcg", number="2", placed_at="2026-09-25T00:01:00Z",
+                lines=[order_store.OrderLine(sku=sku, quantity=wanted_b)],
+            ),
+        ]
+    )
+    return ledger
+
+
+def _wire_owed(c: Checks) -> None:
+    """`_walk_plan_order_ref` (`server/capture_server.py`) puts `owed` on every ref, read off
+    the ledger's own `outstanding`, zeroed for a stood-down line exactly as `demand` already
+    filters — the wire half of the fix (`docs/specs/order-walk-plan.md` §8, amended)."""
+    ledger = _two_order_ledger("A", 1, 3)
+
+    refs = capture_server._walk_plan_refs(ledger, ["tcg:1", "tcg:2"], "A")
+    c.equal([ref["owed"] for ref in refs], [1, 3], "each ref's `owed` is its own line's outstanding")
+
+    ledger.close_line("tcg:2", "A", reason=order_store.CLOSE_REASONS[0])
+    closed_refs = capture_server._walk_plan_refs(ledger, ["tcg:1", "tcg:2"], "A")
+    c.equal(
+        [ref["owed"] for ref in closed_refs], [1, 0],
+        "a stood-down line's ref reads owed 0, though `Ledger.outstanding` alone still says 3",
+    )
+
+    missing_refs = capture_server._walk_plan_refs(ledger, ["tcg:1", "tcg:does-not-exist"], "A")
+    c.equal([ref["key"] for ref in missing_refs], ["tcg:1"],
+            "a key the ledger no longer holds is skipped, not raised")
+
+
+def _walk_pick_all_accepted(c: Checks) -> None:
+    """THE DIAGNOSED BUG, PROVED FIXED: two orders owing 1 and 3 of the same SKU, on hand 4,
+    four presses, all four accepted.
+
+    The old rule (first ref with zero recorded this pass, then `for[0]` forever after) sends
+    the fourth press back to the order owing 1, once it already has its one copy — refused by
+    `record_pull`'s own `OverFulfilled`, and every press after that refuses the same way (the
+    diagnosis's own repro). The fewest-remaining-first rule never revisits a filled ref."""
+    sku = "A"
+    ledger = _two_order_ledger(sku, 1, 3)
+    refs = capture_server._walk_plan_refs(ledger, ["tcg:1", "tcg:2"], sku)
+
+    tally = {}
+    for at in range(4):
+        ref = _pick_ref_for(refs, tally)
+        c.ok(ref is not None, f"press {at + 1} of 4 finds an order still owing a copy")
+        if ref is None:
+            continue
+        try:
+            ledger.record_pull(ref["key"], sku, [f"cap-{at}"])
+            c.ok(True, f"press {at + 1} is accepted, never `OverFulfilled`")
+        except order_store.OverFulfilled as exc:
+            c.ok(False, f"press {at + 1} is accepted, never `OverFulfilled`", str(exc))
+        tally[ref["key"]] = tally.get(ref["key"], 0) + 1
+
+    c.equal(ledger.outstanding("tcg:1", sku), 0, "the order owing 1 is fully recorded")
+    c.equal(ledger.outstanding("tcg:2", sku), 0, "the order owing 3 is fully recorded")
+
+
+def _progress_wire_carries_closed_fields(c: Checks) -> None:
+    """THE REVIEW ROUND'S FINDING 1, AT ITS OWN CAUSE. `_order_progress`
+    (`server/capture_server.py`) used to omit `closed_at`/`closed_reason` from every row it
+    built, though `types.ts`'s `OrderLineProgress` always declared both as present. The client
+    filter this pass added (`app/src/Orders.tsx`'s `owedBySku`, `row.closed_at !== null`) then
+    read `undefined !== null`, which is `true` — so EVERY line looked stood down on the real
+    wire, `owedBySku` came back empty for every walked card, and no "short" pill ever drew.
+    This proves the wire itself, not a client-side mirror: a stood-down line's row carries a
+    real `closed_at` stamp and its own `closed_reason`, and an untouched line's row carries the
+    key with a `None` value — present, never missing, which is what makes `!== null` an honest
+    check again."""
+    sku = "A"
+    ledger = order_store.Ledger()
+    ledger.ingest(
+        [
+            order_store.OrderRecord(
+                source="tcg", number="1", placed_at="2026-09-25T00:00:00Z",
+                lines=[order_store.OrderLine(sku=sku, quantity=2)],
+            ),
+        ]
+    )
+    key = "tcg:1"
+    record = ledger.orders[key]
+
+    before = capture_server._order_progress(ledger, record)
+    c.equal(len(before), 1, "one line on the order, one progress row")
+    row = before[0]
+    c.ok(
+        "closed_at" in row and "closed_reason" in row,
+        "the wire row carries both keys before any stand-down, never omitting them",
+    )
+    c.equal(row["closed_at"], None, "and an untouched line's stamp is None, not missing")
+
+    ledger.close_line(key, sku, reason=order_store.CLOSE_REASONS[0])
+    after = capture_server._order_progress(ledger, record)
+    stood = after[0]
+    c.ok(stood["closed_at"] is not None, "a stood-down line's wire row carries a real stamp")
+    c.equal(
+        stood["closed_reason"], order_store.CLOSE_REASONS[0],
+        "and the reason rides beside it, the same word the ledger stored",
+    )
+
+
+def _walk_pick_short_completes_smallest(c: Checks) -> None:
+    """A SHORT CARD: one copy on hand, three orders owing 3, 1 and 4. The copy goes to the
+    order owing 1 — the smallest remaining, and the one it actually completes — never the
+    first-listed order owing 3, which the diagnosis's own second problem named (the owner's
+    ruling, 2026-09-25: "if we were to give it to someone, whoever it completes")."""
+    sku = "A"
+    ledger = order_store.Ledger()
+    ledger.ingest(
+        [
+            order_store.OrderRecord(
+                source="tcg", number="1", placed_at="2026-09-25T00:00:00Z",
+                lines=[order_store.OrderLine(sku=sku, quantity=3)],
+            ),
+            order_store.OrderRecord(
+                source="tcg", number="2", placed_at="2026-09-25T00:01:00Z",
+                lines=[order_store.OrderLine(sku=sku, quantity=1)],
+            ),
+            order_store.OrderRecord(
+                source="tcg", number="3", placed_at="2026-09-25T00:02:00Z",
+                lines=[order_store.OrderLine(sku=sku, quantity=4)],
+            ),
+        ]
+    )
+    refs = capture_server._walk_plan_refs(ledger, ["tcg:1", "tcg:2", "tcg:3"], sku)
+    c.equal([ref["owed"] for ref in refs], [3, 1, 4], "the three refs owe 3, 1 and 4")
+
+    picked = _pick_ref_for(refs, {})
+    c.equal(picked and picked["key"], "tcg:2", "the one copy goes to the order owing the least")
+
+    ledger.record_pull(picked["key"], sku, ["cap-only"])
+    c.equal(ledger.outstanding("tcg:2", sku), 0, "and that order is now complete")
 
 
 def _optimum(c: Checks) -> None:

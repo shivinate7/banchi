@@ -118,3 +118,4 @@
 .inventory-retire-text { display: flex; flex-direction: column; gap: 2px; }
 .inventory-retire-label { font-size: var(--bn-fs-base); font-weight: 700; }
 .inventory-retire-said { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+

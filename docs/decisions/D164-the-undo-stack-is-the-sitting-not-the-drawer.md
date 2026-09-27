@@ -144,3 +144,7 @@ sorted by drawer; the split's reserved height removed; the drawer label moved in
 flow. Two of those arms survived the first draft of the spec and are the reason the fixture
 now runs a DESCENDING drawer order and measures the split from zero captures — a sweep that
 goes green because the fixture never reached the state is this repo's standing trap.
+
+### Amended 2026-09-25: the stack is the whole sitting, with no cap of ten
+
+The owner's ruling of 2026-09-25, verbatim: "Switch all five (Recommended)". The sentence "capped at `UNDO_DEPTH` as before" no longer holds. The capture strip lists every card of the sitting. The owner's own example needs capture 24 from capture 36, which is thirteen deep. The undo lasts until its sitting ends or a run identifies the card. `docs/specs/undo.md` section 11 is the plan, and UN-1 builds it.

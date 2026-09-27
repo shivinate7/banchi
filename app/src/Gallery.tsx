@@ -7,8 +7,8 @@ import { PositionLabel } from './PositionLabel'
 import { SearchField } from './SearchField'
 import { CardLocations } from './CardLocations'
 import {
-  Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Money, Notice, Page, Pill, Popover, Refusal, ReloadButton, Retry,
-  KeyHint, Section, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
+  Button, Chip, ConfirmSheet, EmptyState, Icon, IconButton, Kbd, Loading, Lockup, Logo, Modal, Money, Notice, Page, PageUndo, Pill, Popover, Refusal, ReloadButton, Retry,
+  KeyHint, Section, SectionPicker, Segmented, Select, Sheet, Stat, StatusSlot, Toolbar, Verdict, VARIANTS as LOGO_VARIANTS,
   type ButtonSize, type ButtonVariant, type IconName, type PillTone,
 } from './kit'
 import { MARKS } from './kit/markPalettes'
@@ -64,16 +64,15 @@ function place(over: Partial<Place>): Place {
     section_start: 26,
     section_end: 50,
     box_total: 250,
-    box_closed: true,
     fraction: 0.16,
     ...over,
   }
 }
 
 const CLOSED_BOX = place({})
-const OPEN_BOX = place({ label: 'Box 7 · Section 1 · Card 12', box: 7, index: 12, slot: 12, section: 1, card: 12, box_name: null, section_start: 1, section_end: null, box_total: 62, box_closed: false, fraction: 12 / 62 })
-const SINGLE_SECTION = place({ label: 'Box 9 · Section 1 · Card 4', box: 9, index: 4, slot: 4, section: 1, card: 4, box_name: 'Bulk, unsorted', section_start: 1, section_end: null, box_total: 80, box_closed: true, fraction: 0.05 })
-const NO_FRACTION = place({ label: 'Box 4 · Section 1 · Card 1', box: 4, index: 1, slot: 1, section: 1, card: 1, box_name: null, section_start: 1, section_end: null, box_total: 0, box_closed: false, fraction: null })
+const OPEN_BOX = place({ label: 'Box 7 · Section 1 · Card 12', box: 7, index: 12, slot: 12, section: 1, card: 12, box_name: null, section_start: 1, section_end: null, box_total: 62, fraction: 12 / 62 })
+const SINGLE_SECTION = place({ label: 'Box 9 · Section 1 · Card 4', box: 9, index: 4, slot: 4, section: 1, card: 4, box_name: 'Bulk, unsorted', section_start: 1, section_end: null, box_total: 80, fraction: 0.05 })
+const NO_FRACTION = place({ label: 'Box 4 · Section 1 · Card 1', box: 4, index: 1, slot: 1, section: 1, card: 1, box_name: null, section_start: 1, section_end: null, box_total: 0, fraction: null })
 /* A COPY THAT HAS LEFT ITS BOX (D58, D68, D71), which is a ROW SHAPE and not a variation on a
    located one: `slot`, `section` and `card` are all null, because a card that has left is in no
    slot, and `join.departed_label` is what the server sends where a position label would be — the
@@ -89,7 +88,7 @@ const DEPARTED = place({ label: 'Box 3 · departed · B3 #31', box: 3, index: 31
    carries no label at all, so the row draws the game's own name where a position would be and
    `pooled, <key>` under it. A different game from every other fixture here on purpose: the
    pooled shape only ever arrives on a game whose registry entry says it is unlocated. */
-const POOLED = place({ located: false, label: null, game: 'pokemon_code', game_display: 'Pokémon code cards', box: 12, index: 5, slot: null, section: null, card: null, box_name: null, section_start: 1, section_end: null, box_total: 0, box_closed: false, fraction: null })
+const POOLED = place({ located: false, label: null, game: 'pokemon_code', game_display: 'Pokémon code cards', box: 12, index: 5, slot: null, section: null, card: null, box_name: null, section_start: 1, section_end: null, box_total: 0, fraction: null })
 
 /* BOX 3'S REAL TILING, so the two depth specimens below draw a strip of four chips rather than
    the three runs `spansOf` synthesises from a `Place` alone. `CLOSED_BOX` is card 40, the 15th
@@ -229,6 +228,7 @@ const SECTIONS: readonly { id: string; label: string; group: string }[] = [
   { id: 'pills', label: 'Pills & dots', group: 'Primitives' },
   { id: 'fields', label: 'Fields', group: 'Primitives' },
   { id: 'segmented', label: 'Segmented & tabs', group: 'Primitives' },
+  { id: 'section-pick', label: 'Section pick', group: 'Primitives' },
   { id: 'notice', label: 'Notice', group: 'Primitives' },
   { id: 'failure', label: 'Refusal & retry', group: 'Primitives' },
   { id: 'overlays', label: 'Sheets & popovers', group: 'Primitives' },
@@ -343,6 +343,23 @@ const LONG_ANSWER =
   'capture screen first, then press here once more. Every card already in it stays exactly ' +
   'where it is, and nothing about its sections changes until you open it.'
 
+/* THE SECTION PICKER (D300): a Move-to-box's own destination, one Tab
+ * stop and arrow keys between rows, "back"/"front" tags on either end of more than one. */
+function SectionPickSpecimen() {
+  const [value, setValue] = useState<string | null>(null)
+  return (
+    <SectionPicker
+      value={value}
+      onChange={setValue}
+      sections={[
+        { div: '1', section: 1, name: null, count: 22 },
+        { div: '20', section: 2, name: 'Rares', count: 9 },
+        { div: '31', section: 3, name: null, count: 3 },
+      ]}
+    />
+  )
+}
+
 /* THE KIT'S SELECT, never the operating system's menu: the owner's own gripe. */
 function SelectSpecimen() {
   const [from, setFrom] = useState<'market' | 'low'>('market')
@@ -384,6 +401,11 @@ function ScaffoldSpecimens() {
           />
         </Toolbar>
       </Spec>
+      <Spec name="page-undo" label="undo: the newest reversible write's own door (UN-10)" wide>
+        <div className="bn-page-undo">
+          <PageUndo onPress={() => {}} />
+        </div>
+      </Spec>
       <Spec name="status-slot" label="status slot: holds its space" wide>
         <div className="kit-row kit-row-wrap">
           <Button size="sm" onClick={() => setSaid('short')} data-kit-answer="short">
@@ -398,11 +420,11 @@ function ScaffoldSpecimens() {
         </div>
         <StatusSlot>
           {said === 'short' ? (
-            <Refusal title="This box is closed." code="box_closed" detail="POST /boxes/3/sections">
-              Open it first.
+            <Refusal title="That section is empty." code="section_empty" detail="POST /boxes/3/sections">
+              Fill it first.
             </Refusal>
           ) : said === 'long' ? (
-            <Refusal title="This box is closed." code="box_closed" detail="POST /boxes/3/sections refused: the box is closed">
+            <Refusal title="This section holds nothing yet." code="section_empty" detail="POST /boxes/3/sections refused: the section is empty">
               {LONG_ANSWER}
             </Refusal>
           ) : null}
@@ -1156,6 +1178,20 @@ export function Gallery() {
                     <Icon name="check" size={14} /> Answered
                   </button>
                 </div>
+              </Spec>
+            </div>
+          </Section>
+
+          <Section
+            id="kit-section-pick"
+            data-kit-section="section-pick"
+            className="kit-section"
+            title="Section pick"
+            lede="No auto default (D300): the owner picks a box's section. One Tab stop, arrow keys move and pick, and a box of one section carries no back/front tag."
+          >
+            <div className="kit-grid">
+              <Spec label="section pick">
+                <SectionPickSpecimen />
               </Spec>
             </div>
           </Section>

@@ -14,7 +14,7 @@ import {
 import type { ExportAsked, ExportFetched, ExportScope, RunDetail, RunSummary } from './types'
 import { usePoll } from './usePoll'
 import { readUpload } from './csvUpload'
-import { Button, EmptyState, Icon, IconButton, Notice, Pill, Segmented, Stat } from './kit'
+import { Button, EmptyState, Icon, IconButton, Loading, Money, Notice, Pill, Segmented, Select, Stat } from './kit'
 import { toast } from './kit/toast'
 import { RunFiles } from './RunFiles'
 import { RunRescue } from './RunRescue'
@@ -22,7 +22,7 @@ import { FileButton } from './RunsDrop'
 import { LogWell } from './RunsLog'
 import { COMMANDS, StageBar, StagePill, matchProblemTitle, runningFor, stageOf, whenLabel, type Command } from './RunsStage'
 import { boxOf, runBoxLabel } from './runScope'
-import { money, roundsToNothing } from './money'
+import { roundsToNothing } from './money'
 import { matchWaiting } from './autoMatch'
 import './RunPanel.css'
 
@@ -229,7 +229,7 @@ function StepCard({
  *  `.bn-money` is mono, 600 and tabular — the treatment a column of dollar amounts needs, and
  *  the wrong treatment for three English words. */
 function Spent({ usd }: { readonly usd: number }) {
-  return roundsToNothing(usd) ? <>under a cent</> : <span className="bn-money">{money(usd)}</span>
+  return roundsToNothing(usd) ? <>under a cent</> : <Money value={usd} />
 }
 
 /** What the Identify step's heading says about money.
@@ -730,11 +730,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
   const loadingPanel = (
     <div className="bn-panel runs-detail-panel runs-detail-loading" aria-busy="true">
       {troubleFor(['detail'])}
-      <div className="bn-skeleton" style={{ height: 14, width: 140 }} />
-      <div className="bn-skeleton" style={{ height: 28, width: 320 }} />
-      <div className="bn-skeleton" style={{ height: 12, width: 200 }} />
-      <div className="bn-skeleton" style={{ height: 56, marginTop: 12 }} />
-      <div className="bn-skeleton" style={{ height: 120 }} />
+      <Loading shape="summary" rows={1} label="Reading the run" />
     </div>
   )
 
@@ -769,7 +765,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
         )}
         <div className="run-list">
           {!loaded ? (
-            Array.from({ length: 5 }, (_, i) => <div key={i} className="bn-skeleton runs-skel-row" />)
+            <Loading rows={5} label="Reading the runs" />
           ) : runs.length === 0 ? (
             failure !== null ? null : (
               <EmptyState
@@ -1034,7 +1030,7 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                 <div className="run-actions">
                   <Button
                     variant="primary"
-                    icon="download"
+                    icon="refresh"
                     busy={busy === 'fetch'}
                     disabled={busy !== null}
                     onClick={() => void doFetchExport()}
@@ -1077,20 +1073,14 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                         the fetch asks for. The well used to open on a lone checkbox. */}
                     <div className="runs-optgroup">
                       <p className="run-scope-head">Sent to review</p>
-                      <label className="runs-option runs-option-row">
-                        <span className="bn-field-label">Send to review at or below</span>
-                        <select
-                          className="bn-select run-select"
+                      <div className="runs-option runs-option-row">
+                        <Select<'none' | 'low' | 'medium'>
+                          label="Send to review at or below"
                           value={reviewBelow}
-                          onChange={(event) => setReviewBelow(event.target.value as 'none' | 'low' | 'medium')}
-                        >
-                          {REVIEW_BELOW.map((row) => (
-                            <option key={row.key} value={row.key}>
-                              {row.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                          options={REVIEW_BELOW.map((row) => ({ value: row.key, label: row.label }))}
+                          onChange={setReviewBelow}
+                        />
+                      </div>
                       <p className="run-step-fine">
                         A card read with less confidence than this goes to review instead of straight to a listing.
                       </p>
@@ -1100,24 +1090,21 @@ export function RunPanel({ drawers, openRun, onOpenRun, reloadTick, onIdentify, 
                       <div className="run-scope">
                         <p className="run-scope-head">The export this run will ask for</p>
                         {scopeInfo.games.length < 2 ? null : (
-                          <label className="runs-option runs-option-row">
-                            <span className="bn-field-label">Category</span>
-                            <select
-                              className="bn-select run-select"
-                              value={scopeGame ?? ''}
-                              onChange={(event) => {
-                                setScopeGame(event.target.value)
+                          <div className="runs-option runs-option-row">
+                            <Select
+                              label="Category"
+                              placeholder="Pick one"
+                              value={scopeGame === '' ? null : scopeGame}
+                              options={scopeInfo.games.map((row) => ({
+                                value: row.game,
+                                label: `${row.display} (${row.cards} card${row.cards === 1 ? '' : 's'})`,
+                              }))}
+                              onChange={(next) => {
+                                setScopeGame(next)
                                 setScopeTicked([])
                               }}
-                            >
-                              <option value="">Pick one…</option>
-                              {scopeInfo.games.map((row) => (
-                                <option key={row.game} value={row.game}>
-                                  {row.display} ({row.cards} card{row.cards === 1 ? '' : 's'})
-                                </option>
-                              ))}
-                            </select>
-                          </label>
+                            />
+                          </div>
                         )}
                         {scopeInfo.games
                           .filter((row) => row.game === (scopeGame ?? scopeInfo.asked?.game))

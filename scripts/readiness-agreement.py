@@ -16,9 +16,13 @@ it had, and a run with zero is refused rather than passed by omission):
   4. Every `pipeline/decisions.py:<line>` citation in readiness.ts that names a numbered line
      resolves to the AST node it is talking about, classified by the words around it:
        - "RULE 1" / "sub-threshold gate" -> the first `reasons.append` call inside `blocking`
-       - "RULE 2" / "unanswered property" -> the `unanswered` property's `def` line
+       - "RULE 2" / "unanswered property" -> the `unanswered` property's `def` line (no such
+         citation exists since D277 Q3 retired the second reason; the reader stays for one)
      A citation pointing at any other line is reported as a stale citation (D149's disease:
      a line number that still resolves, to the wrong code).
+  6. The `owes` codes (R4): `server/pipeline_routes.py:OWE_CODES` and
+     `app/src/types.ts:OweCode` name the same codes, both ways. A screen decides on the code,
+     so a code one side lacks is a reason the other side cannot read.
   5. The two bare-name citations, `pipeline/decisions.py:blocking` and the two constant
      citations `pipeline/decisions.py:FLOOR_CHOICE` / `:FLAT_KEY`, resolve to something real.
 
@@ -45,11 +49,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DECISIONS_PY = REPO_ROOT / "pipeline" / "decisions.py"
 READINESS_TS = REPO_ROOT / "app" / "src" / "readiness.ts"
+ROUTES_PY = REPO_ROOT / "server" / "pipeline_routes.py"
+TYPES_TS = REPO_ROOT / "app" / "src" / "types.ts"
 
 # The number of mutation arms `--self-test` runs. Bump this only when you add or remove an
 # arm below, in the same commit — a stale count here would be exactly the disease this round
 # exists to fix, one register up.
-SELF_TEST_ARM_COUNT = 9
+SELF_TEST_ARM_COUNT = 12
 
 
 class Disagreement(Exception):
@@ -74,7 +80,7 @@ class TsFacts:
     owed_reasons: list
     # Each numeric citation: (line_number_in_ts, cited_py_line, context_text)
     numeric_citations: list = field(default_factory=list)
-    # Each bare-name citation: (line_number_in_ts, name)
+    # Each bare-name citation: (line_number_in_ts, name, the citation's own line)
     name_citations: list = field(default_factory=list)
 
 
@@ -195,7 +201,7 @@ def read_ts_facts(source: str) -> TsFacts:
                 context_window = "\n".join(lines[max(0, idx - 4) : idx])
                 numeric_citations.append((idx, int(token), context_window))
             else:
-                name_citations.append((idx, token))
+                name_citations.append((idx, token, line))
 
     if not numeric_citations and not name_citations:
         raise Disagreement("app/src/readiness.ts: no `pipeline/decisions.py:...` citations found at all")
@@ -301,12 +307,29 @@ def run_checks(py: PyFacts, ts: TsFacts) -> list:
             )
         )
 
+    # 4b — a symbol citation whose own line names a rule names the function that holds it.
+    # A citation names a symbol, never a line (D245), so RULE 1 cites `blocking` by name.
+    symbol_by_class = {"rule1_sub_threshold": "blocking", "rule2_unanswered": "unanswered"}
+    for ts_line, name, own_line in ts.name_citations:
+        klass = _classify(own_line)
+        if klass == "unclassified":
+            continue
+        classified_any = True
+        ok = name == symbol_by_class[klass]
+        checks.append(
+            Check(
+                f"citation readiness.ts:{ts_line} -> decisions.py:{name} ({klass})",
+                ok,
+                f"expected decisions.py:{symbol_by_class[klass]} for {klass}, citation says :{name}",
+            )
+        )
+
     if not classified_any and not any(c.subject.startswith("citation") for c in checks):
-        raise Disagreement("no numeric citation could be classified — nothing to check here")
+        raise Disagreement("no rule citation could be classified — nothing to check here")
 
     # 5 — bare-name citations resolve to something real
     known_names = {"blocking", "FLOOR_CHOICE", "FLAT_KEY", "unanswered"}
-    for ts_line, name in ts.name_citations:
+    for ts_line, name, _own_line in ts.name_citations:
         ok = name in known_names
         checks.append(
             Check(
@@ -339,13 +362,54 @@ def _report(checks: list) -> int:
     return 0
 
 
+def owe_code_checks(routes_source: str, types_source: str) -> list:
+    """The owe codes: `owes` codes agree both ways (R4). Python by `ast`, TS by its flat union."""
+    codes_py = None
+    for node in ast.parse(routes_source).body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "OWE_CODES" for target in node.targets
+        ):
+            codes_py = ast.literal_eval(node.value)
+    if not codes_py:
+        raise Disagreement("server/pipeline_routes.py: no `OWE_CODES` tuple literal found")
+    m = re.search(r"export type OweCode =((?:\s*\|\s*'[^']*')+)", types_source)
+    if not m:
+        raise Disagreement("app/src/types.ts: `OweCode` is not a flat union of string literals")
+    codes_ts = re.findall(r"'([^']*)'", m.group(1))
+    checks = []
+    # EVERY OWED REASON IS BUILT BY `_owe` (R6-7), which asserts its code is declared. A dict
+    # literal that writes an owe code by hand bypasses that assert and this check with it.
+    by_hand = [
+        node.lineno
+        for node in ast.walk(ast.parse(routes_source))
+        if isinstance(node, ast.Dict)
+        and any(
+            isinstance(key, ast.Constant) and key.value == "code"
+            and isinstance(value, ast.Constant) and value.value in codes_py
+            for key, value in zip(node.keys, node.values)
+        )
+    ]
+    checks.append(
+        Check(
+            "every owed reason in server/pipeline_routes.py is built by `_owe`",
+            not by_hand,
+            f"owe codes written by hand at lines {by_hand}" if by_hand else "none written by hand",
+        )
+    )
+    for code in codes_py:
+        checks.append(Check(f"owe code {code!r} in app/src/types.ts:OweCode", code in codes_ts, f"ts={codes_ts}"))
+    for code in codes_ts:
+        checks.append(Check(f"owe code {code!r} in server/pipeline_routes.py:OWE_CODES", code in codes_py, f"py={list(codes_py)}"))
+    return checks
+
+
 def main_check() -> int:
     try:
         py_source = DECISIONS_PY.read_text()
         ts_source = READINESS_TS.read_text()
         py = read_py_facts(py_source)
         ts = read_ts_facts(ts_source)
-        checks = run_checks(py, ts)
+        checks = run_checks(py, ts) + owe_code_checks(ROUTES_PY.read_text(), TYPES_TS.read_text())
     except Disagreement as exc:
         print(f"READINESS-AGREEMENT: REFUSED — {exc}")
         return 3
@@ -422,17 +486,12 @@ def self_test() -> int:
 
     arm("catches a third reasons.append with no matching OWED_REASONS entry", a4)
 
-    # Arm 5: stale citation reproduction — this is the exact defect this round exists to fix.
-    # Feed a TS source whose RULE 1 citation points at a line that is NOT the first
-    # reasons.append call (the historical :332 defect, reproduced generically).
+    # Arm 5: a RULE 1 citation that names the wrong symbol. It was a line number once (the
+    # historical :332 defect). It is a symbol now (D245), and the wrong symbol is the same defect.
     def a5():
-        m = re.search(r"RULE 1 — `pipeline/decisions\.py:(\d+)`", ts_source)
+        m = re.search(r"RULE 1 — `pipeline/decisions\.py:(\w+)`", ts_source)
         assert m, "fixture missing: RULE 1 citation text not found"
-        broken_ts = (
-            ts_source[: m.start(1)] + "1" + ts_source[m.end(1) :]
-            if m.group(1) != "1"
-            else ts_source[: m.start(1)] + "2" + ts_source[m.end(1) :]
-        )
+        broken_ts = ts_source[: m.start(1)] + "unanswered" + ts_source[m.end(1) :]
         assert broken_ts != ts_source, "fixture mutation produced no change"
         checks, err = _run_against(py_source, broken_ts)
         assert err is None
@@ -440,30 +499,29 @@ def self_test() -> int:
         assert rule1_checks, "no rule1 citation was classified at all"
         assert any(not c.passed for c in rule1_checks), "mutation not caught: stale RULE 1 citation"
 
-    arm("catches a RULE 1 citation pointing at the wrong line", a5)
+    arm("catches a RULE 1 citation naming the wrong symbol", a5)
 
-    # Arm 6: same for RULE 2 / unanswered.
+    # Arm 6: the other direction of arm 4 — a reason the screen still lists that Python no
+    # longer refuses on. D277 Q3 retired `blocking`'s second reason (an unanswered no-price
+    # card), and a mirror that kept it would draw a refusal `emit` no longer makes.
     def a6():
-        m = re.search(r"RULE 2 — `pipeline/decisions\.py:(\d+)`", ts_source)
-        assert m, "fixture missing: RULE 2 citation text not found"
-        broken_ts = (
-            ts_source[: m.start(1)] + "1" + ts_source[m.end(1) :]
-            if m.group(1) != "1"
-            else ts_source[: m.start(1)] + "2" + ts_source[m.end(1) :]
+        literal = "export const OWED_REASONS = ['sub_threshold_unset'] as const"
+        assert literal in ts_source, "fixture missing: OWED_REASONS literal not found"
+        broken_ts = ts_source.replace(
+            literal,
+            "export const OWED_REASONS = ['sub_threshold_unset', 'no_market_data_unanswered'] as const",
+            1,
         )
-        assert broken_ts != ts_source, "fixture mutation produced no change"
         checks, err = _run_against(py_source, broken_ts)
-        assert err is None
-        rule2_checks = [c for c in checks if "rule2_unanswered" in c.subject]
-        assert rule2_checks, "no rule2 citation was classified at all"
-        assert any(not c.passed for c in rule2_checks), "mutation not caught: stale RULE 2 citation"
+        assert err is None and checks is not None
+        assert any(not c.passed for c in checks), "mutation not caught: a reason Python no longer has"
 
-    arm("catches a RULE 2 citation pointing at the wrong line", a6)
+    arm("catches an OWED_REASONS entry Python no longer refuses on", a6)
 
     # Arm 7: an unparsable/missing OWED_REASONS constant is refused, not silently skipped.
     def a7():
         broken_ts = ts_source.replace(
-            "export const OWED_REASONS = ['sub_threshold_unset', 'no_market_data_unanswered'] as const",
+            "export const OWED_REASONS = ['sub_threshold_unset'] as const",
             "export const OWED_REASONS = computeReasons()",
             1,
         )
@@ -488,6 +546,36 @@ def self_test() -> int:
         assert checks is None and err is not None, "a missing `blocking` method must be refused"
 
     arm("refuses when `Decisions.blocking` cannot be found at all", a9)
+
+    routes_source = ROUTES_PY.read_text()
+    types_source = TYPES_TS.read_text()
+
+    # Arm 10: a code the server sends and the screen's type lacks is red (R4).
+    def a10():
+        assert all(c.passed for c in owe_code_checks(routes_source, types_source)), "clean tree must agree"
+        missing = types_source.replace("  | 'needs_price'\n", "", 1)
+        assert missing != types_source, "fixture missing: `| 'needs_price'` not found in OweCode"
+        checks = owe_code_checks(routes_source, missing)
+        assert any(not c.passed and "needs_price" in c.subject for c in checks), "a missing TS code was not caught"
+
+    arm("catches an owe code app/src/types.ts does not name", a10)
+
+    # Arm 11: the other direction, a code the screen names and the server never sends.
+    def a11():
+        extra = routes_source.replace('OWE_CODES = ("sub_threshold_unset", ', 'OWE_CODES = (', 1)
+        assert extra != routes_source, "fixture missing: the OWE_CODES tuple text not found"
+        checks = owe_code_checks(extra, types_source)
+        assert any(not c.passed and "sub_threshold_unset" in c.subject for c in checks), "a code only TS names was not caught"
+
+    arm("catches an owe code server/pipeline_routes.py does not send", a11)
+
+    # Arm 12: an owe code written by hand, past `_owe`, is red (R6-7).
+    def a12():
+        bypass = routes_source + '\n_BYPASS = {"code": "unreadable", "count": None}\n'
+        checks = owe_code_checks(bypass, types_source)
+        assert any(not c.passed and "built by `_owe`" in c.subject for c in checks), "a hand-written code was not caught"
+
+    arm("catches an owe code written by hand past `_owe`", a12)
 
     assert len(arms) == SELF_TEST_ARM_COUNT, (
         f"SELF_TEST_ARM_COUNT says {SELF_TEST_ARM_COUNT} but {len(arms)} arms are registered — "

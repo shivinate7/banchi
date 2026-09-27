@@ -127,7 +127,7 @@ Every box is drawn from above, as the owner sees it on the desk. **The far back 
 1, is at the top. The end nearest the owner, the highest number, is at the bottom.** The boxes
 stand side by side.
 
-- **The box head:** its name, cards on hand, a lock when sealed. No box number shows (slug
+- **The box head:** its name and cards on hand. No box number shows (slug
   `a-box-is-shown-by-its-name`). A press opens the walk at
   that box.
 - **One block per section.** Its height follows its count, with a floor of 44px so a small
@@ -138,7 +138,6 @@ stand side by side.
   "3 owed" when open orders want copies from it.
 - **An empty section** (a divider with no card) is a thin dashed block, because the plastic is
   still in the box.
-- **A sealed box** is drawn, and it is not a target (D20, a box is an object).
 - **A last column, "New box",** is a target that splits a section into a new box. A new box
   with no name gets its stored default name, "Box" and the count plus one.
 
@@ -161,7 +160,7 @@ A drop in the same box reorders its sections. A drop on "New box" splits. A merg
 section of one box, in order, to the far end or the near end of another.
 
 **While dragging:** the section lifts with an accent tint. Its old place shows a dashed outline.
-A sealed box dims and says "Sealed". A section with a live paid reading cannot lift. The cursor
+A section with a live paid reading cannot lift. The cursor
 is `not-allowed` (D50, interactive feedback is the product's), and the block says why.
 
 **Touch and small widths.** At 390 and 720, the primary path is tap to pick and tap to place.
@@ -227,7 +226,6 @@ another write, the way back is a new move. This adds a move to the fast path in
 | The section's cards belong to a run that is matched and not yet sent | Allow. The join follows the card (slug `a-moved-card-keeps-its-price`). |
 | Cards owed to open orders | Allow. Orders claim no copy (D212, no order claims a copy). The receipt says so. |
 | A stale walk or Cards to pull presses sold on a moved card | The server answers `card_moved`. The screen says where the card went, from the tombstone's `moved_to`, and refreshes. |
-| The destination is sealed | Not a target. |
 | Another device changed the section since the map loaded | The write carries an aim: the count and the first and last card names. A mismatch refuses, and the map reloads. |
 
 ## 7. Slices, in build order
@@ -261,7 +259,6 @@ largest, and a reviewer must see it.
 - A section lands at the chosen gap, in order, with its divider and name.
 - The source loses the divider, and the other names stay.
 - Moving section 1 works.
-- A sealed destination refuses.
 - A card with a live claim refuses.
 - A stale aim refuses.
 - An injected failure writes nothing.
@@ -272,7 +269,7 @@ largest, and a reviewer must see it.
 ### 7.2 Browser checks
 
 A spec over a seeded store at 1440, 720 and 390, in both themes. It drags, taps and uses the
-keyboard. It checks the sealed target, the receipt text and the orientation. It holds the D50 (interactive feedback is the product's),
+keyboard. It checks the receipt text and the orientation. It holds the D50 (interactive feedback is the product's),
 D117 (the thumb floor), D118 (a press moves nothing around it) and D195 (same-role buttons share
 a width) floors.
 

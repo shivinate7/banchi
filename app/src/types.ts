@@ -277,6 +277,17 @@ export type CardSummary = {
    *  capture's own response already carries the count, so nothing needs to compute it
    *  again. */
   place: Place
+
+  /** THE DIVIDER KEY OF THE SECTION THIS CARD LANDED IN, read after the write
+   *  (`docs/specs/subbox-capture.md` 1.2) — correct after a re-space too. Null for a pooled
+   *  card, which has no section, and absent from an older server, which reads the same way:
+   *  the capture screen's section pick falls back to the last section. */
+  section_div?: string | null
+
+  /** THE BOX'S LAYOUT TOKEN AFTER THE WRITE — changes when this capture caused a re-space,
+   *  same field `BoxRecord.layout_token` carries. Null for a pooled card. Absent from an
+   *  older server. */
+  layout_token?: string | null
 }
 
 /** `GET /status`. Counts, the next index per box, and whether the store is healthy. */
@@ -408,6 +419,14 @@ export type InventoryCard = {
   photo: string | null
 
   set_hint: string | null
+
+  /** THE OLD POSITION A TRANSPLANT CARRIES (`store/master.py:Card.moved_from`), ALREADY ON
+   *  THIS WIRE AND NEVER TYPED HERE UNTIL THE UX REVIEW'S GRAVEYARD RULING. Set only on the
+   *  card a move CREATED, not on the tombstone it left behind — `"box/index"`, the same key
+   *  shape `#/graveyard`'s `moved_to` carries. `null` for a card captured where it stands.
+   *  `Inventory.tsx`/`BoxBrowse.tsx` read it to say where a card was moved in from; nothing
+   *  writes it back. */
+  moved_from: string | null
 
   /** THE CATALOGUE'S OWN SET (D213), ALREADY ON THIS WIRE AND NEVER TYPED HERE UNTIL NOW.
    *  `server/capture_server.py:_card_row` and `do_inventory` both ship `asdict(card)`
@@ -846,8 +865,8 @@ export type RemoveResult = {
  *  becomes a permanent tombstone (same shape as a sale or a retirement) and the card is
  *  recorded fresh at `new_box`/`new_index`. `card` is the transplant as it now reads —
  *  the same shape `GET /inventory` rows carry — so the screen can redraw it without a
- *  second read. Undo is not a separate result shape: moving the transplant back is this
- *  same call again, in the other direction. */
+ *  second read. The undo is `MoveUndoResult` (UN-14), until either box changes. After
+ *  that, moving the transplant back is this same call again, in the other direction. */
 export type MoveResult = {
   moved: string
   to: string
@@ -860,6 +879,39 @@ export type MoveResult = {
   review_moved: boolean
   parked_moved: boolean
   cache_moved: boolean
+  card: InventoryCard
+}
+
+/** What `GET /capture/sitting` answers (UN-2): the newest sitting, rebuilt from the store, so
+ *  a reload does not end the capture strip. `open` is false once the newest capture is more
+ *  than `gap_minutes` old. That sitting has ended, and `cards` is empty. The server decides
+ *  this, and the screen never measures the gap itself. The capture undo reads the same rule
+ *  and refuses `capture_built_on` for a card outside the open sitting. `cards` runs oldest first. Each row is
+ *  a `CardSummary` plus the claims the strip draws under a shot, and the card's `state`. */
+export type CaptureSitting = {
+  open: boolean
+  gap_minutes: number
+  cards: Array<
+    CardSummary & {
+      captured_at: string | null
+      set_hint: string | null
+      metadata_finish: string | string[] | null
+      game: string | null
+      state: string
+    }
+  >
+}
+
+/** What a move's undo answers (UN-14): `POST /inventory/<box>/<index>/move` with
+ *  `{undo: true}`, aimed at the TOMBSTONE the move left. `moved` is the transplant's key,
+ *  now deleted. `to` is the card's own key again, and `card` is the card as it now reads
+ *  there. Nothing else in either box moves. */
+export type MoveUndoResult = {
+  moved: string
+  to: string
+  box: number
+  index: number
+  undone: true
   card: InventoryCard
 }
 
@@ -902,14 +954,20 @@ export type BoxDeleteResult = {
   directory_removed: boolean
 }
 
-/** One row of `GET /graveyard` (D134): a card that has left inventory, whichever of the
- *  two doors it went through, drawn in one shape regardless of which.
+/** One row of `GET /graveyard` (D134, amended by the UX review's graveyard ruling,
+ *  2026-09-26, verbatim: "Move Moved out of Graveyard"): a card that TRULY LEFT the store —
+ *  sold or retired, never moved — whichever of the two doors it went through, drawn in one
+ *  shape regardless of which. A moved card is alive in another box, so it is not one of
+ *  these rows any more; `#/inventory`'s own card details say where it moved in from
+ *  (`CardHero.tsx:movedFromFact`).
  *
- *  `buried` is what tells the two sources apart. `false` means this record is a sold,
- *  retired or moved card still standing in a box nobody has deleted — the same records
- *  `#/inventory` already draws as departed. `true` means its box WAS deleted (D134): the
- *  record itself is gone, and this row is read out of the `buried` history line instead.
- *  `buried_at` is null in the first case and the burial's own timestamp in the second.
+ *  `buried` is what tells the two sources apart, and it names a FACT ABOUT THE BOX, not a
+ *  third way a card left: `false` means this record is a sold or retired card still
+ *  standing in a box nobody has deleted — the same records `#/inventory` already draws as
+ *  departed. `true` means its box WAS deleted (D134): the record itself is gone, and this
+ *  row is read out of the `buried` history line instead. `buried_at` is null in the first
+ *  case and the burial's own timestamp in the second. The screen shows this as a small,
+ *  quiet tag rather than a filter (D196: no pipeline noun on screen).
  *
  *  `box_name` and `order` are best-effort: the box may never have been named, and `order`
  *  is only ever set when `Ledger.holder_of` finds this copy pulled against one. Every other
@@ -917,7 +975,7 @@ export type BoxDeleteResult = {
  *  the record never carried that claim, not that it was withheld. */
 export type DepartedCard = {
   left_at: string | null
-  how: 'sold' | 'retired' | 'moved'
+  how: 'sold' | 'retired'
   box: number
   index: number
   box_name: string | null
@@ -928,7 +986,6 @@ export type DepartedCard = {
   sku: string | null
   condition: string | null
   retire_reason: string | null
-  moved_to: string | null
   order: string | null
   run: string | null
   captured_at: string | null
@@ -937,8 +994,8 @@ export type DepartedCard = {
   buried_at: string | null
 }
 
-/** `GET /graveyard` (D134): every departed card the store still knows about, newest
- *  departure first — the merge of what is still standing and what was buried. */
+/** `GET /graveyard` (D134): every card the store knows truly left — sold or retired —
+ *  newest departure first, the merge of what is still standing and what was buried. */
 export type GraveyardPayload = {
   departed: DepartedCard[]
 }
@@ -1075,6 +1132,20 @@ export type SaleResult = {
    *  and null on a reversal that held no order line. Additive: every field above this one is
    *  unmoved. */
   order_released: { key: string; sku: string } | null
+
+  /** True when this call was "This card is still here" (UN-7): a reversal past a sale that
+   *  was built on. A shipped order keeps its count, so `order_released` stays null. */
+  still_here?: boolean
+
+  /** WHICH OF THREE THINGS HAPPENED TO THE ORDER LINE (the Opus review round, finding #4):
+   *  `order_released` alone answers `null` for two different facts — no order ever held this
+   *  copy, and a shipped order that was hand-filled instead — and a screen cannot build the
+   *  right sentence from one field that means either. `'none'`: no order held this copy.
+   *  `'released'`: an OPEN order's line let this copy go, same as `order_released` names.
+   *  `'filled_by_hand'`: a SHIPPED order kept its count, and this card's id came off the
+   *  line as a hand-fill (`sold_separately`) instead. Optional: an older server sends
+   *  neither this nor a body a screen can build a sentence from at all. */
+  order_effect?: 'none' | 'released' | 'filled_by_hand'
 }
 
 /** Why a retired card left (D26). The send-side union — the four words the server's
@@ -1411,6 +1482,11 @@ export type Place = {
 
   box: number
 
+  /** Where the card stands in its box, 1 at the far back (D265). The sort key a walk orders
+   *  by. It equals `index` until a section is placed into the box. Never drawn. Optional
+   *  because an older server omits it: then `index` is the order. */
+  order?: number
+
   /** The card's sequential position in the box — D10's allocator number, 1-based. THE STORE
    *  KEY: the `/inventory/<box>/<index>` path every write aims by, the `<index>.jpg` the
    *  photograph is named after, and half of `key`. It stopped being the numerator of the
@@ -1441,12 +1517,9 @@ export type Place = {
   section_start: number
   section_end: number | null
 
-  /** How many cards the box holds. For a closed box that number is final; for an open one it
-   *  is how many are in it so far and it moves with the next capture. `box_closed` is what
-   *  says which of those two sentences is true, and it is the whole reason both fields are on
-   *  the wire rather than one. */
+  /** How many cards the box holds now (D58). A box has no lid (`D299`), so
+   *  this number always moves with the next capture. */
   box_total: number
-  box_closed: boolean
 
   /** How far into the box this card sits, 0 to 1, or null when the server cannot say — an
    *  empty box, or a record whose numbers do not support the division. NULL IS NOT ZERO and
@@ -1695,21 +1768,67 @@ export type SectionDetail = {
   /** The operator's own word for the section — `Rares` — or null where none was given.
    *  Joined at read time by ordinal (D132), the way `box_name` is (D56). */
   name: string | null
+  /** The box map's landmarks and aim (D264): the first and last card on hand in the section,
+   *  by name for the eye (null where no card is named) and by cid for a move's aim. Null for
+   *  an empty section. Absent from an older server. */
+  first_name?: string | null
+  last_name?: string | null
+  first_cid?: string | null
+  last_cid?: string | null
+  /** THE DIVIDER KEY OF THIS SECTION (`docs/specs/subbox-capture.md` 1.1) — the handle a
+   *  capture, an S, a U or a Move-to-box aims at. Section 1 of an undeclared box (no stored
+   *  dividers) still gets one — `"1"`, the box's own front (`store/master.py:front_of_box`)
+   *  — so this is real for every section a current server draws. Null or absent only for an
+   *  older server that predates the field: nothing on this side may parse or compose one
+   *  (subbox-capture.md 1, "Never parse one and never compose one") — a screen with no `div`
+   *  falls back to the box's own default, the last section. */
+  div?: string | null
 }
 
-/** What a box's `state` may be SET to, which is one thing and not the same thing as what may
- *  come back off disk.
- *
- *  Narrow because it is sent: the server refuses anything it does not know as
- *  `box_state_invalid`, and a union caught at the call site is better than a refusal caught at
- *  the rig. Exactly the split `Finish` and `InventoryCard.metadata_finish` already draw — what
- *  the wire accepts, and what a record written before the server validated anything may hold.
- *
- *  ASSUMED, AND THE ONE TYPE IN THIS FILE THAT IS. The route contract names the refusals
- *  `box_state_invalid` and `box_closed` without publishing the vocabulary they police; these
- *  two words are read off those codes and off `Place.box_closed`, which is a boolean and so
- *  admits exactly two states. If the server speaks a third, this union is the one edit. */
-export type BoxState = 'open' | 'closed'
+/** What `POST /boxes/<box>/sections/move` answers (D264): the move's id for Undo, the
+ *  physical instruction, and both boxes as `GET /boxes` draws them. */
+export type SectionMoveResult = {
+  move: string
+  box: number
+  to_box: number
+  /** The box a split made, or null. */
+  created: number | null
+  moved: number
+  /** Each moved section's new ordinal in the destination. */
+  landed: number[]
+  receipt: {
+    heading: string
+    steps: string[]
+    renumbered: string[]
+  }
+  boxes: BoxRecord[]
+}
+
+/** Where a section move lands: in front of a section of `toBox`, or at its near end (null). */
+export type SectionMoveTarget = {
+  toBox: number | 'new'
+  before: number | null
+  /** `toBox`'s `layout_token` as the map drew it: the server refuses a drop onto sections that
+   *  changed since (409 `section_gone`). Omitted for a new box. */
+  layoutToken?: string
+}
+
+/** Where a card or a range lands (D264): in front of a card of `toBox` (its stored index),
+ *  or after the last card of one of its sections. */
+export type CardMoveTarget = {
+  toBox: number
+  beforeCard: number | null
+  sectionEnd: number | null
+  /** `toBox`'s `layout_token` as the map drew it (see `SectionMoveTarget`). */
+  layoutToken?: string
+}
+
+/** What `POST /boxes/sections/undo` answers. */
+export type SectionUndoResult = {
+  move: string
+  undone: boolean
+  boxes: BoxRecord[]
+}
 
 /** One box: what it is called, how it is divided, and how full it is. `GET /boxes` serves a
  *  list of these and `POST`/`PUT /boxes` answer with the one they wrote.
@@ -1718,6 +1837,16 @@ export type BoxState = 'open' | 'closed'
  *  — see `BoxState`. This value comes off disk. */
 export type BoxRecord = {
   box: number
+
+  /** THE BOX'S LAYOUT TOKEN (subbox-capture.md 1, the Opus review's first finding,
+   *  2026-09-26) — a short hash of the box's divider keys, in order. Send it beside any
+   *  aim that names a section (a capture's `section`, an S's `after`) so a re-space cannot
+   *  make a stale key silently name the wrong section: two equal tokens mean two equal
+   *  divider lists, and in an equal list a key names the same section it always did. The
+   *  server refuses an aim whose token is not the box's now (409 `section_gone`). Optional
+   *  because an older server, or a fixture that predates the field, sends none — a screen
+   *  with no token falls back the same way a stale pick does (§9, Q2's fallback). */
+  layout_token?: string
 
   /** THE TRUE INDEX OF THIS DRAWER — allocated once at its creation, never reused, and never
    *  rendered (D145). The owner said the last part twice: *"a box needs an index # not visible
@@ -1760,8 +1889,6 @@ export type BoxRecord = {
    *  answers a count, this is the one edit and the call sites fail loudly at the compiler
    *  rather than quietly at the box. */
   sections: number[]
-  state: string
-  capacity: number
   fill: number
   next_index: number
   cards: number
@@ -2197,6 +2324,12 @@ export type PricingSku = {
   condition: string
   set_name: string
   name: string
+  /** A hotlinked stock photo for this SKU's product, or `null` on a join miss
+   *  (`D301`, `pipeline/stockimages.py`). Resolved fresh on every
+   *  `GET /pipeline/pricing`, never written into `pricing.json` — see that module's own
+   *  header for why. Several SKUs (a foil and a normal printing of one card) may carry
+   *  the identical URL; `condition` beside it is what still tells the rows apart. */
+  image_url: string | null
   /** The four export price columns plus the export's own `TCG Marketplace Price`, each
    *  rendered to two decimals or `null` where the cell is blank. `null` is a real answer:
    *  measured, `TCG Direct Low` is blank on 2,060 of 2,476 listable rows in the wide export,
@@ -2274,6 +2407,12 @@ export type WithheldRecord = {
   withheld: string
   watch_above?: string
   note?: string
+  /** THE ANSWER THE HOLD REPLACED, value and channel, so a release puts it back (the owner's
+   *  ruling, "Bring back $5.16"). Absent when there was none, and a release then leaves no
+   *  answer. `decisions.parse` reads only the three keys above, so a send never sees it.
+   *  `at` is the answer's first date. A release sends it back, and the server keeps it
+   *  (`corpus.stamp_answers`, the owner's ruling "Keep the first date"). */
+  before?: { value: string | number | null; channel?: string; at?: string }
 }
 
 /** One run's pricing decision, as `GET .../pricing` projects the corpus for one run (D86).
@@ -2338,8 +2477,12 @@ export type MergedSku = PricingSku & {
  *  property of what is in the drawer; this route merges the VIEW and never the file, and one
  *  answer to a merged row is one `PUT` per run in that row's `in`. */
 export type RosterRun = RunSummary & {
-  /** Why this run still has pricing in it, in `emit`'s own words. Empty means answered. */
+  /** Why this run still has pricing in it, in `emit`'s own words. Empty means answered. For a
+   *  person to read, never for a screen to decide on: that is `owed` below. */
   owes: string[]
+  /** The machine code for each `owes` reason, in the same order, and the count its sentence
+   *  carries (R4). A screen decides on this and never on the sentence. */
+  owed: OwedReason[]
   /** Open while it OWES something OR HOLDS AN UNSENT COPY (D156). The
    *  first is `owes`; the second is `unsent` below, and it is what keeps an answered, emitted
    *  run on the worklist for as long as one of its copies is not at TCGplayer. */
@@ -2349,6 +2492,27 @@ export type RosterRun = RunSummary & {
    *  2026-09-12, which the picker reads as zero. */
   unsent?: number
 }
+
+/** WHY AN EMPTY SEND SENT NOTHING, as figures (R6-2): cards that need a price, priced cards
+ *  under the cut-off a listed-only send held back, and cards TCGplayer already held every copy
+ *  of, with their names. Rides a `needs_price` or `under_cut_off` refusal's `data.empty`. */
+export type EmptySend = {
+  needs_price: number
+  under_cut_off: number
+  live: number
+  live_names: string[]
+}
+
+/** WHY A RUN OWES, AS A CODE. The same list as `server/pipeline_routes.py:OWE_CODES`, one
+ *  literal per line, reconciled both ways by `make readiness-agreement`. */
+export type OweCode =
+  | 'sub_threshold_unset'
+  | 'needs_price'
+  | 'never_emitted'
+  | 'unreadable'
+
+/** One `owes` reason as a code, with the count its sentence carries, or null. */
+export type OwedReason = { code: OweCode; count: number | null }
 
 /** What no worklist can offer, named rather than left out (D156,
  *  `CLAUDE.md`: never silently drop a card). Each figure is a door to the screen that moves
@@ -2449,6 +2613,9 @@ export type PricingClearResult = {
    *  re-dating it — a restore that stamped would read as a store-wide re-pricing on the next
    *  markdown survey. */
   cleared: Record<string, { value: string | number | null; at?: string; from_run?: string }>
+  /** Which kept clear this is. The server keeps every clear not yet restored, and this clear's
+   *  Undo names it, so a later clear never takes its way back. Absent when nothing was cleared. */
+  clear_id?: string
   count: number
   holds: number
   unknown: number
@@ -3234,6 +3401,15 @@ export type OrderLineWire = {
   rarity: string | null
   unit_price: string | null
   kind: string | null
+  /** THE `skus` TABLE'S OWN FACTS FOR THIS LINE'S SKU (identity-follows-sku.md §3.2), never
+   *  the feed's — `condition`/`rarity` above are already completed from this same row on the
+   *  server (`server/capture_server.py:_order_line_wire`) where the feed said nothing, so
+   *  these two exist only for a screen that wants the raw product/set text as well, e.g. to
+   *  build a short display name off a long TCGplayer product title. `null` when the SKU is
+   *  not (yet) in the table. Optional so a fixture built before this field existed still
+   *  matches the shape — a screen reading it falls back to `null`, same as an absent SKU. */
+  product_line?: string | null
+  set_name?: string | null
 }
 
 /** What WE have recorded against one line — the ledger's own half, beside the feed's.
@@ -3388,11 +3564,11 @@ export type ResolvedOrder = {
  *  (`docs/specs/order-walk-plan.md` §7). `pipeline/walkplan.py:plan` over one snapshot; NOT
  *  STORED (D36), and a plan re-pressed a minute later over a changed store can name
  *  different cards. */
-export type WalkPlanRef = { key: string; number: string; buyer: string | null }
+export type WalkPlanRef = { key: string; number: string; buyer: string | null; owed: number }
 
 /** One physical copy of a take's card, anywhere in the store — REBUILT 2026-09-19 (`docs/
  *  specs/order-walk-plan.md` §8, "The stop, rebuilt"). The flat fields the first build carried
- *  (`box`, `index`, `slot`, `card`, `label`, `neighbors`, `box_total`, `box_closed`,
+ *  (`box`, `index`, `slot`, `card`, `label`, `neighbors`, `box_total`,
  *  `fraction`) are GONE — every one of them now lives inside `place`, which is the full block
  *  `_Places.of` composes, the same dict `do_search` sends. The client composes NOTHING from
  *  the stop any more; the old `neighborShim`/`placeOf` reconstruction is deleted with them. */
@@ -3408,7 +3584,7 @@ export type WalkPlanCopy = {
    *  for a copy recorded before the field existed. */
   cid: string | null
   /** The full place, exactly what `SearchCopy.place` carries. Includes `box_name`, `section`,
-   *  `section_name`, `section_start`, `section_end`, `box_total`, `box_closed`, `fraction`,
+   *  `section_name`, `section_start`, `section_end`, `box_total`, `fraction`,
    *  `neighbors`, `label`, `slot`, `card`. */
   place: Place
   /** True when this copy stands at THIS stop (same box and section) — the solver's reach. */
@@ -3421,8 +3597,9 @@ export type WalkPlanCopy = {
  *  `wanted`, or at this stop's own copies, would put an address back on a fungible copy.
  *
  *  `copies` ORDER IS LOAD-BEARING AND THE CLIENT MUST NOT RE-SORT: (1) copies with `here: true`,
- *  in the solver's own order (densest first, as before); (2) every other copy, ascending
- *  (box, index). D212: all of them are pressable. D93: none is hidden. */
+ *  in the solver's own order (densest first, as before); (2) every other copy, in box-walk
+ *  order: by box, then by the card's order key (D265). D212: all of them are pressable. D93:
+ *  none is hidden. */
 export type WalkPlanTake = {
   sku: string
   /** The identified card's own name, off its first ranked copy — null where the store holds
@@ -3846,6 +4023,8 @@ export type MarkdownAsk = {
   above_market?: number | string
   limit?: number
   again?: boolean
+  /** The most the rule takes off one copy, in dollars (`reprice list --cap`). Omit for no cap. */
+  cap?: string
   write?: boolean
 }
 
@@ -3987,6 +4166,9 @@ export type MarkdownSku = {
   /** The export row, verbatim, all sixteen cells. What an upload's bytes are built from and
    *  what a price history's five identity cells are read out of. */
   row: Record<string, string>
+  /** Sealed product: the row's condition is `Unopened` (`pipeline/reprice.py:is_sealed`). Absent
+   *  on a survey written before 2026-09-26, which reads as a single. */
+  sealed?: boolean
 }
 
 /** The lens's whole input — `survey.json` as `GET /pipeline/markdowns/<stamp>/table` serves it. */
@@ -4004,6 +4186,9 @@ export type MarkdownTable = {
    *  enforces it and two lists would drift. */
   unpriceable: string[]
   floor: string
+  /** How old this read may be and still be sent from, in seconds (`reprice.READ_FRESH_S`).
+   *  Past it the tab offers "Read again" in place of Send (the owner's ruling, 2026-09-26). */
+  stale_after_s?: number
 }
 
 /** One markdown as the screen lists it. `files` is what the directory actually holds, so
@@ -4160,6 +4345,53 @@ export type ValueTable = {
    *  figure — a store-wide chip count no row list is needed to draw, matching the fields
    *  `do_pipeline_value_page`'s `totals` block carries. */
   totals: { cards: number; valued: number; value: string; under_cutoff: number; at_or_over: number }
+}
+
+/** `GET /pipeline/sets` — one distinct card on hand, grouped under its set. `box`/`cid` are
+ *  a REPRESENTATIVE copy, never every copy: `#/inventory?box=<box>&card=<cid>` is
+ *  `BoxBrowse.tsx`'s own deep link (Review's place pill uses it too), and the walk it lands
+ *  on already shows every other on-hand copy of `sku` through `CopiesPanel`. `null` on
+ *  `box`/`cid` only for a record whose position will not coerce — `do_pipeline_sets`'s own
+ *  rule, `do_pipeline_value`'s too. */
+export type SetGroupCard = {
+  sku: string | null
+  cid: string | null
+  box: number | null
+  name: string | null
+  /** The composed form a screen draws (D67) — `cardNumber.ts` composes nothing here, this
+   *  is `pipeline/join.py:display_number`'s own string, already on the wire. */
+  number_display: string | null
+  qty: number
+  /** A hotlinked stock photo, or `null` on a join miss (`D301`,
+   *  `pipeline/stockimages.py`). Never downloaded or stored here — the browser loads it
+   *  straight from tcgcsv's or pokemontcg.io's own CDN. Resolved server-side, fresh on
+   *  every read, and never on the demo's own static wire (`make demo-record` bakes
+   *  whatever this held at recording time, same as every other field here). */
+  image_url: string | null
+  /** THE STORE'S OWN `skus` TABLE FACT (identity-follows-sku.md §3.2), `null` for a
+   *  `sku_unknown` row and for a plain Near Mint print with no finish suffix to name. A
+   *  foil and a normal printing of one card share `image_url` (the owner's own ruling,
+   *  mid-build: several SKUs may point at one photo) and never share this — it is the
+   *  one thing on the row that still tells two such rows apart. */
+  printing: string | null
+}
+
+/** One game-and-set group, cards in the set's own printed order (server-side natural sort
+ *  over the raw number, `do_pipeline_sets:_natural_number_key`). */
+export type SetGroup = {
+  game: string | null
+  set_name: string
+  cards: SetGroupCard[]
+}
+
+/** `GET /pipeline/sets` whole: every on-hand (`identified`) card, by set, one row per
+ *  distinct card with its quantity — never one row per physical copy. `no_set` is every
+ *  on-hand card whose `set_name` is empty, in the same shape, so a card with no set is a
+ *  group and not a silent drop. */
+export type SetsReport = {
+  at: string
+  groups: SetGroup[]
+  no_set: SetGroupCard[]
 }
 
 /* ============================================================ the one press (send to live)

@@ -233,11 +233,11 @@ def write_photo(digest: str, row: "Row") -> None:
 # ------------------------------------------------------------------------------- boxes
 
 # The shape of the demo store. Four boxes, chosen so that every case a screen has to draw
-# is present somewhere — an open box with dividers, a sealed one with a frozen capacity, a
+# is present somewhere — two boxes with dividers, a
 # mixed box with NO dividers (D10's undeclared box, which renders as one section), and a
 # box holding the departed. A demo where every box is the same box teaches nothing.
 # The shape of the demo store. Four boxes, chosen so every case a screen has to draw is
-# present somewhere — an open box with dividers, a sealed one with a frozen capacity, a
+# present somewhere — two boxes with dividers, a
 # mixed box with NO dividers (D10's undeclared box, which renders as one section), and a
 # box holding the departed. A demo where every box is the same box teaches nothing.
 #
@@ -251,21 +251,21 @@ BOXES = (
         "box": 1, "name": "RB Origins", "pool": "priceable", "count": 42,
         "sections": [1, 15, 29],
         "section_names": {"1": "Commons", "15": "Uncommons", "29": "Signatures"},
-        "state": "open", "created": 24.0,
+        "created": 24.0,
         "sittings": ((24.0, 34, 2.9), (20.6, 8, 5.2)),
     },
     {
         "box": 2, "name": "MEG Bulk", "pool": "other", "count": 28,
         "sections": [1, 16],
         "section_names": {"1": "Commons", "16": "Holos"},
-        "state": "open", "created": 17.0,
+        "created": 17.0,
         "sittings": ((17.0, 28, 6.5),),
     },
     {
         "box": 3, "name": "RB Epics", "pool": "priceable", "count": 34,
         "sections": [1, 12, 24],
         "section_names": {"1": "Origins", "12": "Legacy", "24": "Epics"},
-        "state": "closed", "created": 31.0,
+        "created": 31.0,
         "sittings": ((31.0, 19, 3.4), (29.4, 15, 4.7)),
     },
     {
@@ -276,7 +276,7 @@ BOXES = (
         # per-card claim rather than a mode.
         "box": 4, "name": "Mixed Singles", "pool": "mixed", "count": 18,
         "sections": [], "section_names": {},
-        "state": "open", "created": 9.0,
+        "created": 9.0,
         "sittings": ((9.0, 18, 3.9),),
     },
 )
@@ -499,6 +499,38 @@ def state_for(position: int, count: int, rng: random.Random) -> str:
     return "identified"
 
 
+def log_states(inventory, card: Card, bound_at: str) -> None:
+    """The state lines a real card's life writes, on the demo's own clock (UN-4).
+
+    The loop below puts cards into `inventory.cards` directly, so no `record_capture`,
+    `set_state` or `retire` ever logged a line for them. The sale and retire reversals read
+    the prior state out of the log (`_state_before_sale`), found none, and refused every
+    undo on the demo as `sold_origin_unknown`. These are the same lines those writers log,
+    in the same order. The stamps come from `stamp()`, never `now()`, so the rebuild stays
+    byte-identical.
+    """
+    key = card.key
+    captured = str(card.captured_at)
+    inventory.events.append(
+        {"at": captured, "event": "captured", "position": key, "photo": card.photo, "cid": card.cid}
+    )
+    if card.state == "captured":
+        return
+    later = max(captured, bound_at)
+    inventory.events.append(
+        {"at": later, "event": "identified", "position": key, "sku": card.sku, "run": card.run}
+    )
+    if card.state == "identified":
+        return
+    left = max(later, stamp(1.0))
+    line = {"at": left, "event": card.state, "position": key}
+    if card.state == "retired":
+        line["reason"] = card.retire_reason
+    if card.state == "moved":
+        line["moved_to"] = card.moved_to
+    inventory.events.append(line)
+
+
 def build_store(force: bool) -> dict:
     """Write the whole demo store. Returns a summary for the caller to print."""
     rng = random.Random(SEED)
@@ -541,10 +573,7 @@ def build_store(force: bool) -> dict:
                 name=spec["name"],
                 sections=list(spec["sections"]),
                 section_names=dict(spec["section_names"]),
-                state="closed" if spec["state"] == "closed" else "open",
-                capacity=spec["count"] if spec["state"] == "closed" else None,
                 created_at=stamp(spec["created"]),
-                closed_at=stamp(spec["created"] - 6) if spec["state"] == "closed" else None,
             )
             counts["boxes"] += 1
 
@@ -630,6 +659,7 @@ def build_store(force: bool) -> dict:
                     card.retire_reason = "damaged"
                 if state == "moved":
                     card.moved_to = "4/%d" % (rng.randint(1, 18))
+                log_states(inventory, card, stamp(2.0))
 
                 placed.append((card, row))
                 counts["cards"] += 1
@@ -656,6 +686,10 @@ def build_store(force: bool) -> dict:
                     if card.cid and not card.cid.startswith(store_photos.MOVED_PREFIX):
                         card.cid = store_photos.MOVED_PREFIX + card.cid
                     inventory.cards[card.key] = card
+                    inventory.events.append(
+                        {"at": max(str(card.captured_at), stamp(1.0)), "event": "moved",
+                         "position": card.key, "moved_to": card.moved_to}
+                    )
                     counts["moved"] += 1
                     counts["identified"] = counts.get("identified", 0) - 1
                     break
@@ -994,6 +1028,117 @@ def write_archive() -> int:
     return len(buckets)
 
 
+# ---------------------------------------------------------- extra real box (opt-in only)
+
+
+def add_extra_real_boxes() -> dict:
+    """A SECOND, small, real box — additive, opt-in, and never the default build.
+
+    OFF UNLESS `PKMNSCAN_DEMO_EXTRA_REAL=1`. `make demo-seed` on its own never calls this
+    branch at all, so the default store stays byte-identical to the build before this
+    function existed — `make demo-determinism-selftest` proves the digest matcher without
+    ever setting the variable, and nothing above this function changes.
+
+    RUNS IN ITS OWN `store.write()`, AFTER THE DETERMINISTIC BASE STORE IS ALREADY
+    COMMITTED. So it cannot perturb `SEED`/`NOW`, `placed`, the corpus, the review queue, or
+    either run directory the base build writes — this only ever ADDS a box, its cards, and a
+    listing row per SKU. `docs/specs/demo.md` §4's REAL/INVENTED split still holds: reads
+    `demo-assets/extra/cards.json` (`scripts/demo-extra-real.py`'s own output), which is
+    itself real names, numbers, SKUs, rarities, market prices, typed prices and sale facts
+    curated from a READ-ONLY COPY of the owner's store. WHICH BOX AND INDEX each card sits
+    at is invented, exactly like the base build's boxes — nothing here claims otherwise.
+
+    NO ORDER IS WRITTEN, on the owner's own ruling: buyers and orders stay invented, and nothing
+    here adds either.
+    """
+    if not os.environ.get("PKMNSCAN_DEMO_EXTRA_REAL"):
+        return {}
+
+    manifest_path = REPO_ROOT / "demo-assets" / "extra" / "cards.json"
+    if not manifest_path.is_file():
+        print("PKMNSCAN_DEMO_EXTRA_REAL is set but %s is missing — run "
+              "scripts/demo-extra-real.py first. Skipping." % manifest_path.relative_to(REPO_ROOT))
+        return {}
+    entries = json.loads(manifest_path.read_text())
+    photos_dir = manifest_path.parent / "photos"
+
+    counts = {"boxes": 0, "cards": 0, "photos": 0, "listings": 0, "sold": 0, "identified": 0}
+    store = Store()
+    with store.write() as snapshot:
+        inventory = snapshot.inventory
+        box_number = max((int(b) for b in inventory.boxes), default=0) + 1
+        box_name = "Demo Box"
+        if box_name in {b.name for b in inventory.boxes.values()}:
+            return {}  # already added by an earlier run — never a second box
+        inventory.boxes[str(box_number)] = Box(
+            box=box_number,
+            name=box_name,
+            sections=[1],
+            section_names={},  # section 1 carries no name, on the owner's own ruling
+            created_at=stamp(1.0),
+        )
+        counts["boxes"] += 1
+
+        for offset, entry in enumerate(entries):
+            index = offset + 1
+            digest = store_photos.sha256_of(photos_dir / entry["photo"])
+            dest = store_photos.path(digest)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(photos_dir / entry["photo"], dest)
+            counts["photos"] += 1
+
+            sale = entry.get("sale")
+            state = "sold" if sale else "identified"
+            captured_at = stamp(1.0)
+            card = Card(
+                box=box_number,
+                index=index,
+                photo=relative_photo(digest),
+                cid=digest,
+                game=entry["game"],
+                capture_id="demo-extra-%04d" % index,
+                captured_at=captured_at,
+                state=state,
+                # A REAL DATE WHERE THERE IS ONE — the sale's own `placed_at`, never
+                # `now()`. Everything else here is the same fixed `stamp(1.0)` the base
+                # build's own review-queue entries use.
+                state_at=sale["placed_at"] if sale else captured_at,
+                condition=entry.get("condition") or "Near Mint",
+            )
+            inventory.cards[card.key] = card
+            counts["cards"] += 1
+            counts[state] = counts.get(state, 0) + 1
+
+            if entry.get("sku"):
+                bind_or_hold(
+                    inventory, snapshot.skus, card,
+                    sku=entry["sku"], game=entry["game"], run="demo-extra",
+                    read_name=entry["name"], read_number=entry["number"],
+                    read_printed_total=entry.get("printed_total"),
+                    confidence="high", bound_at=captured_at,
+                )
+                if state == "identified":
+                    inventory.listings[entry["sku"]] = Listing(
+                        sku=entry["sku"], condition=card.condition,
+                        pushed=0, staged=0, live=0, at=captured_at, live_as_of=captured_at,
+                    )
+                    counts["listings"] += 1
+    # A real typed price reaches the pricing corpus for real, so a viewer of `#/pricing`
+    # sees the actual gap between what the owner typed and today's market — not a synthetic
+    # one. Merged into the corpus `write_corpus` already wrote, above main()'s own call to
+    # this function — never a second, competing writer of the same file at once.
+    typed = {e["sku"]: e["typed_price"] for e in entries if e.get("typed_price")}
+    if typed:
+        from pipeline import corpus as corpus_mod
+        current = corpus_mod.Corpus.read()
+        for sku, value in typed.items():
+            current.answers[sku] = corpus_mod.Answer(value=value, at=stamp(1.0))
+        current.write()
+        counts["typed_prices"] = len(typed)
+
+    return counts
+
+
 # ------------------------------------------------------------------------------- entry
 
 
@@ -1023,10 +1168,19 @@ def main() -> int:
         if write_run(placed, box, home, whole_box) is not None:
             counts["runs"] += 1
 
+    extra = add_extra_real_boxes()
+    if extra:
+        for key, value in extra.items():
+            counts["extra_" + key] = value
+
     print("demo store seeded at %s" % home)
     for key in ("boxes", "cards", "photos", "listings", "answers", "archived", "review",
                 "runs", "orders", "sold", "retired", "moved", "captured"):
         print("  %-9s %d" % (key, counts.get(key, 0)))
+    if extra:
+        print("  extra real box (PKMNSCAN_DEMO_EXTRA_REAL):")
+        for key, value in extra.items():
+            print("    %-9s %d" % (key, value))
     return 0
 
 

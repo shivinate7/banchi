@@ -31,6 +31,7 @@ import {
   reshootPhoto,
   updateCard,
   newCaptureId,
+  saleStillHere,
   undoRetire,
   undoSale,
 } from './server'
@@ -78,11 +79,13 @@ import './BoxBrowse.css'
  * from './BoxBrowse'` keeps working) — `#/orders`' walk pane builds one too. */
 export type { Row } from './CardHero'
 
-/* Box-walk order — box, then index — the order the cards physically sit in. */
+/* Box-walk order — box, then the card's order in it (D265), the order the cards physically
+ * sit in. The order is the index until a section is placed into the box. */
 function rowsOf(cards: Record<string, InventoryCard>): Row[] {
+  const at = (card: InventoryCard) => card.place?.order ?? card.index
   return Object.entries(cards)
     .map(([key, card]) => ({ key, card }))
-    .sort((a, b) => a.card.box - b.card.box || a.card.index - b.card.index)
+    .sort((a, b) => a.card.box - b.card.box || at(a.card) - at(b.card))
 }
 
 const NO_ROWS: Row[] = []
@@ -438,9 +441,6 @@ type BoxBrowseProps = {
    *  writes. Given as a node because the caller already knows which card is selected. */
   detail?: ReactNode
 
-  /** Rendered under the box header, for the BOX being walked rather than for a card in it. */
-  boxPanel?: ReactNode
-
   /** The one primary action for the selected copy, drawn in the phone's sticky action bar. */
   actionBar?: ReactNode
 
@@ -465,9 +465,6 @@ type BoxBrowseProps = {
    *  for the key the way it used to when `rows` held the whole store. Null for a pooled
    *  card, which has no box to switch to. */
   goTo?: { key: string; at: number; box: number | null } | null
-
-  /** What a run would be scoped to: the box being walked, and the ticked cards inside it. */
-  onScope?: (scope: { box: number | null; indices: readonly number[] }) => void
 
   /** FOLD DEPARTED ROWS AWAY (D132). The state is the route's, because the same answer reaches
    *  the copies list beside this walk; this component draws the control and applies it. Hidden,
@@ -595,6 +592,19 @@ function cardParam(): string | null {
   return value === null || value.trim() === '' ? null : value.trim()
 }
 
+/** `#/inventory?q=<text>` — a store-wide search text, seeded once (D293: the set
+ *  view's own tap, for a card whose `box` will not coerce, and so cannot be aimed at a
+ *  row the way `card=<cid>` aims one — see `cardParam` above). `q` is D285's own key for
+ *  a screen's search text (`kit/viewState.ts`'s comment), so a link built this way reads
+ *  the same as if the operator had typed it. */
+function qParam(): string | null {
+  const hash = window.location.hash
+  const at = hash.indexOf('?')
+  if (at === -1) return null
+  const value = new URLSearchParams(hash.slice(at + 1)).get('q')
+  return value === null || value.trim() === '' ? null : value.trim()
+}
+
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
   useEffect(() => {
@@ -693,12 +703,10 @@ function VariantChooser({
 
 export function BoxBrowse({
   detail,
-  boxPanel,
   actionBar,
   onSelect,
   onBoxes,
   onListings,
-  onScope,
   goTo,
   reloadToken = 0,
   hideSold = false,
@@ -1781,6 +1789,18 @@ export function BoxBrowse({
     jumpBox.current = typeof row.card.box === 'number' ? row.card.box : null
     setJump(row.key)
   }, [rows, wantedCard, shelf, shelves])
+  /* `#/inventory?q=<text>`, SEEDED ONCE (D293): the set view's own tap, for a card
+   *  whose `box` will not coerce — `qParam` above says why `card=<cid>` cannot aim a row
+   *  for it. Read once, on mount, never again: a second link pressed while this screen is
+   *  already open would otherwise overwrite whatever the operator has since typed. */
+  const seededQuery = useRef(false)
+  useEffect(() => {
+    if (seededQuery.current) return
+    seededQuery.current = true
+    const text = qParam()
+    if (text !== null) setQuery(text)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   useEffect(() => {
     if (goTo === undefined || goTo === null) return
     if (askedAt.current === goTo.at) return
@@ -1874,10 +1894,6 @@ export function BoxBrowse({
     }
   }, [pricedRun, reloads, reloadToken])
 
-  useEffect(() => {
-    onScope?.({ box: typeof shelf === 'number' ? shelf : null, indices: pickedIndices })
-  }, [shelf, pickedIndices, onScope])
-
   /* The phone's sheet closes once a card is chosen; the box picker keeps it open. */
   const pickRow = (key: string) => {
     setSelected(key)
@@ -1960,7 +1976,6 @@ export function BoxBrowse({
             const record = typeof cell === 'number' ? boxMap.get(cell) : undefined
             const onHand = record ? (record.on_hand ?? record.cards - record.sold - record.retired - record.moved) : null
             const pct = record && record.cards > 0 && onHand !== null ? Math.round((onHand / record.cards) * 100) : 0
-            const sealed = record?.state === 'closed'
             const matches = matchesByShelf.get(cell) ?? (typeof cell === 'number' ? facetMatchesByBox.get(cell) : undefined)
             return (
               <button
@@ -1977,10 +1992,8 @@ export function BoxBrowse({
                          name and then a naked number. Naming it here, in the one aria-label
                          the button already carries, rather than a second aria-label on the
                          count span, which a button's own explicit aria-label would swallow
-                         (S16). SEALED STAYS LAST: `inventory.spec.ts`'s own sealed-row case
-                         reads `/sealed$/` off this string, so the captured count is inserted
-                         before it rather than appended after. */
-                        `${shelfLabel(cell, record?.name)}${record ? `, ${record.cards.toLocaleString()} captured` : ''}${sealed ? ', sealed' : ''}`
+                         (S16). */
+                        `${shelfLabel(cell, record?.name)}${record ? `, ${record.cards.toLocaleString()} captured` : ''}`
                 }
                 aria-current={cell === shelf ? 'true' : undefined}
                 disabled={!reachable}
@@ -2028,18 +2041,6 @@ export function BoxBrowse({
                     <span style={{ width: `${pct}%` }} />
                   </span>
                 ) : null}
-                {record ? (
-                  // The track exists on every record row, sealed or not (the lock's own
-                  // horizontal form of D118: a row's geometry may not depend on which of its
-                  // states is drawn). Only the glyph inside is conditional.
-                  <span
-                    className="browse-boxcell-lock"
-                    title={sealed ? 'Sealed' : undefined}
-                    aria-hidden={sealed ? undefined : 'true'}
-                  >
-                    {sealed ? <Icon name="lock" size={12} /> : null}
-                  </span>
-                ) : null}
                 {record ? <span className="browse-boxcell-count">{record.cards.toLocaleString()}</span> : null}
               </button>
             )
@@ -2080,7 +2081,6 @@ export function BoxBrowse({
                 <p>These cards have no box or place the store can read.</p>
               </div>
             )}
-            {shelfBox === null ? null : boxPanel}
           </div>
 
           <div className="browse-status">
@@ -2661,6 +2661,7 @@ export function BoxBrowse({
                     market={panelRow.card.run === null ? undefined : priced[panelRow.card.run]}
                     listings={listings}
                     phone={phone}
+                    boxes={boxRecords}
                     // "Inventory only" (owner's ruling, D252): `correctable`
                     // defaults false — an allow-list of one screen — so this is the one call
                     // site that opts in. The smallest edit that ruling reaches into this file for.
@@ -2794,6 +2795,11 @@ function CardOps({
   // write's own lock), so the FIRST press is what learns it; every one after degrades to the
   // note, the same way the sale receipt withholds Undo once `restores_to` reads null.
   const [originUnknown, setOriginUnknown] = useState(false)
+  // Set once `undoSale` refuses `sale_built_on` (UN-7, `docs/specs/undo.md` §11.1): the photo
+  // is gone or the order shipped or closed, and the ordinary reversal is refused ON PURPOSE.
+  // The fix after that is "This card is still here" — a different write, `saleStillHere`,
+  // which puts the card back without touching a shipped order's own count.
+  const [builtOn, setBuiltOn] = useState(false)
   const anchor = useRef<HTMLDivElement | null>(null)
 
   const terminal = row.card.state === 'sold' || row.card.state === 'retired'
@@ -2879,14 +2885,17 @@ function CardOps({
       // sigil-ok: a store key, `storeKeyText`'s own shape (D92) with the box respelled from
       // its number to its name — this card is not in a slot to count, same as that one.
       const label = `${row.card.place?.box_name ?? UNNAMED_BOX} #${row.card.index}`
+      /* ONE VOCABULARY (UN-5, finding #15, the Opus review round, `docs/specs/undo.md`
+       * §11.9): a true reversal is always "<what it undid> undone", the same words
+       * `Inventory.tsx` uses for the identical write reached from its own screen. */
       if (row.card.state === 'sold') {
         const result: SaleResult = await undoSale(row.card.box, row.card.index)
         toast({
           kind: 'ok',
           icon: 'undo',
-          title: 'Card brought back',
+          title: 'Sale undone',
           body: result.order_released
-            ? `${label} is back in its box. The order it was pulled for no longer counts it shipped.`
+            ? `${label} is back in its box. The order it was pulled for no longer counts it.`
             : `${label} is back in its box.`,
           ttlMs: 12000,
         })
@@ -2895,7 +2904,7 @@ function CardOps({
         toast({
           kind: 'ok',
           icon: 'undo',
-          title: 'Card brought back',
+          title: 'Retirement undone',
           body: `${label} is back in its box.`,
           ttlMs: 12000,
         })
@@ -2907,7 +2916,53 @@ function CardOps({
       if (failure.code === 'sold_origin_unknown' || failure.code === 'retired_origin_unknown') {
         setOriginUnknown(true)
       }
+      if (failure.code === 'sale_built_on') setBuiltOn(true)
       setTrouble(failure)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /* THE FIX AFTER "BUILT ON" (UN-7): the ordinary reversal refused ON PURPOSE, because the
+   * photo is gone or the order it was pulled for has shipped or closed. This is a DIFFERENT
+   * write — never a retry of the same one.
+   *
+   * THE OWNER'S RULING, 2026-09-25: "Card back, order re-points." The card goes back on the
+   * shelf, and a SHIPPED order's line is marked filled by hand instead (`sold_separately`,
+   * lane S's own doc, §11.8) — a shipped order's own count stands, so the screen may say
+   * this plainly rather than staying silent about the order.
+   *
+   * THE OPUS REVIEW ROUND, FINDING #4: the sentence used to claim an order changed every
+   * time, even when this card never had one, or when the order it had was OPEN (released,
+   * not filled). `order_effect` names which of the three actually happened, so the toast is
+   * built from the server's own answer rather than assumed. */
+  const stillHere = async () => {
+    if (busy) return
+    setBusy(true)
+    setTrouble(null)
+    try {
+      // sigil-ok: a store key, the same shape `resurrect`'s own label above draws and the
+      // same reason (D92) — this card is not in a slot to count, same as that one.
+      const label = `${row.card.place?.box_name ?? UNNAMED_BOX} #${row.card.index}`
+      const result = await saleStillHere(row.card.box, row.card.index)
+      const orderNote =
+        result.order_effect === 'filled_by_hand'
+          ? ' The order it was pulled for is now marked filled by hand.'
+          : result.order_effect === 'released'
+            ? ' The order it was pulled for no longer counts it.'
+            : ''
+      toast({
+        kind: 'ok',
+        icon: 'undo',
+        title: 'Card undone',
+        body: `${label} is back in stock.${orderNote}`,
+        ttlMs: 12000,
+      })
+      setMenu(false)
+      setBuiltOn(false)
+      onChanged()
+    } catch (err) {
+      setTrouble(describeFailure(err))
     } finally {
       setBusy(false)
     }
@@ -2960,6 +3015,19 @@ function CardOps({
                         ? 'The store has no earlier state for this card, so the sale cannot be reversed here. Set it by hand instead.'
                         : 'The store has no earlier state for this card, so the retirement cannot be reversed here. Set it by hand instead.'}
                     </p>
+                  ) : builtOn ? (
+                    /* UN-7: the ordinary reversal is refused ON PURPOSE — its photo is gone or
+                       its order has shipped or closed — so this is a different write, never a
+                       retry of the same one. */
+                    <button
+                      role="menuitem"
+                      type="button"
+                      className="bn-menu-item"
+                      disabled={busy}
+                      onClick={() => void stillHere()}
+                    >
+                      <Icon name="undo" size={16} /> This card is still here
+                    </button>
                   ) : (
                     <button
                       role="menuitem"

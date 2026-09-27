@@ -3,6 +3,7 @@ import type {
   ButtonHTMLAttributes, CSSProperties, ReactNode, Ref,
   FocusEvent as ReactFocusEvent, MouseEvent as ReactMouseEvent, TouchEvent as ReactTouchEvent,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 import { rememberTheme, storedTheme, type Theme } from '../deviceMemory'
 import {
@@ -10,9 +11,11 @@ import {
   SHEEN_HEIGHT, SMALL_BRACKET, SMALL_STROKE, TILE,
 } from './markGeometry'
 import { DEFAULT_VARIANT, MARKS, SHEEN, type LogoVariant } from './markPalettes'
+import { UNDO_KEY_LABEL } from './undo'
 
 export { Icon }
 export type { IconName }
+export { UNDO_KEY, UNDO_KEY_LABEL, useUndoHotkey } from './undo'
 
 /* ---- Button ------------------------------------------------------------------ */
 export type ButtonVariant = 'default' | 'primary' | 'ghost' | 'quiet' | 'danger' | 'danger-solid' | 'ok'
@@ -111,27 +114,46 @@ export function Button({
    word); a call site that breaks this is loud in development, never silently wrong in
    production.
 
-   THE TOOLTIP STAYS A DOM CHILD OF THE BUTTON (never a portal: `app/tests/icon-button.spec.ts`
-   finds it with `button.querySelector('.bn-icon-tip')`, matching how the rest of the kit
-   reads its own markup). What changed after the round-2 review is the POSITION, not the
-   parentage: `reposition()` below measures the button and the tip with `getBoundingClientRect`
-   and sets `position: fixed` coordinates, clamped inside the viewport and flipped below the
-   button when there is no room above it. `position: fixed` is computed against the true
-   viewport regardless of an ancestor's `overflow` (no ancestor here sets `transform`, which
-   is the one thing that would re-anchor it) — so `.bn-sheet`'s own `overflow: hidden`, which
-   clipped the overlay Close tooltip at the top of a sheet before this fix, no longer reaches
-   it. `reposition()` runs on the same events that reveal the tip — pointer enter, focus, and
-   the long-press timer firing — so the coordinates are set before the opacity transition
-   starts and nothing visibly jumps.
+   THE TOOLTIP IS PORTALLED TO `<body>` (ROUND 3, replacing round 2's DOM-child shape:
+   D288, the owner's report — "if i hover icons on the inventory on the first row they'll go
+   above the height of the box"). Round 2 kept it a DOM child of the button and escaped
+   clipping with `position: fixed`, on the premise that no ancestor ever re-anchors a fixed
+   element's containing block. That premise is false at `#/inventory`: `.inventory-detail`
+   (`Inventory.css`) sets `container-type: inline-size` for its own `copies` query container,
+   which makes IT the containing block instead of the viewport, so `.card-locations-rows`'s
+   rounded, scrolling panel (`CardLocations.css`) — nested inside it — clips the tooltip again,
+   the same way `.bn-sheet` used to before round 2. Re-deriving the real clip rect per ancestor
+   chain is a losing game against every future `container-type`/`transform`/`filter`/`contain`
+   anywhere in the tree, AND it does not even fully fix the bug: `.card-locations-row` carries
+   its own entrance `animation` (`CardLocations.css`), which makes each row its OWN stacking
+   context permanently (a declared animation on transform/opacity does this whether or not it
+   is still running) — so a tooltip flipped BELOW the first row's button, still a DOM
+   descendant of that row, paints BEHIND the next row's own stacking context regardless of
+   `z-index`, because z-index only orders siblings within one stacking context and the tip is
+   nested three levels inside the wrong one. Measured directly: `elementFromPoint` at the
+   tip's own corners returned the next row's `<li>`, not the tip.
 
-   VISIBILITY IS STILL CSS, not React state, for hover and keyboard focus: `:hover` (now
-   wrapped in `@media (hover: hover)`, so a touchscreen tap does not leave a phantom hover
-   after the finger lifts — round 2's own finding) and `:focus-visible` (never a mouse
-   `:focus`, so a click does not leave the tip stuck open). A touch long-press sets
-   `data-tip-open` after `LONG_PRESS_MS`, and — new in round 2 — the touch that opened it
-   calls `preventDefault()` on its own `touchend`, so the long-press that reveals "Delete"
-   never also fires the delete. It is `aria-hidden`: the accessible name is the button's own
-   `aria-label`, never the tooltip's text, so a screen reader is never told the label twice.
+   A portal to `<body>` fixes both at the cause: `<body>` has neither an `overflow` ancestor
+   nor a `container-type`/`transform` one, so `position: fixed` always means the true viewport,
+   and the tip becomes a plain sibling of the app root in the ROOT stacking context, where its
+   own `z-index: 90` (kit.css) compares fairly against everything else instead of losing to an
+   ancestor it never asked for. `app/tests/iconTooltip.ts` is the one place a test finds a
+   button's tip now — `data-tip-id` on the control names the id `id` carries on the portalled
+   span, since `button.querySelector('.bn-icon-tip')` can no longer reach a body-level sibling.
+
+   VISIBILITY MOVES TO REACT STATE, because a portal breaks the descendant selectors
+   (`.bn-icon-btn:hover .bn-icon-tip` and its neighbours) visibility used to run on: `hovering`
+   (set only when `(hover: hover)` matches, so a touchscreen tap does not leave a phantom hover
+   once the finger lifts — round 2's own finding, kept), `focusVisible` (read off the button's
+   own `:focus-visible` match at focus time, never a plain mouse `:focus`, so a click does not
+   leave the tip stuck open), `longPress` (the touch timer, unchanged) and `dismissed` (a click
+   closes its own tooltip, unchanged) combine into one `visible` boolean, mirrored onto the
+   portalled span as `data-tip-visible` — kit.css keys the fade on that attribute directly
+   rather than on an ancestor's pseudo-class. `reposition()` runs on the same events that
+   reveal the tip — pointer enter, focus, and the long-press timer firing — so the coordinates
+   are set before the opacity transition starts and nothing visibly jumps. It is `aria-hidden`:
+   the accessible name is the button's own `aria-label`, never the tooltip's text, so a screen
+   reader is never told the label twice.
 
    `pressed` marks a toggle of one act (Hold/Release, Reveal/Hide) with `aria-pressed`, tinted
    like `Chip`'s own pressed state — change the label AND the icon together on a toggle, never
@@ -144,7 +166,8 @@ const LONG_PRESS_MS = 500
 const FACE_PX: Record<ButtonSize, number> = { sm: 24, md: 28, lg: 34, xl: 40 }
 const GLYPH_PX: Record<ButtonSize, number> = { sm: 12, md: 14, lg: 16, xl: 18 }
 /** Clamp the tooltip inside the viewport, and flip it below the button when there is no room
- *  above — the shape that fixed the overlay Close tooltip clipping at the top of a sheet. */
+ *  above. Portalled to `<body>` (round 3), so the viewport is always the real bound — no
+ *  ancestor of `<body>` can re-anchor a `position: fixed` descendant. */
 function positionTip(btn: HTMLElement, tip: HTMLElement): void {
   const b = btn.getBoundingClientRect()
   const tw = tip.offsetWidth
@@ -222,12 +245,22 @@ export function IconButton({
   if (import.meta.env.DEV && name !== undefined && !name.includes(label)) {
     console.error(`IconButton: name "${name}" does not contain label "${label}" (WCAG 2.5.3, Label in Name).`)
   }
+  const tipId = useId()
   const [longPress, setLongPress] = useState(false)
+  /* HOVER AND KEYBOARD FOCUS, TRACKED IN REACT STATE (round 3): a portal breaks the descendant
+     selectors (`.bn-icon-btn:hover .bn-icon-tip`) visibility used to run on entirely in CSS —
+     see the block comment above. `hovering` only turns on when `(hover: hover)` matches, the
+     same guard the old CSS media query carried, so a touchscreen tap does not leave a phantom
+     hover once the finger lifts (round 2's own finding). `focusVisible` reads the button's own
+     `:focus-visible` match at the moment it focuses, never a plain mouse `:focus`. */
+  const [hovering, setHovering] = useState(false)
+  const [focusVisible, setFocusVisible] = useState(false)
   /* A CLICK DISMISSES ITS OWN TOOLTIP (round 2, `icon-button.spec.ts`). The mouse does not
      move on a click, so `:hover` alone would leave "Mark sold" reading its own tooltip after
      the press already changed the card under it. Cleared on the next mouseleave or blur, so
      hovering away and back — or tabbing off and back — reads it again. */
   const [dismissed, setDismissed] = useState(false)
+  const visible = !dismissed && (hovering || focusVisible || longPress)
   const longPressFired = useRef(false)
   const timer = useRef<number | null>(null)
   const btnRef = useRef<HTMLButtonElement | HTMLAnchorElement>(null)
@@ -248,13 +281,13 @@ export function IconButton({
     timer.current = null
   }
   const classes = ['bn-btn', 'bn-icon-btn', className ?? ''].filter(Boolean).join(' ')
-  /* Shared with both the `<button>` and `<a>` forms — the face, the badge and the tooltip
-     never differ by tag. No `style` override on `<Icon>` (round 3's own bug): `Icon.tsx`
-     spreads `rest` onto the `<svg>` AFTER its own `width`/`height` attributes, and inline CSS
-     beats an SVG attribute — a `style={{ width: FACE_PX[size], ... }}` here drew every glyph
-     at the FACE size, not GLYPH_PX, filling the whole face. The host's OWN box is already
-     FACE_PX (its own inline `style` below) and `.bn-icon-btn`'s flex centring places the
-     smaller glyph inside it — nothing here needs to repeat that size. */
+  /* Shared with both the `<button>` and `<a>` forms — the face and the badge never differ by
+     tag. No `style` override on `<Icon>` (round 3's own bug): `Icon.tsx` spreads `rest` onto
+     the `<svg>` AFTER its own `width`/`height` attributes, and inline CSS beats an SVG
+     attribute — a `style={{ width: FACE_PX[size], ... }}` here drew every glyph at the FACE
+     size, not GLYPH_PX, filling the whole face. The host's OWN box is already FACE_PX (its own
+     inline `style` below) and `.bn-icon-btn`'s flex centring places the smaller glyph inside
+     it — nothing here needs to repeat that size. */
   const face = (
     <>
       <Icon name={icon} size={GLYPH_PX[size]} />
@@ -263,26 +296,42 @@ export function IconButton({
           {badge}
         </span>
       ) : null}
-      <span ref={tipRef} className="bn-icon-tip" aria-hidden="true">
-        {label}
-        {kbd ? <Kbd>{kbd}</Kbd> : null}
-      </span>
     </>
+  )
+  /* PORTALLED TO `<body>` (round 3) — see the block comment above `IconButton`. Always
+     mounted, like round 2's DOM-child tip was, so `reposition()` can measure it before the
+     opacity transition starts; `data-tip-visible` (not a CSS pseudo-class) drives the fade. */
+  const tip = createPortal(
+    <span
+      ref={tipRef}
+      id={tipId}
+      className="bn-icon-tip"
+      aria-hidden="true"
+      data-tip-visible={visible ? 'true' : undefined}
+    >
+      {label}
+      {kbd ? <Kbd>{kbd}</Kbd> : null}
+    </span>,
+    document.body,
   )
   const sharedStyle = { width: FACE_PX[size], height: FACE_PX[size], ...style }
   const handleMouseEnter = (event: ReactMouseEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    if (window.matchMedia('(hover: hover)').matches) setHovering(true)
     reposition()
     onMouseEnter?.(event as ReactMouseEvent<HTMLButtonElement>)
   }
   const handleMouseLeave = (event: ReactMouseEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    setHovering(false)
     setDismissed(false)
     onMouseLeave?.(event as ReactMouseEvent<HTMLButtonElement>)
   }
   const handleFocus = (event: ReactFocusEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    setFocusVisible(event.currentTarget.matches(':focus-visible'))
     reposition()
     onFocus?.(event as ReactFocusEvent<HTMLButtonElement>)
   }
   const handleBlur = (event: ReactFocusEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    setFocusVisible(false)
     setDismissed(false)
     onBlur?.(event as ReactFocusEvent<HTMLButtonElement>)
   }
@@ -331,7 +380,7 @@ export function IconButton({
         data-tone={tone}
         data-busy={busy ? 'true' : undefined}
         data-tip-open={longPress ? 'true' : undefined}
-        data-tip-dismissed={dismissed ? 'true' : undefined}
+        data-tip-id={tipId}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onFocus={handleFocus}
@@ -342,6 +391,7 @@ export function IconButton({
         onTouchCancel={handleTouchCancel}
       >
         {face}
+        {tip}
       </a>
     )
   }
@@ -357,7 +407,7 @@ export function IconButton({
       data-tone={tone}
       data-busy={busy ? 'true' : undefined}
       data-tip-open={longPress ? 'true' : undefined}
-      data-tip-dismissed={dismissed ? 'true' : undefined}
+      data-tip-id={tipId}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onFocus={handleFocus}
@@ -369,7 +419,33 @@ export function IconButton({
       {...rest}
     >
       {face}
+      {tip}
     </button>
+  )
+}
+
+/* ---- PageUndo -------------------------------------------------------------------- */
+/** THE ONE UNDO CONTROL (`docs/specs/undo.md` §11.3, UN-10), passed to `Page`'s own `undo`
+ *  prop, never `actions` — `docs/specs/undo.md` keeps it off a screen's own primary press
+ *  (Send, Fetch), which is the whole reason `Page` gives it a separate slot rather than
+ *  folding it into the header. `size="lg"` is 40px or more once a thumb is the pointer
+ *  (`tokens.css`'s own media query, D117), so this is the door UN-9 counts on: reachable and
+ *  40px wide before any per-row control has to be. `label` names the write; `Undo` alone is
+ *  the READ ("What was undone" is the receipt's job, not this button's). Null where there is
+ *  nothing to undo — `Page` draws nothing for it either. */
+export function PageUndo({
+  label = 'Undo',
+  onPress,
+  busy,
+}: {
+  readonly label?: string
+  readonly onPress: () => void
+  readonly busy?: boolean
+}) {
+  return (
+    <Button size="lg" variant="ghost" icon="undo" kbd={UNDO_KEY_LABEL} onClick={onPress} disabled={busy}>
+      {label}
+    </Button>
   )
 }
 
@@ -736,6 +812,96 @@ export function Segmented<T extends string>({
           {option.icon ? <Icon name={option.icon} size={14} /> : null}
           {option.label}
           {option.kbd ? <Kbd>{option.kbd}</Kbd> : null}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/* ---- SectionPicker ------------------------------------------------------------------------- */
+/** One item of a box's `sections_detail`, the part `SectionPicker` needs. */
+export type SectionPickerOption = {
+  readonly div: string
+  readonly section: number
+  readonly name: string | null
+  readonly count: number
+}
+
+/**
+ * A box has no auto default (D300, the owner's ruling: "i need to
+ * specify where it goes there no auto default"). Every Move-to-box path shows this list once
+ * a destination box is chosen — a box with one section still shows its single choice, so the
+ * owner confirms it rather than a screen deciding quietly. `value` is a divider key
+ * (`sections_detail[].div`), never an index or an ordinal — the same key a capture, an S, a
+ * U and a Move-to-box all aim with (`docs/specs/subbox-capture.md` 1). The first row is
+ * tagged "back" and the last "front" (D260: card 1 sits at the far back).
+ */
+export function SectionPicker({
+  sections,
+  value,
+  onChange,
+  label = 'Section',
+}: {
+  readonly sections: readonly SectionPickerOption[]
+  readonly value: string | null
+  readonly onChange: (div: string) => void
+  readonly label?: string
+}) {
+  /* F7 — A REAL RADIO GROUP, THE ARIA ROVING-TABINDEX PATTERN: one Tab stop for the whole
+   * group, and the arrow keys both move focus and pick (the native behaviour a real
+   * `<input type="radio">` group already has). Only the checked row is a Tab stop; with
+   * nothing checked yet, the first row is, so a first Tab always lands somewhere real. */
+  const refs = useRef<Array<HTMLButtonElement | null>>([])
+  const checkedIndex = sections.findIndex((option) => option.div === value)
+  const tabbableIndex = checkedIndex >= 0 ? checkedIndex : 0
+  const focusAndPick = (index: number) => {
+    const at = sections[index]
+    if (at === undefined) return
+    refs.current[index]?.focus()
+    onChange(at.div)
+  }
+  return (
+    <div className="bn-section-pick" role="radiogroup" aria-label={label}>
+      {sections.map((option, i) => (
+        <button
+          key={option.div}
+          ref={(el) => {
+            refs.current[i] = el
+          }}
+          type="button"
+          role="radio"
+          aria-checked={option.div === value}
+          tabIndex={i === tabbableIndex ? 0 : -1}
+          className="bn-section-pick-item"
+          onClick={() => onChange(option.div)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+              event.preventDefault()
+              focusAndPick((i + 1) % sections.length)
+            } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+              event.preventDefault()
+              focusAndPick((i - 1 + sections.length) % sections.length)
+            } else if (event.key === 'Home') {
+              event.preventDefault()
+              focusAndPick(0)
+            } else if (event.key === 'End') {
+              event.preventDefault()
+              focusAndPick(sections.length - 1)
+            }
+          }}
+        >
+          <span className="bn-section-pick-main">
+            <span className="bn-section-pick-num">Section {option.section}</span>
+            {option.name ? <span className="bn-section-pick-name">{option.name}</span> : null}
+          </span>
+          <span className="bn-section-pick-meta">
+            {/* F4 — A BOX OF ONE SECTION NAMES NO EDGE: "back" and "front" (D260) distinguish
+                one section from another, and there is nothing to distinguish it from. */}
+            {sections.length > 1 && i === 0 ? <span className="bn-section-pick-tag">back</span> : null}
+            {sections.length > 1 && i === sections.length - 1 ? <span className="bn-section-pick-tag">front</span> : null}
+            <span className="bn-section-pick-count">{option.count === 1 ? '1 card' : `${option.count} cards`}</span>
+          </span>
+          {option.div === value ? <Icon name="check" size={16} /> : <span className="bn-section-pick-spacer" />}
         </button>
       ))}
     </div>

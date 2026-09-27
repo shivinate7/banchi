@@ -29,10 +29,9 @@
  * clearable` written a second time against the one file in this product that holds money —
  * D49 refused that across two languages and D103 found it happening across two Python modules.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useMemo, useState } from 'react'
 
-import { Button, Icon, Notice, Segmented } from './kit'
+import { Button, Notice, Segmented, Sheet } from './kit'
 import { clearPricingAnswers, describeFailure, type Failure } from './server'
 import type { PricingClearResult, PricingClearable } from './types'
 
@@ -91,7 +90,6 @@ export function ClearPrices({
   const [days, setDays] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<Failure | null>(null)
-  const sheet = useRef<HTMLElement | null>(null)
 
   /* THE SHEET OPENS IN ITS SAFEST STATE EVERY TIME. A scope or a window remembered from the
      last press is a destructive default the operator did not choose this time — and this is
@@ -102,17 +100,7 @@ export function ClearPrices({
     setScope('worklist')
     setDays(null)
     setFailure(null)
-    sheet.current?.focus()
   }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
 
   /* THE AGES IN SCOPE. An intersection of the server's list with this screen's rows — set
      arithmetic over an answer Python already gave, never a second opinion about it. */
@@ -167,180 +155,102 @@ export function ClearPrices({
   const holds = clearable?.holds ?? 0
   const unpriced = clearable?.unknown ?? 0
 
-  /* Portalled to <body> for the reason the markdown sheet is: `main.bn-page` keeps a filled
-     transform after its enter animation, and a fixed sheet inside it would hang off the column. */
-  return createPortal(
-    <>
-      {open ? <div className="bn-scrim" onClick={onClose} /> : null}
-      <aside
-        ref={sheet}
-        className="bn-sheet clearprices"
-        hidden={!open}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="clearprices-head"
-        tabIndex={-1}
-      >
-        <header className="clearprices-top">
-          <div className="clearprices-heading">
-            <span className="bn-eyebrow">Removes pricing answers</span>
-            <h2 className="clearprices-head" id="clearprices-head">
-              Clear typed prices
-            </h2>
-          </div>
-          <Button variant="ghost" icon="x" iconOnly onClick={onClose}>
-            Close
-          </Button>
-        </header>
-
-        <div className="clearprices-body">
-          <p className="clearprices-says">
-            Removes the <strong>answer</strong>, not the card — a cleared row shows the
-            standing rule again. <strong>Nothing at TCGplayer changes.</strong>
-          </p>
-
-          <section className="clearprices-step" aria-labelledby="clearprices-scope">
-            <h3 className="bn-section-title bn-dotline" id="clearprices-scope">
-              <span>1</span>
-              <span>Which answers</span>
-            </h3>
-            {/* THE BLAST RADIUS IS THE FIRST THING ASKED AND THE NARROW ONE IS SELECTED.
-                `inventory/prices.json` is one file for the whole store (D86), so "everywhere"
-                is the shape this act naturally has and is exactly why it may not be the
-                default. */}
-            <Segmented
-              label="Which answers to clear"
-              value={scope}
-              options={[
-                {
-                  value: 'worklist',
-                  label: (
-                    <span className="bn-dotline">
-                      <span>On this worklist</span>
-                      <span>{worklistTotal}</span>
-                    </span>
-                  ),
-                  icon: 'layers',
-                },
-                {
-                  value: 'store',
-                  label: (
-                    <span className="bn-dotline">
-                      <span>Everywhere</span>
-                      <span>{storeTotal}</span>
-                    </span>
-                  ),
-                  icon: 'grid',
-                },
-              ]}
-              onChange={(next) => setScope(next)}
-            />
-            <p className="clearprices-scope-says">
-              {scope === 'worklist' ? (
-                <>
-                  Only answers in <strong>{worklistName}</strong>.
-                </>
-              ) : (
-                <>
-                  <strong>Every run at once.</strong> Includes runs and boxes not on this screen.
-                </>
-              )}
-            </p>
-          </section>
-
-          <section className="clearprices-step" aria-labelledby="clearprices-age">
-            <h3 className="bn-section-title bn-dotline" id="clearprices-age">
-              <span>2</span>
-              <span>How old</span>
-            </h3>
-            <div className="clearprices-ages" role="group" aria-label="How old an answer must be">
-              {WINDOWS.map((window) => {
-                const n = count(window)
-                return (
-                  <button
-                    key={String(window)}
-                    type="button"
-                    className="clearprices-age"
-                    aria-pressed={window === days}
-                    onClick={() => setDays(window)}
-                  >
-                    <span className="clearprices-age-label">{windowLabel(window)}</span>
-                    <span className="clearprices-age-count">{n}</span>
-                  </button>
-                )
-              })}
-            </div>
-            {/* ITS OWN CLASS AND NOT THE SCOPE'S. Two sentences in one sheet sharing a
-                selector is a spec that cannot address either — and, read as CSS, a claim that
-                these are the same kind of line when one describes a blast radius and the other
-                describes a policy this feature deliberately does not have. */}
-            <p className="clearprices-age-says">
-              Nothing expires on its own — an answer stands until you clear it.
-            </p>
-          </section>
-
-          {/* WHAT IS LEFT ALONE, SAID RATHER THAN LEFT TO BE DISCOVERED. Both of these are
-              permanent: no control in this sheet reaches them, because neither is a typed
-              price. */}
-          <Notice tone="info" title="What this never touches" className="clearprices-spares">
-            <ul className="clearprices-spare-list">
-              <li>
-                <strong>{holds}</strong> held back on purpose. Lift one on its own row.
-              </li>
-              {unpriced === 0 ? null : (
-                <li>
-                  <strong>{unpriced}</strong> with no catalogue price.
-                </li>
-              )}
-              {undated === 0 ? null : (
-                <li>
-                  <strong>{undated}</strong> carry no date. Choose <em>Any age</em> to include them.
-                </li>
-              )}
-            </ul>
-          </Notice>
-
-          {unsaved ? (
-            <Notice tone="warn" title="Save first">
-              Clearing now would be undone by the next autosave.
-            </Notice>
-          ) : null}
-
-          {failure === null ? null : (
-            <Notice tone="danger" title={failure.message} code={failure.code} />
-          )}
-        </div>
-
-        <footer className="clearprices-foot">
-          <Button onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          {/* THE FIGURE IS IN THE LABEL, WHICH IS THIS REPO'S RULE FOR A PRESS THAT COSTS
-              SOMETHING. A button reading "Clear" over 407 answers is the ambush this sheet
-              exists to prevent, and a count in a tooltip is a count nobody reads. */}
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Clear typed prices"
+      icon="eraser"
+      className="clearprices"
+      footer={
+        <>
+          {/* THE FIGURE IS IN THE LABEL, this repo's rule for a press that costs something. */}
           <Button
             variant="danger-solid"
-            icon="trash"
+            icon="eraser"
             busy={busy}
             disabled={busy || going === 0 || unsaved}
             onClick={() => void press()}
           >
             {going === 0
               ? 'Nothing to clear'
-              : `Clear ${going} typed price${going === 1 ? '' : 's'}${
-                  scope === 'store' ? ' everywhere' : ''
-                }`}
+              : `Clear ${going} typed price${going === 1 ? '' : 's'}${scope === 'store' ? ' everywhere' : ''}`}
           </Button>
-        </footer>
-        <p className="clearprices-undo">
-          <Icon name="undo" size={13} />
-          <span>
-            Undo is offered on the receipt, and it puts every answer back with the date it was
-            typed on.
-          </span>
+          <Button onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+        </>
+      }
+    >
+      <p className="clearprices-says">Nothing at TCGplayer changes. You can undo this.</p>
+
+      <section className="clearprices-step" aria-labelledby="clearprices-scope">
+        <h3 className="clearprices-step-head" id="clearprices-scope">
+          Which answers
+        </h3>
+        {/* THE BLAST RADIUS IS ASKED FIRST AND THE NARROW ONE IS SELECTED (D86: one file for
+            the whole store, which is exactly why "everywhere" may not be the default). */}
+        <Segmented
+          label="Which answers to clear"
+          value={scope}
+          options={[
+            { value: 'worklist', label: `On this list ${worklistTotal}`, icon: 'layers' },
+            { value: 'store', label: `Everywhere ${storeTotal}`, icon: 'grid' },
+          ]}
+          onChange={(next) => setScope(next)}
+        />
+        <p className="clearprices-scope-says">
+          {scope === 'worklist' ? (
+            <>
+              Only answers in <strong>{worklistName}</strong>.
+            </>
+          ) : (
+            <strong>Every run and box at once.</strong>
+          )}
         </p>
-      </aside>
-    </>,
-    document.body,
+      </section>
+
+      <section className="clearprices-step" aria-labelledby="clearprices-age">
+        <h3 className="clearprices-step-head" id="clearprices-age">
+          How old
+        </h3>
+        <div className="clearprices-ages" role="group" aria-label="How old an answer must be">
+          {WINDOWS.map((window) => (
+            <button
+              key={String(window)}
+              type="button"
+              className="clearprices-age"
+              aria-pressed={window === days}
+              onClick={() => setDays(window)}
+            >
+              <span className="clearprices-age-label">{windowLabel(window)}</span>
+              <span className="clearprices-age-count">{count(window)}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* WHAT IS LEFT ALONE, SAID RATHER THAN LEFT TO BE DISCOVERED. */}
+      <Notice tone="info" title="Left alone" className="clearprices-spares">
+        <ul className="clearprices-spare-list">
+          <li>
+            <strong>{holds}</strong> held back on purpose.
+          </li>
+          {unpriced === 0 ? null : (
+            <li>
+              <strong>{unpriced}</strong> with no market price.
+            </li>
+          )}
+          {undated === 0 ? null : (
+            <li>
+              <strong>{undated}</strong> with no date. Pick <em>Any age</em> to include them.
+            </li>
+          )}
+        </ul>
+      </Notice>
+
+      {unsaved ? <Notice tone="warn" title="Wait for your last price to save first." /> : null}
+      {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
+    </Sheet>
   )
 }

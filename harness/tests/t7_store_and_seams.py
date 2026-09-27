@@ -234,6 +234,7 @@ from pipeline import (  # noqa: E402
     selection,
     sendguard,
     shipping,
+    stockimages,
     tcgcsv,
     variant,
 )
@@ -599,6 +600,17 @@ def sent_image(payload: dict) -> bytes:
     return base64.b64decode(payload["image"])
 
 
+def back_of(box: int) -> dict:
+    """The aim at `box`'s last section, key and token: where a Move to box went before it
+    had to name a section (`docs/specs/subbox-capture.md` 1.5). A test that meant "the back
+    of the box" says so with this. Splat it into a body: `{"to_box": 7, **back_of(7)}`."""
+    inventory = Store().read().inventory
+    return {
+        "section": master.divider_key(inventory.dividers_of(box)[-1]),
+        "layout_token": inventory.layout_token(box),
+    }
+
+
 def fake_cid(seed) -> str:
     """A distinct, deterministic 64-hex name for a card a test invents (D172).
 
@@ -823,7 +835,7 @@ def identifications_for(cards) -> dict:
     }
 
 
-def seam_run(checks: Checks, cards, *, live=None, market=None, join=True):
+def seam_run(checks: Checks, cards, *, live=None, market=None, join=True, sections=None):
     """A joined run over `cards`, in whatever isolated home is current. Returns the run.
 
     Captures a photo per card through the real route first, so the store holds the same
@@ -832,10 +844,15 @@ def seam_run(checks: Checks, cards, *, live=None, market=None, join=True):
 
     `join=False` stops before the join and returns the run with an empty report, for the
     cases that need to put something in the run directory FIRST and watch the join refuse.
+
+    `sections` maps a box to its dividers, declared after the captures and before the join:
+    a divider typed ahead of the fill would take the captures (D10).
     """
     for box, index, *_ in cards:
         while Store().read().inventory.next_index(box) <= index:
             capture_server.do_capture(capture_payload(box))
+    for box, layout in (sections or {}).items():
+        capture_server.do_put_box(box, {"sections": layout})
     run_dir = runs.create("t7-seam")
     run_dir.write_identifications(identifications_for(cards))
     export = write_export(run_dir.path("export.csv"), live=live, market=market)
@@ -845,19 +862,20 @@ def seam_run(checks: Checks, cards, *, live=None, market=None, join=True):
     return runs.open_run(run_dir.directory), said
 
 
-def command(checks: Checks, *argv):
+def command(checks: Checks, *argv, exits: int = 0):
     """Run one `./pkmnscan` subcommand and return what it printed. Exit 0 or a failure.
 
     Through `cli/__main__.py:main` rather than by importing the command module, because the
     dispatch and the argument defaults are part of the seam: a flag whose default moved would
-    otherwise be invisible here.
+    otherwise be invisible here. `exits=1` is for an emit that adds nothing, which is
+    refused on both paths (DEBT35).
     """
     from cli import __main__ as entry
 
     with quiet() as said:
         code = entry.main(list(argv))
     text = said.getvalue()
-    checks.ok(code == 0, f"`pkmnscan {argv[0]}` exits 0", f"exit {code}\n{text}")
+    checks.ok(code == exits, f"`pkmnscan {argv[0]}` exits {exits}", f"exit {code}\n{text}")
     return text
 
 
@@ -2015,6 +2033,35 @@ def check_store_of_record(checks: Checks) -> None:
             Store().read().inventory.next_index(2),
             3,
             "and the store is what it was",
+        )
+
+
+def check_skus_photos_limit(checks: Checks) -> None:
+    """Round 2 review finding: `GET /skus/photos` (`do_skus_photos`, D298)
+    had no server-side bound of its own — only `Revenue.tsx:PHOTO_LOOKUP_CAP` bounded what
+    the client SENDS, and a hand-typed query string could ask for any number of SKUs.
+    `SKUS_PHOTOS_LIMIT` is that same value, kept in step by hand (no shared constant
+    reaches across the TS/Python boundary here, `ORDER_NAMES_LIMIT`'s own precedent has
+    the same gap).
+    """
+    checks.note("")
+    checks.note("SKU PHOTO LOOKUP CAP — GET /skus/photos (D298, round 2 review)")
+
+    with isolated_home():
+        at_limit = [f"sku-{n}" for n in range(capture_server.SKUS_PHOTOS_LIMIT)]
+        answer = answers(
+            checks,
+            lambda: capture_server.do_skus_photos(at_limit),
+            "exactly the limit answers",
+        )
+        if answer is not None:
+            checks.equal(answer["photos"], {}, "none of these SKUs exist, so none photograph")
+
+        refusal(
+            checks,
+            lambda: capture_server.do_skus_photos(at_limit + ["one-more"]),
+            "too_many_skus",
+            "one SKU over the limit refuses",
         )
 
 
@@ -3940,7 +3987,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             checks,
             lambda: capture_server.do_remove_card(3, 2, {"capture_id": "r2"}),
             "capture_id_mismatch",
-            "replaying the remove refuses — the neighbour that slid in is not the card "
+            "replaying the remove refuses — the neighbor that slid in is not the card "
             "the request describes",
         )
 
@@ -3964,7 +4011,7 @@ def check_remove_and_box_delete(checks: Checks) -> None:
             snapshot.inventory.cards["3/2"].sku = None
             snapshot.inventory.set_state("3/2", master.SOLD)
             snapshot.inventory.retire("3/4", "damaged")
-        move_result = capture_server.do_move_card(3, 3, {"capture_id": "r4", "to_box": 9})
+        move_result = capture_server.do_move_card(3, 3, {"capture_id": "r4", "to_box": 9, **back_of(9)})
         moved_to = move_result["to"]
         with Store().write() as snapshot:
             snapshot.inventory.set_state("3/1", master.IDENTIFIED)
@@ -6268,9 +6315,9 @@ def check_mark_sold(checks: Checks) -> None:
     )
     checks.equal(
         capture_server.SOLD_FIELDS,
-        ("undo",),
-        "and mark-sold's whole body is the undo flag: the position is in the path and the "
-        "state is a constant",
+        ("undo", "still_here"),
+        "and mark-sold's whole body is two flags, the undo and its \"still here\" form "
+        "(UN-7): the position is in the path and the state is a constant",
     )
 
     # ROUTING, and specifically that the sale does not shadow the two verbs already living
@@ -6349,6 +6396,12 @@ def check_mark_sold_releases_ledger(checks: Checks) -> None:
             "done before this card was ever marked sold",
         )
         checks.equal(
+            sold.get("order_effect"),
+            "none",
+            "the Opus review round's finding #4: a plain sale (never a reversal) also "
+            "answers 'none', so no screen may read this field as a claim about undo alone",
+        )
+        checks.equal(
             Store().read().ledger.recorded(key, "9191486").fulfilled,
             1,
             "and the ledger is untouched by the sale itself — only the undo direction reads it",
@@ -6362,6 +6415,13 @@ def check_mark_sold_releases_ledger(checks: Checks) -> None:
             {"key": key, "sku": "9191486"},
             "and the response NAMES the line it released, so a screen can say the order "
             "moved without a second request",
+        )
+        checks.equal(
+            back.get("order_effect"),
+            "released",
+            "finding #4: an OPEN order's own reversal answers 'released', never the "
+            "'filled_by_hand' a SHIPPED order's reversal answers — the two claims are "
+            "opposites and a screen must not read one when the field says the other",
         )
 
         after = Store().read().ledger.recorded(key, "9191486")
@@ -6392,6 +6452,558 @@ def check_mark_sold_releases_ledger(checks: Checks) -> None:
             "and reversing THAT sale releases nothing either — the ledger has already let "
             "this copy go, and a second release would be a fabricated write",
         )
+
+
+# ------------------------------------------------------------- undo, until it is built on
+
+
+def _demo_seed_module():
+    """`scripts/demo-seed.py`, loaded in this process. The filename carries a hyphen, so it
+    is loaded by path. In-process on purpose: no third child process for this harness."""
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[2] / "scripts" / "demo-seed.py"
+    spec = importlib.util.spec_from_file_location("demo_seed_for_t7", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def check_undo_until_built_on(checks: Checks) -> None:
+    """`docs/specs/undo.md` section 11, lane S: an undo has no clock and lasts until the
+    next step is built on it. The server decides "built on", and refuses with a sentence.
+
+    MUTATION-TESTED, one guard per block. Each block names the line whose removal turns it
+    red: UN-7's two `sale_built_on` refusals, UN-8's `owed_entries`, UN-11's side file and
+    its posting read, UN-14's history read, name check, newest check and divider check,
+    UN-2's gap, its end, its transplant refusal, and UN-4's `log_states`.
+
+    EVERY CALL AFTER A GUARD GOES THROUGH `answers` OR `refusal`, and every read of an answer
+    is guarded, for `last_event`'s reason: a mutation must turn a NAMED check red, never raise
+    a traceback that hides every check behind it.
+    """
+    checks.note("")
+    checks.note("UNDO UNTIL BUILT ON — docs/specs/undo.md section 11, lane S")
+    from dataclasses import asdict
+
+    def field(body, name):
+        return body.get(name) if isinstance(body, dict) else None
+
+    # ------------------------------------------------ UN-7: a sale whose photo is cleared
+    with isolated_home():
+        capture_server.do_capture(capture_payload(5, capture_id="un7-photo"))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("5/1", master.IDENTIFIED)
+            _bind(snapshot, "5/1", "9191486")
+        capture_server.do_mark_sold(5, 1, {})
+        capture_server.do_reclaim_box_photos(5, {"confirm": True})
+        refusal(
+            checks,
+            lambda: capture_server.do_mark_sold(5, 1, {"undo": True}),
+            "sale_built_on",
+            "UN-7: a sale whose photo was cleared is built on, and its undo refuses",
+        )
+        back = answers(
+            checks,
+            lambda: capture_server.do_mark_sold(5, 1, {"still_here": True}),
+            "\"This card is still here\" answers on a sale that is built on",
+        )
+        checks.equal(
+            (field(back, "state"), field(back, "still_here")),
+            (master.IDENTIFIED, True),
+            "and puts the card back to its earlier state anyway",
+        )
+        checks.equal(
+            field(back, "order_effect"),
+            "none",
+            "the Opus review round's finding #4: no order ever held this copy, so the field "
+            "that answers which of three things happened says so by name, not by a null "
+            "that also means 'a shipped order got hand-filled instead'",
+        )
+
+    # ---------------------------------------- UN-7: a sale whose order has shipped
+    with isolated_home():
+        capture_server.do_capture(capture_payload(4, capture_id="un7-order"))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("4/1", master.IDENTIFIED)
+            _bind(snapshot, "4/1", "9191486")
+            snapshot.ledger.ingest([
+                order_store.OrderRecord(
+                    source="TCGplayer",
+                    number="UN7-1",
+                    placed_at="2026-09-25T10:00:00.000+00:00",
+                    status="Ready to Ship",
+                    lines=[order_store.OrderLine(sku="9191486", quantity=1)],
+                )
+            ])
+        key = order_store.order_key("TCGplayer", "UN7-1")
+        target = [{"box": 4, "index": 1, "capture_id": "un7-order"}]
+        capture_server.do_order_pull(
+            {"source": "TCGplayer", "number": "UN7-1", "sku": "9191486", "targets": target}
+        )
+        with Store().write() as snapshot:
+            record = snapshot.ledger.get(key)
+            record.status = "Shipped - In Transit"
+        refusal(
+            checks,
+            lambda: capture_server.do_order_pull({"undo": True, "targets": target}),
+            "sale_built_on",
+            "UN-7: once the order ships, the pull's own undo refuses",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_mark_sold(4, 1, {"undo": True}),
+            "sale_built_on",
+            "and so does the card's own undo on #/inventory",
+        )
+        back = answers(
+            checks,
+            lambda: capture_server.do_mark_sold(4, 1, {"still_here": True}),
+            "\"still here\" answers on a shipped order's card",
+        )
+        line = Store().read().ledger.recorded(key, "9191486")
+        checks.equal(field(back, "state"), master.IDENTIFIED, "and puts the card back")
+        checks.equal(
+            (line.fulfilled, line.by_hand, "un7-order" in line.copies),
+            (1, 1, False),
+            "and the shipped order keeps its count (D212): the card's id comes off the line "
+            "as a hand-fill, so pulling this card again is not refused as a double shipment",
+        )
+        checks.equal(
+            field(back, "order_effect"),
+            "filled_by_hand",
+            "finding #4: the screen reads THIS field to say the order was hand-filled, "
+            "rather than the ambiguous null `order_released` also answers for 'no order'",
+        )
+
+    # ------------------------------------------------ UN-8: a retired card leaves Review
+    with isolated_home():
+        capture_server.do_capture(capture_payload(8))
+        with Store().write() as snapshot:
+            snapshot.review.entries["8/1"] = entry(8, 1)
+
+        def in_review() -> bool:
+            return any(row["position"] == "8/1" for row in capture_server.do_queues()["review"])
+
+        checks.ok(in_review(), "UN-8: a queued card is in Review")
+        capture_server.do_retire(8, 1, {"reason": master.RETIRE_REASONS[0]})
+        checks.ok(
+            not in_review(),
+            "UN-8: once retired, it leaves Review, and a reload does not bring it back",
+        )
+        capture_server.do_retire(8, 1, {"undo": True})
+        checks.ok(in_review(), "and the retire undo brings it back with no second write")
+
+    # ------------------------------------------------ UN-11: the clear outlives the toast
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers = {"2000": corpus.Answer(value="4.50"), "2001": corpus.Answer(value="1.25")}
+        book.write()
+        cleared = pipeline_routes.do_pricing_clear({})
+        checks.equal(cleared["count"], 2, "UN-11: a clear removes two typed prices")
+        checks.equal(
+            (pipeline_routes.do_pricing_corpus()["last_clear"] or {}).get("count"),
+            2,
+            "and the server keeps it, so a reload still offers the undo",
+        )
+        back = answers(
+            checks,
+            lambda: pipeline_routes.do_pricing_restore({"last_clear": True}),
+            "the stored clear answers a restore",
+        )
+        checks.equal(
+            sorted(field(back, "restored") or []), ["2000", "2001"], "and restores both"
+        )
+        checks.equal(
+            pipeline_routes.do_pricing_corpus()["last_clear"],
+            None,
+            "and once restored there is nothing left to undo",
+        )
+        pipeline_routes.do_pricing_clear({})
+        with Store().write() as snapshot:
+            snapshot.postings.record(sku="2000", price="0.49", source="emit")
+        checks.equal(
+            pipeline_routes.do_pricing_corpus()["last_clear"],
+            None,
+            "UN-11: a send that carried a cleared SKU builds on the clear",
+        )
+        try:
+            pipeline_routes.do_pricing_restore({"last_clear": True})
+        except pipeline_routes.PipelineRefusal as caught:
+            checks.equal(caught.code, "clear_built_on", "and the restore refuses it")
+        else:
+            checks.ok(False, "and the restore refuses it", "did not refuse")
+
+    # ------------------------------------------------ a restore takes back only what was cleared
+    # `POST /pricing/restore` once stored any value and date for a SKU the corpus did not hold,
+    # so a hold with a forged `before.at` could arrive through it. It now accepts only the rows
+    # the server's own stored clear holds, verbatim, and refuses the whole press otherwise.
+    with isolated_home():
+        first = "2026-09-01T10:00:00+00:00"
+        book = corpus.Corpus()
+        book.answers = {"2000": corpus.Answer(value="4.50", at=first), "2001": corpus.Answer(value="1.25", at=first)}
+        book.write()
+        taken = pipeline_routes.do_pricing_clear({})["cleared"]
+
+        def refused(sent, label):
+            try:
+                pipeline_routes.do_pricing_restore({"answers": sent})
+            except pipeline_routes.PipelineRefusal as caught:
+                checks.equal(caught.code, "restore_not_cleared", label)
+            else:
+                checks.ok(False, label, "did not refuse")
+            checks.equal(sorted(corpus.Corpus.read().answers), [], f"{label}: and it wrote nothing")
+
+        refused({"2000": {"value": "4.50", "at": "2020-01-01T00:00:00+00:00"}}, "a forged date is refused")
+        refused(
+            {"2000": {"value": {"withheld": "bullish", "before": {"value": "4.50", "channel": "price", "at": "2020-01-01T00:00:00+00:00"}}}},
+            "a hold is refused",
+        )
+        refused({"2999": {"value": "9.99"}}, "a SKU the clear did not take is refused")
+        refused({**taken, "2999": {"value": "9.99"}}, "one foreign row refuses the whole press")
+        back = pipeline_routes.do_pricing_restore({"answers": taken})
+        checks.equal(sorted(back["restored"]), ["2000", "2001"], "the clear's own rows still come back")
+        checks.equal(corpus.Corpus.read().answers["2000"].at, first, "verbatim, with their first date")
+
+    # ------------------------------------------------ every clear keeps its undo, until built on
+    # The owner's standing undo rule, "until it's built on". A second clear once replaced the
+    # first, so the first clear's Undo refused while its toast was still up. The server keeps
+    # every clear not yet restored, and each restore names its own.
+    with isolated_home():
+        first = "2026-09-01T10:00:00+00:00"
+        book = corpus.Corpus()
+        book.answers = {"3000": corpus.Answer(value="4.50", at=first), "3001": corpus.Answer(value="1.25", at=first)}
+        book.write()
+        one = pipeline_routes.do_pricing_clear({"skus": ["3000"]})
+        two = pipeline_routes.do_pricing_clear({"skus": ["3001"]})
+        checks.ok(one.get("clear_id") and two.get("clear_id") and one["clear_id"] != two["clear_id"], "two clears, two ids")
+        checks.equal(
+            (pipeline_routes.do_pricing_corpus()["last_clear"] or {}).get("id"),
+            two["clear_id"],
+            "the Restore notice offers the newest clear",
+        )
+        checks.equal(
+            [row["id"] for row in pipeline_routes.do_pricing_corpus()["clears"]],
+            [two["clear_id"], one["clear_id"]],
+            "the Restore notice lists every kept clear, newest first (\"Anytime, from a history\")",
+        )
+        older = answers(
+            checks,
+            lambda: pipeline_routes.do_pricing_restore({"clear": one["clear_id"]}),
+            "the older clear's Undo answers after a newer clear",
+        )
+        checks.equal(field(older, "restored"), ["3000"], "the older clear's Undo still works after a newer clear")
+        checks.equal([row["id"] for row in corpus.read_clears()], [two["clear_id"]], "and only that clear is removed")
+        newer = answers(
+            checks,
+            lambda: pipeline_routes.do_pricing_restore({"answers": two["cleared"], "clear": two["clear_id"]}),
+            "the newer clear's Undo answers",
+        )
+        checks.equal(field(newer, "restored"), ["3001"], "then the newer one comes back too")
+        checks.equal(corpus.read_clears(), [], "and no clear is left kept")
+        back_first = corpus.Corpus.read().answers.get("3000")
+        checks.equal(back_first and back_first.at, first, "each verbatim, with its first date")
+
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers = {"3100": corpus.Answer(value="4.50"), "3101": corpus.Answer(value="1.25")}
+        book.write()
+        one = pipeline_routes.do_pricing_clear({"skus": ["3100"]})
+        pipeline_routes.do_pricing_clear({"skus": ["3101"]})
+        with Store().write() as snapshot:
+            snapshot.postings.record(sku="3100", price="0.49", source="emit")
+        try:
+            pipeline_routes.do_pricing_restore({"answers": one["cleared"], "clear": one["clear_id"]})
+        except pipeline_routes.PipelineRefusal as caught:
+            checks.equal(caught.code, "clear_built_on", "a clear a send has built on refuses its Undo")
+        else:
+            checks.ok(False, "a clear a send has built on refuses its Undo", "did not refuse")
+        checks.ok("3100" not in corpus.Corpus.read().answers, "and writes nothing")
+        checks.equal(
+            [row["count"] for row in pipeline_routes.do_pricing_corpus()["clears"]],
+            [1],
+            "a clear a send has built on is not offered, and the other one is",
+        )
+        checks.equal(
+            sorted(pipeline_routes.do_pricing_restore({"last_clear": True})["restored"]),
+            ["3101"],
+            "the Restore notice skips the built-on clear and offers the newest it can still undo",
+        )
+
+    # ------------------------------------------------ an older clear never undoes a newer one
+    # Clear A takes X at 5.00. The owner types 6.00. Clear B takes X at 6.00 and Y. Restoring A
+    # first once put 5.00 back, so B's restore skipped X and the 6.00 was lost. A newer kept
+    # clear holds the later answer, so A skips X and B brings back 6.00.
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers = {"4000": corpus.Answer(value="5.00")}
+        book.write()
+        a = pipeline_routes.do_pricing_clear({"skus": ["4000"]})
+        book = corpus.Corpus.read()
+        book.answers["4000"] = corpus.Answer(value="6.00")
+        book.answers["4001"] = corpus.Answer(value="3.00")
+        book.write()
+        b = pipeline_routes.do_pricing_clear({"skus": ["4000", "4001"]})
+        first = answers(checks, lambda: pipeline_routes.do_pricing_restore({"clear": a["clear_id"]}), "clear A's restore answers")
+        checks.equal(field(first, "skipped"), ["4000"], "A skips X, because the newer clear B holds X's later answer")
+        checks.ok("4000" not in corpus.Corpus.read().answers, "and A does not put 5.00 back")
+        checks.equal([row["id"] for row in corpus.read_clears()], [b["clear_id"]], "A is done: its X is B's to bring back")
+        second = answers(checks, lambda: pipeline_routes.do_pricing_restore({"clear": b["clear_id"]}), "clear B's restore answers")
+        checks.equal(sorted(field(second, "restored") or []), ["4000", "4001"], "B brings back X and Y")
+        back = corpus.Corpus.read().answers.get("4000")
+        checks.equal(back and back.value, "6.00", "and X is 6.00, the later answer, never the 5.00 A took")
+
+    # ------------------------------------------------ UN-14: a move, until either box changes
+    with isolated_home():
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        before = Store().read().inventory
+        mover = before.cards["6/1"]
+        neighbor = asdict(before.cards["6/2"])
+        stayer = asdict(before.cards["7/1"])
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, **back_of(7)})
+        undone = answers(
+            checks,
+            lambda: capture_server.do_move_card(6, 1, {"undo": True}),
+            "UN-14: the move's undo answers",
+        )
+        after = Store().read().inventory
+        home = after.cards.get("6/1")
+        checks.equal(
+            (field(undone, "to"), field(undone, "moved"), getattr(home, "state", None),
+             getattr(home, "capture_id", None)),
+            ("6/1", "7/2", mover.state, mover.capture_id),
+            "and puts the card back at its own index",
+        )
+        checks.ok(
+            "7/2" not in after.cards
+            and asdict(after.cards["6/2"]) == neighbor
+            and asdict(after.cards["7/1"]) == stayer,
+            "and the transplant is gone, and nothing else in either box moved (D118)",
+        )
+        checks.equal(
+            (getattr(home, "order", None), getattr(home, "order_key", None) is not None),
+            (mover.order, True),
+            "and the card's order key comes back too (D265), so it stands where it stood",
+        )
+        checks.equal(
+            (getattr(home, "cid", None), getattr(home, "moved_from", "unset")),
+            (mover.cid, None),
+            "the card wears its own name again, and is no transplant",
+        )
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, **back_of(7)})
+        capture_server.do_mark_sold(6, 2, {})
+        refusal(
+            checks,
+            lambda: capture_server.do_move_card(6, 1, {"undo": True}),
+            "move_built_on",
+            "UN-14: a sale in the old box builds on the move, and its undo refuses",
+        )
+
+    # ---------------------- UN-14: the store's own guards, under the route's history read
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, **back_of(7)})
+        capture_server.do_capture(capture_payload(7))
+        with Store().write() as snapshot:
+            checks.raises(
+                master.CardDeparted,
+                lambda: snapshot.inventory.unmove_card("6/1"),
+                "UN-14: the store refuses a move undo once the transplant is not the newest",
+            )
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, **back_of(7)})
+        capture_server.do_open_section(7, {})
+        refusal(
+            checks,
+            lambda: capture_server.do_move_card(6, 1, {"undo": True}),
+            "move_built_on",
+            "UN-14: a divider put in behind the transplant builds on the move",
+        )
+
+    # ---------------- UN-14: a tombstone written before the key suffix still undoes
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, **back_of(7)})
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["6/1"].cid = f"{master.MOVED_CID_PREFIX}{mover.cid}"
+        undone = answers(
+            checks,
+            lambda: capture_server.do_move_card(6, 1, {"undo": True}),
+            "UN-14: a tombstone in the older `moved:<name>` form still undoes",
+        )
+        checks.equal(field(undone, "to"), "6/1", "and the card is back home")
+
+    # ------------------ D83's chain: a move back, and a move on, write distinct tombstones
+    with isolated_home():
+        capture_server.do_capture(capture_payload(6))
+        capture_server.do_capture(capture_payload(7))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, **back_of(7)})
+        back = answers(
+            checks,
+            lambda: capture_server.do_move_card(7, 2, {"capture_id": mover.capture_id, "to_box": 6, **back_of(6)}),
+            "a transplant moves back to its first box without a UNIQUE clash on its name",
+        )
+        onward = answers(
+            checks,
+            lambda: capture_server.do_move_card(
+                6, 2, {"capture_id": mover.capture_id, "to_box": 8, **back_of(8)}
+            ),
+            "and on to a third box",
+        )
+        cards = Store().read().inventory.cards
+        tombstones = [cards[key].cid for key in ("6/1", "7/2", "6/2") if key in cards]
+        checks.equal(
+            (field(back, "to"), field(onward, "to"), getattr(cards.get("8/1"), "cid", None),
+             len(set(tombstones))),
+            ("6/2", "8/1", mover.cid, 3),
+            "and the card keeps its own name (D172) while three tombstones stay distinct",
+        )
+
+    # ------------------------------------------------ UN-2: the sitting, off the store
+    ts_gap = re.search(
+        r"GAP_MINUTES = (\d+)",
+        (Path(__file__).resolve().parents[2] / "app" / "src" / "storeHistory.ts").read_text(),
+    )
+    checks.equal(
+        int(ts_gap.group(1)) if ts_gap else None,
+        capture_server.SITTING_GAP_MINUTES,
+        "UN-2: the server's sitting gap is the screen's own GAP_MINUTES",
+    )
+    with isolated_home():
+        for _ in range(3):
+            capture_server.do_capture(capture_payload(9))
+        sitting = capture_server.do_capture_sitting()
+        checks.equal(
+            (sitting["open"], [row["key"] for row in sitting["cards"]]),
+            (True, ["9/1", "9/2", "9/3"]),
+            "UN-2: a reload reads the sitting back off the store, oldest first",
+        )
+        stale = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        with Store().write() as snapshot:
+            for key in ("9/1", "9/2"):
+                snapshot.inventory.cards[key].captured_at = stale
+        checks.equal(
+            [row["key"] for row in capture_server.do_capture_sitting()["cards"]],
+            ["9/3"],
+            "and a gap longer than the sitting's own ends the older sitting",
+        )
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["9/3"].captured_at = stale
+        checks.equal(
+            (lambda body: (body["open"], body["cards"]))(capture_server.do_capture_sitting()),
+            (False, []),
+            "and once the newest capture is older than the gap, the sitting has ended",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_delete_card(9, 3),
+            "capture_built_on",
+            "UN-2: once its sitting has ended, the capture undo refuses, by the same rule",
+        )
+        checks.ok(
+            "9/3" in Store().read().inventory.cards,
+            "and the refused undo deleted nothing",
+        )
+        naive = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+        with Store().write() as snapshot:
+            card = snapshot.inventory.cards.get("9/3")
+            if card is not None:
+                card.captured_at = naive
+        sitting = answers(
+            checks,
+            capture_server.do_capture_sitting,
+            "UN-2: a captured_at with no zone reads as UTC and never raises",
+        )
+        checks.equal(field(sitting, "open"), True, "and it counts as the open sitting")
+
+    # ---------------- UN-2: a moved card is not a capture, in the strip or in the undo
+    with isolated_home():
+        for _ in range(2):
+            capture_server.do_capture(capture_payload(6))
+        mover = Store().read().inventory.cards["6/1"]
+        capture_server.do_move_card(6, 1, {"capture_id": mover.capture_id, "to_box": 7, **back_of(7)})
+        checks.equal(
+            [row["key"] for row in capture_server.do_capture_sitting()["cards"]],
+            ["6/2"],
+            "UN-2: the sitting leaves out the tombstone and the transplant",
+        )
+        said = _refusal_text(lambda: capture_server.do_delete_card(7, 1))
+        checks.ok(
+            said is not None and said[0] == "capture_built_on" and "moved here" in said[1],
+            "and the capture undo refuses the transplant AS A MOVED CARD, rather than delete "
+            "it: its own guard, not only the sitting's",
+            f"refusal was: {said}",
+        )
+        checks.ok(
+            "7/1" in Store().read().inventory.cards
+            and photos.path(mover.cid, files.home()).is_file(),
+            "and the moved card and its photograph are both still there",
+        )
+
+    # ------------------------------------ UN-4, and every reversal, on a fresh demo seed
+    with isolated_home():
+        seed = _demo_seed_module()
+        with quiet():
+            seed.build_store(force=True)
+        cards = sorted(Store().read().inventory.cards.values(), key=lambda c: c.key)
+        sold = [c for c in cards if c.state == master.SOLD]
+        retired = [c for c in cards if c.state == master.RETIRED]
+        moved = [c for c in cards if c.state == master.MOVED]
+        trips = 0
+        for card in sold:
+            back = answers(
+                checks,
+                lambda card=card: capture_server.do_mark_sold(card.box, card.index, {"undo": True}),
+                f"UN-4: the demo's sold {card.key} undoes",
+            )
+            capture_server.do_mark_sold(card.box, card.index, {}) if back else None
+            trips += field(back, "state") == master.IDENTIFIED
+        for card in retired:
+            back = answers(
+                checks,
+                lambda card=card: capture_server.do_retire(card.box, card.index, {"undo": True}),
+                f"UN-4: the demo's retired {card.key} undoes",
+            )
+            if back:
+                capture_server.do_retire(card.box, card.index, {"reason": card.retire_reason})
+            trips += field(back, "state") == master.IDENTIFIED
+        checks.equal(
+            (trips, len(sold) > 0, len(retired) > 0),
+            (len(sold) + len(retired), True, True),
+            "UN-4: every sold and retired card on a fresh demo seed undoes and redoes, "
+            "because the seed logs the state lines a real card logs",
+        )
+        refusal(
+            checks,
+            lambda: capture_server.do_move_card(moved[0].box, moved[0].index, {"undo": True}),
+            "move_built_on",
+            "the demo's moved card has no real transplant, so its undo refuses and deletes "
+            "no other card",
+        )
+        with Store().write() as snapshot:
+            checks.raises(
+                master.CardNotFound,
+                lambda: snapshot.inventory.unmove_card(moved[0].key),
+                "and the store's own name check refuses it too, under the route's history read",
+            )
+        live = next(c for c in cards if c.state == master.IDENTIFIED and c.box == 1)
+        capture_server.do_move_card(1, live.index, {"capture_id": live.capture_id, "to_box": 2, **back_of(2)})
+        undone = answers(
+            checks,
+            lambda: capture_server.do_move_card(1, live.index, {"undo": True}),
+            "a fresh move on the demo undoes",
+        )
+        checks.equal(field(undone, "to"), live.key, "and the card is back at its own key")
 
 
 # ---------------------------------------------------------------------------------- history
@@ -8323,12 +8935,124 @@ def check_inventory_filter_facets(checks: Checks) -> None:
             "active facet is ANDed, not the last one applied winning",
         )
 
+        # --- S3, THE OPUS REVIEW, 2026-09-25: A DIMENSION IS NEVER COUNTED UNDER ITS OWN
+        # FILTER. `_card_facets` builds `sets_filters`/`rarities_filters` by EXCLUDING the
+        # dimension's own key (`_other("game", "set_name")`, `_other("game", "rarity")`) —
+        # every earlier assertion in this function reads `facets["sets"]`/`["rarities"]`
+        # only with NO filter active at all, so a mutant that dropped that exclusion (making
+        # the set menu narrow itself to whatever set is picked) went undetected: "picking
+        # rarity first and set second gives the identical counts as the reverse" is a claim
+        # this function had never once put a live `set_name`/`rarity` filter beside a
+        # `facets` read to test.
+        set_filtered = capture_server.do_boxes(game="riftbound", set_name="Unleashed")
+        checks.equal(
+            {row["set"]: row["count"] for row in set_filtered["facets"]["sets"]["riftbound"]},
+            {"Unleashed": 1, None: 1},
+            "with `set=Unleashed` ACTIVE, the SET menu still lists both sets — a dimension "
+            "never narrows its own menu, or picking one set would erase every other choice "
+            "from the dropdown that offered it",
+        )
+        checks.equal(
+            {row["rarity"]: row["count"] for row in set_filtered["facets"]["rarities"]["riftbound"]},
+            {"Rare": 1},
+            "and the RARITY menu still follows the set filter as an ORDINARY other-facet — "
+            "narrowed to only `set=Unleashed`'s own card the same way `matches` is, "
+            "dropping the unclassified card's None-rarity bucket because IT carries no "
+            "set at all — an other-facet obeys every active filter but its own",
+        )
+        rarity_filtered = capture_server.do_boxes(game="riftbound", rarity="Rare")
+        checks.equal(
+            {row["rarity"]: row["count"] for row in rarity_filtered["facets"]["rarities"]["riftbound"]},
+            {"Rare": 1, None: 1},
+            "and the reverse: with `rarity=Rare` ACTIVE, the RARITY menu still lists both "
+            "rarities — the same dimension-never-counts-itself rule from the other side",
+        )
+        checks.equal(
+            {row["set"]: row["count"] for row in rarity_filtered["facets"]["sets"]["riftbound"]},
+            {"Unleashed": 1},
+            "while the SET menu (an ordinary other-facet under `rarity=Rare`) narrows to "
+            "just the classified card — the null-set card is Rare too but has no `set` to "
+            "list, so it drops out of the SET bucket the same way any other-facet narrows",
+        )
+
         # --- clearing the filter restores everything ------------------------------------
         cleared = capture_server.do_boxes()
         checks.ok(
             all("matches" not in row for row in cleared["boxes"]),
             "and calling with no filter keywords at all returns to the unfiltered shape — "
             "the same route, the same rows, nothing left over from the last question asked",
+        )
+
+        # --- UX-210: hide_sold narrows both `matches` and `facets`, ANY ORDER of the OTHER
+        # active filters, the owner's own measured shape ("9 matches" against a 7-row walk,
+        # a games total of 122 that was every card ever captured). Three more Riftbound
+        # cards in box 1, one departed by each of the three doors, added here rather than
+        # in the setup above so the first half of this test stays the ground D213 was
+        # originally measured against.
+        #
+        # F4, round-3 Opus review, 2026-09-25: SOLD ALONE IS NOT ENOUGH. D132 hides every
+        # DEPARTED card, not sold alone, and the fixture before this fix carried only a
+        # SOLD card — a mutant narrowing S3's fix back to `state == master.SOLD` (instead
+        # of `state in master.TERMINAL_STATES`) stayed GREEN, because a retired or moved
+        # card was never in this fixture to leak through. `rift_d` (RETIRED) and `rift_e`
+        # (MOVED) are that mutant's own counter-example: both carry the SAME set/rarity as
+        # `rift_c`, so every assertion below that stayed unchanged by adding `rift_c` alone
+        # now ALSO has to stay unchanged with two more departed cards added, or the mutant
+        # shows through as a wrong number.
+        with Store().write() as snapshot:
+            rift_c, _ = snapshot.inventory.allocate_capture(1, game="riftbound", cid=fake_cid("facet-rift-sold"))
+            snapshot.inventory.cards[rift_c.key].set_name = "Unleashed"
+            snapshot.inventory.cards[rift_c.key].rarity = "Rare"
+            snapshot.inventory.set_state(rift_c.key, master.SOLD)
+            rift_d, _ = snapshot.inventory.allocate_capture(1, game="riftbound", cid=fake_cid("facet-rift-retired"))
+            snapshot.inventory.cards[rift_d.key].set_name = "Unleashed"
+            snapshot.inventory.cards[rift_d.key].rarity = "Rare"
+            snapshot.inventory.set_state(rift_d.key, master.RETIRED)
+            rift_e, _ = snapshot.inventory.allocate_capture(1, game="riftbound", cid=fake_cid("facet-rift-moved"))
+            snapshot.inventory.cards[rift_e.key].set_name = "Unleashed"
+            snapshot.inventory.cards[rift_e.key].rarity = "Rare"
+            snapshot.inventory.set_state(rift_e.key, master.MOVED)
+
+        no_hide = capture_server.do_boxes(game="riftbound")
+        checks.equal(
+            {row["box"]: row["matches"] for row in no_hide["boxes"]},
+            {1: 5, 2: 0},
+            "before this fix's toggle: game=riftbound counts the sold, retired AND moved "
+            "cards too — a departed card is still on hand as far as a bare game filter is "
+            "concerned",
+        )
+        with_hide = capture_server.do_boxes(game="riftbound", hide_sold=True)
+        checks.equal(
+            {row["box"]: row["matches"] for row in with_hide["boxes"]},
+            {1: 2, 2: 0},
+            "and with hide_sold=True EVERY departed copy drops out of `matches` — sold, "
+            "retired AND moved, not sold alone — while `cards`/`sold` (D58's own promise) "
+            "are untouched",
+        )
+        checks.equal(
+            capture_server.do_boxes()["boxes"][0]["sold"],
+            1,
+            "and the plain `sold` count on the unfiltered row still counts only the sold "
+            "one — hide_sold narrows `matches` and `facets` alone, never the box's own "
+            "census, and retired/moved have their own separate counters",
+        )
+        hidden_facets = capture_server.do_boxes(hide_sold=True)["facets"]
+        rift_games = {row["game"]: row["count"] for row in hidden_facets["games"]}
+        checks.equal(
+            rift_games["riftbound"], 2,
+            "and the GAMES facet drops every departed card — sold, retired and moved — "
+            "before this fix it summed every card ever captured regardless of Hide sold, "
+            "which is the owner's own 'Pokémon (37) + Riftbound (85) = 122, every card "
+            "ever captured' measurement",
+        )
+        combined_hide = capture_server.do_boxes(rarity="Rare", hide_sold=True)
+        checks.equal(
+            {row["game"]: row["count"] for row in combined_hide["facets"]["games"]},
+            {"riftbound": 1},
+            "filters compose in ANY ORDER: rarity=Rare picked before hide_sold gives the "
+            "identical games count as hide_sold picked first — one live Rare Riftbound "
+            "card, and the sold, retired AND moved Rare ones all excluded — a "
+            "`state == SOLD` mutant would count `rift_d`/`rift_e` here too and answer 3",
         )
 
         # --- the wire itself: `?set=` (blank) means the unclassified bucket, not "unset" --
@@ -8475,9 +9199,10 @@ def check_box_routes_and_search(checks: Checks) -> None:
             "not the registry, so no box captured before D20 is invisible",
         ):
             checks.equal(
-                [listed[8]["state"], listed[8]["capacity"], listed[8]["sections"]],
-                [master.BOX_OPEN, None, []],
-                "and it renders as open, uncapped and undeclared, which is what it is",
+                ["state" in listed[8], "capacity" in listed[8], listed[8]["sections"]],
+                [False, False, []],
+                "and it renders undeclared, with no lid and no capacity: a box has neither "
+                "since `D299`",
             )
             checks.equal(
                 [listed[8]["cards"], listed[8]["fill"], listed[8]["next_index"]],
@@ -8518,8 +9243,7 @@ def check_box_routes_and_search(checks: Checks) -> None:
             checks,
             lambda: capture_server.do_put_box(9, {"capacity": 250}),
             "field_not_settable",
-            "and PUT refuses `capacity` for the same reason — it is FROZEN at the seal, "
-            "never typed",
+            "and PUT refuses `capacity`: a box has none (`D299`)",
         )
         refusal(
             checks,
@@ -8527,13 +9251,6 @@ def check_box_routes_and_search(checks: Checks) -> None:
             "field_not_settable",
             "and refuses `box`: a body that could change a box NUMBER would be a renumber, "
             "which D10 forbids outright",
-        )
-        refusal(
-            checks,
-            lambda: capture_server.do_put_box(9, {"state": "sealed"}),
-            "box_state_invalid",
-            "a state outside open/closed refuses in its OWN code, not as field_not_settable "
-            "— the field is settable and the value is not one of the two",
         )
         refusal(
             checks,
@@ -8549,75 +9266,25 @@ def check_box_routes_and_search(checks: Checks) -> None:
             "so refusing here would put a dead rename control on a live row",
         )
 
-        # --- sealing freezes capacity at the fill ---------------------------------------
-        sealed = capture_server.do_put_box(9, {"state": master.BOX_CLOSED})
-        checks.equal(
-            [sealed["capacity"], sealed["fill"], sealed["state"]],
-            [0, 0, master.BOX_CLOSED],
-            "sealing an empty box freezes capacity at its fill, which is zero",
+        # --- NO SEAL (`D299`, the owner's ruling of 2026-09-25) ----------
+        # "what was the point of sealed boxes? lets kill this". Red before the removal: the
+        # PUT sealed box 8, and the capture into it was refused `box_closed`.
+        refusal(
+            checks,
+            lambda: capture_server.do_put_box(8, {"state": "closed"}),
+            "field_not_settable",
+            "a box has no lid: PUT refuses `state` as a field it does not have",
         )
-        reopened = capture_server.do_put_box(9, {"state": master.BOX_OPEN})
-        checks.equal(
-            reopened["capacity"],
-            None,
-            "and re-opening drops capacity rather than leaving a stale number standing",
+        status, _ = capture_server.do_capture(capture_payload(8))
+        checks.ok(
+            int(status) in (200, 201),
+            "and a capture into any box is taken: there is no sealed box to refuse it",
+            f"status {status}",
         )
-        filled = capture_server.do_put_box(8, {"state": master.BOX_CLOSED})
-        checks.equal(
-            [filled["capacity"], filled["fill"]],
-            [3, 3],
-            "sealing a filled box freezes capacity at the cards it holds — the difference "
-            "between D20's '#40 of 250 · 16% in' and a denominator that keeps growing",
+        checks.ok(
+            not hasattr(master, "BoxClosed") and not hasattr(master.Inventory, "close_box"),
+            "and the store has no seal left to reach: no `BoxClosed`, no `close_box`",
         )
-        # BOTH SEALED-BOX REFUSALS GO OVER A SOCKET, and they are the only cases in this
-        # section that have to. `store/master.py` raises `BoxClosed` and `_dispatch` is what
-        # turns it into a code, so an in-process call asserts the store's exception and
-        # proves nothing about what a client is told — which is the half that reaches a
-        # screen. Asserted here as well, since a route that stopped raising would answer 500.
-        checks.raises(
-            master.BoxClosed,
-            lambda: capture_server.do_put_box(8, {"state": master.BOX_CLOSED}),
-            "sealing a sealed box raises rather than restamping it — the alternative "
-            "reading is that the call re-froze capacity at a new fill",
-        )
-        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
-        port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
-        try:
-            status, body, _ = request(
-                port, "PUT", "/boxes/8", payload={"state": master.BOX_CLOSED}
-            )
-            checks.equal(status, 409, "and on the wire a second seal is a 409, not a 500")
-            checks.equal(
-                error_code(body),
-                "box_closed",
-                "answering in its own code: the request was well-formed and lost a race "
-                "with the lid",
-            )
-
-            status, body, _ = request(port, "POST", "/capture", payload=capture_payload(8))
-            checks.equal(status, 409, "a capture into a sealed box is refused the same way")
-            checks.equal(
-                error_code(body),
-                "box_closed",
-                "and in the same code — one more card would falsify every fraction already "
-                "printed off that box",
-            )
-            after = {row["box"]: row for row in capture_server.do_boxes()["boxes"]}
-            checks.equal(
-                [
-                    after.get(8, {}).get("capacity"),
-                    after.get(8, {}).get("fill"),
-                    after.get(9, {}).get("capacity", "missing"),
-                ],
-                [3, 3, None],
-                "AND NEITHER REFUSAL CHANGED ANYTHING: box 8 is still sealed at 3 with no "
-                "index burned, and box 9 is still uncapped",
-            )
-        finally:
-            httpd.shutdown()
-            httpd.server_close()
 
     # --- GET /search: D7's SKU -> positions map, finally served to a screen -------------
     with isolated_home():
@@ -8644,6 +9311,42 @@ def check_box_routes_and_search(checks: Checks) -> None:
                 f"a search for {blank!r} refuses as query_required — clearing the box is "
                 "not a request for every card in the store",
             )
+
+        # F6, round-3 Opus review, 2026-09-25: NO QUERY MAY 500. A NUL byte truncates the
+        # C string sqlite3's driver binds while Python's own `len()` still sees the whole
+        # thing, and the mismatch surfaced as an uncaught `OperationalError` from deep
+        # inside `_fts_query`'s own MATCH — `q=%00` and `q=a%00b` both 500'd. Asserted
+        # in-process first (the refusal itself), then over a real socket (F6's own report
+        # named the WIRE route, `GET /search?q=%00`) so a future regression cannot hide
+        # behind an in-process call that never reaches the real query-string decode.
+        for nul_query in ("\x00", "a\x00b"):
+            refusal(
+                checks,
+                lambda q=nul_query: capture_server.do_search(q),
+                "query_invalid",
+                f"a search for {nul_query!r} refuses as query_invalid rather than 500ing",
+            )
+
+        # AND OVER THE REAL SOCKET, the shape F6's own report named — a query STRING with
+        # a percent-encoded NUL, decoded by `parse_qs` the same way a browser's own request
+        # would arrive.
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for wire_query in ("/search?q=%00", "/search?q=a%00b"):
+                status, body, _ = request(port, "GET", wire_query)
+                checks.equal(
+                    status, 400, f"GET {wire_query} answers 400, never 500",
+                )
+                checks.equal(
+                    error_code(body), "query_invalid",
+                    f"and GET {wire_query} names the refusal",
+                )
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
 
         found = capture_server.do_search("eiscue")["groups"]
         if checks.equal(
@@ -8807,9 +9510,17 @@ def check_search_fts5(checks: Checks) -> None:
     every existing assertion there (`eiscue`, `japanese`, `044/167`, the D67 mixed-number
     case) passes unmodified against this rewrite, which is what proves the CANDIDATE SET
     changed and the ANSWER did not. This function proves the three properties that are new:
-    multi-word any-order matching, prefix matching from a word's start (and the accepted
-    loss of mid-word matching), and that the index tracks every write shape the ordinary
-    application makes, plus the migration that seeds it for a store that predates it.
+    multi-word any-order matching, prefix matching from a word's start, and that the index
+    tracks every write shape the ordinary application makes, plus the migration that seeds
+    it for a store that predates it.
+
+    MID-WORD MATCHING WAS AN ACCEPTED LOSS AND IS NOT ONE ANY MORE (the owner's ruling,
+    2026-09-25: "Add mid-word search"). D271's one matcher wins over this item's own
+    prefix-only trade-off. `server/capture_server.py:_fts_substring_candidates` is a
+    fourth candidate source, a plain SQL `LIKE '%term%'` scan, measured first on a
+    synthetic 2,500-card store before it shipped
+    (`docs/decisions/D271-one-forgiving-search-matcher.md` carries the numbers). The
+    `midword` case below now asserts the FOUND direction.
 
     ORDINARY WRITES EXERCISE `cards_fts_ad` THEN `cards_fts_ai`, NEVER `cards_fts_au` —
     THIS WAS NOT WHAT store/db.py's OWN COMMENT NEXT TO THE THIRD TRIGGER PREDICTS, AND IT
@@ -8848,19 +9559,20 @@ def check_search_fts5(checks: Checks) -> None:
             f"forward={forward!r} backward={backward!r}",
         )
 
-        # --- prefix from a word's start, and the accepted loss of mid-word matching ---
+        # --- prefix from a word's start, and mid-word matching (MID-WORD, 2026-09-25) ---
         prefix = [g["sku"] for g in capture_server.do_search("chariz")["groups"]]
         midword = [g["sku"] for g in capture_server.do_search("izard")["groups"]]
         checks.ok(
             bool(prefix),
             "a partial word typed from its start still hits ('chariz' finds Charizard)",
         )
-        checks.equal(
-            midword, [],
-            "and a mid-word fragment does NOT ('izard' does not find Charizard) — the "
-            "owner was told mid-word matching is the cost of FTS5 over LIKE and took it "
-            "explicitly (docs/specs/store-scaling/08-search-fts5.md); a future session "
-            "'fixing' this is reopening a settled trade-off, not closing a bug",
+        checks.ok(
+            bool(midword) and midword == prefix,
+            "and a mid-word fragment DOES too ('izard' finds Charizard) — the owner "
+            "reversed the earlier trade-off ('Add mid-word search'); measured first on a "
+            "synthetic 2,500-card store, never this repo's own, before it shipped "
+            "(docs/decisions/D271-one-forgiving-search-matcher.md)",
+            f"midword={midword!r} prefix={prefix!r}",
         )
 
         # --- the index tracks capture, sale, box moves and rename -----------------------
@@ -9804,12 +10516,12 @@ def check_place_neighbors(checks: Checks) -> None:
     THE DEGRADE CASE IS THE ONE THAT MATTERS, and it is this section's half of the
     corrupt-record case `check_server_routes` arms. "Between Mantine and Thievul" is a
     position claim somebody counts slots against, so a walk that skipped an unreadable
-    record would keep the sentence rendering while possibly naming the wrong neighbour —
+    record would keep the sentence rendering while possibly naming the wrong neighbor —
     the exact failure a position label may never cause, one hop removed. The decoration
     therefore degrades WHOLE and STORE-WIDE, and costs nobody their label.
     """
     checks.note("")
-    checks.note("PLACE BLOCK — neighbours and section gaps (D30), server/capture_server.py")
+    checks.note("PLACE BLOCK — neighbors and section gaps (D30), server/capture_server.py")
 
     with isolated_home():
         # --- a gapped box tells the truth ------------------------------------------------
@@ -9837,7 +10549,7 @@ def check_place_neighbors(checks: Checks) -> None:
             "be the thing you count from (D30) — and each side carries BOTH numbers (D92): "
             "the store key and D58's count, which this box has already pulled apart. `next` "
             "IS THE UNREAD CARD AT 5, `unread: 1`: the owner's ruling of 2026-09-24 (LOC-28, "
-            "amending D116) counts an unread card as a neighbour, where D116 answered null",
+            "amending D116) counts an unread card as a neighbor, where D116 answered null",
         )
         checks.equal(
             rows["4/3"]["place"]["section_gaps"],
@@ -9862,7 +10574,7 @@ def check_place_neighbors(checks: Checks) -> None:
             "AN UNREAD CARD IS A NEIGHBOUR (the owner's ruling, 2026-09-24, LOC-28, amending "
             "D116). D116 walked past the unread card at 3 to name Mantine, and the screen "
             "said `with 1 unidentified card in between`; the owner's word is that the card "
-            "next to this one is the neighbour, read or not, said as `an unread card`. THE "
+            "next to this one is the neighbor, read or not, said as `an unread card`. THE "
             "TWO NUMBERS STILL DIVERGE AND ARE STILL PINNED TOGETHER (D92): the card at "
             "index 3 is the SECOND card in this box",
         )
@@ -9884,7 +10596,7 @@ def check_place_neighbors(checks: Checks) -> None:
         # card that had leaked in. It had not: the ladder had never named one, and the
         # figure was an unnamed LIVE card, which is what D116 above is about. This case is
         # the claim they could not see, made in the one place it can be seen: a card is
-        # named as a landmark, then SOLD through its own route, and the neighbour that used
+        # named as a landmark, then SOLD through its own route, and the neighbor that used
         # to name it must move to the next named card rather than keep pointing at it.
         capture_server.do_capture(capture_payload(6))
         capture_server.do_capture(capture_payload(6))
@@ -9910,10 +10622,10 @@ def check_place_neighbors(checks: Checks) -> None:
             "between nothing at all",
         )
 
-        # --- a run of unread cards is one neighbour, with its count ----------------------
+        # --- a run of unread cards is one neighbor, with its count ----------------------
         # Box 8: Mantine, then three cards nothing has named, then this card, then Thievul.
         # The owner's words for the run are "N unread cards", so `unread` is the length of the
-        # run, counted from the neighbour outward to the next named card.
+        # run, counted from the neighbor outward to the next named card.
         for _ in range(6):
             capture_server.do_capture(capture_payload(8))
         with Store().write() as snapshot:
@@ -9933,32 +10645,64 @@ def check_place_neighbors(checks: Checks) -> None:
         checks.equal(
             capture_server.do_inventory()["cards"]["8/2"]["place"]["neighbors"]["next"],
             {"index": 3, "slot": 3, "name": None, "unread": 2},
-            "and the run is counted from the neighbour outward, not from the box's start: "
+            "and the run is counted from the neighbor outward, not from the box's start: "
             "card 2's front side holds two unread cards before Charizard",
         )
 
-        # --- an unallocated tail is not a gap --------------------------------------------
-        # A declared divider far past the fill: section 1 of box 5 runs to index 50 while
-        # the box holds five cards. `section_gaps` counts terminal RECORDS, not unoccupied
-        # indices — that an empty tail adds nothing is the CONSTRUCTION, not a bounds
-        # check, and this is the box that would catch the bounds check creeping back in.
+        # --- a divider typed ahead of the fill takes the captures ---------------------------
+        # The owner's ruling, 2026-09-26 (D10): a section is where captures go once it exists.
+        # So a divider declared far past the fill, `[1, 51]` on an empty box, is an empty last
+        # section, and every capture goes INTO it. Section 1 stays empty. `section_gaps`
+        # still counts terminal RECORDS only, so the sold card is the one gap.
         capture_server.do_create_box({"box": 5, "sections": [1, 51]})
         for _ in range(5):
             capture_server.do_capture(capture_payload(5))
         capture_server.do_mark_sold(5, 2, {})
         place = capture_server.do_inventory()["cards"]["5/3"]["place"]
-        # 50 UNTIL D58 AND 49 SINCE, WHICH IS ONE DEPARTED CARD AND NOT A LOST PLAN. The
-        # divider is declared at index 51 and the box has sold one card, so it now stands
-        # in front of the FIFTIETH card rather than the fifty-first slot; section 1 runs to
-        # the forty-ninth. `Position._divider` is what keeps the other 45 slots — the ones
-        # the box has not grown into — counting for one card each, so a layout typed in
-        # before the box was filled still says what was typed.
+        checks.equal(
+            (place["section"], place["slot"]),
+            (2, 2),
+            "a divider typed ahead of the fill takes the captures: card 3 stands in section 2, "
+            "as its second card once card 2 has sold (D58)",
+        )
+        checks.equal(
+            [
+                d["count"]
+                for b in capture_server.do_boxes()["boxes"] if b["box"] == 5
+                for d in b["sections_detail"]
+            ],
+            [0, 4],
+            "and section 1 holds nothing: no capture went in front of the typed divider",
+        )
+        checks.equal(
+            place["section_gaps"],
+            1,
+            "and an index with no record adds NOTHING to the gap count: only the sold record "
+            "at 2 is a gap",
+        )
+
+        # --- an unallocated tail is not a gap --------------------------------------------
+        # The same divider far past the fill, TYPED AFTER THE CAPTURES: section 1 of box 9
+        # runs to index 50 while the box holds five cards. `section_gaps` counts terminal
+        # RECORDS, not unoccupied indices — that an empty tail adds nothing is the
+        # CONSTRUCTION, not a bounds check, and this is the box that would catch the bounds
+        # check creeping back in.
+        capture_server.do_create_box({"box": 9})
+        for _ in range(5):
+            capture_server.do_capture(capture_payload(9))
+        capture_server.do_put_box(9, {"sections": [1, 51]})
+        capture_server.do_mark_sold(9, 2, {})
+        place = capture_server.do_inventory()["cards"]["9/3"]["place"]
+        # 49, ONE DEPARTED CARD AND NOT A LOST PLAN. The divider is declared at index 51 and
+        # the box has sold one card, so it stands in front of the FIFTIETH card rather than
+        # the fifty-first slot. `Position._divider` keeps the other 45 slots counting for
+        # one card each.
         checks.equal(
             place["section_end"],
             49,
-            "a declared divider past the fill still carries its unfilled slots — the "
-            "block says the section ends at 49, one short of the declared 50, because "
-            "one card has left the box in front of it (D58)",
+            "a divider typed past the fill still carries its unfilled slots — the block says "
+            "the section ends at 49, one short of the declared 50, because one card has left "
+            "the box in front of it (D58)",
         )
         checks.equal(
             place["section_gaps"],
@@ -9998,7 +10742,7 @@ def check_place_neighbors(checks: Checks) -> None:
         checks.equal(
             rows["4/5"]["place"]["neighbors"]["next"],
             None,
-            "a pooled record is never named as anyone's neighbour — card 5's `next` is "
+            "a pooled record is never named as anyone's neighbor — card 5's `next` is "
             "still the box's edge, not the code card whose index happens to be 6",
         )
         checks.equal(
@@ -10023,7 +10767,7 @@ def check_place_neighbors(checks: Checks) -> None:
             [None, None],
             "one record whose box will not coerce nulls the decoration for a card in a "
             "DIFFERENT box: skipping the unreadable record would keep the sentence "
-            "rendering while possibly naming the wrong neighbour, and 'between X and Y' "
+            "rendering while possibly naming the wrong neighbor, and 'between X and Y' "
             "is a position claim somebody counts slots against",
         )
         checks.equal(
@@ -10031,7 +10775,7 @@ def check_place_neighbors(checks: Checks) -> None:
             [None, None],
             "and the degrade is STORE-WIDE, not per-box — box 5 loses its sentences to "
             "box 7's record too, because a walk that cannot read one record cannot vouch "
-            "for any neighbour it names anywhere",
+            "for any neighbor it names anywhere",
         )
         # THE LABEL NOW DEGRADES WITH THE DECORATION AND IT USED NOT TO, which is the one
         # place D58 is visible in this file's degrade story and the reversal of what this
@@ -10390,9 +11134,13 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
         # names a card says the box's NAME, the section and the card within the section,
         # through the one helper (`join.said_place`), and never the box number or the store
         # index. A refusal reaches a screen as a toast. The error code does not change.
-        capture_server.do_create_box({"box": 7, "name": "Rares", "sections": [1, 3]})
+        capture_server.do_create_box({"box": 7, "name": "Rares"})
         for _ in range(4):
             capture_server.do_capture(capture_payload(7))
+        # DIVIDERS AFTER THE CAPTURES (D10, the owner's ruling of 2026-09-26): a divider
+        # typed ahead of the fill takes the next captures, so a layout is declared
+        # over cards that are already in the box.
+        capture_server.do_put_box(7, {"sections": [1, 3]})
         capture_server.do_mark_sold(7, 4, {})
         try:
             capture_server.do_mark_sold(7, 4, {})
@@ -10410,17 +11158,19 @@ def check_box_names_and_place_labels(checks: Checks) -> None:
             "The code stays `already_sold`, and neither the box number nor the index is said",
             f"refusal: {getattr(said_sold, 'code', None)}: {said_sold}",
         )
-        with Store().write() as snapshot:
-            snapshot.inventory.close_box(7)
+        # A STORE REFUSAL ABOUT A BOX SAYS ITS NAME. This read the sealed-box refusal until
+        # `D299`; a second divider in front of nothing is the same shape.
+        said_empty = ""
         try:
-            capture_server.do_capture(capture_payload(7))
-            said_sealed = ""
+            with Store().write() as snapshot:
+                snapshot.inventory.open_section(7)
+                snapshot.inventory.open_section(7)
         except Exception as caught:  # noqa: BLE001 — the message is what is read here
-            said_sealed = str(caught)
+            said_empty = str(caught)
         checks.ok(
-            said_sealed.startswith("Rares is sealed") and "box 7" not in said_sealed.casefold(),
-            "and a store refusal about a box says its name: `Rares is sealed`, never `box 7`",
-            said_sealed,
+            "of Rares holds nothing yet" in said_empty and "box 7" not in said_empty.casefold(),
+            "and a store refusal about a box says its name, `Rares`, never `box 7`",
+            said_empty,
         )
         checks.equal(
             (
@@ -10477,9 +11227,13 @@ def check_consolidated_numbering(checks: Checks) -> None:
 
     with isolated_home():
         # Two sections, six cards each: [1, 7] over twelve.
-        capture_server.do_create_box({"box": 3, "sections": [1, 7]})
+        capture_server.do_create_box({"box": 3})
         for _ in range(12):
             capture_server.do_capture(capture_payload(3))
+        # DIVIDERS AFTER THE CAPTURES (D10, the owner's ruling of 2026-09-26): a divider
+        # typed ahead of the fill takes the next captures, so a layout is declared
+        # over cards that are already in the box.
+        capture_server.do_put_box(3, {"sections": [1, 7]})
         # THE LABEL SAYS THE BOX'S NAME (D259), and a box created with
         # no name carries its stored default. Read back, so this check is about numbering.
         box_title = Store().read().inventory.box(3).name
@@ -12168,7 +12922,7 @@ def check_code_ledger(checks: Checks) -> None:
                 and place.get("neighbors") is None
                 and place.get("section_gaps") is None,
                 "and a POOLED place — D24's ruling: a code card is a count, not a slot, "
-                "so no label, no neighbours, no gaps, and null rather than zero for the "
+                "so no label, no neighbors, no gaps, and null rather than zero for the "
                 "gap count because `no section at all` is a different fact from `a "
                 "countable section with no holes`",
                 f"place: {place!r}",
@@ -17119,7 +17873,7 @@ def check_emit_identity_stamp(checks: Checks) -> None:
 
         # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
         # arithmetic, and the store cannot hold a standing figure any more.
-        command(checks, "emit", str(run_dir.directory), "--cap", "4")
+        command(checks, "emit", str(run_dir.directory), "--cap", "4", exits=1)
         after = Store().read().inventory
         checks.equal(
             after.get(master.position_key(3, 1)).state,
@@ -19758,14 +20512,7 @@ def check_send_press(checks: Checks) -> None:
     # ------------------------------------------------------------ the mark-down's one press
     for failing in (None, "movetolive"):
         with send_portal() as portal, isolated_home() as home:
-            directory = home / "inventory" / "markdowns" / "20260923-130000"
-            directory.mkdir(parents=True)
-            source = tcgcsv.read_export(FIXTURE_EXPORT)
-            row = dict(
-                source.by_sku()[ARTICUNO_SKU],
-                **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: "19.99"},
-            )
-            tcgcsv.write_csv(directory / cmd_reprice.IMPORT, source.header, [row])
+            directory = _markdown_dir(home, "20260923-130000")
             portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
             if failing:
                 # A CLEAR REFUSAL (400): rolled back, nothing left. The unclear 500 is
@@ -20278,15 +21025,7 @@ def check_send_hazards(checks: Checks) -> None:
     # ------------------------------------------- the mark-down: two presses at once
     with _case(checks, "the mark-down: two presses at once"):
         def markdown(home):
-            directory = home / "inventory" / "markdowns" / "20260924-130000"
-            directory.mkdir(parents=True)
-            source = tcgcsv.read_export(FIXTURE_EXPORT)
-            row = dict(
-                source.by_sku()[ARTICUNO_SKU],
-                **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: "19.99"},
-            )
-            tcgcsv.write_csv(directory / cmd_reprice.IMPORT, source.header, [row])
-            return directory
+            return _markdown_dir(home, "20260924-130000")
 
         with send_portal() as portal, isolated_home() as home:
             directory = markdown(home)
@@ -20349,16 +21088,40 @@ class _Died(BaseException):
     and no `except Exception` catches it."""
 
 
-def _markdown_dir(home: Path, stamp: str, price: str = "19.99") -> Path:
-    """A mark-down directory holding one price row for Articuno, as `reprice list` writes it."""
+def _markdown_dir(home: Path, stamp: str, price: str = "19.99", *, at: Optional[str] = None) -> Path:
+    """A mark-down directory holding one price row for Articuno, as `reprice list` writes it.
+
+    WITH ITS SURVEY, which the send reads twice (the owner's ruling, 2026-09-26): its `at` says
+    whether the read is fresh enough to send from, and its asking price is the price the screen
+    drew, which the fresh read must still show. The asking price is the fixture's market price,
+    the same figure `_live_export_bytes` puts live. `at` defaults to now."""
     directory = home / "inventory" / "markdowns" / stamp
     directory.mkdir(parents=True)
     source = tcgcsv.read_export(FIXTURE_EXPORT)
-    row = dict(
-        source.by_sku()[ARTICUNO_SKU],
-        **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: price},
-    )
+    original = source.by_sku()[ARTICUNO_SKU]
+    row = dict(original, **{tcgcsv.QUANTITY_COLUMN: "0", tcgcsv.PRICE_COLUMN: price})
     tcgcsv.write_csv(directory / cmd_reprice.IMPORT, source.header, [row])
+    files.write_json(
+        directory / cmd_reprice.SURVEY,
+        {
+            "kind": "survey",
+            "at": at or master.now(),
+            "asked": {},
+            "counts": {},
+            "skus": [
+                {
+                    "sku": ARTICUNO_SKU,
+                    "standing": "offered",
+                    "skip": None,
+                    "name": original.get(tcgcsv.NAME_COLUMN, ""),
+                    "asking": str(original.get(tcgcsv.MARKET_PRICE_COLUMN) or ""),
+                    "live": 1,
+                    "sealed": False,
+                    "row": dict(original),
+                }
+            ],
+        },
+    )
     return directory
 
 
@@ -21645,7 +22408,10 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
             conn.close()
         return stamp, tables, views, columns, skus_rows
 
-    checks.equal(db.SCHEMA_VERSION, 12, "the current schema is 12: skus at 11, send_claims at 12")
+    checks.equal(
+        db.SCHEMA_VERSION, 13,
+        "the current schema is 13: skus at 11, send_claims at 12, the order key at 13 (D265)",
+    )
 
     # --- a store at 10 has neither table -------------------------------------------------
     with isolated_home():
@@ -21672,7 +22438,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
         checks.equal(
             (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns,
              {"sku_products", "sku_printings"} <= views),
-            (("12",), True, True, True, True),
+            ((str(db.SCHEMA_VERSION),), True, True, True, True),
             "a schema-10 store passes through 11 and then 12, and gains both tables",
         )
         checks.equal(
@@ -21703,7 +22469,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
         stamp, tables, _views, _columns, rows = shape(store_path)
         checks.equal(
             (stamp, "send_claims" in tables, rows),
-            (("12",), True, 1),
+            ((str(db.SCHEMA_VERSION),), True, 1),
             "a schema-11 store from main gains send_claims at 12 and keeps its skus row",
         )
 
@@ -21734,7 +22500,7 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
         checks.equal(
             (stamp, "skus" in tables, "send_claims" in tables, "identity_source" in columns,
              {"sku_products", "sku_printings"} <= views),
-            (("12",), True, True, True, True),
+            ((str(db.SCHEMA_VERSION),), True, True, True, True),
             "the UX branch's schema-11 store reaches 12 with skus, both views and "
             "cards.identity_source",
         )
@@ -21951,6 +22717,290 @@ def _refusal_code_transport(rows, *, listing: bool) -> Optional[str]:
     except tcg_import.FetchRefusal as refusal:
         return refusal.code
     return None
+
+
+def check_live_markdown_guards(checks: Checks) -> None:
+    """The Live tab's four rules (the owner's rulings, 2026-09-26), each red under its own
+    mutation: a fresh read before any send, no mark-down for a card with no market price, a
+    dollar cap on top of the percentage, and a Singles / Sealed filter the apply holds the
+    screen to. And the mark-down send checks each price against the fresh read (D273)."""
+    checks.note("")
+    checks.note("LIVE TAB — fresh read, no-market skip, dollar cap, sealed filter")
+
+    now = datetime(2026, 9, 26, 12, 0, 0, tzinfo=timezone.utc)
+    long_ago = (now - timedelta(days=30)).isoformat()
+
+    def listing(sku, asking, market, condition="Near Mint"):
+        return {
+            tcgcsv.SKU_COLUMN: sku,
+            tcgcsv.NAME_COLUMN: sku,
+            tcgcsv.CONDITION_COLUMN: condition,
+            tcgcsv.LIVE_QUANTITY_COLUMN: "1",
+            tcgcsv.PRICE_COLUMN: asking,
+            tcgcsv.MARKET_PRICE_COLUMN: market,
+        }
+
+    rows = [
+        listing("SINGLE", "100.0000", "80.00"),
+        listing("NO-MARKET", "6000.0000", ""),
+        listing("SEALED", "349.9900", "300.00", tcgcsv.SEALED_CONDITION),
+    ]
+
+    def plan(cap=None):
+        return reprice.plan(
+            rows,
+            owned_since={row[tcgcsv.SKU_COLUMN]: long_ago for row in rows},
+            now=now,
+            days=7,
+            rule="undercut:10",
+            basis=reprice.BASIS_ASKING,
+            floor=Decimal("0.25"),
+            cap=cap,
+        )
+
+    # ------------------------------------------------------------- no market, no mark-down
+    uncapped = plan()
+    skipped = {c.sku: c.skip for group in uncapped.skipped.values() for c in group}
+    checks.equal(
+        skipped.get("NO-MARKET"),
+        reprice.NO_MARKET,
+        "SKIP NO-MARKET CARDS: a card with no market price is refused `no_market`, even on the "
+        "asking-price basis that could price it",
+    )
+    checks.ok(
+        "NO-MARKET" not in {c.sku for c in uncapped.rows},
+        "and it is not in the mark-down set, so no rule lowers it",
+    )
+
+    # -------------------------------------------------------------------- the dollar cap
+    proposed = {c.sku: c.proposed for c in uncapped.rows}
+    checks.equal(proposed.get("SINGLE"), Decimal("90.00"), "with no cap, 10% off $100 is $90")
+    capped = {c.sku: c.proposed for c in plan(Decimal("5.00")).rows}
+    checks.equal(
+        capped.get("SINGLE"),
+        Decimal("95.00"),
+        "A $5 CAP CLAMPS THE RULE: 10% off $100 would take $10, so the proposal is $95",
+    )
+    checks.equal(plan(Decimal("5.00")).asked.get("cap"), "5.00", "and the read records its cap")
+    back = reprice.read_back(
+        [{tcgcsv.SKU_COLUMN: "SINGLE", tcgcsv.PRICE_COLUMN: "80.00"}],
+        {"SINGLE": "100.0000"},
+        floor=Decimal("0.25"),
+    )
+    checks.equal(
+        [e.sku for e in back.edits],
+        ["SINGLE"],
+        "THE CAP IS THE RULE'S ONLY (\"Rule only\"): a price typed $20 under the live one goes as "
+        "typed, whatever the read's cap",
+    )
+
+    # ------------------------------------ an earlier answer goes out only when it is higher
+    back = reprice.read_back(
+        [
+            {tcgcsv.SKU_COLUMN: "LOWER", tcgcsv.PRICE_COLUMN: "80.00"},
+            {tcgcsv.SKU_COLUMN: "HIGHER", tcgcsv.PRICE_COLUMN: "120.00"},
+            {tcgcsv.SKU_COLUMN: "TYPED-NOW", tcgcsv.PRICE_COLUMN: "70.00"},
+            {tcgcsv.SKU_COLUMN: "RULE", tcgcsv.PRICE_COLUMN: "90.00"},
+        ],
+        {"LOWER": "100.0000", "HIGHER": "100.0000", "TYPED-NOW": "100.0000", "RULE": "100.0000"},
+        floor=Decimal("0.25"),
+        earlier={
+            "LOWER": Decimal("80.00"),
+            "HIGHER": Decimal("120.00"),
+            "TYPED-NOW": Decimal("75.00"),
+            "RULE": Decimal("90.00"),
+        },
+        proposed={"RULE": Decimal("90.00")},
+    )
+    checks.equal(
+        ({e.sku: e.refusal for e in back.refused}, sorted(e.sku for e in back.edits)),
+        ({"LOWER": reprice.EARLIER_LOWER}, ["HIGHER", "RULE", "TYPED-NOW"]),
+        "\"IF THE PRICE I'VE TYPED IS HIGHER YEA\": a lower answer stored before the read is "
+        "refused, a higher one goes, a price written after the read goes, and the rule's own "
+        "price goes",
+    )
+    checks.raises(reprice.InvalidCap, lambda: reprice.check_cap("0"), "a cap of $0 is refused")
+
+    # ------------------------------------------------------------------ the sealed rule
+    checks.equal(
+        [reprice.is_sealed(row) for row in rows],
+        [False, False, True],
+        "SEALED IS THE `Unopened` CONDITION, and nothing else",
+    )
+    checks.equal(
+        [cmd_reprice._surveyed(c, "offered").get("sealed") for c in uncapped.rows],
+        [reprice.is_sealed(c.row) for c in uncapped.rows],
+        "and the survey carries it per row, so the Live tab can filter by it",
+    )
+
+    # ------------------------------------------------------------------ a fresh read
+    checks.equal(
+        [
+            reprice.read_is_fresh((now - timedelta(hours=23)).isoformat(), now),
+            reprice.read_is_fresh((now - timedelta(hours=25)).isoformat(), now),
+            reprice.read_is_fresh(None, now),
+        ],
+        [True, False, False],
+        "A READ IS FRESH FOR A DAY, and one nothing can date is not fresh",
+    )
+    with send_portal() as portal, isolated_home() as home:
+        stale = _markdown_dir(home, "20260926-100000", at=long_ago)
+        portal["live"] = _live_export_bytes({ARTICUNO_SKU: 1})
+        checks.equal(
+            _route_refusal(lambda: send_routes.do_markdown_send(stale.name, {"confirm": True})),
+            "read_stale",
+            "REQUIRE A FRESH READ: a mark-down from a read a month old refuses",
+        )
+        checks.equal(portal["calls"], [], "and it refuses before TCGplayer is asked anything")
+
+        # THE APPLY REFUSES A STALE READ TOO, so "Download the file instead" cannot write one.
+        manual = _markdown_dir(home, "20260926-100100", at=long_ago)
+        (manual / cmd_reprice.IMPORT).unlink()
+        files.write_json(manual / cmd_reprice.MANIFEST, {"at": long_ago, "asked": {}, "skus": {}})
+        worklist = pipeline_routes._write_edits(manual, [{"sku": ARTICUNO_SKU, "price": "19.99"}])
+        said = command(checks, "reprice", "apply", str(worklist), "--write", exits=1)
+        checks.ok(
+            "more than a day ago" in said and not (manual / cmd_reprice.IMPORT).exists(),
+            "and `reprice apply --write` over a stale read writes no file",
+            said,
+        )
+
+    # AN EARLIER, LOWER ANSWER, THROUGH THE COMMAND: `_apply` reads the corpus's own stamps.
+    with isolated_home() as home:
+        fresh_at = master.now()
+        directory = _markdown_dir(home, "20260926-100200", at=fresh_at)
+        (directory / cmd_reprice.IMPORT).unlink()
+        files.write_json(directory / cmd_reprice.MANIFEST, {"at": fresh_at, "asked": {}, "skus": {}})
+        # BACKDATED BY HAND, WHICH IS ONLY EVER SETUP HERE: there is no real path that writes
+        # an answer dated in 2026-01 without the wall clock actually being there, so seeding
+        # "an old answer already sat in the corpus" has no route to go through.
+        book = corpus.Corpus.read()
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value="19.99", at="2026-01-01T00:00:00.000+00:00")
+        book.write()
+        worklist = pipeline_routes._write_edits(directory, [{"sku": ARTICUNO_SKU, "price": "19.99"}])
+        said = command(checks, "reprice", "apply", str(worklist), "--write")
+        checks.ok(
+            f"[{reprice.EARLIER_LOWER}]" in said and not (directory / cmd_reprice.IMPORT).exists(),
+            "an answer stored before the read, lower than the live price, writes no file",
+            said,
+        )
+
+        # A DIFFERENT PRICE, WRITTEN AFTER THE READ THROUGH THE REAL SAVE PATH. The case this
+        # replaces built `corpus.Answer(at=master.now())` BY HAND, which never runs
+        # `stamp_answers` at all and so cannot tell a real "after this read" from a fake one.
+        # `do_pricing_corpus_write` is what `#/pricing` actually calls.
+        seeded = dict(pipeline_routes.do_pricing_corpus()["corpus"], skus={ARTICUNO_SKU: {"value": "20.00"}})
+        pipeline_routes.do_pricing_corpus_write({"corpus": seeded})
+        checks.ok(
+            str(corpus.Corpus.read().answers[ARTICUNO_SKU].at or "") >= fresh_at,
+            "and `stamp_answers` dates a CHANGED answer to now, which is after the read",
+        )
+        worklist = pipeline_routes._write_edits(directory, [{"sku": ARTICUNO_SKU, "price": "20.00"}])
+        said = command(checks, "reprice", "apply", str(worklist), "--write")
+        checks.ok(
+            (directory / cmd_reprice.IMPORT).exists(),
+            "and a genuinely new price, saved through the real route after the read, is written",
+            said,
+        )
+
+    # THE ACTUAL DEFECT: A PRICE RETYPED, UNCHANGED, THROUGH THE REAL SAVE PATH. `stamp_answers`
+    # keeps the OLD `at` here on purpose (its own ratchet rule, for `priced_recently`) — so
+    # retyping, on this visit, a price already stored from days ago leaves the timestamp
+    # pointing at the past, and `_apply`'s `earlier` map still calls it "earlier". The owner's
+    # ruling, 2026-09-26: "if the price i've typed is higher yea" — but this price is retyped,
+    # not raised, and is refused for a reason ("typed before this read") that is false this
+    # time. Only naming the SKU as typed THIS VISIT (`typed`, D273's `typedHere`) fixes it,
+    # because the caller is the one witness the timestamp cannot be.
+    with isolated_home() as home:
+        old_at = "2026-01-01T00:00:00.000+00:00"
+        book = corpus.Corpus.read()
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value="19.99", at=old_at)
+        book.write()
+
+        fresh_at = master.now()
+        directory = _markdown_dir(home, "20260926-100250", at=fresh_at)
+        (directory / cmd_reprice.IMPORT).unlink()
+        files.write_json(directory / cmd_reprice.MANIFEST, {"at": fresh_at, "asked": {}, "skus": {}})
+
+        # THE RETYPE, THROUGH THE REAL SAVE PATH — same value, so `stamp_answers` keeps `old_at`.
+        seeded = dict(pipeline_routes.do_pricing_corpus()["corpus"], skus={ARTICUNO_SKU: {"value": "19.99"}})
+        pipeline_routes.do_pricing_corpus_write({"corpus": seeded})
+        checks.equal(
+            corpus.Corpus.read().answers[ARTICUNO_SKU].at,
+            old_at,
+            "AN UNCHANGED RETYPE KEEPS THE OLD `at`, through the real save path",
+        )
+
+        refused = pipeline_routes.do_markdown_apply(
+            directory.name, {"edits": [{"sku": ARTICUNO_SKU, "price": "19.99"}], "write": True}
+        )
+        checks.ok(
+            not refused["wrote"] and f"[{reprice.EARLIER_LOWER}]" in refused["console"],
+            "WITHOUT NAMING THE VISIT: the price the owner just retyped is refused for a false "
+            "reason, because the timestamp alone cannot see this visit",
+            refused["console"],
+        )
+
+        rescued = pipeline_routes.do_markdown_apply(
+            directory.name,
+            {
+                "edits": [{"sku": ARTICUNO_SKU, "price": "19.99"}],
+                "write": True,
+                "typed": [ARTICUNO_SKU],
+            },
+        )
+        checks.ok(
+            rescued["ok"] and rescued["wrote"],
+            "NAMING THE VISIT (`typed`, `Pricing.tsx`'s `typedHere`) RIDES: the caller is the "
+            "witness the timestamp cannot be",
+            rescued["console"],
+        )
+
+    # ------------------------------------------- each price, checked against the fresh read
+    for label, live, code in (
+        ("TCGplayer moved the price", _live_export_priced({ARTICUNO_SKU: 1}, {ARTICUNO_SKU: "30.00"}), "price_refused"),
+        ("TCGplayer already shows it", _live_export_priced({ARTICUNO_SKU: 1}, {ARTICUNO_SKU: "19.99"}), "nothing_to_send"),
+        ("TCGplayer holds no copy", _live_export_bytes({ARTICUNO_SKU: 0}), "nothing_to_send"),
+    ):
+        with send_portal() as portal, isolated_home() as home:
+            directory = _markdown_dir(home, "20260926-110000")
+            portal["live"] = live
+            checks.equal(
+                _route_refusal(
+                    lambda directory=directory: send_routes.do_markdown_send(directory.name, {"confirm": True})
+                ),
+                code,
+                f"THE FRESH READ JUDGES EACH PRICE: {label}, so the mark-down refuses ({code})",
+            )
+            checks.equal(
+                [name for kind, name in portal["calls"] if kind == "POST"],
+                [],
+                f"{label}: and nothing is pushed",
+            )
+            checks.equal(
+                [claim.stamp for claim in Store().read().send_claims.live()],
+                [],
+                f"{label}: and its claim is released",
+            )
+
+    # --------------------------------------------------------------- the sealed filter
+    with isolated_home() as home:
+        directory = _markdown_dir(home, "20260926-120000")
+        edits = [{"sku": ARTICUNO_SKU, "price": "19.99"}]
+        checks.equal(
+            _route_refusal(
+                lambda: pipeline_routes.do_markdown_apply(directory.name, {"edits": edits, "kind": "sealed"})
+            ),
+            "kind_mismatch",
+            "THE SEALED FILTER HOLDS: a list filtered to Sealed may not carry a single's price",
+        )
+        checks.equal(
+            _route_refusal(
+                lambda: pipeline_routes.do_markdown_apply(directory.name, {"edits": edits, "kind": "singles"})
+            ),
+            None,
+            "and a list filtered to Singles carries it",
+        )
 
 
 def check_publish_lag(checks: Checks) -> None:
@@ -23342,9 +24392,10 @@ def check_pricing_labels(checks: Checks) -> None:
     with isolated_home():
         # Two sections over four cards — dividers at 1 and 3 — so a divider has cards on both
         # sides of it and a departure in front of one can be told from a departure behind it.
-        capture_server.do_create_box({"box": 3, "sections": [1, 3]})
+        capture_server.do_create_box({"box": 3})
         run_dir, _ = seam_run(
-            checks, [(3, at, "Articuno", "161", None) for at in (1, 2, 3, 4)]
+            checks, [(3, at, "Articuno", "161", None) for at in (1, 2, 3, 4)],
+            sections={3: [1, 3]},
         )
         name = run_dir.directory.name
         joined_bytes = run_dir.path(runs.PRICING).read_bytes()
@@ -24452,7 +25503,7 @@ def check_listing_commands(checks: Checks) -> None:
         # being touched, and that cannot be checked against a file this block wrote itself.
         before_bytes = run_dir.path(runs.IMPORT_MERGED).read_bytes()
         command(checks, "join", str(run_dir.directory))
-        again = command(checks, "emit", str(run_dir.directory))
+        again = command(checks, "emit", str(run_dir.directory), exits=1)
         re_inventory = Store().read().inventory
         checks.equal(
             re_inventory.listing_counts(),
@@ -25029,7 +26080,7 @@ def check_listing_commands(checks: Checks) -> None:
         )
         # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
         # arithmetic, and the store cannot hold a standing figure any more.
-        again = command(checks, "emit", str(run_dir.directory), "--cap", "4")
+        again = command(checks, "emit", str(run_dir.directory), "--cap", "4", exits=1)
         checks.ok(
             "nothing new to send" in again,
             "and the re-emit says so rather than writing a file",
@@ -25065,7 +26116,7 @@ def check_listing_commands(checks: Checks) -> None:
         )
         # THE SEND NAMES THE CAP (D7, amended 2026-09-08): this case asserts cap
         # arithmetic, and the store cannot hold a standing figure any more.
-        command(checks, "emit", str(run_dir.directory), "--cap", "4")
+        command(checks, "emit", str(run_dir.directory), "--cap", "4", exits=1)
         checks.equal(
             run_dir.path(runs.IMPORT_MERGED).read_bytes(),
             untouched,
@@ -25213,9 +26264,13 @@ def check_section_names(checks: Checks) -> None:
     checks.note("D132 — A SECTION CAN BE NAMED, AND THE NAME FOLLOWS ITS DIVIDER")
 
     with isolated_home():
-        capture_server.do_create_box({"box": 3, "sections": [1, 7]})
+        capture_server.do_create_box({"box": 3})
         for _ in range(12):
             capture_server.do_capture(capture_payload(3))
+        # DIVIDERS AFTER THE CAPTURES (D10, the owner's ruling of 2026-09-26): a divider
+        # typed ahead of the fill takes the next captures, so a layout is declared
+        # over cards that are already in the box.
+        capture_server.do_put_box(3, {"sections": [1, 7]})
 
         row = capture_server.do_put_box(3, {"section_names": {"2": "Rares"}})
         checks.equal(
@@ -25323,9 +26378,9 @@ def check_boxes_and_listings(checks: Checks) -> None:
         migrated.boxes["1"].sections, [],
         "MIGRATED BOXES DECLARE NO LAYOUT — which is what preserves every existing label",
     )
-    checks.equal(
-        migrated.boxes["1"].capacity, None,
-        "and no capacity: it is retroactive, and this box was never sealed (D20)",
+    checks.ok(
+        not hasattr(migrated.boxes["1"], "capacity"),
+        "and no capacity: a box has none since `D299`",
     )
 
     # THE LABELS THEMSELVES. Literal strings, because a formula asserted against itself
@@ -25369,7 +26424,6 @@ def check_boxes_and_listings(checks: Checks) -> None:
     inventory = master.Inventory()
     inventory.ensure_box(1, name="ME01 commons")
     checks.equal(inventory.box(1).name, "ME01 commons", "a box can be created and named")
-    checks.equal(inventory.box(1).state, master.BOX_OPEN, "and starts open")
 
     inventory.set_sections(1, [1, 31, 56])
     checks.equal(
@@ -25430,36 +26484,11 @@ def check_boxes_and_listings(checks: Checks) -> None:
             capture_server.do_capture(capture_payload(5))
         with Store().write() as snapshot:
             checks.equal(snapshot.inventory.box_fill(5), 4, "fill is the high-water mark")
-            snapshot.inventory.close_box(5)
-            box = snapshot.inventory.box(5)
-            checks.equal(box.capacity, 4, "SEALING FREEZES CAPACITY at the final fill (D20)")
-            checks.ok(box.closed, "and the box reads closed")
-            checks.raises(
-                master.BoxClosed,
-                lambda: snapshot.inventory.close_box(5),
-                "sealing a sealed box refuses rather than restamping it",
-            )
-            checks.raises(
-                master.BoxClosed,
-                # DELIBERATELY NAMELESS, for the reason the `UnknownClaim` case above gives
-                # (D172): the seal is checked before the index is computed and therefore
-                # before `record_capture` can refuse a nameless card, so this still hears
-                # `BoxClosed`. A `cid` here would let a reordering turn the seal's refusal
-                # into `UnnamedCard` with the case still green.
-                lambda: snapshot.inventory.allocate_capture(5),
-                "A SEALED BOX TAKES NO MORE CARDS — one more would falsify every fraction",
-            )
-            checks.equal(
-                snapshot.inventory.next_index(5), 5,
-                "and the refusal burned no index: it is checked before one is computed",
-            )
-            snapshot.inventory.reopen_box(5)
-            checks.equal(
-                snapshot.inventory.box(5).capacity, None,
-                "re-opening drops capacity rather than leaving a stale number standing",
-            )
             card, created = snapshot.inventory.allocate_capture(5, cid=fake_cid("reopened"))
-            checks.ok(created and card.index == 5, "and the box takes cards again")
+            checks.ok(
+                created and card.index == 5,
+                "and the box takes the next card: a box has no lid (`D299`)",
+            )
 
     # --- listings are quantities, never addresses --------------------------------------
     inventory = master.Inventory()
@@ -26198,6 +27227,23 @@ def check_pipeline_routes(checks: Checks) -> None:
                 "the preflight names the CARD that is held, not the drawer it is in — so the "
                 "screen can withhold its confirm before the operator reaches for it, in the "
                 "one vocabulary that has an answer for a press over two drawers",
+            )
+            # THE STRIP'S LIST (D291): what a spend over this selection would buy — every
+            # photographed card it names, minus the ones a live claim holds. The screen counts,
+            # prices and spends exactly this list, so it must leave the claimed card out.
+            status, body, _ = request(port, "POST", "/pipeline/waiting", payload={"box": 3})
+            waiting = json.loads(body)
+            checks.equal(
+                (status, "3/1" in waiting["keys"], waiting["claimed"], len(waiting["keys"]) > 0),
+                (200, False, 1, True),
+                "POST /pipeline/waiting leaves out the card a live run has claimed, and says it did "
+                "— so Review's strip never offers to buy what is already being paid for",
+            )
+            status, body, _ = request(port, "POST", "/pipeline/waiting", payload={"box": 7})
+            checks.equal(
+                (status, json.loads(body)["claimed"]),
+                (200, 0),
+                "and it claims nothing held over a drawer nobody is paying to read",
             )
             status, body, _ = request(port, "POST", "/pipeline/preflight", payload={"box": 7})
             checks.equal(
@@ -26955,28 +28001,21 @@ def check_open_section(checks: Checks) -> None:
         )
 
         # A DECLARED DIVIDER PAST THE FILL is legal (`_section_spans` renders it with a
-        # count of zero) and is the one layout this route cannot append to, because the
-        # divider it would add belongs BEHIND one that already exists.
+        # count of zero). It is an empty last section, so under the owner's ruling of
+        # 2026-09-25 ("Into the empty section (Recommended)", D10) S refuses it as
+        # `section_empty`, and the next capture goes INTO it, behind the divider.
         with Store().write() as snapshot:
             snapshot.inventory.record_capture(
                 master.Card(box=5, index=1, cid=fake_cid("section-ahead-5-1"))
             )
         capture_server.do_put_box(5, {"sections": [1, 51]})
         checks.raises(
-            master.SectionAhead,
+            master.SectionEmpty,
             lambda: capture_server.do_open_section(5, {}),
-            "a divider already declared past the next card refuses, naming it — appending "
-            "would make the layout unsorted, and `check_sections` would say so in a "
-            "sentence about a list rather than about this box",
+            "a divider already declared past the next card is an empty section, so S "
+            "refuses it the way it refuses a second press",
         )
 
-        capture_server.do_put_box(4, {"state": "closed"})
-        checks.raises(
-            master.BoxClosed,
-            lambda: capture_server.do_open_section(4, {}),
-            "A SEALED BOX TAKES NO DIVIDER, for the reason it takes no card: there are no "
-            "more cards to come, so the section would hold nothing, ever",
-        )
         refusal(
             checks,
             lambda: capture_server.do_open_section(77, {}),
@@ -27009,8 +28048,8 @@ def check_open_section(checks: Checks) -> None:
         #
         # THE PATH AND THE CODES, which are the whole of what a client sees. `do_*` calls
         # above prove the behaviour; only a socket proves that `POST /boxes/6/sections`
-        # reaches it and that the store's three exceptions arrive as three distinct strings
-        # rather than as one 500. `app/src/server.ts:openSection` branches on all three.
+        # reaches it and that the store's refusals arrive as distinct strings
+        # rather than as one 500. `app/src/server.ts:openSection` branches on them.
         # Card 8 of box 6, so the section opened at 8 above holds something and the wire
         # press below is a real one rather than the replay refusal.
         capture_server.do_capture(capture_payload(6))
@@ -27029,8 +28068,7 @@ def check_open_section(checks: Checks) -> None:
             )
             for box, code, label in (
                 (6, "section_empty", "a replayed press is a 409 `section_empty`"),
-                (5, "section_ahead", "a divider ahead of the next card is 409 `section_ahead`"),
-                (4, "box_closed", "and a sealed box is 409 `box_closed`, not a 500"),
+                (5, "section_empty", "a divider ahead of the next card is 409 `section_empty`"),
             ):
                 status, body, _ = request(port, "POST", f"/boxes/{box}/sections", payload={})
                 checks.equal(
@@ -31062,6 +32100,50 @@ def check_order_reconcile_backlog(checks: Checks) -> None:
             "an unknown field refuses — this route never takes a reason; it writes exactly "
             "one",
         )
+
+        # search-server lane, 2026-09-24 (from the Orders review): a cutoff after today
+        # would stand down every open order, live Ready-to-ship included — the SAME
+        # hazard HOR-04 found in the screen's own preview, at the server this time. The
+        # screen already disables the press past today; this is the SECOND guard.
+        future = str(int(order_store.today()[:4]) + 1) + order_store.today()[4:]
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_order_reconcile({"preview": True, "cutoff": future}),
+            "a cutoff after today refuses, even under preview, which writes nothing",
+        )
+        if caught is not None:
+            checks.equal(
+                caught.code, "cutoff_in_future",
+                "and the refusal names itself so a client can tell it apart from "
+                "cutoff_invalid's plain formatting complaint",
+            )
+        checks.equal(
+            capture_server.do_order_reconcile({"preview": True, "cutoff": order_store.today()})["cutoff"],
+            order_store.today(),
+            "today itself is still a valid cutoff — the refusal is strictly AFTER today, "
+            "never on it",
+        )
+
+        # S4, THE OPUS REVIEW, 2026-09-25: THE BOUNDARY ITSELF, NOT A YEAR PAST IT. The
+        # `future` case above jumps a whole year ahead, which a looser mutant (a cutoff
+        # refused only past, say, 30 days out) would still pass — it never asks the one
+        # question the guard's own docstring answers ("NEVER AFTER TODAY... strictly AFTER
+        # today, never on it"): where exactly the line falls. `tomorrow`, one real UTC day
+        # past `order_store.today()`, is that line.
+        tomorrow = (
+            datetime.now(timezone.utc) + timedelta(days=1)
+        ).strftime("%Y-%m-%d")
+        caught = checks.raises(
+            capture_server.BadRequest,
+            lambda: capture_server.do_order_reconcile({"preview": True, "cutoff": tomorrow}),
+            "exactly tomorrow refuses too — the boundary is today, not 'today plus some "
+            "slack'",
+        )
+        if caught is not None:
+            checks.equal(
+                caught.code, "cutoff_in_future",
+                "with the same refusal code as a cutoff a year out",
+            )
 
 
 # ---------------------------------------------------------------- the order screen
@@ -36574,10 +37656,979 @@ def check_value_page(checks: Checks) -> None:
         )
 
 
+def check_emit_unpriced_left_out(checks: Checks) -> None:
+    """A SEND WITH ONE UNPRICED ROW SENDS EVERY OTHER READY COPY (D277 Q3, the owner's words:
+    "send every ready copy; unpriced rows stay on the list").
+
+    `emit` used to refuse the WHOLE file while any card with no market price had no answer
+    (`Decisions.blocking`, `join.prices_for`). A missing price is still unknown and never low
+    (D9, D49), so that card still cannot go: it is LEFT OUT, named, and stays owed. The two
+    priced cards go. Both paths the send can take are asserted: one run, and several runs.
+    """
+    checks.note("")
+    checks.note("EMIT, ONE UNPRICED ROW — the ready copies go, the unpriced one stays owed")
+
+    cards = [
+        (3, 1, "Dunsparce", "120", "normal"),
+        (3, 2, "Dunsparce", "120", "reverse_holo"),
+        (3, 3, "Articuno", "161", None),
+    ]
+    # A BLANK MARKET CELL IS "NO MARKET PRICE" (D9), and `join` seeds it unanswered.
+    no_price = {ARTICUNO_SKU: ""}
+
+    def left_out(said: str) -> None:
+        # THE FILE IS WHERE `emit` SAID IT WROTE IT, read off its own line, so one assertion
+        # serves the single-run path and the merged one.
+        paths = [Path(found) for found in re.findall(r"-> (\S+\.csv)", said)]
+        written = {
+            row[tcgcsv.SKU_COLUMN]
+            for path in paths
+            if path.is_file()
+            for row in tcgcsv.read_export(path).rows
+        }
+        checks.equal(
+            sorted(written),
+            sorted([DUNSPARCE_SKU, DUNSPARCE_REVERSE_SKU]),
+            "the file carries EXACTLY the two ready rows — not zero (the old whole-send "
+            "refusal) and not three (a guess at a price nobody gave)",
+        )
+        checks.ok(
+            "no market price" in said and ARTICUNO_SKU in said,
+            "the unpriced card is NAMED where it was left out, never dropped silently",
+            said,
+        )
+        listing = Store().read().inventory.listings.get(ARTICUNO_SKU)
+        checks.equal(
+            0 if listing is None else listing.pushed,
+            0,
+            "and it STAYS OWED: nothing of it was committed as sent, so the next worklist "
+            "still carries it",
+        )
+        checks.equal(
+            getattr(corpus.Corpus.read().answers.get(ARTICUNO_SKU), "value", None),
+            None,
+            "and it still has no answer — nothing was invented for it",
+        )
+
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards, market=no_price)
+        # THE WORKLIST SAYS THE RUN OWES A PRICE, BEFORE AND AFTER THE SEND (the delta review,
+        # R3-2). `blocking` no longer names the card, so the roster reads the rows itself:
+        # otherwise Home counted the unpriced copy as ready to send and never said to price it.
+        def owes_price() -> List[str]:
+            roster = pipeline_routes.do_pipeline_worklist([])["roster"]
+            row = next((one for one in roster if one["run"] == run_dir.name), {})
+            return [reason for reason in row.get("owes", []) if reason != "never emitted"]
+
+        checks.equal(
+            owes_price(),
+            ["1 card with no market price needs a price"],
+            "the joined run owes a PRICE for the unpriced card, a reason that is not the send",
+        )
+        # AND EACH REASON CARRIES ITS CODE (R4): the screen reads the code, never the sentence.
+        roster = pipeline_routes.do_pipeline_worklist([])["roster"]
+        chip = next((one for one in roster if one["run"] == run_dir.name), {})
+        checks.equal(
+            chip.get("owed"),
+            [{"code": "needs_price", "count": 1}, {"code": "never_emitted", "count": None}],
+            "the roster sends a machine code beside each owed sentence, in the same order",
+        )
+        checks.ok(
+            all(reason["code"] in pipeline_routes.OWE_CODES for reason in chip.get("owed", [])),
+            "every code sent is one `OWE_CODES` declares",
+        )
+        left_out(command(checks, "emit", str(run_dir.directory)))
+        checks.equal(
+            owes_price(),
+            ["1 card with no market price needs a price"],
+            "and after the send it still owes that price: the card stayed back, so the run did",
+        )
+
+    with isolated_home():
+        first, _ = seam_run(checks, [cards[0], cards[2]], market=no_price)
+        second, _ = seam_run(checks, [cards[1]], market=no_price)
+        left_out(command(checks, "emit", str(first.directory), str(second.directory)))
+
+    # WHEN EVERY READY CARD NEEDS A PRICE, THE REFUSAL SAYS SO, AND BOTH PATHS AGREE (the delta
+    # review, R3-3). The single-run path said "every row is already sent" and exited 0; the
+    # merged path said "held back, unlisted, or has no room" and exited 1; the send route read
+    # either as "already at TCGplayer or held back". All three were false.
+    from cli import __main__ as entry
+
+    def refused(argv) -> Tuple[int, str]:
+        with quiet() as said:
+            code = entry.main(list(argv))
+        return code, said.getvalue()
+
+    with isolated_home():
+        only, _ = seam_run(checks, [cards[2]], market=no_price)
+        code, said = refused(["emit", str(only.directory)])
+        checks.ok(
+            code == 1 and merge.ONLY_UNPRICED in said and "already sent" not in said,
+            "one run, every card unpriced: `emit` refuses by saying the card needs a price",
+            f"exit {code}\n{said}",
+        )
+    with isolated_home():
+        one, _ = seam_run(checks, [cards[2]], market=no_price)
+        two, _ = seam_run(checks, [cards[2]], market=no_price)
+        code, said = refused(["emit", str(one.directory), str(two.directory)])
+        checks.ok(
+            code == 1 and merge.ONLY_UNPRICED in said and "no room" not in said,
+            "several runs, every card unpriced: the same sentence and the same exit",
+            f"exit {code}\n{said}",
+        )
+    answer = send_routes._empty_send_refusal(f"...\n{merge.ONLY_UNPRICED}\n", [], "sent")
+    checks.equal(
+        (answer.code, "already at TCGplayer" in str(answer)),
+        ("needs_price", False),
+        "and the send route names it `needs_price`, never `nothing_to_send`",
+    )
+
+    # THE REVIEWER'S STORES, R4 (the delta review of 683860e7).
+    #
+    # F3: several runs, one card sent with `--quantity SKU=0` and one with no price. The empty
+    # send returned on the price sentence before the loop that names every left-out card, so
+    # the zero-quantity card was never named.
+    with isolated_home():
+        one, _ = seam_run(checks, [cards[0], cards[2]], market=no_price)
+        two, _ = seam_run(checks, [cards[2]], market=no_price)
+        code, said = refused(
+            ["emit", str(one.directory), str(two.directory), "--quantity", f"{DUNSPARCE_SKU}=0"]
+        )
+        checks.ok(
+            code == 1 and merge.ONLY_UNPRICED in said and f"{DUNSPARCE_SKU} — " in said,
+            "several runs, an empty send: every left-out card is NAMED with its reason before "
+            "the price sentence",
+            f"exit {code}\n{said}",
+        )
+
+    # F4: `--listed-only` over a priced card under the cut-off and an unpriced card. Nothing
+    # can go. The single-run path ignored the flag, and the merged path said every card needs a
+    # price while a priced card stayed back. Both paths must say the same true thing: the
+    # priced card is held back by the flag, and it is named apart from the unpriced one.
+    under = {ARTICUNO_SKU: "", DUNSPARCE_SKU: "0.10"}
+
+    def listed_only_truth(argv, label) -> None:
+        code, said = refused(argv)
+        checks.ok(
+            code == 1
+            # R6-9: both reasons in one headline, never only the flag's.
+            and "nothing to send: 1 card needs a price first, and 1 priced card under the "
+            "cut-off is held back by --listed-only" in said
+            and merge.ONLY_UNPRICED not in said
+            and f"{DUNSPARCE_SKU} — under the cut-off" in said
+            and ARTICUNO_SKU in said,
+            f"{label}, --listed-only: the priced card under the cut-off is named apart from the "
+            "unpriced one, and the refusal says the flag holds it back",
+            f"exit {code}\n{said}",
+        )
+
+    with isolated_home():
+        only, _ = seam_run(checks, [cards[0], cards[2]], market=under)
+        listed_only_truth(["emit", str(only.directory), "--listed-only"], "one run")
+    with isolated_home():
+        one, _ = seam_run(checks, [cards[0]], market=under)
+        two, _ = seam_run(checks, [cards[2]], market=under)
+        listed_only_truth(
+            ["emit", str(one.directory), str(two.directory), "--listed-only"], "several runs"
+        )
+
+    # F5: a live-guard trim beside the price reason. The route checked the price sentence
+    # first and dropped the trim. It names both now.
+    trim = {"sku": DUNSPARCE_SKU, "name": "Dunsparce", "live": 1, "on_hand": 1, "would": 1, "goes": 0}
+    answer = send_routes._empty_send_refusal(f"...\n{merge.ONLY_UNPRICED}\n", [trim], "sent")
+    checks.ok(
+        answer.code == "needs_price" and "Dunsparce" in str(answer) and "TCGplayer already" in str(answer),
+        "the send route names the trimmed card beside the price reason, never hides it",
+        str(answer),
+    )
+    answer = send_routes._empty_send_refusal(f"...\n{merge.ONLY_UNDER_CUT}\n", [], "sent")
+    checks.equal(
+        answer.code,
+        "under_cut_off",
+        "and a send that --listed-only emptied is named for the flag, not for a price",
+    )
+
+
+# ============================================================================= the send matrix
+#
+# THE REVIEWER'S CASE MATRIX, MADE PERMANENT (R6). Every round of the pricing lane closed one
+# message defect and opened another, because each fix was checked against the case that found
+# it and nothing else. This is every store shape and every flag set a send can meet, over one
+# run and over several, and for each one it asserts all four places the owner reads the answer:
+#
+#   the file      each import file's rows, as (SKU, Add to Quantity, price)
+#   emit          the reasons it prints, and the ones it must never print
+#   the route     the refusal code, and the title the Send card words from the refusal's
+#                 figures (`standing.ts:emptySendTitle`, never the server's sentence, D269)
+#   Home          the standing line, the Pricing tile and the run chips, from the worklist
+#                 the send started from. Read by running `app/src/standing.ts` itself, bundled
+#                 by the app's own esbuild, so no third copy of the rule lives here.
+#
+# A ROW NAMES ITS OWN DEFECT where it has one: R6-3 is the live-guard trim named as a trim,
+# R6-5 the one-run twin of F3, R6-6 the merged `--listed-only` naming, R6-9 the headline worded
+# from its reasons. R6-4 (a failed read of typed prices) and R6-8 (the chip) are Home columns.
+
+_M_D, _M_R, _M_A = DUNSPARCE_SKU, DUNSPARCE_REVERSE_SKU, ARTICUNO_SKU
+_M_CARDS = [
+    (3, 1, "Dunsparce", "120", "normal"),
+    (3, 2, "Dunsparce", "120", "reverse_holo"),
+    (3, 3, "Articuno", "161", None),
+    # A SECOND DRAWER HOLDING THE SAME TWO SKUS, for the shared-SKU rows (R7 F5).
+    (4, 1, "Dunsparce", "120", "normal"),
+    (4, 2, "Articuno", "161", None),
+    # TWO MORE NORMAL DUNSPARCE IN DRAWER 3, so one SKU has three copies on hand. The guard
+    # alone then leaves room past a cap, for the `--cap` rows (D7).
+    (3, 4, "Dunsparce", "120", "normal"),
+    (3, 5, "Dunsparce", "120", "normal"),
+]
+_M_MIX = {_M_A: ""}
+_M_SUB = {_M_A: "", _M_D: "0.10"}
+_M_SUBALL = {_M_A: "0.05", _M_D: "0.10", _M_R: "0.12"}
+_M_LAYOUT = {
+    "one": [[0, 1, 2]], "two": [[0, 2], [1]], "share": [[0, 1, 2], [3, 4]],
+    "deep1": [[0, 1, 2, 5, 6]], "deep2": [[0, 2, 5], [1, 6]], "share1": [[0, 1, 2, 5]],
+}
+_M_NONE_NAMED = {"prices": [], "moves": []}
+
+# The reasons, as emit prints them, one per card.
+_M_LIVE = "TCGplayer already holds every copy on hand"
+_M_HELD = "held back or answered unlisted"
+_M_ASKED0 = "this send asked for none of this card"
+_M_SENT = "every copy in this run is already listed or has left the box"
+
+# THE HEADLINES, WRITTEN OUT (R7 F6). The matrix never asks `merge` for the sentence it is
+# checking, so a defect in the sentence builder goes red here.
+_M_ONLY_PRICE = "nothing to send: every card left needs a price first"
+_M_ONLY_CUT = "nothing to send: every priced card left is under the cut-off, and --listed-only holds it back"
+_M_NOTHING_NEW = "nothing new to send: every card left is already at TCGplayer, held back, or has no room"
+_M_PRICE_LIVE2 = "nothing to send: 1 card needs a price first, and TCGplayer already holds every copy of 2 cards"
+_M_PRICE_LIVE1 = "nothing to send: 1 card needs a price first, and TCGplayer already holds every copy of 1 card"
+_M_PRICE_CUT_LIVE = (
+    "nothing to send: 1 card needs a price first, and 1 priced card under the cut-off is held "
+    "back by --listed-only, and TCGplayer already holds every copy of 1 card"
+)
+
+
+def _m_row(sku: str, price: str) -> Tuple[str, int, str]:
+    return (sku, 1, price)
+
+
+def _m_cases() -> Dict[str, dict]:
+    """Every case: store, layout, flags, and what each of the four readers must say."""
+    d_mix, r_mix = _m_row(_M_D, "2.06"), _m_row(_M_R, "2.60")
+    d_sub = _m_row(_M_D, "0.49")
+    both = [d_mix, r_mix]
+    send2 = {"line": "send 2 copies to TCGplayer", "behind": "1 card needs a price", "tile": "run to price, 2 ready"}
+    cases: Dict[str, dict] = {}
+    for layout in ("one", "two"):
+        last = "import.csv"
+
+        def add(name, _layout=layout, **spec):
+            spec.setdefault("flags", [])
+            spec.setdefault("says", [])
+            spec.setdefault("never", [])
+            spec.setdefault("route", None)
+            spec["layout"] = _layout
+            cases[f"{name.split('/')[0]}/{_layout}/{name.split('/')[1]}"] = spec
+
+        # A MIXED STORE: two priced cards and one with no market price.
+        for flag, argv, want in (
+            ("plain", [], {last: both}),
+            ("cap1", ["--cap", "1"], {last: both}),
+            ("listed", ["--listed-only"], {last: both}),
+            ("splitT", ["--split-threshold"], {"import-listed.csv": both}),
+            ("splitG", ["--split-games"], {"import-pokemon.csv": both}),
+        ):
+            add(f"mix/{flag}", market=_M_MIX, flags=argv, exit=0, files=want, says=[_M_A], home=send2)
+        add("mix/qty0", market=_M_MIX, flags=["--quantity", f"{_M_D}=0"], exit=0, files={last: [r_mix]},
+            says=[f"{_M_D} Dunsparce — asked 0, none sent"], home=send2)
+        add("mix/held", market=_M_MIX, pre=(_M_D,), exit=0, files={last: [r_mix]}, says=[_M_A],
+            home={"line": "send 1 copy to TCGplayer", "behind": "1 card needs a price", "tile": "run to price, 1 ready",
+                  "failed": "send 2 copies to TCGplayer"})
+        # R6-5: the one-run empty send names every card it left out, as the merged one does.
+        add("mix/heldall", market=_M_MIX, pre=(_M_D, _M_R), exit=1, files={},
+            says=[f"{_M_D} — {_M_HELD}", f"{_M_R} — {_M_HELD}", _M_A, _M_ONLY_PRICE],
+            route=("needs_price", ["Every card on this list needs a price first"]),
+            home={"line": "price 1 card", "behind": None, "tile": "run to price",
+                  "failed": "send 2 copies to TCGplayer"})
+        add("mix/qty0all", market=_M_MIX, flags=["--quantity", f"{_M_D}=0", "--quantity", f"{_M_R}=0"], exit=1, files={},
+            says=[f"{_M_D} — {_M_ASKED0}", f"{_M_R} — {_M_ASKED0}", _M_A, _M_ONLY_PRICE],
+            route=("needs_price", ["Every card on this list needs a price first"]), home=send2)
+        add("mix/sent", market=_M_MIX, twice=True, exit=1, files={last: both},
+            says=[f"{_M_D} — {_M_SENT}", f"{_M_R} — {_M_SENT}", _M_A, _M_ONLY_PRICE],
+            route=("needs_price", ["Every card on this list needs a price first"]),
+            home={"line": "price 1 card", "behind": None, "tile": "run to price",
+                  "chip": "Sent, 1 needs a price"})
+        # R6-3 and R6-9: a live-guard trim is named as a trim, and the headline and the title
+        # state every reason the send was empty, never only the price.
+        for flag, named in (("guard", None), ("guard+named", _M_NONE_NAMED)):
+            add(f"mix/{flag}", market=_M_MIX, live={_M_D: 1, _M_R: 1, _M_A: 0}, named=named, exit=1, files={},
+                says=[f"{_M_D} — {_M_LIVE}", f"{_M_R} — {_M_LIVE}", _M_A,
+                      _M_PRICE_LIVE2],
+                never=[_M_ASKED0, _M_ONLY_PRICE],
+                route=("needs_price", ["1 card needs a price first", "TCGplayer already had every copy of 2 cards"]),
+                home=send2)
+        add("mix/guard+part", market=_M_MIX, live={_M_D: 1, _M_R: 0, _M_A: 0}, named=_M_NONE_NAMED, exit=0,
+            files={last: [r_mix]}, says=[f"{_M_D} Dunsparce — TCGplayer holds 1 of 1 on hand", f"{_M_D} — {_M_LIVE}"],
+            never=[_M_ASKED0], home=send2)
+        # R8-2: A SEND THAT IS NOT EMPTY, WITH A LIVE CARD THAT HAS ANOTHER REASON. A card with
+        # no price and a withheld card are named for that reason alone, on both paths: never in
+        # the "no room" list as live, never in the guard's trimmed list the Send card draws.
+        add("own/sub-listed+Alive", market=_M_SUB, flags=["--listed-only"], live={_M_D: 0, _M_R: 0, _M_A: 1},
+            named=_M_NONE_NAMED, exit=0, files={last: [r_mix]},
+            says=[f"{_M_D} — under the cut-off (Dunsparce)", _M_A],
+            never=[f"{_M_A} — {_M_LIVE}", f'"sku": "{_M_A}", "would"', _M_ASKED0], home=send2)
+        add("own/held+live", market=_M_MIX, pre=(_M_D,), live={_M_D: 1, _M_R: 0, _M_A: 0}, named=_M_NONE_NAMED,
+            exit=0, files={last: [r_mix]}, says=[_M_A],
+            never=[f"{_M_D} — {_M_LIVE}", f'"sku": "{_M_D}", "would"', _M_ASKED0],
+            home={"line": "send 1 copy to TCGplayer", "behind": "1 card needs a price", "tile": "run to price, 1 ready",
+                  "failed": "send 2 copies to TCGplayer"})
+        # R7 F4: a card with no price that TCGplayer also holds has one reason, the price. It is
+        # counted once, and never named among the live cards.
+        add("mix/unpricedlive", market=_M_MIX, live={_M_D: 1, _M_R: 1, _M_A: 1}, named=_M_NONE_NAMED, exit=1,
+            files={}, says=[f"{_M_D} — {_M_LIVE}", f"{_M_R} — {_M_LIVE}", _M_A, _M_PRICE_LIVE2,
+                            '"live_names": ["Dunsparce", "Dunsparce"]'],
+            never=[_M_ASKED0, f"{_M_A} — {_M_LIVE}"],
+            route=("needs_price", ["Nothing was sent. 1 card needs a price first. TCGplayer already had every "
+                                   "copy of 2 cards (Dunsparce, Dunsparce)."]),
+            home=send2)
+
+        # A STORE WITH A PRICED CARD UNDER THE CUT-OFF.
+        sub_both = [d_sub, r_mix]
+        for flag, argv, want in (
+            ("plain", [], {last: sub_both}),
+            ("cap1", ["--cap", "1"], {last: sub_both}),
+            ("splitT", ["--split-threshold"], {"import-listed.csv": [r_mix], "import-subthreshold.csv": [d_sub]}),
+            ("splitG", ["--split-games"], {"import-pokemon.csv": sub_both}),
+        ):
+            add(f"sub/{flag}", market=_M_SUB, flags=argv, exit=0, files=want, says=[_M_A], home=send2)
+        add("sub/qty0", market=_M_SUB, flags=["--quantity", f"{_M_D}=0"], exit=0, files={last: [r_mix]},
+            says=[f"{_M_D} Dunsparce — asked 0, none sent"], home=send2)
+        # R6-6: `--listed-only` names the priced card it leaves under the cut-off, on both paths.
+        add("sub/listed", market=_M_SUB, flags=["--listed-only"], exit=0, files={last: [r_mix]},
+            says=[f"{_M_D} — under the cut-off (Dunsparce)", _M_A], home=send2)
+        # R6-9: the headline is not "every priced card is under the cut-off" when a priced card
+        # above it was trimmed by the guard.
+        add("sub/listed+guard", market=_M_SUB, flags=["--listed-only"], live={_M_D: 0, _M_R: 1, _M_A: 0},
+            named=_M_NONE_NAMED, exit=1, files={},
+            says=[f"{_M_D} — under the cut-off (Dunsparce)", f"{_M_R} — {_M_LIVE}", _M_A,
+                  _M_PRICE_CUT_LIVE],
+            never=[_M_ONLY_CUT, _M_ASKED0],
+            route=("needs_price", ["1 card needs a price first", "1 priced card is under the cut-off",
+                                   "TCGplayer already had every copy of 1 card"]),
+            home=send2)
+
+        # EVERY CARD PRICED AND UNDER THE CUT-OFF.
+        add("suball/listed", market=_M_SUBALL, flags=["--listed-only"], exit=1, files={},
+            says=[f"{sku} — under the cut-off" for sku in (_M_D, _M_R, _M_A)] + [_M_ONLY_CUT],
+            route=("under_cut_off", ["Every priced card on this list is under the cut-off"]),
+            home={"line": "send 3 copies to TCGplayer", "behind": None, "tile": "3 copies ready to send",
+                  "chip": "Never sent"})
+        # DEBT35: ONE ANSWER ON BOTH PATHS. One run exited 0 with its own sentence, and several
+        # exited 1 with another. Both exit 1 now, with one headline and each card's reason.
+        add("suball/listed-sent", market=_M_SUBALL, flags=["--listed-only"], twice=True, exit=1,
+            files={last: [_m_row(_M_D, "0.49"), _m_row(_M_R, "0.49"), _m_row(_M_A, "0.49")]},
+            says=[_M_NOTHING_NEW] + [f"{sku} — {_M_SENT}" for sku in (_M_D, _M_R, _M_A)],
+            never=["nothing to write"],
+            route=("nothing_to_send", ["already at TCGplayer"]),
+            home={"line": None, "behind": None, "tile": "nothing to price", "chip": "All sent"})
+    # R7 F5: A SKU SHARED BY TWO DRAWERS UNDER `--cap 1`, WITH THE GUARD. The reverse holo is
+    # trimmed to nothing and the send is not empty: the trim is named as a trim, never as
+    # "asked for none".
+    # THE CAP IS 2, NOT 1, since the `--cap` fix below. TCGplayer holds 1 Dunsparce, so a cap
+    # of 1 leaves no room and the send is empty. This row is about the trim, not the cap.
+    cases["share/two/cap2-guardall"] = {
+        "layout": "share", "market": _M_MIX, "flags": ["--cap", "2"],
+        "live": {_M_D: 1, _M_R: 1, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 0,
+        "files": {"import.csv": [d_mix]},
+        "says": [f"{_M_R} — {_M_LIVE}"], "never": [_M_ASKED0], "route": None,
+        "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "runs to price, 3 ready"},
+    }
+    # R7 F5 UNDER A CAP THE GUARD CLOSES, ON BOTH PATHS (the lane-end review of send-fixes). A
+    # cap of 1 with one Dunsparce live leaves no room, and the guard trims the reverse holo. The
+    # reverse holo is still the guard's trim, never "asked for none", and the headline names it.
+    # The cap fix first measured the trim with the guard's own reading, saw nothing to trim, and
+    # said "every card left needs a price first".
+    for layout, runs_label in (("share1", "one"), ("share", "two")):
+        cases[f"share/{runs_label}/cap1-guardall"] = {
+            "layout": layout, "market": _M_MIX, "flags": ["--cap", "1"],
+            "live": {_M_D: 1, _M_R: 1, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 1, "files": {},
+            "says": [f"{_M_R} — {_M_LIVE}", f"{_M_D} — 1 live, at the cap of 1", _M_A, _M_PRICE_LIVE1,
+                     f'"sku": "{_M_R}"'],
+            "never": [_M_ASKED0, _M_ONLY_PRICE],
+            "route": ("needs_price", ["1 card needs a price first", "TCGplayer already had every copy of 1 card"]),
+            "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "3 ready"},
+        }
+    # `--cap N` WITH `--live-guard`: THE CAP COUNTS THE COPIES THE GUARD SAYS ARE LIVE (D7: "at
+    # most N copies LIVE"). Three Dunsparce are on hand, so the guard alone leaves room past the
+    # cap. Before the fix the cap read only the store and the join's export, both 0 here, and
+    # each row below sent one copy more than the cap allows. Below, at and over, on both paths.
+    for layout, runs_label in (("deep1", "one"), ("deep2", "two")):
+        for flag, cap, seen, want, said in (
+            ("below", "2", 1, [d_mix, r_mix], []),
+            ("at", "1", 1, [r_mix], [f"{_M_D} — 1 live, at the cap of 1"]),
+            ("over", "1", 2, [r_mix], [f"{_M_D} — 2 live, over the 1 this send asked for"]),
+        ):
+            cases[f"capguard/{runs_label}/{flag}"] = {
+                "layout": layout, "market": _M_MIX, "flags": ["--cap", cap],
+                "live": {_M_D: seen, _M_R: 0, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 0,
+                "files": {"import.csv": want}, "says": said, "never": [_M_ASKED0], "route": None,
+                "home": {"line": "send 4 copies to TCGplayer", "behind": "1 card needs a price", "tile": "4 ready"},
+            }
+    return cases
+
+
+def _m_hold(skus) -> None:
+    book = corpus.Corpus.read()
+    for sku in skus:
+        book.answers[sku] = corpus.Answer(value={"withheld": "keeping"})
+    book.write()
+
+
+def _m_files(dirs) -> Dict[str, List[Tuple[str, int, str]]]:
+    out: Dict[str, List[Tuple[str, int, str]]] = {}
+    for directory in dirs:
+        for path in sorted(Path(directory).glob("import*.csv")):
+            out[path.name] = sorted(
+                (
+                    str(row[tcgcsv.SKU_COLUMN]),
+                    tcgcsv.parse_quantity(row.get(tcgcsv.QUANTITY_COLUMN, "")),
+                    str(row.get("TCG Marketplace Price", "")),
+                )
+                for row in tcgcsv.read_export(path).rows
+            )
+    return out
+
+
+def _m_home(worklists: Dict[str, dict]) -> Dict[str, dict]:
+    """Home's line, tile and run chips for each worklist, off `app/src/standing.ts` itself."""
+    root = Path(__file__).resolve().parents[2]
+    esbuild = root / "app" / "node_modules" / ".bin" / "esbuild"
+    if not esbuild.exists():
+        raise RuntimeError("app/node_modules is not installed (npm --prefix app ci); Home cannot be read")
+    with tempfile.TemporaryDirectory() as tmp:
+        bundle = Path(tmp) / "standing.mjs"
+        subprocess.run(
+            [str(esbuild), str(root / "app" / "src" / "standing.ts"), "--bundle", "--format=esm",
+             "--platform=node", "--log-level=warning", f"--outfile={bundle}"],
+            check=True,
+        )
+        cases = Path(tmp) / "cases.json"
+        cases.write_text(json.dumps(worklists))
+        script = (
+            f"import * as s from {json.dumps(bundle.as_uri())};"
+            "import {readFileSync} from 'node:fs';"
+            f"const cases = JSON.parse(readFileSync({json.dumps(str(cases))}, 'utf8'));"
+            "const status = {cards: 3, queues: {review: 0, parked: 0}, states: {}, problem: null};"
+            "const orders = {orders: [], resolution: {orders: [], counts: {}}};"
+            "const out = {};"
+            "for (const [name, c] of Object.entries(cases)) {"
+            "  const read = (book, failed) => {"
+            "    const say = s.standing({status, statusFailed: false, orders, ordersFailed: false,"
+            "      pricing: c.pricing, pricingFailed: false, runs: [], runsFailed: false, unconfirmed: 0,"
+            "      book, bookFailed: failed});"
+            "    return say === null ? null : {lead: say.lead, text: say.say.map((x) => x.text).join(''),"
+            "      behind: say.behind.slice()};"
+            "  };"
+            "  const ready = s.sendCounts(c.pricing, c.book).ready;"
+            "  out[name] = {line: read(c.book, false), failed: read(null, true),"
+            "    title: c.empty ? s.emptySendTitle(c.empty) : null,"
+            "    tile: s.pricingTileNote(s.runsOwingPrice(c.pricing.roster), ready),"
+            "    chips: c.pricing.roster.map((r) => s.runChip(r))};"
+            "}"
+            # RANKS 5 AND 6 ON A FAILED READ (R8 review, LOW note a), off a worklist that owes
+            # nothing: a live run, then photographed cards. Each keeps the typed-prices note.
+            "const calm = cases['suball/one/listed-sent'];"
+            "if (calm) {"
+            "  const at = (st, rs) => {"
+            "    const say = s.standing({status: st, statusFailed: false, orders, ordersFailed: false,"
+            "      pricing: calm.pricing, pricingFailed: false, runs: rs, runsFailed: false, unconfirmed: 0,"
+            "      book: null, bookFailed: true});"
+            "    return say === null ? null : {key: say.key, lead: say.lead, behind: say.behind.slice()};"
+            "  };"
+            "  out['rank:working'] = at(status, [{live: true, box: 3}]);"
+            "  out['rank:captured'] = at({...status, states: {captured: 2}}, []);"
+            "}"
+            "process.stdout.write(JSON.stringify(out));"
+        )
+        done = subprocess.run(
+            ["node", "--input-type=module", "-e", script], capture_output=True, text=True, check=False
+        )
+        if done.returncode != 0:
+            raise RuntimeError(f"node could not read Home: {done.stderr.strip()[:900]}")
+        return json.loads(done.stdout)
+
+
+def check_send_matrix(checks: Checks) -> None:
+    """THE SEND MATRIX (R6): every store shape and flag set, all four readers, one table."""
+    from cli import __main__ as entry
+
+    checks.note("")
+    checks.note("THE SEND MATRIX — the file, emit's reasons, the route's refusal, and Home, per case")
+
+    def emit(argv) -> Tuple[int, str]:
+        with quiet() as said:
+            code = entry.main(["emit", *argv])
+        return code, said.getvalue()
+
+    cases = _m_cases()
+    worklists: Dict[str, dict] = {}
+    for name, spec in cases.items():
+        with isolated_home() as home:
+            made = [seam_run(checks, [_M_CARDS[i] for i in part], market=spec["market"])[0]
+                    for part in _M_LAYOUT[spec["layout"]]]
+            dirs = [str(run.directory) for run in made]
+            if spec.get("pre"):
+                _m_hold(spec["pre"])
+            extra: List[str] = []
+            if spec.get("live") is not None:
+                live = home / "live.csv"
+                live.write_bytes(_live_export_bytes(spec["live"]))
+                extra += ["--live-guard", str(live)]
+            if spec.get("named") is not None:
+                told = home / "named.json"
+                told.write_text(json.dumps(spec["named"]))
+                extra += ["--reprice-live", str(told)]
+            if spec.get("twice"):
+                emit(dirs)
+            worklists[name] = {
+                "pricing": pipeline_routes.do_pipeline_worklist([]),
+                "book": pipeline_routes.do_pricing_corpus().get("corpus") or {},
+            }
+            code, said = emit(dirs + spec["flags"] + extra)
+            checks.equal(code, spec["exit"], f"{name}: emit exits {spec['exit']}")
+            checks.equal(_m_files(dirs), {k: sorted(v) for k, v in spec["files"].items()},
+                         f"{name}: the import files hold exactly these rows")
+            for phrase in spec["says"]:
+                checks.ok(phrase in said, f"{name}: emit says {phrase!r}", said[-1500:])
+            for phrase in spec["never"]:
+                checks.ok(phrase not in said, f"{name}: emit never says {phrase!r}", said[-1500:])
+            if spec["route"] is not None:
+                guard = send_routes._guard_line(said) or {}
+                refusal = send_routes._empty_send_refusal(said, guard.get("trimmed") or [], "sent", code)
+                want_code, _ = spec["route"]
+                checks.equal(refusal.code, want_code, f"{name}: the route refuses as {want_code}")
+                worklists[name]["empty"] = (refusal.data or {}).get("empty")
+                worklists[name]["detail"] = str(refusal)
+
+    try:
+        home = _m_home(worklists)
+    except (RuntimeError, OSError, subprocess.CalledProcessError) as exc:
+        checks.ok(False, "Home can be read for every matrix case", str(exc))
+        return
+    for name, spec in cases.items():
+        want, got = spec["home"], home[name]
+        if spec["route"] is not None:
+            # R6-2: the Send card's title states every reason; the server's sentence is only the
+            # detail behind the fold. A refusal with no figures keeps its fixed title, and the
+            # detail is what names it.
+            title = got["title"] if got["title"] is not None else worklists[name]["detail"]
+            for phrase in spec["route"][1]:
+                checks.ok(phrase in title, f"{name}: the Send card's title says {phrase!r}", title)
+        line = (got["line"] or {}).get("text", "")
+        if want["line"] is None:
+            checks.ok("send" not in line and "price" not in line, f"{name}: Home owes nothing on Pricing", line)
+        else:
+            checks.ok(want["line"] in line, f"{name}: Home says {want['line']!r}", line)
+        if want.get("behind"):
+            checks.ok(want["behind"] in (got["line"] or {}).get("behind", []),
+                      f"{name}: Home names {want['behind']!r} behind the line", str(got["line"]))
+        checks.ok(want["tile"] in got["tile"], f"{name}: the Pricing tile says {want['tile']!r}", got["tile"])
+        # R6-4 AND R8-1: a failed read of typed prices degrades to the worklist's own counts, the
+        # no-price count included, and a Pricing line names that read. A line from a rank below
+        # Pricing still draws.
+        failed = (got["failed"] or {})
+        # R8-1: A FAILED READ IS NEVER CLEAR. `standing.ts` says Clear only from a complete
+        # reading, so a store whose typed prices could not be read never reads as owing nothing.
+        checks.ok(
+            failed.get("lead") != "Clear" and "nothing is owed" not in failed.get("text", ""),
+            f"{name}: with typed prices unread, Home never says Clear",
+            str(failed),
+        )
+        # A ROW THAT OWES NOTHING ON A FAILED READ NAMES THE READ AND NOTHING ELSE (R8 review, LOW
+        # note b). R8-1 lets the line say "typed prices", because the line is about that read. It
+        # never asks for a send or a price, and nothing behind it counts a card owing a price.
+        spare = failed.get("text", "").replace("typed prices", "")
+        checks.ok(
+            "the pricing worklist" not in failed.get("text", "")
+            and (
+                (
+                    "send" not in spare and "price" not in spare
+                    and not any("needs a price" in b or "need a price" in b for b in failed.get("behind", []))
+                )
+                if want.get("failed", want["line"]) is None
+                else (
+                    want.get("failed", want["line"]) in failed.get("text", "")
+                    and any("typed prices" in b for b in failed.get("behind", []))
+                )
+            ),
+            f"{name}: with typed prices unread, Home still counts the worklist and names that read",
+            str(failed),
+        )
+        if want.get("chip"):
+            checks.ok(any(want["chip"] == chip for chip in got["chips"]),
+                      f"{name}: a run chip says {want['chip']!r}", str(got["chips"]))
+    # R8 REVIEW, LOW NOTE A: ranks 5 and 6 draw their own list behind the line. On a failed
+    # read of typed prices they keep its note, and they are never Clear.
+    for rank in ("working", "captured"):
+        got = home.get(f"rank:{rank}") or {}
+        checks.ok(
+            got.get("key") == rank and got.get("lead") != "Clear"
+            and any("typed prices" in label for label in got.get("behind", [])),
+            f"with typed prices unread, Home's rank {rank!r} still names that read",
+            str(got),
+        )
+    # R6-8: a SENT run that owes a price is told from one never sent that owes one too.
+    checks.ok(
+        all("Sent, 1 needs a price" in home[f"mix/{layout}/sent"]["chips"] for layout in ("one", "two")),
+        "a sent run that owes a price says it was sent",
+        str([home[f"mix/{layout}/sent"]["chips"] for layout in ("one", "two")]),
+    )
+    checks.ok(
+        all(any(chip.startswith("Never sent, 1 needs") for chip in home[f"mix/{layout}/plain"]["chips"])
+            for layout in ("one", "two")),
+        "a never-sent run that owes a price says it was never sent",
+        str([home[f"mix/{layout}/plain"]["chips"] for layout in ("one", "two")]),
+    )
+    checks.note(f"send matrix: {len(cases)} cases")
+
+
+def check_pipeline_sets(checks: Checks) -> None:
+    """`GET /pipeline/sets` — the owner's "by set order" view (D293).
+
+    ON HAND MEANS `identified`, NARROWER THAN `do_pipeline_value`'s "not a terminal state":
+    a captured-and-not-yet-identified card, a sold one, a retired one and a moved one are
+    all excluded, and the fixture below plants one of each so a card wrongly included is a
+    row this test can point at.
+
+    THE GROUPING RUNGS: a SKU groups every physical copy of it into one row with a summed
+    `qty`; a `sku_unknown` card with a name and a number groups on those; a card with none
+    of the three (no SKU, no name, no number) is its own row, because nothing here can tell
+    it apart from another blank card, and merging on a shared blank key would silently
+    collapse two distinct physical cards into one.
+
+    THE ORDER IS A NATURAL SORT OVER THE RAW `number` COLUMN, never a per-game rule:
+    `087/298` < `089a/298` < `090/298`, because the digit run before the letter is compared
+    as an integer (87 < 89 < 90) rather than as text, where `'089a' < '090'` would be false.
+    """
+    checks.note("")
+    checks.note("PIPELINE SETS — grouped by set, natural-sorted, on hand only")
+
+    RICH = "9027460"
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="Spiritforged box")
+
+            minted = 0
+
+            def put(sku, name, number, printed_total, set_name, game="riftbound", state=master.IDENTIFIED):
+                nonlocal minted
+                minted += 1
+                card, _ = inventory.allocate_capture(1, cid=fake_cid(f"sets-{minted}"))
+                card.sku = sku
+                card.name = name
+                card.number = number
+                card.printed_total = printed_total
+                card.set_name = set_name
+                card.game = game
+                card.state = state
+                return card
+
+            # THE NATURAL-SORT CASE, three rows of one set, planted out of printed order so
+            # a route that merely echoed insertion order would pass by accident.
+            put(RICH, "Towering Combatant", "090", "298", "Spiritforged")
+            put("8925668", "Ancient Henge", "087", "298", "Spiritforged")
+            put("8925669", "Corina Veraza", "089a", "298", "Spiritforged")
+
+            # TWO PHYSICAL COPIES OF ONE SKU — one row, `qty: 2`.
+            put(RICH, "Towering Combatant", "090", "298", "Spiritforged")
+
+            # A SECOND SET, SAME GAME — proves grouping is per (game, set), not per game
+            # alone. TWO MORE ROWS HERE, "9" and "10", are the digit-WIDTH case a plain
+            # lexicographic sort cannot pass: as text "10" < "9" (`'1' < '9'`), so a mutation
+            # that dropped the natural sort for `str.lower()` alone would still pass the
+            # 087/089a/090 case above (same digit width, so text order and numeric order
+            # coincide there) and only goes red on this one.
+            put("8611100", "Progress Day", "114", "298", "Origins")
+            put("8611101", "Ninth", "9", "298", "Origins")
+            put("8611102", "Tenth", "10", "298", "Origins")
+
+            # A SKU_UNKNOWN CARD WITH A NAME AND A NUMBER — groups on those, not dropped for
+            # having no SKU.
+            put(None, "Read Off The Photo", "200", "298", "Spiritforged")
+
+            # TWO BLANK CARDS — no SKU, no name, no number. Each is its own row: merging them
+            # on a shared blank key would report one card where two physical ones are on hand.
+            put(None, None, None, None, "Spiritforged")
+            put(None, None, None, None, "Spiritforged")
+
+            # NO SET ON FILE — its own group, at the end, never a silent drop.
+            put("7000001", "No Set On File", "1", "1", "")
+
+            # THE THREE EXCLUSIONS: not `identified`, so none of these may appear anywhere
+            # in the payload.
+            put("7100000", None, None, None, None, state=master.CAPTURED)
+            put("7100001", "Sold Already", "1", "1", "Spiritforged", state=master.SOLD)
+            put("7100002", "Retired Already", "2", "1", "Spiritforged", state=master.RETIRED)
+            put("7100003", "Moved Already", "3", "1", "Spiritforged", state=master.MOVED)
+
+        payload = pipeline_routes.do_pipeline_sets()
+
+    groups = {(g["game"], g["set_name"]): g for g in payload["groups"]}
+
+    checks.equal(
+        len(payload["groups"]),
+        2,
+        "two named sets (Spiritforged, Origins) — the excluded states and the no-set "
+        "card are not among them",
+    )
+
+    spiritforged = groups.get(("riftbound", "Spiritforged"))
+    checks.ok(spiritforged is not None, "the Spiritforged group exists")
+    if spiritforged is not None:
+        # THE TWO BLANK CARDS SHARE THIS SET TOO (checked further down) and their number
+        # sorts first — `('',)`, a prefix of every numbered card's own `('', N, '')` — so
+        # this order check reads only the rows that have a number at all.
+        numbers = [c["number_display"] for c in spiritforged["cards"] if c["number_display"] is not None]
+        checks.equal(
+            numbers,
+            ["087/298", "089a/298", "090/298", "200/298"],
+            "NATURAL SORT: 089a sits between 087 and 090 — the digit run compares as an "
+            "integer (87 < 89 < 90), not as text, where '089a' < '090' would be false",
+        )
+        by_number = {c["number_display"]: c for c in spiritforged["cards"]}
+        checks.equal(
+            by_number["090/298"]["qty"],
+            2,
+            "two physical copies of one SKU are one row with qty 2, not two rows",
+        )
+        checks.equal(
+            by_number["200/298"]["sku"],
+            None,
+            "a sku_unknown card groups on its name and number, and is not dropped for "
+            "having no SKU",
+        )
+
+    origins = groups.get(("riftbound", "Origins"))
+    checks.ok(
+        origins is not None and len(origins["cards"]) == 3,
+        "a second set groups on its own, never folded into the first",
+    )
+    if origins is not None:
+        checks.equal(
+            [c["number_display"] for c in origins["cards"]],
+            ["9/298", "10/298", "114/298"],
+            "DIGIT WIDTH: '9' sorts before '10' numerically, though '10' < '9' as text — "
+            "the case a plain string sort passes on 087/089a/090 (same width) and fails "
+            "here",
+        )
+
+    checks.equal(
+        len(payload["no_set"]),
+        1,
+        "a card with no set on file is one more group, at the end, never a silent drop",
+    )
+    checks.equal(
+        payload["no_set"][0]["name"],
+        "No Set On File",
+        "and it is the right card",
+    )
+
+    blanks = [c for c in spiritforged["cards"] if c["name"] is None] if spiritforged else []
+    checks.equal(
+        len(blanks),
+        2,
+        "TWO BLANK CARDS ARE TWO ROWS, not one merged on a shared blank key — the defect "
+        "caught against the owner's own store, where four such cards would otherwise have "
+        "collapsed into a single row a tap could reach only one of",
+    )
+    checks.equal(
+        len({c["cid"] for c in blanks}),
+        2,
+        "and each blank row's `cid` names a DIFFERENT physical card",
+    )
+
+    all_cards = [c for g in payload["groups"] for c in g["cards"]] + payload["no_set"]
+    excluded_names = {"Sold Already", "Retired Already", "Moved Already"}
+    checks.ok(
+        all(c["name"] not in excluded_names for c in all_cards),
+        "a sold, a retired and a moved card are all excluded from every group",
+    )
+    checks.equal(
+        sum(1 for c in all_cards if c["sku"] == "7100000"),
+        0,
+        "a captured-and-not-yet-identified card carries no set or number to group by, "
+        "and is excluded too",
+    )
+    total_qty = sum(c["qty"] for g in payload["groups"] for c in g["cards"]) + sum(
+        c["qty"] for c in payload["no_set"]
+    )
+    checks.equal(
+        total_qty,
+        11,
+        "on-hand qty sums to exactly the identified cards planted: 3 Spiritforged SKUs + "
+        "1 extra RICH copy + 3 Origins + 1 sku_unknown + 2 blanks + 1 no-set = 11",
+    )
+
+
+def check_stock_images(checks: Checks) -> None:
+    """`pipeline/stockimages.py` (`D301`) — both sources stubbed, never a socket.
+
+    THREE THINGS THE REVIEW ROUND NAMED. The Pokemon "CODE: " prefix match — the store's
+    own `set_name` for ME01 is "ME01: Mega Evolution" against the vendored tree's plain
+    "Mega Evolution", 0 of 542 real-store cards resolving before the fix. A miss answering
+    `None`. And the route threading — `do_pipeline_sets`/`do_pipeline_worklist` actually
+    carry `image_url` when handed a resolver, and carry `None` (open no socket) when not.
+
+    BOTH SOURCES ARE STUBBED. Pokemon reads a throwaway `vendor/pokemon-tcg-data/`-shaped
+    tree under a temp dir, never the real vendored one — this proves the CLASS's own fold,
+    not today's snapshot. Riftbound's tcgcsv walk goes through a fake `fetcher`, the same
+    `pricehistory.Market(fetcher=...)` idiom `check_price_history` already uses.
+
+    THE BACKGROUND-WARM SHAPE ITSELF (the review's second finding: a cold cache must never
+    block a request). `url_for` before `warm()` answers `None` at once, off a fetcher that
+    would otherwise sleep; `warm()`'s own threads, joined, are what makes the SECOND call
+    deterministic rather than a race against a background thread this test never waited
+    for.
+    """
+    checks.note("")
+    checks.note("STOCK IMAGES — both sources stubbed, the prefix fix, and the route thread")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        vendor_root = Path(tmp) / "pokemon-tcg-data"
+        sets_dir = vendor_root / "sets"
+        cards_dir = vendor_root / "cards" / "en"
+        sets_dir.mkdir(parents=True)
+        cards_dir.mkdir(parents=True)
+        (sets_dir / "en.json").write_text(
+            json.dumps([{"id": "me1", "name": "Mega Evolution"}]), "utf-8"
+        )
+        (cards_dir / "me1.json").write_text(
+            json.dumps([
+                {"number": "1", "images": {"small": "https://images.pokemontcg.io/me1/1.png"}},
+            ]),
+            "utf-8",
+        )
+        pokemon = stockimages._PokemonImages(root=vendor_root)
+
+        # `SetGroupCard`/`PricingSku` both carry the store's OWN `set_name` cell, which for
+        # a Pokemon set is "CODE: Name" — never the vendored tree's plain "Name". This is
+        # the exact string the real-store measurement found at 0% before the fix.
+        checks.equal(
+            pokemon.url_for("ME01: Mega Evolution", "1"),
+            "https://images.pokemontcg.io/me1/1.png",
+            "the store's 'CODE: Name' set_name still resolves, stripped and refolded",
+        )
+        checks.equal(
+            pokemon.url_for("Mega Evolution", "1"),
+            "https://images.pokemontcg.io/me1/1.png",
+            "a set_name with no code prefix still matches on its first try",
+        )
+        checks.equal(
+            pokemon.url_for("ME01: Mega Evolution", "999"),
+            None,
+            "a MISS is None, never a guess — this set exists, this number does not",
+        )
+        checks.equal(
+            pokemon.url_for("ME99: No Such Set", "1"),
+            None,
+            "an unknown set, prefix stripped or not, is a miss and never raises",
+        )
+
+    def make_fetcher():
+        def fetcher(url: str):
+            if url.endswith("/categories"):
+                return {"results": [
+                    {"name": "Riftbound League of Legends Trading Card Game", "categoryId": 89},
+                ]}
+            if url.endswith("/89/groups"):
+                return {"results": [{"name": "Vendetta", "groupId": 24698}]}
+            if url.endswith("/89/24698/products"):
+                time.sleep(0.2)  # a real tcgcsv products fetch, standing in for the ~2s cold walk
+                return {"results": [{
+                    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+                    "extendedData": [{"name": "Number", "value": "SP3/006"}],
+                }]}
+            raise AssertionError(f"unexpected fetch: {url}")
+        return fetcher
+
+    # A FRESH INSTANCE, ASKED ONCE, AND NEVER JOINED — `url_for` itself is what schedules a
+    # background warm on a miss (its own docstring), so THIS instance's own thread is left
+    # to finish on its own; the point of this half is only the CALLING thread's own timing.
+    latency = stockimages.StockImages(
+        market=pricehistory.Market(cache_dir=None, fetcher=make_fetcher()), pokemon=pokemon
+    )
+    started = time.time()
+    cold = latency.url_for("riftbound", "Vendetta", "SP3/006")
+    elapsed = time.time() - started
+    checks.equal(cold, None, "a cold cache answers None, never the URL, on the first ask")
+    checks.ok(
+        elapsed < 0.1,
+        f"and it answers in under 100ms even though the fetcher itself sleeps 200ms "
+        f"(measured {elapsed*1000:.0f}ms) — the walk never runs on the calling thread",
+    )
+
+    # A SECOND, UNTOUCHED INSTANCE, WARMED EXPLICITLY AND JOINED — this is what makes the
+    # follow-up read deterministic: `warm()` before any `url_for` call means the ONE thread
+    # it returns is the only one racing this test, and joining it settles that race.
+    images = stockimages.StockImages(
+        market=pricehistory.Market(cache_dir=None, fetcher=make_fetcher()), pokemon=pokemon
+    )
+    threads = images.warm([("riftbound", "Vendetta")])
+    checks.equal(len(threads), 1, "one background thread, for the one pair asked about")
+    for thread in threads:
+        thread.join(timeout=5)
+    checks.equal(
+        images.url_for("riftbound", "Vendetta", "SP3/006"),
+        "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+        "once the background warm has landed, url_for answers the real URL",
+    )
+    checks.equal(
+        images.warm([("riftbound", "Vendetta")]),
+        [],
+        "a fresh entry schedules nothing a second time",
+    )
+
+    # THE ROUTE THREADING: `do_pipeline_sets`/`do_pipeline_worklist` carry `image_url` only
+    # when handed a resolver, and never open a socket when they are not (every OTHER T7
+    # case that calls either function bare is this assertion's own regression guard).
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="stock-image box")
+            card, _ = inventory.allocate_capture(1, cid=fake_cid("stock-image-1"))
+            card.sku = "8925700"
+            card.name = "Ahri, Inquisitive"
+            card.number = "SP3/006"
+            card.printed_total = "166"
+            card.set_name = "Vendetta"
+            card.game = "riftbound"
+            card.state = master.IDENTIFIED
+
+        bare = pipeline_routes.do_pipeline_sets()
+        threaded = pipeline_routes.do_pipeline_sets(images=images)
+
+    bare_row = bare["groups"][0]["cards"][0]
+    threaded_row = threaded["groups"][0]["cards"][0]
+    checks.equal(
+        bare_row["image_url"], None, "no resolver handed in, `image_url` is None, no socket"
+    )
+    checks.equal(
+        threaded_row["image_url"],
+        "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+        "a resolver handed in, and the warmed cache answers it, threaded onto the row",
+    )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
     check_emit_claim_decides(checks)
+    check_emit_unpriced_left_out(checks)
+    check_send_matrix(checks)
     check_emit_identity_stamp(checks)
     check_pricing_authority(checks)
     check_prices_adopt(checks)
@@ -36607,6 +38658,7 @@ def run() -> Result:
     check_send_review_r6(checks)
     check_send_review_r7(checks)
     check_send_review_r8(checks)
+    check_live_markdown_guards(checks)
     check_schema_eleven_then_twelve(checks)
     check_run_match(checks)
     check_publish_lag(checks)
@@ -36626,6 +38678,7 @@ def run() -> Result:
     check_open_read_only_corrupt_main_file(checks)
     check_store_of_record(checks)
     check_photo_reclaim(checks)
+    check_skus_photos_limit(checks)
     check_server_routes(checks)
     check_drain(checks)
     check_supervisor_recovery(checks)
@@ -36718,6 +38771,15 @@ def run() -> Result:
     check_shipping_stamps(checks)
     check_value_table(checks)
     check_value_page(checks)
+    check_undo_until_built_on(checks)
+    check_pipeline_sets(checks)
+    check_stock_images(checks)
+    # The box map's cases live in a sibling file (D264). Imported here, not at the top,
+    # because that file imports its fixtures from this one.
+    from harness.tests import t7_box_map
+
+    for box_map_check in t7_box_map.CHECKS:
+        box_map_check(checks)
     return checks.result(
         "store/, server/ and cli/ — the packages no harness test reached before this one."
     )

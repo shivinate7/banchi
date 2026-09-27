@@ -106,8 +106,19 @@ const BOX4 = {
 }
 
 /** Every DELETE the screen sent, in order. The ORDER is the assertion — newest first — so
- *  this is a list and never a set. */
-type Wire = { deletes: string[]; removes: string[]; captures: number }
+ *  this is a list and never a set. `sections` is every `PUT /boxes/<box>` the screen sent
+ *  with a `sections` field. `closes` is every `DELETE /boxes/<box>/sections?div=<key>`, as
+ *  `<box>:<div>`, UN-15's own
+ *  undo (`closeSection`), by box. */
+type Wire = {
+  deletes: string[]
+  removes: string[]
+  captures: number
+  sections: { box: string; sections: number[] }[]
+  closes: string[]
+  /** The stub's own divider lists by box, so a case can play a dividers-editor save. */
+  layouts: Record<string, number[]>
+}
 
 async function open(
   page: Page,
@@ -126,7 +137,14 @@ async function open(
     onHandStart?: Record<string, number>
   } = {},
 ): Promise<Wire> {
-  const wire: Wire = { deletes: [], removes: [], captures: 0 }
+  const wire: Wire = {
+    deletes: [],
+    removes: [],
+    captures: 0,
+    sections: [],
+    closes: [],
+    layouts: {},
+  }
 
   /* A canvas camera, installed before the app script runs. `useCamera` reads
      `navigator.mediaDevices` at call time, so replacing the two methods is enough — and the
@@ -295,6 +313,89 @@ async function open(
     })
   })
 
+  /* UN-15: dividers, tracked the way the store keeps them — one divider list per box. The
+     section route APPENDS (`openSection`'s own contract, `server.ts`) and its DELETE takes the
+     last divider back out (`closeSection`, UN-15's undo); the box route REPLACES wholesale
+     (`updateBox({ sections })`). A box's starting dividers are its fixture's own. */
+  const sectionsByBox = wire.layouts
+  const boxRecord = (box: string): Record<string, unknown> => {
+    const base =
+      (options.boxes ?? [BOX, BOX4]).find(
+        (entry) => (entry as { box: number }).box === Number(box),
+      ) ?? BOX
+    const sections = sectionsByBox[box] ?? (base as { sections?: number[] }).sections ?? []
+    return {
+      ...base,
+      box: Number(box),
+      sections,
+      /* `div` IS THE DIVIDER'S OWN KEY, and this fixture's own dividers are always whole
+       * numbers — `String(start)` is exactly `store/master.py:divider_key`'s answer for one
+       * (subbox-capture.md 1.1), so the real path (`opened.div`) is what these cases
+       * exercise, not `doSection`'s older-server fallback. See capture-section.spec.ts for
+       * that fallback's own case, which drops this field on purpose. */
+      sections_detail: sections.map((start, at) => ({
+        section: at + 1,
+        start,
+        end: sections[at + 1] === undefined ? start : sections[at + 1]! - 1,
+        count: (sections[at + 1] ?? start) - start,
+        name: null,
+        div: String(start),
+      })),
+    }
+  }
+  await page.route(/\/boxes\/\d+\/sections(\?.*)?$/, (route) => {
+    const method = route.request().method()
+    if (method !== 'POST' && method !== 'DELETE') return route.fallback()
+    const url = new URL(route.request().url())
+    const box = /\/boxes\/(\d+)\/sections$/.exec(url.pathname)![1]!
+    const held = (boxRecord(box).sections as number[]) ?? []
+    if (method === 'DELETE') {
+      // The store's rule: only the divider named by `div`, and only while it is the last.
+      const div = url.searchParams.get('div')
+      wire.closes.push(`${box}:${div}`)
+      if (div === null || Number(div) !== held[held.length - 1]) {
+        return route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'divider_built_on',
+              message: 'The divider you added is no longer the last one in S key, so it stays.',
+            },
+          }),
+        })
+      }
+      sectionsByBox[box] = held.slice(0, -1)
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(boxRecord(box)),
+      })
+    }
+    const at = allocated[box] ?? 1
+    sectionsByBox[box] = [...held, at]
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(boxRecord(box)),
+    })
+  })
+  await page.route(/\/boxes\/\d+$/, (route) => {
+    if (route.request().method() !== 'PUT') return route.fallback()
+    const path = new URL(route.request().url()).pathname
+    const box = /\/boxes\/(\d+)$/.exec(path)![1]!
+    const patch = route.request().postDataJSON() as { sections?: number[] }
+    if (patch.sections !== undefined) {
+      wire.sections.push({ box, sections: patch.sections })
+      sectionsByBox[box] = patch.sections
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(boxRecord(box)),
+    })
+  })
+
   /* The photo service. Every row in the stack draws one, and an unrouted image request
      would reach the dev server as a 404 — noise in the console rather than a failure, but
      the kind that makes a real failure hard to see. */
@@ -406,34 +507,256 @@ function rows(page: Page) {
    `test.beforeEach`, which is what `make docs-audit`'s `spec seal` row checks. */
 sealEveryTest()
 
-test('the stack is the session, newest first, capped at ten', async ({ page }) => {
-  await open(page)
-  await shoot(page, 12)
+/* UN-1: THE CAP IS GONE (D164, Q1). The owner's own example — "undo the 24th capture in my
+ * capturing run when i'm on capture 36" — is the case this proves: with the old `UNDO_DEPTH`
+ * of 10, capture 24 was the 13th newest and had no row at all. */
+test('the stack is the whole sitting, newest first, and reaches the 13th row', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await shoot(page, 36)
 
-  /* TWELVE CAPTURES, TEN ROWS. `UNDO_DEPTH` is the owner's number and the list is capped at
-     it — the two oldest cards are still in the store and simply out of reach of this
-     control, which is what the cap means. */
-  await expect(rows(page)).toHaveCount(10)
+  // Every capture is a row. Nothing is out of reach.
+  await expect(rows(page)).toHaveCount(36)
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Card 36$/)
+  await expect(rows(page).last()).toHaveAttribute('aria-label', /Card 1$/)
 
-  // Newest first: card 12 on top, card 3 at the bottom of the ten.
   /* THE ADDRESS IS READ OFF `aria-label` AND NOT OFF THE TEXT — D41's repair, right twice
      over. `PositionLabel` draws the path as a muted stack and the slot as a figure, so no
      contiguous `Card N` survives in the text content; the label rides `aria-label`
      verbatim, which is what keeps the split a view of the server's string. That entry also
      records the trap in the other direction: a text assertion of this shape goes VACUOUS
      the day the DOM stops containing the string, and passes forever after. */
-  await expect(rows(page).first()).toHaveAttribute('aria-label', /Card 12$/)
-  await expect(rows(page).last()).toHaveAttribute('aria-label', /Card 3$/)
+  // Capture 24 is the 13th newest (36, 35, …, 25, 24) — row index 12.
+  await expect(rows(page).nth(12)).toHaveAttribute('aria-label', /Card 24$/)
+  await expect(rows(page).nth(12).locator('.capture-key')).toHaveText('13')
 
-  /* THE TOP ROW CARRIES ITS KEY AND THE REST CARRY THEIR DEPTH. The number on row N is how
-     many cards that press deletes, which is also its ordinal — the same number twice, which
-     is what makes one chip able to say both. */
-  await expect(rows(page).nth(0).locator('.capture-key')).toHaveText('U')
-  await expect(rows(page).nth(1).locator('.capture-key')).toHaveText('2')
-  await expect(rows(page).nth(9).locator('.capture-key')).toHaveText('10')
+  // "Undo back to 24" — the row's own click walks the plan back to it.
+  await rows(page).nth(12).click()
+  // 36 rows, 13 deleted (36 down to 24): 23 remain.
+  await expect(rows(page)).toHaveCount(23)
+  expect(wire.deletes.length).toBe(13)
+  expect(wire.deletes[0]).toBe('/inventory/3/36')
+  expect(wire.deletes[12]).toBe('/inventory/3/24')
 
-  // And the heading says how many rows there are, because the list is capped and scrolls.
-  await expect(page.locator('.capture-undo-depth')).toHaveText('10 recent')
+  // And the heading counts the whole sitting, not a capped figure.
+  await expect(page.locator('.capture-undo-depth')).toHaveText('23 recent')
+})
+
+/* UN-15: A DIVIDER'S OWN UNDO. `S`/"New section" appends a divider (`openSection`), and `U`
+ * takes that one divider back out through `closeSection`, "while no card is behind it"
+ * (undo.md 11.1). Never through `updateBox({ sections })`: that route reads card counts, and
+ * a box's `sections` are order keys. */
+test('U undoes a divider while no card is behind it', async ({ page }) => {
+  const wire = await open(page)
+  await shoot(page, 2)
+
+  await page.getByRole('button', { name: 'New section' }).click()
+  await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
+    'New section',
+  )
+
+  await page.keyboard.press('u')
+
+  // The divider comes back out through its own route, named by the key S got back, and no
+  // layout is re-sent. The stub's S put it at 3, where the next card goes.
+  await expect.poll(() => wire.closes).toEqual(['3:3'])
+  expect(wire.sections).toEqual([])
+  expect(wire.deletes).toEqual([])
+  // Neither capture was touched.
+  await expect(rows(page)).toHaveCount(2)
+})
+
+/* THE DIVIDER PROOF'S F2, ON A BOX WITH A SOLD CARD. 3 captures, S, 3 captures, sell card 1:
+ * the stored dividers are the keys `[1, 4]`, and the second section starts at card 3 by
+ * count. The old undo re-sent those keys through `PUT /boxes/<box>`, which reads counts, so
+ * the store moved the second divider to `[1, 5]`. The undo must send no layout at all. */
+test('U after S on a box with a sold card takes out only that divider (F2)', async ({ page }) => {
+  const DIVIDED = {
+    ...BOX,
+    sections: [1, 4],
+    cards: 6,
+    sold: 1,
+    on_hand: 5,
+    fill: 6,
+    next_index: 7,
+  }
+  const wire = await open(page, { boxes: [DIVIDED, BOX4], nextIndex: { '3': 7 } })
+
+  await page.getByRole('button', { name: 'New section' }).click()
+  await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
+    'New section',
+  )
+  await page.keyboard.press('u')
+
+  await expect.poll(() => wire.closes).toEqual(['3:7'])
+  expect(wire.sections, 'no layout is re-sent, so no other divider can move').toEqual([])
+})
+
+/* THE STALE U (the Opus review's first finding). S, then a dividers-editor save on another
+ * device adds a divider behind it, then U. The undo names S's own divider, the store refuses
+ * it, and the screen says so in one sentence and drops the pending divider, so the next U
+ * reaches the captures. */
+test('a stale U after an editor save is refused, said, and not retried', async ({ page }) => {
+  const wire = await open(page)
+  await shoot(page, 2)
+  await page.getByRole('button', { name: 'New section' }).click()
+  await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
+    'New section',
+  )
+  wire.layouts['3'] = [...(wire.layouts['3'] ?? []), 9]
+
+  await page.keyboard.press('u')
+  await expect.poll(() => wire.closes).toEqual(['3:3'])
+  await expect(page.getByText('The divider you added is no longer the last one')).toBeVisible()
+  expect(wire.layouts['3'], 'the editor\'s divider stays').toEqual([3, 9])
+
+  await page.keyboard.press('u')
+  await expect.poll(() => wire.deletes).toEqual(['/inventory/3/2'])
+  expect(wire.closes, 'the refused divider undo is not sent again').toEqual(['3:3'])
+})
+
+/* THE OTHER HALF: ONCE A CARD IS CAPTURED BEHIND IT, THE DIVIDER IS "BUILT ON" and `U` reaches
+ * the capture instead — undo.md 11.1's own table row for Divider. */
+test('a capture behind the divider is built on it, and U reaches the capture instead', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await shoot(page, 2)
+  await page.getByRole('button', { name: 'New section' }).click()
+  // The third card, into the same box the divider was opened in — the fixture's own
+  // allocator is already at 3, and `shoot`'s helper assumes a fresh box starting at 1.
+  await shootInto(page, 3, 3, 1)
+
+  await page.keyboard.press('u')
+
+  expect(wire.deletes).toEqual(['/inventory/3/3'])
+  expect(wire.sections).toEqual([])
+})
+
+/* UN-2: A RELOAD KEEPS THE SITTING. `GET /capture/sitting` is the read this proves — the
+ * strip appears with NO capture made in this browser at all, which is the one thing
+ * `shoot()` could never demonstrate on its own. */
+test('a reload rebuilds the strip from the store (UN-2), and never a moved card', async ({
+  page,
+}) => {
+  const sittingCard = (index: number, state: string) => ({
+    box: 3,
+    index,
+    key: `3/${index}`,
+    label: `Box 3, Section 1, Card ${index}`,
+    section: 1,
+    card: index,
+    new_box: index === 1,
+    created: true,
+    photo: `/tmp/3-${index}.jpg`,
+    capture_id: null,
+    place: { box_total: index },
+    captured_at: '2026-09-25T12:00:00+00:00',
+    set_hint: null,
+    metadata_finish: null,
+    game: 'pokemon',
+    state,
+  })
+  await page.route(/\/capture\/sitting$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        open: true,
+        gap_minutes: 30,
+        /* THE SERVER ALREADY LEAVES A MOVED CARD OUT OF THIS LIST (lane S's own review
+         * round). Card 3 is here anyway — the client's OWN filter is what this case
+         * proves, not the server's, because an undo here deletes a photograph and that is
+         * one guard too important to rest on a single reader. */
+        cards: [sittingCard(1, 'captured'), sittingCard(2, 'captured'), sittingCard(3, 'moved')],
+      }),
+    }),
+  )
+  const wire = await open(page)
+
+  // Two rows, newest first — never card 3, whatever state it moved to.
+  await expect(rows(page)).toHaveCount(2)
+  await expect(rows(page).first()).toHaveAttribute('aria-label', /Card 2$/)
+  await expect(rows(page).last()).toHaveAttribute('aria-label', /Card 1$/)
+
+  // And the undo still reaches the captured cards — a hydrated row is not a read-only picture.
+  await page.keyboard.press('u')
+  expect(wire.deletes).toEqual(['/inventory/3/2'])
+})
+
+/* UN-2's fix-after: once the sitting has ended (or a run has identified it), the ordinary
+ * undo route refuses `capture_built_on` (undo.md 11.1's own table row for Capture), and the
+ * strip offers the route that DOES still reach the card — Manage box. */
+test('a capture built on its sitting refuses, and offers Manage box', async ({ page }) => {
+  const wire = await open(page)
+  await shoot(page, 1)
+  // Registered after `open()`'s own DELETE stub, so it wins (Playwright matches newest first).
+  await page.route(/\/inventory\/\d+\/\d+$/, (route) => {
+    if (route.request().method() !== 'DELETE') return route.fallback()
+    wire.deletes.push(new URL(route.request().url()).pathname)
+    return route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'capture_built_on',
+          message: 'This sitting has ended. Manage box removes the card instead.',
+        },
+      }),
+    })
+  })
+
+  await page.keyboard.press('u')
+
+  await expect(page.locator('.capture-refused')).toContainText('This sitting has ended')
+  await expect(page.locator('.capture-halt-code')).toHaveText('capture_built_on')
+  const fix = page.getByRole('button', { name: 'Manage box' })
+  await expect(fix).toBeVisible()
+
+  /* The button's own press changes the hash to `#/inventory`, and that screen mounts and
+   * reads its own routes — `#/review` and `#/orders`'s own reads, which this file never
+   * otherwise needs. Stubbed here, not globally: this is the one test in this file that
+   * ever lets the hash leave `#/capture`. */
+  await page.route(/\/queues$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ review: [], parked: [] }),
+    }),
+  )
+  await page.route(/\/orders$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        summary: '0 orders',
+        orders: [],
+        resolution: {
+          orders: [],
+          counts: {
+            resolved: 0,
+            short: 0,
+            no_copies_on_hand: 0,
+            sku_unknown: 0,
+            sku_unseen: 0,
+            not_a_single: 0,
+          },
+        },
+      }),
+    }),
+  )
+  /* AND THE BOX'S OWN READ. `#/inventory?box=3` reads `GET /inventory/3` as it mounts. Unstubbed,
+     it raced the test's end: on a quiet machine the test finished first, and under load the
+     read reached the capture server and `sealEveryTest` failed the test ("reads reached the
+     capture server"). The Opus re-review of `ux/subbox-store` found it, 2026-09-26. */
+  await page.route(/\/inventory\/\d+(\?.*)?$/, (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: 2, cards: {} }) })
+      : route.fallback(),
+  )
+  await fix.click()
+  await expect.poll(() => page.evaluate(() => window.location.hash)).toBe('#/inventory?box=3')
 })
 
 test('U undoes the most recent one, and only that one', async ({ page }) => {
@@ -878,6 +1201,22 @@ function drops(page: Page) {
  * untouched by every case below.
  * ════════════════════════════════════════════════════════════════════════════════════════ */
 
+/* UN-3 (Q2, "keep the confirm here only"): "never ask" holds everywhere else, and this press
+ * is the one exception the owner named — so its words carry the whole weight of that
+ * exception. The dialog has to say plainly what the recommended undo-and-set-aside would have
+ * made unnecessary to say: this is permanent, and the photograph goes with the record. */
+test('the one confirm this screen keeps says plainly that the removal is permanent and deletes the photo', async ({
+  page,
+}) => {
+  await open(page)
+  await shoot(page, 3)
+
+  await drops(page).nth(1).click()
+  const body = page.locator('.inv-dialog-body')
+  await expect(body).toContainText('permanently deletes')
+  await expect(body).toContainText('photograph')
+})
+
 test('removing a middle row deletes that card alone, and the later ones survive shifted', async ({
   page,
 }) => {
@@ -1041,12 +1380,83 @@ test('Space is the same toggle, and does nothing while typing', async ({ page })
 })
 
 test('pressing the pause button moves nothing else on the screen (D118)', async ({ page }) => {
+  /* THE FLAKE'S REAL CAUSE, measured: the fixture's camera is one frame that never changes,
+   * so armed motion reads it as a settled empty stand — motion.ts's own settle math runs
+   * off `performance.now()`, on the video's real decode clock, not this test's. Given enough
+   * REAL elapsed time, `noCardRun` crosses 3 and `.capture-stage-warn` renders above the
+   * shutter — ON ITS OWN CLOCK, unrelated to this button — which shifts the shutter exactly
+   * as this assertion reads it. The warning is gated on `triggerMode !== 'manual'`, so the
+   * very act of pausing always hides it too, whether or not it had already appeared before
+   * the click — a second, confounding way the shutter can move that has nothing to do with
+   * the pause control's own layout. Freezing the clock only from the moment of the click
+   * still lost this race once in 240: `armMotion` itself spends real frame time, so the
+   * banner can already be up before there is any clock to freeze. D136's idiom (the fake
+   * clock is installed and only ever moved on purpose) goes on BEFORE arming instead, so
+   * `performance.now()` never advances at all and no settle can ever land — the only thing
+   * left that can move the shutter for the rest of this test is the click itself. */
   await open(page)
+  /* Frozen AFTER the page has mounted on real timers (freezing before navigation broke
+   * something else — a smaller, unrelated shift — and is not needed: nothing before this
+   * line reads the video). Frozen BEFORE `armMotion`, not just before the click: arming
+   * itself spends real frame time opening the Rig and the Trigger field, which is enough
+   * for the banner to already be up before there is any clock left to freeze. */
+  await page.clock.install()
+  await page.clock.pauseAt(Date.now())
   await armMotion(page)
   const before = await shutter(page).boundingBox()
   await pauseplay(page).click()
   const after = await shutter(page).boundingBox()
   expect(after).toEqual(before)
+})
+
+/* THE RACE ITSELF, WITH NO `await expect` BETWEEN THE CLICK AND THE KEY. The cases above
+ * all put at least one polling `expect` between `pauseplay(page).click()` and the keyboard
+ * press that follows it — `toHaveClass`, `toHaveAccessibleName`, `toHaveAttribute` — and each
+ * of those polls for real time, which is exactly enough for a passive `useEffect` to flush
+ * before the key ever reaches the page. That is why they passed even against a mutated
+ * `useEffect` with a 50ms artificial delay on the re-arm: the poll ate the delay. These three
+ * press the key on the very next line after the click, the way a fast human or a feeder
+ * would, and prove the fix (`useLayoutEffect` on the three trigger-arming effects,
+ * `CaptureScreen.tsx`) rather than the click's own render. `armMotion` already flips the
+ * `captureTrigger` identity once at arm; the click flips it back, which is the transition
+ * this file measured losing a press over. */
+test('the manual key fires on the very next line after Resume — no wait in between', async ({
+  page,
+}) => {
+  const wire = await open(page)
+  await armMotion(page)
+  await pauseplay(page).click() // motion -> manual: the capture key goes live right here
+  await page.keyboard.press('c') // no awaited expect between the click and this press
+  await expect.poll(() => wire.captures).toBe(1)
+})
+
+/* `U` and `S` are on `manualTrigger`s built with `useMemo(() => ..., [])` — a stable identity
+ * across every render, so `switchTrigger` never changes what they are armed on and the
+ * layout-effect fix above touches them only for consistency with the field-key listener's
+ * own idiom, not because they shared the race. These two are the negative control: if they
+ * DID share it, one of them would fail here exactly like the capture key did before the fix.
+ * They pass under the ORIGINAL `useEffect` too — mutation-tested below, alongside the
+ * capture-key case above. */
+test('U fires on the very next line after Resume — no wait in between', async ({ page }) => {
+  const wire = await open(page)
+  await shoot(page, 1)
+  await armMotion(page)
+  await pauseplay(page).click()
+  await page.keyboard.press('u')
+  await expect.poll(() => wire.deletes.length).toBe(1)
+})
+
+test('S fires on the very next line after Resume — no wait in between', async ({ page }) => {
+  await open(page)
+  await armMotion(page)
+  await pauseplay(page).click()
+  await page.keyboard.press('s')
+  // `openSection`'s own POST never touches `wire.sections` — that field is the UNDO route's
+  // (`updateBox({ sections })`), a different call entirely. The receipt on screen is what a
+  // fresh divider actually proves, the same reader `capture-claims.spec.ts` uses for it.
+  await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
+    'New section',
+  )
 })
 
 /* ------------------------------------------------------------------------------------------
@@ -1060,7 +1470,6 @@ test('pressing the pause button moves nothing else on the screen (D118)', async 
 const HALT_CODES: readonly { code: string; headline: string }[] = [
   { code: 'server_busy', headline: 'the server is answering too many requests right now' },
   { code: 'origin_not_allowed', headline: 'this page is not the one the server trusts to write' },
-  { code: 'box_closed', headline: 'that box was sealed just now' },
   { code: 'store_busy', headline: 'the store is busy' },
   { code: 'store_unavailable', headline: 'the store could not be reached' },
   { code: 'inventory_conflict', headline: 'the store disagreed with what this screen expected' },
@@ -1146,4 +1555,41 @@ test('a capture whose place is unlabeled never writes a zero count onto the box'
   )
   await shootInto(page, 3, 11, 1)
   expect(await nextCardEverywhere(page), 'the box row keeps its count, never "next card 1"').toBe(10)
+})
+
+/* THE 40PX THUMB FLOOR ON `.capture-undo-drop` (D117, the coordinator's review round,
+ * 2026-09-25). `IconButton`'s own `size="sm"` face is 24px, and the kit's `::before` cannot
+ * float this control's hit area past a coarse press on the NEXT card's row: at the old 12px
+ * gap and a corner overhang, the extended reach landed on the neighbour's own `.capture-key`
+ * — a coarse thumb aiming at "remove just this card" could fire the wrong card's undo
+ * instead. The probe is the same one `phone.spec.ts` sweeps every screen with: the four
+ * cardinal points at `FLOOR / 2 - 1` from centre must all resolve back to this control. */
+test('the per-row remove control clears the 40px thumb floor on a phone (D117)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page)
+  await shoot(page, 2)
+
+  const misses = await page.evaluate(() => {
+    const FLOOR = 40
+    const r = FLOOR / 2 - 1
+    const el = document.querySelectorAll('.capture-undo-drop')[0] as HTMLElement
+    const box = el.getBoundingClientRect()
+    const cx = box.left + box.width / 2
+    const cy = box.top + box.height / 2
+    const points: [string, number, number][] = [
+      ['top', cx, cy - r],
+      ['bottom', cx, cy + r],
+      ['left', cx - r, cy],
+      ['right', cx + r, cy],
+    ]
+    return points
+      .filter(([, x, y]) => {
+        const hit = document.elementFromPoint(x, y)
+        return !(hit !== null && (hit === el || el.contains(hit)))
+      })
+      .map(([side]) => side)
+  })
+  expect(misses, 'a probe that does not resolve back to the drop control').toEqual([])
 })

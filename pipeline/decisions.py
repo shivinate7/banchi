@@ -351,19 +351,19 @@ class Decisions:
         return sorted(sku for sku, value in self.no_market_data.items() if value is None)
 
     def blocking(self, sub_threshold_skus) -> List[str]:
-        """Why `emit` must refuse, in the order a human would want to read it."""
+        """Why `emit` must refuse, in the order a human would want to read it.
+
+        AN UNANSWERED CARD WITH NO MARKET PRICE IS NOT A REASON ANY MORE (D277 Q3, the owner:
+        "send every ready copy; unpriced rows stay on the list"). A missing price is still
+        unknown and never low (D9, D49), so that card cannot go: `emit` leaves it out, names
+        it, and it stays owed. It no longer holds every other ready card back with it.
+        `unanswered` above still names them, for the screens and for `emit`'s own line."""
         reasons = []
         if self.sub_threshold is None and list(sub_threshold_skus):
             reasons.append(
                 f"{len(list(sub_threshold_skus))} sub-threshold SKU(s) and "
                 f'sub_threshold is still null — set it to "{FLOOR_CHOICE}" or '
                 f'{{"{FLAT_KEY}": "0.49"}} under policy in {POLICY_FILE}, or on #/pricing'
-            )
-        if self.unanswered:
-            reasons.append(
-                f"{len(self.unanswered)} SKU(s) with no market price are unanswered in "
-                f'{POLICY_FILE}: give each a price or "{pricing.UNLISTED}" on #/pricing '
-                f"({', '.join(self.unanswered[:6])})"
             )
         return reasons
 

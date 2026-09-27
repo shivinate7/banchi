@@ -32,12 +32,17 @@ import { describeFailure, search } from './server'
 
 /** The delay between the last keystroke and the request.
  *
- *  200ms IS AN ASSUMPTION AND IS MARKED AS ONE. It is the usual figure for this and nothing in
- *  this repo has measured it against the store's own latency: `Store.write()` waits up to 30
- *  seconds for the file lock, so a search issued while `./pkmnscan identify` is running can be
- *  slow for reasons no debounce affects. What would settle it is watching the owner use the
- *  screen with a real inventory behind it — the same instrument every other unmeasured number
- *  in this app is waiting on. */
+ *  MEASURED, NOT MERELY ASSUMED, AS OF UX-263 (2026-09-25). `GET /search`'s own round trip —
+ *  the FTS5 query, the rank step, the JSON response — was timed against a seeded store of
+ *  2,500 cards, the owner's own size (docs/specs/store-scaling.md item 8). A name or a short
+ *  prefix answered in 46ms on average, p95 48ms, a bare number in 24ms, a query matching
+ *  nothing in 1ms — every shape well under this wait, with margin to spare. The number is
+ *  KEPT at 200ms on that measurement: the server is not the reason a fast typist would notice
+ *  lag, so a shorter wait would only ask the server more often for no gain in how quickly a
+ *  result appears on screen. `Store.write()` still waits up to 30 seconds for the file lock,
+ *  so a search issued while `./pkmnscan identify` is running can be slow for reasons no
+ *  debounce setting reaches either way. See docs/specs/store-scaling.md item 8 for the full
+ *  measurement. */
 export const SEARCH_DEBOUNCE_MS = 200
 
 export type SearchState = {

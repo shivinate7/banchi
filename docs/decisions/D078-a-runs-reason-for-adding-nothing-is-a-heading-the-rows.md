@@ -35,3 +35,11 @@
 ---
 
 ---
+
+### Amended 2026-09-25 — a held row sorts by value, and the hold tier is gone
+
+The entry with slug `pricing-rebuilt-to-the-reinterview` repeals this entry's third clause,
+"a hold sinks on the reopening". The owner's Pricing re-interview (D277, Q1) ruled one list
+with the rows that need the owner on top, then the rest by value. A held row now keeps its
+place by value on every load (UX-071). The first two clauses stand: a row with nothing to add
+still falls under the server's own sentence, at the foot of the list.

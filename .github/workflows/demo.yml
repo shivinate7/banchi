@@ -8,16 +8,17 @@
 # same three steps `make demo-static` runs locally, from the code as it stands on main, and the
 # thing that gets published is always built from the thing it describes.
 #
-# WHAT IS SAFE TO PUBLISH, because this is the job that makes it public. The seed reads
-# `fixtures/` — real TCGplayer exports, no personal data — and `demo-assets/`, a TRACKED set
-# of the owner's own card photographs that they have said to publish. Every one of those was
-# cleared by `scripts/demo-photos.py` before it reached a tracked path: refused if any QR
-# decoded out of it at full resolution, because a live code card is a bearer instrument and
-# its whole identity is that QR (D70). This job re-runs none of that — it consumes what is
-# committed — and it never touches a real store, which is why `inventory/` has never been in
-# git. The recorder scrubs machine-local absolute paths and REFUSES to write a bundle if any
-# survive (`scripts/demo_scrub.py:audit`), so a `/Users/<name>/` cannot reach the page even
-# by accident.
+# WHAT IS SAFE TO PUBLISH, because this is the job that makes it public. AS OF `D295`
+# (docs/specs/demo.md §13), what this job installs and builds is `demo-assets/mirror/` — the
+# owner's own real store, scrubbed on their own Mac by `scripts/demo-mirror.py` and committed
+# ONLY as that scrubbed output: every buyer "Jane Doe N", every address "123 Demo Way", and
+# every photograph QR-cleared (a live code card is a bearer instrument, D70) before this repo
+# ever saw it. This job never reads a store — `make demo-mirror-install` only copies the
+# already-scrubbed, already-committed files into place — and never touches the owner's real
+# `inventory/`, which has never been in git. The recorder that made the bundle already scrubbed
+# machine-local absolute paths and refused to write one if any survived
+# (`scripts/demo_scrub.py:audit`); the grep step below re-checks the artefact this job is
+# about to publish, rather than trusting that earlier pass alone.
 #
 # IT PUBLISHES AND NOTHING ELSE. No gate, no commit, no branch move — D42 keeps main moving by
 # pull request only, and a workflow that pushed would be a second way. It reads the repo and
@@ -96,12 +97,10 @@ jobs:
           pip install -r requirements.txt
           npm ci --prefix app
 
-      # The record step makes outbound requests to two public price mirrors — D62's reading,
-      # the thing a `t` hold shows on #/pricing. Fetched here rather than tracked: the cache
-      # is 5.1 MB across 140 files, larger than the recording it produces, and would be stale
-      # the day it was committed. It is best-effort — the recorder keeps 200s only, so a
-      # mirror having a bad day costs the trend strip and never the publish.
-      - name: Seed, record and build
+      # No network call here at all: `demo-mirror-install` copies the already-committed,
+      # already-scrubbed `demo-assets/mirror/` into place. Every price and history in it was
+      # read on the owner's own Mac when the mirror was built, never by this job.
+      - name: Install the mirror and build
         # DEMO_BASE must match where Pages serves this. A project site lives at
         # /<repo>/, and a bundle built for / 404s every asset there while working
         # perfectly on localhost — the failure that only appears once it is published.

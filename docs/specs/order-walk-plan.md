@@ -554,6 +554,48 @@ ever. It is a rejection of the question AS FRAMED. A session that wants to chang
 should first say what the previous framing got wrong, in one sentence, and should not put the
 same three options to the owner again.
 
+**AMENDMENT, 2026-09-25 — the fallback was the defect, and it is gone.** The shipped
+`pickOrderFor` (`app/src/OrdersWalkPane.tsx`) followed this section's words for the first press
+against each ref. Then it diverged. Once every ref had one copy recorded this pass, it fell back
+to `take.for[0]` unconditionally. It never checked whether that ref still owed anything. Take a
+card wanted by two or more orders, in a bigger quantity than the order count. Say the first ref
+owes less than its round-robin share. A press then went to an ALREADY-FULL order. The server
+refused it (`over_fulfilled`). Every press after that refused the same way, because a refusal
+changes no tally. This was diagnosed and reproduced against a copy of the real store, 2026-09-25
+— Mirror Image, two buyers, four presses, the third and fourth both refused.
+
+The fix. `_walk_plan_order_ref`/`_walk_plan_refs` (`server/capture_server.py`) put `owed` on
+every ref now. It is the ledger's own `outstanding`, zeroed for a stood-down line exactly as
+`demand` already filters, read off the plan's own snapshot. `pickOrderFor` takes the ref whose
+remaining (`owed` minus this pass's own tally) is smallest and still positive. It returns `null`,
+never `for[0]`, once no ref still owes. THIS AMENDS THIS SECTION'S OWN WORDS ABOVE ("the first
+order in the take's `for` that this pass's own tally has not filled") to say what the words
+always meant. No ref this pass has already filled is ever picked again.
+
+The owner also settled the shortfall question this section left open above ("is the heuristic
+the answer"). Asked directly, 2026-09-25, about a card too short to cover every order that wants
+it, verbatim:
+
+> `i'd say just flag as too few on hand orsomething but yea if we were to give it to someone
+> whoever it completes`
+
+So one rule now serves both halves. Smallest-remaining-first empties the ref closest to done
+first. That is the ref a short copy is most likely to complete. It never revisits a full ref.
+Ties go to the order placed longest ago. D212 (no order claims a copy, so there is no assignment
+to make) and D97 (the plan says how many, never which) are both untouched. This still decides
+only which OPEN order a press records against, one press at a time. It never decides which
+physical copy answers it.
+
+**Wording, the same ruling.** "Pick X of Y" let Y count copies the store does not have. A card
+too short to cover the walked demand showed a Y that implied copies elsewhere. Those copies did
+not exist — Rengar's "of 8" when the store held one. The owner, on how to say it, verbatim:
+
+> `say what's short but it's not intuitive to use so much verbiage`
+
+`Y` is now capped at what is really on hand — `take.copies.length`, the store-wide on-hand count
+already on the wire. A short card drops `of Y` for a short flag instead: `Pick 1` beside `7
+short`, never a sentence.
+
 ### The shortfall block
 
 The plan cannot fill every SKU, and on this store it misses 23 of 59. One block, at the foot,
@@ -805,8 +847,9 @@ the button and the word**; on this screen
 it also records the copy against an owing order (D212: no order claims a copy, the write
 refuses a full line). The copies in the section you are standing in come first; the order is
 held for the walk (§8's ruling: ranking frozen, position refreshed); a sale refreshes
-positions the way inventory already does. `J`/`K` step through the walk list. When a card's
-owed copies are all sold, the next card lights.
+positions the way inventory already does. `J`/`K` step through the walk list.
+
+**UN-6, the Opus review round, 2026-09-25: the pane no longer advances itself.** It used to light the next card the instant a take was satisfied, with no press beyond the sale. That was the defect. The new card's own `Mark sold` landed where the finger had just tapped. A fast second tap sold a card nobody looked at. The sold copy's own row turns into `Undo` in place instead (D57). Nothing else on the pane moves (D118). The operator steps on `J`/`K`, same as ever.
 
 ### Words
 
@@ -1001,6 +1044,8 @@ against the intersection build before it was kept.
 **BUILT.** The half of §9a finding 4 that was fixed in form and not in substance, plus the
 freeze ruling above it.
 
+**Superseded 2026-09-25: a box has no seal and no capacity (D299).**
+
 - **`WalkPlanCopy` carries the box's own numbers** — `box_total`, `box_closed` and `fraction`,
   the same three `Place` carries. `_walk_plan_copy` already held them in the block `_Places.of`
   composed. They were simply not on the wire, so `neighborShim` passed `box_total: 0` and
@@ -1060,3 +1105,61 @@ It never filtered `sku_unknown`. "Tick all" and "Untick all" are now "Tick shown
 "Untick shown", matching `#/inventory`'s own wording for the same reach. "Untick shown" now
 reads the ticked set for its disabled state, not the shown set. The step-through hint no
 longer renders below phone width, where its arrow-key handler is gated off.
+
+## 14. The screen's own arithmetic, one formula, one unit — the UX review, 2026-09-26
+
+**Every count `#/orders` draws over one open order's lines reconciles in one unit: copies.**
+Sum this formula line by line, over any set of open orders:
+
+```
+owed = pick + short + elsewhere
+```
+
+- `owed` — `line.owed`. What the order still wants.
+- `pick` — `line.owed - line.outstanding`, summed only where positive. What the resolver can
+  offer right now. `cardsToPull` sums this same way, over whichever set is walked.
+- `short` — `line.outstanding` where the line's reason is `no_copies_on_hand` or `short`.
+  Both reasons name the same fact: nothing is left on hand for this SKU. The split exists
+  only so `statusOf` can rank a buyer who got some of it above one who got none. A screen
+  states both as one bucket, "short", never as two words for one problem.
+- `elsewhere` — `line.outstanding` where the reason is `sku_unseen`, `sku_unknown` or
+  `not_a_single`. This store has never carried the SKU, or the line is sealed product. A
+  screen with room to spare names them apart ("not in the store", "sealed"). A compact chip
+  states only their sum. See the next paragraph for why.
+
+**The review's finding 1** named two true numbers that a reader could not reconcile: the
+header's "216 copies owed to 70 buyers", and the walk's "97 cards to pick". Both are correct.
+They answer two different questions. One counts the whole store. The other counts only the
+walked subset. Neither said which question it answered, so together they read as one
+contradicted claim.
+
+The fix is not to force the two numbers to agree — they legitimately differ whenever fewer
+than all buyers are walked. The fix gives the header its own full breakdown, stated once:
+"216 copies owed to 70 buyers — 97 to pick, 105 short, 14 not in the store"
+(`verdictOf`, `app/src/Orders.tsx`). A reader can see the header's own identity hold. It no
+longer needs the walk's number to match it.
+
+**Finding 1's second half** named a buyer chip ("7 cards none left") beside that same buyer's
+own figures ("11 short"). One buyer, one set of orders, still two disagreeing numbers. This
+half WAS a defect. `lookWords` reported only the loudest reason's own count, weighted by
+`owed`. It silently dropped every other reason. It never even mapped the `short` bucket at
+all.
+
+The fix sums every reason's `outstanding`, never `owed`, and never only the loudest one. One
+reason explains the whole total: the chip names that reason. Two or more reasons together:
+the chip reads "N cards need a look" instead. See `lookWords`'s own comment for the worked
+example.
+
+## 15. Every copy is fungible — naming it on the row, not only in the plan (finding 2)
+
+A take's slot list can outnumber what it wants. `wanted = 1` over two candidate cards
+standing in the SAME stop is not an error. It is D212 (every copy is fungible) reaching the
+row.
+
+Before this fix, the row printed both card numbers. Nothing told the operator either one
+would do. For a "Pick 1" line, that read as "take both" (the review's Allen Petlock example,
+`#61, #62 Tasty Faefolk Pick 1 of 2`).
+
+The fix is one word, `(either)`. `OrdersWalkPane.tsx` appends it only when the stop holds more
+candidates than the take wants. It never picks one for the operator — D97 still forbids
+that. It only says the choice is free.

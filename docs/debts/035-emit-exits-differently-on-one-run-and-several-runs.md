@@ -1,18 +1,19 @@
-## 35 — emit exits differently on one run and several runs
+## 35 — ~~emit exits differently on one run and several runs~~ — CLOSED 2026-09-25, fixed as recommended
 
-**The defect.** Run `pkmnscan emit --listed-only` after a full send. Over one run, it prints
-"nothing new to send" and exits 0. Over several runs, it prints "nothing to write" and exits
-1. The two paths answer one question in two ways.
+**Closed by the fix this entry recommended.** Both paths now exit 1 with one sentence,
+`pipeline/merge.py:NOTHING_NEW`. Each path names every card's own reason under it. The send route
+reads that constant to answer `nothing_to_send`, where it read two phrases before. The matrix
+row "suball/listed-sent" now asks for exit 1, the sentence and each card's reason, on both paths.
+The row was red on the old code.
 
-**Why no screen sees it.** The send route answers `nothing_to_send` for both paths, so the
-screen reads one answer. Only a shell caller of `emit` sees the split.
+**No screen changes.** No screen presses emit directly. `RunPanel` never calls its step
+function with emit. The client's merged emit function has no caller. The send route answered
+`nothing_to_send` before the fix and answers it now.
 
-**It predates the b-pricing lane.** That lane found it and did not cause it. Its send matrix
-(`check_send_matrix`) pins the current behaviour at the case "suball/listed-sent". A change
-to either path turns that row red.
-
-**The fix, not built.** Make both paths exit the same way. The recommendation is exit 1 on
-both, with one message. Update the matrix row "suball/listed-sent" in the same commit. The
-orchestrator deferred this to its own item after PR 2 (the review rulings, 2026-09-25).
+**The defect, as it was recorded.** Run `pkmnscan emit --listed-only` after a full send. Over one
+run, it printed "nothing new to send" and exited 0. Over several runs, it printed "nothing to
+write" and exited 1. The two paths answered one question in two ways. The send route answered
+`nothing_to_send` for both, so only a shell caller of `emit` saw the split. The b-pricing lane
+found it and did not cause it.
 
 Cites D7 (emit's send controls) and D99 (one press writes one spreadsheet).

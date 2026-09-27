@@ -84,8 +84,8 @@ export function TrendCell({ read }: { read: TrendRead | undefined }) {
   if (read.kind === 'reading') {
     return (
       <span className="pricetrend pricetrend-reading" aria-label="reading the trend">
-        <span className="bn-skeleton pricetrend-skel" />
-        <span className="bn-skeleton pricetrend-skel" />
+        <span className="pricetrend-skel" />
+        <span className="pricetrend-skel" />
       </span>
     )
   }
@@ -101,8 +101,8 @@ export function TrendCell({ read }: { read: TrendRead | undefined }) {
   if (read.ranges.length === 0) {
     return (
       <span className="pricetrend">
-        <span className="pricetrend-refused" title="no recorded sales — this card has not traded">
-          no sales
+        <span className="pricetrend-refused" title="No recorded sales. This card has not traded.">
+          —
         </span>
       </span>
     )

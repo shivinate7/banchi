@@ -443,8 +443,8 @@ tooltip. `make check` is green.
 
 ### W2-9 search-server (Sonnet, M)
 Files: in `server/capture_server.py`, only the search and facet reads (`do_search`,
-`_fts_query`, `_match_rank`, and the facet matches in `_box_row`). New `+server/match.py` and
-`+scripts/match-selftest.py`. `app/src/useSearch.ts`, handed off from `kit-data`. For wave 2
+`_fts_query`, `_match_rank`, and the facet matches in `_box_row`). New `server/match.py` and
+`scripts/match-selftest.py`. `app/src/useSearch.ts`, handed off from `kit-data`. For wave 2
 only: `Makefile`, `scripts/checks.py` and `CLAUDE.md` (one `check` target and its census
 line).
 Findings (3): see `CONSOLIDATED.md`, `lane: "search-server"`.
@@ -455,7 +455,7 @@ a seeded store of the owner's size before the lane keeps or changes it.
 Decisions: D166, D213, D132, and item 8 of `docs/specs/store-scaling.md`.
 Depends on: `filtering` (the case table). Work runs only on this checkout's own port. The lane
 never restarts or touches the owner's server.
-Done: `+make match-selftest` goes red on the current `_match_rank` for "54/132", and green
+Done: `make match-selftest` goes red on the current `_match_rank` for "54/132", and green
 after the fix. It runs in `make check`. `make serve-selftest` is green. The check-census row of
 `make docs-audit` is green.
 

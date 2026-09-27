@@ -694,6 +694,10 @@ def build_parser() -> argparse.ArgumentParser:
         "one term here that says WHY a card is not selling rather than only that it has not.",
     )
     listing.add_argument(
+        "--cap",
+        help="the most the rule takes off one copy, in dollars (e.g. 5.00). No cap without it.",
+    )
+    listing.add_argument(
         "--limit",
         type=int,
         help="take only the N rows carrying the most asking value. The rest are named.",
@@ -724,6 +728,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="the digest of inventory/prices.json this caller last read. Refuses the WHOLE "
         "file if the corpus has moved since. Omit it to say 'I did not read one', which is "
         "the terminal user applying a worklist by hand and is allowed.",
+    )
+    applying.add_argument(
+        "--typed",
+        help="comma-separated SKUs the caller typed on THIS visit (the Live tab's `typedHere`, "
+        "D273). A SKU named here is never refused `earlier_lower` — the caller is the one "
+        "witness to 'this visit', and `Answer.at` cannot be, since `stamp_answers` keeps the "
+        "old `at` when the value is unchanged. Omit for the terminal user, who has no visit "
+        "to name and falls back to the timestamp entirely.",
     )
     applying.add_argument(
         "--write",

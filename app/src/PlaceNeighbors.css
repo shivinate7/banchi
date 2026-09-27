@@ -1,70 +1,28 @@
-/* D30's neighbours as a ranked ladder: a muted key column (`after` / `before`) and the names
-   starting at one x. Two knobs per site: `--nb-key` and `--nb-name`. */
+/* D30's neighbours, back then front (D260's orientation), as ONE LINE joined by an arrow —
+   collapsed from a three-row back/this/front ladder (Direction B, the owner's correction,
+   2026-09-25: "THIS #5 repeats Card 5. Remove it."). WRAPS RATHER THAN TRUNCATES: an epithet
+   can run to thirty characters, and D116's own reasoning against truncating a name still holds
+   — a name cut short is a worse landmark than one that takes a second line. */
 .nb {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.nb-row {
-  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: var(--bn-2);
-  margin: 0;
   min-width: 0;
-}
-
-.nb-key {
-  flex: 0 0 3.4rem;
   font-family: var(--bn-font-ui);
-  font-size: var(--nb-key, 11px);
+  font-size: var(--bn-fs-sm);
   font-weight: 600;
-  letter-spacing: var(--bn-tracking-caps);
-  text-transform: uppercase;
   color: var(--bn-ink-3);
-  line-height: 1.45;
 }
 
-/* A COLUMN, BECAUSE THE SKIP LINE SITS UNDER THE NAME AND NOT AFTER IT (D116). The
-   truncation moved one element in with it: `text-overflow` needs the nowrap and the overflow
-   on the box holding the TEXT, and a container that also holds a second line cannot be that
-   box — the ellipsis would have been computed over both lines and neither would have got
-   one. */
-.nb-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  font-family: var(--bn-font-ui);
-  font-size: var(--nb-name, 13px);
-  line-height: 1.35;
-  color: var(--bn-ink);
-}
+.nb-side { min-width: 0; }
+.nb-side b { color: var(--bn-ink); font-weight: 700; }
+.nb-rest { color: var(--bn-ink-3); font-weight: 600; }
 
-.nb-name-line {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* An unread neighbour, said in words (LOC-28): muted and in the running voice, because it
+   names no card a hand can recognise by its face, only a count of cards nothing has read. */
+.nb-unread { color: var(--bn-ink-3); font-style: italic; font-weight: 600; }
 
-.nb-name b { font-weight: 600; }
-.nb-rest { color: var(--bn-ink-3); }
-
-/* An unread neighbour, said in words (LOC-28): muted, because it names no card a hand can
-   recognise by its face, only a count of cards nothing has read. */
-.nb-unread { color: var(--bn-ink-3); font-style: italic; }
-
-/* THIS CARD, between its two neighbours (the owner's orientation: back on top, front below). It is
-   the row the eye lands on, so it carries the weight; a departed card's row is muted, because the
-   card is no longer there to find. */
-.nb-this .nb-name { font-weight: 700; }
-.nb-this .nb-key { color: var(--bn-ink-2); }
-.nb[data-departed='true'] .nb-this .nb-name,
-.nb[data-departed='true'] .nb-this .nb-key { color: var(--bn-ink-3); font-weight: 600; }
-
-/* The stack: the same rank on one axis. */
-.nb[data-flow='stack'] .nb-row { display: block; }
-.nb[data-flow='stack'] .nb-key { display: block; margin-bottom: 1px; }
-.nb[data-flow='stack'] .nb-row + .nb-row { margin-top: var(--bn-1); }
+/* THE SEAM (D218: never typed) — a bare arrow, muted, between the two names. */
+.nb-arrow { color: var(--bn-ink-4); }
+.nb-arrow::before { content: '→'; }

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
-import { createPortal } from 'react-dom'
 
 import {
   cropPreview,
@@ -17,14 +16,16 @@ import type {
   GameEntry,
   RunPreflight,
   RunSelection,
+  RunSend,
   RunStartFailure,
   RunStartedRun,
   RunSummary,
 } from './types'
-import { Button, Chip, EmptyState, Icon, IconButton, Kbd, Notice, Segmented } from './kit'
+import { Button, Chip, EmptyState, Icon, IconButton, Kbd, Loading, Notice, Segmented, Select } from './kit'
 import { toast } from './kit/toast'
+import { Dialog } from './kit/overlay'
 import { LogWell } from './RunsLog'
-import { useOverlayFocus } from './runsOverlay'
+import { whenLabel } from './RunsStage'
 import { boxesLabel, boxLabel, runBoxLabel } from './runScope'
 import { money } from './money'
 import { storeKeyText } from './storeKey'
@@ -231,6 +232,25 @@ export function selectionOf(draft: SelectionDraft, carried: CarriedScope | null)
   return out
 }
 
+/** THE SELECTION THE COMPOSER OPENS ON: the ticked cards `#/inventory` handed over, when there
+ *  are any (`Runs.tsx`'s handoff opens it on the `ticked` start), and otherwise every card
+ *  photographed and not identified. Review's Identify strip (D291) names and prices this same
+ *  set, so "Check first" and "Identify now" are over one rule. One derivation, `selectionOf`. */
+export function openingSelection(carried: CarriedScope | null): RunSelection {
+  const ticked = carried !== null && carried.keys.length > 0
+  return selectionOf({ ...NO_DRAFT, start: ticked ? 'ticked' : 'needed' }, ticked ? carried : null)
+}
+
+/** "IDENTIFY NOW" (D291, the owner's ruling of 2026-09-25): exactly the cards the strip
+ *  counted and priced, as a `keys` selection (D180), read the composer's default way. Never a
+ *  state: a capture in another tab after the strip read its list must not grow the spend.
+ *  An empty list is refused here, because the wire drops an empty `keys` term and a send with
+ *  no term at all is a press over the whole store. */
+export function sendOfKeys(keys: readonly string[]): RunSend {
+  if (keys.length === 0) throw new Error('A spend must name at least one card.')
+  return { selection: { keys: [...keys] }, crop: DEFAULT_READING.crop, maxEdge: DEFAULT_READING.maxEdge }
+}
+
 /**
  * IS THE START ANSWERED? The gate on both presses, and it is not cosmetic.
  *
@@ -350,8 +370,6 @@ export function RunsComposer({
   onDropCarried,
   onStarted,
 }: Props) {
-  const dialog = useRef<HTMLDivElement | null>(null)
-  const scrim = useRef<HTMLDivElement | null>(null)
   const [stage, setStage] = useState<StageKey>('select')
 
   /* ONE READING FOR THE PRESS. `RunSend` carries one `crop` and one `maxEdge`, so this is a
@@ -459,9 +477,8 @@ export function RunsComposer({
     }
   }, [onClose, stage])
 
-  /* Dialog chrome: focus lands inside on open, stays inside under Tab, and goes back to the
-     button that opened it on close. Escape closes. */
-  useOverlayFocus(dialog, open, close, false, scrim)
+  /* Dialog chrome is the kit's own Dialog (D275): focus lands inside on open, stays inside
+     under Tab, and goes back to the button that opened it on close. Escape closes. */
 
   /* ------------------------------------------------------------------- the stage 1 pickers */
   useEffect(() => {
@@ -759,20 +776,12 @@ export function RunsComposer({
   const estimate = quote?.total.estimate_usd ?? null
   const overNotice = estimate !== null && estimate > notice
 
-  /* Portalled to <body>: `.bn-page`'s enter animation leaves `main` with a filled transform,
-     which makes it the containing block for anything fixed inside it — a dialog drawn there
-     centres on the page column rather than the viewport and the scrim never reaches the nav. */
-  return createPortal(
-    <>
-      <div ref={scrim} className="bn-scrim" onClick={close} />
-      <div
-        ref={dialog}
-        className="bn-dialog runs-composer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="runs-composer-title"
-        tabIndex={-1}
-      >
+  /* THE KIT'S OWN DIALOG (D275), which portals to <body> itself: `.bn-page`'s enter animation
+     leaves `main` with a filled transform, so a dialog drawn inside it would centre on the page
+     column. `passKeys`: the preview's own arrow keys step the selection (the effect above), so
+     the kit must not swallow them. It builds its own head, because the stage list lives there. */
+  return (
+      <Dialog kind="dialog" label={TITLES[stage]} onClose={close} passKeys className="runs-composer">
         <header className="runs-composer-head">
           <div className="runs-composer-heading">
             <span className="bn-eyebrow">
@@ -845,7 +854,7 @@ export function RunsComposer({
                 {draft.start === 'drawers' ? (
                   <div className="runs-boxes" role="group" aria-label="Which boxes to identify">
                     {boxes === null && boxesFailure === null ? (
-                      Array.from({ length: 6 }, (_, i) => <div key={i} className="bn-skeleton runs-box-skel" />)
+                      <Loading rows={6} label="Reading the boxes" className="runs-boxes-loading" />
                     ) : rows.length === 0 ? (
                       <EmptyState
                         icon="box"
@@ -946,7 +955,7 @@ export function RunsComposer({
                   <div className="runs-pick-said">
                     {runsTrouble === null ? null : <Notice tone="warn">{runsTrouble}</Notice>}
                     {runs === null ? (
-                      <div className="bn-skeleton runs-pick-skel" aria-busy="true" />
+                      <Loading rows={1} label="Reading the runs" />
                     ) : runs.length === 0 ? (
                       <EmptyState
                         icon="history"
@@ -955,22 +964,19 @@ export function RunsComposer({
                       />
                     ) : (
                       <>
-                        <label className="runs-field-inline">
-                          <span>Run</span>
-                          <select
-                            className="bn-select"
-                            value={draft.run ?? ''}
-                            onChange={(event) => onDraft({ run: event.target.value === '' ? null : event.target.value })}
-                          >
-                            <option value="">Pick a run…</option>
-                            {runs.map((row) => (
-                              <option key={row.run} value={row.run}>
-                                {row.run}
-                                {runBoxLabel(row) === null ? '' : ` (${runBoxLabel(row)})`}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        {/* A RUN IS NAMED BY ITS BOX AND ITS AGE, never its directory name (D196).
+                            The raw name still narrows a typed search through `text`. */}
+                        <Select
+                          label="Run"
+                          placeholder="Pick one"
+                          value={draft.run}
+                          options={runs.map((row) => {
+                            const when = whenLabel(row.created_at)
+                            const label = `${runBoxLabel(row) ?? 'No box'}${when === '' ? '' : `, ${when}`}`
+                            return { value: row.run, label, text: `${label} ${row.run}` }
+                          })}
+                          onChange={(next) => onDraft({ run: next })}
+                        />
                         <p className="run-step-fine">
                           The cards that run answered, read again at the reading you choose next. Useful when a
                           photograph was replaced or a reading was too small to be trusted.
@@ -988,41 +994,31 @@ export function RunsComposer({
                   Narrow it
                 </span>
 
-                <label className="runs-field-inline">
-                  <span>Game</span>
-                  <select
-                    className="bn-select"
-                    value={draft.game ?? ''}
-                    onChange={(event) => onDraft({ game: event.target.value === '' ? null : event.target.value })}
-                  >
-                    <option value="">Any game</option>
-                    {(games ?? []).map((entry) => (
-                      <option key={entry.key} value={entry.key}>
-                        {entry.display}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {/* `''` is the "no narrowing" choice: the kit's Select has no clear, so the
+                    unnarrowed value is an option of its own, the way the native one had it. */}
+                <Select
+                  label="Game"
+                  value={draft.game ?? ''}
+                  options={[
+                    { value: '', label: 'Any game' },
+                    ...(games ?? []).map((entry) => ({ value: entry.key, label: entry.display })),
+                  ]}
+                  onChange={(next) => onDraft({ game: next === '' ? null : next })}
+                />
 
-                <label className="runs-field-inline">
-                  <span>Section</span>
-                  <select
-                    className="bn-select"
-                    disabled={sectionsOf === null}
-                    value={draft.section === null ? '' : String(draft.section)}
-                    onChange={(event) =>
-                      onDraft({ section: event.target.value === '' ? null : Number(event.target.value) })
-                    }
-                  >
-                    <option value="">Whole box</option>
-                    {(sectionsOf?.sections_detail ?? []).map((row) => (
-                      <option key={row.section} value={row.section}>
-                        Section {row.section}
-                        {row.name === null ? '' : ` (${row.name})`} with {plural(row.count, 'card')}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <Select
+                  label="Section"
+                  disabled={sectionsOf === null}
+                  value={draft.section === null ? '' : String(draft.section)}
+                  options={[
+                    { value: '', label: 'Whole box' },
+                    ...(sectionsOf?.sections_detail ?? []).map((row) => ({
+                      value: String(row.section),
+                      label: `Section ${row.section}${row.name === null ? '' : ` (${row.name})`} with ${plural(row.count, 'card')}`,
+                    })),
+                  ]}
+                  onChange={(next) => onDraft({ section: next === '' ? null : Number(next) })}
+                />
 
                 {/* THE SITTING IS SPENT AS A `since` BOUND, and that is a decision rather than a
                     gap: the server has no `sitting` term on purpose. Home clusters `captured_at`
@@ -1141,7 +1137,10 @@ export function RunsComposer({
                 {previewTrouble !== null ? (
                   <Notice tone="warn">{previewTrouble}</Notice>
                 ) : preview === null ? (
-                  <div className="bn-skeleton runs-preview-skel" aria-busy="true" />
+                  /* The frame's own box while the preview draws, so nothing moves when it lands (D118). */
+                  <div className="run-preview-frame" aria-busy="true">
+                    <Loading rows={0} label="Drawing the preview" />
+                  </div>
                 ) : preview.sample.unreadable !== undefined || preview.sample.frame === undefined ? (
                   <p className="run-preview-fact">
                     {/* THE STORE KEY AND NOT A CARD NUMBER, on all four of this panel's figures.
@@ -1304,13 +1303,17 @@ export function RunsComposer({
                    drawers reported as one failure — and one child cannot: it spawns or the
                    request refuses. The notice is one `length` check and costs nothing to keep,
                    and it no longer names a box because the failure has no drawer to name. */
-                <Notice tone="danger" title={`${plural(partial.length, 'run')} did not start`}>
+                /* THE MACHINE'S CODES GO BEHIND "What the server said" (D269), never in plain view. */
+                <Notice
+                  tone="danger"
+                  title={`${plural(partial.length, 'run')} did not start`}
+                  code={partial.map((row) => row.code).join(', ')}
+                >
                   Nothing in this send was paid for. Press again.
                   {partial.map((row) => (
-                    <div className="bn-notice-code runs-code-parts" key={row.code}>
-                      <span>{row.code}</span>
-                      <span>{row.sentence ?? row.message}</span>
-                    </div>
+                    <p className="runs-partial-said" key={row.code}>
+                      {row.sentence ?? row.message}
+                    </p>
                   ))}
                 </Notice>
               )}
@@ -1322,14 +1325,16 @@ export function RunsComposer({
                    answer for every press. The sentence is the server's — `store/submissions.py`
                    composes it for both refusal sites — and a third spelling here would be a third
                    message to learn. */
-                <Notice tone="warn" title="Some of these cards are already being paid for">
+                <Notice
+                  tone="warn"
+                  /* The count is on the line (D174): two cards is a double-click, four hundred is a
+                     different mistake. */
+                  title={`${plural(quote.claimed.cards, 'card')} already being paid for`}
+                  /* Which runs or receipts hold them are machine names (D196), so they sit
+                     behind "What the server said" (D269). */
+                  detail={quote.claimed.runs.length > 0 ? quote.claimed.runs.join(', ') : quote.claimed.receipts.join(', ')}
+                >
                   {quote.claimed.sentence}. Watch that run, or release its claim if its holder is gone.
-                  <div className="bn-notice-code runs-code-parts">
-                    <span>{plural(quote.claimed.cards, 'card')}</span>
-                    <span>
-                      {quote.claimed.runs.length > 0 ? quote.claimed.runs.join(', ') : quote.claimed.receipts.join(', ')}
-                    </span>
-                  </div>
                 </Notice>
               ) : quote.total.to_send === 0 ? (
                 <Notice tone="ok" title="Nothing to send">
@@ -1463,19 +1468,25 @@ export function RunsComposer({
                         cards are in more than one drawer records no drawer at all, which is an
                         ordinary outcome of a store-wide press rather than a fault — so the
                         selection's own words stand in where there is no box to label. */}
-                    <span className="runs-receipt-box">{runLabel(row, boxes) ?? `${plural(row.cards, 'card')}`}</span>
-                    <span className="bn-mono runs-receipt-run">{row.run}</span>
+                    {/* The run's directory name rides a tooltip only (D196), as the run list's does. */}
+                    <span className="runs-receipt-box" title={row.run}>
+                      {runLabel(row, boxes) ?? `${plural(row.cards, 'card')}`}
+                    </span>
                   </li>
                 ))}
               </ul>
               {partial === null ? null : (
-                <Notice tone="danger" title={`${plural(partial.length, 'run')} did not start`}>
+                /* THE MACHINE'S CODES GO BEHIND "What the server said" (D269), never in plain view. */
+                <Notice
+                  tone="danger"
+                  title={`${plural(partial.length, 'run')} did not start`}
+                  code={partial.map((row) => row.code).join(', ')}
+                >
                   Nothing in that send was paid for. Check the cost again to start it.
                   {partial.map((row) => (
-                    <div className="bn-notice-code runs-code-parts" key={row.code}>
-                      <span>{row.code}</span>
-                      <span>{row.sentence ?? row.message}</span>
-                    </div>
+                    <p className="runs-partial-said" key={row.code}>
+                      {row.sentence ?? row.message}
+                    </p>
                   ))}
                 </Notice>
               )}
@@ -1538,9 +1549,7 @@ export function RunsComposer({
             </>
           ) : null}
         </footer>
-      </div>
-    </>,
-    document.body,
+      </Dialog>
   )
 }
 

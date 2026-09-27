@@ -1,0 +1,31 @@
+/* THE OWNER'S "BY SET" VIEW (D293) — one section per game/set, cards inside in
+ * printed order. Every color is a `--bn-*` token; nothing here names one. */
+
+.inventory-sets { display: flex; flex-direction: column; gap: var(--bn-6); }
+
+.sets-card-row {
+  justify-content: flex-start;
+  cursor: pointer;
+}
+.sets-card-img {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 44px;
+  border-radius: var(--bn-r-sm);
+  object-fit: cover;
+  box-shadow: inset 0 0 0 1px var(--bn-line);
+  background: var(--bn-surface-2);
+}
+.sets-card-number {
+  flex: 0 0 auto;
+  min-width: 4.5em;
+  color: var(--bn-ink-3);
+  font-size: var(--bn-fs-sm);
+}
+.sets-card-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

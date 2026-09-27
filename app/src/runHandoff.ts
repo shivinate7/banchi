@@ -75,11 +75,6 @@ export function parseKey(key: string): { readonly box: number; readonly index: n
   return box >= 1 && index >= 1 ? { box, index } : null
 }
 
-/** A key for a box and a stored index — the one spelling, so no caller composes its own. */
-export function cardKey(box: number, index: number): string {
-  return `${box}/${index}`
-}
-
 /** The drawers a carried selection touches, and which of its cards are in each — ascending by
  *  box and by index, so one selection has one rendering. */
 export function carriedByBox(
@@ -155,18 +150,14 @@ export function carriedScope(): CarriedScope | null {
   return { keys }
 }
 
-/** Hands a selection to `#/runs`. Refuses an empty selection for the reason `CarriedScope`
- *  gives — the whole box is not a handoff, it is what the picker already says. */
-export function carryScope(scope: CarriedScope): void {
-  if (scope.keys.length === 0) return
-  try {
-    window.sessionStorage.setItem(KEY, JSON.stringify({ keys: [...scope.keys] }))
-  } catch {
-    /* Storage refused. The screen still navigates and still draws the whole box, which is the
-       wider scope rather than a wrong one — the operator sees `the whole box` on the header and
-       can tick again. Silently narrowing would be the dangerous direction. */
-  }
-}
+/** THE WRITER, `carryScope`, IS RETIRED — its one caller, `BoxRuns.tsx`, is deleted (the
+ *  owner's word, ux-2026-09-23 review: "Remove it"; `docs/reviews/ux-2026-09-23/RULINGS.md`).
+ *  Nothing on `#/inventory` writes a handoff any more; a card is identified from Review's own
+ *  identify strip instead. The READERS below stay: `carriedScope`/`carriedByBox`/`parseKey`
+ *  still have callers (`Runs.tsx`, `RunsComposer.tsx`, `ReviewQueue.tsx`), and `#/runs` reads
+ *  nothing new because nothing writes any more — the fall-through-rather-than-guessing rule
+ *  above is what makes that safe: an absent handoff is `carriedScope() === null`, the same
+ *  shape a stale or malformed one already reads as. */
 
 /** Drops the handoff. Called by the operator's own Clear, and by picking another box. */
 export function clearCarriedScope(): void {

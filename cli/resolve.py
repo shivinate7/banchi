@@ -601,6 +601,7 @@ def box_views(
             # The label says the box's name (D259), read at the same
             # moment as the layout, so the report and the screen spell one address.
             name=entry.name if entry is not None else None,
+            order=inventory.box_order(number),
         )
     return views
 
@@ -1678,7 +1679,25 @@ def realign(
         inventory = _digest_inventory()
     sources: List[str] = []
 
+    # A MOVED CARD IS FOLLOWED BY ITS OWN LINK, CHECKED BY ITS NAME (D262). A record whose key
+    # is now a `moved` tombstone is not searched for: the tombstone says where the card went.
+    # Followed first, and taken out of the per-box check below, because a whole box merged
+    # away would otherwise read as `unverified` and pass its tombstone keys through.
+    followed: Dict[str, str] = {}
+    for records in by_box.values():
+        for key in sorted(records):
+            dest, gone_reason = follow_moved(inventory, key, records[key].get("photo_sha256"))
+            if dest is not None:
+                followed[key] = dest
+            elif gone_reason:
+                departed.append(key)
+            else:
+                continue
+            del records[key]
+
     for box, records in sorted(by_box.items()):
+        if not records:
+            continue
         at, twice, source = _photo_digests([box], inventory)
         sources.append(source)
         verifiable = {
@@ -1698,6 +1717,10 @@ def realign(
             elif at[digest] != key:
                 moved[key] = at[digest]
 
+    # A followed card is a certain link, never a slot that slid, so it does not trip the
+    # `blind and moved` refusal below: that refusal is about D10's mid-box slide.
+    slid = dict(moved)
+    moved.update(followed)
     if not moved and not departed and not ambiguous:
         return payload, {}, [], unverified
 
@@ -1717,7 +1740,7 @@ def realign(
         landing.setdefault(moved.get(key, key), []).append(key)
     collided = sorted(slot for slot, keys in landing.items() if len(keys) > 1)
 
-    if ambiguous or collided or (blind and moved):
+    if ambiguous or collided or (blind and slid):
         lines = ["this run cannot be placed against the box as it stands now. Nothing was joined.", ""]
         if collided:
             lines += [
@@ -1733,9 +1756,9 @@ def realign(
                 + (" ..." if len(ambiguous) > 8 else ""),
                 "",
             ]
-        if blind and moved:
+        if blind and slid:
             lines += [
-                f"{len(moved)} card(s) have moved slot since they were identified, and these "
+                f"{len(slid)} card(s) have moved slot since they were identified, and these "
                 "records predate the photo digest, so they cannot be checked at all: "
                 + ", ".join(blind[:8]) + (" ..." if len(blind) > 8 else ""),
                 "",
@@ -1803,6 +1826,43 @@ def realign(
         rebuilt[now] = moved_record
     rebound["cards"] = rebuilt
     return rebound, moved, departed, unverified
+
+
+def follow_moved(
+    inventory: Optional[master.Inventory], key: str, digest: Optional[str] = None
+) -> Tuple[Optional[str], Optional[str]]:
+    """Where a moved card stands now: `(key, None)`, or `(None, why)` when the link does not
+    hold, or `(None, None)` when `key` is not a moved tombstone at all. D262.
+
+    ONE HOP AT A TIME, along each tombstone's own `moved_to`. NO OTHER SEARCH RUNS: the join
+    never looks in a box for any other reason (D165's protected outcome). At the end, the
+    card's name must be the name the first tombstone carries under its `moved:` prefix, and
+    where the run recorded the photograph's digest, the digest must agree too. Either
+    mismatch is a card the join refuses and names (`departed`), never a guess.
+    """
+    if inventory is None:
+        return None, None
+    card = inventory.cards.get(key)
+    if card is None or card.state != master.MOVED or not card.moved_to:
+        return None, None
+    tomb = card.cid or ""
+    name = tomb[len(master.MOVED_CID_PREFIX):] if tomb.startswith(master.MOVED_CID_PREFIX) else ""
+    name = name.split("@", 1)[0]
+    at = key
+    seen = {at}
+    while card is not None and card.state == master.MOVED and card.moved_to:
+        at = card.moved_to
+        if at in seen:
+            return None, "its move links form a loop"
+        seen.add(at)
+        card = inventory.cards.get(at)
+    if card is None:
+        return None, "its move link points at no card"
+    if not name or card.cid != name:
+        return None, "the card at the end of its move link has another name"
+    if digest and photos.digest_of(card.cid) not in (None, digest):
+        return None, "the card at the end of its move link has another photograph"
+    return at, None
 
 
 def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run) -> None:

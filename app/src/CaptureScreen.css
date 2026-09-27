@@ -17,14 +17,17 @@
      screenshots this lane took at four widths are the check that this estimate holds — a
      tighter number wants a real measurement, not another guess. */
   --cap-head-h: 96px;
-  --cap-chrome: calc(var(--bn-3) + var(--cap-head-h) + var(--cap-gap) + var(--bn-4));
+  --cap-chrome: calc(var(--bn-page-top) + var(--cap-head-h) + var(--cap-gap) + var(--bn-4));
   display: flex;
   flex-direction: column;
   gap: var(--cap-gap);
   min-height: 100dvh;
-  /* The kit's horizontal inset, so the title's left edge lands where every other screen's
-     does; the vertical inset stays compressed for the viewfinder's sake. */
-  padding: var(--bn-3) var(--bn-7) var(--bn-4);
+  /* D272/D275, the follow-up lane after PR 2: the kit's own top gap, same as every other
+     screen -- measured to still clear the fold at 390x754 and 1440x900 (`--bn-page-top` is
+     4px more than this screen's old compressed pad on a phone, 12px more on a desktop
+     window; `--cap-chrome`'s own first term below moved with it, so the fold math this
+     screen already did for `--cap-head-h` stays exact). */
+  padding: var(--bn-page-top) var(--bn-7) var(--bn-4);
   /* The halt overlay below positions against THIS box, never the viewport, so it lines up
      under the rail regardless of width and needs no z-index fight with the shell (D118). */
   position: relative;
@@ -273,6 +276,25 @@
 }
 .capture-box-val span { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .capture-box-val.is-empty strong { color: var(--bn-accent); }
+/* THE SECTION ROW'S OWN TWO-LINE STACK — a separate class from `.capture-box-val`, never a
+   shared one, because `capture-claims.spec.ts`'s clear-the-setup case reads
+   `.capture-box-val` with no scope beyond the class and would hit both rows' empty state at
+   once (subbox-capture.md §5). Same shape, at the regular row's own scale rather than the
+   Box row's large one — this is not the screen's headline field. */
+/* FINDING 8: `align-items: flex-end` LEFT `strong`/`span` UN-STRETCHED — the CROSS axis of a
+   COLUMN flex container (here, width) sizes a non-stretched item to its own preferred
+   (max-content) size, ignoring the container's own squeezed width entirely; `overflow:hidden`
+   and `text-overflow:ellipsis` only clip once an element HAS a definite width smaller than its
+   content, which a fit-content, non-stretched item never gets. `align-items: stretch` makes
+   both lines take the CONTAINER's own (grid-constrained) width, and `text-align: right` then
+   right-aligns whatever they got left over. Before this, a long section name did not clip: it
+   overflowed the LEFT of its own right-anchored box, over the keycap and the "Section" label
+   — measured at 390, and reachable at 1440 with a name long enough. */
+.capture-section-val { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; align-items: stretch; text-align: right; }
+.capture-section-val strong { min-width: 0; font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.capture-section-val span { min-width: 0; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.capture-section-val.is-empty strong,
+.capture-section-val.is-default strong { color: var(--bn-ink-3); font-weight: 400; }
 .capture-row-lg:has(.is-empty) { background: var(--bn-accent-tint); box-shadow: inset 0 0 0 1.5px var(--bn-accent); }
 .capture-row-lg:has(.is-empty) .capture-row-icon { color: var(--bn-accent); }
 /* UX-137: declared AFTER `:has(.is-empty)` so an empty box still gets a visible hover
@@ -296,6 +318,24 @@
    `.capture-row-covered`), so the slot is exactly as tall as the row's own content needs,
    whether that is one line (empty) or two (a box picked). */
 .capture-box-slot { position: relative; min-height: 54px; }
+/* THE SECTION ROW'S OWN SLOT (D118), the same trick one row down: the closed Row stays in
+   flow and sizes it, and its own open field overlays it without moving the shutter or the
+   blocker list below (docs/specs/subbox-capture.md §5). */
+.capture-section-slot { position: relative; min-height: 40px; }
+/* FINDING 7 (D118): the stale-pick fallback sentence overlays the space below the row rather
+   than adding to the slot's own flow height — matching `.capture-open-pinned`'s own trick just
+   above, an appearing/clearing note must never move `.capture-controls` under the operator's
+   hand. Opaque for the same reason that class is: it sits OVER what would otherwise show
+   through, not beside it. */
+.capture-section-note {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  background: var(--bn-surface);
+  padding-top: var(--bn-2);
+}
 /* The closed row while the field is open: still in flow (it is what sizes the slot), but
    invisible and out of the tab order — the pinned overlay above it is what the operator
    sees and reaches. `visibility`, not `display: none`, is the whole trick: a hidden element
@@ -395,7 +435,7 @@
 .capture-entry { display: flex; }
 .capture-entrybox { width: 100%; }
 .capture-entrybox .capture-filter { padding-right: 104px; min-height: 36px; font-size: var(--bn-fs-md); }
-/* The state of what is typed, in sentence case beside the entry: `Next index 134`, `Sealed`,
+/* The state of what is typed, in sentence case beside the entry: `Next index 134` or
    `New box`. Capped, and the placeholder is `Number or name`, so neither is cut mid-word in
    the 300px rail (the note under the list already says what Enter does). */
 .capture-entrymeta {
@@ -786,6 +826,22 @@
 .capture-frame-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 700; color: var(--vf-ink); }
 .capture-frame-body { font-size: var(--bn-fs-md); max-width: 32ch; color: var(--vf-ink-2); }
 .capture-frame-note .bn-btn { margin-top: var(--bn-2); }
+/* ONE "OPEN THE CAMERA" PRESS AT A TIME (the PR 3 integration). The frame is 9:16 and fills
+   the viewport's height, so its width is 0.5625 of that height. The worded press is 166px and
+   the note pads 24px a side, so the words need a frame about 214px wide: a viewport about 380px
+   tall. Below 400px the icon-only press stands in, with the same accessible name, and the
+   glyph above it goes, because one camera is enough. `display: none` keeps the hidden press out
+   of the accessibility tree. */
+.capture-frame-open-icon { display: none; }
+@container (max-height: 400px) {
+  .capture-frame-note .capture-frame-open-words { display: none; }
+  .capture-frame-note .capture-frame-open-icon { display: inline-flex; }
+  /* The kit's IconButton is a ghost. On the dark frame this is the one press, so it wears
+     the primary face the worded press wears. */
+  .capture-frame-note .capture-frame-open-icon { color: var(--bn-on-accent); background: var(--bn-accent); box-shadow: var(--bn-shadow-1); }
+  .capture-frame-note .capture-frame-open-icon:hover { background: var(--bn-accent-hover); }
+  .capture-frame-note:has(.capture-frame-open-icon) .capture-frame-glyph { display: none; }
+}
 .capture-frame-spinner {
   width: 24px;
   height: 24px;
@@ -928,13 +984,23 @@
 .capture-undo-depth { margin-left: 6px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-3); }
 .capture-film-empty { display: flex; align-items: flex-start; gap: var(--bn-2); padding: 6px 4px 4px; font-size: var(--bn-fs-sm); }
 .capture-film-empty .bn-icon { color: var(--bn-ink-4); }
+/* UN-1: THE WHOLE SITTING SCROLLS INSIDE THE STRIP RATHER THAN GROWING THE PAGE (D164's cap
+   is gone). Fixed at a round number of grid rows rather than a viewport fraction, so the strip's
+   own height does not shift as the viewfinder above it resizes across breakpoints — `40vh`
+   measured taller than the whole footer at 820 and would have made an eleven-card sitting look
+   identical to a two-card one. */
 .capture-undo-list {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-rows: min-content;
   gap: 6px 8px;
   list-style: none;
   margin: 0;
   padding: 8px 2px 2px;
+  max-height: 360px;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
 }
 .capture-undo-list > li { min-width: 0; animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) both; }
 .capture-undo-row {
@@ -1059,8 +1125,6 @@
   position: absolute;
   top: -6px;
   right: -5px;
-  width: 22px;
-  height: 22px;
   padding: 0;
   border: none;
   border-radius: var(--bn-r-full);
@@ -1076,8 +1140,19 @@
 .capture-undo-drop:hover:not(:disabled),
 .capture-undo-drop:focus-visible { background: var(--bn-danger); color: var(--bn-on-accent); }
 .capture-undo-drop:disabled { opacity: 0.5; cursor: not-allowed; }
+/* THE 40PX FLOOR ON A COARSE POINTER (D117), MEASURED RATHER THAN ASSUMED: `IconButton` sizes
+   its own face with an inline `style` (`kit/index.tsx`'s `FACE_PX` table), so a class rule
+   never won, and the press measured 24x24 on a real phone-width run. The size is the
+   `--undo-drop-size` property now, which the press's own `style` reads, so the media rule
+   below sets it with no `!important`. Flush at the corner (`top: 0; right: 0`) instead of
+   hanging over it, so the real 40px box stays inside its own cell rather than reaching into
+   the next one: the corner overhang worked at 24px beside a 12px gap, and not at 40px. */
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
-  .capture-undo-drop { width: var(--bn-control-h-sm); height: var(--bn-control-h-sm); top: -8px; right: -8px; }
+  .capture-undo-drop {
+    --undo-drop-size: var(--bn-control-h-sm);
+    top: 0;
+    right: 0;
+  }
 }
 
 /* ---- the halt (spec 5.5): two lines and one button; the figures sit behind the disclosure ----
@@ -1255,9 +1330,23 @@
   .capture-box-val span { white-space: normal; }
   .capture-undo-list {
     display: flex;
-    gap: var(--bn-3);
-    padding: 8px 4px 4px;
+    /* WIDE ENOUGH THAT TWO CORNER BADGES NEVER TOUCH (the coordinator's review, 2026-09-25):
+       `.capture-undo-drop`'s 40px thumb floor (D117) reaches 13px past its own cell on a
+       coarse pointer (its 24px face plus the kit's `::before` half-reach), and at the old
+       12px gap that overran the next cell's own `.capture-key` by 1px — a coarse press at
+       the drop's own edge could fire the WRONG card's row instead. 16px clears it. */
+    gap: var(--bn-4);
+    /* 16px, not 8px, for the same reason on the vertical axis: `overflow-x: auto` below
+       forces `overflow-y` to `auto` too (the CSS spec's own promotion rule, not a bug this
+       screen can opt out of), so the same `::before` reaching 8px above the FIRST row's
+       drop button needs that much clearance from the list's own top edge or it is clipped
+       exactly as if it were real scrolled-past content. */
+    padding: 16px 4px 4px;
+    /* One scrolling row, not a scrolling grid — the desktop rule's `max-height` and vertical
+       scroll would clip this row's own thumbnails, which are taller than it. */
+    max-height: none;
     overflow-x: auto;
+    overflow-y: visible;
     overscroll-behavior-x: contain;
     scrollbar-width: thin;
   }
@@ -1269,12 +1358,18 @@
 }
 
 @media (max-width: 1023px) and (min-width: 768px) {
-  .capture.bn-page { padding: 12px 20px 16px; }
+  /* D272/D275, the follow-up lane after PR 2: was a literal 12px, matching the base rule's
+     old compressed pad. `--bn-page-top` is still the desktop 24px at this breakpoint (it
+     only drops at 767px and below). */
+  .capture.bn-page { padding: var(--bn-page-top) 20px 16px; }
 }
 
 /* ---- phone: the viewfinder first, then the run, then everything else ----------------------------------------------------- */
 @media (max-width: 767px) {
-  .capture.bn-page { padding: var(--bn-3) var(--bn-4) var(--bn-4); gap: var(--bn-3); }
+  /* D272/D275: was `var(--bn-3)` (12px). `--bn-page-top` is 16px here (the token's own
+     767px rule), and the phone `.capture-stage` height below is a fixed clamp() budget, not
+     this `--cap-chrome` calc -- it is re-measured for the 4px difference in the same commit. */
+  .capture.bn-page { padding: var(--bn-page-top) var(--bn-4) var(--bn-4); gap: var(--bn-3); }
   /* The lamp and the box sentence are drawn again inside the stage, 20px lower; the h1 and
      the odometer both show here now (Page's own header, R1, UX-048) — the old
      `.capture-head-text { display: none }` this replaced hid the title text entirely, which
@@ -1284,7 +1379,7 @@
   .capture-odo .bn-stat-value { font-size: var(--bn-fs-xl); }
   .capture-odo-rule { height: 22px; }
   .capture-shell { display: flex; flex-direction: column; gap: var(--bn-3); }
-  /* Sized by what is left above the tab bar, not by a ratio: top bar 52 + page pad 12 + head
+  /* Sized by what is left above the tab bar, not by a ratio: top bar 52 + page pad 16 + head
      38 + gap 12 above it, and gap 12 + run card head 92 + shutter 52 + THE TAB BAR + 12 of
      air below it.
      THE TAB BAR IS `var(--bn-tabbar-h)`, NEVER A LITERAL, because it is not a constant: it is
@@ -1318,8 +1413,25 @@
        The 260px floor forced 41.77px of overlap into the tab bar regardless of what this
        constant subtracted, because the calc() branch was already below the floor at that
        height — raising or lowering 366px could not reach it. 214px is that budget with a
-       ~4px margin, the same subpixel-rounding cushion the constant above already keeps. */
-    height: clamp(214px, calc(100dvh - 366px - var(--bn-tabbar-h)), 560px);
+       ~4px margin, the same subpixel-rounding cushion the constant above already keeps.
+
+       +4px, 2026-09-25 (D272/D275, the follow-up lane after PR 2): the phone page pad moved
+       from a flat 12px to the kit's own `--bn-page-top`, 16px on a phone. Every rect below the
+       page head shifts down by that same 4px, confirmed against the real DOM at 390x754 (a
+       measured screenshot pass, not arithmetic): 370px, the same margin as before, carried
+       forward. THE FLOOR GOES THE OTHER WAY, 214px to 210px (the PR 3 integration): at 390x667
+       with the 34px inset the rows around the stage now total about 354.77px, so the stage has
+       569 - 354.77 = 214.23px. A floor of 218px pushed the shutter 4px into the tab bar
+       (`phone.spec.ts`). 210px keeps the same ~4px cushion.
+
+       +42px, 2026-09-26 (the sub-box capture merge, this integration branch): "Sub-box
+       capture, Lane B" added the Section row to the run card, ALWAYS drawn beside the Box row
+       (D118 — pinned open, never a fold that could move the shutter). `.capture-section-slot`
+       is 40px plus the card's own 2px row gap, 42px the budget above never re-measured for —
+       confirmed against the CI failure this constant fixes: shutter bottom 610.765625 at
+       390x667 with the 34px inset, 41.77px into a tab bar starting at 569. 412px (370 + 42)
+       and a 168px floor (210 - 42) restore the same ~4px cushion with the new row counted. */
+    height: clamp(168px, calc(100dvh - 412px - var(--bn-tabbar-h)), 560px);
     max-height: none;
     align-self: stretch;
   }

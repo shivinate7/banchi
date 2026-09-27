@@ -128,3 +128,15 @@ own, and none of them is a fix that the integration branch can make safely.
 - The six `icons` entries: `ClearPrices`, `Markdown`, `PriceHistory`, `Pricing`,
   `ProductHistory` and `SendCard`. All six are b-pricing's files, and the b-pricing branch
   already clears them, so they leave when b-pricing lands.
+
+## Deferred items, 2026-09-26 (docs sweep)
+
+- **Dark-mode contrast.** SHELVED until after this PR merges. Proposals live on branch
+  `ux/dark-palette`. Two causes are measured: a surface separation of 3.7 ΔL*, and an
+  accent/status lightness of 55-78%. Three variants exist, A, B and C. The owner is
+  considering a cyberpunk-themed dark mode instead. Ask before choosing a variant.
+- **Stock card images.** An open question for the owner. The tcgcsv product `imageUrl` on
+  the TCGplayer CDN, keyed by `productId`, is one source. The vendored catalog is a second
+  source, for Pokemon. Coverage across the store is unmeasured.
+- **One card named from its rules text.** On the owner's store, box 3, index 987, one card's
+  name reads its own rules text rather than its printed name. It is to be fixed in Review.

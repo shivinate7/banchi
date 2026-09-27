@@ -1,55 +1,14 @@
-/* The store-wide reconcile (D87), as a right-hand sheet off the Runs header. */
+/* The store-wide reconcile (D87), in the kit's own Sheet (D275). The kit draws the head, the
+   Close and the foot; this file styles only the body. */
 
 .livecheck {
   width: min(520px, 100vw);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.livecheck[hidden] {
-  display: none;
-}
-
-.livecheck:focus {
-  outline: none;
-}
-
-.livecheck-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--bn-3);
-  padding: var(--bn-5) var(--bn-4) var(--bn-4) var(--bn-6);
-  padding-top: calc(var(--bn-5) + env(safe-area-inset-top));
-  border-bottom: 1px solid var(--bn-line);
-  flex: none;
-}
-
-.livecheck-heading {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.livecheck-head {
-  margin: 0;
-  font-family: var(--bn-font-display);
-  font-size: var(--bn-fs-2xl);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
 }
 
 .livecheck-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: var(--bn-4);
-  padding: var(--bn-5) var(--bn-6);
 }
 
 .livecheck-says {
@@ -99,35 +58,4 @@
   margin: 0;
   font-size: var(--bn-fs-md);
   color: var(--bn-ink-3);
-}
-
-.livecheck-foot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--bn-2);
-  padding: var(--bn-3) var(--bn-6);
-  padding-bottom: calc(var(--bn-3) + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--bn-line);
-  background: var(--bn-surface);
-  flex: none;
-}
-
-@media (max-width: 767px) {
-  .livecheck-top {
-    padding-left: var(--bn-4);
-  }
-  .livecheck-body,
-  .livecheck-foot {
-    padding-left: var(--bn-4);
-    padding-right: var(--bn-4);
-  }
-}
-
-/* THE THUMB FLOOR, ON THE POINTER (D117). These two lifts were inside this sheet's width-only
-   phone block and spelled `--btn-h: 40px` by hand — so an 820px tablet missed them, and the
-   literal could not follow `--bn-control-h*` if that token ever moved. */
-@media (max-width: 767px), (hover: none) and (pointer: coarse) {
-  .livecheck-top .bn-btn-icon,
-  .livecheck-foot .bn-btn { --btn-h: var(--bn-control-h-sm); }
 }
