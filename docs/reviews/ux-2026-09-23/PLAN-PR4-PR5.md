@@ -29,25 +29,18 @@ carries are quoted in backticks.
 - **Order:** PR 4A, then PR 4B, then the post-PR 4 checks, then PR 5. PR 4A and PR 4B merge
   independently.
 
-## PR 3B: the demo data follow-up (waits for PR 4A)
+## PR 3B: the demo data follow-up (DONE, 2026-09-27)
 
-- The full-store mirror build runs detached in worktree
-  `.claude/worktrees/agent-a184b2e3f6b4fe201`, branch `ux/demo-mirror-data-build`.
-- Run 1 hung on an unread server output pipe. Commit `36d2f796` fixes it, with a self-test:
-  the recorder drains the pipe, and a failed request stops the build loudly. This fix needs
-  its one review before it merges.
-- Run 2 failed loudly on 2026-09-27. The snapshot, the scrub and the photos passed: 3,510
-  photos, 94.7 MB, 0 refused for a QR. One price-trends request for about 400 SKUs timed out.
-  The likely cause, not yet proved, is the archive's per-SKU full scan. Lane N1 in PR 4A fixes
-  that scan (10.8s to 72ms for 300 SKUs).
-- After PR 4A merges: rebase the build branch on main, then run `make demo-mirror-rebuild`.
-  It reuses the snapshot and does not read the store again. The build is done when
-  `demo-mirror-build.exit` exists at that worktree's root.
-- Then:
-  1. Check the scrub. Every buyer matches `^Jane Doe \d+$`, and every address is `123 Demo Way`.
-  2. Check that the photos total 512 MB or less.
-  3. Commit `demo-assets/mirror/` and the fix, then push to `origin ux/demo-mirror-data`.
-  4. A short leak check, a small PR, green CI, and merge.
+The full mirror is live at `shivinate7.github.io/banchi/`, publish run 36329643153 on main
+`b61f995e2`. PRs #467 to #474 carried it. 808 buyers are scrubbed to `Jane Doe N`, 3,510
+photos total 94.7 MB, and a leak check against a store copy found 0 real names.
+
+Left for PR 4B (lane M):
+- Riftbound and One Piece stock images are blank in the demo. The demo records offline, and
+  those images come from the network. Pokemon images come from the vendored catalog, so they
+  show. The live app is not affected.
+- The demo records a walk plan for each order and for the screens' own "walk all" sets. Any
+  other ticked combination shows the demo's honest refusal, by design.
 
 ## PR 4A (in flight)
 
