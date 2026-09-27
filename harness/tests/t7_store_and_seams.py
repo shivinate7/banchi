@@ -38591,6 +38591,16 @@ def check_stock_images(checks: Checks) -> None:
         [],
         "a fresh entry schedules nothing a second time",
     )
+    # SPACED-SLASH LOOKUP (measured on a real-store copy: 9 of 1913 on-hand Riftbound
+    # misses, of which this shape — a raw number like `019 / 166`, not `019/166` — was the
+    # one that was a spacing defect and not a genuine absence). `join.number_index_key`
+    # itself is untouched: it keeps a space verbatim by design, so this is a lookup-only
+    # fold ahead of it, proved red on a `.bak` copy of the real fixture before the fix.
+    checks.equal(
+        images.url_for("riftbound", "Vendetta", "SP3 / 006"),
+        "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+        "a raw number with spaces around the slash still resolves against a clean index",
+    )
 
     # THE ROUTE THREADING: `do_pipeline_sets`/`do_pipeline_worklist` carry `image_url` only
     # when handed a resolver, and never open a socket when they are not (every OTHER T7
