@@ -48,7 +48,7 @@ Owner, 2026-09-27: `approved on your next portion, can merge them all into an in
 | F | `ux/pr4a-stock` | Stock images: fold the spaces around the slash in a lookup number | PASS |
 | N1 | `ux/pr4a-sets` | Inventory Sets: a grid of card images, a set picker, a clean header. A tile opens the card's Inventory view | Building |
 | N2 | `ux/pr4a-map` | Inventory Map: box rows left to right, an edit mode with one Confirm that saves all or nothing, no subtitles on Inventory | Building. Needs a strict review, because it writes store data |
-| E | `ux/pr4-search` | Search: close the open gaps that D271 (one forgiving search matcher) discloses. Product choices go to the owner | Building |
+| E | `ux/pr4-search` | Search: close the open gaps that D271 (one forgiving search matcher) discloses | Done. Every listed gap was already closed. D271 round 12 records it. Typo search is deferred as DEBT46 |
 | records | `ux/pr4a-records` | DEBT45, and this file | Committed |
 
 Owner rulings for N1 and N2 (2026-09-26):
@@ -79,9 +79,7 @@ drifted from it. The owner's final direction:
 4. A click on a row fills the right pane with the photo and the card facts. Below them goes
    EVERY on-hand copy, in Inventory's copies list, with the walk's chosen copy first. D212
    (every copy is fungible) governs.
-5. A sold walk row stays until the next load. Today it hides at once, so the page jumps about
-   48px. Remove the `scrollTo` pin in `app/tests/orders.spec.ts` UN-6 so the test guards the
-   real behavior again. Add a DEBT for the jump first.
+5. The sold-row jump is its own lane, E, below. Lane A must not undo that fix.
 6. On a phone, the buyer shows before the photo.
 
 Do a design pass first, and show the owner a mockup.
@@ -114,6 +112,19 @@ Owner: `is there anyway u can have it chunking so that way it's not starting fro
 - The recorder writes each route as it lands. A re-run over the same snapshot skips the routes
   already recorded.
 - The build log already moved out of `demo-mirror/` in PR 3B.
+
+### E. The Orders jump, unpinned (replaces the search item, which is done)
+
+Owner, 2026-09-27: `save it in the markdown as an item for PR4B, ironically rpelcaing the current E you have in there since we solved that now`.
+
+- The defect: in an Orders walk, Mark sold hides the row at once under `hideSold`. The page
+  shrinks, and the view jumps about 48px. `OrdersWalkPane.tsx` does this, on main since
+  `fc58ca3f`. D118 (a press never moves the rest of the screen) forbids it.
+- PR 3 made CI green with a bandaid. A `scrollTo` pin in `app/tests/orders.spec.ts` UN-6 hides
+  the jump from the test. The test no longer guards the real behavior.
+- The fix: a sold walk row stays in place until the next load, as D263 (a sold row folds on
+  the next load) already rules for Inventory. Remove the pin. Prove UN-6 red on the old
+  behavior, then green. Add a DEBT for the jump first, and close it in the same lane.
 
 ### F2. The spacing gap in the real join
 
