@@ -17,6 +17,10 @@ carries are quoted in backticks.
   - Order (owner, same day): E, B2 and S start now. A's design pass starts now. D, C and
     DEBT35 wait for an interview. G and T wait for an interview and a cross-check. The
     cross-check covers debts, deferred items, wants, CI tests, audits and rules. H waits.
+  - The interview on C, D and M (owner, same day):
+    - C: the cap fix and DEBT35 were already built on 2026-09-25. Owner: `Send a sonnet agent to see what's left on Debt 37 and how we can fix it`.
+    - D: the lock glyph starts now as lane D1. For Home's top gap the owner said `i need to see a visual`. For the other items: `ill need to see details/plans before confirming`.
+    - M: no open question, so the lane starts now.
   - Merge grant: the owner named this session an Orchestrator. It merges PR 4B into main with
     `make merge` once CI is green.
 - **Integration branch (2026-09-27, second session):** `ux/pr4b`. Each lane branches from it
@@ -94,16 +98,19 @@ Owner, 2026-09-27: `save it in the markdown as an item for PR4B, ironically rpel
 
 ### C. The send path (money, so an adversarial review)
 
-- The `--cap` plus `--live-guard` defect. The owner's ruling (2026-09-25) is in `RULINGS.md`:
-  the cap counts the larger of the guard's live count and the store's own count.
-- The DEBT35 exit split for `emit`.
+- BUILT before this plan was written, on 2026-09-25: the `--cap` plus `--live-guard` defect
+  (the D7 amendment, T7's `capguard` rows) and the DEBT35 exit split (closed).
+- Open: DEBT37 (under a cap, a pending copy and an unseen live copy can both be out). A Sonnet
+  study says what is left and how to fix it. The lane waits for the owner's word on it.
 
 ### D. Leftover screens
 
-- The Home h1 greeting, the Capture top gap, the Fulfillment `<Page>` variant, the Runs R2
-  entries, and the six icon entries (see `STATE.md` in this folder).
-- The lock glyph sits low in its drawing (`kit/Icon.tsx`, `lock`). Lane K nudged one Pricing
-  button 1px as a bandaid. Fix the glyph, and remove the nudge.
+- Already gone from `scripts/kit-adoption-allow.json`: the Home h1, the Capture top gap, the
+  Fulfillment `<Page>` variant, the Runs R2 entries, and the six icon entries.
+- Still listed, and waiting for visuals and plans (`lane-d/` in this folder): the top gap on
+  `/`, `/review` and `/runs`, five ReviewQueue R2 entries, and the Codes filter row.
+- Lane D1: the lock glyph sits low in its drawing (`kit/Icon.tsx`, `lock`). Lane K nudged one
+  Pricing button 1px as a bandaid. Fix the glyph, and remove the nudge.
 
 ### M. Demo mirror resumability
 
