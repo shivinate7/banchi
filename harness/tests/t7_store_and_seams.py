@@ -234,6 +234,7 @@ from pipeline import (  # noqa: E402
     selection,
     sendguard,
     shipping,
+    stockimages,
     tcgcsv,
     variant,
 )
@@ -38473,6 +38474,155 @@ def check_pipeline_sets(checks: Checks) -> None:
     )
 
 
+def check_stock_images(checks: Checks) -> None:
+    """`pipeline/stockimages.py` (`D-stock-images`) — both sources stubbed, never a socket.
+
+    THREE THINGS THE REVIEW ROUND NAMED. The Pokemon "CODE: " prefix match — the store's
+    own `set_name` for ME01 is "ME01: Mega Evolution" against the vendored tree's plain
+    "Mega Evolution", 0 of 542 real-store cards resolving before the fix. A miss answering
+    `None`. And the route threading — `do_pipeline_sets`/`do_pipeline_worklist` actually
+    carry `image_url` when handed a resolver, and carry `None` (open no socket) when not.
+
+    BOTH SOURCES ARE STUBBED. Pokemon reads a throwaway `vendor/pokemon-tcg-data/`-shaped
+    tree under a temp dir, never the real vendored one — this proves the CLASS's own fold,
+    not today's snapshot. Riftbound's tcgcsv walk goes through a fake `fetcher`, the same
+    `pricehistory.Market(fetcher=...)` idiom `check_price_history` already uses.
+
+    THE BACKGROUND-WARM SHAPE ITSELF (the review's second finding: a cold cache must never
+    block a request). `url_for` before `warm()` answers `None` at once, off a fetcher that
+    would otherwise sleep; `warm()`'s own threads, joined, are what makes the SECOND call
+    deterministic rather than a race against a background thread this test never waited
+    for.
+    """
+    checks.note("")
+    checks.note("STOCK IMAGES — both sources stubbed, the prefix fix, and the route thread")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        vendor_root = Path(tmp) / "pokemon-tcg-data"
+        sets_dir = vendor_root / "sets"
+        cards_dir = vendor_root / "cards" / "en"
+        sets_dir.mkdir(parents=True)
+        cards_dir.mkdir(parents=True)
+        (sets_dir / "en.json").write_text(
+            json.dumps([{"id": "me1", "name": "Mega Evolution"}]), "utf-8"
+        )
+        (cards_dir / "me1.json").write_text(
+            json.dumps([
+                {"number": "1", "images": {"small": "https://images.pokemontcg.io/me1/1.png"}},
+            ]),
+            "utf-8",
+        )
+        pokemon = stockimages._PokemonImages(root=vendor_root)
+
+        # `SetGroupCard`/`PricingSku` both carry the store's OWN `set_name` cell, which for
+        # a Pokemon set is "CODE: Name" — never the vendored tree's plain "Name". This is
+        # the exact string the real-store measurement found at 0% before the fix.
+        checks.equal(
+            pokemon.url_for("ME01: Mega Evolution", "1"),
+            "https://images.pokemontcg.io/me1/1.png",
+            "the store's 'CODE: Name' set_name still resolves, stripped and refolded",
+        )
+        checks.equal(
+            pokemon.url_for("Mega Evolution", "1"),
+            "https://images.pokemontcg.io/me1/1.png",
+            "a set_name with no code prefix still matches on its first try",
+        )
+        checks.equal(
+            pokemon.url_for("ME01: Mega Evolution", "999"),
+            None,
+            "a MISS is None, never a guess — this set exists, this number does not",
+        )
+        checks.equal(
+            pokemon.url_for("ME99: No Such Set", "1"),
+            None,
+            "an unknown set, prefix stripped or not, is a miss and never raises",
+        )
+
+    def make_fetcher():
+        def fetcher(url: str):
+            if url.endswith("/categories"):
+                return {"results": [
+                    {"name": "Riftbound League of Legends Trading Card Game", "categoryId": 89},
+                ]}
+            if url.endswith("/89/groups"):
+                return {"results": [{"name": "Vendetta", "groupId": 24698}]}
+            if url.endswith("/89/24698/products"):
+                time.sleep(0.2)  # a real tcgcsv products fetch, standing in for the ~2s cold walk
+                return {"results": [{
+                    "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+                    "extendedData": [{"name": "Number", "value": "SP3/006"}],
+                }]}
+            raise AssertionError(f"unexpected fetch: {url}")
+        return fetcher
+
+    # A FRESH INSTANCE, ASKED ONCE, AND NEVER JOINED — `url_for` itself is what schedules a
+    # background warm on a miss (its own docstring), so THIS instance's own thread is left
+    # to finish on its own; the point of this half is only the CALLING thread's own timing.
+    latency = stockimages.StockImages(
+        market=pricehistory.Market(cache_dir=None, fetcher=make_fetcher()), pokemon=pokemon
+    )
+    started = time.time()
+    cold = latency.url_for("riftbound", "Vendetta", "SP3/006")
+    elapsed = time.time() - started
+    checks.equal(cold, None, "a cold cache answers None, never the URL, on the first ask")
+    checks.ok(
+        elapsed < 0.1,
+        f"and it answers in under 100ms even though the fetcher itself sleeps 200ms "
+        f"(measured {elapsed*1000:.0f}ms) — the walk never runs on the calling thread",
+    )
+
+    # A SECOND, UNTOUCHED INSTANCE, WARMED EXPLICITLY AND JOINED — this is what makes the
+    # follow-up read deterministic: `warm()` before any `url_for` call means the ONE thread
+    # it returns is the only one racing this test, and joining it settles that race.
+    images = stockimages.StockImages(
+        market=pricehistory.Market(cache_dir=None, fetcher=make_fetcher()), pokemon=pokemon
+    )
+    threads = images.warm([("riftbound", "Vendetta")])
+    checks.equal(len(threads), 1, "one background thread, for the one pair asked about")
+    for thread in threads:
+        thread.join(timeout=5)
+    checks.equal(
+        images.url_for("riftbound", "Vendetta", "SP3/006"),
+        "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+        "once the background warm has landed, url_for answers the real URL",
+    )
+    checks.equal(
+        images.warm([("riftbound", "Vendetta")]),
+        [],
+        "a fresh entry schedules nothing a second time",
+    )
+
+    # THE ROUTE THREADING: `do_pipeline_sets`/`do_pipeline_worklist` carry `image_url` only
+    # when handed a resolver, and never open a socket when they are not (every OTHER T7
+    # case that calls either function bare is this assertion's own regression guard).
+    with isolated_home():
+        with Store().write() as snapshot:
+            inventory = snapshot.inventory
+            inventory.ensure_box(1, name="stock-image box")
+            card, _ = inventory.allocate_capture(1, cid=fake_cid("stock-image-1"))
+            card.sku = "8925700"
+            card.name = "Ahri, Inquisitive"
+            card.number = "SP3/006"
+            card.printed_total = "166"
+            card.set_name = "Vendetta"
+            card.game = "riftbound"
+            card.state = master.IDENTIFIED
+
+        bare = pipeline_routes.do_pipeline_sets()
+        threaded = pipeline_routes.do_pipeline_sets(images=images)
+
+    bare_row = bare["groups"][0]["cards"][0]
+    threaded_row = threaded["groups"][0]["cards"][0]
+    checks.equal(
+        bare_row["image_url"], None, "no resolver handed in, `image_url` is None, no socket"
+    )
+    checks.equal(
+        threaded_row["image_url"],
+        "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+        "a resolver handed in, and the warmed cache answers it, threaded onto the row",
+    )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -38623,6 +38773,7 @@ def run() -> Result:
     check_value_page(checks)
     check_undo_until_built_on(checks)
     check_pipeline_sets(checks)
+    check_stock_images(checks)
     # The box map's cases live in a sibling file (D264). Imported here, not at the top,
     # because that file imports its fixtures from this one.
     from harness.tests import t7_box_map

@@ -57,11 +57,30 @@ function openInWalk(card: SetGroupCard): void {
   patchViewQuery({ view: null, box: null, card: null, q: text })
 }
 
+/** THE MAIN VIEW ON THIS SCREEN, per the owner's own ask (`D-stock-images`): "if it'd be easy
+ *  to live pull all the photos without much lag I'd be happy to have the stock photos show as
+ *  the main view on say set view or pricing." A join miss, or a load failure, draws no image
+ *  at all — this screen never carried one before, so "nothing" is the honest fallback here
+ *  (unlike Pricing's thumb, there is no owner photograph handy to fall back to: this row has
+ *  no `idx` to build one from). */
+function SetCardImage({ url }: { readonly url: string | null }) {
+  const [failed, setFailed] = useState(false)
+  if (url === null || failed) return null
+  return (
+    <img className="sets-card-img" src={url} alt="" loading="lazy" onError={() => setFailed(true)} />
+  )
+}
+
 function SetCardRow({ card }: { readonly card: SetGroupCard }) {
   return (
     <button type="button" className="bn-list-row sets-card-row" onClick={() => openInWalk(card)}>
+      <SetCardImage url={card.image_url} />
       <span className="bn-mono sets-card-number">{card.number_display ?? '—'}</span>
       <span className="sets-card-name">{card.name ?? 'Not identified yet'}</span>
+      {/* A FOIL AND A NORMAL PRINTING CAN SHARE THE IMAGE ABOVE (the owner's own addition,
+          mid-build) — this is what still tells the two rows apart. `null` for a plain Near
+          Mint print with no finish suffix to name, and for a `sku_unknown` row. */}
+      {card.printing === null ? null : <Pill tone="default">{card.printing}</Pill>}
       <Pill tone="default">{plural(card.qty, 'copy', 'copies')}</Pill>
     </button>
   )

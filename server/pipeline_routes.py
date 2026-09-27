@@ -155,6 +155,7 @@ from server import tcg_import  # noqa: E402
 from pipeline import pricehistory  # noqa: E402
 from pipeline import productview  # noqa: E402
 from pipeline import holdings  # noqa: E402
+from pipeline import stockimages  # noqa: E402
 from store.pricearchive import RANGE_WIDTH_DAYS  # noqa: E402
 # THE SAME RULE, AND IT IS WHY THE RATES MOVED OUT OF `cli/cmd_identify.py`. `identify/cost.py`
 # reaches `decimal` and nothing else, and `identify/__init__.py` is a docstring with no imports
@@ -171,6 +172,41 @@ from store.session import Snapshot  # noqa: E402
 PKMNSCAN = REPO_ROOT / "pkmnscan"
 CONSOLE = "console.log"
 PID_FILE = "running.pid"
+
+# ONE RESOLVER, FOR THE PROCESS'S WHOLE LIFE (`D-stock-images`). `pipeline/stockimages.py`'s
+# own header says why: its cache is only worth having if the same instance answers every
+# request. `do_pipeline_sets`/`do_pipeline_worklist` take it as a parameter rather than
+# reaching for this name directly, so a harness test calling either function bare gets no
+# resolver and opens no socket — `server/capture_server.py`'s HTTP dispatch is the one
+# caller that passes this.
+STOCK_IMAGES = stockimages.StockImages()
+
+
+def warm_stock_images() -> None:
+    """Prime `STOCK_IMAGES` with every `(game, set_name)` pair the store holds — the
+    background-warm's other trigger, called once by `server/capture_server.py:serve` at
+    process start (never at import: a harness test imports this module directly and must
+    open no socket, `STOCK_IMAGES`'s own docstring).
+
+    A STORE THAT CANNOT BE READ WARMS NOTHING, SILENTLY. This runs before the server has
+    accepted a single request, so there is nobody to report a refusal to, and a store this
+    checkout has never seeded (a fresh worktree, D43) is not a fault — `do_pipeline_sets`
+    already answers an unreadable store as a `PipelineRefusal` on the real request path;
+    this is a courtesy that widens the very first request's coverage and nothing depends on
+    it having run.
+    """
+    try:
+        inventory = Store().read().inventory
+        pairs = {
+            (str(game or ""), str(set_name or "").strip())
+            for _key, (game, set_name) in inventory.cards.select(
+                ("game", "set_name"), state=master.IDENTIFIED
+            )
+        }
+    except (files.StoreError, OSError, ValueError, TypeError):
+        return
+    STOCK_IMAGES.warm(pair for pair in pairs if pair[0] and pair[1])
+
 
 # The free commands, and the flags each will accept from a request. An allowlist rather than
 # a passthrough: a request that could append arbitrary argv to `./pkmnscan` would be a shell
@@ -2657,10 +2693,18 @@ def _unreachable(inventory: master.Inventory, review_count: int, root: Path) -> 
     }
 
 
-def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
+def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.StockImages"] = None) -> dict:
     """`GET /pipeline/pricing` — one pricing worklist over several runs (D86), and since
     D156 the standing list of EVERY COPY THE STORE HOLDS THAT TCGPLAYER
     DOES NOT, across every joined run.
+
+    `images`, WHEN GIVEN, ADDS ONE MORE FIELD TO EVERY MERGED ROW: `image_url`
+    (`D-stock-images`). `None` — every direct call this module's own harness tests make —
+    answers `image_url: null` on every row and opens no socket; `server/capture_server.py`'s
+    HTTP dispatch passes `STOCK_IMAGES`, the one instance this process keeps, so its
+    in-process cache is actually worth having. See that module's own header for the tcgcsv
+    and vendored-Pokemon walk this resolves through, and D16 for why a route that can now
+    reach `tcgcsv.com` says so here in as many words.
 
     THE WORKLIST SPANS RUNS, AND SO DOES THE ANSWER. D48's resolution — a send is a cart of
     boxes and a run is still one box, because a run carries a reading that is a property of
@@ -3133,6 +3177,24 @@ def do_pipeline_worklist(wanted: Sequence[str]) -> dict:
         else {"captured": 0, "in_review": 0, "unjoined": []}
     )
     unreachable["reallocated"] = reallocated
+
+    # THE STOCK IMAGE, RESOLVED FRESH ON EVERY READ AND NEVER PERSISTED (`D-stock-images`).
+    # `sku_row`/`_pricing_table` do not carry this field — adding it there would bake a
+    # hotlinked CDN URL into `pricing.json`, a file this repo otherwise never rewrites, and
+    # the whole point of a resolver with its own short TTL is that the answer can change
+    # without a re-join. `row["row"]` is the export cell dict `sku_row` already put on the
+    # wire verbatim (D49); its own `Number` cell is what a photo is keyed on, same as the
+    # join.
+    for row in merged.values():
+        row["image_url"] = (
+            None
+            if images is None
+            else images.url_for(
+                str(row.get("game") or ""),
+                str(row.get("set_name") or ""),
+                str((row.get("row") or {}).get(tcgcsv.NUMBER_COLUMN, "")),
+            )
+        )
 
     # WHAT TCGPLAYER HOLDS NOW, OFF THE NEWEST LIVE EXPORT ON DISK (round 7, R6-1). Every send
     # and every check writes one, so this is minutes old where the join's export can be days.
@@ -3956,11 +4018,18 @@ def _natural_number_key(number: object) -> Tuple[object, ...]:
     return tuple(int(part) if part.isdigit() else part.lower() for part in _NUMBER_RUN.split(text))
 
 
-def do_pipeline_sets() -> dict:
+def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict:
     """`GET /pipeline/sets` — every on-hand card grouped by game and set, in printed-number
     order, one row per distinct card with its quantity (the owner: *"do i have anyway of
     seeing my inventory by set order? basically a view where i just know what qty of each
     card and then can click in if interested and it pops me to inventory screen?"* — D-set-view).
+
+    `images`, WHEN GIVEN, ADDS `image_url` TO EVERY ROW (`D-stock-images`) — see
+    `do_pipeline_worklist`'s own paragraph for what `None` answers and why, and
+    `pipeline/stockimages.py` for the resolver itself. `printing` rides every row too,
+    off the store's own `skus` table (identity-follows-sku.md §3.2) rather than off
+    `images`: two SKUs sharing one stock image is exactly the case this field exists
+    for, so a foil and a normal printing of one card still read apart.
 
     ON HAND MEANS STATE `identified`, NARROWER THAN `do_pipeline_value`'s "not a terminal
     state": a captured-and-not-yet-identified card carries no name, set or number to group
@@ -3989,13 +4058,14 @@ def do_pipeline_sets() -> dict:
     A PLAIN READ, `do_pipeline_value`'s posture: no socket, no write, no lock.
     """
     try:
-        inventory = Store().read().inventory
+        snapshot = Store().read()
     except (files.StoreError, OSError, ValueError, TypeError) as exc:
         raise PipelineRefusal(
             HTTPStatus.SERVICE_UNAVAILABLE,
             "store_unreadable",
             f"The store could not be read, so nothing can be grouped: {exc}",
         ) from None
+    inventory = snapshot.inventory
 
     groups: Dict[Tuple[str, str], Dict[str, dict]] = {}
     no_set: Dict[str, dict] = {}
@@ -4030,6 +4100,7 @@ def do_pipeline_sets() -> dict:
                 box = int(box_raw)
             except (TypeError, ValueError):
                 box = None
+            sku_entry = snapshot.skus.entries.get(sku) if sku else None
             row = {
                 "sku": sku,
                 "cid": cid or None,
@@ -4037,6 +4108,14 @@ def do_pipeline_sets() -> dict:
                 "name": name or None,
                 "number_display": number_display or None,
                 "qty": 0,
+                # NULL FOR A `sku_unknown` ROW, WHICH HAS NO SKU TO HOLD THE FACT — the
+                # store's own table, never re-derived from a condition string here.
+                "printing": sku_entry.printing if sku_entry is not None else None,
+                "image_url": (
+                    None
+                    if images is None
+                    else images.url_for(str(game or ""), set_label, str(number or ""))
+                ),
                 "_sort": _natural_number_key(number),
             }
             bucket[row_key] = row

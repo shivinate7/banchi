@@ -2324,6 +2324,12 @@ export type PricingSku = {
   condition: string
   set_name: string
   name: string
+  /** A hotlinked stock photo for this SKU's product, or `null` on a join miss
+   *  (`D-stock-images`, `pipeline/stockimages.py`). Resolved fresh on every
+   *  `GET /pipeline/pricing`, never written into `pricing.json` — see that module's own
+   *  header for why. Several SKUs (a foil and a normal printing of one card) may carry
+   *  the identical URL; `condition` beside it is what still tells the rows apart. */
+  image_url: string | null
   /** The four export price columns plus the export's own `TCG Marketplace Price`, each
    *  rendered to two decimals or `null` where the cell is blank. `null` is a real answer:
    *  measured, `TCG Direct Low` is blank on 2,060 of 2,476 listable rows in the wide export,
@@ -4356,6 +4362,18 @@ export type SetGroupCard = {
    *  is `pipeline/join.py:display_number`'s own string, already on the wire. */
   number_display: string | null
   qty: number
+  /** A hotlinked stock photo, or `null` on a join miss (`D-stock-images`,
+   *  `pipeline/stockimages.py`). Never downloaded or stored here — the browser loads it
+   *  straight from tcgcsv's or pokemontcg.io's own CDN. Resolved server-side, fresh on
+   *  every read, and never on the demo's own static wire (`make demo-record` bakes
+   *  whatever this held at recording time, same as every other field here). */
+  image_url: string | null
+  /** THE STORE'S OWN `skus` TABLE FACT (identity-follows-sku.md §3.2), `null` for a
+   *  `sku_unknown` row and for a plain Near Mint print with no finish suffix to name. A
+   *  foil and a normal printing of one card share `image_url` (the owner's own ruling,
+   *  mid-build: several SKUs may point at one photo) and never share this — it is the
+   *  one thing on the row that still tells two such rows apart. */
+  printing: string | null
 }
 
 /** One game-and-set group, cards in the set's own printed order (server-side natural sort

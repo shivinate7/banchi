@@ -626,12 +626,37 @@ function LiveCount({ live, soldHere, age }: { live: number; soldHere: number | u
    has brought near the viewport, answered once per session. 0.34 keeps the art and the name. */
 const THUMB_FOCUS = 0.34
 
-function PricingThumb({ at, name, onOpen }: { at: PricingSku['positions'][number] | null; name: string; onOpen: () => void }) {
+function PricingThumb({
+  at,
+  name,
+  onOpen,
+  imageUrl,
+}: {
+  at: PricingSku['positions'][number] | null
+  name: string
+  onOpen: () => void
+  /** The stock photo (`D-stock-images`), the MAIN view here per the owner's own ask — "if
+   *  it'd be easy to live pull all the photos without much lag I'd be happy to have the
+   *  stock photos show as the main view". `null` on a join miss, and a load failure falls
+   *  back to the owner's own photograph below exactly as if `imageUrl` had been `null` —
+   *  never a broken-image icon. */
+  imageUrl: string | null
+}) {
   const host = useRef<HTMLButtonElement | null>(null)
   const crop = useCardCropWhenSeen(at, host)
+  const [stockFailed, setStockFailed] = useState(false)
+  const showStock = imageUrl !== null && !stockFailed
   return (
     <button ref={host} type="button" className="pricing-thumb" aria-label={`Photograph of ${name}`} onClick={onOpen}>
-      {at === null ? (
+      {showStock ? (
+        <img
+          className="bn-crop pricing-stock-img"
+          src={imageUrl}
+          alt=""
+          loading="lazy"
+          onError={() => setStockFailed(true)}
+        />
+      ) : at === null ? (
         <Icon name="image" size={14} />
       ) : (
         <img
@@ -2912,7 +2937,9 @@ function PricingRow({
       data-flag={flag?.kind}
       data-hold={holding ? 'open' : undefined}
     >
-      {!source.copies ? null : <PricingThumb at={first} name={sku.name} onOpen={onPhoto} />}
+      {!source.copies ? null : (
+        <PricingThumb at={first} name={sku.name} onOpen={onPhoto} imageUrl={sku.image_url} />
+      )}
 
       <div className="pricing-id">
         <span className="pricing-name-line">
