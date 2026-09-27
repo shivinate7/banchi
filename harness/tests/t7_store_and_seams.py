@@ -6713,6 +6713,29 @@ def check_undo_until_built_on(checks: Checks) -> None:
             "the Restore notice skips the built-on clear and offers the newest it can still undo",
         )
 
+    # ------------------------------------------------ an older clear never undoes a newer one
+    # Clear A takes X at 5.00. The owner types 6.00. Clear B takes X at 6.00 and Y. Restoring A
+    # first once put 5.00 back, so B's restore skipped X and the 6.00 was lost. A newer kept
+    # clear holds the later answer, so A skips X and B brings back 6.00.
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers = {"4000": corpus.Answer(value="5.00")}
+        book.write()
+        a = pipeline_routes.do_pricing_clear({"skus": ["4000"]})
+        book = corpus.Corpus.read()
+        book.answers["4000"] = corpus.Answer(value="6.00")
+        book.answers["4001"] = corpus.Answer(value="3.00")
+        book.write()
+        b = pipeline_routes.do_pricing_clear({"skus": ["4000", "4001"]})
+        first = answers(checks, lambda: pipeline_routes.do_pricing_restore({"clear": a["clear_id"]}), "clear A's restore answers")
+        checks.equal(field(first, "skipped"), ["4000"], "A skips X, because the newer clear B holds X's later answer")
+        checks.ok("4000" not in corpus.Corpus.read().answers, "and A does not put 5.00 back")
+        checks.equal([row["id"] for row in corpus.read_clears()], [b["clear_id"]], "A is done: its X is B's to bring back")
+        second = answers(checks, lambda: pipeline_routes.do_pricing_restore({"clear": b["clear_id"]}), "clear B's restore answers")
+        checks.equal(sorted(field(second, "restored") or []), ["4000", "4001"], "B brings back X and Y")
+        back = corpus.Corpus.read().answers.get("4000")
+        checks.equal(back and back.value, "6.00", "and X is 6.00, the later answer, never the 5.00 A took")
+
     # ------------------------------------------------ UN-14: a move, until either box changes
     with isolated_home():
         for _ in range(2):

@@ -5574,6 +5574,17 @@ def do_pricing_restore(payload: dict) -> dict:
             HTTPStatus.CONFLICT, "corpus_unreadable", str(exc)
         ) from None
 
+    # A NEWER KEPT CLEAR THAT TOOK THE SAME SKU HOLDS THE LATER ANSWER ("until it's built
+    # on"). Clear A took 5.00, the owner typed 6.00, clear B took 6.00: restoring A first must
+    # not put 5.00 back, or B's restore then skips it and the 6.00 is lost. So A skips it, and
+    # B keeps it.
+    kept = corpus.read_clears()
+    ids = [row["id"] for row in kept]
+    newer = {
+        sku
+        for row in kept[ids.index(stored["id"]) + 1:] if stored["id"] in ids
+        for sku in row["cleared"]
+    }
     restored: List[str] = []
     skipped: List[str] = []
     for sku, row in sorted(answers.items()):
@@ -5584,7 +5595,7 @@ def do_pricing_restore(payload: dict) -> dict:
                 "restore_invalid",
                 f"{key}: each answer must be an object carrying a `value`.",
             )
-        if key in book.answers:
+        if key in book.answers or key in newer:
             skipped.append(key)
             continue
         book.answers[key] = corpus.Answer(
@@ -5597,8 +5608,9 @@ def do_pricing_restore(payload: dict) -> dict:
     if restored:
         book.write()
     # THE STORED CLEAR GOES ONCE EVERY ANSWER IT HOLDS IS BACK, whichever door restored
-    # them: the toast's own map, or the stored one. A price typed since counts as back.
-    if all(sku in book.answers for sku in stored["cleared"]):
+    # them: the toast's own map, or the stored one. A price typed since counts as back, and
+    # so does one a newer kept clear holds: that clear is its way back.
+    if all(sku in book.answers or sku in newer for sku in stored["cleared"]):
         corpus.drop_clear(stored["id"])
 
     return {
