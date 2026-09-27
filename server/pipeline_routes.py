@@ -4682,6 +4682,15 @@ def do_markdown_apply(stamp: str, payload: dict) -> dict:
     revision = payload.get("revision")
     if isinstance(revision, str) and revision:
         argv += ["--corpus-revision", revision]
+    # THE SKUS THE LIVE TAB SAW TYPED THIS VISIT (`app/src/Pricing.tsx`'s `typedHere`, D273).
+    # `corpus.stamp_answers` keeps an answer's old `at` when its value is unchanged, so a
+    # retyped-but-identical price cannot be told from an old one by its timestamp alone — the
+    # screen is the one witness that saw the keystroke. See `cli/cmd_reprice.py:_apply`.
+    typed = payload.get("typed")
+    if isinstance(typed, list) and typed:
+        skus = ",".join(str(sku).strip() for sku in typed if str(sku).strip())
+        if skus:
+            argv += ["--typed", skus]
     if payload.get("write"):
         argv.append("--write")
     code, console = _run_sync(argv, STEP_TIMEOUT_S)

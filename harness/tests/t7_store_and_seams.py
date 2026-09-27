@@ -22740,6 +22740,9 @@ def check_live_markdown_guards(checks: Checks) -> None:
         directory = _markdown_dir(home, "20260926-100200", at=fresh_at)
         (directory / cmd_reprice.IMPORT).unlink()
         files.write_json(directory / cmd_reprice.MANIFEST, {"at": fresh_at, "asked": {}, "skus": {}})
+        # BACKDATED BY HAND, WHICH IS ONLY EVER SETUP HERE: there is no real path that writes
+        # an answer dated in 2026-01 without the wall clock actually being there, so seeding
+        # "an old answer already sat in the corpus" has no route to go through.
         book = corpus.Corpus.read()
         book.answers[ARTICUNO_SKU] = corpus.Answer(value="19.99", at="2026-01-01T00:00:00.000+00:00")
         book.write()
@@ -22750,14 +22753,76 @@ def check_live_markdown_guards(checks: Checks) -> None:
             "an answer stored before the read, lower than the live price, writes no file",
             said,
         )
-        book = corpus.Corpus.read()
-        book.answers[ARTICUNO_SKU] = corpus.Answer(value="19.99", at=master.now())
-        book.write()
+
+        # A DIFFERENT PRICE, WRITTEN AFTER THE READ THROUGH THE REAL SAVE PATH. The case this
+        # replaces built `corpus.Answer(at=master.now())` BY HAND, which never runs
+        # `stamp_answers` at all and so cannot tell a real "after this read" from a fake one.
+        # `do_pricing_corpus_write` is what `#/pricing` actually calls.
+        seeded = dict(pipeline_routes.do_pricing_corpus()["corpus"], skus={ARTICUNO_SKU: {"value": "20.00"}})
+        pipeline_routes.do_pricing_corpus_write({"corpus": seeded})
+        checks.ok(
+            str(corpus.Corpus.read().answers[ARTICUNO_SKU].at or "") >= fresh_at,
+            "and `stamp_answers` dates a CHANGED answer to now, which is after the read",
+        )
+        worklist = pipeline_routes._write_edits(directory, [{"sku": ARTICUNO_SKU, "price": "20.00"}])
         said = command(checks, "reprice", "apply", str(worklist), "--write")
         checks.ok(
             (directory / cmd_reprice.IMPORT).exists(),
-            "and the same price typed after the read is written",
+            "and a genuinely new price, saved through the real route after the read, is written",
             said,
+        )
+
+    # THE ACTUAL DEFECT: A PRICE RETYPED, UNCHANGED, THROUGH THE REAL SAVE PATH. `stamp_answers`
+    # keeps the OLD `at` here on purpose (its own ratchet rule, for `priced_recently`) — so
+    # retyping, on this visit, a price already stored from days ago leaves the timestamp
+    # pointing at the past, and `_apply`'s `earlier` map still calls it "earlier". The owner's
+    # ruling, 2026-09-26: "if the price i've typed is higher yea" — but this price is retyped,
+    # not raised, and is refused for a reason ("typed before this read") that is false this
+    # time. Only naming the SKU as typed THIS VISIT (`typed`, D273's `typedHere`) fixes it,
+    # because the caller is the one witness the timestamp cannot be.
+    with isolated_home() as home:
+        old_at = "2026-01-01T00:00:00.000+00:00"
+        book = corpus.Corpus.read()
+        book.answers[ARTICUNO_SKU] = corpus.Answer(value="19.99", at=old_at)
+        book.write()
+
+        fresh_at = master.now()
+        directory = _markdown_dir(home, "20260926-100250", at=fresh_at)
+        (directory / cmd_reprice.IMPORT).unlink()
+        files.write_json(directory / cmd_reprice.MANIFEST, {"at": fresh_at, "asked": {}, "skus": {}})
+
+        # THE RETYPE, THROUGH THE REAL SAVE PATH — same value, so `stamp_answers` keeps `old_at`.
+        seeded = dict(pipeline_routes.do_pricing_corpus()["corpus"], skus={ARTICUNO_SKU: {"value": "19.99"}})
+        pipeline_routes.do_pricing_corpus_write({"corpus": seeded})
+        checks.equal(
+            corpus.Corpus.read().answers[ARTICUNO_SKU].at,
+            old_at,
+            "AN UNCHANGED RETYPE KEEPS THE OLD `at`, through the real save path",
+        )
+
+        refused = pipeline_routes.do_markdown_apply(
+            directory.name, {"edits": [{"sku": ARTICUNO_SKU, "price": "19.99"}], "write": True}
+        )
+        checks.ok(
+            not refused["wrote"] and f"[{reprice.EARLIER_LOWER}]" in refused["console"],
+            "WITHOUT NAMING THE VISIT: the price the owner just retyped is refused for a false "
+            "reason, because the timestamp alone cannot see this visit",
+            refused["console"],
+        )
+
+        rescued = pipeline_routes.do_markdown_apply(
+            directory.name,
+            {
+                "edits": [{"sku": ARTICUNO_SKU, "price": "19.99"}],
+                "write": True,
+                "typed": [ARTICUNO_SKU],
+            },
+        )
+        checks.ok(
+            rescued["ok"] and rescued["wrote"],
+            "NAMING THE VISIT (`typed`, `Pricing.tsx`'s `typedHere`) RIDES: the caller is the "
+            "witness the timestamp cannot be",
+            rescued["console"],
         )
 
     # ------------------------------------------- each price, checked against the fresh read

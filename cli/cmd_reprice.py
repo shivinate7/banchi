@@ -724,9 +724,19 @@ def _apply(args, say) -> int:
     # THE ANSWERS STORED BEFORE THIS READ WAS TAKEN, and the read's own rule prices (the owner's
     # ruling, 2026-09-26: "if the price i've typed is higher yea"). An answer with no stamp is
     # older than any read. See `reprice.read_back`'s `earlier`.
+    #
+    # `--typed` NARROWS THIS, AND IS THE FIX FOR A TIMESTAMP THAT CANNOT SAY "THIS VISIT".
+    # `corpus.stamp_answers` keeps an answer's OLD `at` when its value is unchanged (deliberate,
+    # for the `priced_recently` ratchet) — so retyping, on this visit, a price already stored
+    # from days ago leaves `answer.at` in the past, and this loop would call it `earlier` on a
+    # false premise. The Live tab (`app/src/Pricing.tsx`'s `typedHere`) is the one witness that
+    # actually saw the keystroke; a SKU it names is never judged by the timestamp at all.
+    typed_here = {s.strip() for s in (getattr(args, "typed", None) or "").split(",") if s.strip()}
     read_at = str(manifest.get("at") or "")
     earlier = {}
     for sku, answer in corpus.Corpus.read().answers.items():
+        if sku in typed_here:
+            continue
         if answer.channel != "price" or not isinstance(answer.value, str):
             continue
         if answer.at and read_at and str(answer.at) >= read_at:

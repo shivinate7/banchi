@@ -730,6 +730,14 @@ def build_parser() -> argparse.ArgumentParser:
         "the terminal user applying a worklist by hand and is allowed.",
     )
     applying.add_argument(
+        "--typed",
+        help="comma-separated SKUs the caller typed on THIS visit (the Live tab's `typedHere`, "
+        "D273). A SKU named here is never refused `earlier_lower` — the caller is the one "
+        "witness to 'this visit', and `Answer.at` cannot be, since `stamp_answers` keeps the "
+        "old `at` when the value is unchanged. Omit for the terminal user, who has no visit "
+        "to name and falls back to the timestamp entirely.",
+    )
+    applying.add_argument(
         "--write",
         action="store_true",
         help="write import.csv and record the prices. Previews without it.",

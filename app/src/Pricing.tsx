@@ -1187,6 +1187,9 @@ export function Pricing() {
           revision: revision.current,
           write: true,
           kind: kind === '' ? undefined : kind,
+          /* THE SKUS TYPED THIS VISIT, so the server never reads `earlier_lower` off a
+             timestamp `stamp_answers` left in the past for an unchanged value (round 8). */
+          typed: pushable.map((edit) => edit.sku).filter((sku) => typedHere.has(sku)),
         })
         setApplied(result)
         setWroteUpload(result.wrote)
@@ -1210,7 +1213,7 @@ export function Pricing() {
         setPush('idle')
       }
     })()
-  }, [push, stamp, pushable, dirty, saving, book, load, picked, liveTab, kind])
+  }, [push, stamp, pushable, dirty, saving, book, load, picked, liveTab, kind, typedHere])
 
   /* A NEW WRITE IS OWED THE MOMENT A PRICE MOVES. */
   useEffect(() => {
