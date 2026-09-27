@@ -166,6 +166,9 @@ Do a design pass first, and show the owner a mockup.
 ### H. Epilogue: cyberpunk dark mode
 
 - Owner: `it'll be the epilogue of PR4`. First an interview and mockups, then one lane.
+- A blind first look (owner, 2026-09-27, second session, Opus by the owner's word): an agent
+  with no project history views the published demo and proposes a cyberpunk dark mode. Owner:
+  `send an opus agent to blindly just see wht the app looks like now, none of the decisions/work that went into it`.
 - The earlier palette work is shelved on `ux/dark-palette`.
 
 ## After PR 4 lands in full
