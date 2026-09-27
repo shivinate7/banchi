@@ -11,6 +11,10 @@ carries are quoted in backticks.
   sonnet in this session`), the merge grant, and the 2026-09-27 autonomous-run grants all
   ended with that session. The run finished: PR 3B merged (#467 to #477). A new session asks
   the owner again for the merge grant and the model cap.
+- **This session's grants (owner, 2026-09-27, second session, process-only):**
+  - Model cap: `Only sonnet unless if I tell you to use opus for a specific agent work (I will say so for that lane) so no Opus for Lane C.`
+  - Merge grant: the owner named this session an Orchestrator. It merges PR 4B into main with
+    `make merge` once CI is green.
 - **Integration branch (2026-09-27, second session):** `ux/pr4b`. Each lane branches from it
   and merges back into it. PR 4B is one PR from it.
 - **Cadence (owner, 2026-09-26):**
