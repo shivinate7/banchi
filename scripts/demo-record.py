@@ -33,6 +33,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -569,32 +570,75 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
     for key in orders:
         take_post("/orders/picks", {"keys": [key]})
 
-    # TWO SCREENS TICK TWO DIFFERENT "WALK ALL" SETS, NOT ONE. `Fulfillment.tsx` sends
-    # `order.open` alone. `Orders.tsx` sends `walkableKeysAll`, built from `ownsAWalkableBody`
-    # (`app/src/Orders.tsx:840`) — `open` OR (`terminal` and still owed a copy). A prior version
-    # of this comment claimed the two callers "are both exactly this same open-order list."
-    # Measured on the real mirror, 2026-09-27: 71 open orders against 305 walkable ones — 234
-    # terminal-but-owing orders `Orders.tsx` ticks that `Fulfillment.tsx` never does. Recording
-    # only the open set left every "Walk all N buyers" press on `#/orders` asking for a 305-key
-    # set nothing had recorded, so `demoServer.ts:walkPlan` refused it every time (the
-    # `walk.failure !== null` defect). Both sets are now recorded, by name.
+    # TWO SCREENS TICK TWO DIFFERENT "WALK ALL" SETS, NOT ONE, AND `Orders.tsx`'S OWN SET IS
+    # NOT STORE-WIDE. `Fulfillment.tsx` sends `order.open` alone. `Orders.tsx`'s "Walk all N
+    # buyers" ticks `tickableKeys`, built from `shownGroups` — the default "open" tab, every
+    # BUYER GROUP with at least one truly open order (`inOpenBase`, `app/src/Orders.tsx:2771`,
+    # `finished` empty on a fresh load) — and expands each ticked group through
+    # `walkableOf`/`ownsAWalkableBody` (`open` OR `terminal` and still owed a copy,
+    # `app/src/Orders.tsx:840`). A GROUP WHOSE ONLY ORDERS ARE TERMINAL-AND-OWING NEVER SHOWS
+    # IN THE DEFAULT TAB AND IS NEVER TICKED, even though its orders individually pass
+    # `ownsAWalkableBody` — a prior version of this recorder recorded the STORE-WIDE walkable
+    # set (305 orders) and still refused, because the real press only asks for the 97 orders
+    # belonging to the ~70 buyers who have an open order (measured on the real mirror,
+    # 2026-09-27, CI run 36322624741: "97 cards to pick", not 305 and not 71). Grouping by
+    # buyer mirrors `orderBuyers.ts:buyerKeyOf`/`foldName` exactly — the demo's own buyer
+    # field is already the scrubbed "Jane Doe N" name, one per real buyer, so grouping by it
+    # groups the same orders the real name would (`demo-mirror.py`'s own scrub, one name per
+    # distinct real buyer).
     listed = (recorded.get("/orders", {}).get("body") or {}).get("orders") or []
-
-    def owns_a_walkable_body(entry: dict) -> bool:
-        if entry.get("open"):
-            return True
-        return bool(entry.get("terminal")) and (entry.get("wanted") or 0) > (entry.get("recorded") or 0)
-
     open_orders = sorted(
         str(entry["key"]) for entry in listed
         if isinstance(entry, dict) and entry.get("open") and entry.get("key")
     )
-    walkable_orders = sorted(
-        str(entry["key"]) for entry in listed
-        if isinstance(entry, dict) and entry.get("key") and owns_a_walkable_body(entry)
-    )
+    screen_walkable_orders = default_view_walkable_orders(listed)
 
-    record_walk_plans(open_orders, walkable_orders, take_post)
+    record_walk_plans(open_orders, screen_walkable_orders, take_post)
+
+
+def owns_a_walkable_body(entry: dict) -> bool:
+    """`app/src/Orders.tsx:840`'s `ownsAWalkableBody`: `open`, or `terminal` and still owed
+    a copy — restated over the wire's own order dict rather than `OrderRow`."""
+    if entry.get("open"):
+        return True
+    return bool(entry.get("terminal")) and (entry.get("wanted") or 0) > (entry.get("recorded") or 0)
+
+
+def buyer_key_of(entry: dict) -> str:
+    """`orderBuyers.ts:buyerKeyOf`/`foldName`, restated over the wire's own order dict. The
+    demo's `buyer` field is already the scrubbed "Jane Doe N" name, one per real buyer
+    (`demo-mirror.py`'s own scrub), so grouping by it groups the same orders the real name
+    would."""
+    buyer = entry.get("buyer")
+    if isinstance(buyer, str):
+        trimmed = re.sub(r"\s+", " ", buyer.strip())
+        if trimmed != "":
+            return "name:%s" % trimmed.casefold()
+    return "order:%s" % entry.get("key")
+
+
+def default_view_walkable_orders(listed: Sequence[dict]) -> List[str]:
+    """The exact set `Orders.tsx`'s "Walk all N buyers" ticks on a FRESH page load: every
+    walkable order (`owns_a_walkable_body`) belonging to a buyer group that holds at least
+    one truly OPEN order (`inOpenBase`, `app/src/Orders.tsx:2771`, with `finished` empty —
+    true on a fresh load, never true once a buyer has been marked done this session). A
+    group whose every order is terminal-but-owing never shows in the default "open" tab and
+    is never ticked, even though each of its orders individually passes
+    `owns_a_walkable_body` — the gap a store-wide walkable set (this function's own first
+    version) missed, measured on the real mirror as 305 orders recorded against the 97 the
+    real press asked for (CI run 36322624741, 2026-09-27)."""
+    groups: Dict[str, List[dict]] = {}
+    for entry in listed:
+        if not isinstance(entry, dict) or not entry.get("key"):
+            continue
+        groups.setdefault(buyer_key_of(entry), []).append(entry)
+    return sorted(
+        str(entry["key"])
+        for bucket in groups.values()
+        if any(entry.get("open") for entry in bucket)
+        for entry in bucket
+        if owns_a_walkable_body(entry)
+    )
 
 
 def record_walk_plans(open_orders: Sequence[str], walkable_orders: Sequence[str], take_post) -> None:
