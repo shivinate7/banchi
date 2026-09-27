@@ -5585,6 +5585,41 @@ def _box_digest(inventory: master.Inventory, box: int) -> str:
     return hashlib.sha256(json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()
 
 
+def _layout_digest(inventory: master.Inventory, box: int) -> str:
+    """THE MAP'S CONFIRM GATE, AND ONLY THE MAP'S (the owner's ruling, 2026-09-27: "Only
+    layout changes"). `_box_digest` hashes every field of every card — a note, a photo, a
+    SKU, a price — and the re-review proved that a plain note edit between Edit layout and
+    Confirm refuses the whole draft over a fact no layout move reads. This digest is narrower
+    on purpose: the box's own dividers, and each card's `cid` (identity), `order` (its key),
+    `state` (on hand or departed) and the section it currently sits in — exactly what
+    `do_move_sections_batch` and `do_move_range`/`do_move_sections` depend on. A card
+    captured, sold, retired, removed or moved still changes one of those four and still
+    refuses; a note, photo, SKU or price edit touches none of them and does not.
+
+    `layout_of` ALREADY WALKS EVERY SLOT IN SECTION ORDER, so the ordinal it hands back at
+    each slot is read here rather than recomputed — the same shape `_section_idents` reads,
+    one call earlier in every move already in this file.
+    """
+    entry = inventory.box(box)
+    sections = inventory.layout_of(box)
+    dividers = [(sec["div"], sec.get("name")) for sec in sections]
+    cards = []
+    for ordinal, sec in enumerate(sections, start=1):
+        for index in sec["slots"]:
+            card = inventory.cards.get(master.position_key(box, index))
+            if card is None:
+                continue
+            cards.append({
+                "index": int(index),
+                "cid": card.cid,
+                "order": card.order,
+                "state": card.state,
+                "section": ordinal,
+            })
+    body = {"exists": entry is not None, "dividers": dividers, "cards": cards}
+    return hashlib.sha256(json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()
+
+
 def _plural(n: int, word: str) -> str:
     return f"{n} {word}" if n == 1 else f"{n} {word}s"
 
@@ -5967,19 +6002,21 @@ def do_move_sections_batch(payload: dict) -> dict:
 
     `digests` is `{box: content_digest}` for every box the draft touched, read (with
     `?with_digest=1`) when the owner pressed `Edit layout`. `content_digest` is
-    `_box_digest` — the box's own record AND every card in it, not only its dividers —
-    because `layout_token` alone is BLIND TO A CARD (the strict review's finding,
-    2026-09-27): a card captured into a section, or sold out of one, changes nothing about
-    the section's own divider list, so a batch checked against `layout_token` alone would
-    carry a card the draft never saw, or move a card gone before Confirm reached it, with no
-    refusal either way. Every digest is checked against the box's CURRENT one before a
-    single write happens — a change to ANY of them (a capture, a sale, a move, an S on the
-    rig, another device's edit) refuses the WHOLE draft with `draft_stale`, and nothing here
-    is applied. `moves` is the ordered list of section moves the draft recorded, each the
-    same shape `first`..`last`, `to_box`/`new_box`, `before` that a single move sends — but
-    never its own `aim` or `layout_token`, because a later move in the same draft may target
-    a box an earlier move in the SAME draft already changed; the one freshness check above
-    already answered whether anything moved out from under the draft.
+    `_layout_digest` — ONLY what a layout move depends on (the owner's ruling, 2026-09-27:
+    "Only layout changes"): the box's own dividers, and each card's identity, order key,
+    section and state. `layout_token` alone is BLIND TO A CARD (the strict review's first
+    finding, 2026-09-27): a card captured into a section, or sold out of one, changes
+    nothing about the section's own divider list. `_box_digest` — every field of every
+    record — went too far the other way (the re-review's finding, 2026-09-28): a note,
+    photo, SKU or price edit changes it too, refusing a draft over a fact no layout move
+    reads. `_layout_digest` sits between the two on purpose. Every digest is checked against
+    the box's CURRENT one before a single write happens — a card captured, sold, retired,
+    removed or moved still refuses the WHOLE draft with `draft_stale`; a note, photo, SKU or
+    price edit does not. `moves` is the ordered list of section moves the draft recorded,
+    each the same shape `first`..`last`, `to_box`/`new_box`, `before` that a single move
+    sends — but never its own `aim` or `layout_token`, because a later move in the same
+    draft may target a box an earlier move in the SAME draft already changed; the one
+    freshness check above already answered whether anything moved out from under the draft.
 
     ONE UNDO PUTS BACK EVERY BOX THE DRAFT TOUCHED. `undo.boxes` holds each touched box's
     state from before the first move reached it, and `undo.pairs` is every cross-box card's
@@ -6005,11 +6042,17 @@ def do_move_sections_batch(payload: dict) -> dict:
                     HTTPStatus.CONFLICT, "draft_stale",
                     f"{_plural(1, 'box')} the map drew is gone. The map shows it as it is now.",
                 )
-            if _box_digest(inventory, box_number) != digest:
+            if _layout_digest(inventory, box_number) != digest:
+                # THE REFUSAL NAMES WHAT ACTUALLY CHANGED, never a layout change that did
+                # not happen (the re-review's finding, 2026-09-28): this digest is over the
+                # box's cards and its dividers, so a mismatch here IS the box's cards, not
+                # necessarily its layout — a note or a photo never reaches this digest at
+                # all, so the only way to land here is a capture, a sale, a retirement, a
+                # removal or a move.
                 raise BadRequest(
                     HTTPStatus.CONFLICT, "draft_stale",
-                    f"{inventory.box_title(box_number)} changed since the map was drawn, so "
-                    f"nothing was moved. The map shows it as it is now.",
+                    f"{inventory.box_title(box_number)}'s cards changed since the map was "
+                    f"drawn, so nothing was moved. The map shows it as it is now.",
                 )
         pre_state = {int(k): _box_state(inventory, int(k)) for k in digests}
         touched: set = set(pre_state)
@@ -12921,7 +12964,7 @@ def do_boxes(
     ]
     if with_digest:
         for row in rows:
-            row["content_digest"] = _box_digest(inventory, int(row["box"]))
+            row["content_digest"] = _layout_digest(inventory, int(row["box"]))
     return {
         "boxes": rows,
         "facets": _card_facets(inventory, cells, filters=filters, hide_sold=hide_sold),

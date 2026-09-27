@@ -133,11 +133,14 @@ def _drag_sections(box: int, body: dict) -> dict:
 
 
 def _digests(boxes: List[int]) -> dict:
-    """The Confirm gate's own freshness snapshot: `_box_digest`, card-aware, not
-    `layout_token` alone (the strict review's finding, 2026-09-27 — a card arriving or
-    leaving a section changes no divider, so a token-only check cannot see it)."""
+    """The Confirm gate's own freshness snapshot: `_layout_digest`, ONLY LAYOUT (the owner's
+    ruling, 2026-09-27), not `layout_token` alone (the strict review's first finding,
+    2026-09-27 — a card arriving or leaving a section changes no divider, so a token-only
+    check cannot see it) and not `_box_digest` either (the re-review's finding, 2026-09-28 —
+    every field of every record is too much: a note or a photo edit changes nothing a layout
+    move reads, and refusing the draft over it was the defect)."""
     inv = Store().read().inventory
-    return {str(b): capture_server._box_digest(inv, b) for b in boxes}
+    return {str(b): capture_server._layout_digest(inv, b) for b in boxes}
 
 
 def _shelf() -> None:
@@ -1973,7 +1976,8 @@ def check_layout_batch(checks: Checks) -> None:
 
     # THE STRICT REVIEW'S FAILURE (2026-09-27): `layout_token` hashes the dividers alone, so
     # a card arriving in — or leaving — a section changes no token, and the Confirm gate read
-    # only tokens. The fix is `_box_digest`, over the box's cards too, sent as `digests`.
+    # only tokens. The fix is `_layout_digest`, over the box's cards too (identity, order,
+    # section, state), sent as `digests`.
     with isolated_home():
         _shelf()
         digests = _digests([1, 2])
@@ -2020,6 +2024,70 @@ def check_layout_batch(checks: Checks) -> None:
         checks.ok(
             Store().read().inventory.cards["1/4"].state == master.SOLD,
             "and the sale itself was not touched by the refused batch",
+        )
+
+    # THE RE-REVIEW'S FINDING (2026-09-28), the owner's ruling of the same day: "Only layout
+    # changes". `_box_digest` hashed every field, so a note or a photo edit refused a draft
+    # over a fact no layout move reads. `_layout_digest` must NOT catch either.
+    with isolated_home():
+        _shelf()
+        digests = _digests([1, 2])
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["1/4"].note = "Corner ding, still gradeable"
+        body = capture_server.do_move_sections_batch({
+            "digests": digests,
+            "moves": [{"box": 1, "first": 2, "last": 2, "to_box": 2, "before": 2}],
+        })
+        checks.ok(
+            body["move"] is not None,
+            "a NOTE edit between the draft and Confirm does not refuse: it is not a layout fact",
+        )
+
+    with isolated_home():
+        _shelf()
+        digests = _digests([1, 2])
+        with Store().write() as snapshot:
+            snapshot.inventory.cards["1/4"].photo = "a-different-photo.jpg"
+        body = capture_server.do_move_sections_batch({
+            "digests": digests,
+            "moves": [{"box": 1, "first": 2, "last": 2, "to_box": 2, "before": 2}],
+        })
+        checks.ok(
+            body["move"] is not None,
+            "a PHOTO field edit between the draft and Confirm does not refuse either",
+        )
+
+    with isolated_home():
+        _shelf()
+        digests = _digests([1, 2])
+        capture_server.do_remove_card(1, 4, {"capture_id": None})
+        error = None
+        try:
+            capture_server.do_move_sections_batch({
+                "digests": digests,
+                "moves": [{"box": 1, "first": 2, "last": 2, "to_box": 2, "before": 2}],
+            })
+        except capture_server.BadRequest as caught:
+            error = caught
+        checks.ok(
+            error is not None and error.code == "draft_stale" and "cards changed" in str(error),
+            "a card REMOVED between the draft and Confirm still refuses, and the message "
+            "names the cards, never a layout change that did not happen",
+            str(error),
+        )
+
+    with isolated_home():
+        _shelf()
+        digests = _digests([1, 2])
+        capture_server.do_remove_card(2, 1, {"capture_id": None})
+        refusal(
+            checks,
+            lambda: capture_server.do_move_sections_batch({
+                "digests": digests,
+                "moves": [{"box": 1, "first": 2, "last": 2, "to_box": 2, "before": 2}],
+            }),
+            "draft_stale",
+            "a card removed from a DIFFERENT box the draft also saw still refuses the whole batch",
         )
 
     # THE OWNER'S RULING (2026-09-27): card ranges rejoin edit mode, drafted and confirmed

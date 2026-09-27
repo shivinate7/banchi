@@ -388,7 +388,9 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
     (gap: GapId) => {
       if (source === null || range === null || dest === null) return
       if (cardMode) {
-        if (chosen.length === 0 || dest === 'new') return
+        /* DEFENSE IN DEPTH: the disabled destination buttons are the real gate (the
+           re-review's finding); this refuses even a stray call the UI never offered. */
+        if (chosen.length === 0 || dest === 'new' || dirtied.has(dest) || dirtied.has(source.box)) return
         const beforeCard = gap.startsWith('c:') ? Number(gap.slice(2)) : null
         const sectionEnd = gap.startsWith('e:') ? Number(gap.slice(2)) : null
         const dstSection = sectionEnd ?? (destCards ?? []).find((c) => c.index === beforeCard)?.place?.section ?? 1
@@ -515,6 +517,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
           dest={dest}
           chosenName={cardMode ? chosenName : null}
           canPickCards={!dirtied.has(source.box)}
+          dirtied={dirtied}
           onScope={(scope) => {
             setLifted({ ...lifted, scope })
             setPicked(null)
@@ -593,7 +596,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
  *  again. Every other refusal keeps the plain title, with the server's words behind it. */
 function failureTitle(code: string): string {
   return code === 'draft_stale' || code === 'section_gone'
-    ? 'A box changed since Edit layout was pressed, so nothing in the draft was applied. The map shows it as it is now.'
+    ? "A box's cards changed since Edit layout was pressed, so nothing in the draft was applied. The map shows it as it is now."
     : 'That layout did not save.'
 }
 
@@ -606,6 +609,7 @@ function LiftBar({
   dest,
   chosenName,
   canPickCards,
+  dirtied,
   onScope,
   onDest,
   onCancel,
@@ -618,6 +622,11 @@ function LiftBar({
   readonly dest: Dest | null
   readonly chosenName: string | null
   readonly canPickCards: boolean
+  /** Boxes the draft has already touched (D264, the re-review's finding, 2026-09-28): in
+   *  card mode a range cannot aim at one of these either, not only pick up FROM one — its
+   *  card list is fetched live, and an earlier queued move already made that live shape
+   *  wrong. */
+  readonly dirtied: ReadonlySet<number>
   readonly onScope: (scope: Scope) => void
   readonly onDest: (dest: Dest) => void
   readonly onCancel: () => void
@@ -632,6 +641,7 @@ function LiftBar({
   if (canPickCards) scopes.push({ value: 'cards', label: 'Some cards' })
   const others = destinations.filter((r) => r.box !== source.box)
   const what = cardMode ? chosenName || 'No card picked' : lifted.scope === 'all' ? boxName(source) : name
+  const sourceChanged = cardMode && dirtied.has(source.box)
   return (
     <section className="shelf-lift" aria-label="Move sections">
       <p className="shelf-lift-line" aria-live="polite">
@@ -651,25 +661,34 @@ function LiftBar({
       </p>
       {dest === null ? <Segmented value={lifted.scope} label="What moves" options={scopes} onChange={onScope} /> : null}
       <div className="shelf-dests" role="group" aria-label="Which box">
-        {others.map((r) => (
-          <Button
-            key={r.box}
-            variant={dest === r.box ? 'primary' : 'default'}
-            aria-pressed={dest === r.box}
-            disabled={cardMode && !chosenName}
-            onClick={() => onDest(r.box)}
-          >
-            {boxName(r)}
-          </Button>
-        ))}
+        {others.map((r) => {
+          /* A CARD RANGE CANNOT AIM AT A BOX THIS DRAFT ALREADY CHANGED: its gaps come from
+             a live fetch that does not know about an earlier queued move. */
+          const changed = cardMode && dirtied.has(r.box)
+          return (
+            <Button
+              key={r.box}
+              variant={dest === r.box ? 'primary' : 'default'}
+              aria-pressed={dest === r.box}
+              disabled={changed || (cardMode && !chosenName)}
+              title={changed ? 'Already changed in this draft' : undefined}
+              onClick={() => onDest(r.box)}
+            >
+              {boxName(r)}
+              {changed ? ' (already changed)' : ''}
+            </Button>
+          )
+        })}
         {(total > 1 && lifted.scope !== 'all') || cardMode ? (
           <Button
             variant={dest === source.box ? 'primary' : 'default'}
             aria-pressed={dest === source.box}
-            disabled={cardMode && !chosenName}
+            disabled={sourceChanged || (cardMode && !chosenName)}
+            title={sourceChanged ? 'Already changed in this draft' : undefined}
             onClick={() => onDest(source.box)}
           >
             Another place in {boxName(source)}
+            {sourceChanged ? ' (already changed)' : ''}
           </Button>
         ) : null}
         {cardMode ? null : (

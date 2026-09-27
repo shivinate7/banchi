@@ -223,7 +223,7 @@ test('a stale draft is refused whole, and the map reads again', async ({ page })
   const before = reads
   await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(
-    page.getByText('A box changed since Edit layout was pressed, so nothing in the draft was applied. The map shows it as it is now.'),
+    page.getByText("A box's cards changed since Edit layout was pressed, so nothing in the draft was applied. The map shows it as it is now."),
   ).toBeVisible()
   await expect.poll(() => reads).toBeGreaterThan(before)
 })
@@ -308,6 +308,29 @@ test('a box the draft already touched cannot offer Some cards a second time', as
   await expect(page.getByRole('button', { name: 'Some cards' })).toHaveCount(0)
 })
 
+/* THE RE-REVIEW'S FINDING (2026-09-28): "dirtied" gated only the SOURCE a range could be
+   picked up from. A box the draft already touched as a DESTINATION must be just as
+   unreachable for a range: its live card list disagrees with what the earlier queued move
+   already did to it. */
+test('a box the draft already changed cannot be chosen as a range destination either', async ({ page }) => {
+  await stubCards(page)
+  await openShelf(page)
+  await page.getByRole('button', { name: 'Edit layout' }).click()
+  // Queue a section move that touches Mixed Singles (box 2) as a destination.
+  await page.getByRole('button', { name: 'Move section Old of Old Box' }).click()
+  await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
+  await page.getByRole('button', { name: /at the end of Mixed Singles nearest you/ }).click()
+  await expect(page.getByText('1 change queued.', { exact: false })).toBeVisible()
+
+  // Now lift a card range from an UNTOUCHED box and try to aim it at the touched one.
+  await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
+  await page.getByRole('button', { name: 'Some cards' }).click()
+  await page.getByRole('list', { name: 'The cards in this section' }).getByRole('button', { name: /u1/ }).click()
+  const dest = page.getByRole('button', { name: /Mixed Singles.*already changed/ })
+  await expect(dest).toBeVisible()
+  await expect(dest).toBeDisabled()
+})
+
 test('a stale draft on the card path is refused whole, the same way a section drop is', async ({ page }) => {
   await stubCards(page)
   let reads = 0
@@ -331,7 +354,7 @@ test('a stale draft on the card path is refused whole, the same way a section dr
   const before = reads
   await page.getByRole('button', { name: 'Confirm' }).click()
   await expect(
-    page.getByText('A box changed since Edit layout was pressed, so nothing in the draft was applied. The map shows it as it is now.'),
+    page.getByText("A box's cards changed since Edit layout was pressed, so nothing in the draft was applied. The map shows it as it is now."),
   ).toBeVisible()
   await expect.poll(() => reads).toBeGreaterThan(before)
 })
