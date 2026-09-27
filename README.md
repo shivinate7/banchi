@@ -21,9 +21,9 @@ No server, no login, nothing it does can reach a real store.
 ## The screens
 
 Fourteen screens — home, capture, review, pricing, orders, shipping, sales, inventory,
-graveyard, codes, cards to pull, kit, product history, runs — all fourteen routed. All
-fourteen open at a hash. Ten sit in the nav. Four are off-nav on purpose: reached by a
-deep link, the command palette, or a redirect into another screen's own sheet (see
+graveyard, codes, cards to pull, kit, product history, runs. All fourteen open at a hash,
+all fourteen routed. Ten sit in the nav. Four are off-nav on purpose: reached by a deep
+link, the command palette, or a redirect into another screen's own sheet (see
 `app/src/App.tsx`'s `ROUTES` table).
 
 The Fulfiller's view opens without the shell — the other thirteen carry it.
