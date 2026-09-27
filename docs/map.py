@@ -9531,7 +9531,7 @@ COMPONENTS = [
                         "with no `dist-demo/`; `DEMO_REQUIRED=1` makes that a failure, and "
                         "`.github/workflows/demo.yml` runs it that way before it publishes.",
                 "governed_by": ["D52", "D126", "D183", "D213", "D227", "D271", "D277", "D282",
-                                "D295"],
+                                "D295", "D301"],
             },
             "tests/product-history.spec.ts": {
                 "does": "`#/product`'s own hard rule (D227): the market "

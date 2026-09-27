@@ -52,7 +52,26 @@ function basePath(): string {
 
 const REFUSAL = 'Not in this demo.'
 
+// A ONE-PIXEL STUB, NEVER THE GUARD. `pipeline/stockimages.py` (D301) hotlinks Riftbound and
+// One Piece stock images straight from `tcgplayer-cdn.tcgplayer.com` — that is the design, not
+// a leak, and the published page really does load them. `sealOutside` (shell.ts) exists to
+// catch every OTHER outside request, and widening its allow-list to a real vendor host would
+// weaken it for every spec that imports it, not only this one. So this file alone routes that
+// one host to a local image, registered AFTER `sealEveryTest()` — Playwright checks the most
+// recently registered handler first, so this answers before `sealOutside`'s catch-all ever
+// sees the request.
+const STUB_PIXEL = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+)
+
 sealEveryTest()
+
+test.beforeEach(async ({ page }) => {
+  await page.route('https://tcgplayer-cdn.tcgplayer.com/**', (route) =>
+    route.fulfill({ contentType: 'image/png', body: STUB_PIXEL }),
+  )
+})
 
 test.skip(!BUILT && !REQUIRED, 'no dist-demo/ in this checkout: run `make demo-static` first')
 
@@ -215,8 +234,12 @@ test.describe('the published demo draws what reviewers grade', () => {
       // A mirror is a snapshot, and this is what the snapshot genuinely holds; nothing here
       // fabricates a queue entry to make the screen busier than the real store is today.
       if (screen === 'Review') {
+        // `/Card \d+ of \d+/` matched no text `ReviewQueue.tsx` has ever drawn — the
+        // progress line reads "Nothing is waiting." when the queue is empty and
+        // "<N> done, <M> to go" otherwise (UX-256). Invisible until this branch's own
+        // re-snapshot put a real, non-empty queue in the recording for the first time.
         const empty = page.getByText('Nothing is waiting.')
-        await expect(empty.or(page.getByText(/Card \d+ of \d+/))).toBeVisible()
+        await expect(empty.or(page.getByText(/\d+ done, \d+ to go/))).toBeVisible()
         if ((await empty.count()) > 0) {
           await expect(page.getByText(REFUSAL)).toHaveCount(0)
           return
@@ -333,13 +356,13 @@ test.describe('the published demo draws what reviewers grade', () => {
 
   test('Review: an answer, then Undo, puts the question back', async ({ page }) => {
     await visit(page, 'Review')
-    // REAL, NOT STALE (2026-09-27, D295 full mirror): the 60-card sample always had 9
-    // cards queued. The owner's real store has zero owed right now — every open queue
-    // entry's card has since sold or retired, measured against a fresh `.backup`. A
-    // mirror is a snapshot; this is what today's snapshot genuinely holds. The
-    // answer-then-undo mechanism cannot be demonstrated with nothing queued, so this
-    // case asserts the honest empty state instead of a fabricated card.
-    const label = page.getByText(/Card \d+ of \d+/)
+    // REAL, NOT STALE (2026-09-27, D295 full mirror). Whether the owner's store owes an
+    // answer right now is a fact about today, so this reads the queue's own progress line
+    // ("Nothing is waiting." when empty, "<N> done, <M> to go" otherwise, UX-256 — never
+    // `/Card \d+ of \d+/`, which no version of ReviewQueue.tsx has drawn) rather than
+    // asserting either shape by name. Answer-then-undo runs only when a card is queued;
+    // an empty queue asserts the honest empty state instead of fabricating a card.
+    const label = page.getByText(/\d+ done, \d+ to go/)
     const empty = page.getByText('Nothing is waiting.')
     await expect(label.or(empty)).toBeVisible()
     if ((await empty.count()) > 0) {
