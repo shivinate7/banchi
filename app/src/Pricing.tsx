@@ -1040,7 +1040,7 @@ export function Pricing() {
       })
       return id
     },
-    [book, source.kind],
+    [book],
   )
   const write = useCallback(
     (sku: string, bucket: PricingSku['bucket'], value: unknown): number => writeMany([{ sku, bucket, value }]),
