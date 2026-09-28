@@ -34,6 +34,13 @@ full-table scan filtered in Python. Previews by default. `--write` applies every
 inside one `Store.write()` transaction, under `files.exclusive` (the store's existing lock,
 `store/session.py:Store.write`) — an interrupted run just leaves fewer `game IS NULL` rows for
 the next one to plan; nothing here is staged outside that transaction.
+
+EVERY REPAIRED CARD LOGS ONE `game_backfilled` EVENT, through `Inventory._log` — the same
+primitive `record_capture`, `bind_sku` and every other card mutation in `store/master.py`
+use, so this write leaves the durable trail every other one does (`pipeline/skus.py`'s
+`sku_facts_changed` is this same idea for the `skus` table). In the same transaction as the
+`game` write, never a second pass. A preview logs nothing — `Store.read()` opens no
+transaction to append into.
 """
 
 from __future__ import annotations
@@ -178,6 +185,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         plan = build_plan(writable)
         for repair in plan.repairs:
             repair.card.game = repair.game
+            # ONE EVENT PER REPAIRED CARD, THROUGH THE STORE'S OWN LOGGING PRIMITIVE —
+            # `Inventory._log`, the same one `record_capture`, `bind_sku` and `pipeline/
+            # skus.py`'s own `sku_facts_changed` all go through, so this write leaves the
+            # same durable trail every other card mutation does. In the SAME transaction as
+            # the `game` write, never a second pass: `Store.write()` appends `writable.
+            # inventory.events` to the history table on the one commit at the end, so a card
+            # this repair touched and the event that says so land together or not at all.
+            writable.inventory._log(
+                "game_backfilled", repair.card.key, sku=repair.sku, game=repair.game,
+            )
     say_plan(plan, print)
     print("\nWritten." if plan.repairs else "\nNothing written.")
     return 0

@@ -4712,8 +4712,11 @@ COMPONENTS = [
                         "second table — and refuses a card whose product line the registry "
                         "does not recognize, or one two games could equally claim. Previews "
                         "by default: count per derived game, five examples, and every "
-                        "refusal. `--write` applies inside one `Store.write()` transaction. "
-                        "A generator that gates nothing (D18): on no hook.",
+                        "refusal. `--write` applies inside one `Store.write()` transaction, "
+                        "and logs one `game_backfilled` event per repaired card through "
+                        "`Inventory._log` — the same primitive every other card mutation in "
+                        "`store/master.py` uses, so this write leaves the durable trail every "
+                        "other one does. A generator that gates nothing (D18): on no hook.",
                 "governed_by": ["D18", "D21", "D258"],
                 "note": "THE ONE PLACE THIS SCRIPT AND `cli/cmd_emit.py` MUST NOT DISAGREE: "
                         "the birth-site fix passes the game the PIPELINE already resolved for "
@@ -4730,8 +4733,10 @@ COMPONENTS = [
                         "never planned or touched, a card whose sku's product line maps to "
                         "no game is refused and named, a card whose sku this store has never "
                         "seen is refused and named, a card with no sku is not a candidate at "
-                        "all, and the preview writes nothing. NOT in `make check`, "
-                        "`map-fix-selftest`'s precedent for a generator's own selftest.",
+                        "all, the preview writes and logs nothing, and `--write` logs exactly "
+                        "one `game_backfilled` event per repaired card and none on a re-run "
+                        "with nothing left to fix. NOT in `make check`, `map-fix-selftest`'s "
+                        "precedent for a generator's own selftest.",
                 "governed_by": ["D18"],
             },
             "map-view.py": {

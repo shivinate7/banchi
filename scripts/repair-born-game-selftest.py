@@ -129,13 +129,18 @@ def main() -> int:
                "both the unmapped-product-line card and the unknown-sku card are refused, "
                "named, and nothing else is", str(refused_keys))
 
-            # ---------------------------------------------- preview writes nothing
+            # ---------------------------------------------- preview writes nothing, logs nothing
             print("\n  -- preview (no --write) --")
             before = {k: v.game for k, v in dict(Store().read().inventory.cards).items()}
+            events_before = [e for e in Store().history() if e.get("event") == "game_backfilled"]
             exit_code = repair.main(["--home", str(home / "inventory")])
             after = {k: v.game for k, v in dict(Store().read().inventory.cards).items()}
+            events_after = [e for e in Store().history() if e.get("event") == "game_backfilled"]
             ok(exit_code == 0, "preview exits 0")
             ok(before == after, "preview writes nothing at all", str((before, after)))
+            ok(events_before == [] and events_after == [],
+               "and a preview logs no game_backfilled event either — Store().read() opens "
+               "no transaction to append one into", str(events_after))
 
             # ---------------------------------------------- --write applies exactly the plan
             print("\n  -- --write --")
@@ -153,12 +158,26 @@ def main() -> int:
             ok(reloaded[position_key(9, 3)].game is None,
                "the no-sku card is still untouched")
 
-            # A second --write over an already-repaired store has nothing left to plan.
+            # -------------------------------------- one durable event per repaired card, never per refusal
+            print("\n  -- game_backfilled events --")
+            logged = [e for e in Store().history() if e.get("event") == "game_backfilled"]
+            ok(len(logged) == 1,
+               "exactly one event was logged — one repaired card, one event", str(logged))
+            ok(logged[0].get("position") == position_key(5, 1)
+               and logged[0].get("sku") == "RIFT1" and logged[0].get("game") == "riftbound",
+               "and it names the card, its sku and the game it was given", str(logged))
+
+            # A second --write over an already-repaired store has nothing left to plan, and
+            # logs nothing more — the event count above must not creep on a re-run.
             print("\n  -- a second --write finds nothing left --")
             plan_again = repair.build_plan(Store().read())
             ok(not plan_again.repairs and len(plan_again.refusals) == 2,
                "the two refusals persist (still unrepairable) and nothing else is replanned",
                str(plan_again))
+            repair.main(["--home", str(home / "inventory"), "--write"])
+            still_logged = [e for e in Store().history() if e.get("event") == "game_backfilled"]
+            ok(len(still_logged) == 1,
+               "and a --write with nothing to repair logs no second event", str(still_logged))
         finally:
             if previous is None:
                 os.environ.pop(files.HOME_ENV, None)
