@@ -97,6 +97,7 @@ Logged, waiting for the owner's word:
   game filter, and price bands. The same screen says "10 held" and "Held 15".
 - F6: one spacing rule for every relation, and a check that fails an off-scale value.
 - F7: `archive` and `wallet` sit low like the lock did.
+- F8: in Inventory, a search for "hand hammer" ranks Jayce cards above the common card Hand Hammer. A Sonnet lane diagnoses the cause and the change that made it, then proposes a fix. D271 (one forgiving matcher everywhere) governs.
 
 Before PR 4B merges:
 
