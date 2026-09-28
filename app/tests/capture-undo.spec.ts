@@ -1575,6 +1575,11 @@ test('the per-row remove control clears the 40px thumb floor on a phone (D117)',
     const FLOOR = 40
     const r = FLOOR / 2 - 1
     const el = document.querySelectorAll('.capture-undo-drop')[0] as HTMLElement
+    // The document's scroll offset is not the test's to assume: it lands at 790 or 946 by how
+    // tall the page settled, and at 946 the control sits under the sticky top bar, so every
+    // probe resolves to the bar (or to null above the viewport). Centre it, instantly and in
+    // the same synchronous turn as the probe, so no scroll can move it between measure and hit.
+    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })
     const box = el.getBoundingClientRect()
     const cx = box.left + box.width / 2
     const cy = box.top + box.height / 2
