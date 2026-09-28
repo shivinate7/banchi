@@ -236,10 +236,10 @@ test.describe('the published demo draws what reviewers grade', () => {
       if (screen === 'Review') {
         // `/Card \d+ of \d+/` matched no text `ReviewQueue.tsx` has ever drawn — the
         // progress line reads "Nothing is waiting." when the queue is empty and
-        // "<N> done, <M> to go" otherwise (UX-256). Invisible until this branch's own
+        // "Progress <N> of <M>" otherwise (UX-256). Invisible until this branch's own
         // re-snapshot put a real, non-empty queue in the recording for the first time.
         const empty = page.getByText('Nothing is waiting.')
-        await expect(empty.or(page.getByText(/\d+ done, \d+ to go/))).toBeVisible()
+        await expect(empty.or(page.getByText(/Progress \d+ of \d+/))).toBeVisible()
         if ((await empty.count()) > 0) {
           await expect(page.getByText(REFUSAL)).toHaveCount(0)
           return
@@ -358,11 +358,11 @@ test.describe('the published demo draws what reviewers grade', () => {
     await visit(page, 'Review')
     // REAL, NOT STALE (2026-09-27, D295 full mirror). Whether the owner's store owes an
     // answer right now is a fact about today, so this reads the queue's own progress line
-    // ("Nothing is waiting." when empty, "<N> done, <M> to go" otherwise, UX-256 — never
+    // ("Nothing is waiting." when empty, "Progress <N> of <M>" otherwise, UX-256 — never
     // `/Card \d+ of \d+/`, which no version of ReviewQueue.tsx has drawn) rather than
     // asserting either shape by name. Answer-then-undo runs only when a card is queued;
     // an empty queue asserts the honest empty state instead of fabricating a card.
-    const label = page.getByText(/\d+ done, \d+ to go/)
+    const label = page.getByText(/Progress \d+ of \d+/)
     const empty = page.getByText('Nothing is waiting.')
     await expect(label.or(empty)).toBeVisible()
     if ((await empty.count()) > 0) {
