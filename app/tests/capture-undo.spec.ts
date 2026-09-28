@@ -1474,7 +1474,7 @@ const HALT_CODES: readonly { code: string; headline: string }[] = [
   { code: 'store_unavailable', headline: 'the store could not be reached' },
   { code: 'inventory_conflict', headline: 'the store disagreed with what this screen expected' },
   { code: 'game_invalid', headline: 'capturing as a game the server does not know' },
-  { code: 'game_unverified', headline: 'this game has no export to join against' },
+  { code: 'game_unverified', headline: 'this game has no export to check its cards against' },
   { code: 'rarity_claim_invalid', headline: 'the Rarity claim no longer matches this game' },
   { code: 'variant_invalid', headline: 'the Finish claim no longer matches this game' },
   { code: 'box_required', headline: 'no box reached the server' },
@@ -1483,7 +1483,7 @@ const HALT_CODES: readonly { code: string; headline: string }[] = [
   { code: 'image_invalid', headline: 'the photograph did not reach the server intact' },
   { code: 'image_too_large', headline: 'the photograph was too large to send' },
   { code: 'image_not_jpeg', headline: 'the camera sent a frame the server will not store' },
-  { code: 'server_error', headline: 'the server hit a bug' },
+  { code: 'server_error', headline: 'the server hit a problem' },
 ]
 
 /** Overrides `open()`'s own always-succeeds `/capture` stub with one refusal, carrying the

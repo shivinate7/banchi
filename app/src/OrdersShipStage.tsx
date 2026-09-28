@@ -4,7 +4,7 @@ import { readUpload } from './csvUpload'
 import { Button, EmptyState, Icon, IconButton, Money, Notice, OrderLink, type IconName } from './kit'
 import { toast } from './kit/toast'
 import { SHIP_LANES, setHub, useHub } from './OrdersHubStore'
-import { describeFailure, fillShippingStamps, forgetShippingExport, readShippingExport, shippingFileUrl } from './server'
+import { describeFailure, fillShippingStamps, forgetShippingExport, readShippingExport, shippingFileUrl, failureTone } from './server'
 import type { Failure } from './server'
 import type { OrderRow, OrdersPayload, ShippingLane, ShippingReason, ShippingRow } from './types'
 import './Shipping.css'
@@ -357,7 +357,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
   const notices = (
     <>
       {gone === null ? null : <Notice tone="warn" className="shipping-note" title={gone} />}
-      {failure === null ? null : <Notice tone="danger" className="shipping-note" title={failure.message} code={failure.code} />}
+      {failure === null ? null : <Notice tone={failureTone(failure)} className="shipping-note" title={failure.message} code={failure.code} />}
     </>
   )
 

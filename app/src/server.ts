@@ -325,13 +325,31 @@ function failureKind(code: string, status: number): 'refusal' | 'retry' {
  */
 export function describeFailure(err: unknown): Failure {
   if (err instanceof ServerError) return { code: err.code, message: err.message, kind: failureKind(err.code, err.status), data: err.data }
-  const detail = err instanceof Error ? err.message : String(err)
+  console.error('The app failed before the server could answer.', err) // the detail belongs in the console, never on screen
   return {
     kind: 'refusal',
     code: 'client_bug',
     message:
       'The app hit a problem before it could ask the server. Reload the page, and if it repeats, restart the app on the Mac.',
   }
+}
+
+/** Which colour a failure earns. Red is for a real fault: the server did not answer, answered
+ *  garbage, or broke inside. A refusal, a busy store or a guard is a "no" the person can act on,
+ *  so it is a warning and never danger red. */
+const FAULT_CODES: ReadonlySet<string> = new Set([
+  'unreachable',
+  'origin_blocked',
+  'no_server_address',
+  'bad_response',
+  'http_error',
+  'client_bug',
+  'server_error',
+  'store_unavailable',
+])
+
+export function failureTone(failure: { readonly code?: string | null }): 'warn' | 'danger' {
+  return failure.code !== undefined && failure.code !== null && FAULT_CODES.has(failure.code) ? 'danger' : 'warn'
 }
 
 /**
@@ -668,13 +686,6 @@ async function serverAnswersReads(): Promise<boolean> {
     return false
   }
 }
-
-/* The address in the phone's address bar, which is the thing being refused and the thing the
- * operator has to recognise. Guarded for the non-browser callers `sameHostBase` already names
- * — `tsc`, the specs' module imports, an editor's type server — where there is no address bar
- * to quote. */
-const pageOrigin = (): string =>
-  typeof window !== 'undefined' && window.location ? window.location.origin : 'this page'
 
 async function request(path: string, init?: RequestInit): Promise<unknown> {
   /* THE ONE SEAM. Every client function in this module funnels through here, so this branch

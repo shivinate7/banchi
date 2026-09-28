@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 
-import { describeFailure, fetchLiveExport, reconcileLive, type Failure } from './server'
+import { describeFailure, fetchLiveExport, reconcileLive, type Failure, failureTone } from './server'
 import { readUpload } from './csvUpload'
 import { Button, Icon, Notice, Sheet } from './kit'
 import { toast } from './kit/toast'
@@ -170,7 +170,7 @@ export function LiveReconcile({ open, onClose }: { readonly open: boolean; reado
           ) : null}
 
           {failure === null ? null : (
-            <Notice tone="danger" code={failure.code}>
+            <Notice tone={failureTone(failure)} code={failure.code}>
               {failure.message}
             </Notice>
           )}

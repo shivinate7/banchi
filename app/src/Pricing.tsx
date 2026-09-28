@@ -33,6 +33,7 @@ import {
   getRuns,
   photoUrl,
   type Failure,
+  failureTone,
 } from './server'
 import type {
   DecisionsDocument,
@@ -2132,7 +2133,7 @@ export function Pricing() {
       })
     } catch (err) {
       const trouble = describeFailure(err)
-      toast({ kind: 'refusal', title: 'Not undone', body: `${trouble.message} (${trouble.code})` })
+      toast({ kind: 'refusal', title: 'Not undone', body: trouble.message })
     }
   }, [])
 
@@ -2582,7 +2583,7 @@ export function Pricing() {
   const status = (
     <>
       {failure === null || table === null ? null : (
-        <Notice tone="danger" title={failure.message} code={failure.code} compact>
+        <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} compact>
           {/* A CONFLICT HAS SOMEWHERE TO GO: the file moved under this screen, and re-reading
               costs what is unsaved, so the press says so. */}
           {failure.code !== 'corpus_moved' ? null : (
@@ -3494,7 +3495,7 @@ function LiveSheet({
           {note === null ? null : <p className="pricing-sheet-bad">{note}</p>}
         </div>
       )}
-      {failure === null ? null : <Notice tone="danger" compact title={failure.message} code={failure.code} />}
+      {failure === null ? null : <Notice tone={failureTone(failure)} compact title={failure.message} code={failure.code} />}
     </Sheet>
   )
 }

@@ -73,8 +73,7 @@ class CatalogIndex:
     def open(cls, path: Path = DEFAULT_INDEX_PATH) -> "CatalogIndex":
         if not path.exists():
             raise CatalogNotBuilt(
-                f"{path} does not exist. Run `make catalog-refresh` then `make catalog-index` "
-                f"to build it — this module never builds it implicitly."
+                "The card catalogue has not been built on this Mac yet. Ask for it to be refreshed, then try again."
             )
         conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row

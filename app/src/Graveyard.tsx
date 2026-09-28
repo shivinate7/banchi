@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 
-import { describeFailure, getGraveyard, type Failure } from './server'
+import { describeFailure, getGraveyard, type Failure, failureTone } from './server'
 import type { DepartedCard } from './types'
 import { Button, EmptyState, Notice, Page, Pill, ReloadButton, Segmented, type PillTone } from './kit'
 import { readingAgo, readingExact, stateLabel, stateTone } from './cardState'
@@ -154,7 +154,7 @@ export function Graveyard() {
       status={
         failure !== null && rows !== null ? (
           <div className="graveyard-failure bn-anim-pop">
-            <Notice tone="danger" title={failure.message} code={failure.code || undefined}>
+            <Notice tone={failureTone(failure)} title={failure.message} code={failure.code || undefined}>
               As last read.
             </Notice>
             <Button variant="ghost" size="sm" icon="refresh" busy={retrying} disabled={retrying} onClick={() => void retry()}>

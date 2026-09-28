@@ -24,6 +24,7 @@ import {
   retireCard,
   undoRetire,
   undoSale,
+  failureTone,
 } from './server'
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
@@ -967,7 +968,7 @@ function CopiesPanel({
 
   return (
     <section className="inventory-copies">
-      {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
+      {failure === null ? null : <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />}
 
       {/* D118: a press changes what is on screen, never where the rest of it is. A re-read
           after `Mark sold` (`doSell`'s `setReloads`) keeps `group` standing from the old

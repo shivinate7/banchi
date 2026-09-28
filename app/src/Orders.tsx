@@ -83,6 +83,7 @@ import {
   undoFill,
   undoPull,
   walkPlan,
+  failureTone,
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
@@ -525,7 +526,7 @@ function StatusPicker({
     <div className="orders-statuses bn-well" role="group" aria-label="Which orders to fetch">
       {failure !== null ? (
         <div className="orders-statuses-state">
-          <Notice tone="danger" title={failure.message} code={failure.code} />
+          <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />
           <Button size="sm" icon="refresh" onClick={onRetry}>
             Count them again
           </Button>
@@ -3664,7 +3665,7 @@ function PullStage({
     <div className={walking ? 'orders-stage is-walking' : 'orders-stage'}>
       <WalkLinePublisher words={walking && selectedGroup !== null ? chipWords : null} />
       {filterBar}
-      {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
+      {failure === null ? null : <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />}
       {/* THE DEGRADED MAP, SAID ONCE (UX-266), in the kit's notice shape. The ledger answered and
           every Mark sold still works; only the other copies of each card are missing. */}
       {storeFailed ? (

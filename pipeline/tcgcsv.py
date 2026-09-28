@@ -142,27 +142,27 @@ class Export:
         for row in self.rows:
             sku = row[SKU_COLUMN]
             if sku in index:
-                raise MalformedCsv(f"duplicate {SKU_COLUMN} in source: {sku}")
+                raise MalformedCsv(f"Duplicate {SKU_COLUMN} in source: {sku}")
             index[sku] = row
         return index
 
 
 def parse(data: bytes, source: Optional[Path] = None) -> Export:
     if data.startswith(codecs.BOM_UTF8):
-        raise MalformedCsv("unexpected UTF-8 BOM; the real export has none")
+        raise MalformedCsv("Unexpected UTF-8 BOM; the real export has none")
 
     text = data.decode(ENCODING)
     reader = csv.reader(io.StringIO(text, newline=""))
     records = list(reader)
     if not records:
-        raise MalformedCsv("empty file")
+        raise MalformedCsv("Empty file")
 
     header = tuple(records[0])
     rows: List[Row] = []
     for lineno, record in enumerate(records[1:], start=2):
         if len(record) != len(header):
             raise MalformedCsv(
-                f"line {lineno}: {len(record)} fields, header has {len(header)}"
+                f"Line {lineno}: {len(record)} fields, header has {len(header)}"
             )
         rows.append(dict(zip(header, record)))
 
@@ -203,7 +203,7 @@ def _check_header(header: Sequence[str]) -> None:
     # file rather than being escaped. Fail loudly instead.
     for name in header:
         if any(ch in name for ch in ',"\r\n'):
-            raise MalformedCsv(f"header field needs quoting, cannot be written raw: {name!r}")
+            raise MalformedCsv(f"Header field needs quoting, cannot be written raw: {name!r}")
 
 
 def render(header: Sequence[str], rows: Iterable[Row]) -> bytes:
@@ -225,10 +225,10 @@ def render(header: Sequence[str], rows: Iterable[Row]) -> bytes:
     for index, row in enumerate(rows):
         extra = set(row) - set(columns)
         if extra:
-            raise MalformedCsv(f"row {index}: columns not in header: {sorted(extra)}")
+            raise MalformedCsv(f"Row {index}: columns not in header: {sorted(extra)}")
         missing = [c for c in columns if c not in row]
         if missing:
-            raise MalformedCsv(f"row {index}: missing columns: {missing}")
+            raise MalformedCsv(f"Row {index}: missing columns: {missing}")
         writer.writerow([row[c] for c in columns])
 
     return buf.getvalue().encode(ENCODING)
@@ -256,7 +256,7 @@ def check_only_writable_changed(before: Row, after: Row) -> None:
     )
     if illegal:
         raise ReadOnlyColumn(
-            "not writable: "
+            "Not writable: "
             + ", ".join(
                 f"{c} {before.get(c)!r} -> {after.get(c)!r}" for c in illegal
             )
@@ -357,7 +357,7 @@ def scan_records(data: bytes) -> Iterator[List[Tuple[bytes, bool]]]:
             while True:
                 j = data.find(b'"', i)
                 if j == -1:
-                    raise MalformedCsv("unterminated quoted field")
+                    raise MalformedCsv("Unterminated quoted field")
                 if data[j + 1 : j + 2] == b'"':  # escaped quote
                     chunks.append(data[i : j + 1])
                     i = j + 2
@@ -386,7 +386,7 @@ def scan_records(data: bytes) -> Iterator[List[Tuple[bytes, bool]]]:
         if i >= n:
             break
         raise MalformedCsv(
-            f"byte {i}: expected ',' or CRLF, found {data[i : i + 1]!r}"
+            f"Byte {i}: expected ',' or CRLF, found {data[i : i + 1]!r}"
         )
 
     if record:
@@ -414,7 +414,7 @@ def inspect(data: bytes) -> FormatProfile:
 
     split = body.find(LINE_TERMINATOR_BYTES)
     if split == -1:
-        raise MalformedCsv("no CRLF-terminated header row")
+        raise MalformedCsv("No CRLF-terminated header row")
     header_line = body[:split]
     data_section = body[split + 2 :]
 

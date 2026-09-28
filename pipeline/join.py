@@ -1693,7 +1693,7 @@ def lookup_for(game: str) -> Callable:
     strategy = JOIN_KEY_STRATEGIES.get(name)
     if strategy is None:
         raise NotJoinable(
-            f"game {game!r} names join key {name!r}, which never joins. A card of this game "
+            f"Game {game!r} names join key {name!r}, which never joins. A card of this game "
             "is captured, located and described by hand; filter it out of the run before a "
             "catalog is built rather than matching it against an export it has no rows in."
         )
@@ -1945,14 +1945,12 @@ class Catalog:
                     sorted({str(r.get(tcgcsv.CONDITION_COLUMN) or "") for r in mine})
                 ) or "none"
                 raise EmptyCatalog(
-                    f"the export{source} holds {len(mine)} row(s) for game {game!r} and not "
-                    f"one of them is a condition this product lists (D12 — Near Mint): it "
-                    f"offers {offered}, and this join reads {', '.join(sorted(conditions))}. "
-                    f"Re-export without the condition filter — nothing was joined and nothing "
-                    f"was written."
+                    f"The export{source} holds {len(mine)} row(s) for game {game!r}, and none is a condition this "
+                    f"product lists: it offers {offered}, and the match reads {', '.join(sorted(conditions))}. "
+                    "Export again without the condition filter. Nothing was matched and nothing was written."
                 )
             raise EmptyCatalog(
-                f"the export{source} holds no rows for game {game!r} "
+                f"The export{source} holds no rows for game {game!r} "
                 f"(Product Line {line!r}"
                 + (f", Rarity in {rarities!r}" if rarities else "")
                 + f"); its own Product Line cells are: {lines}. This is the wrong file "
@@ -3332,16 +3330,15 @@ def prices_for(
 
     if undecided:
         raise Undecided(
-            f"{len(undecided)} sub-threshold SKU(s) have no disposition. Pass a run "
-            "default as sub_threshold=, or name them in sku_dispositions=.\n"
+            f"{len(undecided)} below-cutoff SKU(s) have no decision yet. Choose what to do with them, "
+            "or name each one.\n"
             + report.below_threshold.report()
         )
 
     if unanswered:
         raise Undecided(
-            f"{len(unanswered)} SKU(s) have no market price in the catalog and no "
-            f"hand-entered answer. A missing price is an unknown price (D9): give each a "
-            f"price or {pricing.UNLISTED!r}, never the floor by default.\n"
+            f"{len(unanswered)} SKU(s) have no market price in the catalogue and no price typed by hand. "
+            f"A missing price is an unknown price: give each a price or {pricing.UNLISTED!r}, never the floor by default.\n"
             + "\n".join(
                 f"    {m.sku} {m.row[tcgcsv.NAME_COLUMN]} {m.condition} x{m.copies}"
                 for m in unanswered
@@ -3350,7 +3347,7 @@ def prices_for(
 
     unknown = set(overrides) - set(report.matches)
     if unknown:
-        raise Undecided(f"sku_dispositions names SKUs not in this batch: {sorted(unknown)}")
+        raise Undecided(f"These SKUs are not in this batch: {sorted(unknown)}")
 
     return prices
 
@@ -3411,7 +3408,7 @@ def emit_import(
     """
     if not report.ok:
         raise OutputSuppressed(
-            "output suppressed; unmatched must be reported first:\n"
+            "Output suppressed; unmatched must be reported first:\n"
             + "\n".join(f"  - {r}" for r in report.blocking_reasons)
             + "\n"
             + report.report()
@@ -3437,7 +3434,7 @@ def write_import(catalog: Catalog, path, rows: List[tcgcsv.Row]) -> bytes:
     """
     skus = [r[tcgcsv.SKU_COLUMN] for r in rows]
     if len(skus) != len(set(skus)):
-        raise OutputSuppressed("duplicate TCGplayer Id rows in one import file")
+        raise OutputSuppressed("Duplicate TCGplayer Id rows in one import file")
     return tcgcsv.write_csv(path, catalog.header, rows)
 
 

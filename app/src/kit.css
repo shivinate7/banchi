@@ -1506,7 +1506,8 @@ img.bn-crop[data-cropped='true'] {
 }
 .bn-toast-icon { flex: none; margin-top: 2px; opacity: 0.85; }
 .bn-toast-ok .bn-toast-icon { color: var(--bn-ok); opacity: 1; }
-.bn-toast-refusal .bn-toast-icon { color: var(--bn-danger); opacity: 1; }
+/* A refusal toast is a guard or a no-op far more often than a fault, so it is amber. Red is for a Notice that earned it (`failureTone`). */
+.bn-toast-refusal .bn-toast-icon { color: var(--bn-warn); opacity: 1; }
 .bn-toast-receipt .bn-toast-icon { color: var(--bn-accent); opacity: 1; }
 :root[data-theme='dark'] .bn-toast-receipt .bn-toast-icon { color: var(--bn-accent); }
 .bn-toast-text { flex: 1 1 auto; min-width: 0; font-size: var(--bn-fs-md); line-height: 1.4; }

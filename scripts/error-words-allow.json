@@ -103,5 +103,30 @@
   "Send a non-empty `runs` list.": "wire-shape validation, caller-facing; reword lane owed",
   "`prices` must be a list of at most {} {sku, price,": "wire-shape validation, caller-facing; reword lane owed",
   "`moves` must be a list of at most {} {sku, price} ": "wire-shape validation, caller-facing; reword lane owed"
+ },
+ "pipeline/selection.py": {
+  "`{}` must be a positive integer or a non-empty arr": "wire-shape validation, caller-facing; reword lane owed",
+  "`keys` must be a non-empty array of `box/index` po": "wire-shape validation, caller-facing; reword lane owed",
+  "`state` is {}, which is not a state.": "wire-shape validation, caller-facing; reword lane owed",
+  "`game` is {}, which is not a game.": "wire-shape validation, caller-facing; reword lane owed",
+  "`since` is {}, which is not an ISO-8601 instant.": "wire-shape validation, caller-facing; reword lane owed",
+  "`since` is {}. It is an ISO-8601 instant — `2026-0": "wire-shape validation, caller-facing; reword lane owed",
+  "`run` is {}, which is not a run name.": "wire-shape validation, caller-facing; reword lane owed",
+  "A selection is a JSON object.": "wire-shape validation, caller-facing; reword lane owed",
+  "`indices` is not a selection term. Name the cards ": "wire-shape validation, caller-facing; reword lane owed",
+  "`scopes` is not a selection term. A send is one se": "wire-shape validation, caller-facing; reword lane owed",
+  "`section` names a divider inside ONE drawer, so it": "wire-shape validation, caller-facing; reword lane owed",
+  "`box` and `bid` both name a drawer — the number on": "wire-shape validation, caller-facing; reword lane owed",
+  "`{}` holds {}, which is not a positive integer.": "wire-shape validation, caller-facing; reword lane owed",
+  "`keys` holds {}, which is not a `box/index` positi": "wire-shape validation, caller-facing; reword lane owed",
+  "`state` is {}. The states a card can be in are {}.": "wire-shape validation, caller-facing; reword lane owed",
+  "`game` is {}, which is not a game this pipeline kn": "wire-shape validation, caller-facing; reword lane owed",
+  "`paths` must be a non-empty array of capture direc": "wire-shape validation, caller-facing; reword lane owed",
+  "`bid` needs the store to resolve.": "wire-shape validation, caller-facing; reword lane owed",
+  "`section` needs the store to resolve.": "wire-shape validation, caller-facing; reword lane owed",
+  "`run` needs the run directory to read.": "wire-shape validation, caller-facing; reword lane owed",
+  "`state` needs the store to resolve.": "wire-shape validation, caller-facing; reword lane owed",
+  "`paths` holds {}, which is not a path.": "wire-shape validation, caller-facing; reword lane owed",
+  "No drawer has true index {}. An id is fixed when t": "wire-shape validation, caller-facing; reword lane owed"
  }
 }

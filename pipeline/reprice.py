@@ -191,7 +191,7 @@ class UnknownBasis(ValueError):
 
 def check_basis(basis: str) -> str:
     if basis not in BASES:
-        raise UnknownBasis(f"unknown basis: {basis!r}; expected one of {', '.join(BASES)}")
+        raise UnknownBasis(f"Unknown basis: {basis!r}; expected one of {', '.join(BASES)}")
     return basis
 
 
@@ -430,9 +430,9 @@ def check_cap(cap) -> Optional[Decimal]:
     try:
         value = Decimal(str(cap))
     except ArithmeticError:
-        raise InvalidCap(f"the cap is {cap!r}, which is not money") from None
+        raise InvalidCap(f"The cap is {cap!r}, which is not money") from None
     if not value.is_finite() or value <= 0 or value != value.quantize(Decimal("0.01")):
-        raise InvalidCap(f"the cap is {cap!r}; it must be more than $0, in whole cents")
+        raise InvalidCap(f"The cap is {cap!r}; it must be more than $0, in whole cents")
     return value
 
 

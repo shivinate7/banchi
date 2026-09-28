@@ -168,7 +168,6 @@ harness asserts the join against a committed fixture and never against a live fe
 
 from __future__ import annotations
 
-import contextlib
 import json
 import time
 import urllib.error
@@ -956,33 +955,29 @@ def fetch_json(
             try:
                 body = response.read()
             except (urllib.error.URLError, OSError, TimeoutError) as exc:
-                raise Unreachable(f"{url} could not be reached: {exc}") from exc
+                raise Unreachable("The price service could not be reached. Check the connection, then try again.") from exc
     except urllib.error.HTTPError as exc:
-        detail = ""
-        with contextlib.suppress(Exception):  # a body we cannot read is not the interesting fault
-            detail = exc.read().decode("utf-8", "replace")[:200]
         if exc.code == 403:
             # NEVER THE VALUE, ONLY THE NAME OF THE KNOB — D171's rule that a refusal must
             # name its remedy, and CLAUDE.md's rule that no message here ever carries the
             # user agent string itself.
             raise Blocked(
-                f"{url} answered HTTP 403. That is either an authorization change at the "
-                f"host or its own defenses declining this client by its request signature — "
-                f"set {AGENT_ENV} in .env to the User-Agent your browser sends and try "
-                f"again."
+                "The price service refused this request. Either what it allows changed, or it is declining this "
+                "app's browser signature. Set the browser signature in the Mac's settings file to match your "
+                "browser, then try again."
             ) from exc
-        raise Unreachable(f"{url} answered HTTP {exc.code}: {detail}") from exc
+        raise Unreachable("The price service refused the request. Try again in a moment.") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         # `Offline`, NOT THE PLAIN `Unreachable` ABOVE — raised only here, from `urlopen`
         # itself, which means no HTTP response arrived at all: a refused connection, a DNS
         # failure, or a timeout reaching the socket in the first place. Every socket
         # attempt after this one is heading for the identical failure. See `Offline`'s own
         # docstring for what a caller does with that distinction.
-        raise Offline(f"{url} could not be reached: {exc}") from exc
+        raise Offline("The price service could not be reached. Check the connection, then try again.") from exc
     try:
         return json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise Unreachable(f"{url} did not answer JSON: {exc}") from exc
+        raise Unreachable("The price service sent back something that could not be read. Try again in a moment.") from exc
 
 
 Fetcher = Callable[[str], Dict]
@@ -998,9 +993,7 @@ def history_url(product_id: int, range_: str) -> str:
     """
     if range_ not in RANGES:
         raise UnknownRange(
-            f"{range_!r} is not a range this endpoint accepts; known: {', '.join(RANGES)}. "
-            "Every other spelling answers HTTP 400 — `week`, `year`, `all` and `latest` were "
-            "all probed and none of them is a range."
+            f"{range_!r} is not a range the price service accepts. Pick one of: {', '.join(RANGES)}."
         )
     try:
         product = int(product_id)
@@ -1139,10 +1132,8 @@ class Market:
         row = self.categories().get(join.normalize_set(product_line))
         if row is None:
             raise NotResolvable(
-                f"no tcgcsv category is named {product_line!r}. That cell is what "
-                "`pipeline/games.py` authors per game and D22 audits against the committed "
-                "exports, so a miss here means either the registry or the upstream catalog "
-                "renamed a product line — check the export's own `Product Line` column first."
+                f"No product line called {product_line!r} exists in the price catalogue. "
+                "Either Banchi's game list or the catalogue renamed a product line."
             )
         return int(row["categoryId"])  # type: ignore[index]
 
@@ -1158,7 +1149,7 @@ class Market:
         row = self.groups(category_id).get(join.normalize_set(set_name))
         if row is None:
             raise NotResolvable(
-                f"no tcgcsv group in category {category_id} is named {set_name!r}. All 19 "
+                f"No tcgcsv group in category {category_id} is named {set_name!r}. All 19 "
                 "set names in the committed exports matched exactly, so this is a set the "
                 "mirror has not published rather than a spelling to fold harder."
             )
@@ -1224,7 +1215,7 @@ class Market:
         )
         if product_id is None:
             raise NotResolvable(
-                "no single tcgcsv product matches "
+                "No single tcgcsv product matches "
                 f"{row.get(tcgcsv.NAME_COLUMN, '')!r} "
                 f"{row.get(tcgcsv.NUMBER_COLUMN, '')!r} in "
                 f"{row.get(tcgcsv.SET_COLUMN, '')!r}. Either the mirror does not carry it or "
@@ -1264,7 +1255,7 @@ class Market:
         sku = str(row.get(tcgcsv.SKU_COLUMN, "")).strip()
         if not sku:
             raise NotResolvable(
-                f"the row carries no {tcgcsv.SKU_COLUMN!r}, so there is nothing to pick out "
+                f"The row carries no {tcgcsv.SKU_COLUMN!r}, so there is nothing to pick out "
                 "of a product's answer."
             )
         resolved_id = int(product_id) if product_id else self.product_id_for_row(row)

@@ -5,6 +5,8 @@ sees a refusal. This reads the refusal templates themselves, at the source, and 
 WHAT IT READS. Every message a refusal carries to the screen word for word, in two places:
   - `server/*.py`: the message argument of `BadRequest`, `PipelineRefusal`, `ShippingRefusal`,
     `CodesRefusal`, `_refuse`, `_fail`, `FetchRefusal` and `PushFailed`.
+  - `store/*.py` and `pipeline/*.py`: the message of every `raise <Class>(...)` where the class is
+    an exception this repo defines. The dispatcher relays these with `str(exc)`.
   - `app/src/*.ts(x)`: the message argument of `new ServerError(...)`.
 WHY THIS ONE (D196, D284). A mocked failing server over every route would prove the renderer
 and miss most refusals, because most refusals need a specific press to fire. The template is the
@@ -59,7 +61,7 @@ def problems(message: str) -> list[str]:
     out += [f"word '{w}'" for w, rx in _WORD_RES if rx.search(message)]
     if "\x01" in message:
         out.append("exception text")
-    if message[:1] not in "\x00\x01" and not message[:1].isupper():
+    if message[:1].islower():
         out.append("no capital")
     return out
 
@@ -120,11 +122,47 @@ def ts_findings(source: str) -> list[tuple[str, int, str]]:
     return found
 
 
+def exception_classes() -> set[str]:
+    """Names of the exception classes store/ and pipeline/ define, subclasses included."""
+    trees = [ast.parse(p.read_text()) for d in ("store", "pipeline") for p in sorted((ROOT / d).glob("*.py"))]
+    known: set[str] = set()
+    for _ in range(4):
+        for tree in trees:
+            for n in ast.walk(tree):
+                if isinstance(n, ast.ClassDef):
+                    for b in n.bases:
+                        base = b.id if isinstance(b, ast.Name) else b.attr if isinstance(b, ast.Attribute) else ""
+                        if base.endswith(("Error", "Exception")) or base in known or base in (
+                            "ValueError", "KeyError", "LookupError", "RuntimeError",
+                        ):
+                            known.add(n.name)
+    return known
+
+
+def raised_findings(source: str, classes: set[str]) -> list[tuple[str, int, str]]:
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if not (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)):
+            continue
+        f = node.exc.func
+        name = f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else ""
+        idx = 1 if name == "SelectionError" else 0
+        if name in classes and len(node.exc.args) > idx:
+            text = flatten(node.exc.args[idx])
+            found += [(text, node.lineno, p) for p in problems(text)]
+    return found
+
+
 def scan() -> list[tuple[str, int, str, str]]:
     out = []
     for path in sorted((ROOT / "server").glob("*.py")):
         rel = str(path.relative_to(ROOT))
         out += [(rel, line, text, p) for text, line, p in python_findings(path.read_text())]
+    classes = exception_classes()
+    for d in ("store", "pipeline"):
+        for path in sorted((ROOT / d).glob("*.py")):
+            rel = str(path.relative_to(ROOT))
+            out += [(rel, line, text, p) for text, line, p in raised_findings(path.read_text(), classes)]
     src = ROOT / "app" / "src"
     for path in sorted([*src.glob("*.ts"), *src.glob("*.tsx")]):
         if path.name == "demoServer.ts":

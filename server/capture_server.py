@@ -10214,7 +10214,7 @@ def do_review_group_answer(payload: dict) -> dict:
                     absent[box] = absent.get(box, 0) + 1
                     continue
                 where = join.place_within_box(view, box, index)
-                named_parts.append(f"{where}: {exc.code} — {exc}")
+                named_parts.append(f"{where}: {exc}")
             for box, count in sorted(absent.items()):
                 named_parts.append(
                     f"{count} of the cards you named {'is' if count == 1 else 'are'} not in "
@@ -15123,7 +15123,7 @@ def do_order_pull(payload: dict) -> dict:
         # ---------------------------------------------------------------- phase one
         prepared, refused = _prepare_targets(snapshot, places, parsed, sku, undo, set())
         if refused:
-            named = "; ".join(f"{where}: {exc.code} — {exc}" for where, exc in refused)
+            named = "; ".join(f"{where}: {exc}" for where, exc in refused)
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "pull_entry_refused",

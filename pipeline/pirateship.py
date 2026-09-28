@@ -197,7 +197,7 @@ class Parcel:
         object.__setattr__(self, "stamps", tuple(str(s) for s in self.stamps))
         if len(self.stamps) > STAMP_LIMIT:
             raise MalformedParcel(
-                f"order {self.order_id}: {len(self.stamps)} rubber stamps, "
+                f"Order {self.order_id}: {len(self.stamps)} rubber stamps, "
                 f"and the label has {STAMP_LIMIT} corners for them"
             )
 
@@ -265,7 +265,7 @@ def render(parcels: Iterable[Parcel]) -> bytes:
         check_no_insurance(row)
         extra = set(row) - set(COLUMNS)
         if extra:
-            raise MalformedParcel(f"columns not in the import format: {sorted(extra)}")
+            raise MalformedParcel(f"Columns not in the import format: {sorted(extra)}")
 
     buf = io.StringIO(newline="")
     buf.write(",".join(COLUMNS))

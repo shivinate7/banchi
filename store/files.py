@@ -128,7 +128,7 @@ def exclusive(directory: Path, timeout: float = LOCK_TIMEOUT_SECONDS):
                 break
             except OSError as exc:
                 if exc.errno not in (errno.EACCES, errno.EAGAIN):
-                    raise StoreError(f"could not lock {path}: {exc}") from exc
+                    raise StoreError("The store could not be locked for writing. Check that the disk is available, then try again.") from exc
                 if time.monotonic() > deadline:
                     raise LockTimeout(
                         f"{path} is locked by another process after {timeout}s — the "
@@ -177,7 +177,7 @@ def read_json(path: Path, default: Optional[Any] = None) -> Any:
     try:
         return json.loads(path.read_text("utf-8"))
     except json.JSONDecodeError as exc:
-        raise StoreError(f"{path} is not valid JSON: {exc}") from exc
+        raise StoreError("A store file could not be read because it is damaged. Restore it from a backup.") from exc
 
 
 def append_jsonl(path: Path, record: Any) -> None:
@@ -225,12 +225,12 @@ def read_jsonl(path: Path):
     if not path.is_file():
         return []
     out = []
-    for lineno, line in enumerate(path.read_text("utf-8").splitlines(), start=1):
+    for line in path.read_text("utf-8").splitlines():
         line = line.strip()
         if not line:
             continue
         try:
             out.append(json.loads(line))
         except json.JSONDecodeError as exc:
-            raise StoreError(f"{path}:{lineno} is not valid JSON: {exc}") from exc
+            raise StoreError("A line in a store file could not be read because it is damaged. Restore it from a backup.") from exc
     return out

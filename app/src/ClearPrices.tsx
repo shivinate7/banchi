@@ -32,7 +32,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { Button, Notice, Segmented, Sheet } from './kit'
-import { clearPricingAnswers, describeFailure, type Failure } from './server'
+import { clearPricingAnswers, describeFailure, type Failure, failureTone } from './server'
 import type { PricingClearResult, PricingClearable } from './types'
 
 import './ClearPrices.css'
@@ -250,7 +250,7 @@ export function ClearPrices({
       </Notice>
 
       {unsaved ? <Notice tone="warn" title="Wait for your last price to save first." /> : null}
-      {failure === null ? null : <Notice tone="danger" title={failure.message} code={failure.code} />}
+      {failure === null ? null : <Notice tone={failureTone(failure)} title={failure.message} code={failure.code} />}
     </Sheet>
   )
 }
