@@ -3996,7 +3996,7 @@ COMPONENTS = [
                         "numbered list as shipped; see the D206 "
                         "decision entry for why that reconciliation is left to a session "
                         "arguing for it on purpose.",
-                "governed_by": ["D15", "D18"],
+                "governed_by": ["D15", "D18", "D206"],
             },
             "catalog-image-mirror.py": {
                 "does": "build-order step 9, piece 3: derive the image-mirror manifest from "
@@ -4845,8 +4845,8 @@ COMPONENTS = [
                         "for the reason every other declarative literal here is read that way.",
                 # THE LONG TAIL IS NOT DECORATION. Every decision a CHECKS entry cites is one
                 # this file's content depends on: D43 is why port-agreement exists at all, D65
-                # and D76 the same for set-hint-agreement, D47 for ignore-check, D60 and D74
-                # for vale. Change one and the entry describing that check goes stale with it,
+                # and D76 the same for set-hint-agreement, D47 for ignore-check, D60 for prose.
+                # Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
                 "governed_by": ["D7", "D16", "D17", "D18", "D25", "D26", "D36", "D42", "D43",

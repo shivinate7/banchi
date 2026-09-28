@@ -11,10 +11,10 @@
 # A fresh runner is the point. It has no venv, no banked cache, no image mirror and no recording
 # — exactly the checkout nobody ever tests in, which is the checkout this is for.
 #
-# IT RUNS `make ci-check`, NOT `make check`, AND THE MAKEFILE ARGUES THE DIFFERENCE. One row is
-# missing: `vale` needs a binary that is not on the runner and has never gated a commit.
-# Everything else, the harness included, answers from the tree alone — D112 made that true by
-# moving T1's 40K of labels out of the 133M image mirror they had been filed inside.
+# IT RUNS `make ci-check`, NOT `make check`, AND THE MAKEFILE ARGUES THE DIFFERENCE. Vale
+# is retired 2026-09-27 and gates neither list now. Everything here, the harness included,
+# answers from the tree alone — D112 made that true by moving T1's 40K of labels out of the
+# 133M image mirror they had been filed inside.
 #
 # SO A GREEN RUN HERE MEANS "the tree is self-consistent", NEVER "the rig is fine". T1 asserts a
 # committed measurement rather than taking a new one, and the detector's numbers still come from

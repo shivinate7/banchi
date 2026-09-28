@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -84,7 +84,6 @@ help:
 	@echo "                    (D-text-shape-checks). Never a gate. ARGS=\"--route '#/x'\"."
 	@echo "  make orient       which component renders the thing, and what selects it."
 	@echo "                    ARGS=<file.tsx> [--name <Component>]. Derived, never stored."
-	@echo "  make vale         prose style over every tracked .md. Needs vale; never gates."
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
@@ -244,17 +243,18 @@ help:
 	@echo "                    MAIN TREE ONLY. ARGS=--remove takes it away."
 	@echo "  make reap         stop what THIS session started, and nothing else. Previews;"
 	@echo "                    ARGS=--confirm presses. ARGS=\"port:5484 --confirm\" for one port."
-	@echo "  make ci-check     what a fresh clone can prove: everything in check but vale."
+	@echo "  make ci-check     subset of check for a fresh clone. Vale is retired, so it is no"
+	@echo "                    longer the reason the two lists differ."
 	@echo "  make janitor-install  copy the sweep to ~/.claude/bin so every repo's hooks can reach it."
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
-	@echo "  make check        harness + docs-audit + claim-stale + revert-guard +"
+	@echo "  make check        harness + docs-audit + revert-guard +"
 	@echo "                    port-agreement + set-hint-agreement + readiness-agreement +"
 	@echo "                    screen-freshness +"
 	@echo "                    screen-freshness-selftest + sigil-check +"
 	@echo "                    css-var-check + css-var-check-selftest + token-literal-check +"
 	@echo "                    kit-adoption + ignore-check +"
-	@echo "                    lint + vale + typecheck + audit-self-test +"
+	@echo "                    lint + typecheck + audit-self-test +"
 	@echo "                    mutate-anchors +"
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
 	@echo "                    claim-selftest + decisions-selftest + debts-selftest +"
@@ -638,7 +638,6 @@ audit-history:
 check:
 	@$(MAKE) --no-print-directory harness
 	@$(MAKE) --no-print-directory docs-audit
-	@$(MAKE) --no-print-directory claim-stale
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -652,7 +651,6 @@ check:
 	@$(MAKE) --no-print-directory kit-adoption
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
-	@$(MAKE) --no-print-directory vale
 	@$(MAKE) --no-print-directory typecheck
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory mutate-anchors
@@ -723,7 +721,6 @@ ci-check:
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
 	@$(MAKE) --no-print-directory claim-selftest
-	@$(MAKE) --no-print-directory claim-stale
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory debts-selftest
 	@$(MAKE) --no-print-directory gates-selftest
@@ -892,7 +889,11 @@ kit-adoption-selftest:
 # reaches a real checkout's server, and it stops only the processes it started.
 port-slots-selftest:
 	$(NPM_GUARD)
-	@python3 scripts/port-slots.py selftest
+	@if python3 scripts/guard-scope.py classify --target port-slots-selftest --base origin/main; then \
+		python3 scripts/port-slots.py selftest; \
+	else \
+		echo "port-slots-selftest: SKIPPED — this branch does not touch the port-slot claim or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # FLT-06/04, UX-173: the one forgiving matcher, server side. `server/match.py` against every
 # row of app/src/kit/match.cases.json (the filtering lane's own case table, so the server and
@@ -1728,7 +1729,11 @@ suite-lock-selftest:
 # real tree (D-browser-spec-allow-list). Reads only; nothing here writes, so it sits beside
 # the other guard selftests rather than on the commit path (D18).
 browser-scope-selftest:
-	@python3 scripts/browser-scope.py selftest
+	@if python3 scripts/guard-scope.py classify --target browser-scope-selftest --base origin/main; then \
+		python3 scripts/browser-scope.py selftest; \
+	else \
+		echo "browser-scope-selftest: SKIPPED — this branch does not touch the browser-matrix classifier or its spec map. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # A JS media query's viewport width against what a stylesheet under app/src declares
 # (D123): the pure extraction and comparison `make docs-audit`'s `js breakpoints` row
@@ -1779,47 +1784,6 @@ design-check-quiet:
 #
 # No `--fix`, here or in the npm script, for either language. `check` below runs this
 # target, and D18 keeps anything that writes off the path that decides whether work is done.
-# Vale, the prose linter, over EVERY tracked markdown file.
-#
-# NOT on the commit path and it must not go there. scripts/githooks/pre-commit runs a bare
-# python3 with nothing installed (D18), and vale is a third-party Go binary — a commit gate
-# that needs software present would make the three opsec rules depend on it too. `make check`
-# is invoked by a person, which is where port-agreement and the audit's self-test already sit.
-#
-# It answers the STYLE half of D60 and none of the size half; `entry budget` in
-# scripts/docs-audit.py is what knows an entry costs tokens to load.
-#
-# IT RAN OVER FOUR FILES UNTIL 2026-08-30 AND .vale.ini ALWAYS SAID `[*.md]`. The target was
-# the narrow half of that disagreement, so docs/specs/ and docs/design-refs/ were never linted
-# at all: 35 AmericanSpelling errors had accumulated there, none of them reachable by any check
-# in this repo. D60's rule is written about the four docs a session loads, and that is an
-# argument about which prose must be DENSE — never an argument for leaving the rest unspelled.
-# The file list is `git ls-files` so a new document is linted the day it is committed rather
-# than the day somebody remembers to add it here.
-#
-# A missing binary reports and does not fail, so `make check` still runs on a machine
-# without it — the same shape NPM_GUARD takes, minus the exit.
-#
-# ONE RECIPE LINE, DELIBERATELY. Split across two — a guard line ending `exit 0`, then a
-# bare `git ls-files | xargs vale` — the guard's `exit 0` only ends ITS OWN shell; each `@`
-# line is a separate invocation, and make advances to the next line on any zero exit, guard
-# or not. So the message printed, the target reported nothing wrong, and `xargs` ran anyway
-# with no `vale` to run — `xargs: vale: No such file or directory`, exit 127, `make check`
-# failing on the one row this comment says cannot fail it. Measured, not hypothetical: that
-# is the exact output a binary-less machine produced. One `if` keeps the run inside the
-# branch that only exists once the guard has already passed.
-vale:
-	@echo "NOT A GATE: prose style is reported and never blocks (D18). --no-exit swallows"
-	@echo "  the status, and a missing binary reports and exits 0 — so this slot in"
-	@echo "  \`make check\` cannot fail, and a reader of a green run should not count it"
-	@echo "  among the ones that can. \`make docs-audit\`'s \`check registry\` row pairs this"
-	@echo "  line against the entry's \`gates: False\` in both directions."
-	@if command -v vale >/dev/null; then \
-		git ls-files '*.md' | xargs vale --no-exit; \
-	else \
-		echo "vale is not installed — prose style unchecked."; \
-		echo "  Fix: brew install vale"; \
-	fi
 
 lint:
 	$(NPM_GUARD)

@@ -15,7 +15,7 @@ PR 5's work now lives inside PR 4B. Owner: `bring everything that was PR5 into P
   grant and the model cap. This session's grants are in the log below.
 - Cadence (owner, 2026-09-26): each lane gets one review, and a re-review only after a FAIL. A
   reviewer never re-runs a suite that the builder ran green at the same head. A lane merge gets
-  only `cd app && npx tsc --noEmit`. The final head gets `make vale` only, then the PR, green CI,
+  only `cd app && npx tsc --noEmit`. The final head gets linting only (Vale retired 2026-09-27), then the PR, green CI,
   and the merge. CI is the only browser gate before main.
 - A test that asserts a superseded rule goes to the owner. Nobody rewrites it silently.
 
@@ -108,7 +108,7 @@ Before PR 4B merges:
 - Main is red. The docs audit's `id claims` row fails on main's unclaimed slug
   `D-demo-stock-images`, because PR #476 merged without its claim. The owner: `Fold it into PR 4B`.
   So PR 4B's merge claims it. Check at merge time that `make merge` claims a slug main already holds.
-- The final head: the PR, green CI, and `make merge`. Vale is retired, so no local step runs.
+- The final head: linting only (Vale retired 2026-09-27), then the PR, green CI, and `make merge`.
 
 After PR 4B merges:
 
@@ -155,7 +155,7 @@ Grants, process-only:
 - Opus for the test-audit review: `an opus agent reviews the corpus made and plans with me the resolution`.
 - Merge grant: the owner named this session an Orchestrator. It merges PR 4B with `make merge`
   once CI is green.
-- The final head gets `make vale` only, not a full `make check`: `Agreed and proceed`.
+- The final head gets linting only (Vale retired 2026-09-27), not a full `make check`: `Agreed and proceed`.
 
 Lane E and A:
 
@@ -209,6 +209,6 @@ G, T and PR 5:
 - Test-audit Q1, the tiers: `Three tiers, agent proposes, you approve (Recommended)`. Q2: `Yes (Recommended)`.
 - Start now: `L1, L3, L6, L7`. The owner asked for the other three options explained first.
 - Vale: `Retire it, keep American spelling in docs-audit (Recommended)`. Lane L3 removes Vale.
-  The spelling row learns markdown in lane L2. So the final head no longer runs `make vale`.
+  The spelling row learns markdown in lane L2. So the final head no longer runs Vale.
 - Old demo seed: `Cut the old seed guards`. Lane L5. The heartbeat and coordinator: `Retire both (Recommended)`. Lane L10.
 - Q8: `you haven't shown me the changes made to docs audit`. No docs-audit change is made yet. The owner sees the tier list and the merge families before any lane changes it.
