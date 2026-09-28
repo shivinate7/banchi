@@ -1184,6 +1184,31 @@ export function BoxBrowse({
     return out
   }, [filtered, results, activeGroups, hideSold])
 
+  /* WHILE THE CHOOSER IS PENDING, A BOX HOLDING ONE OF ITS PRINTINGS IS NOT "NO MATCH"
+   *  (owner report, 2026-09-28). `activeGroups` is deliberately EMPTY_GROUPS until a
+   *  printing is picked (see its own comment above), and `matchesByShelf`/`searchBoxes`
+   *  read off `activeGroups` on purpose — that emptiness is the one substitution that keeps
+   *  a box a no-op to enter before a pick, with no second flag. But the SAME emptiness also
+   *  fed the box list's own label, so a search for a name held in two or more conditions
+   *  (`Punch First`, `Body Rune` — ordinary at the store's real size: measured 10 and 80
+   *  SKUs respectively for those two names alone) drew every one of its boxes as holding
+   *  "No match", although the chooser beside it was correctly listing where they are. This
+   *  is a second, READ-ONLY tally off `searchGroups` (the UNRESOLVED groups) — it never
+   *  touches `reachable`/`disabled`, only what a still-disabled cell SAYS while the operator
+   *  is looking at the chooser. */
+  const chooserMatchesByShelf = useMemo(() => {
+    const out = new Map<Shelf, number>()
+    if (!chooserActive || searchGroups === null) return out
+    for (const group of searchGroups) {
+      for (const copy of group.copies) {
+        if (hideSold && copyDeparted(copy)) continue
+        const s = copyShelf(copy)
+        out.set(s, (out.get(s) ?? 0) + 1)
+      }
+    }
+    return out
+  }, [chooserActive, searchGroups, hideSold])
+
   /* Every position with an open question, for the row badges. */
   const queuedKeys = useMemo(() => {
     const out = new Set<string>()
@@ -2004,7 +2029,14 @@ export function BoxBrowse({
              native `placeholder` attribute. Shorter here, where the column is narrowest. */
           placeholder: 'Search',
         }}
-        count={{ shown: reachableCount, total: boxRecords.length, noun: { one: 'box', many: 'boxes' } }}
+        count={{
+          /* While the chooser is pending, `reachableCount` reads `activeGroups` — which is
+           * empty on purpose (see `chooserMatchesByShelf` above) — so this line said "0 of
+           * N boxes" over a search that had, in fact, found every box it named. */
+          shown: chooserActive ? chooserMatchesByShelf.size : reachableCount,
+          total: boxRecords.length,
+          noun: { one: 'box', many: 'boxes' },
+        }}
         sort={{
           options: [
             { key: 'recent', label: 'Most recent' },
@@ -2054,6 +2086,10 @@ export function BoxBrowse({
             const onHand = record ? (record.on_hand ?? record.cards - record.sold - record.retired - record.moved) : null
             const pct = record && record.cards > 0 && onHand !== null ? Math.round((onHand / record.cards) * 100) : 0
             const matches = matchesByShelf.get(cell) ?? (typeof cell === 'number' ? facetMatchesByBox.get(cell) : undefined)
+            /* The chooser's own unresolved count for this shelf — see `chooserMatchesByShelf`'s
+             * own header. `undefined` off the chooser too, so the ordinary "No match" still
+             * runs when this genuinely holds none. */
+            const pending = chooserActive ? chooserMatchesByShelf.get(cell) : undefined
             return (
               <button
                 key={String(cell)}
@@ -2099,7 +2135,9 @@ export function BoxBrowse({
                         one figure that sort is actually about (D221: `Money`, never a plain
                         string, or this dollar sign sits in the wrong face). */}
                     {!reachable
-                      ? 'No match'
+                      ? pending !== undefined
+                        ? `${pending} ${pending === 1 ? 'match' : 'matches'}, pick a printing`
+                        : 'No match'
                       : matches !== undefined
                       ? `${matches} ${matches === 1 ? 'match' : 'matches'}`
                       : record && sort.key === 'value' && typeof cell === 'number'
