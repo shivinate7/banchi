@@ -257,3 +257,59 @@ deliberate choice. Knowledge reachable only from inside the file it is about is 
 diagnosing from the outside will not have. `make docs-audit`'s `server concurrency` row now pins the
 class, the timeout and the backlog in this section against the code, so a future worker pool cannot
 land while this section still describes threads.
+
+**THE PHOTO LANE, 2026-09-28: THE OWNER'S RULING REOPENS THIS DEBT FOR PHOTO AND STATIC GETS ONLY.**
+`GET /photo/...` and `GET /assets/...` touch no store and no lock (`do_photo` is a lock-free WAL
+read), yet they queued behind writers that hold a slot up to `LOCK_TIMEOUT_SECONDS`. They now have
+their own pool, their own semaphore and their own refusal: **`PHOTO_SLOTS = 4`**,
+`photo_slots_in_use()`, and `photo_busy` (503, `server_busy`'s shape, the same wait). Everything
+above stays true for every other route. `REQUEST_SLOTS = 4` is untouched, and `Connection: close`
+still goes out from `end_headers` on every response, 304 included.
+
+**The classifier is one sorter thread and never the accept thread.** A prototype peeked the request
+line in the accept loop, so one silent client stalled accept for everyone. `CaptureServer._sort` now
+watches every connection with `selectors`, peeks the first 12 bytes with `MSG_PEEK` once they
+arrive, and routes to a pool. Worst case of a slow or silent client: one file descriptor held for
+`SORT_SECONDS` (1s), then the slot pool, exactly as before. A byte-at-a-time client is routed on
+its first byte. Neither stalls accept, the sorter, or another connection. `_dispatch` gates by the
+PARSED path (`photo_lane_path`, the one predicate the sorter also uses), so a photo that was
+mis-sorted still takes the photo semaphore: a wrong sort costs a lane, never the bound.
+
+**Why 4, from measurement.** Scratch store (`make demo-seed`), 150 connections looping
+`GET /photo/1/1`, a `/status` probe beside them, the machine at load average 70 to 100 from other
+lanes, so absolute figures are noisy and the ratios are the evidence:
+
+| `PHOTO_SLOTS` | 2 | 4 | 8 | 16 |
+|---|---|---|---|---|
+| photos/sec, first pass | 165 | 223 | 188 | 229 |
+| photos/sec, repeats | | 141, 181 | 221, 176 | |
+| `/status` probe, first pass | 23 ms | 33 ms | 39 ms | 469 ms |
+| peak threads | 5 | 7 | 11 | 19 |
+
+Throughput is flat from 2 to 16 within the noise (the GIL-bound shape of the sweep above), so no
+bound buys speed. The probe holds under 40 ms up to 8 on the quiet pass and collapses at 16.
+4 matches `REQUEST_SLOTS`, costs the fewest threads that keep a full lane, and has no measured loser.
+The repeat passes on the loaded box moved every cell, which is why the choice is "flat, so small".
+
+**Against main, same store, same box** (main: no lane; branch: this lane):
+
+| scenario | main | branch |
+|---|---|---|
+| 150-connection photo flood, `/status` probe | 648 ms | 25 ms |
+| same flood, photos/sec | 268 to 296 | 276 |
+| same flood, errors, peak threads | 0, 5 | 0, 7 |
+| 6 `/orders` loops, photo p50 | 136 ms | 5 ms |
+| 4 writers parked on the store lock, photo latency | 8 s timeout, 4.5 s, then ~10 ms after release | 9 to 11 ms throughout |
+
+**What the lane does NOT do.** With the 4 writers parked, `/status` is on the slot pool and still
+waits (8 s and 4.5 s on the branch, 10 to 60 ms on main once the lock frees). The lane frees photos,
+not the rest. Measured on a scratch store, never the owner's.
+
+**Proof:** `harness/tests/t7_store_and_seams.py:check_photo_lane`. With more photo callers than
+`PHOTO_SLOTS` (the photo pool widened so the semaphore is the only bound), exactly `PHOTO_SLOTS`
+execute, the excess get `photo_busy`, `/status` answers 200 at once while the lane is full, the slot
+pool's count is 0, and every response says `Connection: close`. Red on three mutations, run
+2026-09-28: the photo semaphore widened to 1000 (peak 10, no refusals), photos gated by the slot
+semaphore (`/status` refused, slot count 4), and the sorter sending photos to the slot pool
+(`/status` waited 10 s, no refusals). `check_request_slots` leg 1 drops the one sorter thread by
+name and stays green.

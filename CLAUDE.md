@@ -429,7 +429,9 @@ Rationale, sales strategy, and open questions: `docs/CODES-DECISIONS.md`.
   `CaptureHandler.timeout = 15` (reaps only idle connections). A burst of concurrent clients
   kills it. `REQUEST_SLOTS = 4` bounds executing requests with a
   `ThreadPoolExecutor(REQUEST_SLOTS)`. It is safe over HTTP/1.1 only because every response
-  sends `Connection: close` (DEBT11 has the mechanism and the measurements). `make
+  sends `Connection: close` (DEBT11 has the mechanism and the measurements). `PHOTO_SLOTS = 4` is
+  a second, separate bound for `/photo/` and `/assets/` GETs, sorted off the accept thread (owner's
+  ruling, 2026-09-28, DEBT11); its refusal is `photo_busy`. `make
   launch-agent` keeps this alive over the owner's real store. Run the full suite ONCE at the
   end. Never `make up ARGS=--restart`, `make down` or `make up` to fix a wedge — the refusal
   without `--confirm` is the answer.
