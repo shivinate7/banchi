@@ -203,6 +203,32 @@ function copyDeparted(copy: SearchCopy): boolean {
   return isDeparted(copy.place)
 }
 
+/* RANK BEFORE PILE SIZE (the owner, 2026-09-27, over "hand hammer" surfacing Jayce, Hammer in
+ * Hand first while Hand Hammer sat in stock unseen): `activeGroups` already arrives sorted by
+ * `SearchGroup.rank` (`do_search`'s own sort, F8) — several printings of one card share a
+ * tier because they share a rank, and an unrelated card only lands beside them by matching
+ * the query exactly as well. Consecutive equal ranks are one tier, so a single pass over the
+ * already-sorted array finds every boundary. */
+function tiersOf(groups: readonly SearchGroup[]): SearchGroup[][] {
+  const tiers: SearchGroup[][] = []
+  let i = 0
+  while (i < groups.length) {
+    const rank = groups[i]?.rank
+    let j = i + 1
+    while (j < groups.length && groups[j]?.rank === rank) j++
+    tiers.push(groups.slice(i, j))
+    i = j
+  }
+  return tiers
+}
+
+/* Does any copy in this tier still count as live? The same predicate every other reader of
+ * `frozen` asks (`frozenRank.ts`, D181), so a sale mid-search cannot re-rank this tier's
+ * pile any more than it can any other reader's. */
+function tierHasLive(tier: readonly SearchGroup[], frozen: FrozenRank): boolean {
+  return tier.some((group) => group.copies.some((copy) => ranksAsLive(copy.key, copyDeparted(copy), frozen)))
+}
+
 /* A SHELF BY ITS NAME (D259): the owner ruled the box number an index the
  * store keeps, never a label. Every box carries a stored name since the backfill, so `Box <n>`
  * is only the fallback for a registry the screen has not read yet, and it is the same string
@@ -901,6 +927,31 @@ export function BoxBrowse({
     return picked === undefined ? searchGroups : [picked]
   }, [searchGroups, chooserActive, resolvedVariant])
 
+  /* `activeGroups` BUCKETED INTO RANK TIERS, ONCE, HERE — THE ONE SHARED PLACE (the owner,
+   * 2026-09-27, F8). The rail's `order`, the walk's shelf-picking effect and the section
+   * landing below all read `rankedGroups`/`topTierSoldOut` from here rather than each
+   * re-deriving their own idea of "the best tier". */
+  const searchTiers = useMemo(() => tiersOf(activeGroups), [activeGroups])
+
+  /* RANK BEFORE PILE SIZE: the first tier (best rank) that still holds a live copy anywhere
+   * in the store is what pile size may rank boxes and sections WITHIN. A tier with nothing
+   * live is skipped entirely rather than counted — that skip is the fall-through the owner
+   * asked for. With nothing live in any tier, every group pools together exactly as it did
+   * before this fix: a sold-out answer still shows where its copies were. */
+  const rankedGroups = useMemo(() => {
+    const live = searchTiers.find((tier) => tierHasLive(tier, frozen))
+    return live ?? activeGroups
+  }, [searchTiers, activeGroups, frozen])
+
+  /* `rankedGroups`' OWN COPY KEYS, for the landing below: which row of `visible` counts
+   * toward "the fullest section" is the same rank-before-pile-size question, just asked of
+   * one box's rows instead of every box. */
+  const rankedKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const group of rankedGroups) for (const copy of group.copies) keys.add(copy.key)
+    return keys
+  }, [rankedGroups])
+
   /* THE WALK LEAVES THE BOX IT WAS ON WHILE THE CHOOSER IS SHOWING. The shelf-picking effect
    * below returns early the moment `shelves` is empty (its own guard, written for the
    * registry's late arrival — see its own comment) — which under a plain empty search is
@@ -940,6 +991,13 @@ export function BoxBrowse({
 
   const filtered = searching && matched !== null
 
+  /* SAY WHEN THE BEST MATCH IS SOLD (the owner, 2026-09-27, F8): this asks about the TOP
+   * tier specifically, never mind which tier `rankedGroups` fell through to for ranking. */
+  const topTier = searchTiers[0] ?? EMPTY_GROUPS
+  const topTierSoldOut = filtered && topTier.length > 0 && !tierHasLive(topTier, frozen)
+  const topTierLabel = topTier.map((group) => group.names[0] ?? 'This card').join(', ')
+  const topTierCopyCount = topTier.reduce((sum, group) => sum + group.copies.length, 0)
+
   /* THE RAIL'S ORDER IS THE HAND'S (D132): the box opened most recently on this browser first,
      then its own true index (`bid`, newest box first), then the number — `kit/dataRules.ts:
      boxesMostRecentFirst`, the one primitive for a box order every list of boxes now shares.
@@ -973,14 +1031,19 @@ export function BoxBrowse({
        not by its total, so the rail agrees with the copies list and with where the walk lands:
        three in one section outranks one-plus-two across two. Sold copies count for nothing —
        a box full of departed matches is not where the hand goes. With no query this term is
-       zero everywhere and the rail is the hand's again. */
+       zero everywhere and the rail is the hand's again.
+
+       RANK BEFORE PILE SIZE (F8, 2026-09-27): pile size counts only `rankedGroups`, the best
+       rank tier that still has a live copy — never every matched group pooled together. A
+       weaker match with a bigger pile no longer outranks a stronger match that is in stock
+       ("hand hammer" no longer lets Jayce, Hammer in Hand's pile bury Hand Hammer's own). */
     /* D192, item 2: this box's own `rows` no longer stands for every box's cards, so the
        cross-box tally reads the search's OWN result (`results`) instead — `SearchCopy`
        carries `place.box`/`place.section`, everything this needed off a `Row`. */
     const liveMatches = new Map<number, number>()
     if (filtered && results !== null) {
       const perSection = new Map<string, number>()
-      for (const group of activeGroups) {
+      for (const group of rankedGroups) {
         for (const copy of group.copies) {
           const shelf = copyShelf(copy)
           /* A COPY THAT LEFT SINCE THIS ORDER WAS TAKEN STILL COUNTS (`frozenRank.ts`), so a
@@ -1002,7 +1065,7 @@ export function BoxBrowse({
       if (rra !== rrb) return rra - rrb
       return a - b
     }
-  }, [sort, valueByBox, boxRecords, recency, filtered, results, activeGroups, frozen])
+  }, [sort, valueByBox, boxRecords, recency, filtered, results, rankedGroups, frozen])
 
   /* D192, item 2: under a search, which OTHER boxes hold a match comes off the search's own
      result now — `inQuery` is only this box's matched rows since the fetch became box-scoped,
@@ -1332,11 +1395,14 @@ export function BoxBrowse({
        D192 (store-scaling item 2): off `results` rather than `inQuery`, for the
        same reason `order`'s own tally above is — `inQuery` is this box's own matched rows
        now, and a candidate shelf other than the one on screen would never appear in it, which
-       silently made every OTHER box read as holding no live match at all. */
+       silently made every OTHER box read as holding no live match at all.
+
+       RANK BEFORE PILE SIZE (F8): `rankedGroups`, not every matched group, so a shelf only
+       counts as "live" here through the same tier `order`'s pile size just ranked it by. */
     const holdsLive = (candidate: Shelf) =>
       !filtered ||
       results === null ||
-      activeGroups.some((group) =>
+      rankedGroups.some((group) =>
         group.copies.some(
           (copy) => copyShelf(copy) === candidate && ranksAsLive(copy.key, copyDeparted(copy), frozen),
         ),
@@ -1365,7 +1431,7 @@ export function BoxBrowse({
       shelfSource.current = 'search'
       return pool[0] ?? null
     })
-  }, [shelves, boxesAnswered, filtered, results, activeGroups, frozen])
+  }, [shelves, boxesAnswered, filtered, results, rankedGroups, frozen])
 
   /* The selection follows the filter. When nothing matches it is left alone.
      A NEW ANSWER LANDS IN THE FULLEST SECTION (D132 amended): the query's answer is drawn by
@@ -1388,9 +1454,14 @@ export function BoxBrowse({
     answered.current = query
     setSelected((prev) => {
       if (!fresh && prev !== null && visible.some((row) => row.key === prev)) return prev
-      return (filtered ? landingInFullest(visible) : landingOf(visible))?.key ?? null
+      /* RANK BEFORE PILE SIZE (F8): land among `rankedKeys`' own rows first — the same tier
+       * the rail just ranked boxes by — falling back to every visible row only when this box
+       * holds none of that tier (it was opened by hand, not by the walk). */
+      const ranked = visible.filter((row) => rankedKeys.has(row.key))
+      const pool = ranked.length > 0 ? ranked : visible
+      return (filtered ? landingInFullest(pool) : landingOf(visible))?.key ?? null
     })
-  }, [visible, filtered, results])
+  }, [visible, filtered, results, rankedKeys])
 
   /* The ticks are the box's, so they go when the box does. */
   useEffect(() => {
@@ -1954,6 +2025,27 @@ export function BoxBrowse({
           )
         }
       />
+
+      {/* SAY WHEN THE BEST MATCH IS SOLD (the owner, 2026-09-27, F8): the top-ranked answer
+          can be out of stock while a weaker match still has copies, and a hand searching for
+          it should be told rather than left to notice the pile silently reordered under a
+          card it never asked for. `Hide sold` is the ONE control that reveals it — no second
+          toggle. */}
+      {!topTierSoldOut ? null : (
+        <Notice
+          tone="warn"
+          compact
+          className="browse-topsold"
+          title={`${topTierLabel}: ${topTierCopyCount} ${topTierCopyCount === 1 ? 'copy' : 'copies'}, all sold`}
+          action={
+            !hideSold || onHideSold === undefined ? undefined : (
+              <Button size="sm" onClick={onHideSold}>
+                Show sold cards
+              </Button>
+            )
+          }
+        />
+      )}
 
       {cells.length === 0 ? null : (
         <div className="browse-boxes bn-panel" role="group" aria-label="Choose a box to walk" ref={boxesRef}>

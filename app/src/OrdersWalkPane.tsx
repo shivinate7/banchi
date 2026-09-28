@@ -339,6 +339,8 @@ export function useOrderWalk({
       on_hand: take.copies.length,
       listable: 0,
       live_as_of: null,
+      // NEVER READ HERE. A synthesised group, one take and never ranked against another.
+      rank: 0,
       copies: take.copies.map((copy): SearchCopy => {
         const fresh = facts.get(copy.key)
         return {

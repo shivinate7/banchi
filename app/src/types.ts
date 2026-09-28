@@ -1744,6 +1744,15 @@ export type SearchGroup = {
    *  and a `Math.min` over `cap` here would be that rule kept in two places. */
   listable: number
 
+  /** How well this group answers the query: lower is a better match (an exact number beats a
+   *  name prefix beats a bare substring). `groups` already arrives sorted by it, so a reader
+   *  rarely needs the number itself — only whether two groups share one, which is what a box
+   *  walk needs to rank pile size WITHIN a tier rather than across all of them (F8, 2026-09-27:
+   *  `BoxBrowse.tsx`'s `bestLiveTier`). Never compare it to a number named in this file — the
+   *  server's `_RANK_*` constants are its only meaning, and they may be renumbered there
+   *  without notice. */
+  rank: number
+
   copies: SearchCopy[]
 }
 
