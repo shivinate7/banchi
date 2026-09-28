@@ -55,20 +55,20 @@ find.
   authority for what the guard actually enforces; `00-phases.md`'s own table already
   reflects the correction (its Phase-0 row says "`do_inventory` and `to_payload` stay by
   the owner's word").
-- `scripts/docs-audit.py:13547` (was cited as `:13538`, corrected) `check_rule_enforcement`
+- `scripts/docs-audit.check_rule_enforcement` `check_rule_enforcement`
   — the "pinned number, moves only down, mutation-proofed" pattern this row's allowlist
   count copies.
-- `scripts/docs-audit.py:9845` (was cited as `:9836`, corrected) `check_storage_keys` — the
+- `scripts/docs-audit.check_storage_keys` `check_storage_keys` — the
   "reconcile code against a roster, in both directions, with `scanned=`" pattern this
   row's allowlist copies from the other side (roster → code instead of code → roster is
   symmetric here since there is no markdown roster, only the constant in this same file).
-- `scripts/docs-audit.py:2680` (was cited as `:2671`, corrected) `_history_readers` — the
+- `scripts/docs-audit._history_readers` `_history_readers` — the
   exact `ast.walk` shape to copy for finding calls inside functions and naming which
   function owns each call.
-- `scripts/docs-audit.py:15563` (was cited as `:15548`, corrected) `audit()` — where every
+- `scripts/docs-audit.audit` `audit()` — where every
   check is dispatched; `check_dispatch` fails the commit if you define a function here and
   never call it.
-- `scripts/docs-audit.py:12746` (was cited as `:12737`, corrected) `check_subject_counts`
+- `scripts/docs-audit.check_subject_counts` `check_subject_counts`
   — why every `report.add(...)` call needs `scanned=<n>` and what happens if you omit it
   (a distinct "no count declared" finding, always failing, never silently green).
 - `store/rows.Rows` — `Rows.where(**equals)`, `Rows.select(columns, **equals)`,
@@ -168,7 +168,7 @@ _UNSCOPED_WALK_SINGLE_FILES: Tuple[Path, ...] = (
 
 # The three method names that always materialise every row when called on something
 # ending in `.cards` (`Rows` is a `MutableMapping`; these three take no filter argument
-# under any Rows signature — see store/rows.py:213-266), plus `select`, which only
+# under any Rows signature — see store/rows.Rows), plus `select`, which only
 # materialises everything when called with NO keyword arguments (a keyword is a filter:
 # `equals` in `Rows.select`).
 _UNSCOPED_METHODS = frozenset({"values", "items", "distinct"})
@@ -222,7 +222,7 @@ def unscoped_walk_sites(paths: Sequence[Path]) -> List[Tuple[str, int, str, str]
     shape `_payload_keys` and `mechanism_refs` are tested in already.
 
     WHAT THIS CANNOT SEE, and it says so rather than pretending completeness:
-    `store/rows.py:177`'s degradation — a `where()`/`select()` call that LOOKS scoped but
+    `store/rows.Rows`'s degradation — a `where()`/`select()` call that LOOKS scoped but
     answers from a Python-side list because an earlier call in the same request already
     materialised everything — is invisible here. This function reads one file at a time
     with no notion of a request's call order, so it cannot tell a `where()` that hits the
@@ -306,7 +306,7 @@ def check_unscoped_walk(report: Report) -> None:
     entry nothing will ever delete, which is why `UNSCOPED_WALK_EXPECTED`'s floor never
     reaches zero.
 
-    WHAT IT CANNOT SEE: `store/rows.py:177`'s runtime degradation (a call that reads
+    WHAT IT CANNOT SEE: `store/rows.Rows`'s runtime degradation (a call that reads
     scoped in the source and answers unscoped at runtime because an earlier call in the
     same request already loaded everything) — see `unscoped_walk_sites`'s own docstring,
     which item 2 is what actually removes. This row reads Python source shapes, never
@@ -387,7 +387,7 @@ index when `enter_staged_mode()` has run.
 
 ### 4. Register it in `audit()`
 
-At `scripts/docs-audit.py:15563` (was cited as `:15548`, corrected), add one line. Place it near the other single-purpose
+At `scripts/docs-audit.audit`, add one line. Place it near the other single-purpose
 code-scanning rows — right after `check_shell_substitution(report)` and before
 `check_rule_enforcement(report)` is fine, or anywhere before the two lines at the very end
 (`check_dispatch(report)` and, if staged, `check_coupling`; `check_subject_counts` must

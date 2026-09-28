@@ -94,7 +94,7 @@ Severity: medium (narrow miss, but it's the SYSTEM token failing its own documen
 Fix: darken `--bn-ink-3` slightly (light theme) — e.g. from `#6b7280` to something ≥`#5f6672`-equivalent — to clear 4.5:1 on both `--bn-bg` and `--bn-surface-2`.
 
 **Finding: `.bn-menu-label` (kit.css:785) sets `color: var(--bn-ink-4)` for real, small (10px), all-caps text** — directly contradicting the token's own comment two lines above its definition in `tokens.css`: "Data-bearing text reads ink-3; this is the floor a word may sit at, never a caption." A menu-group label ("BOX" as a section label inside a dropdown) is exactly a caption. Measured contrast for `ink-4` on `--bn-surface` is 3.64:1 (light) — below the 4.5:1 a 10px caption needs.
-Where: `app/src/kit.css:785`.
+Where: `app/src/kit.css` (`.bn-menu-label`).
 Severity: medium — low-vision users will struggle to read menu section labels, and it is the kit itself violating a rule written two lines above the color's own definition.
 Fix: change `.bn-menu-label` to `var(--bn-ink-3)`.
 
@@ -109,8 +109,8 @@ Off-scale raw `border-radius: Npx` literals with counts: `2px`×14, `3px`×13, `
 `18px` (9 uses, all effectively "a radius between `--bn-r-xl` (16) and `--bn-r-2xl` (22) that isn't either") is the clearest sign of an implicit second radius step that never got named — most of Fulfillment's panel corners (`.ff-today-none`, `.ff-notice`, `.ff-empty` uses 22, but `.ff-box`, `.ff-order`, `.ff-more`, `.ff-sheet`-adjacent elements use 18) are on this unnamed step.
 
 **Two undefined custom properties, confirmed live in the browser:**
-- `border-radius: var(--bn-r-md)` — used at `app/src/CaptureScreen.css:154` (`.capture-rig-summary`). `--bn-r-md` is never defined anywhere in `app/src` (checked every `.css` file). Confirmed live: injecting a test element with `border-radius: var(--bn-r-md)` into the running app and reading `getComputedStyle(...).borderRadius` returns **`"0px"`** — i.e., this control renders with hard square corners in production, on every theme, contradicting every other rounded surface in the product.
-- `border-radius: var(--bn-radius-md)` — used at `app/src/OrdersWalkPane.css:15` (`.orders-walk-photo`). Same story: `--bn-radius-md` is never defined. This is a photograph frame that should be rounded (every other photo frame in the product is — `.bn-photo` uses `--bn-r-lg`, `.ff-photo-btn` uses 22px) and instead renders with 0px corners.
+- `border-radius: var(--bn-r-md)` — used at `app/src/CaptureScreen.css` (`.capture-rig-summary`). `--bn-r-md` is never defined anywhere in `app/src` (checked every `.css` file). Confirmed live: injecting a test element with `border-radius: var(--bn-r-md)` into the running app and reading `getComputedStyle(...).borderRadius` returns **`"0px"`** — i.e., this control renders with hard square corners in production, on every theme, contradicting every other rounded surface in the product.
+- `border-radius: var(--bn-radius-md)` — used at `app/src/OrdersWalkPane.css` (`.orders-walk-photo`). Same story: `--bn-radius-md` is never defined. This is a photograph frame that should be rounded (every other photo frame in the product is — `.bn-photo` uses `--bn-r-lg`, `.ff-photo-btn` uses 22px) and instead renders with 0px corners.
 Severity: **high**. These are not style nits — they are two custom-property typos (probably meant to both read the same token, and neither one is a real token name) that silently strip rounded corners from two live controls. Confirmed by direct computed-style read, not inferred.
 Fix: point both at `--bn-r-lg` (12px, the closest existing "medium" step) or define `--bn-r-md` for real if a genuine in-between value is wanted, and use it consistently instead of two different misspelled names for what both call sites clearly intend to be the same thing.
 

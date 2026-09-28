@@ -45,11 +45,11 @@ and the rule is dropped silently:
 
 | Property | Referenced at | Effect |
 | --- | --- | --- |
-| `--bn-r-md` | `app/src/CaptureScreen.css:154` | corner radius lost |
-| `--bn-radius-md` | `app/src/OrdersWalkPane.css:15` | corner radius lost |
-| `--bn-well` | `app/src/Pricing.css:835` | pill loses its muted ground |
-| `--bn-muted` | `app/src/Pricing.css:836` | pill text renders full strength |
-| `--bn-border` | `app/src/ProductHistory.css:75` | `border-style: none`, panels near-invisible in light theme |
+| `--bn-r-md` | `app/src/CaptureScreen.css` (`.capture-rig-summary`) | corner radius lost |
+| `--bn-radius-md` | `app/src/OrdersWalkPane.css` (`.orders-walk-photo`) | corner radius lost |
+| `--bn-well` | `app/src/Pricing.css` (`.pricing-locked`) | pill loses its muted ground |
+| `--bn-muted` | `app/src/Pricing.css` (`.pricing-locked`) | pill text renders full strength |
+| `--bn-border` | `app/src/ProductHistory.css` (`.producthistory-range`) | `border-style: none`, panels near-invisible in light theme |
 
 Confirmed live, not read off the stylesheet. A linter that fails a build on a `var()` with
 no definition and no fallback would have caught all five, and nothing in the repo reads for

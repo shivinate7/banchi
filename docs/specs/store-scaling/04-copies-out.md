@@ -16,7 +16,7 @@ touch to `server/pipeline_routes.py` is discussed under "Allowlist entries remov
 holds (2–3 times per listing, once each for `positions_for_sku`, `copies_not_sold`'s own
 internal `positions_for_sku` call, and — on the `read <= 0` branch — `sales_before`'s own
 internal `positions_for_sku` call). Measured at 0.9 s over 492 listings
-(D156, restated in `server/pipeline_routes.py:2306-2308`) and
+(D156, restated in `server/pipeline_routes._unsent_ledger`) and
 projected as the plan's single largest per-request cost at 50,000 cards
 (`docs/specs/store-scaling.md` §0, §1's table row). Rewrite it to read every card's
 SKU-relevant columns in ONE `Rows.select()` call, grouped into an in-memory dict keyed by
@@ -26,7 +26,7 @@ every input this repo's tests already exercise.
 
 **Done when:**
 1. `_copies_out`'s signature, return type and every caller's call site are unchanged
-   (`cli/resolve.py:1916`, `server/pipeline_routes.py:2405`) — this is an internal rewrite,
+   (`cli/resolve._resolve`, `server/pipeline_routes._unsent_ledger`) — this is an internal rewrite,
    not an API change.
 2. `harness/tests/t7_store_and_seams.py`'s `check_committed_copies_are_the_oldest` (starts
    line 16547) and `check_listing_commands` (starts line 16705) pass unmodified, including
@@ -54,7 +54,7 @@ every input this repo's tests already exercise.
 - **No conflict with item 2** (`Inventory.to_payload()` / `do_orders()`'s `_Places`) — that
   item touches `server/capture_server.py` and `store/rows.py`'s `_complete` fallback path;
   this item touches neither. It does, however, matter to READ: item 2's fix to
-  `store/rows.py:177`'s degradation is a *different* mechanism from the one this item's
+  `store/rows.Rows`'s degradation is a *different* mechanism from the one this item's
   rewrite avoids — see "Read first" below for why both are real and why fixing one does not
   fix the other.
 - **No conflict with item 3** (`Store.history()` scoped to the key) — different table
@@ -92,7 +92,7 @@ every input this repo's tests already exercise.
   misattributed it to DEBTS.md in the summary bullet. Either way: **do not go looking for a
   DEBTS.md paragraph to edit — there is none to correct.** If a future session's `make
   docs-audit` or a stale grep turns one up, the corrected text is: *the `cards_sku` index
-  exists (`store/db.py:135`, generated from the `("cards", "sku")` tuple in `_INDEXES` at
+  exists (`store/db._INDEXES`, generated from the `("cards", "sku")` tuple in `_INDEXES` at
   line 135 via the `CREATE INDEX IF NOT EXISTS {table}_{column}` loop at line 272); `Inventory.
   positions_for_sku`'s `self.cards.where(sku=sku)` already uses it. What defeats the index is
   not its absence — it is `store/rows.py`'s `where()`/`select()` re-filtering the ENTIRE
@@ -101,7 +101,7 @@ every input this repo's tests already exercise.
   a second index.*
 - `CLAUDE.md`'s D7, D86 and D156 paragraphs (already quoted to you in full) — D156's own
   decision file, D156, is the actual source of the "0.9s per call on 492 listings, two queries
-  each" figure that `server/pipeline_routes.py:2306-2308` restates in a docstring, and that
+  each" figure that `server/pipeline_routes._unsent_ledger` restates in a docstring, and that
   `docs/specs/store-scaling.md`'s §1 table (753 listings, a later/different store snapshot)
   restates again with a slightly different count. Both figures describe the same defect;
   the count differs because the store grew between measurements.
@@ -122,19 +122,19 @@ every input this repo's tests already exercise.
     ```
     `positions_for_sku(sku)` returns every card carrying this SKU in any state;
     `copies_not_sold(sku)` returns every card carrying this SKU whose state is not `SOLD`
-    (`store/master.py:2421`: `return [c for c in self.positions_for_sku(sku) if c.state !=
+    (`store/master.Inventory`: `return [c for c in self.positions_for_sku(sku) if c.state !=
     SOLD]`) — so the subtraction is exactly "how many of this SKU's cards are SOLD," computed
     by calling `positions_for_sku` TWICE for the same SKU (once directly, once again inside
     `copies_not_sold`).
-  - When `read <= 0`, `sales_before(sku, read_at)` (`store/master.py:2423-2447`) calls
+  - When `read <= 0`, `sales_before(sku, read_at)` (`store/master.Inventory`) calls
     `positions_for_sku(sku)` a third way and counts cards where `card.state == SOLD and
     master.newer_stamp(as_of, card.state_at) is True` — i.e. sold strictly before the
     reading at `read_at`.
-- `store/master.py:2366-2447` — `positions_for_sku`, `copies_not_sold`, `sales_before` in
+- `store/master.Inventory` — `positions_for_sku`, `copies_not_sold`, `sales_before` in
   full, already read above; their bodies are quoted precisely so you can verify the
   replacement dict-based logic below reproduces them exactly. **Do not edit these three
-  methods** — they have other callers (`pipeline/orders.py:454`,
-  `server/capture_server.py:7986`, and every T7 case listed in "Do not touch" below) that
+  methods** — they have other callers (`pipeline/orders._Draw`,
+  `server/capture_server.do_search`, and every T7 case listed in "Do not touch" below) that
   must keep working exactly as they do today; this item only stops `_copies_out` from
   calling them in a loop.
 - `store/rows.Rows` — `Rows.where(**equals)` and `Rows.select(columns, **equals)` in
@@ -154,9 +154,9 @@ every input this repo's tests already exercise.
       return [found[key] for key in sorted(found)]
   ```
   The `if not self._complete:` block runs one real indexed SQL query
-  (`SELECT key, payload FROM cards WHERE sku = ? ORDER BY key`, via `store/db.py:1065-1069`,
+  (`SELECT key, payload FROM cards WHERE sku = ? ORDER BY key`, via `store/db.SqliteSource`,
   which hits the `cards_sku` index) and calls `_remember` on each returned row — which
-  parses it into a `Card` object and inserts it into `self._loaded` (`store/rows.py:118-125`).
+  parses it into a `Card` object and inserts it into `self._loaded` (`store/rows.Rows`).
   **The line that actually costs O(cards) is the one after that block**: `found = {key:
   obj for key, obj in self._loaded.items() if self._matches(obj, equals)}` runs
   UNCONDITIONALLY, filtering over the WHOLE current `_loaded` dict, not just the rows the
@@ -175,22 +175,22 @@ every input this repo's tests already exercise.
   the compounding happens inside `where()`/`select()` themselves, independent of the
   `_complete` flag. One full-table `select()` avoids this entirely because it is called
   exactly once and its own object-free path (below) never touches `_loaded` at all.
-  `select()` (`store/rows.py:231-250`) has the identical shape one level down — same `if not
+  `select()` (`store/rows.Rows`) has the identical shape one level down — same `if not
   self._complete:` SQL branch, same unconditional `for key, obj in self._loaded.items(): if
   self._matches(...)` tail — except it does NOT call `_remember`, so it builds no `Card`
   objects and never writes into `_loaded` at all. That is the path this rewrite uses: one
   `select()` call with NO cards already loaded first, so its SQL half returns everything and
   its Python tail (over an empty or near-empty `_loaded`) costs nothing.
-- `store/db.py:1071-1080` (`Source.select`) — confirms `select(columns, equals)` issues
+- `store/db.SqliteSource` (`Source.select`) — confirms `select(columns, equals)` issues
   `SELECT key, {columns} FROM cards {WHERE...} ORDER BY key` and returns `(key, tuple)`
   pairs with no payload parse, no `Card` construction — the cheapest read this store offers,
   the same one `Inventory.counts()` (`store/master.Inventory`) and `next_index`'s
   high-water scan already rely on.
-- `store/master.py:2480-2489` — the `CARDS` `TableSpec`, confirming the indexed column names
+- `store/master.Inventory` — the `CARDS` `TableSpec`, confirming the indexed column names
   are `box`, `idx` (not `index`), `state`, `sku`, `capture_id`, `name`, `number`, `game`,
   `set_hint`, `run`, `captured_at`, `state_at`, `cid` — `select()` must name these exact
   column strings, e.g. `select(("sku", "state", "box", "idx", "captured_at", "state_at"))`.
-- `store/db.py:130-141` — confirms `("cards", "sku")` is in `_INDEXES`, so `cards_sku` is a
+- `store/db._INDEXES` — confirms `("cards", "sku")` is in `_INDEXES`, so `cards_sku` is a
   real B-tree index (auto-named `{table}_{column}` at line 272), and it is what
   `positions_for_sku`'s existing `.where(sku=sku)` already hits on its SQL half — the index
   was never the problem.
@@ -200,7 +200,7 @@ every input this repo's tests already exercise.
   (sku))[:out]: ...`, line 729-731 — `copies_on_hand` calls `positions_for_sku` internally)
   and is NOT part of this item's scope. See "Do not touch" and "Risks" below — flag it,
   do not fix it here.
-- `cli/resolve.py:1889-1923` — the tail of `_resolve` (the shared body of `load` and
+- `cli/resolve._resolve` — the tail of `_resolve` (the shared body of `load` and
   `load_from_store`, NOT a function literally named `_join_common` — confirm the name with
   `grep -n "^def _resolve" cli/resolve.py` before writing anything that refers to it by
   name), which is `_copies_out`'s first caller: `copies_out, live_now = _copies_out(
@@ -243,7 +243,7 @@ class _SkuCardRow(NamedTuple):
 
     `key` and `box`/`index` are carried even though `_copies_out` itself does not read them,
     because this is the SAME shape `_committed_keys` (`cli/resolve._committed_keys`) and
-    `_unsent_ledger`'s orphan scan (`server/pipeline_routes.py:2364-2374`) would need if
+    `_unsent_ledger`'s orphan scan (`server/pipeline_routes._unsent_ledger`) would need if
     either is ever rewritten onto this helper — see this item's "Allowlist entries removed"
     section for whether that happens in this PR or a later one. Carrying two extra columns
     the current caller does not read costs nothing extra: `select()` reads them off the
@@ -265,12 +265,12 @@ def _cards_by_sku(inventory: master.Inventory) -> Dict[str, List[_SkuCardRow]]:
     `Rows.select()`. `_copies_out` used to call `positions_for_sku`/`copies_not_sold`/
     `sales_before` — each a `Rows.where(sku=sku)` — 2 to 3 times per listing; measured at
     0.9s over 492 listings (D156). The SQL half of each call was
-    already an indexed lookup (`cards_sku`, `store/db.py:135`) and always has been — the
-    cost is `Rows.where`'s own closing filter (`store/rows.py:213-229`), which re-scans the
+    already an indexed lookup (`cards_sku`, `store/db._INDEXES`) and always has been — the
+    cost is `Rows.where`'s own closing filter (`store/rows.Rows`), which re-scans the
     ENTIRE `_loaded` cache on every call regardless of whether the SQL half found the row via
     the index, and `_loaded` grows with every SKU this loop has already visited. One
     `select()` with no filter touches the underlying table exactly once and — unlike
-    `where()` — never writes into `_loaded` at all (`store/rows.py:231-250` builds no `Card`
+    `where()` — never writes into `_loaded` at all (`store/rows.Rows` builds no `Card`
     objects), so its own cost is a single SQL scan plus one Python pass over the result,
     O(cards), done once rather than once per listing.
 
@@ -348,7 +348,7 @@ set(live_by_sku) | set(inventory.listings):` loop's first eleven lines (through 
 0 and claim <= 0: continue`) changes at all — this is the SAME code, character for
 character, as the original lines 527-574; only the `sold = ...` computation and everything
 after it is rewritten. Do not touch `Listing.live_reading`, `.sales_pending`, `.held`, or
-`.reading_taken_at` (`store/master.py:939-1062`) — none of them read `inventory.cards` and
+`.reading_taken_at` (`store/master.Listing`) — none of them read `inventory.cards` and
 none of them are part of this cost.
 
 ### 3. Confirm the docstring's own claims still hold, word for word
@@ -367,19 +367,19 @@ instead, or leave it if it is describing the RULE rather than the CALL (most of 
 Grepped: `grep -rn "_copies_out" --include='*.py' .` across the whole tree. Every
 non-comment, non-docstring hit:
 
-1. `cli/resolve.py:1916` — `copies_out, live_now = _copies_out(snapshot.inventory,
+1. `cli/resolve._resolve` — `copies_out, live_now = _copies_out(snapshot.inventory,
    _live_by_sku(parsed, {...}))`, inside `_resolve` (the shared tail of `load`/
    `load_from_store`, cli/resolve.load_from_store). Called ONCE per `join`/`emit` invocation —
-   confirmed by `cli/cmd_join.py:347` and `cli/cmd_join.py:363` (`resolve.load(...)` /
-   `resolve.load_from_store(...)`, one call each) and `cli/cmd_emit.py:466` (`resolve.load(
+   confirmed by `cli/cmd_join.run` and `cli/cmd_join.run` (`resolve.load(...)` /
+   `resolve.load_from_store(...)`, one call each) and `cli/cmd_emit.run` (`resolve.load(
    ...)`, one call). Signature and return type unchanged by this item; no edit needed here.
-2. `server/pipeline_routes.py:2405` — `held_out, live_out = run_resolve._copies_out(
+2. `server/pipeline_routes._unsent_ledger` — `held_out, live_out = run_resolve._copies_out(
    inventory, readings)`, inside `_unsent_ledger` (`server/pipeline_routes._unsent_ledger`).
    Called ONCE per `_unsent_ledger` invocation, which is itself called ONCE per
-   `do_pipeline_worklist` request (`server/pipeline_routes.py:2642`, the only call site of
+   `do_pipeline_worklist` request (`server/pipeline_routes.do_pipeline_worklist`, the only call site of
    `_unsent_ledger` in the tree). No edit needed here either, UNLESS you take the optional
    `_unsent_ledger` refactor described below.
-3. `harness/tests/t7_store_and_seams.py:16655` — `copies_out, _ = resolve._copies_out(
+3. `harness/tests/t7_store_and_seams.check_committed_copies_are_the_oldest` — `copies_out, _ = resolve._copies_out(
    inventory, {})`, a direct test call inside `check_committed_copies_are_the_oldest`
    (starts line 16547). Not a production caller; must keep passing (see "Tests").
 
@@ -528,7 +528,7 @@ State the one mutation this repo's convention calls for (per `make reap-selftest
 `make silent-write-selftest`): **revert the `sold` computation's `read > 0` branch to count
 `row.state == master.SOLD` OR `row.state in master.TERMINAL_STATES`** (i.e., accidentally
 also counting `retired`/`moved` cards as "sold" — the exact wrong generalization
-`copies_not_sold`'s own docstring warns against at `store/master.py:2395-2399`: "A RETIREMENT
+`copies_not_sold`'s own docstring warns against at `store/master.Inventory`: "A RETIREMENT
 is the other door... counting it as gone would free a slot under the cap that is not free").
 Test A's SKU-A/SKU-B fixtures would need a retired card added to go red on this specific
 mutation (neither current fixture has one) — add a third SKU, SKU-D, with one sold and one
@@ -636,8 +636,8 @@ pointing at this section so a future reader does not re-derive the same analysis
 ## Do not touch
 
 - `Inventory.positions_for_sku`, `Inventory.copies_not_sold`, `Inventory.sales_before`
-  (`store/master.py:2366-2447`) — their bodies are unchanged; they still have other callers
-  (`pipeline/orders.py:454`, `server/capture_server.py:7986` for `positions_for_sku`; T7
+  (`store/master.Inventory`) — their bodies are unchanged; they still have other callers
+  (`pipeline/orders._Draw`, `server/capture_server.do_search` for `positions_for_sku`; T7
   cases at lines 1116, 12652, 14984, 15038, 17312 for `positions_for_sku`; T3 line 215) that
   must keep getting the exact same answers, computed the exact same way, for a single
   point lookup. This item only stops `_copies_out` from calling them in a per-listing loop.

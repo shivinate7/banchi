@@ -33,7 +33,7 @@ materialises the whole `cards` table — `Inventory.to_payload()`, a `.values()`
 Capture is exempt because `allocate_capture` reads one box through the indexed `box`
 column (`store/master.py:records_in`), measured flat at 3.9 ms at every store size. **Two
 mechanisms compound it, and the first was mis-anchored until 2026-09-12's review read the
-file.** `store/rows.py:226-228` and `:247-250` — every `where()` and `select()` ends with a
+file.** `store/rows.Rows` (two places) — every `where()` and `select()` ends with a
 Python pass over EVERYTHING THE SESSION HAS LOADED SO FAR, whether or not a full load
 happened (the SQL half at `:220-225` is skipped only once `_complete` is set; the Python
 half never is). So a scoped call is cheap only while little is loaded: after
@@ -55,7 +55,7 @@ and `events` duplicated under new keys.
 | `Inventory.to_payload()` — `GET /inventory` | 78 ms | 1,485 ms | 19.0x | Home, Inventory, Fulfillment, Orders, on load; Inventory again after **every** sale, retire, move and reshoot |
 | `do_orders()` — `GET /orders` | 185 ms | 3,465 ms | 18.7x | Orders and Shipping on load |
 | `Store.history()` | 16.5 ms | 345 ms | 20.9x | **every** mark-sold press (`_sale_origin`, `server/capture_server._sale_origin`), every queue-answer undo, stand-down undo and retirement reversal — **FIXED, see D191: `Store.history_at(key)` scopes the read to the key's own box via the existing `events_position` index. Re-measured on this session's own copy of the owner's store: base 13.68 ms / 20x 309.50 ms for the unscoped read (this store's own numbers, close to the figures above); the new `events_at('3/1')` reads 3.77 ms on the base copy and 3.74 ms on a 20x-larger store where box 3's own size is held fixed (new cards added as new boxes, not by inflating existing ones) — flat, as the fix claims. On the plan's own duplication recipe (every existing box, including box 3, ALSO inflated 20x, which is what "duplicate every row" does when positions aren't remapped), `events_at('3/1')` reads 96.9 ms against `history()`'s 309.5 ms at the same store size — worse than "flat" because that recipe confounds store size with box size, but still ~3.2x faster than the unscoped read it replaces.** |
-| `_copies_out` (before item 4) | 1,617 ms / 753 listings, 2,535 cards | 32,478 ms / 753 listings, 50,700 cards | 20.1x | `GET /pipeline/pricing`'s default landing (`pipeline_routes.py:2405`), `cli/resolve.py:1916` |
+| `_copies_out` (before item 4) | 1,617 ms / 753 listings, 2,535 cards | 32,478 ms / 753 listings, 50,700 cards | 20.1x | `GET /pipeline/pricing`'s default landing (`pipeline_routes.py:2405`), `cli/resolve.load_from_store` |
 | `_copies_out` (after item 4 — one `select()` via `_cards_by_sku`) | 6.6 ms | 189 ms | 28.6x | same call sites — 245x and 172x faster than the row above, at 1x and 20x respectively |
 
 **`GET /orders` was a named contradiction and it is resolved: the route's comment is stale
@@ -67,7 +67,7 @@ the same: the store has five boxes, every order's picks span most of them, and a
 read of a store that is five boxes is a fifth of a full read, five times.
 
 **`history()` was flagged by one investigation of four and unquantified. It is on the
-hottest write path in the product.** `store/db.py:1208` is `SELECT id, payload FROM events
+hottest write path in the product.** `store/db.flush_rows` is `SELECT id, payload FROM events
 ORDER BY id` with a `json.loads` per row, unconditionally, and `_sell` calls it before the
 `if undo:` branch — so a Fulfiller marking cards sold hundreds of times a day pays a
 full-table read of an events table that grows with every write ever made, on every press.
@@ -84,7 +84,7 @@ made for granted"* — and these are the corrections, kept here so the next sess
 re-derive the original list from the investigation's own journal.
 
 - **"Stop BoxBrowse's refetch" has no narrower route to switch to.** `GET /boxes/<n>` is
-  deliberately refused at `server/capture_server.py:10687` — *"a per-box read would be a
+  deliberately refused at `server/capture_server.CaptureHandler` — *"a per-box read would be a
   second renderer for one caller that does not exist yet"*. The caller exists. So the
   item is the per-box read itself, and it merges with the systemic fix rather than
   preceding it. The write responses already carry the updated `CardSummary`
@@ -109,7 +109,7 @@ re-derive the original list from the investigation's own journal.
 - **There is no `docs/DEBTS.md` entry about `_copies_out`'s cost, and the investigation's
   "documented in-repo" figure came from a session's memory note.** DEBTS §24 mentions the
   function about a stuck claim's arithmetic, never its speed. The note asked for a `sku`
-  index; `cards_sku` exists (`store/db.py:136`, the `_INDEXES` tuple) and `where(sku=…)`
+  index; `cards_sku` exists (`store/db._INDEXES`, the `_INDEXES` tuple) and `where(sku=…)`
   uses it. What defeats it is the Python pass at `rows.py:226-228`, which every per-SKU
   `where` pays over the cache the previous ones filled. The fix is one pass, not an index.
 - **The investigation's `rows.py:177` anchor was wrong**, and two of the three reviews
@@ -148,7 +148,7 @@ box alone. **`GET /inventory` itself is kept, unused, on the allowlist** — the
 asked whether an unused route was harmless and chose to keep it rather than delete it; it
 is named there as "kept on the owner's word, no caller". `#/inventory` loads the box it is standing on and re-reads that box — not the
 store — after a sale, retire, move or reshoot; the `reloads` counter
-(`app/src/BoxBrowse.tsx:663`) is scoped to it. Home takes `Inventory.counts()` and the
+(`app/src/BoxBrowse.BoxBrowse`) is scoped to it. Home takes `Inventory.counts()` and the
 per-stage figures it already reads; Fulfillment reads the boxes the order names; Orders
 moves under item 6. **And `rows.py`'s post-load pass is bounded**: `where()`/`select()`
 consult only the loaded objects that could have CHANGED since they were read — a
@@ -160,7 +160,7 @@ issues no `GET /inventory`. Ordered second on the owner's word: it fixes the mos
 and the two half-day items behind it are not made worse by waiting three days.
 
 **3. `history()` scoped to the box. ½ day, no migration.** `events.position` is already an
-indexed column (`store/db.py:139`) holding `"{box}/{index}"`, so the scoped read is a
+indexed column (`store/db._INTEGER`) holding `"{box}/{index}"`, so the scoped read is a
 `GLOB '<box>/*'` range on the existing index. **The scope is the BOX and never the exact
 key**: a mid-box delete writes its `renumbered` event under the DELETED card's position
 (`capture_server.py:4196`), and every reversal reader relies on seeing it — a key-scoped
@@ -170,7 +170,7 @@ the non-undo path. Proof: the 20x copy's mark-sold press costs what today's does
 
 **4. `_copies_out` and `_committed_keys` as one pass each. 1 day.** One `select` over
 `(sku, state, box, index, captured_at)` into a dict keyed by SKU, then the arithmetic per
-listing — O(cards + listings). `cli/resolve.py:487` and its per-SKU helpers
+listing — O(cards + listings). `cli/resolve._copies_out` and its per-SKU helpers
 (`positions_for_sku`, `copies_not_sold`, `sales_before`), and `_committed_keys` (`:676`),
 whose `copies_on_hand(sku)` per listing is the same shape and the same PR — leaving it
 would be the plan's own defect one function down. Its two callers (`resolve.py:1916`,
@@ -181,7 +181,7 @@ store copy before and after, and the 20x ratio.
 
 **5. The `readings` writer. 1 day.** #333 merged as D189 while this plan was written;
 this reopens its manual press (§5). `collect()` reads exactly two inputs — a run's
-`pricing.json` (written at `cli/cmd_join.py:685`) and the newest `inventory/.live/*.csv`
+`pricing.json` (written at `cli/cmd_join.run`) and the newest `inventory/.live/*.csv`
 (`pipeline_routes.py:3550`) — so those are the two wiring sites; `reconcile --live` writes
 neither and there is no run-deletion path, so neither is a site. The refresh is per source
 (`Readings.replace_source`), never a full re-collect, so a join does not re-parse a live
@@ -292,8 +292,8 @@ Taken 2026-09-12. Per-press means a write handler; per-load means a screen openi
 | `server/pipeline_routes._unsent_ledger` `_unsent_ledger` | `distinct("sku")` | per-load | item 4 |
 | `server/pipeline_routes._on_hand_by_run` `_on_hand_by_run` | `select(("run","state"))` | per-load | item 7 |
 | `server/pipeline_routes.do_pipeline_value` `do_pipeline_value` | `.values()` | per-load | item 7 |
-| `store/master.py:1447` `to_payload` | `.items()` | called by `do_inventory` alone | stays with `do_inventory` |
-| `store/master.py:2378` `counts` | `select(("state",))` | `do_status`, polled | stays — one column; the guard names it |
+| `store/master.Inventory` `to_payload` | `.items()` | called by `do_inventory` alone | stays with `do_inventory` |
+| `store/master.Inventory` `counts` | `select(("state",))` | `do_status`, polled | stays — one column; the guard names it |
 | `cli/resolve.box_views` `box_views` | `.values()` | `GET /pipeline/pricing` | item 7 |
 
 `do_graveyard` (`:5208`), `_box_row` (`:8243`) and `do_put_box` (`:8547`) are scoped today
@@ -305,7 +305,7 @@ The owner's standing instruction, 2026-09-12: think from outcomes, and flag a ru
 premise has gone rather than defer to it. These three are flagged, argued, and taken on
 their word.
 
-**The refusal of `GET /boxes/<n>`** (`server/capture_server.py:10687`). Its sentence is
+**The refusal of `GET /boxes/<n>`** (`server/capture_server.CaptureHandler`). Its sentence is
 *"a second renderer for one caller that does not exist yet."* The caller is every load of
 `#/inventory` and every press on it, and the outcome the refusal protected — one renderer
 for a card row — is kept by having the per-box route return the same shape as the

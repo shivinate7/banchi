@@ -924,7 +924,7 @@ measured now rather than carried from a planning session.
 **The browser extension `tcgtracking-bridge-v2.4.2` is READ MATERIAL AND NOT A COMPONENT, AND IT
 IS NOT IN THIS REPOSITORY.** It was supplied by the owner and read during T3's design; it has
 never been committed, is in no worktree, and is not on disk beside this checkout — so the bare
-path `tcgtracking-bridge-v2.4.2/` written here and at `server/order_transport.py:50` names
+path `tcgtracking-bridge-v2.4.2/` written here and at `server/order_transport.py` names
 nothing a reader can open, and is kept only to say what was corroborated against what. `make
 check` never sees it, `docs/map.py` does not map it, the git hooks do not guard it, and nothing
 in this repo calls it or depends on it.
