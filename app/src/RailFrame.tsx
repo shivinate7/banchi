@@ -15,13 +15,18 @@ import { useCallback, useLayoutEffect, useState, type ReactNode, type Ref } from
 
 export type RailFrameProps = {
   readonly ref?: Ref<HTMLDivElement>
-  /** Defaults to `browse-map`, `#/inventory`'s own class in `BoxBrowse.css`. A future caller
-   *  (`#/orders`'s buyer list) may pass its own, over the same sticky/fit-to-window rule. */
+  /** Defaults to `browse-map`, `#/inventory`'s own class in `BoxBrowse.css`. `#/orders`'s buyer
+   *  list (lane A5) passes its own, over the same sticky/fit-to-window rule. */
   readonly className?: string
+  /** `BoxBrowse.tsx` names its rail no other way today. `#/orders`'s buyer rail is a real
+   *  landmark (`role="navigation" aria-label="Buyers"`), so these two are a passthrough, not a
+   *  new rule — every existing caller that omits them is unchanged. */
+  readonly role?: string
+  readonly 'aria-label'?: string
   readonly children: ReactNode
 }
 
-export function RailFrame({ ref, className = 'browse-map', children }: RailFrameProps) {
+export function RailFrame({ ref, className = 'browse-map', children, ...rest }: RailFrameProps) {
   /* The same node as state, so this effect runs when the frame mounts (it is not drawn on the
    * first render) — moved comment, `BoxBrowse.tsx`'s own reason, unchanged. */
   const [node, setNode] = useState<HTMLDivElement | null>(null)
@@ -49,7 +54,7 @@ export function RailFrame({ ref, className = 'browse-map', children }: RailFrame
   }, [node])
 
   return (
-    <div className={className} ref={setRef}>
+    <div className={className} ref={setRef} {...rest}>
       {children}
     </div>
   )

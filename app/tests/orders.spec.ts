@@ -1137,9 +1137,19 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
   })
 
   /* AT 390, THE LIST AND THE CARD PANE ARE TWO STOPS, not one screen: `.orders-walk-press`
-     opens the row a phone shows one at a time. Desktop draws both, which is why the older
-     case here never had to do this. */
+     opens the row in a sheet (Q4, `docs/decisions/D-orders-walk-rejoins-inventory.md`) — a
+     phone never draws the pane inline. Desktop draws both at once, which is why the older
+     case here never had to do this. THE SHEET MOUNTS ON THE NEXT TICK (`useLeave`'s own
+     `useEffect`, kit/index.tsx), so `.browse-card` is awaited rather than read the instant
+     the click's promise resolves — reading it too early once measured an empty pane (zero
+     rects) as this press's own "before". */
   await page.getByRole('button', { name: /Volcanion/ }).click()
+  await expect(page.locator('.browse-card')).toBeVisible()
+  /* THE SHEET'S OWN ROWS ENTER WITH `bn-stagger` (`kit.css`'s `bn-page-in`), the same entrance
+     `motionSettled.ts` exists for — freshly mounted here, where the pane used to sit still on
+     the page from the very first render. `before` read mid-animation once moved every row up
+     ~5px against a `before` that settled by the time `after` was read a whole click later. */
+  await settleMotion(page)
 
   /* THE PRESSED BUTTON'S OWN SUBTREE IS EXEMPT (its icon and label are meant to change, from
      `Mark sold` to `Undo` — D118 is about the REST of the page, never the control itself).
@@ -1153,32 +1163,32 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
      load (D263's own rule, ported from Inventory's box walk) — the document never gets
      shorter, so there is nothing left for a browser's scroll clamp to react to, and nothing
      left for this pin to hide. */
-  /* DOCUMENT-ABSOLUTE, NOT VIEWPORT-RELATIVE (A4's own finding): `getBoundingClientRect().top`
-     alone reads as a shift when nothing on the PAGE moved at all — a click on a control this
-     far down a much taller walk (A4's own copy rows) makes Chromium's own actionability check
-     scroll the target toward the middle of the viewport before it dispatches the synthetic
-     click, the same way it would for a real `scrollIntoViewIfNeeded`. That scroll is real, and
-     it is never a D118 violation: nothing on the page reflowed, only the WINDOW's own scroll
-     position changed, which `+ window.scrollY` folds back out so the comparison reads the
-     page's own layout again, the way the pane looked before this lane made the walk list this
-     much taller. Measured: `.orders-cardcol` and `.orders-walk`'s own top/bottom are bit-for-bit
-     identical before and after this press; only `window.scrollY` (1021 -> 605) ever moved. */
+  /* PANE-RELATIVE, NOT PAGE-ABSOLUTE (lane A5: the pane moved off the page, into a sheet). The
+     old compensation folded out `window.scrollY` alone, on the premise that `.browse-card` sat
+     inline on the page and only the WINDOW's own scroll position ever moved under it (A4's own
+     finding: a click far down the walk list makes Chromium scroll the target toward the middle
+     of the viewport before dispatching the synthetic click). A `Sheet` is fixed to the viewport
+     and scrolls ITS OWN content instead, so `window.scrollY` no longer answers for the pane's
+     own coordinate space at all — every rect read a ~300px jump on the very same press this
+     comment used to wave through. Subtracting `.browse-card`'s OWN top/left, rather than adding
+     back a page scroll, answers the real question either way: does anything move RELATIVE TO
+     THE PANE ITSELF (D118), regardless of whether the pane's ancestor is the page or a sheet. */
   const rectsOf = () =>
     page.locator('.browse-card').evaluate((el) => {
+      const base = el.getBoundingClientRect()
       const controls = [...el.querySelectorAll('.card-locations-action')]
       return [...el.querySelectorAll('*')]
         .filter((node) => !controls.some((control) => control === node || control.contains(node)))
         .map((node) => node.getBoundingClientRect())
-        /* A ZERO-AREA NODE PAINTS NOTHING, so `+ window.scrollY` above would read it as having
-           moved when the only thing that changed is the window's own scroll position it never
-           tracked in the first place (found alongside the scroll fix above: one such node
-           reads a bare `0:0` in viewport terms, on purpose, at both polls). */
+        /* A ZERO-AREA NODE PAINTS NOTHING, so comparing it against the pane's own origin would
+           read it as having moved when nothing did (found alongside the scroll fix above: one
+           such node reads a bare `0:0` on purpose, at both polls). */
         .filter((r) => r.width > 0 || r.height > 0)
         /* ROUNDED, the convention this suite already reads rects by (`brand.spec.ts`,
            `gallery.spec.ts`, `filters.spec.ts`) — one icon glyph on the pane settles a
            hairline (~0.00001px) off its first paint, floating-point noise from the browser's
            own sub-pixel layout, never a real D118 shift. */
-        .map((r) => `${Math.round(r.top + window.scrollY)}:${Math.round(r.left)}:${Math.round(r.width)}:${Math.round(r.height)}`)
+        .map((r) => `${Math.round(r.top - base.top)}:${Math.round(r.left - base.left)}:${Math.round(r.width)}:${Math.round(r.height)}`)
     })
   const before = await rectsOf()
   /* THE WALK LIST'S OWN JUMP (the plan's own repro: "the page shrinks and the view jumps
@@ -1330,14 +1340,26 @@ test('finding #16 (the Opus review round) — the struck-out row in the walk lis
   await expect(walkLine).not.toHaveClass(/is-done/)
   await expect(walkLine.getByRole('button', { name: /^Undo/ })).toHaveCount(0)
 
+  /* Q4: on a phone the card is a sheet, opened by a tap on the row — never drawn inline. */
+  await page.getByRole('button', { name: /Volcanion/ }).click()
+  await expect(page.locator('.browse-card')).toBeVisible()
   await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
   await expect(walkLine).toHaveClass(/is-done/)
+
+  /* THE SHEET'S OWN SCRIM SITS OVER THE LIST WHILE IT IS OPEN (the kit's one overlay contract,
+   * `kit/overlay.tsx`) — closing it first is what proves the finding: the list's row answers
+   * for itself, with no pane open over it at all, not merely a second Undo drawn inside one. */
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.orders-card-sheet')).toBeHidden()
 
   const undo = walkLine.getByRole('button', { name: /^Undo/ })
   await expect(undo).toBeVisible()
   await undo.click()
 
   await expect(walkLine).not.toHaveClass(/is-done/)
+
+  /* THE PANE AGREES, reopened the same way (Q4): still the same one row, not a second story. */
+  await page.getByRole('button', { name: /Volcanion/ }).click()
   await expect(page.locator('.browse-card').getByRole('button', { name: 'Mark sold' })).toBeVisible()
 })
 
@@ -2471,21 +2493,34 @@ test('the buyer list is not a scroll box of its own, and no hint sits on its row
   await expect(page.locator(VIEW)).not.toContainText('step through buyers')
 })
 
-/* THE LIST AND THE WALK ARE ON THE PAGE AT 1440, 820 AND 720 (UX-169, UX-194). 720 is the owner's
- * half-width Chrome, which gets the desktop rail (Q2), so it gets the desktop layout too. */
+/* THE LIST AND THE WALK ARE ON THE PAGE AT 1440, 820 AND 720 (UX-169, UX-194) — LAYOUT R
+ * (`docs/decisions/D-orders-walk-rejoins-inventory.md`, Q1). 1440 is the three-column desk
+ * (buyers | walk | card). 820 and 720 sit inside Orders' own 560-999 mid range (the app shell's
+ * own rail collapses to 64px there, D289 rule 3's "720 is a desk" is about a DIFFERENT
+ * breakpoint, `#/inventory`'s own 640, and never widens Orders' 1000px one) — Inventory's own
+ * two-column skeleton: the buyer rail sits above the walk, in the same column, and the card
+ * pane sits beside that column, sticky. */
 for (const [width, height] of [
   [1440, 900],
   [820, 1180],
   [720, 900],
 ] as const) {
-  test(`at ${width}, the buyer list sits beside the walk`, async ({ page }) => {
+  const desk = width >= 1000
+  test(`at ${width}, the buyer list sits ${desk ? 'beside the walk' : 'above the walk, beside the card'}`, async ({ page }) => {
     await page.setViewportSize({ width, height })
     await open(page, { orders: threeBuyerPayload() })
     const buyers = await page.locator('.orders-buyers').boundingBox()
     const walk = await page.locator('.orders-walk').boundingBox()
-    if (buyers === null || walk === null) throw new Error('the buyer list or the walk did not lay out')
-    expect(walk.x, 'the walk does not sit to the right of the buyer list').toBeGreaterThan(buyers.x + buyers.width - 1)
-    expect(walk.width, 'the walk is squeezed').toBeGreaterThan(300)
+    const card = await page.locator('.orders-cardcol').boundingBox()
+    if (buyers === null || walk === null || card === null) throw new Error('the buyer list, the walk or the card did not lay out')
+    if (desk) {
+      expect(walk.x, 'the walk does not sit to the right of the buyer list').toBeGreaterThan(buyers.x + buyers.width - 1)
+      expect(walk.width, 'the walk is squeezed').toBeGreaterThan(300)
+    } else {
+      expect(walk.x, 'the walk stays in the buyer rail column, not beside it').toBeLessThan(buyers.x + buyers.width)
+      expect(walk.y, 'the walk sits under the buyer rail').toBeGreaterThan(buyers.y + buyers.height - 1)
+      expect(card.x, 'the card sits beside the rail column').toBeGreaterThan(buyers.x + buyers.width - 1)
+    }
     await expect(page.locator('.orders-buyerchip')).toBeHidden()
   })
 }

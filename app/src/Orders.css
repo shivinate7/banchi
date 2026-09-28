@@ -8,27 +8,34 @@
 /* Add orders and Cards to pull: two small squares on the filter bar's line. */
 .orders-store-controls { display: inline-flex; align-items: center; gap: var(--bn-2); }
 
-/* ---- the layout: buyers, the walk, the card (UX-169, UX-194, D274)
-   THE WALK GETS THE HEIGHT. There is one scroll, the page's (UX-201): no column scrolls on its
-   own. The card pane is sticky beside the walk on a wide column, so Mark sold stays in reach
-   while the walk scrolls under it.
+/* ---- the layout: buyers, the walk, the card — LAYOUT R (UX-169, UX-194, D274, amended by
+   `docs/decisions/D-orders-walk-rejoins-inventory.md`, lane A5).
+   THE WALK GETS THE HEIGHT: its column carries the page's own scroll (UX-201). The buyer rail is
+   the one thing that scrolls on its own (Q2, amending D274's HOR-33) — `RailFrame`, the same
+   sticky, fit-to-window frame `#/inventory`'s box list uses (D289 rule 2). The card pane is
+   sticky beside the walk wherever both share a column.
 
    THREE SHAPES, CHOSEN BY THE COLUMN (a container query, D123), never by the window:
-   - wide (1000px and up): buyers | walk | card.
-   - mid (560 to 999px, which holds 720 beside the desktop rail and 820): buyers | the card
-     over the walk.
-   - narrow (under 560px, a phone): one line that says who, how many and what is next, which
-     opens the buyer list as a sheet; then the card; then the walk. */
+   - wide (1000px and up): buyers (its own rail) | walk (page scroll) | card (sticky) — Q1.
+   - mid (560 to 999px, which holds 720 beside the desktop rail and 820): Inventory's own two-
+     column skeleton. The left column holds the buyer rail (capped short, D289's own "three and
+     a half rows") over the walk, which takes the rest of the column's height. The card pane
+     sits beside it, sticky.
+   - narrow (under 560px, a phone): the buyer chip, then the walk. THE CARD IS NEVER DRAWN
+     INLINE HERE — a tap on a walk row opens it in a sheet instead (Q4). `Orders.tsx` decides
+     the sheet-vs-inline choice in JS (a portal cannot be placed by a container query); this file
+     only ever hides `.orders-cardcol`'s own grid area at this width, in case anything is ever
+     rendered into it here by mistake. */
 .orders-body { container-type: inline-size; container-name: orders; min-width: 0; }
 .orders-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: 'chip' 'card' 'walk';
+  grid-template-areas: 'chip' 'walk';
   gap: var(--bn-4);
   align-items: start;
 }
 .orders-buyers { grid-area: buyers; display: none; min-width: 0; }
-.orders-cardcol { grid-area: card; min-width: 0; }
+.orders-cardcol { grid-area: card; display: none; min-width: 0; }
 .orders-walk { grid-area: walk; min-width: 0; }
 
 /* The skip link (interaction review, "32 tab stops"): off screen until a Tab lands on it, then
@@ -76,11 +83,29 @@
 @container orders (min-width: 560px) {
   .orders-layout {
     grid-template-columns: 220px minmax(0, 1fr);
-    grid-template-areas: 'buyers card' 'buyers walk';
+    grid-template-areas: 'buyers card' 'walk card';
     grid-template-rows: auto 1fr;
   }
-  .orders-buyers { display: block; }
+  /* THE RAIL, Q2: sticky, fit to the window, its own scroll — `RailFrame`'s own rule
+     (`--browse-rail-rest`, D289 rule 2), never the class it defaults to (`#/inventory`'s
+     `.browse-map` stays untouched). */
+  .orders-buyers {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bn-3);
+    position: sticky;
+    top: var(--bn-4);
+    max-height: calc(100dvh - var(--browse-rail-rest, var(--bn-4)) - var(--bn-4));
+    overflow-y: auto;
+  }
   .orders-buyerchip { display: none; }
+  .orders-cardcol { display: block; }
+}
+@container orders (min-width: 560px) and (max-width: 999px) {
+  /* MID: Inventory's own skeleton, two columns. The rail's main part is the walk (D289 rule 1),
+     so the buyer list above it is capped to the same "three and a half rows" `#/inventory`'s own
+     box list uses (`BoxBrowse.css:.browse-boxes`), scrolling on its own within that short box. */
+  .orders-buyers { max-height: 164px; }
 }
 @container orders (min-width: 1000px) {
   .orders-layout {
@@ -117,10 +142,12 @@
    needs.
 
    THE CARD PANE'S OWN NARROW SHAPE IS LANE A5'S — `docs/decisions/D-orders-walk-rejoins-inventory.md`,
-   Q4: the walk with the card in a sheet on a phone — the thin-row collapse this used to do
-   (`.orders-card-thin`) went with `WalkCardPane`, which drew it. `.browse-card` is
-   `Inventory.tsx`'s own pane now, and it draws itself in full here until A5 gives it a phone
-   shape of its own. */
+   Q4: the walk with the card in a sheet on a phone. Under 560px of column `Orders.tsx` never
+   mounts `.orders-cardcol` at all (a JS width read, `narrow` — a portal cannot be placed by a
+   container query), so this block's own `'card' 'walk'` areas below draw nothing into `card`
+   at that width; a tap on a walk row opens the pane in a sheet instead. Between 560 and 999,
+   walking still shows the card here, in full, beside the walk — the same `.browse-card`
+   `Inventory.tsx` draws everywhere else. */
 .orders-walkline { display: none; }
 .orders-hub.is-walking .bn-verdict { display: none; }
 @container bn-page (max-width: 999px) {

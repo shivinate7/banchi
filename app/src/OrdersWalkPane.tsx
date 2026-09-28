@@ -639,6 +639,7 @@ export function WalkList({
   owedBySku,
   showBuyers,
   sections,
+  onPick,
 }: {
   readonly walk: OrderWalk
   readonly hideSold: boolean
@@ -650,6 +651,10 @@ export function WalkList({
    *  turns into a map for the pane's own `CardLocations` — never a second read for the walk
    *  list's copies. Optional; the strip is honest without it (`PositionBar`'s own contract). */
   readonly sections?: ReadonlyMap<number, readonly SectionDetail[]>
+  /** LANE A5, Q4: on a phone, a tap opens the card in a sheet. `Orders.tsx` passes this only
+   *  while its own column reads narrow — `WalkList` never reads a width itself. Undefined at a
+   *  desk width, where the pane sits beside the walk already and needs no sheet to open. */
+  readonly onPick?: () => void
 }) {
   /* THE OWNER'S RULING, 2026-09-27: THE PRESS FOLDS, NOT THE SALE. Turning Hide picked ON is
    * itself allowed to fold every row picked SO FAR, right then — D118 permits this, because
@@ -719,7 +724,11 @@ export function WalkList({
                         className="orders-walk-press"
                         type="button"
                         aria-current={current ? 'true' : undefined}
-                        onClick={() => next !== undefined && walk.select(next.rowKey)}
+                        onClick={() => {
+                          if (next === undefined) return
+                          walk.select(next.rowKey)
+                          onPick?.()
+                        }}
                       >
                         <span className="orders-walk-slot">
                           {slots.length === 0 ? '—' : slots.map((slot) => `#${slot}`).join(', ')}

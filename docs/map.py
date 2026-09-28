@@ -8135,7 +8135,7 @@ COMPONENTS = [
                                "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69",
                                                "D113", "D114", "D117", "D118", "D123", "D193",
                                                "D195", "D196", "D203", "D212", "D221", "D270",
-                                               "D274", "D-orders-walk-rejoins-inventory"]},
+                                               "D274", "D289", "D-orders-walk-rejoins-inventory"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -9406,7 +9406,8 @@ COMPONENTS = [
                                                      "D114", "D118", "D123", "D132", "D171", "D181",
                                                      "D193", "D194", "D196", "D203", "D209", "D212",
                                                      "D218", "D220", "D221", "D263", "D274", "D285",
-                                                     "D296", "D-orders-walk-rejoins-inventory"]},
+                                                     "D289", "D296",
+                                                     "D-orders-walk-rejoins-inventory"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "
