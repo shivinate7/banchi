@@ -11900,13 +11900,13 @@ def _user_strings_toolchain_missing() -> bool:
     return shutil.which("node") is None or not APP_TS_COMPILER.exists()
 
 
-def _add_toolchain_row(report, check: str, peers: str) -> None:
+def _add_toolchain_row(rows: Report, check: str, peers: str) -> None:
     """The `_run_user_strings` None branch: ADVISORY when absent, MECHANICAL when it broke."""
     if _user_strings_toolchain_missing():
-        report.add(check, ADVISORY, [Finding(rel(USER_STRINGS_SCRIPT), UNKNOWN_NO_TOOLCHAIN)],
+        rows.add(check, ADVISORY, [Finding(rel(USER_STRINGS_SCRIPT), UNKNOWN_NO_TOOLCHAIN)],
                    "toolchain unavailable, so nothing was read", scanned=0)
         return
-    report.add(
+    rows.add(
         check, MECHANICAL,
         [Finding(rel(USER_STRINGS_SCRIPT),
                  "could not run — `node` and `app/node_modules/typescript` are present but "
