@@ -4323,10 +4323,13 @@ COMPONENTS = [
                         "and was one 174 KB file until the split; `text()` reassembles it in "
                         "`ORDER.json`'s order and hands every checker the same bytes it used "
                         "to get from `docs/DEBTS.md`. `path_for(n)` accepts the bare number "
-                        "or the `DEBT<n>` id form — a debts finding is not a decision, and "
-                        "D140's claim-at-merge scheme does not govern it. Reads and never "
-                        "writes; stdlib only.",
-                "governed_by": ["D16", "D18", "D120", "D149", "D160"],
+                        "or the `DEBT<n>` id form. A debt now joins D140's claim-at-merge "
+                        "scheme too, reusing the decision machinery: a branch writes "
+                        "`## DEBT-<slug>` in its own file and `scripts/claim-ids.py` "
+                        "allocates the number at merge time. `HEADING_RE` reads either "
+                        "spelling a claimed entry may carry (bare or `DEBT`-prefixed). Reads "
+                        "and never writes; stdlib only.",
+                "governed_by": ["D16", "D18", "D120", "D140", "D149", "D160"],
             },
             "readiness-agreement.py": {
                 "does": "Reconciles app/src/readiness.ts's second implementation of "

@@ -73,7 +73,7 @@ import tokenize
 import keyword
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Dict, FrozenSet, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
+from typing import Callable, Dict, FrozenSet, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -3283,6 +3283,12 @@ def check_gates_structure(report: Report) -> None:
 # reading the heading line as TEXT and asking the pattern afterwards.
 _LOOSE_SLUG_HEADING = re.compile(r"^##\s+([DC]-\S+)")
 _STRICT_SLUG_HEADING = re.compile(r"^##\s+[DC]" + _ID_SLUG + r"\b")
+# DEBT'S OWN PAIR, ONE WORD OVER: `docs/debts/` joined the claim path (D140's scheme, the
+# owner's word), so a pending debt slug carries the identical malformed-heading risk one
+# letter's worth wider — `## DEBT-pad` is one segment and would be silently invisible to
+# `scripts/claim-ids.py` the same way `## D-pad` already is.
+_LOOSE_SLUG_HEADING_DEBT = re.compile(r"^##\s+(DEBT-\S+)")
+_STRICT_SLUG_HEADING_DEBT = re.compile(r"^##\s+DEBT" + _ID_SLUG + r"\b")
 # NOT `\bstep `: a hyphen is a non-word character, so `\b` fires INSIDE `runs-step` and
 # a React className pairing two such words reads as a citation of the second one.
 # Measured on app/src/RunPanel.tsx:165, which is the only such pair in the tree and was
@@ -3334,23 +3340,29 @@ def check_id_claims(report: Report) -> None:
     codes = ROOT / "docs" / "CODES-DECISIONS.md"
 
     unclaimed: List[str] = []
-    for path in decision_files() + [codes]:
-        if not exists(path):
-            continue
-        for number, line in enumerate(read(path).splitlines(), start=1):
-            loose = _LOOSE_SLUG_HEADING.match(line)
-            if not loose:
+    debt_corpus = _debts_corpus()
+    debt_files = debt_corpus.files() if debt_corpus is not None else []
+    for paths, loose_re, strict_re in (
+        (decision_files() + [codes], _LOOSE_SLUG_HEADING, _STRICT_SLUG_HEADING),
+        (debt_files, _LOOSE_SLUG_HEADING_DEBT, _STRICT_SLUG_HEADING_DEBT),
+    ):
+        for path in paths:
+            if not exists(path):
                 continue
-            if not _STRICT_SLUG_HEADING.match(line):
-                findings.append(Finding(
-                    f"{rel(path)}:{number}",
-                    f"`{loose.group(1)}` is not a claimable id, so this heading is not an "
-                    f"entry: no row reports on it, no citation of it resolves, and "
-                    f"`scripts/claim-ids.py` will not allocate it a number. A slug is two or "
-                    f"more lowercase segments, never one — `D-pad` is prose.",
-                ))
-                continue
-            unclaimed.append(loose.group(1))
+            for number, line in enumerate(read(path).splitlines(), start=1):
+                loose = loose_re.match(line)
+                if not loose:
+                    continue
+                if not strict_re.match(line):
+                    findings.append(Finding(
+                        f"{rel(path)}:{number}",
+                        f"`{loose.group(1)}` is not a claimable id, so this heading is not an "
+                        f"entry: no row reports on it, no citation of it resolves, and "
+                        f"`scripts/claim-ids.py` will not allocate it a number. A slug is two or "
+                        f"more lowercase segments, never one — `D-pad` is prose.",
+                    ))
+                    continue
+                unclaimed.append(loose.group(1))
 
     # A STEP IS CITED BY A SLUG THAT SOME `0.` MARKER DECLARES, or it is a dangling id — the
     # same superset rule the letter namespaces get from `decision ids`, which cannot see this
@@ -3375,7 +3387,7 @@ def check_id_claims(report: Report) -> None:
     # runs this on main after every merge, which is the one place and moment it can look.
     if on_main() and unclaimed:
         findings.append(Finding(
-            "docs/decisions/",
+            "docs/decisions/ or docs/debts/",
             "main carries {0} unclaimed id: {1}.\n"
             "  A slug is a branch's placeholder and `make merge` is what turns it into a "
             "number (D140). One on main means a claim half-landed — every "
@@ -3542,6 +3554,62 @@ def check_decision_structure(report: Report) -> None:
                scanned=len(entries))
 
 
+# THE DEBT TWIN OF THE (RETIRED) DECISION-SIDE EXEMPTION, ONE LETTER OVER. `docs/debts/`
+# joined D140's claim path (the owner's word), so a debt's own unclaimed slug
+# (`DEBT-<slug>`) is exempt from "must appear in the index" for the identical reason a
+# decision's used to be, before CLAUDE.md's decision index was retired (D60 amended) —
+# `make map ARGS=--decisions` renders that one now, off the corpus directly, so there is no
+# stub left for a decision-side exemption to guard.
+_ID_UNCLAIMED_DEBT_RE = re.compile(r"^DEBT" + _ID_SLUG + r"$")
+
+
+def _is_unclaimed_debt(ident: str) -> bool:
+    return bool(_ID_UNCLAIMED_DEBT_RE.match(ident))
+
+
+def _decision_index_findings(
+    want: List[Tuple[str, str]], got: List[Tuple[str, str]],
+    is_unclaimed: Callable[[str], bool], doc: str,
+    empty_message: str = "no index found.",
+) -> List[Finding]:
+    """The comparison itself, pure so `--self-test` can drive it without a filesystem.
+
+    `want` is every heading in the corpus, in manifest order; `got` is what `doc`'s fenced
+    index block currently lists. An id absent from `got` is only ever tolerated when
+    `is_unclaimed` says so — everything else that used to fail here still fails exactly the
+    same way.
+
+    ONE CALLER LEFT: `check_debt_index`, with `_is_unclaimed_debt` and `docs/DEBTS.md`. The
+    decision-side twin this was built beside (`check_decision_index`, `_is_unclaimed`) is
+    retired along with CLAUDE.md's decision index (D60 amended) — `make map
+    ARGS=--decisions` renders that list off the corpus now, and a rendered view has nothing
+    to drift, so there is no decision-side row left to reuse this comparison.
+    """
+    findings: List[Finding] = []
+    if not got:
+        findings.append(Finding(doc, empty_message))
+        return findings
+    want_ids = [i for i, _ in want]
+    got_ids = [i for i, _ in got]
+    for ident in [i for i in want_ids if i not in got_ids]:
+        if is_unclaimed(ident):
+            continue
+        findings.append(Finding(doc, f"`{ident}` has a heading but is not in the index."))
+    for ident in [i for i in got_ids if i not in want_ids]:
+        findings.append(Finding(doc, f"the index lists `{ident}`, which has no heading."))
+    titles = dict(want)
+    for ident, title in got:
+        if ident in titles and titles[ident] != title:
+            findings.append(Finding(
+                doc,
+                f"`{ident}`'s index line reads {title!r} and its heading reads "
+                f"{titles[ident]!r}. The heading is the source.",
+            ))
+    if got_ids != [i for i in want_ids if i in got_ids]:
+        findings.append(Finding(doc, "the index is not in heading order."))
+    return findings
+
+
 def check_entry_budget(report: Report) -> None:
     """Entry size, reported and never blocked.
 
@@ -3625,6 +3693,16 @@ def check_debts_headings(report: Report) -> None:
     `docs/DEBTS.md` left as the stub — the same split D160 performed for decisions. This row
     reads the directory rather than the monolith and asserts exactly what it asserted before.
 
+    A DEBT NOW JOINS THE CLAIM PATH TOO (D140's own scheme, the owner's word), so a heading
+    may ALSO be an unclaimed slug (`## DEBT-<slug>`, the entry's own placeholder before
+    `make merge` allocates it a number) or a newly claimed entry's own `## DEBT<n>` — the
+    citation form, since a debt's claimed heading may or may not carry the word (see the
+    block comment above `DEBT_HEADING` in `scripts/claim-ids.py`). Every real entry today
+    still heads itself bare (`## <n>`), and stays addressable exactly as before. The
+    duplicate-number check below only ever compares NUMBERS, so a slug heading is never a
+    candidate collision with one — a filename collision between two branches' slugs is
+    `duplicate_pending`'s question, not this row's.
+
     MECHANICAL on D16's test: a heading either parses or it does not, which is the same
     standard `decision structure` is held to. It says nothing about what a section CONTAINS
     — that is the check §25 measured and declined to build.
@@ -3640,7 +3718,8 @@ def check_debts_headings(report: Report) -> None:
             if not line.startswith("## "):
                 continue
             total += 1
-            good = re.match(r"^## (\d+) — \S", line)
+            good = (re.match(r"^## (?:DEBT)?(\d+) — \S", line)
+                    or re.match(r"^## (DEBT" + _ID_SLUG + r") — \S", line))
             if good is None:
                 findings.append(Finding(
                     f"{rel(path)}:{lineno}",
@@ -3650,7 +3729,10 @@ def check_debts_headings(report: Report) -> None:
                     f"failing.",
                 ))
                 continue
-            number = int(good.group(1))
+            token = good.group(1)
+            if not token.isdigit():
+                continue  # an unclaimed slug — nothing numeric to dedupe against
+            number = int(token)
             if number in seen:
                 findings.append(Finding(
                     f"{rel(path)}:{lineno}",
@@ -3673,11 +3755,13 @@ def check_debt_index(report: Report) -> None:
     believed. Both sides are ids and titles, so this is MECHANICAL — D16's test for what
     may block.
 
-    THERE IS NO CLAIM-AT-MERGE EXEMPTION HERE, unlike `id claims`'s decision-side roster. A
-    debts finding is not a decision (D140 does not govern it); its number is assigned by hand
-    at the time it is written, the way every entry in the original monolith always was. So
-    every id with a heading is required in the index, and every id in the index is required
-    to have a heading — no unclaimed-slug tolerance.
+    A DEBT NOW CARRIES THE IDENTICAL CLAIM-AT-MERGE EXEMPTION A DECISION DOES (D140's own
+    scheme, the owner's word: "they just get assigned numbers upon merge with CI"). A branch
+    adding a finding writes `## DEBT-<slug>` in its own file and cites `DEBT-<slug>`;
+    `scripts/claim-ids.py` allocates the number at merge time and rewrites the heading and
+    every citation, exactly as it already does for a decision — see `_is_unclaimed_debt` and
+    `_decision_index_findings`, which this row now reuses rather than re-implementing its own
+    copy of the comparison.
     """
     if _debts_corpus_empty(report, "debt index"):
         return
@@ -3688,18 +3772,28 @@ def check_debt_index(report: Report) -> None:
         return
 
     corpus = _debts_corpus()
+    # THREE HEADING SHAPES: a real entry's bare `## <n>`, a newly claimed `## DEBT<n>` (its
+    # heading matches its citation, like a decision's — see the block comment above
+    # `DEBT_HEADING` in `scripts/claim-ids.py`), and an unclaimed `## DEBT-<slug>`. The
+    # captured id is always normalized to its WITH-`DEBT`-letter form, matching what the
+    # index itself always spells.
+    heading_re = re.compile(r"^##\s+((?:DEBT)?\d+|DEBT" + _ID_SLUG + r")\s*[—-]\s*(.+)$")
     want: List[Tuple[str, str]] = []
     for path in corpus.files():
-        m = re.match(r"^##\s+(\d+)\s*[—-]\s*(.+)$", read(path).split("\n", 1)[0])
+        m = heading_re.match(read(path).split("\n", 1)[0])
         if m:
-            want.append((f"DEBT{m.group(1)}", m.group(2).strip()))
+            ident = m.group(1)
+            want.append((ident if ident.startswith("DEBT") else f"DEBT{ident}",
+                        m.group(2).strip()))
 
-    # The index is the first fenced block whose lines all start `DEBT<n> `.
+    # The index is the first fenced block whose lines all start `DEBT<id> ` — a number or an
+    # unclaimed slug (D182's own tolerance, one letter over: a pending slug MAY be listed).
+    line_re = re.compile(r"^DEBT(?:\d+|" + _ID_SLUG + r")\s")
     got: List[Tuple[str, str]] = []
     fenced, block = False, []
     for line in read(stub).split("\n"):
         if line.lstrip().startswith("```"):
-            if fenced and block and all(re.match(r"^DEBT\d+\s", b) for b in block if b.strip()):
+            if fenced and block and all(line_re.match(b) for b in block if b.strip()):
                 got = [(b.split(None, 1)[0], b.split(None, 1)[1].strip())
                        for b in block if b.strip()]
                 break
@@ -3708,35 +3802,39 @@ def check_debt_index(report: Report) -> None:
         if fenced:
             block.append(line)
 
-    findings: List[Finding] = []
-    if not got:
-        findings.append(Finding("docs/DEBTS.md", "no debts index found."))
-    else:
-        want_ids = [i for i, _ in want]
-        got_ids = [i for i, _ in got]
-        for ident in [i for i in want_ids if i not in got_ids]:
-            findings.append(Finding("docs/DEBTS.md",
-                                    f"`{ident}` has a heading but is not in the index."))
-        for ident in [i for i in got_ids if i not in want_ids]:
-            findings.append(Finding("docs/DEBTS.md",
-                                    f"the index lists `{ident}`, which has no heading."))
-        titles = dict(want)
-        for ident, title in got:
-            if ident in titles and titles[ident] != title:
-                findings.append(Finding(
-                    "docs/DEBTS.md",
-                    f"`{ident}`'s index line reads {title!r} and its heading reads "
-                    f"{titles[ident]!r}. The heading is the source.",
-                ))
-        if got_ids != [i for i in want_ids if i in got_ids]:
-            findings.append(Finding("docs/DEBTS.md", "the index is not in heading order."))
-
+    findings = _decision_index_findings(
+        want, got, is_unclaimed=_is_unclaimed_debt, doc="docs/DEBTS.md",
+        empty_message="no debts index found.")
     report.add("debt index", MECHANICAL, findings,
                f"{len(got)} indexed, matching {len(want)} headings",
                scanned=len(want))
 
 
-_DEBT_RE = re.compile(r"\bDEBT([0-9]+)\b")
+_DEBT_RE = re.compile(r"\bDEBT(" + _ID_ANY + r")\b")
+
+
+def debt_heading_idents() -> Set[str]:
+    """Every debt id with a heading, WITH its `DEBT` letter — `## <n>`/`## DEBT<n>` (a claimed
+    entry, either spelling — see the block comment above `DEBT_HEADING` in
+    `scripts/claim-ids.py`) and `## DEBT-<slug>` (a pending one), normalized to `DEBT<n>` /
+    `DEBT-<slug>`.
+
+    THE DEBTS TWIN OF `decision_heading_lines_across`, read straight off the corpus files
+    rather than through `debts_corpus.idents()` — that function's own `HEADING_RE` answers a
+    narrower, numbers-only question for `path_for`/`idents`, which is right for THEM and
+    wrong for this: a pending slug's own citation must not read as dangling.
+    """
+    corpus = _debts_corpus()
+    if corpus is None:
+        return set()
+    heading_re = re.compile(r"^##\s+((?:DEBT)?\d+|DEBT" + _ID_SLUG + r")\b")
+    out: Set[str] = set()
+    for path in corpus.files():
+        m = heading_re.match(read(path).split("\n", 1)[0])
+        if m:
+            ident = m.group(1)
+            out.add(ident if ident.startswith("DEBT") else f"DEBT{ident}")
+    return out
 
 # THE PATH FORM, IN EVERY SPELLING THIS SPLIT RETIRED: the stub's path, optionally
 # possessive, followed by "section", a section mark or a hash and a number — anything that
@@ -3777,7 +3875,7 @@ def check_debt_ids(report: Report, docs: List[Path]) -> None:
     """
     if _debts_corpus_empty(report, "debt ids"):
         return
-    known = {f"DEBT{i}" for i in _debts_corpus().idents()}
+    known = debt_heading_idents()
 
     def scan(paths: Iterable[Path], out: List[Finding], regressions: List[Finding]) -> None:
         for path in paths:
@@ -3789,8 +3887,8 @@ def check_debt_ids(report: Report, docs: List[Path]) -> None:
                     if f"DEBT{ident}" not in known:
                         out.append(Finding(
                             f"{rel(path)}:{number}",
-                            f"cites DEBT{ident}, which has no `## {ident}` heading in "
-                            f"docs/debts/.",
+                            f"cites DEBT{ident}, which has no `## {ident}` heading (or, for a "
+                            f"pending slug, no `## DEBT{ident}` heading) in docs/debts/.",
                         ))
                 if _DEBT_PATH_RE.search(line):
                     regressions.append(Finding(

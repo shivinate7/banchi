@@ -5,6 +5,16 @@
 directory and hands every checker the same bytes it used to get from here. It builds the
 same seam `scripts/decisions_corpus.py` built for `docs/DECISIONS.md` under D160.
 
+**A NEW FINDING'S NUMBER IS CLAIMED AT THE MERGE, THE SAME WAY A DECISION'S IS** (D140,
+the owner's ruling: "they just get assigned numbers upon merge with CI"). A branch writes its
+entry as `DEBT-<slug>.md`, under `docs/debts/`, headed `## DEBT-<slug> — <title>`. It cites the entry
+as `DEBT-<slug>`. `scripts/claim-ids.py` allocates the next free number against
+`origin/main`, at merge time. It reuses the decision machinery (`DIR_KINDS`), not a second
+one. It renames the file to `<n>-<slug>.md` — bare, matching every entry already here. It
+rewrites every citation to `DEBT<n>`. This replaces the old rule: "a new finding gets the
+next free number by hand." Hand-picking a number on a branch is the same race two decision
+entries once hit, before D140, one namespace over.
+
 **CITE BY ID, `DEBT<n>`, NEVER BY PATH AND NEVER BY A BARE `§<n>`.** The parent-level rule
 (`~/Developer/claude-settings/CLAUDE.md`: "Give each record its own file, one folder per
 kind. Cite by id, never by path.") applies here exactly as D160 already applied it to
