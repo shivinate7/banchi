@@ -4653,6 +4653,9 @@ export function CaptureScreen() {
               className="capture-shutter"
               onClick={() => void doCapture()}
               disabled={shutterDisabled}
+              aria-describedby={
+                blockers.length === 1 && blockers[0]?.key === 'camera' ? 'capture-shutter-why' : undefined
+              }
               busy={busy}
               /* In motion mode the C key is genuinely disarmed, so the keycap goes; the
                  button itself stays live in both modes as an override. */
@@ -4667,7 +4670,11 @@ export function CaptureScreen() {
                 whole story. The box comes back the moment anything else joins it (a box, the
                 game list), because then there is a REASON list again and the fix buttons vary. */}
             {blockers.length === 1 && blockers[0]?.key === 'camera' ? (
-              <p className="capture-quiet capture-camera-note">Open the camera first</p>
+              // Owner, 2026-09-28: the disabled button and the camera state say it. The
+              // reason stays as the button's accessible description, not as visible text.
+              <span id="capture-shutter-why" className="bn-sr">
+                Open the camera first
+              </span>
             ) : blockers.length === 0 ? null : (
               <div className="capture-block" role="group" aria-label="Setup">
                 <span className="bn-label capture-block-word">Setup</span>

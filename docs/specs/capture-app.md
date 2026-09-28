@@ -544,6 +544,8 @@ what `docs/DESIGN.md` refuses in as many words.
   good press. The shared fix: undo, note and section notes no longer draw `code` at all.
   `machine-words.spec` sweeps loaded screens only, so `capture-claims.spec.ts` asserts the
   error state itself.
+- **No "Open the camera first" line** under Capture. The disabled button carries the reason
+  as its accessible description only (`aria-describedby`, screen-reader text).
 
 ## 6. trigger-seam
 
