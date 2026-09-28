@@ -53,6 +53,8 @@ Each item gets an id, `F<n>`, and one line here. The line names its route:
   images.
 - F3 (own lane, running): a blind Sonnet agent reviews the demo's Pricing screen and proposes
   filters. Owner: `ask it what filters would be nice to have / optimal for an end user`.
+- F4 (to lane D's plan): an odd gap on Capture's top, below the subheading. It was recorded
+  nowhere. Capture's old top-gap exception left the allow-list earlier, so the gap may follow.
 
 ## PR 3B: the demo data follow-up (DONE, 2026-09-27)
 
