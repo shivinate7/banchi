@@ -1,5 +1,8 @@
 # Item 4 — `_copies_out` as one pass
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is `the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree)`. The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 This is one of the eight item files under `docs/specs/store-scaling/`, described by
 `00-phases.md`. Read that file's "Phase 1" section first if you have it; this file is
 self-contained regardless. Your only write for this item is `cli/resolve.py` — one
@@ -544,7 +547,7 @@ not — read this whole section before choosing.**
 
 `docs/specs/store-scaling.md` §4's table has one row naming this item:
 
-> `server/pipeline_routes._unsent_ledger` `_unsent_ledger` | `distinct("sku")` | per-load |
+> `server/pipeline_routes._unsent_ledger` | `distinct("sku")` | per-load |
 > Removed by: item 4
 
 `00-phases.md`'s allowlist-progress table repeats the credit: "Phase 1 | 10 | item 2:

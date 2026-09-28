@@ -1,5 +1,8 @@
 # Item 1 — the `unscoped walk` row
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is `the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree)`. The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 This is one of the eight item files under `docs/specs/store-scaling/`, described by
 `00-phases.md`. Read that file's "Phase 0" section first if you have it; this file is
 self-contained regardless. Your only write for this item is `scripts/docs-audit.py`
@@ -55,20 +58,20 @@ find.
   authority for what the guard actually enforces; `00-phases.md`'s own table already
   reflects the correction (its Phase-0 row says "`do_inventory` and `to_payload` stay by
   the owner's word").
-- `scripts/docs-audit.check_rule_enforcement` `check_rule_enforcement`
+- `scripts/docs-audit.check_rule_enforcement`
   — the "pinned number, moves only down, mutation-proofed" pattern this row's allowlist
   count copies.
-- `scripts/docs-audit.check_storage_keys` `check_storage_keys` — the
+- `scripts/docs-audit.check_storage_keys` — the
   "reconcile code against a roster, in both directions, with `scanned=`" pattern this
   row's allowlist copies from the other side (roster → code instead of code → roster is
   symmetric here since there is no markdown roster, only the constant in this same file).
-- `scripts/docs-audit._history_readers` `_history_readers` — the
+- `scripts/docs-audit._history_readers` — the
   exact `ast.walk` shape to copy for finding calls inside functions and naming which
   function owns each call.
-- `scripts/docs-audit.audit` `audit()` — where every
+- `scripts/docs-audit.audit` — where every
   check is dispatched; `check_dispatch` fails the commit if you define a function here and
   never call it.
-- `scripts/docs-audit.check_subject_counts` `check_subject_counts`
+- `scripts/docs-audit.check_subject_counts`
   — why every `report.add(...)` call needs `scanned=<n>` and what happens if you omit it
   (a distinct "no count declared" finding, always failing, never silently green).
 - `store/rows.Rows` — `Rows.where(**equals)`, `Rows.select(columns, **equals)`,

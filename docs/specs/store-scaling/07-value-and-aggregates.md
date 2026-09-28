@@ -1,5 +1,8 @@
 # Item 7 — the value route paginated, and the aggregates in SQL
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is `the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree)`. The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 Source: `docs/specs/store-scaling.md` §3 item 7 and its §4 allowlist rows for
 `do_pipeline_value`, `_release_plan`, `box_views`, `_box_names`, `_on_hand_by_run`. This file
 is the implementation playbook; it does not itself change code. It also carries the owner's
@@ -10,7 +13,7 @@ walk — that ruling post-dates the spec file's own item-7 paragraph, which only
 ## Goal and done-when
 
 **(A) `do_pipeline_value`** (`server/pipeline_routes.do_pipeline_value`, the `.values()` walk at
-behind `GET /pipeline/value` at `server/capture_server.CaptureHandler`, consumed by
+behind `GET /pipeline/value` at `server/capture_server.CaptureHandler`'s `do_GET`, consumed by
 `#/pricing?band=top|bottom` — `app/src/ValueBands.tsx`) ranks every on-hand card by market.
 Today it builds a full `Card` dataclass for every row in the store (`inventory.cards.values()`
 triggers `Rows._load_all()`, which JSON-parses and constructs a `Card` for every stored
@@ -120,7 +123,7 @@ step this playbook is doing on the implementer's behalf.
   *behavior* changes (it reads a `readings` table instead of re-parsing CSVs) but its
   *signature* does not, so this item's code is unaffected either way — confirm the signature
   is unchanged with `grep -n "^def _readings" server/pipeline_routes.py` before writing code.
-- **Item 2 (the per-box read, `server/capture_server.CaptureHandler`)** reopens `GET
+- **Item 2 (the per-box read, `server/capture_server.CaptureHandler`'s `do_GET`)** reopens `GET
   /inventory/<box>` and touches `store/rows.Rows`'s "materialise-then-filter" fallback.
   This item's `box_views` change does not depend on that fallback being fixed — the per-box
   branch here calls `Inventory.records_in`, which is `self.cards.where(box=box)`
@@ -384,7 +387,7 @@ reversed-tie-order as "removed" behavior). Write `_value_sort_key_reversed` expl
 than deriving it by negating `_value_sort_key`'s output, so a reader sees the actual
 comparator.
 
-**Route dispatch** — `server/capture_server.CaptureHandler`. The docstring comment there
+**Route dispatch** — `server/capture_server.CaptureHandler`'s `do_GET`. The docstring comment there
 currently reads *"No band, no filter and no percentile in the query string"* — this is now
 false and must be corrected in the same edit, not left as a stale claim (`CLAUDE.md`'s own
 rule about a claim a check can no longer support):
@@ -478,7 +481,7 @@ around **two fetches**:
 
 ## Call sites (complete)
 
-- `server/capture_server.CaptureHandler` — the `GET /pipeline/value` route dispatch. Edited per §A2.
+- `server/capture_server.CaptureHandler`'s `do_GET` — the `GET /pipeline/value` route dispatch. Edited per §A2.
 - `harness/tests/t7_store_and_seams.check_value_table` — direct calls to
   `pipeline_routes.do_pipeline_value()`. Unedited (T7-parity requirement).
 - `app/src/ValueBands.tsx` — `getValueTable()` call inside `read()`. Replaced per §A3.
@@ -666,11 +669,11 @@ From `docs/specs/store-scaling.md` §4:
 
 | Site | Confirmed removed? |
 |---|---|
-| `server/pipeline_routes.do_pipeline_value` `do_pipeline_value` (`.values()`) | **Yes** — §A1 replaces it with `inventory.cards.select(...)`. |
-| `cli/resolve.box_views` `box_views` (`.values()`) | **Yes** — §B (below) replaces the store-wide fallback with `select()` and gives the two bounded callers a `records_in`-per-box path that never builds more than one box's `Card` objects at a time. |
-| `server/capture_server._release_plan` `_release_plan` (`.items()`) | **Yes** — §C replaces it with two rounds of indexed `select(box=...)`/`select(sku=...)`. |
-| `server/pipeline_routes._box_names` `_box_names` (`select(("box","run"))`, filter-less) | **Yes** — §C scopes the walk to the box registry's own keys (`inventory.boxes.items()`, a small table) plus one indexed `select(("run",), box=b)` per registry box, never a filter-less pass over `cards`. |
-| `server/pipeline_routes._on_hand_by_run` `_on_hand_by_run` (`select(("run","state"))`, filter-less) | **Yes** — §C scopes the walk to the joined-run-name list the caller already has, one indexed `select(("state",), run=name)` per run. |
+| `server/pipeline_routes.do_pipeline_value` (`.values()`) | **Yes** — §A1 replaces it with `inventory.cards.select(...)`. |
+| `cli/resolve.box_views` (`.values()`) | **Yes** — §B (below) replaces the store-wide fallback with `select()` and gives the two bounded callers a `records_in`-per-box path that never builds more than one box's `Card` objects at a time. |
+| `server/capture_server._release_plan` (`.items()`) | **Yes** — §C replaces it with two rounds of indexed `select(box=...)`/`select(sku=...)`. |
+| `server/pipeline_routes._box_names` (`select(("box","run"))`, filter-less) | **Yes** — §C scopes the walk to the box registry's own keys (`inventory.boxes.items()`, a small table) plus one indexed `select(("run",), box=b)` per registry box, never a filter-less pass over `cards`. |
+| `server/pipeline_routes._on_hand_by_run` (`select(("run","state"))`, filter-less) | **Yes** — §C scopes the walk to the joined-run-name list the caller already has, one indexed `select(("state",), run=name)` per run. |
 
 All five leave the allowlist in this item's PR. If research at implementation time (§"Read
 first", and the open questions in "Call sites" about `cli/resolve._needed_games`) finds

@@ -1,5 +1,8 @@
 # Item 6 — do_orders per SKU
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is `the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree)`. The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 Source: `docs/specs/store-scaling.md` §3 item 6 and its §1 `GET /orders` paragraph and §4
 allowlist. This file is the implementation playbook; it does not itself change code.
 
@@ -112,7 +115,7 @@ the leaner form scoped to exactly those boxes.
 ## Depends on / conflicts with
 
 **Item 2** ("the per-box read", `docs/specs/store-scaling.md` §3 item 2) touches
-`server/capture_server.CaptureHandler` (`GET /boxes/<n>`, currently refused) and
+`server/capture_server.CaptureHandler`'s `do_GET` (`GET /boxes/<n>`, currently refused) and
 `store/rows.Rows`'s materialize-then-filter fallback. It does NOT touch `_Places`, `do_orders`,
 `_pick_row`, `_line_answer`, or anything under `server/capture_server.do_orders`
 (confirmed by reading item 2's own description in the spec — it lists `do_inventory`,

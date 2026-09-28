@@ -1,5 +1,8 @@
 # Item 8 — search on FTS5
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is `the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree)`. The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 Source: `docs/specs/store-scaling.md` §3 item 8 ("Search gets an index. 2 days... On the
 owner's word over the recommendation to record it as a debt"), and §4's allowlist row
 `server/capture_server.do_search  do_search  .values()  per-keystroke  item 8`.
@@ -586,13 +589,13 @@ assertions already do this structurally — see Tests).
 
 ## Call sites
 
-- `server/capture_server.do_search` `do_search` — the function this item rewrites (Step 4).
+- `server/capture_server.do_search` — the function this item rewrites (Step 4).
 - `server/capture_server.do_order_fill` — the code-card dispute lookup calls `do_search`
   directly (`found = capture_server.do_search(code)["groups"]`); it needs no changes since
   it consumes the same return shape, but re-run its T7 block after this change (harness
   line numbers above).
-- `store/master._card_columns` `_card_columns`, `:2480` `Inventory.CARDS` — extended in Step 2.
-- `store/db.SCHEMA_VERSION` `SCHEMA_VERSION`, `:117-119` `TABLES["cards"]`, `:285` `_upgrade` — the
+- `store/master._card_columns`, `:2480` `Inventory.CARDS` — extended in Step 2.
+- `store/db.SCHEMA_VERSION`, `:117-119` `TABLES["cards"]`, `:285` `_upgrade` — the
   migration (Steps 2-3).
 - `scripts/cid-selftest.table_bytes` (`table_bytes`) and `:649-684`
   (`case_the_reverse_restores_every_table_byte_identically`) — **must be updated, not
@@ -749,7 +752,7 @@ argument given above for T7). Re-run the suite; do not hand-edit the fixture spe
 `docs/specs/store-scaling.md` §4:
 
 ```
-| `server/capture_server.do_search` `do_search` | `.values()` | per-keystroke | item 8 |
+| `server/capture_server.do_search` | `.values()` | per-keystroke | item 8 |
 ```
 
 This row's own "Removed by" column already says "item 8" — this PR is what makes that true.

@@ -180,7 +180,7 @@ Capture, `i` is Inventory.
 
 And the route count is provably unmaintained. D31 records it false in five places for the whole
 of D39's life. **It is false right now in the file that owns the table**: `app/src/App.tsx`
-opens *"The app shell: six routes"* while line 25 of the same comment says *"SEVEN again now"* and
+opens *"The app shell: six routes"* while a later line of the same comment says *"SEVEN again now"* and
 the table carries seven. Nothing in `scripts/docs-audit.py` reconciles it.
 
 ### Into `#/pricing` — REFUSED, and its own argument is why

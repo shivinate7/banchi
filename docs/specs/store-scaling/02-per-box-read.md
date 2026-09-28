@@ -1,5 +1,8 @@
 # Item 2 — the per-box read
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is `the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree)`. The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 **Status of this file: BUILT, 2026-09-13, as D192.** It was the playbook for
 `docs/specs/store-scaling.md` §3 item 2 ("The per-box read, and the screens move to it. 2–3
 days"), written for a session with no other context on this branch. D192 shipped
@@ -12,7 +15,7 @@ and where it corrected this playbook.
 
 **Goal.** Stop every non-capture screen from paying `Inventory.to_payload()`'s full-store
 walk (78 ms today, 1,485 ms at 20x rows) on every load and after every write. Reopen the
-refusal at `server/capture_server.CaptureHandler` ("a per-box read would be a second renderer for
+refusal at `server/capture_server.CaptureHandler`'s `do_GET` ("a per-box read would be a second renderer for
 one caller that does not exist yet" — the caller exists now, D53's own §5 argument) and give
 `#/inventory` a real per-box data path. Remove `rows.py:177`'s degrade so a scoped `where()`/
 `select()` never pays for an earlier full load. `GET /inventory` itself is **kept**, on the
@@ -1318,9 +1321,9 @@ are corrected in the same PR that found this.
 
 | Site | Shape | Actually removed by |
 |---|---|---|
-| `server/capture_server.do_inventory` `do_inventory` | `to_payload()` | **stays permanently** — `GET /inventory` is kept, unused, on the owner's word (`00-phases.md`'s own "Where each item's decisions came from" section already said this; §4's table had not been updated to match) |
-| `server/capture_server._boxes_named` `_boxes_named` | `select(("box",))` | **stays** — its only caller is `do_status` (the health endpoint), which this item does not touch at all; a future item scoping `do_status` removes it |
-| `store/master.Inventory` `to_payload` | `.items()` | **stays with `do_inventory`** — `do_inventory` calling it is a real, still-reachable code path (the route is kept), so the function inside it that walks the whole store cannot be "removed" without deleting the route itself, which this item explicitly does not do |
+| `server/capture_server.do_inventory` | `to_payload()` | **stays permanently** — `GET /inventory` is kept, unused, on the owner's word (`00-phases.md`'s own "Where each item's decisions came from" section already said this; §4's table had not been updated to match) |
+| `server/capture_server._boxes_named` | `select(("box",))` | **stays** — its only caller is `do_status` (the health endpoint), which this item does not touch at all; a future item scoping `do_status` removes it |
+| `store/master.Inventory`'s `to_payload` | `.items()` | **stays with `do_inventory`** — `do_inventory` calling it is a real, still-reachable code path (the route is kept), so the function inside it that walks the whole store cannot be "removed" without deleting the route itself, which this item explicitly does not do |
 
 **`_boxes_named`'s callers were traced, per this section's own original instruction to do so
 before checking the row off.** `grep -rn "_boxes_named" server/ store/ cli/ app/src/` finds
@@ -1335,7 +1338,7 @@ The two rows the plan's §4 table already marked "stays" are unaffected by any o
 
 ## Do not touch
 
-- `server/capture_server.CaptureHandler` — the `GET /boxes/<n>` refusal. The plan's §5
+- `server/capture_server.CaptureHandler`'s `do_GET` — the `GET /boxes/<n>` refusal. The plan's §5
   explicitly reopens this refusal's REASONING (the caller now exists) but the fix is the NEW
   `/inventory/<box>` route, not turning `/boxes/<n>` into a real route. `GET /boxes/<n>`
   stays refused; do not add a second per-box route answering a different question (box

@@ -1,5 +1,8 @@
 # Item 3 — history() scoped to the key
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is `the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree)`. The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 **CORRECTION, from the implementing session (branch `claude/scaling-03-history`): "Done
 when" item 4 and the "second, cheaper win" it describes are WRONG, and were NOT built.**
 The claim was that `_sell`'s and `do_retire`'s `else` branches (`undo=False`) "never read

@@ -1,5 +1,8 @@
 # The store at 50,000 cards
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is `the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree)`. The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 **Status: BUILT 2026-09-13, all eight items, in three phases** — #337 (item 1), #341 (2,
 D192), #339 (3, D191), #340 (4), #338 (5), #342 (6), #344 (7), #343 (8), merged in that
 phase order on the owner's standing word. The `unscoped walk` meter ended at **9, not 6**:
@@ -84,7 +87,7 @@ made for granted"* — and these are the corrections, kept here so the next sess
 re-derive the original list from the investigation's own journal.
 
 - **"Stop BoxBrowse's refetch" has no narrower route to switch to.** `GET /boxes/<n>` is
-  deliberately refused at `server/capture_server.CaptureHandler` — *"a per-box read would be a
+  deliberately refused at `server/capture_server.CaptureHandler`'s `do_GET` — *"a per-box read would be a
   second renderer for one caller that does not exist yet"*. The caller exists. So the
   item is the per-box read itself, and it merges with the systemic fix rather than
   preceding it. The write responses already carry the updated `CardSummary`
@@ -283,18 +286,18 @@ Taken 2026-09-12. Per-press means a write handler; per-load means a screen openi
 
 | Site | Shape | When | Removed by |
 |---|---|---|---|
-| `server/capture_server.do_inventory` `do_inventory` | `to_payload()` | per-load, four screens; per-press on Inventory — until item 2, after which nothing calls it | stays — kept on the owner's word, no caller; the guard names it |
-| `server/capture_server._release_plan` `_release_plan` | `.items()` | per-press (release preflight) | item 7 |
-| ~~`server/capture_server.do_search` `do_search`~~ | ~~`.values()`~~ | ~~per-keystroke~~ | **CLOSED by item 8 — `do_search` reads an FTS5 index (`store/db.py:_add_search_index`); row removed from `scripts/docs-audit.py`'s `UNSCOPED_WALK_ALLOWED`, `UNSCOPED_WALK_EXPECTED` 13 -> 12** |
-| `server/capture_server._boxes_named` `_boxes_named` | `select(("box",))` | per-load | **stays — verified 2026-09-12 by item 2: its only caller is `do_status`, untouched by item 2, so it cannot close this row; a future item scoping `do_status` removes it** |
-| `server/capture_server.do_boxes` `do_boxes` | `distinct("box")` | per-load | stays — one column, cheap; the guard names it |
-| `server/pipeline_routes._box_names` `_box_names` | `select(("box","run"))` | per-load | item 7 |
-| `server/pipeline_routes._unsent_ledger` `_unsent_ledger` | `distinct("sku")` | per-load | item 4 |
-| `server/pipeline_routes._on_hand_by_run` `_on_hand_by_run` | `select(("run","state"))` | per-load | item 7 |
-| `server/pipeline_routes.do_pipeline_value` `do_pipeline_value` | `.values()` | per-load | item 7 |
-| `store/master.Inventory` `to_payload` | `.items()` | called by `do_inventory` alone | stays with `do_inventory` |
-| `store/master.Inventory` `counts` | `select(("state",))` | `do_status`, polled | stays — one column; the guard names it |
-| `cli/resolve.box_views` `box_views` | `.values()` | `GET /pipeline/pricing` | item 7 |
+| `server/capture_server.do_inventory` | `to_payload()` | per-load, four screens; per-press on Inventory — until item 2, after which nothing calls it | stays — kept on the owner's word, no caller; the guard names it |
+| `server/capture_server._release_plan` | `.items()` | per-press (release preflight) | item 7 |
+| ~~`server/capture_server.do_search`~~ | ~~`.values()`~~ | ~~per-keystroke~~ | **CLOSED by item 8 — `do_search` reads an FTS5 index (`store/db.py:_add_search_index`); row removed from `scripts/docs-audit.py`'s `UNSCOPED_WALK_ALLOWED`, `UNSCOPED_WALK_EXPECTED` 13 -> 12** |
+| `server/capture_server._boxes_named` | `select(("box",))` | per-load | **stays — verified 2026-09-12 by item 2: its only caller is `do_status`, untouched by item 2, so it cannot close this row; a future item scoping `do_status` removes it** |
+| `server/capture_server.do_boxes` | `distinct("box")` | per-load | stays — one column, cheap; the guard names it |
+| `server/pipeline_routes._box_names` | `select(("box","run"))` | per-load | item 7 |
+| `server/pipeline_routes._unsent_ledger` | `distinct("sku")` | per-load | item 4 |
+| `server/pipeline_routes._on_hand_by_run` | `select(("run","state"))` | per-load | item 7 |
+| `server/pipeline_routes.do_pipeline_value` | `.values()` | per-load | item 7 |
+| `store/master.Inventory`'s `to_payload` | `.items()` | called by `do_inventory` alone | stays with `do_inventory` |
+| `store/master.Inventory`'s `counts` | `select(("state",))` | `do_status`, polled | stays — one column; the guard names it |
+| `cli/resolve.box_views` | `.values()` | `GET /pipeline/pricing` | item 7 |
 
 `do_graveyard` (`:5208`), `_box_row` (`:8243`) and `do_put_box` (`:8547`) are scoped today
 and are not on the list.
@@ -305,7 +308,7 @@ The owner's standing instruction, 2026-09-12: think from outcomes, and flag a ru
 premise has gone rather than defer to it. These three are flagged, argued, and taken on
 their word.
 
-**The refusal of `GET /boxes/<n>`** (`server/capture_server.CaptureHandler`). Its sentence is
+**The refusal of `GET /boxes/<n>`** (`server/capture_server.CaptureHandler`'s `do_GET`). Its sentence is
 *"a second renderer for one caller that does not exist yet."* The caller is every load of
 `#/inventory` and every press on it, and the outcome the refusal protected — one renderer
 for a card row — is kept by having the per-box route return the same shape as the

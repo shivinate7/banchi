@@ -628,7 +628,7 @@ passing.
 **Where.** scripts/docs-audit.py — the existing `work item standing` row (docs-audit.py:2902)
 
 **What it catches.** Two live contradictions. (1) CLAUDE.md:2069 says docs/specs/one-process.md
-is "SPECIFIED 2026-09-11, NOT BUILT"; that spec's line 3 says "specified and BUILT 2026-09-11",
+is "SPECIFIED 2026-09-11, NOT BUILT"; that spec's status line says "specified and BUILT 2026-09-11",
 D138 merged the same day, and CLAUDE.md's own `make up` block says "ONE PROCESS AS OF 2026-09-11
 (D138)". The row prints ok because it is scoped to order-pipeline.md alone. (2)
 docs/specs/order-pipeline.md reads `### T2b — the rubber stamps. BUILT 2026-09-05, SERVER
