@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""DELETE THE STALE ENTRIES FROM THE THREE SHRINKING OFFENDER LISTS, AND RE-KEY A RENAMED FILE.
+"""DELETE THE STALE ENTRIES FROM THE TWO SHRINKING OFFENDER LISTS, AND RE-KEY A RENAMED FILE.
 
     scripts/offenders-prune.py            what it would delete and re-key. Writes nothing.
     scripts/offenders-prune.py --write    apply it.
     scripts/offenders-prune.py --selftest its own cases, in memory and in a throwaway repo.
 
-THE THREE LISTS (D280): `scripts/ste-offenders.json`, which
-`make docs-audit`'s `ste offenders` row reads, `scripts/typed-interpunct-allow.json`, which
+THE TWO LISTS (D280): `scripts/typed-interpunct-allow.json`, which
 its `typed interpunct` row reads, and `scripts/line-anchor-offenders.json`, which its `line
-anchor offenders` row reads. Each row fails on a STALE entry, one that matches
-nothing now because the fix landed. The prose list holds more than 14,000 lines, and a stale
+anchor offenders` row reads. A third list, `scripts/ste-offenders.json`, was cut
+2026-09-27 (test-audit plan, D226/D229/D280 amended): the write-time STE hook already lints
+new prose, so the `ste offenders` row was retired along with the list. Each remaining row
+fails on a STALE entry, one that matches
+nothing now because the fix landed. A stale
 entry there is a hash, so a hand delete is slow and a merge conflict is worse. This does the
 delete.
 
@@ -20,12 +22,12 @@ they refuse, they never write. It writes data files under `scripts/` only, so it
 seam in D18's list, which governs the prose files agents read as argument.
 
 IT ONLY EVER DELETES, AND RE-KEYS. It never adds an entry. An offender the list does not name
-stays unlisted, and the row stays red on it: the fix for new prose or a new dot is to rewrite
-it, never to list it. Two edits are all it makes.
+stays unlisted, and the row stays red on it: the fix for a new dot or a stray line anchor is
+to rewrite it, never to list it. Two edits are all it makes.
 
   1. A STALE ENTRY IS DELETED, one occurrence for each occurrence the tree no longer has. The
      comparison is the row's own `_offender_diff`, keyed by the row's own identity
-     (`ste_measure.entry_key` for prose, the string itself for a dot), imported and never
+     (the string itself, for both lists), imported and never
      reimplemented. A second copy would drift, and a pruner that disagreed with the gate
      would delete what the gate still needed.
   2. A FILE GIT SAYS WAS RENAMED IS RE-KEYED. When a listed file key names no file today, and
@@ -221,20 +223,6 @@ def git_renames(root: Path, reference: str = "origin/main") -> List[Tuple[str, s
     return pairs
 
 
-def ste_inputs(audit):
-    """(document path, found, present, list_key, key, rules) for the prose list."""
-    ste_measure = audit._sibling("ste_measure.py")
-    if ste_measure is None:
-        raise SystemExit("scripts/ste_measure.py could not be loaded, so nothing was measured")
-    docs = audit.markdown_files()
-    paths = [(audit.rel(p), audit.read(p)) for p in docs]
-    found = ste_measure.measure(paths).offenders
-    keys_now = {ste_measure.list_key(rel) for rel, _ in paths}
-    rules = set(ste_measure.error_codes(ste_measure.load_ste_lint()))
-    return (audit.STE_OFFENDERS_JSON, found, keys_now.__contains__, ste_measure.list_key,
-            ste_measure.entry_key, rules)
-
-
 def interpunct_inputs(audit):
     """The same six for the typed-dot list, or None when node cannot run the extractor."""
     strings = audit._run_user_strings(list(audit.TYPED_INTERPUNCT_EXTRACT_ARGS))
@@ -305,8 +293,7 @@ def main() -> int:
 
     audit = _audit()
     renames = git_renames(ROOT)
-    inputs = [("ste offenders", ste_inputs(audit)),
-              ("line anchor offenders", line_anchor_inputs(audit))]
+    inputs = [("line anchor offenders", line_anchor_inputs(audit))]
     dots = interpunct_inputs(audit)
     if dots is None:
         print("typed interpunct: not read. `node` or app/node_modules/typescript is missing, "

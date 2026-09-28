@@ -119,3 +119,16 @@ Three copies of the only-shrinks rules existed: `scripts/kit-adoption.mjs` and t
 **Why one Python helper and not one helper per language.** The other choice kept two implementations and a shared fixture to prove that they agree. A fixture proves agreement only on the cases it holds, and the next fix still has to be made twice. One implementation cannot drift from itself. The price is small. `kit-adoption.mjs` already runs `git` as a child process, and every place that runs `make check` already has `python3`. So the `.mjs` runs `python3 scripts/only_shrinks.py base` and `growth` as commands and reads JSON back. It keeps only what is its own: the keys that a block holds, and the rule ids that its source defines.
 
 Each caller still decides what an identity is, and so whether growth is counted per file. The prose and line-anchor lists count over the whole list. The typed-dot list puts the file in the identity. The kit list keys one entry per file and rule.
+
+### Amended 2026-09-27 — the prose list is CUT
+
+Owner's ruling (test-audit plan, row 92, `docs/reviews/test-audit-2026-09-27/TIERS.md`):
+"Row 92, `ste offenders`, and its list `scripts/ste-offenders.json`: CUT. The write-time
+STE hook lints new prose. This needs dated amendments to D226, D229 and D280 (the prose
+ratchet decisions) in the lane that cuts it." Lane L2 deletes the `ste offenders` row,
+`scripts/ste-offenders.json` and `scripts/docs-audit.py:check_ste_offenders`.
+
+Two offender lists remain: `scripts/typed-interpunct-allow.json` and
+`scripts/line-anchor-offenders.json`. `make offenders-prune` now covers only those two.
+`scripts/only_shrinks.py` and `_offender_list_shape`/`_offender_diff`/`_offender_growth`
+still serve both, unchanged by this cut.

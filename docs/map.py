@@ -3745,32 +3745,16 @@ COMPONENTS = [
                         "beside it — the license's one condition for reuse.",
                 "governed_by": ["D226"]},
             "ste_measure.py": {
-                "does": "the STE prose check's ONE measurer, read by `scripts/docs-audit.py`'s "
-                        "`ste offenders` row. Runs the vendored linter's four ERROR-severity "
-                        "rules over caller-supplied (path, text) pairs, drops findings a named "
-                        "`EXEMPTIONS` recognizer proves are an artifact of the text's shape (a "
-                        "table cell, a decision citation, the literal \"VS Code\", `via`), and "
-                        "names each remaining one as an OFFENDER: one sentence per rule, keyed "
-                        "by a hash of its folded text (`offender_identity`), so a reflow, a "
-                        "code-span edit or a claim moves nothing. A code span, decision "
-                        "citation or `VS Code` that crosses a line break is read over the "
-                        "joined paragraph (`join_span_breaks`), never line by line. Also "
-                        "reports the per-code "
-                        "counts and errors-per-1,000-plain-words per bucket, printed and never "
-                        "gated. Never touches disk itself.",
+                "does": "the STE prose check's ONE measurer. Its `ste offenders` docs-audit "
+                        "row was CUT 2026-09-27 (test-audit plan, D226/D229/D280 amended): "
+                        "the write-time STE hook already lints new prose, so this module's "
+                        "measuring, exemption and offender-identity machinery has no caller "
+                        "left in `scripts/docs-audit.py`. It stays vendored because "
+                        "`list_key` (a decision entry keyed by its file tail, so a claim "
+                        "moves nothing) is still imported by the `line anchor offenders` "
+                        "row's own file-key logic.",
                 "governed_by": ["D18", "D140", "D218", "D226", "D229",
                                 "D280"]},
-            "ste-offenders.json": {
-                "does": "the shrinking offender list for `make docs-audit`'s `ste offenders` "
-                        "row (D226): `rules` (the vendored linter's ERROR-severity codes) and "
-                        "file -> lane and rule -> `<hash> <label>` entries, one per offending "
-                        "sentence, only the hash compared. A decision entry is keyed by its "
-                        "file tail, so a claim moves nothing. The row fails on an unlisted "
-                        "sentence, a stale entry, and growth over the merge-base, so a new "
-                        "file starts clean. Replaced D229's per-file pinned ratio "
-                        "(D280). Shrunk by hand or by "
-                        "`make offenders-prune`, which only deletes. Never grown by a tool.",
-                "governed_by": ["D226", "D229", "D280"]},
             "line-anchor-offenders.json": {
                 "does": "the shrinking offender list for `make docs-audit`'s `line anchor "
                         "offenders` row (D245): file -> lane and `line-anchor` -> every "
@@ -4650,13 +4634,15 @@ COMPONENTS = [
             },
             "offenders-prune.py": {
                 "does": "`make offenders-prune` — delete the STALE entries from the two "
-                        "shrinking offender lists (`ste-offenders.json`, "
-                        "`typed-interpunct-allow.json`), and re-key a listed file that git's "
+                        "shrinking offender lists (`typed-interpunct-allow.json`, "
+                        "`line-anchor-offenders.json`), and re-key a listed file that git's "
                         "rename detection (`git diff -M` from the merge-base with origin/main) "
-                        "says moved. It NEVER ADDS an entry, and it refuses to write a plan "
+                        "says moved. A third list, `ste-offenders.json`, was CUT 2026-09-27 "
+                        "(test-audit plan, D226/D229/D280 amended). It NEVER ADDS an entry, "
+                        "and it refuses to write a plan "
                         "that holds any identity more often than the list it read. Reads with "
-                        "the rows' own `_offender_list_shape`, `_offender_diff`, "
-                        "`ste_measure.measure` and `_typed_interpunct_found`, imported, so the "
+                        "the rows' own `_offender_list_shape`, `_offender_diff` and "
+                        "`_typed_interpunct_found`, imported, so the "
                         "pruner and the gate cannot disagree about what is stale. Previews; "
                         "`--write` applies. A generator that gates nothing (D18): on no hook, "
                         "and its selftest is not in `make check`, on `map-fix.py`'s precedent. "

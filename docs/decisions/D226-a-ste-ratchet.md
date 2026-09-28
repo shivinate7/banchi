@@ -240,4 +240,16 @@ code today, as it always has. It does not yet read markdown prose for spelling â
 is lane L2's work, which waits on the owner. Until L2 lands, markdown prose has no spelling
 reader at all.
 
+### Amended 2026-09-27 â€” the row is CUT
+
+Owner's ruling (test-audit plan, row 92, `docs/reviews/test-audit-2026-09-27/TIERS.md`):
+"Row 92, `ste offenders`, and its list `scripts/ste-offenders.json`: CUT. The write-time
+STE hook lints new prose. This needs dated amendments to D226, D229 and D280 (the prose
+ratchet decisions) in the lane that cuts it." Lane L2 deletes the `ste offenders` row,
+`scripts/ste-offenders.json` and `scripts/docs-audit.py:check_ste_offenders`.
+
+The vendored linter, the four error rules and the four exemption classes stay in
+`scripts/ste_measure.py`. The `line anchor offenders` row still reads `list_key` from
+there. This amendment rewrites nothing else in this entry.
+
 ---

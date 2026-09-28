@@ -578,10 +578,13 @@ map-fix-selftest:
 	@python3 scripts/map-fix.py --selftest
 
 # A DELETING GENERATOR, AND IT GATES NOTHING (D18; D-ratchets-become-offender-lists). It deletes
-# the STALE entries from the two shrinking offender lists, scripts/ste-offenders.json and
-# scripts/typed-interpunct-allow.json, and re-keys a file that git's rename detection says
+# the STALE entries from the two shrinking offender lists, scripts/typed-interpunct-allow.json
+# and scripts/line-anchor-offenders.json, and re-keys a file that git's rename detection says
 # moved. It never adds an entry. It reads with the rows' own functions, imported, so the two
 # cannot disagree about what is stale. Previews. ARGS=--write applies.
+# A third list, scripts/ste-offenders.json, was cut 2026-09-27 (test-audit plan): the
+# write-time STE hook already lints new prose, so the `ste offenders` row was retired with it
+# (D226; D229; D280 amended).
 #
 # NOT A PREREQUISITE OF ANYTHING, never wired to a hook, and its self-test is not in
 # `make check`, on `map-fix`'s precedent above: the rows that read these lists already run on
