@@ -745,3 +745,76 @@ On expiry: "Yes, until it's built on (Recommended)".
 - OWNER (2026-09-26), a name shaped like rules text, reported without a fix: box 3 index 987 (moved from 5/105) is named "While you control this battefield, when you play a spell, if you spent 4 or more, PREDICT: ..." — rules text read as the name. `pipeline/identity_checks.py:flag_long_names` (`cards checks`, class 1) ALREADY FLAGS THIS: measured, that name is 94 characters against the 60-character `LONG_NAME_THRESHOLD`. So this card is already a `long_name` finding waiting in `cards checks`' own output, not a gap in the checker. Not fixed here — graveyard's own fence is rendering and the read route only.
 - OWNER (2026-09-26), the Live tab's mark-down and its send guards, verbatim: "I think we already decided to require a fresh read beforehand? also, allow for a cap cut in dollars atop the % markdown, and allow for sealed product to be filtered independently if needed". The owner chose "Require a fresh read" and "Skip no-market cards". Lane ux/live-markdown builds all four. The homes are the dated 2026-09-26 amendments in D100 (the cap and the no-market skip), D103 (the sealed filter and the counts) and D273 (the fresh read).
 - OWNER (2026-09-26), two answers on the Live tab, verbatim. On a price stored on an earlier visit going out with a Live send: "if the price i've typed is higher yea". So an earlier answer rides only when it is higher than the live price, and the bar names each one. A lower one goes only when the owner types it again or presses "Mark down" on this visit. On the dollar cap's scope: "Rule only". The cap limits the rule's mark-down, and a typed price goes out as typed. The floor still applies to every price. The homes are the second dated 2026-09-26 amendments in D100, D103 and D273.
+
+## Session rulings, 2026-09-27 (second session)
+
+Grants, process-only:
+
+- OWNER (2026-09-27), model cap, verbatim: "Only sonnet unless if I tell you to use opus for a specific agent work (I will say so for that lane) so no Opus for Lane C."
+- OWNER (2026-09-27), Opus for lane A, verbatim: "Send an opus agent for A mockups and full plan".
+- OWNER (2026-09-27), Opus for the blind look, verbatim: "send an opus agent to blindly just see wht the app looks like now, none of the decisions/work that went into it".
+- OWNER (2026-09-27), Opus for the test-audit review, verbatim: "an opus agent reviews the corpus made and plans with me the resolution".
+- OWNER (2026-09-27), the merge grant: named this session an Orchestrator. It merges PR 4B with `make merge` once CI is green.
+- OWNER (2026-09-27), the final head's check, verbatim: "Agreed and proceed". Linting only, not a full `make check`, because Vale retired the same day.
+
+Lane E and A:
+
+- OWNER (2026-09-27), lane E, verbatim: "save it in the markdown as an item for PR4B, ironically rpelcaing the current E you have in there since we solved that now".
+- OWNER (2026-09-27), Hide picked, verbatim: "The press folds picked rows".
+- OWNER (2026-09-27), lane A Q1, verbatim: "Three columns, layout R (Recommended)". Q2: the buyer list scrolls in a sticky rail.
+- OWNER (2026-09-27), lane A Q3, verbatim: "Full detail on every row (Recommended)". Q4, verbatim: "The walk, with the card in a sheet (Recommended)".
+- OWNER (2026-09-27), lane A Q5, verbatim: "i thought we sort formulaically be density of the cards available in a section?" Then, verbatim: "Density first, name breaks ties (Recommended)".
+- OWNER (2026-09-27), lane A Q6, paraphrase: this screen does not need details. Q7: the PNGs stay outside the repo, because the pre-commit opsec hook refuses images.
+- OWNER (2026-09-27), A1's density follow-up, paraphrase: the owner confirmed the point stands. Inventory sorts one way, and the order walk sorts another way. Still open.
+
+Lane B2 and C:
+
+- OWNER (2026-09-27), B2, DEBT48, verbatim: "yes build now".
+- OWNER (2026-09-27), C, DEBT37, paraphrase: send a Sonnet agent to see what remains on DEBT37 and how to fix it. The owner then asked why `emit --cap` overshoots at all, and proposed a cap works only once the store has read TCGplayer's live count. RULING: `emit --cap` refuses a card unless the store's live reading is newer than every copy sent since. Lane C built it (D7 amended, DEBT37 and DEBT24).
+
+Lane D and the feedback items:
+
+- OWNER (2026-09-27), lane D, verbatim: "Keep Home, move Review". Lane D2 builds Capture's gap, ReviewQueue's five controls and Codes' filter row. The owner first asked for a visual, verbatim: "i need to see a visual" and "ill need to see details/plans before confirming".
+- OWNER (2026-09-27), F2, verbatim: "Yes, including Pokemon sealed".
+- OWNER (2026-09-27), F3, verbatim: "ask it what filters would be nice to have / optimal for an end user".
+- OWNER (2026-09-27), the decision index, verbatim: "Derived view + pointer (Recommended)". Its home is `docs/reviews/test-audit-2026-09-27/TIERS.md`, not restated here.
+- OWNER (2026-09-27), the token budget, verbatim: "Prune memory.md now, and then send an audit lane". The audit report's own four rulings sit in that report's own last section, cited there.
+- OWNER (2026-09-27), auto memory, process-only, verbatim: "Migrate first, then off". Built: the memory migration (`daaccd8d`) and auto memory off (`f642a5b5`).
+- OWNER (2026-09-27), F5 and D276, verbatim: "Keep "Go to" (Recommended)". The palette keeps its D276 name.
+- OWNER (2026-09-27), F5, verbatim: "Approved on cutting everything from F5", "rest are good to cull", and for Review's line, verbatim: "middle option approved for the cut mismatch+data". Built: lane F5 (`ee17847c`).
+
+G, T and PR 5:
+
+- OWNER (2026-09-27), the demo build, paraphrase: why walk the demo at all? It ought to be a sanitized copy of main, pointless to review.
+- OWNER (2026-09-27), DEBT47, paraphrase: testing's sealed browser is fixed, but the real demo's browser stays open to other sites. Is a test of that half pointless, then?
+- OWNER (2026-09-27), the test audit's own shape, verbatim: "Sonnet slices build the summaries of what the tests are, an opus agent reviews the corpus made and plans with me the resolution, and then sonnet builders take that plan and execute upon it."
+- OWNER (2026-09-27), test-audit Q3, verbatim: "Yes, path-gate it (Recommended)". Q4, verbatim: "Re-measure, then remove if still 0 (Recommended)".
+- OWNER (2026-09-27), test-audit Q1, paraphrase: the proposed approach is too blunt a tool.
+- OWNER (2026-09-27), test-audit Q2, paraphrase: the owner asked whether CLAUDE.md already says a mechanized rule drops its own prose.
+- OWNER (2026-09-27), the cadence rule's home, verbatim: "Wait for the test-audit plan". The two NOT MECHANIZED rules, verbatim: "defer what to do on this for now".
+- OWNER (2026-09-27), PR 5 stubs, verbatim: 'Stub makes sense, but "ONE PARAGRAPH"????'. Each stub becomes its heading plus one line.
+- OWNER (2026-09-27), PR 5 debts, verbatim: "delete the six, split debt 27, and tell me what is left on debt 27?"
+- OWNER (2026-09-27), PR 5 into PR 4, verbatim: "bring everything that was PR5 into PR4, so you can do that debt27 check now".
+- OWNER (2026-09-27), lane H's home, paraphrase: lane H becomes PR 4B's epilogue.
+- OWNER (2026-09-27), H's first mockups, verbatim: "all of the H concepts tend to just pick one color and stick to it, when the power of cyberpunk is its fusion of several loud color schema contrasting and clashing".
+- OWNER (2026-09-27), same round, verbatim: "neon noir was the closest of the dynamism though if i had to pick one", then "none were good tho".
+- OWNER (2026-09-27), H round 2, verbatim: "Mockup round 2: fusion (Recommended)".
+- OWNER (2026-09-27), H round 2's verdict, verbatim: "pretty underwhelming, neon noir and synthwave are again too mild". Then, paraphrase: many loud, clashing colors, not one accent. A cyberpunk anime dark mode, styled like a League of Legends pro.
+- OWNER (2026-09-27), the blind colorist's four palettes, verbatim: "This version of H is absolute fire".
+- OWNER (2026-09-27), the docs-audit tiers: approved, with changes. Every ruling sits in `docs/reviews/test-audit-2026-09-27/TIERS.md`, section "The owner's rulings", not restated here.
+- OWNER (2026-09-27), H leaves PR 4B, verbatim: "abysall bloom might be gold -- love it. commit all the work done for H and leave it all as something to come back to in its own PR". Record: branch `ux/h-record` (`e7c8358a`).
+- OWNER (2026-09-27), lane R, reap ownership, verbatim: "Make reap stop only what the caller started ... tag each process reap starts with its owner's id, and let --confirm stop only processes carrying the caller's tag". Narrowed, verbatim: "do Blanket for the orchestrator and limited to its own tagged processes for an agent". Built: lane R (`215dd646`).
+- OWNER (2026-09-27), the Box number sweep, verbatim: "In PR 4B, after A3 and F5 (Recommended)". Built: lane Box sweep (`008a7ccc`, D259).
+- OWNER (2026-09-27), walk density, paraphrase: cards to pick at the stop is what got built.
+- OWNER (2026-09-27), test-audit Q1 on the tiers, verbatim: "Three tiers, agent proposes, you approve (Recommended)". Q2, verbatim: "Yes (Recommended)".
+- OWNER (2026-09-27), which test-audit lanes start now, verbatim: "L1, L3, L6, L7".
+- OWNER (2026-09-27), Vale, verbatim: "Retire it, keep American spelling in docs-audit (Recommended)". Built: lane L3.
+- OWNER (2026-09-27), the old demo seed, verbatim: "Cut the old seed guards". Built: lane L5. The heartbeat and coordinator, verbatim: "Retire both (Recommended)". Built: lane L10.
+- OWNER (2026-09-27), Q8, paraphrase: the owner had not yet seen the docs-audit changes. No docs-audit change landed before this ruling.
+
+## Session rulings, 2026-09-28
+
+- OWNER (2026-09-28), debt numbers, paraphrase: debts could get numbers assigned at merge, the same way `make merge` already numbers decisions. Built: lane debt-claim (`9b304772`).
+- OWNER (2026-09-28), the global-rule lines, process-only: G1, G2 and G3, plus two parent guard defects, go to a `claude-settings` session. The brief sits in that session's own scratchpad, not this repo.
+- OWNER (2026-09-28), F10's report, paraphrase: typing "punch first" or "body rune" in full finds nothing, but "body run" or "punch firs" finds the card. Built: lane F10 (`8e2476e8`).
+- OWNER (2026-09-28), search as one method, paraphrase: search should be one method, called the same way across the app. Codes, verbatim: "Keep substring on codes (Recommended)", as a field of the one matcher. Built: lane F11 (`1eaa5939`), a D271 amendment.

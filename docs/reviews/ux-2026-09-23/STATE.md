@@ -24,38 +24,20 @@ Read these over chat memory.
   and the slug decision entries under `docs/decisions/`.
 
 ## What merged
-- Wave 0: `pricing-clip`, the specs, `ports-safety`, `fulfillment`, `kit-data`, `kit-frame`,
-  `guards`.
-- Wave 1: `product`, `demo`, `shell`, `kit-frame-2`, `demo-2`, `text-checks`, `ports-2`,
-  `filtering`, `locating`.
-- The send-and-pricing flow work (`b-runs`), through several review rounds. `RULINGS.md`'s
-  "Orchestrator calls" sections carry each round's own outcome.
-- The offender-list conversion (`ratchets`), replacing the D218 and D229 pinned counters with
-  shrinking lists.
-- An icon-buttons kit lane, still going through review as of this record. Its own decision
-  entry and its iconography spec land with it, under `docs/specs/`.
+PR 1 (`#462`), PR 4A (`#466`), PR 3B, and the demo mirror (`#467` to `#477`) are already on
+main. `PLAN-PR4-PR5.md`'s Finished table tracks PR 4B's own lanes, up to lane rulings
+(`262f3351`). Read that table, not this section, for which PR 4B lane landed with which
+commit.
 
 ## What remains
-- The wave-2 screen lanes: home, capture, sales, shipping, library, inventory, orders, review,
-  search-server, and the Pricing redesign. `LANES.md` names each one's own file scope and done
-  check.
-- The box map: a spec only so far (`docs/specs/box-map.md`). No build lane has started.
-- `docs-sweep`, last, once every other lane has landed.
-- A final verification pass: every screen at 1440, 820, 720 and 390, in light and dark, with a
-  verdict per screen.
-- The merge order: the identity work's own PR first, then this overhaul's first PR (waves 0 and
-  1, plus the released `b-runs` rounds and the ratchets work), then the CSS and token-literal
-  sweep, then this overhaul's second PR (wave 2).
-- The owner's first real TCGplayer test (`REAL-TEST.md`), which runs only after the overhaul
-  reaches main.
+Lane L12, the docs-audit tiers, is the only PR 4B lane still building
+(`docs/reviews/test-audit-2026-09-27/TIERS.md`). After it merges: the final head gets
+linting only, then the PR, green CI, and `make merge`. `PLAN-PR4-PR5.md`'s "Still to come"
+and "After PR 4B merges" sections name what follows.
 
 ## Peers
-- The token-literal sweep and guard session converts the `token-literal-check` guard itself,
-  inside its own sweep, after this overhaul's PR lands. It needs the shared only-shrinks
-  helper's module and symbol names, and the changed CSS file list, once the PR is ready.
-- The photo-issues analysis session relays the merge order for the identity work and the
-  schema bump. Message it the merge commit, the main SHA, the schema number, and the file list,
-  once the first PR merges.
+The token-literal sweep already landed: `make token-literal-check` is in `make check`. No
+peer session's work is outstanding for PR 4B.
 
 ## Lessons
 - A worktree can vanish once its agent finishes. `git` in that path then resolves to the main
@@ -74,69 +56,29 @@ Read these over chat memory.
   Work resumes from its pushed branch, in a fresh worktree, never from the old agent id.
 
 
-## PR 2 / PR 3 lane status, 2026-09-25
+## PR 1, 2 and 3, done
 
-PR 1 (#462) merged as `316b959e3`, claiming D259 through D285. PR 2 carries every wave-2 lane
-except Sales and Box map, which build in parallel and land in PR 3. Each lane rebases onto
-main after PR 1. This table is a snapshot. Read the branch and `LANES.md` for the current
-state.
+PR 1 (`#462`) merged as `316b959e3`, claiming D259 through D285. PR 2 and PR 3 followed and
+are both on main. Every lane the 2026-09-25 snapshot tracked here (home, orders, inventory,
+capture, kit-icons, records, kit-tighten, review, b-pricing, sales, boxmap, search-server,
+library, shipping) landed. Git log on `main` carries the detail. This file no longer repeats
+the per-lane table.
 
-| Lane | Branch | State |
-|---|---|---|
-| home | `ux/home` | Done, reviewed. |
-| orders | `ux/orders` | Round 5 and round 6 passed. Done for PR 2. |
-| inventory | `ux/inventory-r2` | Round 3 built (main plus icons, tightening, the icon map, BoxOps select, CardHero fixes). Round 4 runs the InventoryOverlay icon and the R2 dialog. One review then covers rounds 3 and 4. |
-| capture | `ux/capture` | Round 3 passed. Done for PR 2, apart from any capture entries left in the offender-list sweep. |
-| kit-icons | `ux/kit-icons` | Passed its round-3 delta review. Not merged anywhere yet. Each lane merges `origin/ux/kit-icons` into its own branch. It lands with PR 2. |
-| records | `ux/review-records` | Round 2 runs now: merge main, re-sync every ruling since round 1, and fix the D278 stale path. A Sonnet review of the whole branch follows. |
-| kit-tighten | `ux/kit-tighten` | Passed. The popover browser check stayed vacuous, since no screen drew FilterBar yet. Each screen lane checks it in its own pass. Lanes were told to merge it and clear their round-2 entries. |
-| review | `ux/review` | Round 1 runs now (the W2-8 findings, folding Runs in, three raw refusals, icons, offender entries). It merges `inventory-r2` again before its final pass. |
-| b-pricing | `ux/b-pricing` | Round 1 runs now, on Opus. It covers the whole Pricing flow, Q1 through Q7, D277, and `#/product`. |
-| sales (PR 3) | `ux/sales` | Round 1 reviewed. Every item passed, apart from two small fixes, one of them a confirmed zero-price no-source claim. Round 2 runs now: the spark stroke and the `/skus/photos` server cap. The PR 3 checkpoint stands in for a separate re-review. |
-| boxmap (PR 3) | `ux/boxmap` | Round 1 built the runs-on-the-box form. The owner asked for a per-card key and a singles-and-ranges slice next. Round 2 runs now: the rework to a per-card key, the singles-and-ranges slice, and a merge of `inventory-r2`. An Opus review follows. |
-| search-server | `ux/search-server` | Round 3 built (findings F1 through F8 fixed, mid-word search shipped, p95 44.7ms to 95.1ms measured on 2,600 cards). A fresh Opus delta review runs now. |
-| library | `ux/library` | Round 2 passed. The Codes "slot" gap is recorded in `docs/specs/code-cards.md` §8, item 8. One round-2 filter-row entry (the Codes chip row) stays in the PR 2 sweep list. |
-| shipping | `ux/shipping` | Passed review, 69 of 69. A note for later: two dead `REASON_SAYS` strings. Its OrdersHub-onto-`<Page>` item carries to the orders lane. |
-
-Other PR 2 and PR 3 notes:
-- Once kit-icons passes, it merges into PR 1 if PR 1 is still open, or into PR 2 otherwise.
-  Orders, inventory and capture then merge it and convert their presses per `ICON-MAP.md`.
-- `docs-sweep` has not started. It waits for PR 2.
-- Deferred by the owner: an independent UI/UX review of the Orders walk mode, until budget
-  allows, and the undo session (undo spec §11).
-- Recorded, to build later: Orders' "Add orders" and "Cards to pull" as small square icon
-  buttons on the filter line. This is recorded in D274.
-
-## Follow-up lane after PR 2 (2026-09-25, the orchestrator's call, option a)
-
-The PR 2 offender sweep left these entries in place. Each one needs a ruling or a lane of its
-own, and none of them is a fix that the integration branch can make safely.
-
-- Home's h1 is the greeting. `scaffold.spec.ts` wants the route's own title ("Home") as the one
-  h1, and it wants the kit's top gap. The hero's h1 is the greeting (D121), so the `/` h1 and
-  top entries stay until the owner rules on the hero.
-- The capture top gap. Capture keeps its vertical inset small so that the viewfinder stays
-  above the fold. The `/capture` top entry stays until a layout keeps both the kit gap and the
-  fold.
-- A `Page` variant for Fulfillment. The ruling keeps page and h1 for `#/fulfillment` and exempts
-  width and top gap. `Page` draws its own header and the page width, so a `Page` with no
-  header and no width is the fix. The R1, page and R2-class entries stay until it exists.
-- The Runs R2 entries. `LiveReconcile`, `RunRescue`, `RunsComposer` and `RunPanel` still
-  hand-roll a dialog, a select or a kit class. They wait on the runs fold into Review, per the
-  coordinator's message to the review lane. The PR 2 fix made their sheets join the kit's
-  overlay stack, scrims included, so they are correct now but not yet kit primitives.
-- The six `icons` entries: `ClearPrices`, `Markdown`, `PriceHistory`, `Pricing`,
-  `ProductHistory` and `SendCard`. All six are b-pricing's files, and the b-pricing branch
-  already clears them, so they leave when b-pricing lands.
+The follow-up offender-list entries that snapshot left open (Home's h1, the capture top gap, a
+Fulfillment `Page` variant, the Runs R2 dialogs, and six b-pricing icon files) are all
+resolved: none of them appear in `scripts/kit-adoption-allow.json` any more. Home's h1 stands
+as a PERMANENT, argued exemption (owner's ruling, 2026-09-27, "Keep Home").
 
 ## Deferred items, 2026-09-26 (docs sweep)
 
-- **Dark-mode contrast.** SHELVED until after this PR merges. Proposals live on branch
-  `ux/dark-palette`. Two causes are measured: a surface separation of 3.7 ΔL*, and an
-  accent/status lightness of 55-78%. Three variants exist, A, B and C. The owner is
-  considering a cyberpunk-themed dark mode instead. Ask before choosing a variant.
-- **Stock card images.** An open question for the owner. The tcgcsv product `imageUrl` on
-  the TCGplayer CDN, keyed by `productId`, is one source. The vendored catalog is a second
+- **Dark-mode contrast.** Superseded by lane H. The owner asked for a cyberpunk-themed dark
+  mode instead of the A/B/C contrast fixes (`ux/dark-palette`). H found its many-color
+  direction ("Abyssal Bloom") and left PR 4B as its own deferred PR, recorded on
+  `ux/h-record` (`e7c8358a`).
+- **Stock card images.** Still an open question for the owner. The tcgcsv product `imageUrl`
+  on the TCGplayer CDN, keyed by `productId`, is one source. The vendored catalog is a second
   source, for Pokemon. Coverage across the store is unmeasured.
 - **One card named from its rules text.** On the owner's store, box 3, index 987, one card's
-  name reads its own rules text rather than its printed name. It is to be fixed in Review.
+  name reads its own rules text rather than its printed name. Still not fixed: the
+  2026-09-26 graveyard ruling touched only rendering and the read route
+  (`pipeline/identity_checks.py:flag_long_names` already flags it as a `long_name` finding).
