@@ -1548,6 +1548,16 @@ def _stamp_single(writable, resolved, emitted, priced_flat, run_dir, sku_game, s
                     index=position.index,
                     cid=_name_for(key, resolved.photos.get(key)),
                     photo=resolved.photos.get(key),
+                    # THE CAUSE OF THE NULL-GAME DEFECT, FIXED HERE (owner's report F1:
+                    # "there's two sets of unleashed, with the one with 99 cards having no
+                    # photos"). `game_name` is resolved two lines above this loop's own
+                    # start, for `bind_sku`'s `expected_product_line` — a never-seen
+                    # position born here inherited none of it, so `server/pipeline_routes.py:
+                    # do_pipeline_sets` (which groups on `(game, set_name)`) split it into a
+                    # second group with no game, and `pipeline/stockimages.py:url_for`
+                    # returns no photo for an empty game. `record_capture` skips a falsy
+                    # claim on a re-record, so this never overwrites a game already on file.
+                    game=game_name,
                 )
             )
             # `set_state(key, IDENTIFIED)` rather than assigning `sku` and `condition`
@@ -2132,6 +2142,11 @@ def _stamp_merged(writable, merged_plan, shipped, resolved_by_run):
                     index=position.index,
                     cid=_name_for(key, resolved_by_run[run_name].photos.get(key)),
                     photo=resolved_by_run[run_name].photos.get(key),
+                    # SAME FIX AS `_stamp_single` ABOVE, SAME DEFECT. `row.game` is
+                    # `MergedSku`'s own field (`pipeline/merge.py`), already read at this
+                    # loop's own start to resolve `entry` for `bind_sku` — a never-seen
+                    # position born here inherited none of it, until now.
+                    game=row.game,
                 )
             )
             # THE FIVE IDENTITY KWARGS ARE GONE, exactly as in `_stamp_single` above —

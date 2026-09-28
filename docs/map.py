@@ -4701,6 +4701,39 @@ COMPONENTS = [
                         "so it opens no seam in D18's list.",
                 "governed_by": ["D18", "D218", "D226", "D229",
                                 "D280"]},
+            "repair-born-game.py": {
+                "does": "the one-off repair for the F1 defect: a card born with `game IS "
+                        "NULL` although its sku is already bound. `cli/cmd_emit.py`'s two "
+                        "never-seen-position birth sites now pass the game they had already "
+                        "resolved for `bind_sku`, so this is only for cards that were born "
+                        "before that fix. `game_for_sku` reads the bound sku's `product_line` "
+                        "and `rarity` back off `pipeline/games.py`'s registry — the inverse "
+                        "of `pipeline/join.py:Catalog.from_export`'s own partition, never a "
+                        "second table — and refuses a card whose product line the registry "
+                        "does not recognize, or one two games could equally claim. Previews "
+                        "by default: count per derived game, five examples, and every "
+                        "refusal. `--write` applies inside one `Store.write()` transaction. "
+                        "A generator that gates nothing (D18): on no hook.",
+                "governed_by": ["D18", "D21", "D258"],
+                "note": "THE ONE PLACE THIS SCRIPT AND `cli/cmd_emit.py` MUST NOT DISAGREE: "
+                        "the birth-site fix passes the game the PIPELINE already resolved for "
+                        "this run (never a guess), while this script derives one from the "
+                        "STORED sku's own facts after the fact — two different sources of "
+                        "truth for the same field, correct only because both refuse rather "
+                        "than guess when they do not know. `repair-born-game-selftest.py` "
+                        "proves the derivation and the refusal, on a throwaway store, not in "
+                        "`make check` (map-fix.py's precedent for a generator's own selftest).",
+            },
+            "repair-born-game-selftest.py": {
+                "does": "proves `repair-born-game.py` on a throwaway store: a resolvable "
+                        "NULL-game card gets the right game, a card that already has one is "
+                        "never planned or touched, a card whose sku's product line maps to "
+                        "no game is refused and named, a card whose sku this store has never "
+                        "seen is refused and named, a card with no sku is not a candidate at "
+                        "all, and the preview writes nothing. NOT in `make check`, "
+                        "`map-fix-selftest`'s precedent for a generator's own selftest.",
+                "governed_by": ["D18"],
+            },
             "map-view.py": {
                 "does": "`make map` — docs/map.py rendered for a person, in four views: the "
                         "shape, one package, one module, everything a decision governs, and "
