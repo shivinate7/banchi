@@ -59,7 +59,7 @@ The fingerprint is a `{path: (mtime, size)}` dict rather than a digest so the lo
 
 **Main tree only, and the refusal is the design.** A worktree is deleted routinely and its plist would outlive it, leaving launchd retrying a path that is gone. `up`, `down`, `restart` and `status` work in every tree; only login-persistence is refused.
 
-**2026-09-28, owner's ruling: the plist carries `ProcessType: Interactive`.** An unset ProcessType is background and throttled (`man launchd.plist`). The live server ran 2.5 to 3.5 times slower than an identical copy. Unmeasured after the change; revert if no gain.
+**2026-09-28, owner's ruling: the plist carries `ProcessType: Interactive`.** An unset ProcessType is Standard, with light resource limits (`man launchd.plist`). Interactive removes them. The live server ran 2.5 to 3.5 times slower than an identical copy. Measured after merge; revert if no gain.
 
 **`KeepAlive: {SuccessfulExit: false}` and not `true`, which is what lets `make down` win.** A process terminated by a signal is an *unsuccessful* exit to launchd, so `true` would restart the very thing `make down` had just stopped. The SIGTERM handler therefore always exits 0, and `make down` says — before the operator finds out tomorrow morning — that the agent will start it again at the next login.
 
