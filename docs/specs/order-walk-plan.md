@@ -960,7 +960,7 @@ the only rows that can hold a tick.
 press matched the press before the walk existed. That argument is retired. The operator says
 who the walk is for, every time, and an empty selection means Start is not offered.
 
-**Opening a buyer is not ticking one (owner's ruling, 2026-09-28).** `#/orders` opens the first buyer in the list on its own, as `#/inventory` opens its first box: `selectedKey` falls back to the first shown row. That is a view. The tick set stays empty at first render, and on a phone no sheet opens by itself.
+**Opening a buyer is not ticking one (owner's ruling, 2026-09-28).** `#/orders` opens the first buyer in the list on its own, as `#/inventory` opens its first box: `selectedKey` falls back to the first shown row, and the landing list is the pullable buyers (D270, amended 2026-09-28: "Hide unpullable" is on at rest, one click widens it). That is a view. The tick set stays empty at first render, and on a phone no sheet opens by itself.
 
 **2 was not a question the owner could answer as asked, because "a frozen pass" was this
 document's word and not defined here.** It is defined in section 8: from the press of Start to

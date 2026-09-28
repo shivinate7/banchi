@@ -385,6 +385,8 @@ async function open(
        once"/"fires twice"/"never fires" cases assert on — a call COUNT, not a screen text,
        is the only thing that tells "asked the SAME run twice" apart from "asked once". */
     pricing?: unknown | ((name: string) => unknown)
+    /* Land with no query at all: the default view. */
+    landing?: boolean
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -677,7 +679,9 @@ async function open(
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [], facet_cells: [] }) })
   })
 
-  await page.goto(VIEW_ROUTE)
+  /* THE LANDING VIEW HIDES BUYERS WITH NOTHING ON HAND (2026-09-28). Every case but the one about
+     that view opens with it widened, so a fixture's buyer is never hidden by a default it is not about. */
+  await page.goto(options.landing === true ? VIEW_ROUTE : `${VIEW_ROUTE}?pullable=0`)
   await expect(page.locator(VIEW)).toBeVisible()
   return wire
 }
@@ -954,7 +958,7 @@ test('the Show facet lists a buyer only in its own state, and each count is the 
 
 /** A buyer's one state says what is wrong in words (UX-200), and a pulled-out short line stays
  *  Short (UX-196). */
-test('Needs a look names what to look at, in cards', async ({ page }) => {
+test('Check names what to look at, in cards', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   const carol = page.locator('.orders-index-row', { hasText: 'Carol' })
   await expect(carol).toContainText('1 missing')
@@ -2794,7 +2798,7 @@ async function reverseSort(page: Page): Promise<void> {
 
 test('Dollar value sorts buyers by their order total, high to low then low to high', async ({ page }) => {
   await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
-  await pickSort(page, /^Dollar value/)
+  await pickSort(page, /^Value/)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Zeta', 'Abel', 'Mona'])
   await reverseSort(page)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Abel', 'Zeta'])
@@ -2802,7 +2806,7 @@ test('Dollar value sorts buyers by their order total, high to low then low to hi
 
 test('Card count sorts buyers by copies still owed, most first then fewest first', async ({ page }) => {
   await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
-  await pickSort(page, /^Card count/)
+  await pickSort(page, /^Cards/)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Zeta', 'Abel'])
   await reverseSort(page)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Abel', 'Zeta', 'Mona'])
@@ -2810,7 +2814,7 @@ test('Card count sorts buyers by copies still owed, most first then fewest first
 
 test('Buyer name sorts A to Z, then Z to A', async ({ page }) => {
   await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
-  await pickSort(page, /^Buyer name/)
+  await pickSort(page, /^Buyer/)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Abel', 'Mona', 'Zeta'])
   await reverseSort(page)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Zeta', 'Mona', 'Abel'])
@@ -2821,7 +2825,7 @@ test('Buyer name sorts A to Z, then Z to A', async ({ page }) => {
  * box, Abel's sits in two — 0, 1, 2 ascending, and unplaced never means "last". */
 test('Fewest drawers to open reuses the walk plan: unplaced buyers rank first, ascending', async ({ page }) => {
   await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
-  await pickSort(page, /^Fewest drawers to open/)
+  await pickSort(page, /^Fewest drawers/)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Zeta', 'Abel'])
   await reverseSort(page)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Abel', 'Zeta', 'Mona'])
@@ -2829,7 +2833,7 @@ test('Fewest drawers to open reuses the walk plan: unplaced buyers rank first, a
 
 test('a new sort key survives a reload through the URL', async ({ page }) => {
   await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
-  await pickSort(page, /^Buyer name/)
+  await pickSort(page, /^Buyer/)
   await expect(page).toHaveURL(/sort=buyer/)
   await page.reload()
   await expect(page.locator(VIEW)).toBeVisible()
@@ -2861,7 +2865,7 @@ test('Mark sold does not re-rank the Card count sort under the hand', async ({ p
       return { undone: false, order_key: ZETA.row.key, sku: 'SKU-ZETA1', newly: 2, recorded: 2, outstanding: 0, places: [place({ box: 3, index: 9 })], sales: [] }
     },
   })
-  await pickSort(page, /^Card count/)
+  await pickSort(page, /^Cards/)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Zeta', 'Abel'])
 
   await page.locator('.orders-index-row', { hasText: 'Zeta' }).click()
@@ -4380,11 +4384,11 @@ test('an empty cutoff refuses the press', async ({ page }) => {
 test('a typed ?buyer= selects that buyer, and Back selects the one before (FLT-11)', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   await page.evaluate(() => {
-    window.location.hash = '#/orders?buyer=name%3Abob'
+    window.location.hash = '#/orders?pullable=0&buyer=name%3Abob'
   })
   await expect(page.locator('.orders-panel-name')).toHaveText('Bob')
   await page.evaluate(() => {
-    window.location.hash = '#/orders?buyer=name%3Aalice'
+    window.location.hash = '#/orders?pullable=0&buyer=name%3Aalice'
   })
   await expect(page.locator('.orders-panel-name')).toHaveText('Alice')
   await page.goBack()
@@ -4604,4 +4608,35 @@ test('the Show facet takes several picks: a buyer passes on any, and the URL kee
 
   await page.reload()
   await expect(page.locator('.orders-index-row')).toHaveCount(2)
+})
+
+/* THE LANDING VIEW IS THE PULLABLES (owner's ruling, 2026-09-28, D270): a fresh landing lists only
+ * buyers with a card on hand to pull, names the hide in the count line, opens the first of them,
+ * ticks nobody, and one click widens it. A link that names its own view is not narrowed. */
+test('a fresh landing shows only pullable buyers, and one click widens it', async ({ page }) => {
+  /* Alice's line resolves (a copy is on hand); Bob's is short (none on hand). */
+  const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+  const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'short' })
+  const both = payloadOf([alice.row, bob.row], [alice.resolved, { ...bob.resolved, outstanding: 2 }])
+  await open(page, { orders: both, landing: true })
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Alice')
+  await expect(page.locator('.orders-index-row')).toHaveAttribute('aria-current', 'true')
+  await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
+  await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('1 of 2 buyers')
+  await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('Hide unpullable')
+  /* The rest state is not a change: no badge on the Filters press. */
+  await expect(page).not.toHaveURL(/pullable=/)
+
+  await (await openFilters(page)).getByRole('button', { name: /^Hide unpullable/ }).click()
+  await closeFilters(page)
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+  await expect(page).toHaveURL(/pullable=0/)
+  await page.reload()
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+
+  /* A link that names its own view is not narrowed by the default. */
+  await page.goto(`${VIEW_ROUTE}?show=short`)
+  await page.reload()
+  await expect(page.locator('.orders-index-row')).toContainText('Bob')
 })

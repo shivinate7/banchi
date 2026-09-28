@@ -21,6 +21,7 @@ import {
   useSortParam,
   useUndoHotkey,
   useViewFlag,
+  useViewQuery,
   useViewParam,
   type FilterFacet,
   type IconName,
@@ -865,8 +866,8 @@ const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconNam
   /* THE WORD IS "Ready" — one word, not "Ready to sell" (owner's ruling, 2026-09-19). */
   ready: { label: 'Ready', tone: 'ok', icon: 'check' },
   short: { label: 'Short', tone: 'warn', icon: 'alert' },
-  look: { label: 'Needs a look', tone: 'warn', icon: 'eye' },
-  unresolved: { label: 'Not resolved', tone: 'default', icon: 'clock' },
+  look: { label: 'Check', tone: 'warn', icon: 'eye' },
+  unresolved: { label: 'Unresolved', tone: 'default', icon: 'clock' },
   done: { label: 'Done', tone: 'default', icon: 'check' },
 }
 
@@ -876,10 +877,10 @@ const STATUS_PILL: Record<Status, { label: string; tone: PillTone; icon: IconNam
  *  Ship still leads every one of these (`orderView.ts`'s own banner on why). */
 const SORT_OPTIONS: readonly SortOption<OrderSortKey>[] = [
   { key: 'placed', label: 'Placed', desc: 'Newest first', asc: 'Oldest first', first: 'desc' },
-  { key: 'value', label: 'Dollar value', desc: 'High to low', asc: 'Low to high', first: 'desc' },
-  { key: 'cards', label: 'Card count', desc: 'Most first', asc: 'Fewest first', first: 'desc' },
-  { key: 'buyer', label: 'Buyer name', desc: 'Z to A', asc: 'A to Z', first: 'asc' },
-  { key: 'drawers', label: 'Fewest drawers to open', desc: 'Most first', asc: 'Fewest first', first: 'asc' },
+  { key: 'value', label: 'Value', desc: 'High to low', asc: 'Low to high', first: 'desc' },
+  { key: 'cards', label: 'Cards', desc: 'Most first', asc: 'Fewest first', first: 'desc' },
+  { key: 'buyer', label: 'Buyer', desc: 'Z to A', asc: 'A to Z', first: 'asc' },
+  { key: 'drawers', label: 'Fewest drawers', desc: 'Most first', asc: 'Fewest first', first: 'asc' },
 ]
 const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'desc' }
 
@@ -890,9 +891,8 @@ const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'desc' }
 type ShowValue = Status | typeof MISSING_FACET
 const SHOW_ORDER: readonly ShowValue[] = [MISSING_FACET, 'look', 'short', 'ready', 'unresolved', 'done']
 const NO_SHOWS: readonly ShowValue[] = []
-/** The facet's own short words. The row's pill keeps `STATUS_PILL`'s longer ones. */
-const SHOW_WORDS: Partial<Record<ShowValue, string>> = { [MISSING_FACET]: 'Missing', look: 'Check', unresolved: 'Unresolved' }
-const showLabel = (value: ShowValue): string => SHOW_WORDS[value] ?? STATUS_PILL[value as Status].label
+/** ONE STATE, ONE NAME: the facet and the row's pill read the same `STATUS_PILL` words. */
+const showLabel = (value: ShowValue): string => (value === MISSING_FACET ? 'Missing' : STATUS_PILL[value].label)
 
 const LANE_TONE: Record<ShippingLane, PillTone> = { envelope: 'ok', parcel: 'default', unjudged: 'warn' }
 const LANE_ICON: Record<ShippingLane, IconName> = { envelope: 'mail', parcel: 'package', unjudged: 'alert' }
@@ -2842,6 +2842,15 @@ function PullStage({
   const [query, setQuery] = useViewParam('q')
   const [sort, setSort] = useSortParam<OrderSortKey>(SORT_AT_REST, { options: SORT_OPTIONS })
   const [hideUnknown, setHideUnknown] = useViewFlag('unknown', false)
+  /* THE LANDING VIEW IS THE PULLABLES (owner's ruling, 2026-09-28): a buyer with at least one card
+     on hand to pull. It is a hide toggle ON AT REST, the way Inventory's Hide sold is (D132), so
+     it is one click to widen, it is named in the "N of M" line, and its badge counts only a move
+     away from rest. A link that names its own view (a state, a status, a buyer, an order, a
+     search) opens with the toggle off: the link's answer is never hidden by the default. Read
+     once, at mount, so a pick made later never flips the rest state under the hand. */
+  const viewQuery = useViewQuery()
+  const [pullableAtRest] = useState(() => !['show', 'status', 'buyer', 'order', 'q', 'unknown'].some((key) => viewQuery.has(key)))
+  const [hideUnpullable, setHideUnpullable] = useViewFlag('pullable', pullableAtRest)
 
   /* THE SECOND TIER'S CACHE: real picks and places, fetched on demand for exactly the orders
    *  this screen is looking at (`POST /orders/picks`, `server/capture_server.py:do_orders`'s
@@ -3027,7 +3036,13 @@ function PullStage({
     statuses.length === 0 || group.orders.some((order) => statuses.includes((order.status ?? '').trim()))
   const passesSearch = (group: BuyerGroup) =>
     matchQuery(query, { text: [group.name, buyerLabel(group), ...group.orders.map((order) => order.number)] })
-  const passesHide = (group: BuyerGroup) => passesHideUnknown(group, hideUnknown, answers)
+  /* A buyer still owed a copy that is on hand. A finished or done buyer has nothing to pull and
+     stays: the default hides open buyers only. */
+  const groupPullable = (group: BuyerGroup) =>
+    group.open.length === 0 ||
+    group.open.some((order) => (answers.get(order.key)?.lines ?? []).some((line) => line.owed - line.outstanding > 0))
+  const passesPullable = (group: BuyerGroup) => !hideUnpullable || groupPullable(group)
+  const passesHide = (group: BuyerGroup) => passesHideUnknown(group, hideUnknown, answers) && passesPullable(group)
   /* SEVERAL PICKS, ONE FACET (owner's ruling 2026-09-28, D270): a group passes when it matches ANY
      picked value. "Done" is read against the closed groups, every other value against the open
      ones, so Done plus another pick is the union of both sets. */
@@ -3114,7 +3129,7 @@ function PullStage({
      freeze still holds against one. Always `false` outside `sort.key === 'drawers'`
      (`drawerPlan` is nulled the moment another key is picked), so this term is inert for
      every other sort. */
-  const basisSig = [sort.key, sort.dir, shows.join(','), statuses.join(','), query, hideUnknown, drawerPlan !== null].join('\u0000')
+  const basisSig = [sort.key, sort.dir, shows.join(','), statuses.join(','), query, hideUnknown, hideUnpullable, drawerPlan !== null].join('\u0000')
   const [takeSig, setTakeSig] = useState<string | null>(null)
   const [take, setTake] = useState<GroupTake>(new Map())
   if (takeSig !== basisSig) {
@@ -3155,6 +3170,14 @@ function PullStage({
     },
   ]
   const unknownCount = base.filter((group) => groupHasUnseenLine(group, answers)).length
+  const unpullableCount = base.filter(
+    (group) =>
+      !groupPullable(group) &&
+      passesFeed(group) &&
+      passesSearch(group) &&
+      passesShow(group) &&
+      passesHideUnknown(group, hideUnknown, answers),
+  ).length
 
   /* ------------------------------------------------------------------- the walk's selection */
 
@@ -3444,7 +3467,12 @@ function PullStage({
       count={{ shown: shownGroups.length, total: base.length, noun: { one: 'buyer', many: 'buyers' } }}
       search={{ query, onChange: setQuery, placeholder: 'Buyer or order', label: 'Search buyers' }}
       sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
-      hide={unknownCount === 0 && !hideUnknown ? undefined : { checked: hideUnknown, onChange: setHideUnknown, label: 'Hide unknown', count: unknownCount }}
+      hide={[
+        ...(unpullableCount === 0 && !hideUnpullable
+          ? []
+          : [{ checked: hideUnpullable, onChange: setHideUnpullable, label: 'Hide unpullable', count: unpullableCount, defaultChecked: pullableAtRest }]),
+        ...(unknownCount === 0 && !hideUnknown ? [] : [{ checked: hideUnknown, onChange: setHideUnknown, label: 'Hide unknown', count: unknownCount }]),
+      ]}
       beside={storeControls}
     />
   )
@@ -3485,7 +3513,13 @@ function PullStage({
               title={shows.length === 1 && shows[0] === 'done' ? 'Nothing done yet' : 'No buyer in this view'}
               body="Clear the filters to see every open buyer."
               actions={
-                <Button icon="list" onClick={() => setPicked({})}>
+                <Button
+                  icon="list"
+                  onClick={() => {
+                    setPicked({})
+                    setHideUnpullable(false)
+                  }}
+                >
                   Show every open buyer
                 </Button>
               }

@@ -86,7 +86,8 @@ export type FilterBarProps<K extends string = string> = {
   readonly count: FilterBarCount
   readonly search?: FilterBarSearch
   readonly sort?: FilterBarSort<K>
-  readonly hide?: FilterBarHide
+  /** One hide toggle, or several (Orders: unpullable and unknown). */
+  readonly hide?: FilterBarHide | readonly FilterBarHide[]
   /** A screen's own control, drawn beside the search at every width: the rail's collapse
    *  press, a reload. One control, not a toolbar. */
   readonly beside?: ReactNode
@@ -139,18 +140,18 @@ function FiltersAndSort<K extends string>({
   readonly value: FilterValue
   readonly onChange: (next: FilterValue) => void
   readonly sort?: FilterBarSort<K>
-  readonly hide?: FilterBarHide
+  readonly hide: readonly FilterBarHide[]
   readonly label: string
 }) {
   return (
     <>
       {facets.length > 0 ? <FilterChips facets={facets} value={value} onChange={onChange} label={label} /> : null}
       {sort === undefined ? null : <SortControl options={sort.options} value={sort.value} onChange={sort.onChange} label={sort.label} />}
-      {hide === undefined ? null : (
-        <HideToggle checked={hide.checked} onChange={hide.onChange} count={hide.count}>
-          {hide.label}
+      {hide.map((one) => (
+        <HideToggle key={one.label} checked={one.checked} onChange={one.onChange} count={one.count}>
+          {one.label}
         </HideToggle>
-      )}
+      ))}
     </>
   )
 }
@@ -162,23 +163,25 @@ export function FilterBar<K extends string = string>({
   count,
   search,
   sort,
-  hide,
+  hide: hideProp,
   beside,
   label = 'Filters',
   compact = 'popover',
   className,
 }: FilterBarProps<K>) {
   const id = useId().replace(/:/g, '')
+  const hides: readonly FilterBarHide[] = hideProp === undefined ? [] : Array.isArray(hideProp) ? hideProp : [hideProp as FilterBarHide]
   const [overlayOpen, setOverlayOpen] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
   const active = activeFacetCount(facets, value)
 
   const rest = sort === undefined ? null : sortAtRest(sort)
   const sortMoved = sort !== undefined && rest !== null && (sort.value.key !== rest.key || sort.value.dir !== rest.dir)
-  const hideMoved = hide !== undefined && hide.checked !== (hide.defaultChecked ?? false)
+  const hidesMoved = hides.filter((one) => one.checked !== (one.defaultChecked ?? false))
+  const hideMoved = hidesMoved.length > 0
   /* The badge on the compact trigger: what inside the SHEET differs from the screen at rest.
    *  A Hide sold that is on because it is on by default is not a change (D132). */
-  const badge = active + (sortMoved ? 1 : 0) + (hideMoved ? 1 : 0)
+  const badge = active + (sortMoved ? 1 : 0) + hidesMoved.length
 
   const typed = search?.query.trim() ?? ''
   /* THE COUNT LINE NAMES EVERYTHING THAT NARROWS THE LIST: each picked option, the search's
@@ -186,13 +189,13 @@ export function FilterBar<K extends string = string>({
   const words = [
     ...facetWords(facets, value),
     ...(typed === '' ? [] : [`“${typed}”`]),
-    ...(hide !== undefined && hide.checked && (hide.count ?? 1) > 0 ? [hide.label] : []),
+    ...hides.filter((one) => one.checked && (one.count ?? 1) > 0).map((one) => one.label),
   ]
   const clearable = active > 0 || typed !== '' || hideMoved
   const clearAll = () => {
     onChange({})
     if (typed !== '') search?.onChange('')
-    if (hideMoved) hide?.onChange(hide.defaultChecked ?? false)
+    for (const one of hidesMoved) one.onChange(one.defaultChecked ?? false)
   }
 
   return (
@@ -219,7 +222,7 @@ export function FilterBar<K extends string = string>({
 
         {/* ONE LINE, ALWAYS: one trigger, one overlay (D270). No wide inline
             row exists any more, at any width. */}
-        {facets.length > 0 || sort !== undefined || hide !== undefined ? (
+        {facets.length > 0 || sort !== undefined || hides.length > 0 ? (
           <div className="bn-filterbar-compact">
             <IconButton
               ref={trigger}
@@ -244,13 +247,13 @@ export function FilterBar<K extends string = string>({
             {compact === 'sheet' ? (
               <Sheet open={overlayOpen} onClose={() => setOverlayOpen(false)} title={label} icon="filter">
                 <div className="bn-filterbar-sheet-body" id={`${id}-sheet`}>
-                  <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hide} label={label} />
+                  <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hides} label={label} />
                 </div>
               </Sheet>
             ) : (
               <Popover open={overlayOpen} onClose={() => setOverlayOpen(false)} anchor={trigger} label={label} className="bn-filterbar-popover">
                 <div className="bn-filterbar-sheet-body" id={`${id}-sheet`}>
-                  <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hide} label={label} />
+                  <FiltersAndSort facets={facets} value={value} onChange={onChange} sort={sort} hide={hides} label={label} />
                 </div>
               </Popover>
             )}
