@@ -527,13 +527,6 @@
         "labelled"
       ]
     },
-    "docs/decisions/*-every-row-in-the-collapsed-rail-draws-one-glyph-on-one.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "centred",
-        "centred"
-      ]
-    },
     "docs/decisions/*-gross-sales-retrospective.md": {
       "lane": "docs-sweep",
       "SPELLING": [

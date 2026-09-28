@@ -728,8 +728,8 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
      *
      * The distinction is worth a round trip on a path that has already failed, because the
      * two remedies point at different places. `unreachable` sends the operator to start a
-     * server; on the phone that server is already running, and the shell's own status dot
-     * is saying `Server online` — off the very same ungated read — while the write claims it
+     * server; on the phone that server is already running, and the shell's offline banner
+     * is absent — off the very same ungated read — while the write claims it
      * is down. The app was contradicting itself at the moment it was least able to explain. */
     const answering = await serverAnswersReads()
     if (answering) {

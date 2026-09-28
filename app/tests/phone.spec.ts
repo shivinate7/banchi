@@ -737,15 +737,15 @@ test('the drawer has no fixed foot, and every screen in it shows without a scrol
   const nav = drawer.locator('.bn-nav')
   await expect(nav.getByRole('link', { name: 'Pull' })).toHaveCount(1)
   await expect(nav.getByRole('button', { name: 'Theme' })).toHaveCount(1)
-  await expect(nav.locator('.bn-server')).toHaveCount(1)
+  await expect(nav.locator('.bn-server')).toHaveCount(0)
 
   const screens = nav.locator('a.bn-nav-link:not([target="_blank"])')
   expect(await screens.count(), 'the drawer drew no screens').toBeGreaterThan(5)
   for (const link of await screens.all()) await expect(link).toBeInViewport({ ratio: 1 })
 
   // and the last row of all is reached by scrolling the one list
-  await nav.locator('.bn-server').scrollIntoViewIfNeeded()
-  await expect(nav.locator('.bn-server')).toBeInViewport()
+  await nav.getByRole('button', { name: 'Theme' }).scrollIntoViewIfNeeded()
+  await expect(nav.getByRole('button', { name: 'Theme' })).toBeInViewport()
 })
 
 /* THE SWEEP ABOVE COULD NOT HAVE CAUGHT THIS. It reads `#/graveyard` off the shared empty

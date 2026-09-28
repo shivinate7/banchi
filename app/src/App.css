@@ -357,24 +357,6 @@
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot { align-items: flex-start; }
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-btn { width: 48px; padding: 0; justify-content: center; }
 .bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-btn > :not(.bn-icon) { display: none; }
-/* THE SERVER DOT IS THE ONE FOOT CHILD THE RAIL NEVER NAMED, AND IT IS NOT A NUDGE.
-   `.bn-server` is not a `.bn-btn`, so the width rule above skips it, and nothing else here
-   mentions it — it kept its OPEN-sidebar layout into the rail: `padding: 0 var(--bn-3)` with the
-   label `display: none`, shrink-wrapped to 32px by the `align-items: flex-start` above. So the
-   dot was never centred against anything. It was LEFT-ALIGNED in a shrunk box and its position
-   was whatever the left padding happened to be: 8 (the sidebar's gutter) + 12 (that padding) + 4
-   (half an 8px dot) = 24, against the 32 every other glyph in the column sits on. Eight pixels
-   left of the spine, measured, and the owner could see it.
-   It is therefore NOT off by half a border and NOT centred against an asymmetric container — the
-   two other shapes this failure comes in — and it is correct in the OPEN sidebar, where the row
-   is meant to be left-aligned and the dot lines up under the button icons. Collapse-only, and a
-   missing rule rather than a wrong number.
-   The fix is the rule its siblings already have, so the spine is one declaration repeated and not
-   a second arithmetic to keep in step. `width` is FIXED at 48px and the centring resolves against
-   THAT, never against the sidebar's animating width — the trap this whole block is written
-   around. The dot rests on 32 and does not travel to get there. */
-.bn-shell[data-rail='true'] .bn-side .bn-side-foot .bn-server { width: 48px; padding: 0; justify-content: center; }
-
 /* Tooltip for rail links */
 .bn-nav-link[data-tip]::after {
   content: attr(data-tip);
@@ -414,20 +396,6 @@
 .bn-side-foot .bn-side-foot-text { flex: 1 1 auto; text-align: left; }
 .bn-side-foot .bn-btn:hover { background: var(--bn-hover); color: var(--bn-ink); }
 .bn-side-foot .bn-btn .bn-icon { color: var(--bn-ink-3); }
-.bn-server {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-2);
-  height: 36px;
-  padding: 0 var(--bn-3);
-  border-radius: var(--bn-r);
-  font-size: var(--bn-fs-sm);
-  color: var(--bn-ink-3);
-  white-space: nowrap;
-}
-/* the dot sits in an 18px cell, on the same column as every icon above it */
-.bn-server .bn-dot { margin: 0 5px; flex: none; }
-.bn-server[data-state='offline'] { color: var(--bn-danger); background: var(--bn-danger-tint); }
 
 /* ---- mobile top bar + sheet ------------------------------------------------ */
 .bn-topbar { display: none; }
@@ -453,7 +421,6 @@
   .bn-side .bn-side-foot { align-items: flex-start; }
   .bn-side .bn-side-foot .bn-btn { width: 48px; height: 44px; padding: 0; justify-content: center; }
   .bn-side .bn-side-foot .bn-btn > :not(.bn-icon) { display: none; }
-  .bn-side .bn-side-foot .bn-server { width: 48px; padding: 0; justify-content: center; }
   .bn-side .bn-nav-link[data-tip]:hover::after { opacity: 1; transform: translateY(-50%); }
 }
 @media (max-width: 639px) {
@@ -542,7 +509,6 @@
 }
 .bn-drawer .bn-nav-link { height: 44px; font-size: var(--bn-fs-base); }
 .bn-drawer .bn-nav-link .bn-kbd { opacity: 1; }
-.bn-drawer .bn-server { height: 44px; }
 /* The old foot's rows, at the end of the list, under one rule like the groups above them. */
 .bn-drawer-more { border-top: 1px solid var(--bn-line); padding-top: var(--bn-2); }
 /* A <button> wearing a nav row: the theme toggle. */
