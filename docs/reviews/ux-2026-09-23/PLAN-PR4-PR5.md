@@ -38,6 +38,20 @@ carries are quoted in backticks.
 - **Order:** PR 4A, then PR 4B, then the post-PR 4 checks, then PR 5. PR 4A and PR 4B merge
   independently.
 
+## Feedback inbox (owner's process, 2026-09-27, process-only)
+
+Owner: `I will also provide feedback as I'm running through the app, and it either needs to logged into the markdown as lanes to start, or it needs to be sent to a lane currently on it, and/or sent as its own lane once identified by me`.
+
+Each item gets an id, `F<n>`, and one line here. The line names its route:
+- `to lane <X>`: sent to the running lane that owns it.
+- `logged`: a new lane that waits for the owner's word.
+- `own lane <X>`: the owner named it, so it is dispatched at once.
+
+- F1 (logged, diagnosis running): Inventory, Sets shows two "Unleashed" sets. The one with 99
+  cards has no photos. Owner: `why does this 99 card set of unleashed even exist?`
+- F2 (logged, diagnosis running): Sales draws "No photo" where Sets and Pricing draw stock card
+  images.
+
 ## PR 3B: the demo data follow-up (DONE, 2026-09-27)
 
 The full mirror is live at `shivinate7.github.io/banchi/`, publish run 36329643153 on main
@@ -100,8 +114,14 @@ Owner, 2026-09-27: `save it in the markdown as an item for PR4B, ironically rpel
 
 - BUILT before this plan was written, on 2026-09-25: the `--cap` plus `--live-guard` defect
   (the D7 amendment, T7's `capguard` rows) and the DEBT35 exit split (closed).
-- Open: DEBT37 (under a cap, a pending copy and an unseen live copy can both be out). A Sonnet
-  study says what is left and how to fix it. The lane waits for the owner's word on it.
+- DEBT37 (under a cap, a pending copy and an unseen live copy can both be out). A Sonnet study
+  found all four parts still true, and CLI only. The owner asked why it overshoots at all. The
+  answer: the cap counts two partial models of one fact. The owner proposed, in paraphrase: a cap is usable only once the store has reconciled with
+  the live export. The verbatim words trip the docs audit's make-target row.
+  Then the owner chose the precise rule: `emit --cap` refuses for a card unless the store's live
+  reading for it is newer than every copy sent since. The refusal names `reconcile --live`. This
+  replaces the 2026-09-25 ruling "Take the larger". The two wording gaps are fixed in the same
+  lane. Lane C builds it now.
 
 ### D. Leftover screens
 
