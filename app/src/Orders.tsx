@@ -30,6 +30,7 @@ import {
 } from './kit'
 import { absoluteDate, relativeDate } from './dates'
 import { toast } from './kit/toast'
+import { boxTitle } from './kit/data'
 import { CardPane, gameWord, marketTable, photoSrc, type MarketRead, type Row } from './CardHero'
 import { CardLocations, layoutsOf } from './CardLocations'
 import { forSale } from './cardState'
@@ -1218,7 +1219,7 @@ function buildCopyMap(line: ResolvedLine, store: StoreCopies | null, claims: Cla
     if (stop === undefined) {
       stop = {
         key,
-        title: pooled ? (text(place.game_display) ? place.game_display : 'Pooled') : `Box ${pick.box}`,
+        title: pooled ? (text(place.game_display) ? place.game_display : 'Pooled') : boxTitle(place.box_name, pick.box),
         name: pooled ? 'no position' : (text(place.box_name) ? place.box_name : null),
         box: pooled ? null : pick.box,
         pooled,
@@ -4278,8 +4279,13 @@ function OrderLineRow({
     return copies.filter((copy) => keep.has(copy.key))
   }, [copies, unfolded])
   const folded = copies.length - shown.length
-  /* Where the folded ones are, so the control names a drawer rather than a number alone. */
-  const foldedIn = [...new Set(copies.filter((copy) => !shown.includes(copy)).map((copy) => copy.pick.box))]
+  /* Where the folded ones are, so the control names a drawer by its NAME (D259), never a bare
+     number. Deduped on the box number; the first copy seen for a box carries its name. */
+  const foldedIn = [
+    ...new Map(
+      copies.filter((copy) => !shown.includes(copy)).map((copy) => [copy.pick.box, copy.pick.place.box_name] as const),
+    ),
+  ]
 
   return (
     <li className={`orders-line orders-line-${line.reason}`}>
@@ -4394,7 +4400,9 @@ function OrderLineRow({
                 ) : (
                   <>
                     Show the other {folded} {folded === 1 ? 'copy' : 'copies'}
-                    {foldedIn.length === 1 ? ` in Box ${foldedIn[0]}` : ''}
+                    {foldedIn.length === 1 && foldedIn[0] !== undefined
+                      ? ` in ${boxTitle(foldedIn[0][1], foldedIn[0][0])}`
+                      : ''}
                   </>
                 )}
               </button>

@@ -50,6 +50,7 @@ import {
   touchBox,
 } from './deviceMemory'
 import type { CaptureSetup, SectionPick } from './deviceMemory'
+import { boxTitle } from './kit/data'
 import { captureBoxLabel } from './runScope'
 // The one thing this screen takes from the library drawing: how long a pause has to be
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
@@ -2155,7 +2156,15 @@ export function CaptureScreen() {
               'browser remembered the number before it started recording which box that was, ' +
               'and a deleted box hands its number to the next one. Nothing is selected; pick ' +
               'the drawer in front of you.'
-          : `Box ${found.box} is a different drawer now — the one you last captured into was ` +
+          : /* D153's OWN EXCEPTION SURVIVES D259, confirmed by this file's own test
+               ("it says it by number... naming the box now at it (`Epics`) would be telling
+               the operator their drawer is something it has never been"). The number is the
+               one fact the two drawers share, and this sentence is ABOUT the number's own
+               reallocation, not a label identifying the current drawer — D259's "never a bare
+               number standing for the drawer" is about identifying a box, which this is not.
+               Allow-listed in kit-adoption for the same reason the picker's search suffix is
+               (below). */
+            `Box ${found.box} is a different drawer now — the one you last captured into was ` +
               'deleted, and its number went to this one. Nothing is selected; pick the drawer ' +
               'in front of you.',
       )
@@ -4490,7 +4499,7 @@ export function CaptureScreen() {
                 {boxOffer === null ? null : (
                   <Opt
                     on={false}
-                    name={boxOffer.box === null ? (boxOffer.name ?? '') : `Box ${boxOffer.box}`}
+                    name={boxOffer.box === null ? (boxOffer.name ?? '') : boxTitle(boxOffer.name, boxOffer.box)}
                     trail="New"
                     trailWord
                     onPick={() => void createOfferedBox()}
