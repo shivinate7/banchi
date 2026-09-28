@@ -69,7 +69,7 @@ make serve-scope    # what `make serve-selftest` reads, and whether this branch 
                     #   checkout with a STUB app/, so no screen change can reach it.
                     #   `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every skip.
 make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
-                    #   measurement). What each of twenty-two guard self-tests reads. A
+                    #   measurement). What each of twenty-three guard and product self-tests reads. A
                     #   sixteenth, `pricearchive-selftest`, joined 2026-09-23 on the
                     #   owner's word: "once it's done, it only needs to be tested when
                     #   touched." Six more joined the same day, once that sixteenth's own
@@ -81,7 +81,9 @@ make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
                     #   `sku-number-contradictions-selftest` — each proves a module with a
                     #   real caller today (`archive sweep --write`, `#/revenue`'s
                     #   unsold-stock panel, `cards checks`, `emit`/`reprice apply`,
-                    #   `#/product`, `cards contradictions`).
+                    #   `#/product`, `cards contradictions`). `match-selftest` joined
+                    #   2026-09-27 on the owner's word (owner ruling Q3, test-audit plan): "Yes,
+                    #   path-gate it." It is a product test, deterministic over what it imports.
                     #   ARGS=list [--target <name>], or
                     #   ARGS="classify --target <name> --base <rev>".
                     #   D247 is the argument. A guard

@@ -927,7 +927,11 @@ demo-determinism-selftest:
 # still applies to the temp store it writes, which is why it gates rather than runs in the
 # commit hook).
 match-selftest:
-	@python3 scripts/match-selftest.py
+	@if python3 scripts/guard-scope.py classify --target match-selftest --base origin/main; then \
+		$(PYTHON) scripts/match-selftest.py; \
+	else \
+		echo "match-selftest: SKIPPED — this branch does not touch search, matching or their callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
 # its own. D18 is the first: this writes — a bare repo, a clone, commits, pushes — and nothing
