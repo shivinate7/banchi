@@ -37937,6 +37937,10 @@ _M_SUBALL = {_M_A: "0.05", _M_D: "0.10", _M_R: "0.12"}
 _M_LAYOUT = {
     "one": [[0, 1, 2]], "two": [[0, 2], [1]], "share": [[0, 1, 2], [3, 4]],
     "deep1": [[0, 1, 2, 5, 6]], "deep2": [[0, 2, 5], [1, 6]], "share1": [[0, 1, 2, 5]],
+    # ONE SKU ALONE, NO R AND NO A, for the D7 2026-09-27 cap-reconcile rows below: three
+    # normal Dunsparce and nothing else, so a case can push, reconcile and cap one SKU
+    # without a second card's own reasons crowding the assertions.
+    "pure1": [[0, 5, 6]], "pure2": [[0, 5], [6]],
 }
 _M_NONE_NAMED = {"prices": [], "moves": []}
 
@@ -38094,37 +38098,143 @@ def _m_cases() -> Dict[str, dict]:
         "says": [f"{_M_R} — {_M_LIVE}"], "never": [_M_ASKED0], "route": None,
         "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "runs to price, 3 ready"},
     }
-    # R7 F5 UNDER A CAP THE GUARD CLOSES, ON BOTH PATHS (the lane-end review of send-fixes). A
-    # cap of 1 with one Dunsparce live leaves no room, and the guard trims the reverse holo. The
-    # reverse holo is still the guard's trim, never "asked for none", and the headline names it.
-    # The cap fix first measured the trim with the guard's own reading, saw nothing to trim, and
-    # said "every card left needs a price first".
+    # R7 F5, UNDER A CAP THE GUARD USED TO CLOSE AND NO LONGER DOES (the owner's ruling,
+    # 2026-09-27, replacing the 2026-09-25 "take the larger" amendment, DEBT37). A cap of 1
+    # with one Dunsparce live guard-side now leaves room for exactly one, because the guard's
+    # own reading no longer feeds the cap at all — only the store's own `copies_out` does, and
+    # it is fresh here (no prior push, no pending). What the guard STILL does, unchanged, is
+    # trim the reverse holo to nothing on its own reading: R7 F5's own fence, "the guard's
+    # on-hand trim must not change", proved by this row surviving the cap rewrite intact.
     for layout, runs_label in (("share1", "one"), ("share", "two")):
         cases[f"share/{runs_label}/cap1-guardall"] = {
             "layout": layout, "market": _M_MIX, "flags": ["--cap", "1"],
-            "live": {_M_D: 1, _M_R: 1, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 1, "files": {},
-            "says": [f"{_M_R} — {_M_LIVE}", f"{_M_D} — 1 live, at the cap of 1", _M_A, _M_PRICE_LIVE1,
-                     f'"sku": "{_M_R}"'],
-            "never": [_M_ASKED0, _M_ONLY_PRICE],
-            "route": ("needs_price", ["1 card needs a price first", "TCGplayer already had every copy of 1 card"]),
-            "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "3 ready"},
+            "live": {_M_D: 1, _M_R: 1, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 0,
+            "files": {"import.csv": [d_mix]},
+            "says": [f"{_M_R} — {_M_LIVE}"],
+            "never": [_M_ASKED0, "run reconcile --live first", "1 live, at the cap of 1"],
+            "route": None,
+            "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price",
+                     "tile": "3 ready"},
         }
-    # `--cap N` WITH `--live-guard`: THE CAP COUNTS THE COPIES THE GUARD SAYS ARE LIVE (D7: "at
-    # most N copies LIVE"). Three Dunsparce are on hand, so the guard alone leaves room past the
-    # cap. Before the fix the cap read only the store and the join's export, both 0 here, and
-    # each row below sent one copy more than the cap allows. Below, at and over, on both paths.
+
+    # ============================================================ D7, THE 2026-09-27 RULING
+    #
+    # `--cap` REFUSES A CARD OUTRIGHT WHILE A COPY SENT SINCE IS STILL PENDING (DEBT37), and
+    # once reconciled the cap reads the store's own one reading alone — nothing maxed or
+    # summed with a guard any more. `pure1`/`pure2` hold Dunsparce alone (no R, no A), so a
+    # case can push, reconcile and cap one SKU with nothing else to crowd the assertions;
+    # `deep1`/`deep2` (R and A present) are for the rows that need a second card to prove it
+    # still sends. Every group runs on both the one-run and the several-run path.
+
+    # --- fresh (no pending) caps on the store's own count exactly: below, at and over -------
+    # `setup` pushes copies with no `--live-guard` and no `--cap` bigger than it needs to be
+    # wrong about; `reconcile` then plants the store's own live reading at exactly that many,
+    # closing the pending gap before the row's own `--cap` is asked. THIS IS ALSO THE "STALE
+    # READING NO LONGER UNDER-SENDS ONCE RECONCILED" ROW: before the reconcile the SKU is
+    # pending and `--cap` would refuse it (the row above proves that refusal); the reconcile
+    # is the fix, and "below" is the proof it worked — the cap opens back up to the fresh
+    # figure rather than staying stuck on the stale one.
+    for layout, runs_label in (("pure1", "one"), ("pure2", "two")):
+        cases[f"freshcap/{runs_label}/below"] = {
+            "layout": layout, "market": _M_MIX, "flags": ["--cap", "5"],
+            "setup": ["--quantity", f"{_M_D}=1"], "reconcile": {_M_D: 1},
+            "exit": 0, "files": {"import.csv": [(_M_D, 2, "2.06")]},
+            "says": [], "never": [_M_ASKED0, "run reconcile --live first"], "route": None,
+            "home": {"line": "send 2 copies to TCGplayer", "behind": None,
+                     "tile": "2 copies ready to send"},
+        }
+        # AT AND OVER LEAVE THE SETUP PRESS'S OWN FILE ON DISK (D54): the real press adds
+        # nothing, and a refusal never touches a file an earlier press wrote.
+        cases[f"freshcap/{runs_label}/at"] = {
+            "layout": layout, "market": _M_MIX, "flags": ["--cap", "1"],
+            "setup": ["--quantity", f"{_M_D}=1"], "reconcile": {_M_D: 1},
+            "exit": 1, "files": {"import.csv": [(_M_D, 1, "2.06")]},
+            "says": [f"{_M_D} — 1 live, at the cap of 1"],
+            "never": [_M_ASKED0, "run reconcile --live first"],
+            "route": ("nothing_to_send", ["already at TCGplayer"]),
+            # HOME READS NO CAP AT ALL (`do_pipeline_worklist` never asks `--cap` for), so it
+            # still counts the two backstock copies as ready — the SAME reason `capguard`'s
+            # own home block never claimed otherwise before this rewrite.
+            "home": {"line": "send 2 copies to TCGplayer", "behind": None,
+                     "tile": "2 copies ready to send"},
+        }
+        cases[f"freshcap/{runs_label}/over"] = {
+            "layout": layout, "market": _M_MIX, "flags": ["--cap", "1"],
+            "setup": ["--cap", "2"], "reconcile": {_M_D: 2},
+            "exit": 1, "files": {"import.csv": [(_M_D, 2, "2.06")]},
+            "says": [f"{_M_D} — 2 live, over the 1 this send asked for"],
+            "never": [_M_ASKED0, "run reconcile --live first"],
+            "route": ("nothing_to_send", ["already at TCGplayer"]),
+            "home": {"line": "send 1 copy to TCGplayer", "behind": None,
+                     "tile": "1 copy ready to send"},
+        }
+
+    # --- a pending copy refuses that card, and the other card in the send still goes --------
+    # TWO of Dunsparce's three copies are pushed and NEVER reconciled, so one copy is left
+    # uncommitted behind the pending pair — the shape that tells a pending refusal apart from
+    # "every copy is already listed" (D59's own, unrelated, branch, which is what a FULLY
+    # pushed SKU reaches instead: nothing is left to decide, cap or no cap). The reverse holo
+    # is left untouched by naming it `=0` in the setup press. The real press then asks a cap
+    # of any size: Dunsparce refuses outright, on the remedy — including the one copy that
+    # was never sent — and the reverse holo sends normally.
     for layout, runs_label in (("deep1", "one"), ("deep2", "two")):
-        for flag, cap, seen, want, said in (
-            ("below", "2", 1, [d_mix, r_mix], []),
-            ("at", "1", 1, [r_mix], [f"{_M_D} — 1 live, at the cap of 1"]),
-            ("over", "1", 2, [r_mix], [f"{_M_D} — 2 live, over the 1 this send asked for"]),
-        ):
-            cases[f"capguard/{runs_label}/{flag}"] = {
-                "layout": layout, "market": _M_MIX, "flags": ["--cap", cap],
-                "live": {_M_D: seen, _M_R: 0, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 0,
-                "files": {"import.csv": want}, "says": said, "never": [_M_ASKED0], "route": None,
-                "home": {"line": "send 4 copies to TCGplayer", "behind": "1 card needs a price", "tile": "4 ready"},
-            }
+        cases[f"pendingcap/{runs_label}"] = {
+            "layout": layout, "market": _M_MIX, "flags": ["--cap", "5"],
+            "setup": ["--quantity", f"{_M_D}=2", "--quantity", f"{_M_R}=0"],
+            "exit": 0, "files": {"import.csv": [r_mix]},
+            "says": [f"{_M_D} — 2 copies sent since the live reading — run reconcile --live first"],
+            "never": [_M_ASKED0, _M_LIVE, "1 live, at the cap of"], "route": None,
+            "home": {"line": "send 2 copies to TCGplayer", "behind": "1 card needs a price",
+                     "tile": "2 ready"},
+        }
+
+    # --- DEBT37's wording gap 2: the empty-send headline names a card the cap closed --------
+    # Two of Dunsparce's three copies are pushed and never reconciled (one stays uncommitted,
+    # for the same reason as the row above), the reverse holo's one copy is pushed in full,
+    # and Articuno still has no price — nothing is left to send at all, which is what reaches
+    # `empty_send_sentence`. Before this fix the headline counted `needs_price` and `live` (a
+    # guard trim) and said nothing about the card the CAP closed.
+    for layout, runs_label in (("deep1", "one"), ("deep2", "two")):
+        cases[f"capsempty/{runs_label}"] = {
+            "layout": layout, "market": _M_MIX,
+            "flags": ["--cap", "5"], "setup": ["--cap", "5", "--quantity", f"{_M_D}=2"],
+            # THE SETUP PRESS'S FILE STAYS (D54): Dunsparce at 2, the reverse holo at 1.
+            "exit": 1, "files": {"import.csv": [(_M_D, 2, "2.06"), r_mix]},
+            "says": [
+                f"{_M_D} — 2 copies sent since the live reading — run reconcile --live first",
+                f"{_M_R} — {_M_SENT}",
+                _M_A,
+                "nothing to send: 1 card needs a price first, and 1 card is held at this "
+                "send's cap",
+            ],
+            "never": [_M_ASKED0, _M_LIVE, _M_ONLY_PRICE],
+            "route": (
+                "needs_price",
+                ["1 card needs a price first", "1 card is held at this send's cap"],
+            ),
+            "home": {"line": "send 1 copy to TCGplayer", "behind": "1 card needs a price",
+                     "tile": "run to price, 1 ready"},
+        }
+
+    # --- DEBT37's wording gap 1: a guard-zeroed `asked` is not a typed zero -----------------
+    # The cap already closes Dunsparce to nothing on its own (one pushed and reconciled,
+    # exactly at a cap of one, with two more uncommitted behind it) — so the guard's OWN
+    # independent closure (it shows the whole three on hand as live) trims `would` from zero,
+    # which `sendguard.trims()` never names as a visible trim. Before this fix the row printed
+    # "this send asked for none of this card", as if the operator had typed the zero.
+    for layout, runs_label in (("pure1", "one"), ("pure2", "two")):
+        cases[f"guardzero/{runs_label}"] = {
+            "layout": layout, "market": _M_MIX, "flags": ["--cap", "1"],
+            "setup": ["--quantity", f"{_M_D}=1"], "reconcile": {_M_D: 1},
+            "live": {_M_D: 3}, "named": None,
+            # THE SETUP PRESS'S FILE STAYS (D54): one Dunsparce, from before the reconcile.
+            "exit": 1, "files": {"import.csv": [(_M_D, 1, "2.06")]},
+            "says": [f"{_M_D} — the live guard leaves no room for this card on hand"],
+            "never": [_M_ASKED0, "1 live, at the cap of 1", "run reconcile --live first"],
+            "route": ("nothing_to_send", ["already at TCGplayer"]),
+            "home": {"line": "send 2 copies to TCGplayer", "behind": None,
+                     "tile": "2 copies ready to send"},
+        }
     return cases
 
 
@@ -38241,6 +38351,19 @@ def check_send_matrix(checks: Checks) -> None:
                 extra += ["--reprice-live", str(told)]
             if spec.get("twice"):
                 emit(dirs)
+            # A PRELIMINARY PRESS, FOR THE D7 2026-09-27 CAP-RECONCILE ROWS: pushes copies
+            # under its OWN flags (typically its own `--cap`/`--quantity`), so the real press
+            # under test meets a store that already carries a claim — pending, unless
+            # `reconcile` below catches it up.
+            if spec.get("setup"):
+                emit(dirs + spec["setup"])
+            # A REAL `reconcile --live --write`, off the same seam rows `_live_export_bytes`
+            # already builds for the guard. Closes (or, left out, leaves open) the pending gap
+            # `SkuMatch._cap_pending` reads.
+            if spec.get("reconcile") is not None:
+                reconciled = home / "reconciled.csv"
+                reconciled.write_bytes(_live_export_bytes(spec["reconcile"]))
+                command(checks, "reconcile", "--live", str(reconciled), "--write")
             worklists[name] = {
                 "pricing": pipeline_routes.do_pipeline_worklist([]),
                 "book": pipeline_routes.do_pricing_corpus().get("corpus") or {},

@@ -337,7 +337,11 @@ make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HE
                                    # write ONE import.csv (D99), across runs and games.
                                    #   NO STANDING CAP (D7, rewritten). Every unsent copy goes
                                    #   out unless a send bounds it.
-                                   #   --cap N            hold this SKU to at most N copies LIVE
+                                   #   --cap N            hold this SKU to at most N copies LIVE.
+                                   #                      REFUSES a card outright while a copy
+                                   #                      sent since is still pending (D7,
+                                   #                      amended 2026-09-27) — run
+                                   #                      reconcile --live first
                                    #   --quantity SKU=N   SEND exactly N copies this press (D7,
                                    #                      amended). 0 sends none without a hold
                                    #   --listed-only      above-threshold rows only

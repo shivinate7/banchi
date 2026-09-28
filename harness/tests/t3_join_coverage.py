@@ -520,13 +520,42 @@ def _check_committed_from_counts(c, export) -> None:
                 "TWO of them are committed — the staged COUNT, resolved into that many "
                 "positions and not into 'any non-zero count commits everything'",
             )
-            c.equal(held.add_to_quantity, 2, "so there is room for two more under the cap")
-            c.equal(held.backstock, 3, "and three stay backstock at known positions")
-            c.equal(
-                [p.index for p in held.live_positions],
-                [3, 4],
-                "and the copies offered are the ones the count did not already claim",
+            # UNDER A CAP THIS NOW REFUSES OUTRIGHT (the owner's ruling, 2026-09-27):
+            # `staged` copies TCGplayer has not confirmed live are a pending copy exactly
+            # as a pushed one is, so `--cap` closes the whole SKU until a `reconcile
+            # --live` catches the store up, rather than spending the cap on an arithmetic
+            # that could be wrong either way. See the uncapped case right below for the
+            # count this scenario asserted before that ruling.
+            c.equal(held.add_to_quantity, 0, "a cap refuses the whole SKU while it is pending")
+            c.equal(held.backstock, 5, "and every uncommitted copy stays backstock, not two")
+            c.ok(
+                held.live_positions == []
+                and "run reconcile --live first" in (held.nothing_to_add or ""),
+                f"and the reason names the remedy. Got: {held.nothing_to_add!r}",
             )
+
+    # --- THE SAME SHELF, NO CAP ASKED FOR (D7, rewritten 2026-09-07). `_committed_keys`'s
+    # own count is unaffected by the cap ruling above — it is what `uncommitted_positions`
+    # reads regardless of whether a send is capped, and an uncapped send has never read
+    # `copies_out` at all, so a pending copy cannot block it.
+    with _isolated_home() as home:
+        _stock(SEVEN_COPY_SKU, "Near Mint", 7, staged=2)
+        resolved = _resolve_in(
+            home, 7, _export_file(home / "export.csv", export), live_cap=None
+        )
+        held = resolved.report.matches[SEVEN_COPY_SKU]
+        c.equal(
+            len(held.committed_positions),
+            2,
+            "the same two are committed — the staged COUNT, cap or no cap",
+        )
+        c.equal(held.add_to_quantity, 5, "uncapped, every uncommitted copy goes")
+        c.equal(held.backstock, 0, "and none of it is held back as backstock")
+        c.equal(
+            [p.index for p in held.live_positions],
+            [3, 4, 5, 6, 7],
+            "the copies offered are the ones the count did not already claim",
+        )
 
     # --- `live` is subtracted EXACTLY ONCE, and `copies_out` is where ------------------
     # This block asserted `live` COMMITS NOTHING until D59, on a reason that was right about
@@ -883,8 +912,11 @@ def _check_overrun_is_named(c, export) -> None:
         )
 
     # THE OTHER ARM, where copies are out that this pipeline has not seen land. `pending > 0`
-    # takes a different sentence, and that is the one `min(copies_out, live_cap)` was written
-    # into — the arm the operator meets after an import they have not reconciled.
+    # USED TO TAKE A DIFFERENT SENTENCE NAMING THE OVERRUN; IT NOW REFUSES OUTRIGHT (the
+    # owner's ruling, 2026-09-27, replacing the 2026-09-25 "take the larger" amendment): a
+    # pending copy closes the cap for this card until a `reconcile --live` catches the store
+    # up, rather than spending the cap against a reading that may already be stale. This is
+    # the arm the operator meets after an import they have not reconciled.
     with _isolated_home() as home:
         _stock(SEVEN_COPY_SKU, "Near Mint", 7, pushed=5, live=2)
         resolved = _resolve_in(
@@ -894,19 +926,19 @@ def _check_overrun_is_named(c, export) -> None:
         c.equal(
             match.add_to_quantity,
             0,
-            "five out against a cap of two adds nothing on this arm too",
+            "a pending copy refuses this card outright, whatever the cap's own arithmetic "
+            "would otherwise have allowed",
         )
         said = match.nothing_to_add or ""
         c.ok(
-            "5 already out" in said,
-            f"AND IT NAMES THE FIVE THAT ARE OUT. `min(copies_out, live_cap)` printed the CAP "
-            f"here — '2 of the 2 this SKU may have out' — which is a true statement about the "
-            f"cap and a false one about the store, on the row whose whole question is why "
-            f"nothing is going. Got: {said!r}",
+            "3 cop" in said and "run reconcile --live first" in said,
+            f"AND THE REASON NAMES THE PENDING COUNT AND THE REMEDY, not the cap: three copies "
+            f"sent since the live reading is why nothing goes, and the fix is to reconcile, "
+            f"never a bigger cap. Got: {said!r}",
         )
         c.ok(
-            "of the 2 this SKU may have out" not in said,
-            f"and the clamped phrasing is gone rather than merely joined. Got: {said!r}",
+            "of the 2 this SKU may have out" not in said and "already out against" not in said,
+            f"and the retired clamped phrasing is gone rather than merely joined. Got: {said!r}",
         )
 
 
