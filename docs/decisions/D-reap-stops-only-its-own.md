@@ -41,7 +41,7 @@ the fact, here, at all.
 pattern, one register down. `protected_pids` already solves this shape for D53's one
 supervisor. It uses a marker FILE under `.serve/`, holding a pid. `_descendants` walks DOWN
 from it, to reach children spawned after the marker was written. `scripts/reap_mark.py`
-generalises that from "the one supervisor" to "whichever session's launcher wrote it". It
+generalizes that from "the one supervisor" to "whichever session's launcher wrote it". It
 writes one JSON file per launched root, under `.serve/owners/<pid>.json`: `{pid, owner, label,
 startedAt}`. `reap.py` reads the whole directory now, not one fixed name.
 
@@ -65,7 +65,7 @@ recorded.
 **The owner is `CLAUDE_CODE_SESSION_ID`, read directly.** It is a primitive Claude Code already
 sets. Every child already inherits it, by ordinary fork and exec. That is not the `ps -E`
 read-back the sketch assumed, and this file measured that read-back does not work. **D175**
-solved a neighbouring "whose is this" question with a Bash-wrapper argv fragment, because no
+solved a neighboring "whose is this" question with a Bash-wrapper argv fragment, because no
 per-session id existed on this machine in 2026-09-12. That fragment answers ANY session, never
 WHICH session. This entry does not replace it. It answers a question D175 never asked.
 
@@ -90,7 +90,7 @@ the code found it starts nothing. That finding is recorded here, not dropped.
 3. **Untagged, and named explicitly.** "Untagged" means: no mark, or a mark with an empty
    owner. A process started before this change, by hand, or by a launcher outside a Claude Code
    session, is untagged this way. "Named explicitly" means `pid:`, `port:` or `match:`. This is
-   allowed. The caller pointed at exactly this process, the same judgement those forms already
+   allowed. The caller pointed at exactly this process, the same judgment those forms already
    carried before ownership existed.
 4. **Untagged, and reached only by a blanket sweep** (no target named). Allowed for the
    top-level session. Refused for a subagent. This is the owner's own narrowing. It is the one
