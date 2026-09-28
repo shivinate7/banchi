@@ -602,11 +602,12 @@ Rationale, sales strategy, and open questions: `docs/CODES-DECISIONS.md`.
   (`ARGS=<n>` with no `--confirm`) never waits, and is never this clause's business.
 - **A CITATION NAMES A SYMBOL, NEVER A LINE.** A line number rots on the next edit above it.
   Write a decision id, a section, or the `module.symbol` form the `paths` row verifies. That
-  form takes no `.py` before the symbol. Mechanized by one `make docs-audit` row, `line
-  anchors`. It refuses every `path:N` and `path:N-M` in every markdown file, with no list of
-  exceptions. It runs at commit. A dated record that must quote a line writes it in words, as
-  in "line 182, column 81". A citation of a symbol that has moved stays invisible, which D149
-  ruled no check can see.
+  form takes no `.py` before the symbol. A method is "`module.Class`'s `method`". A CSS rule is
+  its selector. Mechanized by one `make docs-audit` row, `line anchors`, at commit. It refuses
+  `path:N`, `file.ext:N` and a bare `:N` after a cited file, in every markdown file and in
+  code comments, with no list of exceptions. A time, a ratio, `host:port` and a slice are not
+  anchors. A dated record that must quote a line writes it in words, as in "line 182, column
+  81". A citation of a symbol that has moved stays invisible, which D149 ruled no check can see.
 - **A screen answers to the system**: `--bn-*` tokens only, verified at 1440, 820 and 390,
   light and dark. `docs/DESIGN.md` is the record. `make docs-audit`'s `design tokens` row
   locks every name and hex both ways.

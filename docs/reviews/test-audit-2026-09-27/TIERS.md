@@ -245,6 +245,9 @@ The tier model and every row not named below stand as proposed. The owner's word
   converted 776 anchors in 44 files. The one `line anchors` row (Tier 1) now refuses every
   `path:N` and `path:N-M`, with no list of exceptions. `line anchor allowlist` and `line
   anchor offenders` are gone, with the two data files they read. CLAUDE.md's D245 hard rule describes the one row.
+  **Widened 2026-09-28 by the second line-anchor lane (owner's word).** The row also refuses
+  `file.ext:N` with no directory, a bare `:N` after a cited file, and the same shapes in code
+  comments (.py, .ts, .tsx, .js, .mjs, .css). It converted the remaining short forms.
 - **Row 20, `entry budget`:** CUT.
 - **Row 48, `gates structure`:** CUT. Gating retired, and `gates-selftest` proves the set is
   complete.
