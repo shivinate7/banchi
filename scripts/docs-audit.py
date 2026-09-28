@@ -194,6 +194,12 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
         "counts the `path:N`/`path:N-M` line anchors it found in the staged documents",
     ),
     "make targets": ("staged", "counts the `make` references it found in the staged documents"),
+    "identifier spelling": (
+        "staged",
+        "counts the spelling-suffix files THIS COMMIT TOUCHES (test-audit plan S2) — a "
+        "commit that touches none of them, and does not touch scripts/docs-audit.py itself, "
+        "legitimately scans zero",
+    ),
     "derived numbers": (
         "staged",
         "counts the `<!-- derived:<name> -->` markers it found in the staged documents",
@@ -17008,11 +17014,22 @@ def check_coupling(report: Report) -> None:
 # British words in 169 files and were left alone: a rewrite there is churn against five open
 # branches for no search a session runs.
 #
-# IDENTIFIERS ONLY, BY CONSTRUCTION. Comments, docstrings, string and template literals, regex
-# literals and JSX text are blanked before a token is read, byte for byte so line numbers
-# survive. Vale keeps its advisory watch over markdown (`.vale.ini`), which this row never
-# reads. A British word that reaches this row is therefore a NAME — a function, a variable, a
-# class, a key spelled as an attribute, a CSS class or custom property, a shell variable.
+# IDENTIFIERS ONLY, IN CODE, BY CONSTRUCTION. Comments, docstrings, string and template
+# literals, regex literals and JSX text are blanked before a token is read, byte for byte so
+# line numbers survive. A British word that reaches this row over a code file is therefore a
+# NAME — a function, a variable, a class, a key spelled as an attribute, a CSS class or custom
+# property, a shell variable.
+#
+# MARKDOWN PROSE IS STILL NOT READ HERE, 2026-09-27 — MEASURED, NOT BUILT. The test-audit
+# plan (S2) asked to extend this row to markdown prose, since Vale is retired and nothing
+# else reads spelling in markdown (owner's Vale ruling: "keep American spelling in
+# docs-audit"). Extending `spelling_findings` to `.md` and running it over the tracked tree
+# found 727 British-spelling words in 226 files — catalogue (80), judgement (67), organised,
+# analysed and the rest of the -ise/-our/-re family. That is far past the plan's own "fix it
+# only if fewer than about 30" line, and wiring the row to block on it would fail nearly
+# every commit that touches markdown until the backlog is gone. So this stays unbuilt: see
+# D226's 2026-09-27 amendment for the count and the open question (an offender list over the
+# backlog, on this repo's own D280 pattern, or a bulk rewrite pass — the owner's word).
 #
 # THE -ISE LIST IS CLOSED, DELIBERATELY. An open `\w+ise` pattern flags `raise`, `Promise`,
 # `otherwise`, `pairwise` and `exercise`, every one of them -ise in American English too; a
@@ -17022,6 +17039,14 @@ def check_coupling(report: Report) -> None:
 #
 # THE ALLOW-LIST IS BY NAME AND CARRIES ITS REASON, and each entry is a name the owner ruled
 # out of scope on 2026-09-11 because a rename there is a migration and not a spelling.
+#
+# STAGED-SCOPED, 2026-09-27 (test-audit plan S2). `--staged` reads only the files THIS COMMIT
+# TOUCHES (`_STAGED_PATHS`, not `_INDEX_PATHS`'s whole tracked tree) — a file this commit does
+# not touch cannot grow a new British word. It reads the WHOLE tree in staged mode too when
+# `scripts/docs-audit.py` itself is staged, because a broadened fragment table or a new
+# allow-list entry can make an untouched file's existing word newly non-compliant, or newly
+# excused. A full run (`python3 scripts/docs-audit.py`, no `--staged`) always reads everything,
+# which is what CI runs.
 SPELLING_SUFFIXES = (".py", ".ts", ".tsx", ".mjs", ".sh", ".css")
 
 # Lower-cased identifier fragment -> why it is allowed. Matched as a substring of the whole
@@ -17829,12 +17854,32 @@ def check_rule_enforcement(report: Report) -> None:
     )
 
 
+def _spelling_scope() -> Tuple[List[Path], bool]:
+    """(paths to read, whole_tree) for `check_identifier_spelling`.
+
+    Full mode (`_INDEX_PATHS is None`) always reads the whole tree. Staged mode reads only
+    the files THIS COMMIT TOUCHES (`_STAGED_PATHS`), unless `scripts/docs-audit.py` itself is
+    staged — a changed fragment table or allow-list can make an untouched file's existing
+    word newly non-compliant, or newly excused, so that case reads the whole tree too.
+    """
+    if _INDEX_PATHS is None or "scripts/docs-audit.py" in _STAGED_PATHS:
+        return _walk(ROOT, SPELLING_SUFFIXES), True
+    return (
+        sorted(ROOT / entry for entry in _STAGED_PATHS
+               if entry.endswith(SPELLING_SUFFIXES) and entry in _INDEX_PATHS),
+        False,
+    )
+
+
 def check_identifier_spelling(report: Report) -> None:
     """A name spelled British, anywhere a session might grep for its American twin.
 
     **Blocking, on D16's test.** Under D60 as amended 2026-09-11 an identifier either carries a
     British fragment or it does not; there is nothing to judge. Prose and comments are not read
-    and are not governed — see the section comment above for why the ruling stopped there.
+    and are not governed — see the section comment above for why the ruling stopped there, and
+    why markdown prose is measured but not yet read here either.
+
+    **STAGED-SCOPED** (test-audit plan S2): see `_spelling_scope`.
 
     **What it cannot see, by name.** A British word outside the fragment table (the -ise stems
     are a closed list); a name inside a template literal's `${}` (the whole literal is blanked);
@@ -17843,7 +17888,8 @@ def check_identifier_spelling(report: Report) -> None:
     """
     findings: List[Finding] = []
     scanned = 0
-    for path in _walk(ROOT, SPELLING_SUFFIXES):
+    paths, whole_tree = _spelling_scope()
+    for path in paths:
         scanned += 1
         for line, name, british, american in spelling_findings(read(path), path.suffix):
             findings.append(
@@ -17855,12 +17901,13 @@ def check_identifier_spelling(report: Report) -> None:
                     f"SPELLING_ALLOWED with the reason.",
                 )
             )
+    scope_note = "" if whole_tree else " (staged: only the files this commit touches)"
     report.add(
         "identifier spelling",
         MECHANICAL,
         findings,
-        f"{len(findings)} British identifiers" if findings
-        else f"every identifier in {scanned} files is spelled American",
+        (f"{len(findings)} British identifiers" if findings
+         else f"every identifier in {scanned} files is spelled American") + scope_note,
         scanned=scanned,
     )
 
@@ -19549,6 +19596,45 @@ def self_test() -> int:
         "a .css file: a class and a custom property are names, `color` and the string are not",
         str(found),
     )
+
+    print("\nidentifier spelling: staged scope reads only the files this commit touches")
+    here = globals()
+    saved_index, saved_staged = here["_INDEX_PATHS"], set(_STAGED_PATHS)
+    try:
+        here["_INDEX_PATHS"] = {"a.py", "b.py", "scripts/docs-audit.py"}
+        _STAGED_PATHS.clear()
+        _STAGED_PATHS.add("a.py")
+        paths, whole_tree = _spelling_scope()
+        ok(
+            not whole_tree and paths == [ROOT / "a.py"],
+            "one staged .py file: only that file is read, never the untouched b.py",
+            f"whole_tree={whole_tree} paths={paths}",
+        )
+        _STAGED_PATHS.add("scripts/docs-audit.py")
+        paths, whole_tree = _spelling_scope()
+        ok(
+            whole_tree,
+            "RED before the fix: staging scripts/docs-audit.py itself (the table's own file) "
+            "reads the whole tree instead of narrowing to it",
+            f"whole_tree={whole_tree}",
+        )
+        _STAGED_PATHS.discard("scripts/docs-audit.py")
+        _STAGED_PATHS.add("c.md")
+        paths, whole_tree = _spelling_scope()
+        ok(
+            not whole_tree and paths == [ROOT / "a.py"],
+            "a staged file outside SPELLING_SUFFIXES is never read, and does not widen the scope",
+            f"whole_tree={whole_tree} paths={paths}",
+        )
+        here["_INDEX_PATHS"] = None
+        paths, whole_tree = _spelling_scope()
+        ok(whole_tree, "a full run (no staged mode) always reads the whole tree",
+           f"whole_tree={whole_tree}")
+    finally:
+        here["_INDEX_PATHS"] = saved_index
+        _STAGED_PATHS.clear()
+        _STAGED_PATHS.update(saved_staged)
+
     report = Report()
     check_identifier_spelling(report)
     check_shell_substitution(report)
