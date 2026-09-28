@@ -373,6 +373,11 @@
   max-height: min(420px, calc(100dvh - 200px));
   overflow-y: auto;
 }
+/* OWNER'S RULING, 2026-09-28: the open list goes in FRONT and scrolls. The overlay's own
+   z-index is scoped to `.capture-card`'s stacking context (its animation makes one), so the
+   later RECENT footer and the sibling cards painted over the list's lower rows. While a
+   field is open its card outranks them; the overlay stays out of flow, so nothing moves (D118). */
+.capture-card:has(.capture-open-pinned) { position: relative; z-index: 5; }
 .capture-open-body { display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 10px; }
 .capture-open-lg > .capture-row { min-height: 40px; }
 .capture-meta {
