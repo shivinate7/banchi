@@ -1449,6 +1449,71 @@ def main() -> int:
         ok({"R1", "R2", "R3"} <= final_skus,
            "after the resume, every subject from this pass is archived exactly once",
            final_skus)
+
+        # ------------------- price_history_summary: Holdings' stored read (D219, amended)
+        print("\n-- the per-SKU summary follows the buckets, in the same transaction --")
+
+        def _bucket(sku, start, market):
+            return Bucket(sku, 1, "month", 1, start, market, 1, 1, market, market, 5)
+
+        def _summary(sku):
+            return [tuple(p) for p in Store().read().archive.summary_for_sku(sku, "month")[1]]
+
+        with Store().write() as snapshot:
+            snapshot.archive.upsert({_key("F1", "month", "2026-01-01"):
+                                     _bucket("F1", "2026-01-01", "1.00")})
+        ok(_summary("F1") == [("2026-01-01", "1.00", 1)],
+           "a swept bucket is in the summary on the very next read", _summary("F1"))
+        with Store().write() as snapshot:
+            snapshot.archive.upsert({
+                _key("F1", "month", "2026-01-01"): _bucket("F1", "2026-01-01", "2.00"),
+                _key("F1", "month", "2025-12-31"): _bucket("F1", "2025-12-31", "0.50"),
+            })
+        ok(_summary("F1") == [("2025-12-31", "0.50", 1), ("2026-01-01", "2.00", 1)],
+           "a changed price replaces its point, a new start merges in, ascending", _summary("F1"))
+        ok(Store().read().archive.summary_for_sku("F1", "annual") == (True, []),
+           "another range of a priced sku is empty but the sku still reads as priced")
+        ok(Store().read().archive.summary_for_sku("NOPE", "month") == (False, []),
+           "a sku the archive never priced reads as not priced")
+        read_back = Store().read().archive
+        derived = {}
+        for b in read_back.entries.values():
+            derived.setdefault((b.sku, b.range), {})[b.start] = (b.start, b.market, b.width_days)
+        held = {(r.sku, r.range): {p[0]: tuple(p) for p in r.points}
+                for r in read_back.summary.values()}
+        ok(derived == held,
+           "every (sku, range) summary equals what the buckets themselves say, both ways")
+
+        # The one-time build: an archive with no summary (a schema-13 store) is summarised on
+        # first open, under the lock, and matches the writer's own rows.
+        import sqlite3
+        from store import db
+        conn = sqlite3.connect(str(db.path(files.inventory_dir())))
+        good = conn.execute(
+            "SELECT key, payload FROM price_history_summary ORDER BY key").fetchall()
+        conn.execute("DROP TABLE price_history_summary")
+        conn.execute("UPDATE meta SET value = '13' WHERE key = 'schema'")
+        conn.commit()
+        conn.close()
+        Store().read()
+        conn = sqlite3.connect(str(db.path(files.inventory_dir())))
+        rebuilt = conn.execute(
+            "SELECT key, payload FROM price_history_summary ORDER BY key").fetchall()
+        conn.close()
+        ok(rebuilt == good and len(good) >= 1,
+           "first open of a store with an archive and no summary builds it, identical to the "
+           "writer's own rows", (len(good), len(rebuilt)))
+
+        # Every writer goes through `upsert`: nothing may assign into the bucket table
+        # directly, or its summary would fall behind with no transaction to blame.
+        import re
+        offenders = [
+            str(f) for d in ("cli", "pipeline", "server", "store", "scripts")
+            for f in sorted((ROOT / d).rglob("*.py"))
+            if f.name != "pricearchive-selftest.py"
+            and re.search(r"archive\.entries\[[^\]]*\]\s*=[^=]", f.read_text())
+        ]
+        ok(not offenders, "no module assigns into archive.entries except upsert", offenders)
     finally:
         if previous is None:
             os.environ.pop(files.HOME_ENV, None)

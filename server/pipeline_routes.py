@@ -3692,12 +3692,10 @@ def do_pipeline_holdings_value(range_: str) -> dict:
     drawn as a series over time (`docs/specs/revenue-plan.md` section 1, second half; D225
     already built the sold-cards half above this one).
 
-    NOT YET REACHABLE FROM A SCREEN. This route, `pipeline/holdings.py`'s computation behind
-    it, and the tests over both are the whole of what this change builds — no client function
-    in `app/src/server.ts`, no wire type in `app/src/types.ts`, no control anywhere in `#/revenue`.
-    By this repo's own rule (`CLAUDE.md`'s route-is-not-a-feature paragraph) that means the
-    capability is not built yet, only reachable over the wire, and this docstring says so
-    rather than leaving it to be discovered.
+    REACHED BY `#/revenue`: `app/src/Revenue.tsx` calls it through `getHoldingsValue`.
+
+    READS `price_history_summary`, NEVER THE BUCKET TABLE (D219, amended 2026-09-28):
+    `PriceArchive.summary_for_sku` is one indexed read per on-hand SKU.
 
     THE POSITION IS THE SKU (D212), READ FROM THE `cards` TABLE'S OWN STATE, NEVER THE
     MARKETPLACE'S MIRROR — `pipeline/holdings.py:on_hand_quantities`'s whole argument, this

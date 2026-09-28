@@ -2006,7 +2006,9 @@ COMPONENTS = [
                                         "`PriceArchive.upsert()` only ADDS a new key or "
                                         "overwrites an existing key with a fresher reading of "
                                         "the SAME bucket; a key a pass does not mention is left "
-                                        "untouched, forever.",
+                                        "untouched, forever. `price_history_summary` is derived "
+                                        "from it in the same transaction (D219 amended "
+                                        "2026-09-28) and is what Holdings reads.",
                                 "governed_by": ["D219", "D62", "D88",
                                                 "D189"],
                                 "note": "PROVED BY `make pricearchive-selftest`, PATH GATED "

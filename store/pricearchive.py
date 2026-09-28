@@ -36,6 +36,10 @@ what a sweep does not mention, and a sweep that skips a SKU entirely — a card 
 hint changed, an operator's own query narrower than last time — leaves every bucket that
 sweep did not visit exactly as it was.
 
+A THIRD TABLE, `price_history_summary`, IS DERIVED FROM THE FIRST (D219, amended 2026-09-28):
+one row per `(sku, range)`, merged by `upsert` in the same transaction, and what Holdings reads
+so it never loads every bucket.
+
 BOTH ARE ORDINARY D88 TABLES: bound into `Snapshot` like `readings`, flushed inside the same
 `Store.write()` transaction, read lock-free through `Store.read()`.
 """
