@@ -3222,7 +3222,7 @@ test('the card pane is the photograph, the pick and every copy with its place an
      own editing actions (retire, move and re-shoot are Inventory-only, §13). */
   await expect(page.locator('.browse-details')).toHaveCount(0)
   await expect(pane).not.toContainText('Pushed')
-  await expect(pane.getByRole('button', { name: 'Card actions' })).toHaveCount(0)
+  await expect(pane.getByRole('button', { name: 'Actions' })).toHaveCount(0)
   await expect(pane.getByRole('button', { name: 'Retire' })).toHaveCount(0)
 })
 

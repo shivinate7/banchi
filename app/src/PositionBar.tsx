@@ -80,7 +80,7 @@ export function PositionBar({
         ? /* No count of the box's sections to state, and the section caption above already names
              this one: the line keeps only back and front. */
           ''
-        : `Section ${place.section} of ${sectionCount}`
+        : `Position ${place.section} of ${sectionCount}`
       : parts.main
   const boxDetail = sectionDepth ? null : parts.detail
 

@@ -1228,7 +1228,7 @@ test('removing a middle row deletes that card alone, and the later ones survive 
   await drops(page).nth(2).click()
 
   await expect(page.getByRole('heading', { name: 'Remove just this card?' })).toBeVisible()
-  await page.getByRole('button', { name: 'Remove this card' }).click()
+  await page.getByRole('button', { name: 'Remove' }).click()
 
   await expect(rows(page)).toHaveCount(4)
   expect(wire.removes).toEqual(['/inventory/3/3/remove'])
@@ -1258,7 +1258,7 @@ test('removing the newest row costs nothing else — no shift, and the note says
   await shoot(page, 2)
 
   await drops(page).nth(0).click()
-  await page.getByRole('button', { name: 'Remove this card' }).click()
+  await page.getByRole('button', { name: 'Remove' }).click()
 
   await expect(rows(page)).toHaveCount(1)
   expect(wire.removes).toEqual(['/inventory/3/2/remove'])
@@ -1274,7 +1274,7 @@ test('a blocked removal reaches the operator as a sentence naming what blocked i
   await shoot(page, 5)
 
   await drops(page).nth(2).click()
-  await page.getByRole('button', { name: 'Remove this card' }).click()
+  await page.getByRole('button', { name: 'Remove' }).click()
 
   // NOTHING LEFT THE LIST. The refusal changed nothing, which is the whole point of a route
   // that checks before it writes a single file.

@@ -99,7 +99,7 @@ function bySection(cardsOf: readonly InventoryCard[]): Map<number, InventoryCard
 
 function boxName(record: WorkingBox): string {
   if (record.name) return record.name
-  return record.box < 0 ? 'New box' : 'Unnamed box'
+  return record.box < 0 ? 'New box' : 'Untitled'
 }
 
 /** The sections a lift takes, first and last ordinal. */
@@ -495,7 +495,7 @@ export function BoxShelf({ onView }: { readonly onView: (next: InventoryView) =>
           </>
         ) : (
           <Button variant="primary" icon="grip" onClick={enterEdit} disabled={records === null || entering} busy={entering}>
-            Edit layout
+            Layout
           </Button>
         )}
       </div>

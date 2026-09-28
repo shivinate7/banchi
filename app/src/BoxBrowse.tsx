@@ -2028,7 +2028,7 @@ export function BoxBrowse({
                       : record && sort.key === 'value' && typeof cell === 'number'
                         ? valueByBox?.has(cell) ? <Money value={valueByBox.get(cell)} /> : 'no reading'
                         : record
-                          ? `${(onHand ?? 0).toLocaleString()} on hand`
+                          ? `${(onHand ?? 0).toLocaleString()} stored`
                           : cell === 'pooled'
                             ? 'a count, not a location'
                             : cell === 'unplaced'
@@ -2063,7 +2063,7 @@ export function BoxBrowse({
                   <IconButton
                     size="sm"
                     icon="settings"
-                    label="Manage this box"
+                    label="Manage"
                     className="browse-manage"
                     aria-haspopup="dialog"
                     onClick={() => setManage(true)}
@@ -2106,7 +2106,7 @@ export function BoxBrowse({
               <button className="browse-quiet" type="button" onClick={toggleAllSections}>
                 <Icon name={anyExpanded ? 'chevronUp' : 'chevronDown'} size={12} />
                 {/* THE HEADERS BELOW ALREADY COUNT THE SECTIONS (cut list #11, UX-269). */}
-                {anyExpanded ? 'Collapse all' : 'Expand all'}
+                {anyExpanded ? 'Collapse' : 'Expand'}
               </button>
             )}
 
@@ -2136,7 +2136,7 @@ export function BoxBrowse({
 
             {visible.length === 0 ? null : (
               <button className="browse-quiet" type="button" aria-pressed={shownAllTicked} onClick={tickAllShown}>
-                {shownAllTicked ? 'untick shown' : 'tick shown'}
+                {shownAllTicked ? 'None' : 'All'}
               </button>
             )}
           </div>
@@ -2464,7 +2464,7 @@ export function BoxBrowse({
                 {at >= 0 ? <span className="browse-boxchip-count">{at + 1}/{visible.length}</span> : null}
                 <Icon name="chevronDown" size={14} className="browse-boxchip-chev" />
               </button>
-              <IconButton icon="search" label="Search cards" onClick={() => setRailOpen(true)} />
+              <IconButton icon="search" label="Search" onClick={() => setRailOpen(true)} />
             </div>
           ) : null}
 
@@ -2678,7 +2678,7 @@ export function BoxBrowse({
                 <IconButton
                   className="browse-stepper-btn"
                   icon="chevronLeft"
-                  label="Previous card"
+                  label="Previous"
                   size="lg"
                   disabled={visible.length === 0 || at <= 0}
                   onClick={() => stepSelection(-1)}
@@ -2689,7 +2689,7 @@ export function BoxBrowse({
                 <IconButton
                   className="browse-stepper-btn"
                   icon="chevronRight"
-                  label="Next card"
+                  label="Next"
                   size="lg"
                   disabled={visible.length === 0 || at >= visible.length - 1}
                   onClick={() => stepSelection(1)}
@@ -2972,7 +2972,7 @@ function CardOps({
     <div className="browse-cardops" ref={anchor}>
       <IconButton
         icon="more"
-        label="Card actions"
+        label="Actions"
         aria-haspopup="menu"
         aria-expanded={menu}
         onClick={() => setMenu((held) => !held)}
@@ -2989,7 +2989,7 @@ function CardOps({
               setOpen('claims')
             }}
           >
-            <Icon name="pencil" size={16} /> Correct claims
+            <Icon name="pencil" size={16} /> Correct
           </button>
           {/* The screen re-reads after every write of its own; this is for a write made on
               another device. */}
@@ -3002,7 +3002,7 @@ function CardOps({
               onChanged()
             }}
           >
-            <Icon name="refresh" size={16} /> Re-read the inventory
+            <Icon name="refresh" size={16} /> Reread
           </button>
           {terminal || !addressable ? (
             <>
@@ -3061,7 +3061,7 @@ function CardOps({
                   setOpen('delete')
                 }}
               >
-                <Icon name="trash" size={16} /> Remove this card…
+                <Icon name="trash" size={16} /> Remove
               </button>
             </>
           )}
