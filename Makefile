@@ -282,8 +282,8 @@ map:
 #
 # scripts/checks.py is a PARALLEL DECLARATION and deliberately does not drive the recipe.
 # A registry that drove the suite could silently stop running a check; this one can only lie,
-# and `make docs-audit` has three rows that catch it lying — `check registry` against the
-# recipe, `check census` against the published prose, and `commit path writes`, which asserts
+# and `make docs-audit` has two rows that catch it lying — `check registry` against the
+# recipe and the published prose, and `commit path writes`, which asserts
 # D18 mechanically by refusing any writing check on the commit path.
 #
 # python3, not $(PYTHON): a step-away tool that needs `make venv` first is not a step-away
@@ -381,7 +381,7 @@ orient:
 audit-history:
 	@python3 scripts/audit-history.py
 
-# THE CLAIM `check census` READS ON THE MAKEFILE SIDE. CLAUDE.md's own Commands
+# THE CLAIM `check registry` READS ON THE MAKEFILE SIDE. CLAUDE.md's own Commands
 # section carries the same list; the row reconciles both against the recipe above,
 # both ways, so this line and CLAUDE.md's cannot drift from each other or from it.
 # make check        harness + docs-audit + revert-guard + port-agreement + set-hint-agreement +

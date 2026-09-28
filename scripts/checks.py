@@ -9,9 +9,9 @@ and the summary was WRONG: it said `harness + docs-audit + the self-tests + lint
 while five more targets ran, and had said so since those five landed. CLAUDE.md caught up; the
 front door never did, and nothing compared them.
 
-So the composition becomes data with a reader. Three rows in `scripts/docs-audit.py` consume
-this file — `check registry` reconciles it against the Makefile recipe, `check census`
-reconciles the published prose against it, and `commit path writes` asserts D18 mechanically
+So the composition becomes data with a reader. Two rows in `scripts/docs-audit.py` consume
+this file — `check registry` reconciles it against the Makefile recipe and the published
+prose, and `commit path writes` asserts D18 mechanically
 for the first time by refusing any writing check on the commit path.
 
 **THIS FILE DOES NOT DRIVE `make check` AND MUST NOT.** The Makefile recipe is what runs; this

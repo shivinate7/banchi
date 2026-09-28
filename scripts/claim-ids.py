@@ -46,7 +46,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # `claim vocabulary` row reconciles them. The auditor is stdlib-only, parses rather than
 # imports, and must not run project code; importing this module would break that promise for
 # the one check that gates every commit. Two declarations plus a reader is this repo's
-# standing answer to that shape — `port-agreement`, `set-hint-agreement`, `logo parity`.
+# standing answer to that shape — `port-agreement`, `set-hint-agreement`, `logo`.
 SLUG = r"[a-z][a-z0-9]*(?:-[a-z0-9]+)+"
 DECISION_SLUG = re.compile(r"\b(D-" + SLUG + r")\b")
 CODES_SLUG = re.compile(r"\b(C-" + SLUG + r")\b")

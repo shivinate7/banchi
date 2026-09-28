@@ -246,6 +246,14 @@ The tier model and every row not named below stand as proposed. The owner's word
   26 KB). The same lane amends D60's conversational-path paragraph, whose premise (60 lines,
   3,929 bytes) measured 301 lines and 26,420 bytes on 2026-09-27.
 
+- **Line anchors, re-scoped (owner, 2026-09-28):** `Own lane, after PR 4B (Recommended)`. The real
+  count is 776 citations in 44 files, not about 88. Until that lane lands, the three line-anchor
+  rows stay, and the offender list only shrinks.
+- **`check numbering` and `numbering in code` (owner, 2026-09-28):** `Keep them apart
+  (Recommended)`. The markdown row blocks the commit that touches a bad reference. The code
+  row warns only, because a comment about a count is often plain English. Both find nothing
+  today. So L8 lands 93 rows, not 92.
+
 ## Next
 
 - Owner reviews the tier column and the "Rows I was unsure about" table, and rules or
