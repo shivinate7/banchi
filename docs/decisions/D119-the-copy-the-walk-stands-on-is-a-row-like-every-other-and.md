@@ -114,11 +114,13 @@ named here as the cost of the deletion rather than as a reason to keep a split h
 **The hero came back three commits after it left, and stayed for four days.** `4bf5a44` (PR #218)
 deleted it on 2026-09-07. `9439765` — PR #221, *"The cap is a ceiling on copies live"*, merged
 2026-09-08 — was committed from a tree that still held the PRE-deletion copy of every file #218
-had touched, and its single commit carried all of them back onto main under a message about
-`--cap` wording: `Inventory.tsx` with `LocationCard`, `Inventory.css` with its rules,
-`CardLocations.tsx` with the `current` term back in `noBar`, `Gallery.tsx` without the re-rank
-specimen, both specs with the pre-deletion assertions, DEBT5 note, and
-`docs/map.py`'s prose about all of it. `docs/DECISIONS.md` alone was not reverted — this entry
+had touched. Its single commit carried all of them back onto main under a message about
+`--cap` wording:
+
+  - `Inventory.tsx` with `LocationCard`, and `Inventory.css` with its rules.
+  - `CardLocations.tsx` with the `current` term back in `noBar`.
+  - `Gallery.tsx` without the re-rank specimen, and both specs with the pre-deletion assertions.
+  - `gallery.spec.ts`'s departed-row note, and `docs/map.py`'s prose about all of it. `docs/DECISIONS.md` alone was not reverted — this entry
 survived, and CLAUDE.md's index line for it — so for four days the record said deleted and the
 tree said otherwise, which is the exact shape D16 is written against.
 

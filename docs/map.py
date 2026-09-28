@@ -4139,7 +4139,8 @@ COMPONENTS = [
                         "2026-09-20, is the same shape for a different record: "
                         "`scripts/stop-gate.sh:69` cited in docs/specs/mechanization-"
                         "backlog.md, from before the harness left turn end.",
-                "governed_by": ["D16", "D136", "D141", "D149", "D229", "D248", "D277"],
+                "governed_by": ["D16", "D48", "D136", "D141", "D149", "D180", "D194", "D229",
+                                "D248", "D277", "D284"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
@@ -9174,7 +9175,7 @@ COMPONENTS = [
                 "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118", "D119",
                                 "D269", "D272"],
                 "note": "IT EXISTS BECAUSE THE SHEET WAS INCOMPLETE AND NOTHING SAID SO, "
-                        "2026-09-05. DEBT5 recorded the departed row as "
+                        "2026-09-05. The departed row was "
                         "absent from the kit; the sold fixture inherited a numeric `slot` from "
                         "the base, so `isDeparted` was false and the shell was rendered "
                         "NOWHERE on a page whose entire purpose is that every shape is looked "

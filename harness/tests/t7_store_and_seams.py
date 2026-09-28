@@ -868,7 +868,7 @@ def command(checks: Checks, *argv, exits: int = 0):
     Through `cli/__main__.py:main` rather than by importing the command module, because the
     dispatch and the argument defaults are part of the seam: a flag whose default moved would
     otherwise be invisible here. `exits=1` is for an emit that adds nothing, which is
-    refused on both paths (DEBT35).
+    refused on both paths.
     """
     from cli import __main__ as entry
 
@@ -38333,7 +38333,7 @@ def _m_cases() -> Dict[str, dict]:
             route=("under_cut_off", ["Every priced card on this list is under the cut-off"]),
             home={"line": "send 3 copies to TCGplayer", "behind": None, "tile": "3 copies ready to send",
                   "chip": "Never sent"})
-        # DEBT35: ONE ANSWER ON BOTH PATHS. One run exited 0 with its own sentence, and several
+        # ONE ANSWER ON BOTH PATHS. One run exited 0 with its own sentence, and several
         # exited 1 with another. Both exit 1 now, with one headline and each card's reason.
         add("suball/listed-sent", market=_M_SUBALL, flags=["--listed-only"], twice=True, exit=1,
             files={last: [_m_row(_M_D, "0.49"), _m_row(_M_R, "0.49"), _m_row(_M_A, "0.49")]},
