@@ -98,6 +98,8 @@ Logged, waiting for the owner's word:
 - F6: one spacing rule for every relation, and a check that fails an off-scale value.
 - F7: `archive` and `wallet` sit low like the lock did.
 - F8: in Inventory, a search for "hand hammer" ranks Jayce cards above the common card Hand Hammer. A Sonnet lane diagnoses the cause and the change that made it, then proposes a fix. D271 (one forgiving matcher everywhere) governs.
+  - The diagnosis: `server/match.py` ranks Hand Hammer first. The walk in `BoxBrowse.tsx` picks its box and landing by the largest pile of live copies across all matches, and never reads that rank. The owner confirmed that in-stock Hand Hammers did not surface until another box was picked.
+  - The owner's ruling: `Rank before pile size (Recommended),Say when the best match is sold (Recommended)`. Lane F8 builds both on `ux/pr4b-F8`.
 
 Before PR 4B merges:
 
