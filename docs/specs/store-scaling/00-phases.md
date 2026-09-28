@@ -33,8 +33,8 @@ them opens — otherwise a PR that adds a walk while removing one is invisible.
 
 | Item | `server/capture_server.py` | `server/pipeline_routes.py` | `store/` | `cli/` | `app/src` |
 |---|---|---|---|---|---|
-| 2 | `do_inventory` (~3056), `_Places` (~2029), a new `do_inventory_box` on the unused `_INVENTORY_BOX_RE` (`:546`), a new `do_inventory_recent`, the router table | — | `rows.py`: `where`/`select`/`__setitem__`/`flushed` (the `_touched` set) | — | `server.ts`, `BoxBrowse.tsx`, `Inventory.tsx`, `Home.tsx`, `Fulfillment.tsx`, `Orders.tsx` |
-| 3 | `_sell`/`_sale_origin` (~7199–7232), `do_retire` (~7508), `_answer_origin` (~5461), `_reverse_stand_down` (~6478), `_origin` (~7185), the prose comment at ~980 | — | `db.py`: `history` gains a box scope; `session.py` passes it. **No schema step** — `events_position` exists (`db.py:139`) | — | — |
+| 2 | `do_inventory` (~3056), `_Places` (~2029), a new `do_inventory_box` on the unused `_INVENTORY_BOX_RE`, a new `do_inventory_recent`, the router table | — | `rows.py`: `where`/`select`/`__setitem__`/`flushed` (the `_touched` set) | — | `server.ts`, `BoxBrowse.tsx`, `Inventory.tsx`, `Home.tsx`, `Fulfillment.tsx`, `Orders.tsx` |
+| 3 | `_sell`/`_sale_origin` (~7199–7232), `do_retire` (~7508), `_answer_origin` (~5461), `_reverse_stand_down` (~6478), `_origin` (~7185), the prose comment at ~980 | — | `db.py`: `history` gains a box scope; `session.py` passes it. **No schema step** — `events_position` exists (in `store/db.py`'s index roster) | — | — |
 | 4 | — | `_unsent_ledger` (~2370–2405): the call site only | — | `resolve.py`: `_copies_out` (~487), `_committed_keys` (~676), and the helpers they stop calling | — |
 | 5 | — | `do_live_export` (~3550) | `readings.py`: `Readings.replace_source` | `cmd_join.py` (~685); `pipeline/readings.py`: `collect` split into per-source readers | — |
 

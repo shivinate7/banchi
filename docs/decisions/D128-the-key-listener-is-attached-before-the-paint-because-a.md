@@ -16,8 +16,8 @@ the slowest (1058s) passed, the three failures sat between at 827, 846 and 951. 
 was not random across the suite: **twenty of 462 tests go through `capture-claims.spec.ts`'s**
 **`open()` helper, and they took two of the three.**
 
-**Every recorded casualty was one defect.** The five instances — `capture-claims.spec.ts:314` and
-`:816`, `live-reconcile.spec.ts:236`, `markdown.spec.ts:539` twice (once on PR #230, rerun green,
+**Every recorded casualty was one defect.** The five instances — `capture-claims.spec.ts` line 314 at `33126887` and
+line 816, `live-reconcile.spec.ts` line 236, `markdown.spec.ts` line 539 at `33126887` twice (once on PR #230, rerun green,
 and once in the first run of the job) — each fail at the assertion immediately after a
 `keyboard.press('Escape')` that follows an assertion about the painted DOM. Two shapes, one cause:
 the capture screen's Finish track stays open under an Escape meant to close it (`toHaveCount(0)`

@@ -460,7 +460,7 @@ test('the sheets and menus a phone opens hold the floor too', async ({ page }) =
  * in ONE React commit -- the exact case kit/overlay.tsx's own comment names: "a Dialog mounted
  * in the same commit as the Sheet around it joined the stack FIRST", i.e. the composer's own
  * DOM node lands BEFORE the sheet's. A "last match" reading of `over` would score this
- * backwards. review.spec.ts:1612 already proves the CLICK reaches the composer, not the sheet,
+ * backwards. `review.spec.ts` already proves the CLICK reaches the composer, not the sheet,
  * at desktop width; this proves the THUMB-FLOOR SWEEP scopes to it too, at 390. */
 test('"Check first" mounts the composer over the runs sheet in one commit, and the sweep reaches it', async ({ page }) => {
   await page.setViewportSize(PHONE)

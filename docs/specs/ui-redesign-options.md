@@ -431,7 +431,7 @@ adversarial pass that tried to refute each proposal. Full record and every sourc
   UX ever shipped and is deprecated as of July 2026; Dagster beat Airflow by moving *further*
   toward objects; GitHub Actions ships zero counts in navigation. It is not brave and untested,
   it is the position the field occupied and vacated. It also fails on its own facts: the seven
-  stops omit `join` — `RunPanel.tsx:68` holds exactly identify / join / emit / reconcile — which
+  stops omit `join` — `app/src/RunPanel.tsx`'s `STEPS` holds exactly identify / join / emit / reconcile — which
   is the step that PRODUCES both the ANSWER queue and the PRICE questions, and the counts carry
   three different denominators (cards, run directories, SKU copies) so the one claim B rests on
   cannot hold. D7's fungibility puts one card at several stops at once.
@@ -456,7 +456,7 @@ product will carry two navigational paradigms and that is correct.
 
 **The single most useful finding reframes §0's headline number.** The review screen's 752px of
 empty width is not idle waste sitting beside a badly-sized photo — it is the *cause* of the
-photo's size. `ReviewQueue.css:93` caps the image at `--photo-cap: 48vh` = 432px, because
+photo's size. `app/src/ReviewQueue.css`'s `.review` caps the image at `--photo-cap: 48vh` = 432px, because
 everything stacks in one 688px column and the sentence plus first candidate must stay visible.
 The card therefore draws 309x432 = **10.3% of the viewport** for the one thing that screen
 exists to show. Splitting photo and candidates side by side takes it to 551x769 = **32.7%**,
@@ -475,7 +475,7 @@ the wrong risk.
 
 **The strongest argument against the whole direction, kept because it is strong**: the frame
 fixes none of the four measured defects, and two of its three zones already exist —
-`CaptureScreen.css:151` and `BoxBrowse.css:137` are already rail|stage layouts, and the 240px
+`app/src/CaptureScreen.css`'s `.capture-shell` and `app/src/BoxBrowse.css`'s `.browse-body` are already rail|stage layouts, and the 240px
 header and the y=482 photo happened *inside* them. Every item in the ranked list is achievable
 without a frame. The correct response is sequencing rather than argument: build the ANSWER
 posture first, on the route where the measured harm is largest, and let it earn the rest.
@@ -511,8 +511,8 @@ already exist, and every item in the ranked list is achievable without it. Taken
 that is not a caveat on the Rig — it is a fourth proposal, and it is the cheapest one on the
 table.
 
-**The thesis, verified in the tree.** `CaptureScreen.css:151` is already
-`grid-template-columns: var(--side-w) minmax(0, 1fr)`. `BoxBrowse.css:137` is already
+**The thesis, verified in the tree.** `app/src/CaptureScreen.css`'s `.capture-shell` is already
+`grid-template-columns: var(--side-w) minmax(0, 1fr)`. `app/src/BoxBrowse.css`'s `.browse-body` is already
 `minmax(300px, 380px) minmax(0, 1fr)`. Both are rail-and-stage layouts today, and **the 240px
 header and the y=482 photograph happened inside them**. A frame cannot fix a stacking order.
 Every measured defect is a decision about what sits above what, inside a column that exists.

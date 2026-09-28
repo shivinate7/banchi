@@ -41,7 +41,7 @@
 
 **The gate's lookup half is proven on the runner and the record half is not, and the reason is main's.** Both dispatches printed `0 unexpired pass record(s)` for their tree and released the matrix, and `design-check-passed` was correctly SKIPPED when a shard went red. It went red on `phone.spec.ts`'s thumb-floor case at 390, which main's own run at `591285b` fails on Linux too — PR #252's fix for it was red on the runner at the time of writing — so no tree that includes today's main has had a green matrix to upload a record from. The upload is `actions/upload-artifact@v4` with a name computed by the job, and it runs on this PR's own check the first time main's Linux reds are fixed and merged in; a re-dispatch of the same tree then prints `1 unexpired pass record(s)`. Reported as unexercised rather than claimed.
 
-**One more red was seen and is main's, not this entry's**: `inventory.spec.ts:5074`'s D132 case failed on main's push run and on the first dispatch's shard 2, and passed on the second dispatch — a `toHaveText` over the walk's position cells, not the Escape shape DEBT8 records. Written down here because it is a second shape, and left to that section.
+**One more red was seen and is main's, not this entry's**: `inventory.spec.ts` line 5074 at `1cde3cdc`'s D132 case failed on main's push run and on the first dispatch's shard 2, and passed on the second dispatch — a `toHaveText` over the walk's position cells, not the Escape shape DEBT8 records. Written down here because it is a second shape, and left to that section.
 
 ### What is left, and flagged rather than done
 

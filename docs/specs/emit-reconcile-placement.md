@@ -128,7 +128,7 @@ roughly 210px below the fold. On the same visit as a send, with the crop preview
 around y≈1,750.
 
 **The stack decomposes into chrome for steps the operator is not performing.** About 262px of it
-is a `max-height: 260px` console (`RunPanel.css:583`) tailing a step that has already finished,
+is a `max-height: 260px` console (`app/src/RunPanel.css`'s `.run-console`) tailing a step that has already finished,
 and about 130px is the join step's bypass toggle, two fine notes and three buttons for a join
 already run. `.runs` sets no `max-width`, so the four steps stack at full width and emit's two
 buttons occupy roughly 90px of a ~1,376px line: **the vertical budget is expensive and the
@@ -145,7 +145,7 @@ new address and leaves every one of those dead pixels standing.**
 
 ### `#/runs` keeps both — ADOPTED
 
-`RunPanel.tsx:108` states why `STEPS` is authored rather than derived: *"a screen that only drew
+`app/src/RunPanel.tsx`'s `runningFor` states why `STEPS` is authored rather than derived: *"a screen that only drew
 the current step would leave the operator unable to see that emit exists until join had
 finished."* That promise has already been broken once and repaired at cost — the three free steps
 once rendered inside the open-run guard, so with no runs on disk *"they existed nowhere on the
@@ -202,7 +202,7 @@ Three further costs make it worse than the link it would replace:
   different routes.
 - **A stale run list.** `RunPanel` polls `getRuns()` at 4s/20s because a run started in a
   terminal *begins* live; `Pricing.tsx` calls it once, with no poll.
-- **`Pricing.tsx:29`'s "NOTHING HERE SPENDS"** survives only as a technicality — emit is free —
+- **`Pricing.tsx` line 29 at `156a39a4`'s "NOTHING HERE SPENDS"** survives only as a technicality — emit is free —
   and D33 refused exactly that kind of narrowing when `capture_server.py`'s old promise went the
   same way.
 
@@ -241,13 +241,13 @@ the `state` column is the re-check against the tree that replaced it.
 | 2 | **Draw `sub_threshold` on `#/pricing`** — the payload is already served and typed (§2.1) | unblocks both stuck runs; removes the only argument for moving emit | S | BUILT |
 | 3 | **`phase` says what the run owes**, in the run's own unit — `price` with a count where the disposition is unanswered, `answer N` where the queue is non-empty | both stuck runs read `emit` today | M | BUILT |
 | 4 | **A finished step's body collapses; its head and note never do** (§3) | puts emit near y≈660, above the fold, with no relocation | M | not verified |
-| 5 | **`#/pricing` links back as `#/runs?run=<name>`, and `#/runs` reads it** | the link is one-directional today: `RunPanel.tsx:1603` links out with the run name, `Pricing.tsx` links back bare, and `openRun` is local state with no persistence — so every return costs a re-pick | S | NOT BUILT |
+| 5 | **`#/pricing` links back as `#/runs?run=<name>`, and `#/runs` reads it** | the link is one-directional today: `RunPanel.tsx` links out with the run name, `Pricing.tsx` links back bare, and `openRun` is local state with no persistence — so every return costs a re-pick | S | NOT BUILT |
 | 6 | **`phase === 'reconcile'` gets the ink-600 treatment** `.run-phase-identifying` has | it is the fact the operator needs on re-entry, drawn in the quietest register | XS | NOT BUILT |
 
 **Item 4 is the only one that touches the thing the question was about**, and it is fourth
 because the three above it are worth more.
 
-**Item 4 must not collapse the heads and notes.** `RunPanel.tsx:108`'s promise is about a first
+**Item 4 must not collapse the heads and notes.** `app/src/RunPanel.tsx`'s `runningFor`'s promise is about a first
 visitor being able to see that the pipeline has four parts; it was never made about a finished
 step's console, and the controls are already conditional on `detail !== null`.
 

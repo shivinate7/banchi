@@ -129,7 +129,7 @@ which holds TODAY inside `do_orders`'s own request (nothing before this item's n
 materializes the whole `cards` table in that route), and holds EVEN BETTER after item 2
 lands. **Recommend this item runs after item 2 merges**, per the plan's own ordering (item 2
 is listed before item 6 in `docs/specs/store-scaling.md` §3), so that a rebase picks up
-item 2's `rows.py:177` fix rather than this item's tests being written against a
+item 2's `store/rows.Rows`'s `__len__` fix rather than this item's tests being written against a
 soon-to-change fallback rule. If item 2 has not merged yet: this item's own code does not
 create a full-store load anywhere in `do_orders`'s call path, so the two are independently
 correct; only the ORDER of landing is at stake, not correctness.
@@ -143,7 +143,7 @@ correct; only the ORDER of landing is at stake, not correctness.
 
 - `docs/specs/store-scaling.md` §0 (mechanism), §1 (`GET /orders` paragraph, the measured
   185 ms / 3,465 ms table), §2 ("the punch list got wrong" — confirms `_Places` does no
-  eager scan and the comment at `:9075` is stale), §3 item 6, §4 (allowlist — `do_orders` is
+  eager scan and the comment is stale), §3 item 6, §4 (allowlist — `do_orders` is
   NOT on it; the allowlist's `do_inventory`/`_boxes_named` rows belong to item 2).
 - `CLAUDE.md`: D63 (order ledger is two maps; `pipeline/orders.py` resolves and stores
   nothing — this item touches only the RESOLUTION's rendering, never the ledger), D69 (the
@@ -184,7 +184,7 @@ correct; only the ORDER of landing is at stake, not correctness.
 
 ## Steps
 
-### 1. Add `Inventory.occupied_indices` — `store/master.py`, beside `_positions_in` (`:1492-1519`)
+### 1. Add `Inventory.occupied_indices` — `store/master.py`, beside `_positions_in`
 
 Insert directly after `_positions_in` (which ends at line 1519 with `return out`):
 
@@ -251,7 +251,7 @@ Notes for the implementer:
   does not — keys are `"box/idx"` strings, and string-sorting "3/10" before "3/2" is exactly
   the kind of bug `_positions_in`'s own `int()` coercion exists to avoid elsewhere).
 
-### 2. Add `_Places.for_keys` — `server/capture_server.py`, in the `_Places` class after `__init__` (`:2027-2033`)
+### 2. Add `_Places.for_keys` — `server/capture_server.py`, in the `_Places` class after `__init__`
 
 ```python
 @classmethod
@@ -385,12 +385,12 @@ Every place `_Places(...)` is instantiated today (`grep -n "_Places(" server/cap
 | 8235 | `_box_row` (`view(box)` only, no `.of()`) | No |
 | 8392 | `do_boxes` | No — item 7's subject |
 | 8542 | (`occupied(box)` only) | No |
-| 8829 | `_order_stamps` (`server/capture_server._order_stamps`) — the Rubber Stamp fill helper behind `POST /shipping/batches/<batch>/stamps` (`docs/specs/order-pipeline.md` §3 T2b) | **YES — same shape, confirmed by reading `:8780-8835`.** It runs the IDENTICAL pattern to `do_orders`: `sequence`/`open_records`/`asked = [_engine_order(record, ledger) for record in open_records]`/`resolution = order_engine.resolve_all(...)`, then `places = _Places(snapshot.inventory)` over EVERY open order in the store to stamp only the numbers in one batch. Its own docstring even says "`_Places` built and dropped inside this call" — same cost, same fix. |
+| 8829 | `_order_stamps` (`server/capture_server._order_stamps`) — the Rubber Stamp fill helper behind `POST /shipping/batches/<batch>/stamps` (`docs/specs/order-pipeline.md` §3 T2b) | **YES — same shape, confirmed by reading the function body.** It runs the IDENTICAL pattern to `do_orders`: `sequence`/`open_records`/`asked = [_engine_order(record, ledger) for record in open_records]`/`resolution = order_engine.resolve_all(...)`, then `places = _Places(snapshot.inventory)` over EVERY open order in the store to stamp only the numbers in one batch. Its own docstring even says "`_Places` built and dropped inside this call" — same cost, same fix. |
 | 9078 | `do_orders` | **YES — this item's subject** |
-| 9756 | `do_order_pull` (`server/capture_server.do_order_pull`) | **No — different shape, confirmed by reading `:9740-9793`.** This is a WRITE route (`Store().write()`), bounded by the request body (`parsed`, capped at `ORDER_FILL_TARGET_LIMIT = 50` per D90) rather than by every open order in the store; `places` here answers `_prepare_targets`'s specific positions, not a store-wide resolution. Lower value and not measured in `docs/specs/store-scaling.md` — leave it on the ordinary constructor for this item; note it as a candidate for the SAME treatment in a follow-up if `_prepare_targets`'s own boxes ever prove slow (it is a write, not a polled GET, so it is off this plan's "per-press"/"per-load" cost table). |
+| 9756 | `do_order_pull` (`server/capture_server.do_order_pull`) | **No — different shape, confirmed by reading the function body.** This is a WRITE route (`Store().write()`), bounded by the request body (`parsed`, capped at `ORDER_FILL_TARGET_LIMIT = 50` per D90) rather than by every open order in the store; `places` here answers `_prepare_targets`'s specific positions, not a store-wide resolution. Lower value and not measured in `docs/specs/store-scaling.md` — leave it on the ordinary constructor for this item; note it as a candidate for the SAME treatment in a follow-up if `_prepare_targets`'s own boxes ever prove slow (it is a write, not a polled GET, so it is off this plan's "per-press"/"per-load" cost table). |
 
 **Recommendation: apply the identical `_Places.for_keys` fix to `_order_stamps`
-(`:8829`) in this same PR.** It is not named in `docs/specs/store-scaling.md`'s item 6 text
+in this same PR.** It is not named in `docs/specs/store-scaling.md`'s item 6 text
 because that item's own measurement only covers `GET /orders`, but the code path is the
 same pattern with the same defect for the same reason, and leaving it unfixed while fixing
 `do_orders` beside it would be exactly the kind of half-applied primitive `CLAUDE.md`'s "no
@@ -403,7 +403,7 @@ unfixed twin, with its line number, so it is not rediscovered from scratch later
 ## Tests
 
 Add to `harness/tests/t7_store_and_seams.py`, near the existing `do_orders` block
-(`:22280-23260`) — an `## do_orders scopes to the boxes its picks touch` subsection.
+— an `## do_orders scopes to the boxes its picks touch` subsection.
 
 ### Assertion 1 — sparse build touches only the boxes with picks
 
@@ -434,7 +434,7 @@ INSIDE that call's snapshot, not from the `before` snapshot above (which is a se
 and cannot see what `do_orders` built). The existing test file's pattern for this is to
 monkeypatch `Store.read` to capture the snapshot it returns, OR — simpler and matching the
 existing idiom exactly — call the pieces `do_orders` calls, directly, in the test, the way
-`t7_store_and_seams.py:1074-1090` does inline rather than through a route function:
+`harness/tests/t7_store_and_seams.check_store_of_record` does inline rather than through a route function:
 
 ```python
 snapshot = Store().read()
@@ -570,8 +570,8 @@ exists) before deciding which.
   stays present, `neighbors`/`section_gaps` go through the SAME optional-null path the
   degraded case already uses (no new field, no removed field, no renamed field).
   `app/tests/orders.spec.ts`'s stubbed fixtures must keep passing unmodified.
-- **`pipeline/orders.py`'s resolution arithmetic** — `_Draw.copies` (`:434-472`),
-  `order_engine.resolve_all` (`:582-612`) — UNLESS research (see "Read first" and the "Call
+- **`pipeline/orders.py`'s resolution arithmetic** — `_Draw.copies`,
+  `order_engine.resolve_all` — UNLESS research (see "Read first" and the "Call
   sites" table's open question about line 8825) finds it iterating `inventory.cards`
   unscoped somewhere this playbook did not catch. If it does NOT walk unscoped (the
   expected finding, since it goes through `positions_for_sku`), leave it untouched; this

@@ -81,7 +81,7 @@ text never contains `pkmnscan`, a decision citation, or a log path.
 
 `scripts/docs-audit.py`'s `no mechanism on screen` row gained `_CLI_INVOCATION_RE`: it had no
 key for a backticked `pkmnscan …` invocation before this entry, which is exactly the shape
-`Pricing.tsx:4468` carried. `check_no_mechanism_self_test` pins a fixture (`CliInvocation.tsx`)
+`Pricing.tsx` line 4468 at `c341b884` carried. `check_no_mechanism_self_test` pins a fixture (`CliInvocation.tsx`)
 proving it is caught, red-first against the un-widened row.
 
 ### Not reopened

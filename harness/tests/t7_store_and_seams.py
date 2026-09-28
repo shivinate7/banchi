@@ -10679,7 +10679,7 @@ def check_rows_scoped_after_full_load(checks: Checks) -> None:
 
         # --- a session that WRITES, then queries, must still see its own write -----------
         # VERIFIED AGAINST THE TREE, CORRECTING THE PLAYBOOK'S OWN SKETCH: `Card.key` is a
-        # COMPUTED PROPERTY of `(box, index)` (`store/master.py:523-525`), so moving "2/1"
+        # COMPUTED PROPERTY of `(box, index)` (`store/master.Card`'s `key`), so moving "2/1"
         # into box 1 while keeping its index at 1 makes its `.key` recompute to "1/1" —
         # colliding with box 1's own real card at index 1, which is why the playbook's
         # original sketch (assert `"2/1" in moved_in`) can never pass: nothing in `_loaded`

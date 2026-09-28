@@ -758,10 +758,10 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
     # TWO SCREENS TICK TWO DIFFERENT "WALK ALL" SETS, NOT ONE, AND `Orders.tsx`'S OWN SET IS
     # NOT STORE-WIDE. `Fulfillment.tsx` sends `order.open` alone. `Orders.tsx`'s "Walk all N
     # buyers" ticks `tickableKeys`, built from `shownGroups` — the default "open" tab, every
-    # BUYER GROUP with at least one truly open order (`inOpenBase`, `app/src/Orders.tsx:2771`,
+    # BUYER GROUP with at least one truly open order (`inOpenBase`, `app/src/Orders.tsx`,
     # `finished` empty on a fresh load) — and expands each ticked group through
     # `walkableOf`/`ownsAWalkableBody` (`open` OR `terminal` and still owed a copy,
-    # `app/src/Orders.tsx:840`). A GROUP WHOSE ONLY ORDERS ARE TERMINAL-AND-OWING NEVER SHOWS
+    # `app/src/Orders.tsx`'s `ownsAWalkableBody`). A GROUP WHOSE ONLY ORDERS ARE TERMINAL-AND-OWING NEVER SHOWS
     # IN THE DEFAULT TAB AND IS NEVER TICKED, even though its orders individually pass
     # `ownsAWalkableBody` — a prior version of this recorder recorded the STORE-WIDE walkable
     # set (305 orders) and still refused, because the real press only asks for the 97 orders

@@ -175,11 +175,11 @@ Four files say otherwise:
 | file | current text | replacement |
 |---|---|---|
 | `docs/map.py`, `harness/` component's `does` field | ``"does": "T1-T6. `make harness` must exit 0 before any commit.",`` | ``"does": "T1-T6. The Stop hook runs it at every turn end; the pre-commit hook does not.",`` |
-| `CLAUDE.md:14` | `make harness        # all six verification tests; MUST exit 0 before any commit` | `make harness        # all six verification tests; the Stop hook runs it at turn end` |
-| `README.md:29` | ``harness/                   T1-T6. `make harness` must exit 0 before any commit.`` | ``harness/                   T1-T6. The Stop hook runs it at every turn end.`` |
+| `CLAUDE.md` line 14 at `6c5bd28f` | `make harness        # all six verification tests; MUST exit 0 before any commit` | `make harness        # all six verification tests; the Stop hook runs it at turn end` |
+| `README.md` line 29 at `6c5bd28f` | ``harness/                   T1-T6. `make harness` must exit 0 before any commit.`` | ``harness/                   T1-T6. The Stop hook runs it at every turn end.`` |
 | `Makefile:20` | `T1-T6 verification tests. Must exit 0 before any commit.` | `T1-T6 verification tests. Run at turn end by the Stop hook.` |
 
-Preserve column alignment in all four; `CLAUDE.md:14` and `README.md:29` sit inside fenced
+Preserve column alignment in all four; `CLAUDE.md` line 14 and `README.md` line 29 at `6c5bd28f` sit inside fenced
 blocks whose columns are load-bearing for readability, and `Makefile:20` begins with a
 tab that make requires.
 

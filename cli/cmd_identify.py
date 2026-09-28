@@ -312,7 +312,7 @@ class Item:
     # why this exists and what `prepared is None` used to be asked to mean on its own.
     stage: str = STAGE_PENDING
     # THE DIGEST OF THE FILE ON DISK, CARRIED APART FROM `prepared`, and the reason is
-    # `cli/resolve.py:1108`. D36's realign builds its `verifiable` map out of the run
+    # `cli/resolve.realign`. D36's realign builds its `verifiable` map out of the run
     # payload's `photo_sha256` and drops every record without one into `blind` — a card it
     # can no longer re-bind to a slot. `prepared.sha256` was the only source for that field,
     # so hash-first would have written `None` for every cache hit and blinded 464 of the 678
@@ -1416,7 +1416,7 @@ def run(args, say) -> int:
                 # THE ITEM'S OWN DIGEST, NOT THE PREPARED BYTES'. This read
                 # `item.prepared.sha256 if item.prepared else None`, and under hash-first a
                 # cache hit is never prepared — so that expression would have written `None`
-                # for 464 of this directory's 678 records, and `cli/resolve.py:1108` puts
+                # for 464 of this directory's 678 records, and `cli/resolve.realign` puts
                 # every record without a digest into `blind`, where D36's realign can no
                 # longer re-bind it to a slot. Same value, read off the step that computes it.
                 "photo_sha256": item.photo_sha256,

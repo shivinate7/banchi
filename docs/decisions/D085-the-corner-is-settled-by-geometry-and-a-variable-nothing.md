@@ -76,7 +76,7 @@ Three cases were added and each was **run against the pre-fix tree and failed** 
 punctures, 143 punctures, and a published height that was the empty string.
 
 They hit-test rather than compare rectangles, and that distinction is the entry's point.
-`fulfillment.spec.ts:648` has an `overlaps()` helper and it is deliberately not reused here:
+`fulfillment.spec.ts` line 648 at `33126887` has an `overlaps()` helper and it is deliberately not reused here:
 two boxes intersecting is the normal, correct state of an overlay above a list. The fault was
 never the intersection — it was **who answered inside it**. `elementFromPoint` asks what a
 hand aiming at a pixel actually reaches, which is the property that broke, and it is

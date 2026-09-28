@@ -63,7 +63,7 @@ answer, or the transport's refusal to ask for one, and it is written into
 cache hit still records `succeeded`, an unreadable photograph still records `unreadable`, an
 unregistered game still records `unknown_game`.
 
-**`Item.photo_sha256` is the second field, and it exists for `resolve.py:1108` alone.** The
+**`Item.photo_sha256` is the second field, and it exists for `resolve.py` line 1108 at `ee1a1e1b` alone.** The
 digest now belongs to the item rather than to the bytes that were sent. It is `None` in
 exactly one case where it used to be `None` in two: a file whose bytes could not be READ at
 all. A photograph that hashed and then failed to DECODE keeps its digest, so **`blind` is strictly smaller than it was**.

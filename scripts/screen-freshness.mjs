@@ -1305,7 +1305,7 @@ function recognizers(screens) {
      * Those are two different questions and only the second one is this file's.
      *
      * Nothing regressed by removing it: `Shipping.tsx`'s two real write sites are covered by
-     * idiom 4 at :172 and idiom 11 at :200, both of which look at the handler. The self-test
+     * idiom 4 and idiom 11, both of which look at the handler. The self-test
      * keeps the fixture and inverts its expectation, so the shape that produced this hole is
      * now the case that proves it closed.
      */

@@ -5332,7 +5332,7 @@ COMPONENTS = [
                 # the `runs` line on 2026-08-29 — the pipeline's own route. This comment said
                 # that line was "the one owner render that draws no stored capture photo, so
                 # the `views exposure` question the others raise does not arise for it", and
-                # both halves were wrong: RunsComposer.tsx:692 draws one, `views exposure`
+                # both halves were wrong: `RunsComposer.tsx`'s `RunsComposer` draws one, `views exposure`
                 # names the line on every run, and the manifest's own paragraph was corrected
                 # on 2026-09-05 to describe the RENDER STATE and the three gates that hold it
                 # rather than the screen. D86 is the same drift on the `pricing` line — the

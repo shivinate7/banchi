@@ -154,8 +154,8 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
 - `server/capture_server._clearing_event+` (`_clearing_event`) — identical shape: parses
   `at_box, at_index` from `key` (line 6278), then checks `event.get("box") == at_box` for the
   `RENUMBERED` guard (line 6285).
-- `server/capture_server._state_before_sale` (`_state_before_sale`) and `:7108-7138`
-  (`_state_before_retirement`) — these two do **not** have a `RENUMBERED`/box guard; they
+- `server/capture_server._state_before_sale` (`_state_before_sale`) and
+  `_state_before_retirement` — these two do **not** have a `RENUMBERED`/box guard; they
   filter purely on `event.get("position") == key` (lines 7098, 7131). A box-wide scope is
   still correct for them (it is a superset, not a mismatch) — they simply ignore the
   extra rows for other positions in the box, exactly as `history()`'s current full-store read
@@ -206,8 +206,8 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
   commit if left stale — but it will be **wrong**, in the same way the comment it replaced in
   2026-09-05 was wrong, and this repo's own `sole reader` row exists specifically because that
   kind of drift shipped once already. Fix it in the same commit.
-- `harness/tests/t7_store_and_seams.check_mark_sold` (`check_mark_sold`) and `:5494+`
-  (`check_retire`, confirmed at line 5494) — the existing coverage for the two `undo`-gated
+- `harness/tests/t7_store_and_seams.check_mark_sold` (`check_mark_sold`) and
+  `check_retire` — the existing coverage for the two `undo`-gated
   callers this item changes. `harness/tests/t7_store_and_seams.check_mark_sold` —
   `events_for(key)` / `last_event(key)`, the test-side helpers already used throughout this
   file (`[event for event in Store().history() if event.get("position") == key]`) — this
@@ -506,7 +506,7 @@ Every production, zero-argument `Store.history()` (equivalently `store.history()
 No other production call exists (`grep -rn "\.history()" server/ store/ pipeline/ cli/
 identify/ geometry/ codes/` returns only the three lines above plus two `store/db.py`
 docstring mentions of the phrase, which are prose, not calls). `pipeline/pricehistory.py` has
-an unrelated method of the same name taking `(product, range)` — `docs-audit.py:2674-2677`
+an unrelated method of the same name taking `(product, range)` — `scripts/docs-audit._SOLE_READER_RE`
 already disambiguates this by requiring zero arguments; nothing here changes that
 disambiguation.
 
@@ -708,7 +708,7 @@ regresses to the latter.
   `scripts/docs-audit.check_paths`) has no entry naming `store/db.py`, `events`, `history`, or
   any function touched here. This change does not add, remove, or need an allowlist entry.
 - The `sole reader` docs-audit row (`scripts/docs-audit.py`,
-  `_history_readers()` at `:2671-2708`) is **not** an allowlist and needs no edit — see "Read
+  `_history_readers()`) is **not** an allowlist and needs no edit — see "Read
   first" for the full argument that its dynamic count (currently 3, becoming 0 after this
   change) self-corrects and stays green. If a future session ever needs to make this row
   aware of a *scoped* reader (e.g., to assert "every scoped reader passes a real key"), that

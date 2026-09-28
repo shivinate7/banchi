@@ -1,6 +1,6 @@
 ## 23 — A sale fixture that moves after the press is only wrong sometimes, so no check can flag it
 
-**Measured 2026-09-11, sweeping the eight sites left by `inventory.spec.ts:5074`'s fix.** A case
+**Measured 2026-09-11, sweeping the eight sites left by `inventory.spec.ts` line 5074 at `b61ffa32`'s fix.** A case
 in `app/tests/inventory.spec.ts` that mutates its store on the line AFTER a press is racing the
 browser: `click()` resolves when the click is DISPATCHED, and `Inventory.tsx:doSell` awaits the
 sale and then bumps `reloads`. When that `GET /inventory` is served first, the stub answers with
