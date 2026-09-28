@@ -138,7 +138,7 @@ export function soldSince(soldHere: number | null | undefined): number {
  * condition listed". This is the one table both read. The stored code never reaches the screen
  * (D196): a screen draws `label` and `said`. */
 export const RETIRE_REASONS: readonly { readonly reason: RetireReason; readonly label: string; readonly said: string }[] = [
-  { reason: 'pulled', label: 'Pulled out', said: 'Taken out of the box by hand.' },
+  { reason: 'pulled', label: 'Removed', said: 'Taken out of the box by hand.' },
   { reason: 'damaged', label: 'Damaged', said: 'Not in a condition to sell.' },
   { reason: 'lost', label: 'Lost', said: 'Gone, and not sold.' },
   { reason: 'given_away', label: 'Given away', said: 'Left as a gift or a trade.' },
