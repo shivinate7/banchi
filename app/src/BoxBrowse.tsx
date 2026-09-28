@@ -37,6 +37,7 @@ import {
 } from './server'
 import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
 import { reasonLabel } from './reasons'
+import { RailFrame } from './RailFrame'
 import {
   CardDetailsSection,
   CardPane,
@@ -812,14 +813,9 @@ export function BoxBrowse({
     null,
   )
   const listRef = useRef<HTMLUListElement | null>(null)
+  /* `RailFrame` owns the rest-top measure (lane A2b); this is the mounted node it hands back,
+     used here only to scroll the selected row into view within it. */
   const mapRef = useRef<HTMLDivElement | null>(null)
-  /* The same node as state, so the rail's height effect runs when the rail mounts (it is not
-     drawn on the first render). */
-  const [mapEl, setMapEl] = useState<HTMLDivElement | null>(null)
-  const holdMap = useCallback((node: HTMLDivElement | null) => {
-    mapRef.current = node
-    setMapEl(node)
-  }, [])
   const boxesRef = useRef<HTMLDivElement | null>(null)
   /** N3: set by `selectShelf` alone, right before `setShelf`, so the rail's own scroll-into-view
    *  effect below skips exactly one run — the one a direct press on a row already caused to be
@@ -1434,21 +1430,6 @@ export function BoxBrowse({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [visible, stepSelection])
 
-  /* THE RAIL'S TOP AT REST, for its height (BoxBrowse.css `.browse-map`, UX-227). Read off the
-     rail's parent, which is never sticky, so a resize while the page is scrolled reads the same
-     number as one at rest. */
-  useLayoutEffect(() => {
-    const map = mapEl
-    const body = map?.parentElement ?? null
-    if (map === null || body === null) return
-    const measure = () => {
-      map.style.setProperty('--browse-rail-rest', `${Math.round(body.getBoundingClientRect().top + window.scrollY)}px`)
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [mapEl])
-
   /* Keep the selected row where it can be seen — within the rail, never by scrolling the page. */
   useEffect(() => {
     const current = listRef.current?.querySelector('[aria-current="true"]')
@@ -1932,7 +1913,7 @@ export function BoxBrowse({
   // ---------------------------------------------------------------------------- the rail
 
   const rail = (
-    <div className="browse-map" ref={holdMap}>
+    <RailFrame ref={mapRef}>
       {/* THE KIT'S FILTER BAR (FLT-09): the search, the three facets in any order and the one
           count line. Hide sold stays on the walk's own bar, beside the rows it folds. The rail is narrow, so the facets sit behind one Filters
           press: a popover beside it on a desk, a sheet on a phone. */}
@@ -2354,7 +2335,7 @@ export function BoxBrowse({
               list takes (App.tsx INVENTORY_KEYS), and the legend cost the list a row. */}
         </div>
       )}
-    </div>
+    </RailFrame>
   )
 
   const miniRail = (
