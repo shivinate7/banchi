@@ -2464,6 +2464,112 @@ def main() -> int:
                   "read — this arm proves the fix against the commit this branch actually "
                   "forked from, not a fabricated 'before')")
 
+        print("\n  -- and docs-audit refuses a NUMBERED record a branch allocates by hand --")
+        # THE EXACT DEFECT `DEBT-pricing-corpus-five-unlocked-writers` WAS: a branch writing
+        # `docs/debts/048-....md` straight, never a slug, so `scripts/claim-ids.py` could
+        # independently plan the same number for a pending slug elsewhere.
+        # `scripts/docs-audit.py:check_numbered_record_growth` is the mechanized refusal
+        # (D140) — proved here against a real repo, because the question is a real
+        # `git merge-base`/`git diff` against `origin/main`, not a fixture
+        # `check_numbered_record_growth` could be fooled by. FULL MODE (`staged_only=False`):
+        # this arm asks the branch's whole history since the merge-base, the same question a
+        # full `python3 scripts/docs-audit.py` run asks.
+        ntmp = tmp / "numbered-growth"
+        ntmp.mkdir()
+        nwork = build_split(ntmp)
+        git(nwork, "checkout", "-q", "-b", "feature-numbered")
+        write(nwork, "docs/debts/048-a-branch-allocated-this-number.md",
+              "## 48 — a branch allocated this number\n\nbody\n")
+        git(nwork, "add", "-A")
+        git(nwork, "commit", "-qm", "a branch writes a numbered debt directly")
+
+        audit = docs_audit_module()
+        audit.ROOT = nwork
+        report = audit.Report()
+        audit.check_numbered_record_growth(report, False)
+        row = next(r for r in report.checks if r.check == "numbered record growth")
+        ok(len(row.findings) == 1 and
+           "048-a-branch-allocated-this-number.md" in row.findings[0].where,
+           "a numbered debt file with no matching slug rename behind it is refused",
+           "\n".join(f.where + ": " + f.message for f in row.findings))
+
+        # AND SILENT ON MAIN ITSELF — the branch's own numbered files are exactly what main
+        # already carries once HEAD sits at origin/main, so `merge-base == HEAD` and the diff
+        # is empty. Proves the row does not fire on every numbered file in the tree.
+        git(nwork, "checkout", "-q", "main")
+        clean_report = audit.Report()
+        audit.check_numbered_record_growth(clean_report, False)
+        clean_row = next(r for r in clean_report.checks if r.check == "numbered record growth")
+        ok(not clean_row.findings,
+           "on main itself, with no branch growth, the row finds nothing",
+           "\n".join(f.where for f in clean_row.findings))
+
+        print("\n  -- and it does NOT refuse the sanctioned claim itself --")
+        # THE ROUND THIS ARM CLOSES: `merge-pr.py:claim_half` runs `claim-ids.py --write`
+        # (a plain filesystem rename, no `git mv`), `git add -A`, then a plain `git commit`
+        # through the ARMED pre-commit hook. The first version of `numbered record growth`
+        # refused THAT COMMIT — its own sanctioned rename read as a hand-added numbered
+        # file, so a claim could never land. A stub or a fixture could not have caught this:
+        # the fixture in `merge-selftest.sh` never carries a `scripts/docs-audit.py` at all
+        # (the hook's own `[ -f scripts/docs-audit.py ]` guard skips the whole audit there),
+        # and this file's OWN two arms above call `check_numbered_record_growth` directly,
+        # never through a real commit. So this arm clones THIS repository — the only tree
+        # docs-audit.py's own sibling data (`scripts/machine-words.json` and the rest) is
+        # guaranteed to be complete and consistent for — writes ONE pending debt slug,
+        # and drives the exact three commands `claim_half` runs: `claim-ids.py --write`,
+        # `git add -A`, `git commit`, through the clone's OWN, real, armed pre-commit hook.
+        rtmp = tmp / "real-claim-commit"
+        rtmp.mkdir()
+        rwork = rtmp / "repo"
+        cloned = subprocess.run(
+            ["git", "clone", "-q", "--local", "--no-hardlinks", str(ROOT), str(rwork)],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+        if cloned.returncode != 0:
+            print("  (skipped: could not clone this repository locally for the real-hook "
+                  "arm)\n" + cloned.stdout.decode("utf-8", errors="replace"))
+        else:
+            # `app/node_modules` IS GITIGNORED, so the clone above does not carry it, and
+            # `no mechanism on screen`/`typed interpunct` shell out to `node` over it —
+            # unrelated to this arm's own subject, and a real failure there would be read as
+            # this arm's claim commit refused for the wrong reason. Symlinked, never copied
+            # or installed: the same "clone the real tree" argument two comments up applies
+            # here too, and `make worktree-setup`'s own choice for a linked worktree is this
+            # same symlink, timed at under a second.
+            node_modules = ROOT / "app" / "node_modules"
+            if node_modules.is_dir():
+                (rwork / "app").mkdir(parents=True, exist_ok=True)
+                os.symlink(node_modules, rwork / "app" / "node_modules")
+            git(rwork, "checkout", "-q", "-b", "feature-real-claim-proof")
+            # COMPOSED, NEVER WRITTEN — this file's own standing rule for test ids (see the
+            # comment above `D()`/`C()`): written out, this slug is a citation of a debt
+            # entry that does not exist, and `debt ids` reports it, correctly.
+            proof_slug = "DEBT-" + "claim-selftest-real-hook-proof"
+            write(rwork, "docs/debts/" + proof_slug + ".md",
+                  f"## {proof_slug} — a slug this arm claims for real\n\nbody\n")
+            git(rwork, "add", "-A")
+            git(rwork, "commit", "-qm", "a pending debt slug, for the real-hook arm")
+
+            claim_out, claim_code = claim_rc(rwork, "--write")
+            ok(claim_code == 0,
+               "the real claim-ids.py --write allocates the pending debt slug",
+               claim_out)
+
+            git(rwork, "add", "-A")
+            # ARMED STRAIGHT AT THE CLONE'S OWN scripts/githooks — fine for a throwaway,
+            # single-use repository (merge-selftest.sh's own pattern). The armed-copy
+            # comment in scripts/githooks/pre-commit is about a SHARED clone's worktrees
+            # disagreeing on the hook version, which cannot happen here: there is exactly
+            # one working tree and it never changes branch again.
+            git(rwork, "config", "core.hooksPath", "scripts/githooks")
+            committed = subprocess.run(
+                ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm",
+                 "the claim commit"],
+                cwd=str(rwork), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+            ok(committed.returncode == 0,
+               "the claim commit passes the REAL armed pre-commit hook — `numbered record "
+               "growth` recognizes its own sanctioned rename and does not refuse its own claim",
+               committed.stdout.decode("utf-8", errors="replace"))
+
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))
     return 1 if FAIL else 0

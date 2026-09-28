@@ -251,6 +251,12 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
         "its subject is the unclaimed slugs this branch carries, and main carries none "
         "BY THE INVARIANT the row asserts — so on main it examines nothing, every time",
     ),
+    "numbered record growth": (
+        "always",
+        "its subject is the numbered decision/debt files the staged diff (or, in a full "
+        "run, the branch's history since the merge-base) changes — most commits and most "
+        "branches touch neither corpus, and no merge-base fails open the same way",
+    ),
     "views exposure": (
         "always",
         "turned OFF 2026-09-23 while code cards are dormant (CLAUDE.md) — "
@@ -3232,6 +3238,201 @@ def check_id_claims(report: Report) -> None:
                summary="{0} unclaimed id(s) on {1}{2}".format(
                    len(unclaimed), where,
                    ", claimed at the merge" if unclaimed and not on_main() else ""))
+
+
+# ---------------------------------------------- a numbered record is claimed at merge, never by hand
+
+# `id claims` ABOVE CATCHES A MALFORMED SLUG. It says nothing about a branch that skips the
+# slug entirely and writes the number itself — a `docs/decisions/D<n>-*.md` or
+# `docs/debts/<n>-*.md` file with a real number in its own name, D140's exact violation
+# ("never allocate a numbered record on a branch. Write a slug. Claim the number at merge.").
+# That is how `DEBT-pricing-corpus-five-unlocked-writers` collided: lane B2 added
+# `docs/debts/048-...md` straight, and `scripts/claim-ids.py` independently planned the
+# SAME number for a pending slug.
+#
+# THE SANCTIONED CLAIM IS ALSO A NUMBERED FILE APPEARING, and the first version of this row
+# could not tell the two apart: `merge-pr.py:claim_half` runs `claim-ids.py --write`
+# (`rename_claimed_entries` — a plain filesystem rename, no `git mv`), `git add -A`, then a
+# commit through this very pre-commit hook, and that FIRST commit refused itself. So the
+# question is never "is a numbered file new", it is "did a slug become this exact file" —
+# and git already answers that for free: `--name-status -M` reports a content rename
+# (`R<score>`, both paths) wherever a deleted slug file and an added numbered file are
+# similar enough, which `rename_claimed_entries`'s output always is — only the heading line
+# and the filename change. `_sanctioned_rename` checks the one thing worth checking beyond
+# that: the DESCRIPTIVE TAIL survives unchanged (`D-<tail>.md` -> `D<n>-<tail>.md`,
+# `DEBT-<tail>.md` -> `<n>-<tail>.md`), the exact shape `rename_claimed_entries` writes.
+#
+# THE COMPARISON IS SCOPED TO WHAT THIS PASS ACTUALLY DECIDES, never the whole branch
+# against `origin/main`: in `--staged` mode that is `git diff --cached`, this commit's own
+# change — the shape the pre-commit hook checks, and the reason a claim commit does not
+# re-litigate every EARLIER commit's already-sanctioned rename on every commit after it. In
+# a full run it is the branch's history since the merge-base, the same question asked over
+# every commit at once (a rename mid-history still reads as one `R` between two trees).
+# FAILS OPEN exactly like `only_shrinks.list_at_merge_base`: no merge-base scans nothing and
+# says so, rather than refusing every numbered file in a tree with no `origin/main` to
+# compare against.
+_NUMBERED_DECISION_FILE = re.compile(r"^D[0-9]+-")
+_NUMBERED_DEBT_FILE = re.compile(r"^[0-9]+-")
+_SLUG_SOURCE_DECISION = re.compile(r"^D-(.+)$")
+_NUMBERED_TAIL_DECISION = re.compile(r"^D[0-9]+-(.+)$")
+_SLUG_SOURCE_DEBT = re.compile(r"^DEBT-(.+)$")
+_NUMBERED_TAIL_DEBT = re.compile(r"^[0-9]+-(.+)$")
+
+
+def _sanctioned_rename(old_name: str, new_name: str, kind: str) -> bool:
+    """Whether `old_name -> new_name` is `claim-ids.py:rename_claimed_entries`'s OWN rename:
+    the unclaimed slug file becoming the numbered file with the IDENTICAL descriptive tail.
+    """
+    slug_re, numbered_re = (
+        (_SLUG_SOURCE_DECISION, _NUMBERED_TAIL_DECISION) if kind == "decision"
+        else (_SLUG_SOURCE_DEBT, _NUMBERED_TAIL_DEBT)
+    )
+    slug_match = slug_re.match(old_name)
+    numbered_match = numbered_re.match(new_name)
+    return bool(slug_match and numbered_match and slug_match.group(1) == numbered_match.group(1))
+
+
+# A LOW THRESHOLD ON PURPOSE. `-M`'s default (50%) misses a genuine rename over a SHORT
+# entry: a two-line slug file becoming a two-line numbered file can measure well under 50%
+# similar by git's own heuristic (measured: 7% on a real claim, over a fixture-sized debt
+# entry), and that read as a plain add-plus-delete — the exact shape `merge-pr.py:claim_half`
+# produces for a short entry, and the exact shape that refused its OWN claim commit before
+# this fix. Correctness never comes from the threshold: `_sanctioned_rename` below still
+# demands the EXACT descriptive tail on both sides, so a low threshold only widens which
+# pairs git offers as CANDIDATES — it cannot turn an unrelated pair into a false pass.
+_RENAME_THRESHOLD = "-M5%"
+
+
+def _rename_pairs(diff_text: str) -> List[Tuple[str, str]]:
+    """Every `(old_path, new_path)` a `--name-status` diff (run with `_RENAME_THRESHOLD`)
+    reports as a detected rename or copy."""
+    pairs: List[Tuple[str, str]] = []
+    for line in diff_text.splitlines():
+        if not line:
+            continue
+        fields = line.split("\t")
+        if fields[0][:1] in ("R", "C") and len(fields) == 3:
+            pairs.append((fields[1], fields[2]))
+    return pairs
+
+
+def _sanctioned_new_paths(diff_texts: Iterable[str]) -> Set[str]:
+    """Every numbered file path that is the SANCTIONED rename's destination in any one of
+    `diff_texts` — one diff per commit in range, never one diff across the whole range.
+
+    A TWO-ENDPOINT DIFF CANNOT SEE A RENAME WHOSE SOURCE NEVER EXISTED AT EITHER ENDPOINT.
+    A slug added in one commit and claimed (renamed) in a LATER one is invisible to
+    `git diff <merge-base> <HEAD>` alone: the slug file is in NEITHER tree, so there is
+    nothing for git to call deleted, and the numbered file reads as a plain add — a false
+    positive this row would raise on every legitimately claimed entry, on every `make check`
+    run on the branch, from the commit after the claim until the branch merges. Each commit
+    diffed against its own parent sees the rename where it actually happened.
+    """
+    sanctioned: Set[str] = set()
+    for diff_text in diff_texts:
+        for old_path, new_path in _rename_pairs(diff_text):
+            for directory, kind in (
+                ("docs/decisions/", "decision"), ("docs/debts/", "debt"),
+            ):
+                if old_path.startswith(directory) and new_path.startswith(directory):
+                    old_name = old_path[len(directory):]
+                    new_name = new_path[len(directory):]
+                    if _sanctioned_rename(old_name, new_name, kind):
+                        sanctioned.add(new_path)
+    return sanctioned
+
+
+def _added_or_renamed_paths(diff_texts: Iterable[str]) -> Set[str]:
+    """Every path that is the destination of an ADD, RENAME or COPY in any of `diff_texts` —
+    never a plain edit (`M`) of a file that already existed. A claimed entry's PROSE keeps
+    changing after it is claimed — every later citation of its slug is exhaustively
+    rewritten too (`apply_to_text`) — and reading that as growth is the false positive this
+    function exists to rule out: an already-numbered decision or debt, edited for any
+    ordinary reason, is not a hand-allocated number just because a numbered filename also
+    matches this commit's diff.
+    """
+    paths: Set[str] = set()
+    for diff_text in diff_texts:
+        for line in diff_text.splitlines():
+            if not line:
+                continue
+            fields = line.split("\t")
+            if fields[0][:1] not in ("A", "R", "C"):
+                continue
+            paths.add(fields[-1])
+    return paths
+
+
+def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
+    findings: List[Finding] = []
+    dirs = ["docs/decisions", "docs/debts"]
+
+    if staged_only:
+        # THIS COMMIT'S OWN CHANGE, AND NOTHING EARLIER — exactly what the pre-commit hook
+        # decides, and exactly why an earlier, already-sanctioned claim on this same branch
+        # is never re-litigated on every commit after it.
+        cached_diff = git("diff", _RENAME_THRESHOLD, "--cached", "--name-status", "--", *dirs)
+        sanctioned = _sanctioned_new_paths([cached_diff])
+        candidates = _added_or_renamed_paths([cached_diff])
+        where = "the staged diff"
+    else:
+        base = git("merge-base", _MERGE_BASE_REFERENCE, "HEAD").strip()
+        if not base:
+            report.add("numbered record growth", MECHANICAL, findings, scanned=0,
+                        summary="no merge-base with origin/main — fails open, nothing checked")
+            return
+        # ONE DIFF PER COMMIT IN RANGE, so a rename lands in the one step that actually made
+        # it, plus one trailing diff for whatever is uncommitted (HEAD vs the working tree) —
+        # `check_numbered_record_growth` runs in a full pass over the disk, same as every
+        # other full-mode row, so an uncommitted `claim-ids.py --write` still reads clean.
+        commits = [c for c in git("rev-list", "--reverse", f"{base}..HEAD").splitlines() if c]
+        chain = [base] + commits
+        diff_texts = [
+            git("diff", _RENAME_THRESHOLD, "--name-status", chain[i], chain[i + 1], "--", *dirs)
+            for i in range(len(chain) - 1)
+        ]
+        diff_texts.append(git("diff", _RENAME_THRESHOLD, "--name-status", "HEAD", "--", *dirs))
+        sanctioned = _sanctioned_new_paths(diff_texts)
+        candidates = set()
+        for directory in dirs:
+            dirpath = ROOT / directory
+            if not dirpath.is_dir():
+                continue
+            base_names = set(
+                Path(p).name for p in
+                git("ls-tree", "-r", "--name-only", base, "--", directory).splitlines()
+            )
+            for path in sorted(dirpath.glob("*.md")):
+                if path.name not in base_names:
+                    candidates.add(f"{directory}/{path.name}")
+        where = f"the branch's history since {base[:9]}"
+
+    scanned = 0
+    for directory, pattern, kind in (
+        ("docs/decisions", _NUMBERED_DECISION_FILE, "decision"),
+        ("docs/debts", _NUMBERED_DEBT_FILE, "debt"),
+    ):
+        prefix = directory + "/"
+        for new_path in sorted(candidates):
+            if not new_path.startswith(prefix) or not new_path.endswith(".md"):
+                continue
+            new_name = new_path[len(prefix):]
+            if not pattern.match(new_name):
+                continue
+            scanned += 1
+            if new_path in sanctioned:
+                continue
+            findings.append(Finding(
+                new_path,
+                f"is a NUMBERED {kind} record with no matching slug rename behind it (D140). "
+                f"A branch never allocates a number by hand — write a slug instead and "
+                f"`scripts/claim-ids.py` claims the number at the merge, which git sees as a "
+                f"RENAME from the slug file with the same descriptive tail.",
+            ))
+    report.add("numbered record growth", MECHANICAL, findings,
+               scanned=scanned,
+               summary=f"{len(findings)} unsanctioned numbered record(s) over {where}, "
+                       f"{scanned} numbered file(s) changed there")
 
 
 # --------------------------------------------------- the claimer speaks the same vocabulary
@@ -20311,6 +20512,7 @@ TIER: Dict[str, int] = {
     "decision ids": 1,
     "decision structure": 1,
     "id claims": 1,
+    "numbered record growth": 1,
     "claim vocabulary": 1,
     "debts headings": 1,
     "debt index": 1,
@@ -20392,6 +20594,16 @@ def _run_at_commit(name: str, commit_only: bool) -> bool:
     skipped, so a Tier 2 row still blocks CI and a Tier 3 row still prints, exactly as
     `ADVISORY`/`MECHANICAL` already decide. `commit_only=False` is the unconditional True
     this file ran with for every row before L12.
+
+    A NAME MISSING FROM `TIER` DEFAULTS TO TIER 1, NEVER TO A SKIP. `TIER.get(name, 1)`
+    reads 1 for anything the dict does not name, so a row added later and never tiered
+    blocks at commit exactly as it would have before this file had tiers at all — the
+    fail-loud choice, on `subject counts`'s own precedent (a row with no declared subject
+    is a failure, never a silent pass). The alternative, defaulting an untiered row to skip
+    at commit, would make forgetting to tier a new row the same shape as the defect L12
+    exists to fix: a check nobody notices has stopped running. `check_dispatch` catches an
+    UNDISPATCHED row; nothing yet catches an UNTIERED one, so the safe default carries the
+    whole weight until a `tier census` row (or similar) is worth building.
     """
     return (not commit_only) or TIER.get(name, 1) <= 1
 
@@ -20442,6 +20654,8 @@ def audit(staged_only: bool, commit_only: bool = False) -> Report:
         check_decision_structure(report)
     if _run_at_commit("id claims", commit_only):
         check_id_claims(report)
+    if _run_at_commit("numbered record growth", commit_only):
+        check_numbered_record_growth(report, staged_only)
     if _run_at_commit("claim vocabulary", commit_only):
         check_claim_vocabulary(report)
     if _run_at_commit("debts headings", commit_only):

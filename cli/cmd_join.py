@@ -660,7 +660,7 @@ def run(args, say) -> int:
     #
     # `book` WAS ALSO READ AT THE TOP OF THIS COMMAND, because the threshold it carries had to
     # be in hand before the ladder walked. That copy is read-only from here on and is never
-    # the one written: RE-READ, FRESH, INSIDE THE STORE LOCK (DEBT48), below. The old design
+    # the one written: RE-READ, FRESH, INSIDE THE STORE LOCK (DEBT-pricing-corpus-five-unlocked-writers), below. The old design
     # wrote the top-of-command copy straight back, which meant the corpus was read here at
     # whatever moment `join` happened to reach it — after matching thousands of rows against
     # the export, with no lock held — and a `PUT /pricing` or a clear landing in that gap was
