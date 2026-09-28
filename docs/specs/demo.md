@@ -362,6 +362,19 @@ the only result anybody wants. The job reads the repo and writes to GitHub Pages
 permission to write to the repository itself, so it cannot move `main` and is not a second way
 around D42.
 
+### 11a. Dispatching `demo.yml` on a branch is a safe dry run
+
+`demo.yml` triggers on a push to `main` only. A PR never runs it. Dispatch it by hand on a
+feature branch instead: `gh workflow run demo.yml --ref <branch>`. This is safe. The
+`github-pages` environment names a deployment-branch policy of `main` alone. So the `build`
+job runs in full, and the environment refuses `deploy` before `actions/deploy-pages` even
+loads. Nothing this dispatch builds can reach the public page.
+
+Read the **`build` job's own conclusion**, never the run's overall one. The run reads red
+because the environment refused `deploy`, not because anything failed. For what got
+packaged, download the artifact instead of trusting a local build:
+`gh run download <id> -R shivinate7/banchi -n github-pages -D <dir>`.
+
 ## 12. A second, small, real box — opt-in, additive, and off by default
 
 **Built 2026-09-25, on the owner's ruling: "copy paste some data that we already have so it
