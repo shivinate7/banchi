@@ -82,9 +82,13 @@ Records and studies, also merged:
 
 Earlier PRs, done: PR 3B, the demo mirror (#467 to #477), and PR 4A (#466).
 
-## In motion (state at 709ef385)
+## In motion (state at ee2f908e)
 
-Every PR 4B lane is merged. Next: open PR 4B, wait for green CI, and merge with `make merge`.
+PR 4B (PR #479) merged into main on 2026-09-28, at ee2f908e. The claim gave D302 to D305 and
+DEBT48 to DEBT53. Two follow-ups ran after the merge: `make janitor-install`, and
+`scripts/repair-born-game.py --write`, which gave 99 Riftbound cards in box 5 their game.
+Nothing is in motion. Next: the line-anchor lane, then an integration review, a screen pass
+and the full `make design-check`.
 
 ## Still to come
 
