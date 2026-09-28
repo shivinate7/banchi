@@ -265,6 +265,16 @@ number. The plan:
    ruling is that argument.
 4. `make docs-audit` proves that every citation still resolves.
 
+## The G, T and PR 5 interview: rulings so far (2026-09-27, second session)
+
+- `claim-selftest` must not walk the demo build. The owner: `why do we or do we not want the demo walked? isn't the demo supposed to be more or less a sanitized symlink of main that should be pointless to review`. Both walkers skip what git ignores. Lane G.
+- DEBT47 closes as argued. The owner: `The sealed browser is only in testing right and we can't change that? while, the real demo has unsealed browser that won't refuse other websites? If that's the case, any test for that portion is just dumb?`
+- The test audit: `Sonnet slices build the summaries of what the tests are, an opus agent reviews the corpus made and plans with me the resolution, and then sonnet builders take that plan and execute upon it.` The four slices are in `docs/reviews/test-audit-2026-09-27/`. The Opus plan is running. DEBT45's page follows the cuts.
+- The cadence rule's home: `Wait for the test-audit plan`.
+- The two NOT MECHANIZED rules outside CLAUDE.md's Hard rules block: `defer what to do on this for now`.
+- PR 5, decisions: D48 and D194 shrink to stubs. The owner: `Stub makes sense, but "ONE PARAGRAPH"????` So each stub is its heading plus one line. D59, D96, D132 and D209 stay whole.
+- PR 5, debts: `delete the six, split debt 27`. DEBT5, 6, 18, 28, 35 and 42 go, and their numbers retire. DEBT27 keeps only its open half (site 2), or goes too if D279 removed that call. Lane P5 builds both.
+
 ## Outside the repo
 
 The owner runs the `claude-settings` prompt that the orchestrator gave in chat on 2026-09-26.
