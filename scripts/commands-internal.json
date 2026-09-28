@@ -1,0 +1,20 @@
+{
+  "audit-history": "diagnostic over which docs-audit checks ever fired; never gates, no caller outside a session debugging the audit itself",
+  "cid-audit": "reads the whole corpus, so it is deliberately not in `make check`; cited by name in CLAUDE.md's ./pkmnscan cards audit entry",
+  "claim-ids": "one-off dev tool for previewing a branch's id claims; `make merge` is what actually calls the claimer",
+  "claim-stale": "one-off dev tool for checking a claimed id against a moved main; cited by name in CLAUDE.md's Hard rules",
+  "demo-histories": "owner's Mac only, never CI; a one-off recording step for the demo, not a command a session reaches for",
+  "demo-mirror-rebuild": "re-runs `demo-mirror` from its own gitignored snapshot; a variant of a target already documented",
+  "demo-photos": "owner's Mac only; curates the tracked photograph set, not a build or verification step",
+  "down": "stops what `make up` started; the pair of a documented target, not independently notable",
+  "icloud-sweep": "one-off cleanup for an iCloud-synced checkout; not part of the normal build or verification path",
+  "identity-replay": "one-off dev tool for replaying an identity migration against a fixture; no standing caller",
+  "lan-check": "reaches the network, so it never gates a commit; a diagnostic for the owner's own LAN, not a build step",
+  "launch-config": "writes `.claude/launch.json` for this checkout's own port; called by other targets, never run standalone by a session",
+  "map-fix-selftest": "proves a generator that gates nothing (D18); not in `make check`, on `map-fix`'s own precedent",
+  "mutate-guards": "runs every guard's mutation suite for real, ~190s; explicitly off `make check`, a manual verification step",
+  "offenders-prune-selftest": "proves a generator that gates nothing (D18); not in `make check`, same precedent as `map-fix-selftest`",
+  "serve-scope-selftest": "proves the serve-scope gate; not wired into `make check`'s own recipe (unlike its sibling `guard-scope-selftest`)",
+  "venv": ".venv + requirements.txt; cited by name throughout CLAUDE.md's guards (VENV_GUARD) rather than reached for directly",
+  "worktree-provision-selftest": "proves the worktree node_modules provisioning logic on a fixture; not in `make check`, a fresh-worktree diagnostic"
+}

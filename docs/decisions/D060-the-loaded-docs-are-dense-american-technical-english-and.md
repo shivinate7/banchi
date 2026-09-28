@@ -85,4 +85,20 @@ docs-audit"). `docs-audit`'s `identifier spelling` row reads code today, as it a
 It does not yet read markdown prose for spelling — that half is lane L2's work, which waits
 on the owner. Until L2 lands, markdown prose has no spelling reader at all.
 
+### Amended 2026-09-27 — the index is rendered, not hand-typed
+
+**CLAUDE.md's hand-typed index is retired. `make map ARGS=--decisions` replaces it.** The
+paragraph above measured the index at 60 lines, 3,929 bytes, the day D60 landed. It grew
+with the corpus and was never re-measured. On 2026-09-27 it read 301 lines, 26,420 bytes —
+over six times its own stated size, and `docs/decisions/` had grown from 60 entries to 301.
+
+A rendered view cannot drift, because there is no second copy of the corpus's own headings
+left for it to disagree with. `scripts/index-decisions.py` no longer writes CLAUDE.md at
+merge time. It only folds a claimed branch's entry into `docs/decisions/ORDER.json`, the
+manifest half a rendered view still needs. `make docs-audit`'s `decision index` row is gone
+with it — there is no second copy left for that row to check.
+
+This amendment does not touch the conversational-path argument above it. It touches only its
+own premise: the index is now a command, not a paragraph in this file.
+
 ---

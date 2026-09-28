@@ -1916,27 +1916,31 @@ def check_make_targets(report: Report, docs: List[Path]) -> None:
                 )
 
     # The reverse direction. `make help` is the front door, and a target missing from it
-    # is invisible to anyone who did not read the Makefile.
-    help_body = ""
-    in_help = False
-    for line in text.splitlines():
-        if line.startswith("help:"):
-            in_help = True
-            continue
-        if in_help:
-            if line and not line[0].isspace():
-                break
-            help_body += line + "\n"
-    for name in sorted(targets):
-        if name == "help":
-            continue
-        if f"make {name}" not in help_body:
-            findings.append(
-                Finding(
-                    "Makefile",
-                    f"target `{name}` exists but `make help` never mentions it.",
+    # is invisible to anyone who did not read the Makefile. `help:`'s own recipe is one
+    # line calling scripts/make-help.py (2026-09-27, token-budget audit Q1), so the render
+    # is what this reads now, not the recipe's own (now empty) body — importing the sibling
+    # rather than reimplementing its comment-association logic a second time.
+    help_module = _sibling("make-help.py")
+    if help_module is None:
+        findings.append(Finding("scripts/make-help.py", "does not import — cannot check "
+                                 "`make help`'s own coverage of every target."))
+    else:
+        try:
+            help_body = help_module.render(text)
+        except Exception as exc:  # noqa: BLE001 - a broken renderer must not take this row down
+            help_body = ""
+            findings.append(Finding("scripts/make-help.py",
+                                     f"render() raised: {exc}"))
+        for name in sorted(targets):
+            if name == "help":
+                continue
+            if f"make {name}" not in help_body:
+                findings.append(
+                    Finding(
+                        "Makefile",
+                        f"target `{name}` exists but `make help` never mentions it.",
+                    )
                 )
-            )
 
     unphony, unruled = phony_gaps(text)
     for name in sorted(unphony):
@@ -1957,6 +1961,106 @@ def check_make_targets(report: Report, docs: List[Path]) -> None:
         )
     report.add("make targets", MECHANICAL, findings,
                f"{referenced} references, {len(targets)} targets", scanned=referenced)
+
+
+# --------------------------------------------------------------- commands roster
+
+COMMANDS_INTERNAL = ROOT / "scripts" / "commands-internal.json"
+
+_COMMANDS_BLOCK_RE = re.compile(r"## Commands\n\n```\n(.*?)\n```", re.S)
+_COMMANDS_NAME_RE = re.compile(r"^make ([a-zA-Z0-9_-]+)", re.M)
+
+
+def _commands_named(text: str) -> Set[str]:
+    """Every `make <name>` CLAUDE.md's Commands section documents as its own bullet."""
+    match = _COMMANDS_BLOCK_RE.search(text)
+    if not match:
+        return set()
+    return set(_COMMANDS_NAME_RE.findall(match.group(1)))
+
+
+def _commands_roster_findings(
+    targets: Set[str], named: Set[str], check_members: Set[str], allow: Dict[str, str]
+) -> List[Finding]:
+    """The comparison itself, pure so `--self-test` can drive it without a filesystem."""
+    findings: List[Finding] = []
+    documented = named | check_members
+    for name in sorted(targets - documented - set(allow)):
+        findings.append(Finding(
+            "Makefile",
+            f"target `{name}` is named neither as a `make {name}` bullet in CLAUDE.md's "
+            f"Commands section, inside `make check`'s own recipe, nor in "
+            f"{rel(COMMANDS_INTERNAL)}. Document it, wire it into `make check`, or add it "
+            f"to the allow-list with a reason.",
+        ))
+    for name in sorted(allow):
+        if name not in targets:
+            findings.append(Finding(rel(COMMANDS_INTERNAL),
+                                     f"lists `{name}`, which is not a real Makefile target."))
+        elif name in documented:
+            findings.append(Finding(rel(COMMANDS_INTERNAL),
+                                     f"lists `{name}`, which CLAUDE.md already documents. "
+                                     f"Stale entry — the list only shrinks."))
+    for name in sorted(named - targets):
+        findings.append(Finding("CLAUDE.md",
+                                 f"documents `make {name}`, which is not a real Makefile "
+                                 f"target."))
+    return findings
+
+
+def check_commands_roster(report: Report) -> None:
+    """CLAUDE.md's Commands section against the real Makefile targets, both ways.
+
+    On `check census`'s own precedent (token-budget audit, 2026-09-27, Q1): two published
+    lists reconciled against a real recipe, not against each other. CLAUDE.md's Commands
+    section was cut to name plus one short line plus flags, on the owner's ruling, and a
+    shrunk section is exactly the shape that goes silently stale — a target renamed or
+    retired leaves a dead bullet, and a target ADDED leaves nothing telling a reader it
+    exists.
+
+    A TARGET IS "DOCUMENTED" THREE WAYS, not one. Its own `make <name>` bullet in the
+    Commands section. Named inside `make check`'s own recipe (read from the Makefile, via
+    `_check_recipe()` — the same authority `check census` already trusts, never a second
+    copy of it) — a target `make check` runs is findable from `make explain`, so a bullet
+    here would only restate what running `check` already shows. Or named in
+    `scripts/commands-internal.json`, a SHRINKING allow-list, file -> reason, for a target
+    that is neither: a one-off dev tool, a generator, or a self-test with no caller outside
+    its own guard. This mirrors `serve scope`/`guard scope`'s roster shape rather than
+    inventing a fourth one.
+
+    BOTH WAYS: a real target reaching none of the three fails, naming what it is missing
+    from. An allow-list entry for a target that is now documented, or that no longer
+    exists, fails too — the list only shrinks. A CLAUDE.md bullet for a target that is not
+    real fails (this is also `make targets`'s business; reporting it here as well costs
+    nothing over two small sets).
+    """
+    makefile = ROOT / "Makefile"
+    claude = ROOT / "CLAUDE.md"
+    if not exists(makefile) or not exists(claude):
+        report.add("commands roster", MECHANICAL,
+                   [Finding("Makefile", "cannot read the Makefile or CLAUDE.md.")])
+        return
+
+    targets = set(_MAKE_RULE_RE.findall(read(makefile))) - {"help"}
+    named = _commands_named(read(claude))
+    check_members = set(_check_recipe() or []) & targets
+
+    findings: List[Finding] = []
+    allow: Dict[str, str] = {}
+    if exists(COMMANDS_INTERNAL):
+        try:
+            allow = json.loads(read(COMMANDS_INTERNAL))
+        except Exception as exc:  # noqa: BLE001 - a broken allow-list must not hide every finding
+            findings.append(Finding(rel(COMMANDS_INTERNAL), f"does not parse as JSON: {exc}"))
+    else:
+        findings.append(Finding(rel(COMMANDS_INTERNAL), "does not exist."))
+
+    findings += _commands_roster_findings(targets, named, check_members, allow)
+
+    report.add("commands roster", MECHANICAL, findings,
+               f"{len(targets)} targets, {len(named)} bulleted, {len(check_members)} via "
+               f"`make check`, {len(allow)} allow-listed",
+               scanned=len(targets))
 
 
 # ----------------------------------------------------------- ./pkmnscan subcommands
@@ -2842,8 +2946,8 @@ def decision_files() -> List[Path]:
     made a MALFORMED heading (mixed case, a doubled hyphen, a digit where a segment was
     meant) invisible a step earlier than the `id claims` row's own loose/strict check could
     ever see it: excluded here, that file never reaches the per-line scan that would have
-    reported it as `not a claimable id`, and `decision structure`/`decision index`/`entry
-    budget` silently drop it from their own counts too. A properly numbered or properly
+    reported it as `not a claimable id`, and `decision structure`/`entry budget` silently
+    drop it from their own counts too. A properly numbered or properly
     slugged heading still passes `_ID_ANY` downstream wherever that distinction matters;
     this list is only ever asked to be a superset of it.
     """
@@ -2860,10 +2964,9 @@ def decision_files() -> List[Path]:
 # AN EMPTY CORPUS IS A BROKEN CORPUS, NEVER A CLEAN ONE. This is the guard's own version of
 # the failure it exists to catch: `decision structure` and `entry budget` iterate the entry
 # files, so an unreadable directory gave them nothing to iterate and they reported `0 entries`
-# in green. Measured by deleting one entry file — `decision ids` and `decision index` both
-# went red, and those two passed over nothing while saying so in a sentence that reads like
-# success. A row that cannot tell "nothing is wrong" from "nothing is known" is worse than no
-# row, because it is believed.
+# in green. Measured by deleting one entry file — `decision ids` went red, and it passed
+# over nothing while saying so in a sentence that reads like success. A row that cannot tell
+# "nothing is wrong" from "nothing is known" is worse than no row, because it is believed.
 _EMPTY_CORPUS = ("the decision corpus read as EMPTY. docs/decisions/ holds one file per "
                  "entry and its manifest is ORDER.json; a manifest naming a file that is "
                  "gone, an unreadable directory or a missing scripts/decisions_corpus.py all "
@@ -3076,9 +3179,10 @@ _GATES_MIN_SHIPPED = 15
 def check_gates_structure(report: Report) -> None:
     """The gates corpus reads as non-empty and self-consistent, in both directions.
 
-    Mirrors `decision index`'s own floor: an unreadable corpus, a manifest naming a file that
-    is gone, or a regex that stopped matching after a heading moved must never look like a
-    corpus with nothing wrong in it. `make gates-selftest` (`scripts/split-gates.py
+    Mirrors `corpus_is_empty`'s own floor for the decisions corpus: an unreadable corpus, a
+    manifest naming a file that is gone, or a regex that stopped matching after a heading
+    moved must never look like a corpus with nothing wrong in it. `make gates-selftest`
+    (`scripts/split-gates.py
     --selftest`) proves the same non-vacuity claim from the split side; this row proves it
     from the READER side — `gates_corpus.tests()`/`.runs()`/`.steps()` — so a regression in
     either one is caught by the other.
@@ -3438,137 +3542,6 @@ def check_decision_structure(report: Report) -> None:
                scanned=len(entries))
 
 
-_ID_UNCLAIMED_RE = re.compile(r"^D" + _ID_SLUG + r"$")
-
-
-def _is_unclaimed(ident: str) -> bool:
-    """A branch's own not-yet-merged slug, never a real number.
-
-    `ident` ALREADY CARRIES ITS LEADING `D` — this function's callers both read it out of
-    `want`/`got`, whose own regexes capture the whole `D<id>` token as one group. Prepending
-    a second `D` here was the first version's bug: it made every slug fail this match and
-    silently disabled the exemption below, in the one place a self-test built against a
-    fabricated shape (ids with no leading letter) could not catch it.
-
-    D140: a branch does not take a decision number until `make merge` claims one against
-    main as it stands then, and `scripts/index-decisions.py:normalize` regenerates BOTH
-    `docs/decisions/ORDER.json` and this index from the headings that exist AFTER that
-    substitution, in the same commit. So a slug heading that has not yet been claimed is
-    never going to be the thing this row is checking against — the next read of `corpus`
-    after a claim sees the number, not the slug — and requiring a session to hand-type a
-    line for it into CLAUDE.md before that moment bought nothing but the conflict this
-    check exists to prevent: every open PR touching one shared block at once, on every
-    single commit that adds an entry.
-    """
-    return bool(_ID_UNCLAIMED_RE.match(ident))
-
-
-def _decision_index_findings(
-    want: List[Tuple[str, str]], got: List[Tuple[str, str]]
-) -> List[Finding]:
-    """The comparison itself, pure so `--self-test` can drive it without a filesystem.
-
-    `want` is every `## D<id> — <title>` heading in the corpus, in manifest order; `got` is
-    what CLAUDE.md's fenced index block currently lists. An id absent from `got` is only
-    ever tolerated when `_is_unclaimed` says so — everything else that used to fail here
-    still fails exactly the same way.
-    """
-    findings: List[Finding] = []
-    if not got:
-        findings.append(Finding("CLAUDE.md", "no decision index found. D60 requires one."))
-        return findings
-    want_ids = [i for i, _ in want]
-    got_ids = [i for i, _ in got]
-    for ident in [i for i in want_ids if i not in got_ids]:
-        if _is_unclaimed(ident):
-            continue
-        findings.append(Finding("CLAUDE.md", f"`{ident}` has a heading but is not in the index."))
-    for ident in [i for i in got_ids if i not in want_ids]:
-        findings.append(Finding("CLAUDE.md", f"the index lists `{ident}`, which has no heading."))
-    titles = dict(want)
-    for ident, title in got:
-        if ident in titles and titles[ident] != title:
-            findings.append(Finding(
-                "CLAUDE.md",
-                f"`{ident}`'s index line reads {title!r} and its heading reads "
-                f"{titles[ident]!r}. The heading is the source.",
-            ))
-    if got_ids != [i for i in want_ids if i in got_ids]:
-        findings.append(Finding("CLAUDE.md", "the index is not in heading order."))
-    return findings
-
-
-def check_decision_index(report: Report) -> None:
-    """CLAUDE.md's index against docs/DECISIONS.md's headings.
-
-    D60 dropped the `@` prefix, so that file is no longer loaded in full and the index is
-    the only thing a session sees without opening it. An index that has drifted is worse
-    than none, because it is believed — the argument D17 makes for auditing docs/map.py
-    exactly as hard as it is trusted.
-
-    AN UNCLAIMED SLUG IS EXEMPT FROM "MUST APPEAR", AND THAT IS THE WHOLE FIX. A branch adds
-    its entry's heading in its OWN file and nothing else — `docs/decisions/ORDER.json` was
-    already tolerant of this (`decisions_corpus.order()`'s docstring: "an unregistered entry
-    is corpus content, not an error"), but this row was not, so every branch still had to
-    hand-type its slug into CLAUDE.md's shared index to stay green — the second collision the
-    directory split (D160) was supposed to remove, wearing a different file's name. Measured
-    the day this landed: 25 of the last 40 merges touched `docs/decisions/ORDER.json`, and
-    every open PR's own index edit went stale the instant any OTHER PR merged first, because
-    each was computed against an `origin/main` that had already moved. The entry recording
-    this fix has its own slug and cites itself by filename rather than in prose, for exactly
-    the reason its own next paragraph gives.
-
-    A CONCRETE EXAMPLE SLUG IN THIS DOCSTRING WOULD HAVE BECOME A CITATION, so there is none
-    here — the same trap D178's own entry records under "It caught its own author twice": an
-    example spelled in the shape this file's own extractor reads is read by it. Every id in
-    this function's self-test is a synthetic non-slug number instead, for that reason.
-
-    MECHANICAL. Both sides are ids and titles: there is nothing here a later session could
-    reasonably disagree with, which is D16's test for what may block.
-
-    NOT a generator, and this deliberately does not open D18's seam list. It computes what
-    the index should say and compares; it never writes. That is D18's own write-time versus
-    check-time split, with only the check half built.
-    """
-    claude = ROOT / "CLAUDE.md"
-    corpus = decisions_text()
-    if not exists(claude) or not corpus:
-        report.add("decision index", MECHANICAL,
-                   [Finding("CLAUDE.md", "cannot read the index or the entries.")])
-        return
-
-    # THE CORPUS IN MANIFEST ORDER, which is the order the entries sat in when they were one
-    # file. This row has always reconciled the index against the headings IN ORDER, and the
-    # split had to keep that meaning exactly — `docs/decisions/ORDER.json` is the order, not
-    # the filesystem's, because three chunks in it are not entries and sorting by name would
-    # move them.
-    want = [
-        (m.group(1), m.group(2).strip())
-        for m in (re.match(r"^##\s+(D" + _ID_ANY + r")\s*[—-]\s*(.+)$", line)
-                  for line in corpus.split("\n"))
-        if m
-    ]
-    # The index is the first fenced block whose lines all start `D<n> `. Located by shape
-    # rather than by a heading, so re-titling the Map section cannot silently unhook it.
-    got: List[Tuple[str, str]] = []
-    fenced, block = False, []
-    for line in read(claude).split("\n"):
-        if line.lstrip().startswith("```"):
-            if fenced and block and all(re.match(r"^D" + _ID_ANY + r"\s", b) for b in block if b.strip()):
-                got = [(b.split(None, 1)[0], b.split(None, 1)[1].strip())
-                       for b in block if b.strip()]
-                break
-            fenced, block = not fenced, []
-            continue
-        if fenced:
-            block.append(line)
-
-    findings = _decision_index_findings(want, got)
-    report.add("decision index", MECHANICAL, findings,
-               f"{len(got)} indexed, matching {len(want)} headings",
-               scanned=len(want))
-
-
 def check_entry_budget(report: Report) -> None:
     """Entry size, reported and never blocked.
 
@@ -3696,15 +3669,15 @@ def check_debts_headings(report: Report) -> None:
 def check_debt_index(report: Report) -> None:
     """`docs/DEBTS.md`'s fenced index against `docs/debts/`'s headings, both directions.
 
-    The debts twin of `decision index` (D160): an index that has drifted is worse than
-    none, because it is believed. Both sides are ids and titles, so this is MECHANICAL —
-    D16's test for what may block.
+    D160's own argument: an index that has drifted is worse than none, because it is
+    believed. Both sides are ids and titles, so this is MECHANICAL — D16's test for what
+    may block.
 
-    UNLIKE THE DECISION INDEX, THERE IS NO CLAIM-AT-MERGE EXEMPTION HERE. A debts finding
-    is not a decision (D140 does not govern it); its number is assigned by hand at the time
-    it is written, the way every entry in the original monolith always was. So every id with
-    a heading is required in the index, and every id in the index is required to have a
-    heading, with no unclaimed-slug tolerance to carry over from `_is_unclaimed`.
+    THERE IS NO CLAIM-AT-MERGE EXEMPTION HERE, unlike `id claims`'s decision-side roster. A
+    debts finding is not a decision (D140 does not govern it); its number is assigned by hand
+    at the time it is written, the way every entry in the original monolith always was. So
+    every id with a heading is required in the index, and every id in the index is required
+    to have a heading — no unclaimed-slug tolerance.
     """
     if _debts_corpus_empty(report, "debt index"):
         return
@@ -18453,7 +18426,6 @@ def self_test() -> int:
             f"## {leading_zero} — A leading zero, which is not an id\n",
             encoding="utf-8",
         )
-        text = entries.read_text(encoding="utf-8")
 
         found = [ident for ident, _ in decision_heading_lines(entries, "D")]
         ok(found == ["D9", "D92", past_end], "the heading roster reads one, two and three digits", str(found))
@@ -18467,21 +18439,6 @@ def self_test() -> int:
         both = [ident for ident, _ in decision_heading_lines(slugged, "D")]
         ok(both == ["D9", unclaimed],
            "the heading roster reads a number and a slug out of one file", str(both))
-
-        # `check_decision_index` reconciles CLAUDE.md's fenced index against those headings,
-        # and BOTH of its patterns are exercised here: the heading side, and the shape that
-        # locates the index block by its `D<n> ` lines.
-        indexed = [
-            m.group(1)
-            for m in (re.match(r"^##\s+(D" + _ID_ANY + r")\s*[—-]\s*(.+)$", line)
-                      for line in text.split("\n"))
-            if m
-        ]
-        ok(indexed == ["D9", "D92", past_end],
-           "the index check's heading side reads three digits", str(indexed))
-        ok(all(re.match(r"^D" + _ID_ANY + r"\s", line)
-               for line in ("D9  One digit", "D92  Two digits", f"{past_end}  Three digits")),
-           "and its fenced-block shape accepts a three-digit index line")
 
     cited = _DECISION_RE.findall(f"this cites D72 and {past_end} in one line")
     ok(cited == ["72", "100"], "a two-digit citation still resolves, beside a three-digit one", str(cited))
@@ -20626,34 +20583,6 @@ def self_test() -> int:
     ok(_repo_literals(_code, {"harness/traces/x.json", "docs/DEBTS.md"}) == ["harness/traces/x.json"],
        "a code string naming a tracked file is a dependency and a comment naming one is not")
 
-    # THE FIX: a branch's own unclaimed slug is exempt from "must appear in the index";
-    # nothing else this row ever caught is weakened. Six cases, each pinning one arm.
-    # IDS CARRY THEIR LEADING `D` HERE, matching exactly what `want`/`got` produce in
-    # check_decision_index — the shape the first version of this test got wrong, which is
-    # exactly how the double-`D` bug in `_is_unclaimed` survived its own self-test.
-    # COMPOSED FROM PIECES, NEVER SPELLED WHOLE: a slug-shaped literal sitting in THIS file
-    # is exactly what `check_decision_ids`'s line-by-line scan below reads as a real
-    # citation to resolve — the trap this file's own `1476` comment already names.
-    print("\nthe decision index tolerates an unclaimed slug missing from the block")
-    _slug_1 = "D-" + "not" + "-yet" + "-claimed"
-    _slug_2 = "D-" + "a" + "-ghost"
-    _numbered = [("D42", "Answer"), ("D43", "Question")]
-    _with_slug = _numbered + [(_slug_1, "Something unclaimed")]
-    ok(_decision_index_findings(_with_slug, _numbered) == [],
-       "an unclaimed slug absent from the index is not a finding")
-    ok(_decision_index_findings(_numbered + [("D44", "Third")], _numbered) != [],
-       "a CLAIMED number absent from the index is still a finding — the exemption is slugs only")
-    ok(any("has no heading" in f.message
-           for f in _decision_index_findings(_numbered, _numbered + [(_slug_2, "Ghost")])),
-       "an index line for a slug with no matching heading is still a finding")
-    ok(any("index line reads" in f.message
-           for f in _decision_index_findings(_with_slug, [("D42", "Answer"), ("D43", "Wrong title")])),
-       "a claimed entry's title mismatch is still caught with a slug in the corpus too")
-    ok(bool(_decision_index_findings([], [])
-            and "no decision index found" in _decision_index_findings([], [])[0].message),
-       "an empty index is still refused outright, corpus present or not")
-    ok(not _is_unclaimed("D42") and _is_unclaimed(_slug_1),
-       "the exemption test itself: a number is claimed, a slug is not — ids carry their `D`")
     # A ROW THAT EXAMINED NOTHING IS NOT A ROW THAT PASSED. Driven over a synthetic report,
     # because the thing under test is the REPORTING LAYER and a real run cannot pose a row
     # with no subject without breaking a walk. Every arm here is a state the file printed
@@ -21660,6 +21589,37 @@ def self_test() -> int:
     for label in ("column count", "threshold agreement", "dist path agreement", "import filename agreement", "duplicated measurements"):
         ok(not by_label[label], f"the real tree has zero findings on `{label}`", str(by_label[label]))
 
+    print("\ncommands roster: three ways to be documented, and the allow-list only shrinks")
+    _targets = {"up", "down", "reap", "venv"}
+    _msgs = lambda findings: [f.message for f in findings]  # noqa: E731 - short-lived local
+    ok(_commands_roster_findings(_targets, {"up", "down"}, {"reap"}, {"venv": "why"}) == [],
+       "a bullet, a `make check` member and an allow-list entry all count as documented")
+    _missing = _commands_roster_findings(_targets, {"up"}, set(), {})
+    ok(any("down" in m and "reap" in m for m in _msgs(_missing)) is False
+       and len(_missing) == 3,
+       "a target reaching none of the three ways is refused, one finding per target",
+       str(_missing))
+    _stale = _commands_roster_findings(_targets, {"up", "down", "reap", "venv"}, set(),
+                                        {"up": "used to be internal"})
+    ok(any("Stale" in m for m in _msgs(_stale)),
+       "an allow-list entry for a target CLAUDE.md now bullets is stale",
+       str(_msgs(_stale)))
+    _ghost = _commands_roster_findings(_targets, {"up", "down", "reap", "venv"}, set(),
+                                        {"no-such-target": "why"})
+    ok(any("not a real Makefile target" in m for m in _msgs(_ghost)),
+       "an allow-list entry naming a target that does not exist is refused",
+       str(_msgs(_ghost)))
+    ok(_commands_named("## Commands\n\n```\nmake up   # one line\nmake down # another\n```\n")
+       == {"up", "down"},
+       "the Commands block's bullet names are read out of its fenced list")
+
+    print("\ncommands roster: end to end, unpatched: the real tree agrees with itself")
+    report = Report()
+    check_commands_roster(report)
+    by_label = {row.check: row.findings for row in report.checks}
+    ok(not by_label["commands roster"], "the real tree has zero findings on `commands roster`",
+       str(by_label["commands roster"]))
+
     print("\ncommit path: the AST reads the code, MUTATION-TESTED against the real files, "
           "via .bak copies")
     # This is `commit path` going red on the exact defect it exists to guard: `writes` was
@@ -21829,6 +21789,7 @@ def audit(staged_only: bool) -> Report:
     check_line_anchor_offenders(report)
     check_derived_numbers(report, docs)
     check_make_targets(report, docs)
+    check_commands_roster(report)
     check_pkmnscan_commands(report, docs, all_docs)
     check_harness_tests(report, docs, allowed)
     check_pass_criteria(report)
@@ -21836,7 +21797,6 @@ def audit(staged_only: bool) -> Report:
     check_evidence_freshness(report, staged_only)
     check_decision_ids(report, docs)
     check_decision_structure(report)
-    check_decision_index(report)
     check_id_claims(report)
     check_claim_vocabulary(report)
     check_entry_budget(report)
