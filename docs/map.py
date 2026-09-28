@@ -3837,24 +3837,21 @@ COMPONENTS = [
                 "governed_by": ["D18", "D280"]},
             "derived_numbers.py": {
                 "does": "a named registry of tree-descriptive numbers: one pure "
-                        "`compute(root) -> int` function per figure, called by both "
-                        "`scripts/docs-audit.py`'s `derived numbers` row (read-only) and "
-                        "`scripts/derived-numbers-pin.py --write` (the writer, D18) — no "
-                        "counting logic is duplicated between them. Also carries "
+                        "`compute(root) -> int` function per figure, and "
                         "`MARKER_RE`/`find_markers()`, the `<!-- derived:<name> -->` marker "
-                        "syntax a number in prose uses to name its own derivation, and the "
-                        "module's own docstring is the argument for the one rule that "
-                        "matters here: a figure recording a past event (a gate run, an "
-                        "incident measurement) may NEVER get an entry, because rewriting "
-                        "one would falsify a record rather than fix rot.",
+                        "syntax a number in prose once used to name its own derivation. "
+                        "`docs-audit.py`'s `derived numbers` row read it; that row is CUT "
+                        "(test-audit plan Q2, 2026-09-28), and no tracked marker names a "
+                        "derivation any more, so this module has no live reader. Kept for "
+                        "`scripts/derived-numbers-pin.py`, which still imports it.",
                 "governed_by": ["D18"]},
             "derived-numbers-pin.py": {
-                "does": "`python3 scripts/derived-numbers-pin.py --write` rewrites every "
+                "does": "`python3 scripts/derived-numbers-pin.py --write` rewrote every "
                         "`<!-- derived:<name> -->`-marked number in the tracked markdown "
-                        "to match `derived_numbers.py:REGISTRY[<name>].compute(ROOT)` — "
-                        "the same call the row itself makes. Contains no counting logic of "
-                        "its own. D18: a generator may write, on no `make` target and no "
-                        "hook; `git diff` is the receipt.",
+                        "to match `derived_numbers.py:REGISTRY[<name>].compute(ROOT)`. No "
+                        "tracked file carries such a marker since `derived numbers` was cut "
+                        "(test-audit plan Q2, 2026-09-28), so this generator has nothing to "
+                        "find and rewrites nothing.",
                 "governed_by": ["D18"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
@@ -5348,15 +5345,16 @@ COMPONENTS = [
                         "(D43) — a tracked file cannot name a port derived from one "
                         "directory's path — and screenshot.sh substitutes a worktree's own "
                         "before rendering.",
-                # D5 is what the list is for: NINE owner screens and the Fulfiller's, which
-                # is the one render where the absence of the nav strip is the point. It said
-                # five while the file listed eight — the lines were added (pricing by D49,
-                # orders and shipping by D69) and the count beside them was not, the same
-                # drift the app/ entry below carries a paragraph about. It went eight to seven
-                # on 2026-09-05 when D24's owner ruled that `#/inventory` keeps the pooled
+                # D5 is what the list is for: the owner's screens and the Fulfiller's, which
+                # is the one render where the absence of the nav strip is the point. It once
+                # said five while the file listed eight — the lines were added (pricing by
+                # D49, orders and shipping by D69) and the count beside them was not, the same
+                # drift the app/ entry below carries a paragraph about. It later went stale
+                # again when D24's owner ruled that `#/inventory` keeps the pooled
                 # photographs on its `Pooled` shelf and loses its render (docs/DEBTS.md
-                # section 14) — and the `route census` row caught this sentence in the same
-                # run that dropped the line, which is the whole reason that row exists. D13 is
+                # section 14). The `route census` row that once caught drift like this is
+                # CUT (test-audit plan Q2, 2026-09-28) — recount from `scripts/views.txt`
+                # and `app/src/App.tsx` instead of trusting a number in this comment. D13 is
                 # why the hash route in each URL is load-bearing rather than decoration —
                 # drop it and a render is named after one view and shows another. D39 added
                 # the `runs` line on 2026-08-29 — the pipeline's own route. This comment said
@@ -5860,8 +5858,9 @@ COMPONENTS = [
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
         "does": "the web app, REBUILT AS BANCHI in 2026-09: a new shell, a shared kit, two "
-                "themes, and every screen redrawn against it. FOURTEEN routes behind a "
-                "hand-written hash router, THIRTEEN of them the owner's — home, which took the "
+                "themes, and every screen redrawn against it. Every route lives in "
+                "app/src/App.tsx's ROUTES table, behind a hand-written hash router, most of "
+                "them the owner's — home, which took the "
                 "root hash and is where the six-stage spine is drawn; the capture screen that "
                 "Gate B runs on, now at `#/capture`; the runs screen the pipeline lives on; the "
                 "review queue; the pricing worklist; the order screen and the shipping lane "
@@ -5879,12 +5878,10 @@ COMPONENTS = [
                 "src/App.tsx's ROUTES table and never incremented: it has been wrong more "
                 "often than right — it said "
                 "NINE from D70 until 2026-08-31, and #/codes was missing from the list above "
-                "outright. TWO ROWS RECONCILE IT NOW and neither existed when the sentence "
-                "here ended `and nothing reconciles it`: scripts/docs-audit.py's "
-                "`route census` fails a commit where a published count in this file, in "
-                "CLAUDE.md or in README.md disagrees with that table, and its "
-                "`route rosters` row fails one where a spec's hand-typed list of routes "
-                "does. Playwright "
+                "outright. The count is deleted from prose now rather than reconciled "
+                "(`route census` is CUT, test-audit plan Q2, 2026-09-28) — recount from the "
+                "table itself. `route rosters` still fails a commit where a spec's "
+                "hand-typed list of routes disagrees with it. Playwright "
                 "specs assert docs/DESIGN.md's Fulfillment floors, one against the kit's "
                 "pull-confirm and one against the Fulfillment view.",
         "governed_by": ["D3", "D4", "D5", "D6", "D7", "D9", "D10", "D13", "D18"],
@@ -6402,9 +6399,12 @@ COMPONENTS = [
                                     "`#/fulfillment`, and "
                                     "`#/gallery`, which is the KIT now rather than step 6's "
                                     "component page. RECOUNT FROM THE TABLE, NEVER INCREMENT — "
-                                    "`route census` fails a commit where this file, CLAUDE.md or "
-                                    "README.md disagrees with it, and `route rosters` does the "
-                                    "same for a spec's pinned list. "
+                                    "`route census` once failed a commit where this file, "
+                                    "CLAUDE.md or README.md disagreed with it; that row is CUT "
+                                    "(test-audit plan Q2, 2026-09-28), and the counts are "
+                                    "deleted from those files' prose instead. `route rosters` "
+                                    "still fails a commit where a spec's pinned list "
+                                    "disagrees. "
                                     "ONE TABLE DRIVES FIVE THINGS: the sidebar, the phone tab "
                                     "bar, the command palette, the document title and the "
                                     "render. A route carries its group, its icon, its hotkey, "
@@ -6449,8 +6449,8 @@ COMPONENTS = [
                                     "#/boxes WAS the seventh route and D31 deleted it while "
                                     "keeping the screen; the ordinals kept in this file count "
                                     "the order routes were ADDED and not their place in the "
-                                    "table, which is why `route census` checks the counts and "
-                                    "deliberately not these. "
+                                    "table, which is why a route-count check has never read "
+                                    "these ordinals. "
                                     "ONE BRAND, THREE SURFACES (D120, logo.md section 19): "
                                     "`BrandSlot` is rendered by the sidebar, the phone's top "
                                     "bar and the phone's drawer, and nothing here branches on "

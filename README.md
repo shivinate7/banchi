@@ -114,11 +114,11 @@ app together. It restarts when you edit Python and rebuilds the app when you edi
 A build takes about one second. The old bundle serves until the new one is ready. If a
 build fails, the last good bundle stays and `make status` tells you why.
 
-Fourteen screens — home, capture, review, pricing, orders, shipping, sales, inventory,
-graveyard, codes, cards to pull, kit, product history, runs. All fourteen open at a hash,
-all fourteen routed. Ten sit in the nav. Four are off-nav on purpose: reached by a deep
-link, the command palette, or a redirect into another screen's own sheet. The Fulfiller's
-screen opens without the shell — the other thirteen carry it.
+Home, capture, review, pricing, orders, shipping, sales, inventory, graveyard, codes, cards
+to pull, kit, product history, runs. Every one is in `app/src/App.tsx`'s `ROUTES` table,
+open at a hash. Most sit in the nav. A few are off-nav on purpose: reached by a deep link,
+the command palette, or a redirect into another screen's own sheet. The Fulfiller's screen
+opens without the shell — every other screen carries it.
 
 | Screen | Route | What it is for |
 |---|---|---|

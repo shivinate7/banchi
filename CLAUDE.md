@@ -223,11 +223,10 @@ the browser. No second store. No auth. `app/src/server.ts` is the only client-ca
 
 ### The screens
 
-**The app has fourteen screens and fourteen routes — thirteen the owner's, one the Fulfiller's.**
-Four routes are off-nav (the `aside` group — Kit, Cards to pull, the per-product view D227
-added, and Runs since D291), so the nav itself draws ten rows. `app/src/App.tsx`'s
-`ROUTES` table is the count. Recount from the table, never a sentence (see "the census"
-below).
+**Every screen and route lives in `app/src/App.tsx`'s `ROUTES` table — most are the owner's,
+one is the Fulfiller's.** Four routes are off-nav (the `aside` group — Kit, Cards to pull,
+the per-product view D227 added, and Runs since D291), so the nav itself draws ten rows.
+`ROUTES` is the count. Recount from the table, never a sentence (see "the census" below).
 
 ```
 #/             Home           one ranked sentence of what the store is waiting on (D121),
@@ -288,10 +287,10 @@ kit, `#/product`, the per-product view (D227), and `#/runs` (D291). `#/product` 
 reached by SKU, never a destination anyone browses to cold. `#/runs` is a link target only: its
 content is Review's runs sheet. All four stay registered routes, reachable from elsewhere.
 
-**The census.** Every route or screen count in this file, README.md and docs/map.py is
-reconciled against `ROUTES` by `make docs-audit`'s `route census` row. Every spec's pinned
-roster is reconciled by `route rosters`. `app/tests/cursor.spec.ts` reads the nav strip rather than a
-hand-typed hash list.
+**The census.** Read the route or screen count from `ROUTES` itself, never from a number in
+prose (Q2, test-audit-2026-09-27: a hand-typed count that a table already gives is deleted,
+not reconciled). Every spec's pinned roster is reconciled by `route rosters`.
+`app/tests/cursor.spec.ts` reads the nav strip rather than a hand-typed hash list.
 
 ### The design system
 
@@ -300,11 +299,9 @@ hand-typed hash list.
 §9). It is generated, never hand-edited, reconciled by `make docs-audit`'s `logo` row
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
-**The legacy aliases at the foot of tokens.css are dead.** Measured across all
-156<!-- derived:app_src_file_count --> files under `app/src`: none read the
-25<!-- derived:tokens_css_legacy_alias_count --> old names, against
-281<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
-rule may not read one.
+**The legacy aliases at the foot of tokens.css are dead.** No file under `app/src` reads
+the old names, against many uses of `var(--bn-ink)` alone. Kept by design. A new rule may
+not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before
 first paint, cross-faded as one mechanism. A screen not looked at in dark is not verified.
@@ -378,8 +375,8 @@ read off a declared class.
 
 ### The shell
 
-`App.tsx` is a hand-written hash router and the shell: fourteen hash routes, no routing
-library, one table. It renders for every screen except the Fulfiller's (`persona: 'fulfiller'`,
+`App.tsx` is a hand-written hash router and the shell: one table of hash routes, no routing
+library. It renders for every screen except the Fulfiller's (`persona: 'fulfiller'`,
 not rendered — not focusable, not reachable by a screen reader).
 
 - A sidebar collapsing to a rail (⌘. toggles, remembered in `banchi.rail`), a top bar and
@@ -740,11 +737,10 @@ Three practices settle a brief before it goes out.
   cited as `DEBT<n>` and never by path. Known gaps in the verification tooling, deliberately
   unfixed, never blocking. Read one before treating green `docs-audit` as coverage.
   `make debts-selftest` proves the set is complete.
-- `docs/specs/order-pipeline.md` — steps 8-14, and its own §3 work items. T0 is
-  DISCHARGED. T1 is BUILT. T2 is BUILT. T2b is BUILT, 2026-09-05, server half only. T3 is
-  BUILT. T4 is NOT BUILT. T5 is NOT BUILT. T6 is SUPERSEDED (D96 amended) — its files stay
-  deleted, watched by `make docs-audit`'s `recorded deletions` row. `POST /orders/fill` under
-  D113 is a different capability under a reused name.
+- `docs/specs/order-pipeline.md` — steps 8-14. Its own §3 headings state each work item's
+  build status; read them there rather than a copy here. T6 is SUPERSEDED (D96 amended) —
+  its files stay deleted, watched by `make docs-audit`'s `recorded deletions` row. `POST
+  /orders/fill` under D113 is a different capability under a reused name.
 - `docs/specs/code-cards.md` — QR decode BUILT (140/140, zero mis-reads), ledger BUILT,
   product claim BUILT, channel decision RECORDED and not executed.
 - `docs/specs/stale-listings.md` — SPECIFIED and BUILT, NOT VALIDATED. No file has ever
