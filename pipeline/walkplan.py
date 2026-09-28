@@ -55,8 +55,9 @@ exactly the kind of code that is confidently wrong in a way no screen reveals.
 from __future__ import annotations
 
 import math
+import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, FrozenSet, Iterable, List, Optional, Sequence, Set, Tuple
 
 from pipeline import games, join
@@ -148,7 +149,15 @@ class StopKey:
 
     @property
     def walk_order(self) -> Tuple[int, int, int, str]:
-        """The sort key of the walk: sections by box then section, pooled games LAST.
+        """The SOLVER's own deterministic order: sections by box then section, pooled LAST.
+
+        NOT THE DRAWN ORDER any more (the owner's ruling, 2026-09-27: "in order walk it's
+        sorted by density" — D220's own words, over a box-name draft that never shipped).
+        This key still decides `_dominated`, `_greedy` and `solve`'s own search order, and
+        `_assign` still divides overlapping demand between stops in this order — changing it
+        would change WHICH stops the solver picks on a tie, not only the sequence they are
+        drawn in. `plan`'s own `_drawn_key` re-sorts the already-built `Stop` objects by
+        density for display, after `_assign` has run, and never touches this property.
 
         The leading flag is what puts every pooled stop behind every drawer, whatever its
         game key sorts as. A pooled stop has nothing to open, so it belongs at the end of a
@@ -807,6 +816,41 @@ def _assign(
     return out
 
 
+# A DIGIT RUN COMPARED AS AN INT, EVERYTHING ELSE AS A LOWERED STRING — the same idiom
+# `server/pipeline_routes.py:_natural_number_key` uses for a set's printed number, so `R2`
+# sorts before `R10` rather than after it, the way plain string comparison would put it.
+# Not imported from there: `server/` imports `pipeline/`, never the other way, and a name
+# comparison over a box's TITLE is a different job from a card's printed NUMBER, even though
+# the regex is the same three lines either way.
+_NAME_RUN = re.compile(r"(\d+)")
+
+
+def _natural_key(text: str) -> Tuple[object, ...]:
+    return tuple(int(part) if part.isdigit() else part.lower() for part in _NAME_RUN.split(str(text)))
+
+
+def _drawn_key(stop: "Stop", inventory: master.Inventory) -> Tuple:
+    """The DRAWN order: density first, the box's own NAME breaks a tie, pooled stops last.
+
+    The owner's ruling, 2026-09-27, over D220's own words ("in order walk it's sorted by
+    density") and a box-name draft that never shipped. DENSITY IS `Stop.copies` — the count
+    of cards this stop's takes already ask for, computed by `_assign` before this key ever
+    runs — which is exactly "the density of the cards available in a section" the owner
+    asked about. It is not re-derived: `Stop.copies` is `sum(take.wanted for take in
+    self.takes)`, the same figure `Plan.counts.copies` sums across every stop.
+
+    THE TIE-BREAK IS THE BOX'S NAME, NEVER ITS NUMBER (D259) — `store/master.py:box_title`
+    composes it, the call the refusals already use — IN NATURAL ORDER (`_natural_key`), so
+    "WB1 R2" sorts before "WB1 R10". Pooled stops (D24 — a code card is a count, not a
+    place, so it has no section to be denser or sparser than) stay last regardless of their
+    own count, same as `StopKey.walk_order` already puts them last for the solver.
+    """
+    if stop.pooled:
+        name = stop.game_display or str(stop.game or "")
+        return (1, 0, _natural_key(name), 0)
+    return (0, -stop.copies, _natural_key(inventory.box_title(stop.box)), int(stop.section or 0))
+
+
 def plan(
     inventory: master.Inventory,
     ledger: order_store.Ledger,
@@ -884,6 +928,15 @@ def plan(
             for sku in ordered_skus
         )
         stops.append(Stop(key=key, order=len(stops) + 1, takes=takes))
+
+    # THE DRAWN ORDER IS DENSITY, NOT `walk_order` (see `_drawn_key`). `assigned` above was
+    # divided in `walk_order` on purpose — that register is `_assign`'s and is untouched — so
+    # this re-sorts the already-built `Stop` objects for display alone, after every take is
+    # already decided, and renumbers `Stop.order` to match the new sequence.
+    stops = [
+        replace(stop, order=i + 1)
+        for i, stop in enumerate(sorted(stops, key=lambda stop: _drawn_key(stop, inventory)))
+    ]
 
     boxes = {stop.box for stop in stops if not stop.pooled}
     return Plan(

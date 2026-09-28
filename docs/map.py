@@ -1121,7 +1121,7 @@ COMPONENTS = [
                             # and removing it is what created one. D93/D97 because a stop says
                             # how many to take and lists every copy, never `wanted` of them.
                             "governed_by": ["D10", "D21", "D24", "D26", "D36", "D58", "D63", "D93",
-                                            "D97", "D172", "D183", "D212", "D265"],
+                                            "D97", "D172", "D183", "D212", "D220", "D259", "D265"],
                             "tested_by": ["T11"],
                             "note": "IT TOUCHES NO WIRE AND NO BROWSER. `POST /orders/walk-plan` "
                                     "(`server/capture_server.py:do_order_walk_plan`) and "
