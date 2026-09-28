@@ -2099,7 +2099,8 @@ function Card({
           </h2>
           {/* F5 verbiage cut: `name_disputed` shares its headline with `rarity_claim_mismatch`
               ("Mismatch?"), and its own reason label ("The read name matches no listing") only
-              restated it a second time with no new fact — the mismatch paragraph below (D46's
+              restated it a second time with no new fact — the mismatch paragraph below (the
+              owner's F5 ruling, the "middle option" for this cut: keep the two names as data,
               "Mismatch: <read> / <listing>") is the one place that says WHICH two reads
               disagree. Every other reason keeps its label here. */}
           {entry.reason === 'name_disputed' && row.shadow === undefined ? null : (

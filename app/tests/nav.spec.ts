@@ -772,7 +772,7 @@ test('a throwaway ROUTES row gets its nav, palette, keys, title and scaffold wit
 
   // PALETTE: its Screens group lists it, and Enter goes there
   await page.keyboard.press('Meta+k')
-  const palette = page.getByRole('dialog', { name: 'Search' })
+  const palette = page.getByRole('dialog', { name: 'Go to' })
   await expect(palette).toBeVisible()
   await palette.getByRole('combobox').fill('throwaway')
   await expect(palette.getByRole('option').first()).toHaveText(/Throwaway/)
@@ -858,7 +858,7 @@ test('the palette lists every screen, off-nav ones included, and finds a card', 
     }),
   )
   await page.keyboard.press('Meta+k')
-  const palette = page.getByRole('dialog', { name: 'Search' })
+  const palette = page.getByRole('dialog', { name: 'Go to' })
   await expect(palette).toBeVisible()
 
   // every screen, the three off the nav included (UX-003)
@@ -895,7 +895,7 @@ test('a refused card search hides the Cards group and says so in one line', asyn
     }),
   )
   await page.keyboard.press('Meta+k')
-  const palette = page.getByRole('dialog', { name: 'Search' })
+  const palette = page.getByRole('dialog', { name: 'Go to' })
   await palette.getByRole('combobox').fill('abra')
   /* The line is the demo's own sentence in the published build (`__BN_DEMO__`); this dev build
      says the server did not answer. Either way it is ONE line, and no Cards group. "abra" matches

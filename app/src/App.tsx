@@ -738,7 +738,7 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
   }
   let index = -1
   return (
-    <Modal open={open} onClose={onClose} title="Search" className="bn-cmdk">
+    <Modal open={open} onClose={onClose} title="Go to" className="bn-cmdk">
       <div className="bn-cmdk-input">
         <Icon name="search" size={18} className="bn-muted" />
         {/* `autoFocus`, not only the kit's first-focus frame: a person types the moment the
@@ -754,7 +754,7 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
           autoComplete="off"
           spellCheck={false}
           value={query}
-          placeholder="Query"
+          placeholder="Go to a screen, or a card"
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
@@ -857,7 +857,7 @@ const ANYWHERE_KEYS: KeyGroup = {
   where: '',
   rows: [
     { keys: ['?'], does: 'Opens' },
-    { keys: ['⌘K', 'Ctrl K'], does: 'Search' },
+    { keys: ['⌘K', 'Ctrl K'], does: 'Go to' },
     { keys: ['⌘←', '⌘→', '⌘↑', '⌘↓'], does: 'Navigate' },
     { keys: ['⌘.'], does: 'Toggle' },
     { keys: ['R'], does: 'Reload' },
@@ -883,9 +883,9 @@ function jumpKeys(): KeyGroup {
 
 const PALETTE_KEYS: KeyGroup = {
   id: 'palette',
-  title: 'Search',
+  title: 'Go to',
   icon: 'command',
-  where: 'Only while Search is open.',
+  where: 'Only while Go to is open.',
   rows: [
     { keys: ['↑', '↓'], does: 'Move down the list' },
     { keys: ['↵'], does: 'Open the highlighted screen or card' },
@@ -1188,8 +1188,8 @@ function Sidebar({
             <Icon name="external" size={14} className="bn-faint" />
           </a>
         ))}
-        <Button variant="ghost" icon="search" onClick={onPalette} data-tip="Search" aria-haspopup="dialog">
-          <span className="bn-side-foot-text">Search</span>
+        <Button variant="ghost" icon="search" onClick={onPalette} data-tip="Go to" aria-haspopup="dialog">
+          <span className="bn-side-foot-text">Go to</span>
           <Kbd>⌘K</Kbd>
         </Button>
         <Button variant="ghost" icon={theme === 'dark' ? 'sun' : 'moon'} onClick={onToggleTheme}>
@@ -1224,7 +1224,7 @@ function PhoneBar({ onPalette }: { onPalette: () => void }) {
       >
         Banchi
       </span>
-      <IconButton icon="search" label="Search" onClick={onPalette} aria-haspopup="dialog" />
+      <IconButton icon="search" label="Go to" onClick={onPalette} aria-haspopup="dialog" />
     </header>
   )
 }

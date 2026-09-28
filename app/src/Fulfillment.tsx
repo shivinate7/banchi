@@ -1452,7 +1452,7 @@ export function Fulfillment() {
             )}
 
             {owed.length === 0 ? null : (
-              <section className="ff-owed" aria-label="Cards to pick">
+              <section className="ff-owed" aria-label="Pick">
                 <h2 className="ff-h2">
                   <span className="ff-h2-icon">
                     <Icon name="cart" size={18} />
@@ -1460,7 +1460,9 @@ export function Fulfillment() {
                   {/* F5 verbiage cut (row 192): the CSV's own word, "Queue", is a pipeline
                       noun this screen's own banned-word list refuses (D196) — wrong for this
                       element. "Pick" reads with the cart icon and matches the per-card
-                      heading's own vocabulary (row 193) instead. */}
+                      heading's own vocabulary (row 193) instead. The section's own
+                      `aria-label` is kept in step with this visible heading, per the review's
+                      finding that it had drifted to the pre-cut three-word text. */}
                   Pick
                 </h2>
                 <div className="ff-found ff-owed-list">

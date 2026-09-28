@@ -396,7 +396,7 @@ test('the palette and the keyboard sheet name every route', async ({ page }) => 
   await settle(page)
 
   await page.keyboard.press('ControlOrMeta+k')
-  const palette = page.getByRole('dialog', { name: 'Search' })
+  const palette = page.getByRole('dialog', { name: 'Go to' })
   await expect(palette).toBeVisible()
   const goTo = await palette.evaluate((root) => {
     const out: string[] = []
