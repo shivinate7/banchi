@@ -26,9 +26,8 @@ as its own PR. Nothing here changes the app. The palettes are CSS overrides of t
   and the contrast checks. Body text is at least 4.5:1.
 - `method/` holds the scripts that captured the light-mode references, built the CSS, rendered
   the screens and checked contrast. They carry absolute scratch paths from their session.
-- The screenshots are not in this commit yet. The pre-commit hook refuses images outside the
-  demo photo folders. Lane G (on `ux/pr4b-G`) changes that rule, so every staged image gets
-  the QR scan in any folder. After G merges, the 32 screenshots join this folder as JPEGs.
+- The 32 screenshots are JPEGs in this folder, one per palette and screen. Each one passed the
+  pre-commit QR scan, which lane G extended to every staged image.
 
 ## When this PR resumes
 
