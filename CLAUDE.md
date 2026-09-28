@@ -119,9 +119,14 @@ make map-fix        # THE ONE GENERATOR INTO A DOC (D18, amended). Adds the deci
                     #   ARGS=--write applies. It only ever ADDS. `make map-fix-selftest`
                     #   proves it, deliberately NOT in `make check`.
 make offenders-prune # a generator that only DELETES (D18). It removes the stale entries from
-                    #   the three offender lists (`scripts/ste-offenders.json`,
-                    #   `scripts/typed-interpunct-allow.json`,
-                    #   `scripts/line-anchor-offenders.json`). It re-keys a listed file that
+                    #   the three offender lists (`scripts/typed-interpunct-allow.json`,
+                    #   `scripts/line-anchor-offenders.json`,
+                    #   `scripts/markdown-spelling-allow.json`). A fourth list,
+                    #   `scripts/ste-offenders.json`, was cut 2026-09-27 (test-audit plan):
+                    #   the write-time STE hook already lints new prose (D226; D229; D280
+                    #   amended). `markdown-spelling-allow.json` joined the same day (owner's
+                    #   ruling: "Shrinking offender list now"), over `identifier spelling`'s
+                    #   markdown half. It re-keys a listed file that
                     #   git's rename detection says moved. It never adds an entry. It reads
                     #   with the rows' own functions. Previews. ARGS=--write applies. On no
                     #   hook. `make offenders-prune-selftest` proves it, NOT in `make check`.
