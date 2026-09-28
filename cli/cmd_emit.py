@@ -1706,7 +1706,7 @@ def _after_single(
         # cannot reach TCGplayer through this run, because these copies have already been
         # sent under the old answer.
         #
-        # EXIT 1, AS THE MERGED PATH DOES, WITH ITS SENTENCE (DEBT35). This branch exited 0 and
+        # EXIT 1, AS THE MERGED PATH DOES, WITH ITS SENTENCE. This branch exited 0 and
         # said "nothing new to send" while the merged path exited 1 and said "nothing to write",
         # so a shell caller got two answers to one question. The `no room` list above names
         # each card's own reason, as the merged path's list does.

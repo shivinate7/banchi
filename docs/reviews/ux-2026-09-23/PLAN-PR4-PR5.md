@@ -57,7 +57,7 @@ PASS, with `cd app && npx tsc --noEmit` at the merge.
 | B3 | `ux/pr4b-B3` | A refused markdown apply writes nothing | Round 3: the outer file rename sat outside the error guard, and a failure there kept the price with no file. Fixing, then a re-review. |
 | F5 | `ux/pr4b-F5` | Cut the excess words. Numbers and names stay. Review's mismatch line becomes "Mismatch: photo reading / matched listing". | Building. Then a review. |
 | D2 | `ux/pr4b-D2` | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | Building. Then a review. |
-| P5 | `ux/pr4b-P5` | Stub D48 and D194 to one line each. Delete DEBT5, 6, 18, 28, 35, 42. Split DEBT27, or delete it if D279 removed its call. | Review PASS. DEBT27 keeps its open half (the Fulfiller's screen still loads the whole store). DEBT6 is kept in part, because a docs-audit row reads five figures from it. Rebasing onto `ux/pr4b` after a plan-file conflict, then merge. |
+| P5 | `ux/pr4b-P5` | Stub D48 and D194 to one line each. Delete debts 5, 6, 18, 28, 35 and 42. Split DEBT27, or delete it if D279 removed its call. | Review PASS. DEBT27 keeps its open half (the Fulfiller's screen still loads the whole store). DEBT6 is kept in part, because a docs-audit row reads five figures from it. Rebasing onto `ux/pr4b` after a plan-file conflict, then merge. |
 | A3 | `ux/pr4b-A3` | The Orders pane becomes `CardPane`, with no Details fold | Building. Then a review. |
 | A6 | `ux/pr4b-A6` | No `Box <n>` fallback in the walk | Built. Review running. |
 | L1 | `ux/pr4b-L1` | Cut T7's idle waits | Building. Then a review. |

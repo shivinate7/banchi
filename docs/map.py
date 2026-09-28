@@ -9175,7 +9175,7 @@ COMPONENTS = [
                 "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118", "D119",
                                 "D269", "D272"],
                 "note": "IT EXISTS BECAUSE THE SHEET WAS INCOMPLETE AND NOTHING SAID SO, "
-                        "2026-09-05. DEBT5 recorded the departed row as "
+                        "2026-09-05. The departed row was "
                         "absent from the kit; the sold fixture inherited a numeric `slot` from "
                         "the base, so `isDeparted` was false and the shell was rendered "
                         "NOWHERE on a page whose entire purpose is that every shape is looked "

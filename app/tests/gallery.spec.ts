@@ -5,7 +5,7 @@ import { settleMotion } from './motionSettled'
 
 /* THE ROW SHAPES `#/gallery` DRAWS THAT NOTHING ELSE IN THIS APP EVER DRAWS.
  *
- * DEBT5's remaining half: the kit sheet is "rendered by the build so it cannot go
+ * The gap this closed: the kit sheet is "rendered by the build so it cannot go
  * stale", and it renders `CardLocations` — but until this file existed its fixture group held
  * four copies that were all LOCATED and all carried a slot number. Two of that component's four
  * row shells were therefore reachable in the product and unreachable on the sheet:

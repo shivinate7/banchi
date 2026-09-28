@@ -373,7 +373,7 @@ def _resolve_in(
 def _command(c, *argv, exits=0):
     """One `./pkmnscan` subcommand through the real dispatch. Returns what it printed.
 
-    `exits=1` is for an emit that adds nothing, which is refused on both paths (DEBT35)."""
+    `exits=1` is for an emit that adds nothing, which is refused on both paths."""
     from cli import __main__ as entry
 
     buffer = StringIO()

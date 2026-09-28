@@ -47,6 +47,20 @@ Not a backlog to burn down on sight. An entry leaves when someone argues it shou
   entry animation was what the ruler had been reading, and `app/tests/motionSettled.ts` now
   waits it out. Neither number is reused. `docs/map.py` uses the same rule for its own step ids: a
   renumber leaves every citation pointing at a real entry that is not the one meant.
+- **Five more left 2026-09-27, on the owner's ruling.** Each was already closed. The owner's
+  argument is the preamble's own rule: an entry leaves when someone argues it should. 5 left
+  (the departed-card findings, all four closed by name on 2026-09-05). 18
+  left (D124 vendored the three typefaces). 28 left (D210 gave `pkmnscan rescue` a route and
+  a screen control, PR #347). 35 left (`pipeline/merge.py:NOTHING_NEW` closed it,
+  2026-09-25). 42 left (the owner's ruling in `docs/reviews/ux-2026-09-23/RULINGS.md` closed
+  it, 2026-09-26). None of the five numbers is reused. DEBT27 keeps its number: only its
+  closed half (site 1) left with this sweep, and its open half (site 2) stays.
+- **DEBT6 stays, shrunk to what `detector standing` reads.** Its lighting argument is closed
+  and retired the same way, cited by commit rather than restated. The row checks five
+  figures in its prose against `harness/results/detect.json`. Deleting the section once
+  already made that row fail over a claim nobody removed on purpose. So the five figures are
+  republished in the section, and only the argument around them is gone. Its own
+  `server/` subsection was never about the rig, and stays open, untouched by any of this.
 
 ## Why it is a directory
 
@@ -63,7 +77,6 @@ DEBT1  The reverse direction: five checks walk docs→code and never back
 DEBT2  The map's reach
 DEBT3  The claim chain
 DEBT4  Criteria and evidence: nine ways a row goes quiet
-DEBT5  The departed card on screen
 DEBT6  ~~Measured against one rig, or not at all~~ — CLOSED 2026-09-09, on the owner's word
 DEBT7  The preview crops the card, and the one check that looks at a photo cannot see it
 DEBT8  Recorded and correctly unfixed
@@ -75,7 +88,6 @@ DEBT13 The commit gate was measured, and it is the checks OFF it that are worth 
 DEBT14 A pooled card reaches the pricing table and the box walk, and `located` suppresses the label everywhere and the photograph nowhere
 DEBT16 The browser fleet is locked and the rest of the load is not, and only one of those was measured
 DEBT17 Four blocks still ask the viewport a question only their column can answer
-DEBT18 ~~The suite fetches three typefaces from Google Fonts on every page load~~ — CLOSED 2026-09-08
 DEBT19 The revert guard is exact, and three shapes of reversal walk past it
 DEBT20 Two liveness oracles read a pid, and a recycled one lies to both
 DEBT21 The double-click guard cannot see a run started in a terminal
@@ -84,22 +96,19 @@ DEBT23 A sale fixture that moves after the press is only wrong sometimes, so no 
 DEBT24 A zero reading cannot tell a sold-out listing from an import sitting in Staged
 DEBT25 A cited section number still resolves when it is the wrong section, and no check can read what a sentence is about
 DEBT26 The Intelligent Mail barcode encoder is written, correct against the Postal Service's own examples, and parked on a branch
-DEBT27 Two `GET /inventory` call sites were store-wide; site 1 is closed, site 2 is argued and left
-DEBT28 `pkmnscan rescue` is reachable from no screen, and the screen that needs it names a command
+DEBT27 `Fulfillment.tsx`'s store-wide `GET /inventory` browse is argued and left
 DEBT29 The drawer's tap sweep is skipped, because it races itself on a slower runner
 DEBT30 The copies panel flash guard is shelved, on the owner's own word
 DEBT31 Twelve decisions are cited by path, one of them dead, and the path guard never reads code
 DEBT32 The archive sweep stays a press, and the owner intends to schedule it eventually
 DEBT33 An answered queue entry can never resurface, even when it is wrong
 DEBT34 The catalogue cache never expires, on a membership claim this store cannot re-check on its own
-DEBT35 ~~emit exits differently on one run and several runs~~ — CLOSED 2026-09-25, fixed as recommended
 DEBT36 A layout read taken while the page still moves is wrong
 DEBT37 ~~under `--cap`, a pending copy and an unseen live copy can both be out~~ — CLOSED 2026-09-27, on the owner's word
 DEBT38 a section move's receipt names no owed cards and no next capture
 DEBT39 the public demo refuses every box map move
 DEBT40 a divider save can move a divider past departed records
 DEBT41 Pricing never offers "Make this the rule"
-DEBT42 ~~A row with no market price hides a typed price that the send still lists~~ — CLOSED 2026-09-26, on the owner's word
 DEBT43 the merge-speed guard counts SQLite ticks only, and a pure-Python loop is invisible to it
 DEBT44 pokemontcg.io is deprecated (ends 2027-03-01), and `pipeline/stockimages.py` does not call it today
 DEBT45 no page lists what each test protects, so the owner cannot confirm the tests are current
