@@ -239,3 +239,4 @@ G, T and PR 5:
   The spelling row learns markdown in lane L2. So the final head no longer runs Vale.
 - Old demo seed: `Cut the old seed guards`. Lane L5. The heartbeat and coordinator: `Retire both (Recommended)`. Lane L10.
 - Q8: `you haven't shown me the changes made to docs audit`. No docs-audit change is made yet. The owner sees the tier list and the merge families before any lane changes it.
+- Search, one method (owner, 2026-09-28, on F11's review): `search should just be one sorta object/method that's called upon and used in uniform across the app`. So Sales matches SKU and set name too. The palette, the shortcut sheet and Capture's box filter move onto `matchQuery` as well. Codes: `Keep substring on codes (Recommended)`, as a field of the one matcher, not beside it. Lane F11b carries it. Its home is a D271 amendment.
