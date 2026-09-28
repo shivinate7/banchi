@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { runRow } from './routeFixtures'
+import { boxTitle } from '../src/kit/dataRules'
 
 /* THE PIPELINE IS REACHABLE FROM A SCREEN, ASSERTED WHERE NOTHING ELSE CAN SEE IT.
  *
@@ -450,10 +451,10 @@ async function open(
           },
           {
             /* A SECOND BOX, so a cart can be a cart of more than one. NAMED WHERE BOX 9
-               IS NOT, which is what makes this fixture cover both arms of `boxLabel` (D56):
-               a named box draws `Box 12 · codes` everywhere it appears and an unnamed one
-               draws `Box 9` with no separator and no placeholder — D20 leaves a name optional,
-               so unnamed is an ordinary box rather than a fault to mark. */
+               IS NOT, which is what makes this fixture cover both arms of `boxLabel` (D259):
+               a named box draws its name alone, `codes`, everywhere it appears and an
+               unnamed one draws `Box 9` with no separator and no placeholder — D20 leaves a
+               name optional, so unnamed is an ordinary box rather than a fault to mark. */
             box: 12,
             name: 'codes',
             sections: [],
@@ -579,6 +580,12 @@ async function openComposer(page: Page) {
   await expect(page.locator('.runs-starts')).toBeVisible()
 }
 
+/** The `/boxes` fixture's own names (`open`'s stub, below), read back here so this helper
+ *  clicks the label the chip actually carries rather than a stale `Box N`. D259: the chip's
+ *  accessible name is `boxTitle`'s single name-or-number answer — box 9 has no name and
+ *  reads `Box 9`, box 12 is named `codes` and reads `codes` alone. */
+const BOX_NAMES: Record<number, string | null> = { 9: null, 12: 'codes' }
+
 /** Ticks a box on the dialog's first stage.
  *
  *  SCOPED TO `.runs-boxes`, AND THE FIRST DRAFT WAS NOT — `getByRole('button', {name: 'Box 9'})`
@@ -591,7 +598,9 @@ async function pickBox(page: Page, box = 9) {
      so every existing caller of this helper keeps meaning what it meant. */
   const drawers = page.locator('.runs-starts').getByRole('button', { name: 'Boxes' })
   if (await drawers.isVisible()) await drawers.click()
-  await page.locator('.runs-boxes').getByRole('button', { name: new RegExp(`^Box ${box}\\b`) }).click()
+  const label = boxTitle(BOX_NAMES[box] ?? null, box)
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  await page.locator('.runs-boxes').getByRole('button', { name: new RegExp(`^${escaped}\\b`) }).click()
 }
 
 /** Forward from the boxes stage to the reading stage. */
@@ -1311,8 +1320,8 @@ test('a run row names the drawer, and takes the name from the server', async ({ 
   /* D56. The list drew `box 9` — a digit, on a screen whose whole question is which box you
      are about to spend money on. The name comes off `GET /pipeline/runs`, joined against the
      registry at read time, so it is current rather than whatever the manifest happened to
-     record; the number stays beside it because the number is the shelf and the directory the
-     photographs are in.
+     record. D259 OVERRIDES D56's OWN NUMBER-BESIDE-NAME ARGUMENT: the name alone is drawn
+     where there is one, off `boxTitle`'s single name-or-number answer, never `Box N · Name`.
 
      BOTH ARMS, and the second one is the assertion that matters: an unnamed box draws the
      number ALONE. D20 leaves a name optional, so `Box 9 · —` would draw a fault where there
@@ -1323,7 +1332,9 @@ test('a run row names the drawer, and takes the name from the server', async ({ 
      picked box, so its run sorts above box 12's whatever order the server sent them in. An
      index here would be asserting the grouping by accident and would move the day either
      fixture's box changed. */
-  await expect(rowScope('2026-08-24-box12-01')).toHaveText('Box 12 · codes')
+  /* D259: the box's own NAME, never `Box N · Name` — `runScope.ts:runBoxLabel` falls to
+     `boxTitle`'s single name-or-number answer. */
+  await expect(rowScope('2026-08-24-box12-01')).toHaveText('codes')
   await expect(rowScope('2026-08-24-box9-01')).toHaveText('Box 9')
 })
 
@@ -1344,11 +1355,11 @@ test('a run over a deleted drawer says so, and the drawer on the shelf does not'
      over a reused number would have traded one confusing row for two; the drawer on the shelf
      is an ordinary row with an ordinary name.
 
-     THE NUMBER SURVIVES THE MARKER. `Box 1 (deleted)` and never a bare id: the number is the
-     run directory's own name, the directory its photographs are in, and what every refusal in
-     `server/pipeline_routes.py` names — D56's argument for carrying both halves. And the TRUE
-     INDEX is drawn nowhere, which is the owner's ruling in their own words: *"an index # not
-     visible anywhere in the app"*. */
+     THE MARKER SURVIVES D259. `Pokemon shakedown (deleted)` and never a bare id: `boxTitle`'s
+     name-or-number answer is what `(deleted)` is appended to (`runScope.ts:runBoxLabel`), so a
+     departed drawer with a name still gives its name, never `Box 1 (deleted)` beside it. And
+     the TRUE INDEX is drawn nowhere, which is the owner's ruling in their own words: *"an
+     index # not visible anywhere in the app"*. */
   await open(page, {
     runs: [
       runRow({
@@ -1364,8 +1375,8 @@ test('a run over a deleted drawer says so, and the drawer on the shelf does not'
 
   const rowScope = (run: string) => page.locator(`.run-row[title="${run}"] .run-row-scope`)
 
-  await expect(rowScope('2026-08-22-box1-03')).toHaveText('Box 1 (deleted) · Pokemon shakedown')
-  await expect(rowScope('2026-08-29-box1-01')).toHaveText('Box 1 · RB Epics')
+  await expect(rowScope('2026-08-22-box1-03')).toHaveText('Pokemon shakedown (deleted)')
+  await expect(rowScope('2026-08-29-box1-01')).toHaveText('RB Epics')
 
   /* AND THE TRUE INDEX IS DRAWN NOWHERE. `toHaveText` is exact, so these two assertions ARE
      that proof for this row: both runs carry a `box_bid` and neither label contains it. A
@@ -2883,7 +2894,7 @@ test('rebind: the sheet previews on open, and Apply is absent until it answers',
      encodes, asserted here rather than assumed because a sheet that opens with the write
      button already drawn is one press from spending nothing on a stale reading. */
   await expect(sheet.getByRole('button', { name: 'Rebind these cards' })).toBeVisible()
-  await expect(sheet).toContainText('RB Epics (Box 3)')
+  await expect(sheet).toContainText('RB Epics')
   await expect(sheet).toContainText('2')
 
   /* NOTHING ON SCREEN NAMES A COMMAND, A PATH OR A DECISION NUMBER (D196/no mechanism on
@@ -3044,7 +3055,7 @@ test('no typed interpunct reaches the runs screen', async ({ page }) => {
   ])
   await page.getByRole('button', { name: 'Rebind' }).click()
   const sheet = page.locator('.rescue-sheet')
-  await expect(sheet).toContainText('RB Epics (Box 3)')
+  await expect(sheet).toContainText('RB Epics')
   const sheetText = await sheet.innerText()
   expect(sheetText).not.toMatch(/[·•]/)
   await page.keyboard.press('Escape')
