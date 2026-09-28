@@ -13585,16 +13585,7 @@ def _order_progress(
     return rows
 
 
-def _sku_facts(skus) -> dict:
-    """`{sku: (condition, rarity, product_line, set_name)}`, one column `select` over `skus`
-    (store-scaling item 4's shape) in place of one `entries.get` per order line."""
-    return {
-        key: values
-        for key, values in skus.entries.select(("condition", "rarity", "product_line", "set_name"))
-    }
-
-
-def _order_line_wire(line, skus: dict) -> dict:
+def _order_line_wire(line, skus: "Skus") -> dict:  # noqa: F821 - store.skus.Skus, duck-typed
     """One order line, as the feed said it, with `condition`/`rarity` FILLED IN FROM THE `skus`
     TABLE where the feed's own line said nothing, and the SKU's `product_line`/`set_name`
     carried alongside for a screen to build a short display name from (Sales review, findings
@@ -13618,15 +13609,14 @@ def _order_line_wire(line, skus: dict) -> dict:
     the table not knowing this SKU is not this route's failure to report.
     """
     row = asdict(line)
-    sku_row = skus.get(str(line.sku))
+    sku_row = skus.entries.get(str(line.sku))
     if sku_row is not None:
-        condition, rarity, product_line, set_name = sku_row
         if not row.get("condition"):
-            row["condition"] = condition or None
+            row["condition"] = sku_row.condition or None
         if not row.get("rarity"):
-            row["rarity"] = rarity or None
-        row["product_line"] = product_line or None
-        row["set_name"] = set_name or None
+            row["rarity"] = sku_row.rarity or None
+        row["product_line"] = sku_row.product_line or None
+        row["set_name"] = sku_row.set_name or None
     else:
         row["product_line"] = None
         row["set_name"] = None
@@ -13637,7 +13627,7 @@ def _order_row(
     ledger: order_store.Ledger,
     record: order_store.OrderRecord,
     is_open: bool,
-    skus: dict,  # `_sku_facts`: {sku: (condition, rarity, product_line, set_name)}
+    skus: "Skus",  # noqa: F821 - store.skus.Skus, duck-typed
 ) -> dict:
     """One order as the feed said it, with our own progress beside it.
 
@@ -13884,10 +13874,6 @@ def do_orders() -> dict:
     """
     snapshot = Store().read()
     ledger = snapshot.ledger
-    # ONE READ OF THE FULFILMENT TABLE, not one `Rows.get` per order line: `unfulfilled()` asks
-    # `recorded()` for every line of every order (~6,700 single-key SELECTs on the owner's store).
-    list(ledger.fulfilment)
-    sku_facts = _sku_facts(snapshot.skus)
 
     sequence = sorted(
         ledger.orders.values(),
@@ -13925,7 +13911,7 @@ def do_orders() -> dict:
     return {
         "summary": ledger.summary,
         "orders": [
-            _order_row(ledger, record, record.key in open_keys, sku_facts)
+            _order_row(ledger, record, record.key in open_keys, snapshot.skus)
             for record in sequence
         ],
         "resolution": {
