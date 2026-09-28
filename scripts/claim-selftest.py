@@ -2539,6 +2539,19 @@ def main() -> int:
             if node_modules.is_dir():
                 (rwork / "app").mkdir(parents=True, exist_ok=True)
                 os.symlink(node_modules, rwork / "app" / "node_modules")
+            # `origin/main` MUST EXIST HERE WITHOUT ASKING WHAT BRANCH THIS SESSION'S OWN
+            # CHECKOUT IS ON. A CI runner checks out one ref (often a detached PR commit,
+            # fetch-depth 1) and never fetches `main` at all, so `git clone --local ROOT`
+            # would carry no `origin/main` remote-tracking branch and `claim-ids.py --write`
+            # (default `--ref origin/main`) would refuse: "`origin/main` does not name a
+            # commit". A developer checkout happens to have `origin/main` already, which is
+            # why this only ever failed on CI. The fixture's base — `rwork`'s own HEAD, right
+            # after the clone and before this arm's own commits — IS what "main" means for
+            # this arm's purposes, so it is recorded as `refs/remotes/origin/main` directly,
+            # the same ref shape `git fetch` would have left, without depending on ROOT
+            # having a branch by that name at all.
+            base_sha = git(rwork, "rev-parse", "HEAD").strip()
+            git(rwork, "update-ref", "refs/remotes/origin/main", base_sha)
             git(rwork, "checkout", "-q", "-b", "feature-real-claim-proof")
             # COMPOSED, NEVER WRITTEN — this file's own standing rule for test ids (see the
             # comment above `D()`/`C()`): written out, this slug is a citation of a debt
