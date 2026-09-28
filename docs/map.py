@@ -3516,44 +3516,6 @@ COMPONENTS = [
                 "governed_by": ["D18", "D42", "D53", "D133", "D139", "D158", "D169",
                                 "D171", "D173"],
             },
-            "coordinator.py": {
-                "does": "`make coordinator` — the merge queue READ rather than remembered, so "
-                        "a status report is generated instead of composed out of a session's "
-                        "memory and a driver's stdout. main's tip against origin's, every open "
-                        "PR with a verdict PINNED TO ITS HEAD SHA, how many merged in 24h, "
-                        "`id claims` out of the audit, every worktree holding uncommitted work "
-                        "(D135's symlinks excluded), live sessions read from the console app's "
-                        "own records with the start time checked, and any waiter loop or twice-"
-                        "running driver. THE FLOOR IS THE REQUIRED-CHECK SET FROM BRANCH "
-                        "PROTECTION AND NOT A COUNT, which is a measurement: main's tip carries "
-                        "10 runs including `demo.yml`'s main-only pair, while PR #309's head "
-                        "carried 6 with `design-check` gated to one run, so no single number is "
-                        "right. A missing or `skipped` required check is `not ready` and never "
-                        "clean; a null conclusion is `running` and never failed. Any block it "
-                        "cannot read prints UNKNOWN and makes the exit non-zero.",
-                # D42 is the operation it reports on; D43 is why the worktree block exists at
-                # all; D111 is where the liveness oracle and its argument come from; D141 is
-                # the path-gating that makes a count floor unusable.
-                "governed_by": ["D42", "D43", "D111", "D135", "D140", "D141",
-                                "D171"],
-            },
-            "heartbeat.py": {
-                "does": "`make heartbeat` — docs/GATES.md item 24, built. The durable "
-                        "scheduled heartbeat that watches repo state across sessions: open "
-                        "PRs, `id claims`, dirty worktrees and live sessions by calling "
-                        "coordinator.py --json rather than re-reading any of the four (no "
-                        "bandaids — the primitive already existed); whether MAIN'S OWN last "
-                        "push is green, which coordinator.py's block_main never answers "
-                        "(it compares local main against origin/main, never CI); and "
-                        "janitor.py's own preview, --confirm never passed. Writes "
-                        ".serve/heartbeat/latest.json and appends to history.jsonl — the "
-                        "durable state a fresh, context-free run needs to say what is NEW "
-                        "since the last one, which is the 'a PR conflicting with a live "
-                        "session that has not been told' bullet answered by diffing rather "
-                        "than by memory. Read-and-report authority only.",
-                "governed_by": ["D200", "D42", "D111", "D140", "D148",
-                                "D171"],
-            },
             "session-teardown.sh": {
                 "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "
                         "started in a linked worktree and nothing else — the main checkout's "
@@ -3929,8 +3891,8 @@ COMPONENTS = [
                                 "D111", "D113", "D119", "D122", "D123", "D127", "D132", "D134",
                                 "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
                                 "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
-                                "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
-                                "D213", "D215", "D218", "D226", "D229", "D245", "D247",
+                                "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D200",
+                                "D210", "D213", "D215", "D218", "D226", "D229", "D245", "D247",
                                 "D280", "D284"],
             },
             "claim-ids.py": {
@@ -4112,8 +4074,8 @@ COMPONENTS = [
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
                 "governed_by": ["D15", "D16", "D23", "D39", "D40", "D90", "D96", "D105", "D194",
-                                "D218", "D226", "D229", "D245", "D248", "D271", "D277", "D280",
-                                "D284"],
+                                "D200", "D218", "D226", "D229", "D245", "D248", "D271", "D277",
+                                "D280", "D284"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "

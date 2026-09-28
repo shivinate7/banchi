@@ -41,8 +41,8 @@ waits for a next tick. The cadence is the scheduled task's job, registered again
 `mcp__scheduled-tasks` mechanism this environment already exposes for a periodic agent run — a
 fresh Claude session invoking `python3 scripts/heartbeat.py --json` on a schedule the desktop
 app owns, never a process this repository starts or keeps alive. There is no `make` target
-that backgrounds anything; `make heartbeat` runs the script in the foreground and prints, the
-same shape as `make status` and `make coordinator`.
+that backgrounds anything. The retired heartbeat script runs once and prints, like `make status`
+and the retired coordinator script did.
 
 **Each run is a fresh session with no conversation context.** The script itself starts knowing
 nothing, and so would an agent session spawned to run it. Anything needing memory of a

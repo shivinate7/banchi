@@ -118,7 +118,7 @@ the environment and inline, and printed in every refusal.
 
 ### Mechanism two: the report is generated, and its floor is read from GitHub
 
-`make coordinator`. **Every figure is read from the repository or from the GitHub API at the moment you run it, and nothing is read from any local tool's output.**
+**Every figure is read from the repository and GitHub API at the moment you run it, never from cached local output.**
 
 **A verdict is pinned to a HEAD SHA.** `gh pr checks` answers about a pull request; this asks
 `commits/<headRefOid>/check-runs`, so a green from a push three commits ago cannot be mistaken
@@ -167,9 +167,9 @@ copies of ONE script.
 
 ### It reaches the network, so it does not gate
 
-**`make coordinator` is deliberately not in `make check`**, on `make lan-check`'s reasoning:
+**The retired coordinator was deliberately not in `make check`**, on `make lan-check`'s reasoning:
 `check` answers from the tree alone, and a row that fails on a train is a row people learn to
-ignore. **What gates is `make coordinator-selftest`**, which runs the verdict rules against
+ignore. **What gates is the retired coordinator selftest**, which runs the verdict rules against
 synthetic payloads and needs no network — the split `verdict-selftest` already makes.
 
 **`make silent-write-selftest` gates and is never in the git hook** (D18: it writes a temp
