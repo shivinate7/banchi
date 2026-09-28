@@ -906,9 +906,11 @@ test('the run picker leads with the box, and the directory is what tells two run
      order they sit on a shelf and the order the strip on `#/inventory` already draws."* Two
      screens ordering the same drawers two ways is the drift; this is the fix, and it is pinned
      here because it is otherwise invisible. */
-  await expect(chips.nth(0).locator('.pricing-run-name')).toContainText('Box 1 · UNL Rares')
-  await expect(chips.nth(1).locator('.pricing-run-name')).toContainText('Box 3 · RB Epics')
-  await expect(chips.nth(2).locator('.pricing-run-name')).toContainText('Box 1 · UNL Rares')
+  /* D259: the box's own NAME, never `Box N · Name` — a screen shows the number only where
+     there is no name to fall back to (`boxTitle`, `runScope.ts:runBoxLabel`). */
+  await expect(chips.nth(0).locator('.pricing-run-name')).toContainText('UNL Rares')
+  await expect(chips.nth(1).locator('.pricing-run-name')).toContainText('RB Epics')
+  await expect(chips.nth(2).locator('.pricing-run-name')).toContainText('UNL Rares')
   await expect(chips.nth(3).locator('.pricing-run-name')).toContainText('Box 2')
 
   /* THE DIRECTORY IS STILL DRAWN, and on the two chips whose headline is identical it is the
