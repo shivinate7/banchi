@@ -64,9 +64,9 @@ PASS, with `cd app && npx tsc --noEmit` at the merge.
 | L3 | `ux/pr4b-L3` | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | Removing two `make vale` lines from the test-audit plan on the owner's word, then commit. Then a review. |
 | L5 | `ux/pr4b-L5` | Cut the old demo seed guards, keep the generator | Building. Then a review. |
 | L6 | `ux/pr4b-L6` | DEBT47 closed, pull-confirm folded into fulfillment | Building. Then a review. |
-| L7 | `ux/pr4b-L7` | Measure the slow CI shard, then one route sweep | Building. Then a review. |
+| L7 | `ux/pr4b-L7` | Measure the slow CI shard, then one route sweep | Built. Review running. The measure: shard 2 is slow from `icon-button.spec.ts` re-rendering the gallery per test, not from route walkers. Only `cursor.spec.ts` folded. |
 | L10 | `ux/pr4b-L10` | Heartbeat and coordinator retired | Built. Review running. |
-| Q1 tiers | `ux/pr4b-Q1tiers` | A proposed tier for each docs-audit row, `TIERS.md` | Building. The owner sees it with Q8's merge families before any docs-audit lane starts. |
+| Q1 tiers | merged | A proposed tier for each docs-audit row: `docs/reviews/test-audit-2026-09-27/TIERS.md`. 65 Tier 1, 22 Tier 2, 13 Tier 3, 9 CUT, 7 unsure. | Waiting for the owner, together with Q8's merge families (PLAN.md item M3). No docs-audit lane starts before that. |
 
 ## Still to come
 
