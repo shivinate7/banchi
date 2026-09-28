@@ -203,6 +203,8 @@ Lane D and the feedback items:
   with no repo home a real home: a debt, a spec or a decision entry. It also proposes
   global-rule sentences for the owner. After it merges, `autoMemoryEnabled: false` goes into the project's
   `.claude/settings.json`. The session scratchpad is the per-session note file.
+- Debt numbers (2026-09-28): `i think there's a straightforward way where they just get assigned numbers upon merge with CI`. A lane teaches the merge-time claim to number debts, as it numbers decisions. The memory lane's five drafted debts then land as slugs.
+- The global-rule lines (2026-09-28, process only): the owner takes G1, G2 and G3 to a claude-settings session, with the two parent guard defects. The brief is in this session's scratchpad.
 - F10 (2026-09-28), the owner's report: `if i type let's say punch first, or body rune (fully) then it shows no searches found, but if i type body run or punch firs then it does show up`.
 - F5 and D276 (2026-09-27): `Keep "Go to" (Recommended)`. The palette keeps its D276 name.
 - F5: `Approved on cutting everything from F5`, `rest are good to cull`, and for Review's line
