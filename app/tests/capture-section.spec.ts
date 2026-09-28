@@ -923,6 +923,36 @@ for (const [width, height] of [
   })
 }
 
+/* KEYBOARD AT 390. Capture's open list has no arrow-key handler (`[` and `]` step the pick and
+ * never open the list), so the keyboard path is the native one: focus starts on the first
+ * option and Tab walks the rest. Each focused option must stay inside the list and above the
+ * tab bar, down to the last row. */
+test('walking the open list by keyboard keeps the focused option in view to the last row at 390', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, {
+    spans: manySections(12),
+    boxes: [
+      { ...BOX, sections: manySections(12).map((s) => s.start), sections_detail: manySections(12) },
+    ],
+  })
+  await sectionRow(page).click()
+  await expect(page.locator('.capture-open-pinned')).toBeVisible()
+  const tabTop = (await page.locator('.bn-tabbar').boundingBox())!.y
+  for (let at = 0; at < 12; at += 1) {
+    if (at > 0) await page.keyboard.press('Tab')
+    const focused = page.locator('.capture-open-pinned .capture-opt:focus')
+    await expect(focused).toContainText(`Section ${at + 1} of 12`)
+    await page.waitForTimeout(60)
+    const list = (await page.locator('.capture-open-pinned').boundingBox())!
+    const opt = (await focused.boundingBox())!
+    expect(opt.y).toBeGreaterThanOrEqual(list.y)
+    expect(opt.y + opt.height).toBeLessThanOrEqual(list.y + list.height + 1)
+    expect(opt.y + opt.height).toBeLessThanOrEqual(tabTop)
+  }
+})
+
 /* PHONE CASE (coordinator, 2026-09-28): on opening, the whole list, its own header row
  * included, sits between the top bar and the tab bar. Measured right after the open, before
  * any scroll of the list. */

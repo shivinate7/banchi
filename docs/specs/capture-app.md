@@ -468,7 +468,7 @@ no-dialog rule is argued for ONE card still within reach of the hand that fed it
 that deletes five has to make the five visible instead. The count is also the row's ordinal,
 which is what lets one chip say both; the top row carries its key instead.
 
-**Owner's ruling, 2026-09-28: an open Section or Box list shows in front of the Recent strip and the sibling cards, and scrolls.** The cap stays. The list stays out of flow (D118).
+**Owner's ruling, 2026-09-28: an open Section or Box list shows in front of the Recent strip and the sibling cards, and scrolls.** The cap stays. The list stays out of flow (D118). When an edge of the list would sit under a bar, opening it scrolls the viewport so the list is in view. That is a viewport scroll and not a layout shift, so D118 holds.
 
 **A refused walk stops at the refusal and says how far it got**, because the cards that went
 and the cards that did not both leave the list, and the count is then the only thing that

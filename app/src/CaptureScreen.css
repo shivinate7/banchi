@@ -370,7 +370,6 @@
   /* A long box list grew the card itself before this (in flow); now that it overlays
      instead, an unbounded height would run the list off the bottom of the screen with
      nothing to stop it. Capped and scrollable, never clipped mid-row. */
-  max-height: min(420px, calc(100dvh - 200px));
   overflow-y: auto;
   /* The whole list, header row included, fits between the phone's bars: the shell's own
      tokens, zero where it draws no bar. */
