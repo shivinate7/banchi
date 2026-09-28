@@ -304,15 +304,27 @@ def decisions_index() -> List[str]:
     module = sibling("decisions_corpus.py")
     if module is None:
         return ["", "docs/decisions/ is not readable (scripts/decisions_corpus.py missing)."]
+    # Reuses decisions_corpus's own id pattern (a number, or a claim slug) rather than a
+    # second guess at it — `_ID` is what HEADING_RE is built from, and a fake match here
+    # (e.g. "## Deferred — ...") is the bug this closes: "Deferred" starts with "D" but is
+    # neither digits nor a "-slug".
+    heading_re = re.compile(r"^##\s+(D" + module._ID + r")\s*[—-]\s*(.+)$")
     try:
-        text = module.text()
+        paths = module.files()
     except Exception:  # noqa: BLE001 - a broken corpus must not take the renderer down
         return ["", "docs/decisions/ read as EMPTY."]
     out: List[str] = []
-    for line in text.split("\n"):
-        m = re.match(r"^##\s+(D[\w-]+)\s*[—-]\s*(.+)$", line)
-        if m:
-            out.append(f"{m.group(1):<5} {m.group(2).strip()}")
+    for path in paths:
+        if path.name.startswith("_"):
+            continue  # a filed-under-the-corpus section (Deferred, Someday, v1 bugs), not an entry
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in text.split("\n"):
+            m = heading_re.match(line)
+            if m:
+                out.append(f"{m.group(1):<5} {m.group(2).strip()}")
     return out
 
 

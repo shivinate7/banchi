@@ -717,6 +717,10 @@ githooks-selftest:
 #
 # It never sets PKMNSCAN_MAIN and no refusal it prints suggests it — a session typing that
 # variable is doing something else (D42).
+#
+# A STANDING MERGE INSTRUCTION CARRIES A NEEDED REBASE AND FORCE-PUSH, on a branch nobody else
+# holds (owner ruling, 2026-09-18). The session does not stop and ask again for the rebase —
+# only for whether to merge at all.
 merge:
 	@$(PYTHON) scripts/merge-pr.py $(ARGS)
 
@@ -1431,6 +1435,9 @@ lan-check:
 # reach around the guard entirely. Found 2026-09-06 by following the printed instruction.
 #
 # `up` takes them too, for `--no-watch` and for `--restart`, which is the bounce now.
+#
+# WILL NOT SERVE A PRIMARY CHECKOUT OFF MAIN (D158, D53). `PKMNSCAN_SERVE_MAIN=off` overrides,
+# printed in every refusal.
 up:
 	$(PORT_CLAIM)
 	@$(PYTHON) scripts/serve.py up $(ARGS)
@@ -1503,7 +1510,8 @@ screenshot:
 #
 # IT REFUSES RATHER THAN QUEUES, and exits 75 so the refusal cannot read as a failing suite.
 # `ARGS=--wait` queues instead, out loud. The `--` is what separates the guard's flags from
-# the command it guards, so `ARGS` can never reach npm.
+# the command it guards, so `ARGS` can never reach npm. `PKMNSCAN_SUITE_LOCK=off` overrides
+# the lock outright, printed in every refusal (D122).
 #
 # AND IT LEAVES A VERDICT BEHIND, WHICH IS HOW A SESSION WAITS FOR IT. The suite is ~90-175s
 # against the 120s tool timeout an agent session runs under, so every invocation from one is

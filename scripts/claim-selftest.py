@@ -99,6 +99,22 @@ def with_claimer(repo: Path) -> None:
         source = CLAIMER.parent / helper
         if source.exists():
             shutil.copy(source, repo / "scripts" / helper)
+    # AND THE VIEW THE CLAIM'S EFFECT IS NOW CHECKED THROUGH. CLAUDE.md's decision index is a
+    # rendering (`make map ARGS=--decisions`, D60 amended), not a stored copy `settle_corpus`
+    # regenerates any more — so an arm proving the claim landed reads this instead.
+    shutil.copy(CLAIMER.parent / "map-view.py", repo / "scripts" / "map-view.py")
+    (repo / "docs").mkdir(parents=True, exist_ok=True)
+    map_py = repo / "docs" / "map.py"
+    if not map_py.exists():
+        map_py.write_text("", encoding="utf-8")
+
+
+def decisions_index(repo: Path) -> str:
+    """`make map ARGS=--decisions` against `repo`, run the way the Makefile runs it."""
+    done = subprocess.run(
+        [sys.executable, str(repo / "scripts" / "map-view.py"), "--decisions"],
+        cwd=str(repo), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+    return done.stdout.decode("utf-8", errors="replace")
 
 # ------------------------------------------------- driving the wait for the claim commit
 #
@@ -1594,11 +1610,9 @@ def main() -> int:
         ok(manifest["order"][-1] == landed_name,
            "and appends it LAST, so the three non-entry sections keep their place",
            str(manifest["order"][-3:]))
-        index_lines = [row for row in
-                       (split / "CLAUDE.md").read_text(encoding="utf-8").split("\n")
-                       if re.match(r"^D[0-9]+\s", row)]
+        index_lines = decisions_index(split).split("\n")
         ok(any(row.startswith(f"D{number} ") for row in index_lines),
-           "and the CLAUDE.md index is regenerated with the allocated number",
+           "and `make map ARGS=--decisions` shows the allocated number",
            str(index_lines))
         ok(f"{entry}-a-third-thing.md" not in manifest["order"],
            "and does not still name the file that no longer exists")

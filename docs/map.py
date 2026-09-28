@@ -3993,8 +3993,8 @@ COMPONENTS = [
                 # split `--unclaim` and the fixed `stale_claims` both have to read through; D186
                 # and D188 are the real, landed entries the incident this file's own docstring
                 # narrates is about.
-                "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135", "D140", "D151",
-                                "D160", "D182", "D185", "D186", "D188", "D190", "D295"],
+                "governed_by": ["D16", "D18", "D42", "D47", "D60", "D72", "D80", "D135", "D140",
+                                "D151", "D160", "D182", "D185", "D186", "D188", "D190", "D295"],
             },
             "catalog-refresh.py": {
                 "does": "build-order step 9, piece 1 (D15): shallow-clone "
@@ -4092,9 +4092,9 @@ COMPONENTS = [
                 # D160, D186 and D188 are the same worked example claim-ids.py's own entry
                 # carries — the fixture's directory-corpus arms build a real D160 shape, and
                 # the incident arm's own prose names the two real, landed entries it replays.
-                "governed_by": ["D1", "D2", "D16", "D18", "D47", "D80", "D135", "D136", "D140",
-                                "D141", "D143", "D148", "D151", "D160", "D185", "D186", "D188",
-                                "D190", "D249", "D295"],
+                "governed_by": ["D1", "D2", "D16", "D18", "D47", "D60", "D80", "D135", "D136",
+                                "D140", "D141", "D143", "D148", "D151", "D160", "D185", "D186",
+                                "D188", "D190", "D249", "D295"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "

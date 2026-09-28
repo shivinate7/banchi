@@ -998,22 +998,21 @@ def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
 
 
 def settle_corpus(root: Path, write: bool) -> List[str]:
-    """Write the two DERIVED things at claim time: the manifest's order and the index.
+    """Write the one DERIVED thing at claim time: the manifest's order.
 
-    THE MERGE IS THE ONE MOMENT EITHER IS KNOWABLE, which is exactly D140's argument for the
-    number and the reason both belong here rather than on a branch. A branch adding an entry
-    would otherwise have to append to a shared JSON array and add a line to CLAUDE.md's index
-    at the position every other such branch touches — two more collisions, in the change that
-    exists to remove one.
+    THE MERGE IS THE ONE MOMENT THIS IS KNOWABLE, which is exactly D140's argument for the
+    number and the reason it belongs here rather than on a branch. A branch adding an entry
+    would otherwise have to append to a shared JSON array at the position every other such
+    branch touches — one more collision, in the change that exists to remove one.
 
     So a branch carries its entry FILE and nothing shared. Corpus membership is derived by
-    `decisions_corpus.order()` until this runs, and the index is regenerated from the headings
-    that exist after the claim — including the number this claim just allocated, which is why
-    it runs AFTER the substitution and the rename rather than beside them.
+    `decisions_corpus.order()` until this runs.
 
-    D18 PUTS THIS ON THE WRITING SIDE and keeps the checking side elsewhere: `decision index`
-    still computes the index independently and blocks, and it is a different program. A
-    generator that also gated could satisfy itself.
+    THERE IS NO SECOND INDEX TO REGENERATE. CLAUDE.md's decision index is `make map
+    ARGS=--decisions` (D60 amended) — a rendering off the corpus itself, never a stored copy —
+    so nothing here writes CLAUDE.md. D18 PUTS THIS ON THE WRITING SIDE and keeps the checking
+    side elsewhere: `decision index` still computes the index independently and blocks, and it
+    is a different program. A generator that also gated could satisfy itself.
     """
     moved: List[str] = []
     try:
@@ -1025,14 +1024,11 @@ def settle_corpus(root: Path, write: bool) -> List[str]:
         spec.loader.exec_module(index)
     except Exception as exc:                       # a tree without the generator still claims
         return [f"(index generator not runnable: {exc})"]
-    try:
-        appended = index.normalize(root, write)
-        if appended:
-            moved.append(f"{DECISIONS_MANIFEST} (+{len(appended)} entry)")
-        if index.rewrite_index(root, write):
-            moved.append("CLAUDE.md (decision index regenerated)")
-    except Exception as exc:
-        return [f"(corpus not settled: {exc})"]
+    if not (root / DECISIONS_MANIFEST).exists():
+        return moved  # no directory-shape corpus here — nothing to normalize
+    appended = index.normalize(root, write)
+    if appended:
+        moved.append(f"{DECISIONS_MANIFEST} (+{len(appended)} entry)")
     return moved
 
 
