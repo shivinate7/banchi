@@ -13874,6 +13874,9 @@ def do_orders() -> dict:
     """
     snapshot = Store().read()
     ledger = snapshot.ledger
+    # ONE READ OF THE FULFILMENT TABLE, not one `Rows.get` per order line: `unfulfilled()` asks
+    # `recorded()` for every line of every order (~6,700 single-key SELECTs on the owner's store).
+    list(ledger.fulfilment)
 
     sequence = sorted(
         ledger.orders.values(),
