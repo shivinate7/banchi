@@ -555,6 +555,11 @@ what `docs/DESIGN.md` refuses in as many words.
   once the strip spans drawers) and the card's number from the rendered label. A tile with
   no label (a reload, or a card that slid after a remove) shows the box name alone. No
   `B<n> #<n>` key is drawn or spoken.
+- **The viewfinder panel hugs its portrait frame** (desktop and tablet). Its width is derived
+  from its height (`--cap-stage-w`), not a 1fr track; the freed width goes to the last-capture
+  photo (desktop) and the run and last cards (tablet). The phone keeps a full-width panel: its
+  height budget pins the shutter above the tab bar. Layout only: capture, motion trigger and
+  rotation are untouched. Rewrites §5.1's "live camera on the left" only in width, not order.
 
 ## 6. trigger-seam
 

@@ -1774,3 +1774,43 @@ test('every field puts focus on its own first control when it opens, not the bod
     await expect(page.locator('.capture-open')).toHaveCount(0)
   }
 })
+
+/* THE VIEWFINDER PANEL HUGS ITS PORTRAIT FRAME (owner, 2026-09-28: "oddly too square for a
+   capturing that's done in a portrait view"). The frame is 9:16 and height-bound; the panel was a
+   1fr track that left 50px+ of dead dark on each side at desktop. Measured at rest, in one frame,
+   at the widths this screen is verified at above the phone layout (the phone keeps a full-width
+   panel: its height budget pins the shutter above the tab bar). */
+test('the stage panel hugs the portrait frame: no dead side bands', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await open(page)
+  for (const [width, height] of [
+    [1440, 900],
+    [1280, 800],
+    [1100, 900],
+    [820, 1100],
+  ] as const) {
+    await page.setViewportSize({ width, height })
+    let last = ''
+    await expect
+      .poll(async () => {
+        const now = JSON.stringify(
+          await page.evaluate(() => {
+            const box = (sel: string) => {
+              const r = document.querySelector(sel)!.getBoundingClientRect()
+              return { w: Math.round(r.width), h: Math.round(r.height) }
+            }
+            return { stage: box('.capture-stage'), frame: box('.capture-frame-live') }
+          }),
+        )
+        const still = now === last
+        last = now
+        return still
+      })
+      .toBe(true)
+    const { stage, frame } = JSON.parse(last) as { stage: { w: number }; frame: { w: number; h: number } }
+    // Still a 9:16 portrait frame, within a pixel of rounding.
+    expect(Math.abs(frame.w / frame.h - 9 / 16)).toBeLessThan(0.01)
+    // The panel is the frame plus its 16px padding each side, never the wide dark track.
+    expect(stage.w - frame.w, `${width}x${height}`).toBeLessThanOrEqual(40)
+  }
+})
