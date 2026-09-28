@@ -38766,7 +38766,7 @@ def _m_cases() -> Dict[str, dict]:
         add("suball/listed", market=_M_SUBALL, flags=["--listed-only"], exit=1, files={},
             says=[f"{sku} — under the cut-off" for sku in (_M_D, _M_R, _M_A)] + [_M_ONLY_CUT],
             route=("under_cut_off", ["Every priced card on this list is under the cut-off"]),
-            home={"line": "send 3 copies to TCGplayer", "behind": None, "tile": "3 copies ready to send",
+            home={"line": "send 3 copies to TCGplayer", "behind": None, "tile": "3 ready",
                   "chip": "Never sent"})
         # ONE ANSWER ON BOTH PATHS. One run exited 0 with its own sentence, and several
         # exited 1 with another. Both exit 1 now, with one headline and each card's reason.
@@ -38831,7 +38831,7 @@ def _m_cases() -> Dict[str, dict]:
             "exit": 0, "files": {"import.csv": [(_M_D, 2, "2.06")]},
             "says": [], "never": [_M_ASKED0, "read what is live, then send again"], "route": None,
             "home": {"line": "send 2 copies to TCGplayer", "behind": None,
-                     "tile": "2 copies ready to send"},
+                     "tile": "2 ready"},
         }
         # AT AND OVER LEAVE THE SETUP PRESS'S OWN FILE ON DISK (D54): the real press adds
         # nothing, and a refusal never touches a file an earlier press wrote.
@@ -38846,7 +38846,7 @@ def _m_cases() -> Dict[str, dict]:
             # still counts the two backstock copies as ready — the SAME reason `capguard`'s
             # own home block never claimed otherwise before this rewrite.
             "home": {"line": "send 2 copies to TCGplayer", "behind": None,
-                     "tile": "2 copies ready to send"},
+                     "tile": "2 ready"},
         }
         cases[f"freshcap/{runs_label}/over"] = {
             "layout": layout, "market": _M_MIX, "flags": ["--cap", "1"],
@@ -38856,7 +38856,7 @@ def _m_cases() -> Dict[str, dict]:
             "never": [_M_ASKED0, "read what is live, then send again"],
             "route": ("nothing_to_send", ["already at TCGplayer"]),
             "home": {"line": "send 1 copy to TCGplayer", "behind": None,
-                     "tile": "1 copy ready to send"},
+                     "tile": "1 ready"},
         }
 
     # --- a pending copy refuses that card, and the other card in the send still goes --------
@@ -38923,7 +38923,7 @@ def _m_cases() -> Dict[str, dict]:
             "never": [_M_ASKED0, "1 live, at the cap of 1", "read what is live, then send again"],
             "route": ("nothing_to_send", ["already at TCGplayer"]),
             "home": {"line": "send 2 copies to TCGplayer", "behind": None,
-                     "tile": "2 copies ready to send"},
+                     "tile": "2 ready"},
         }
     return cases
 

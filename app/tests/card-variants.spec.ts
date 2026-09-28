@@ -282,4 +282,26 @@ test.describe('the name -> variant chooser draws real collisions distinctly', ()
     await expect(page.locator('.browse-row', { hasText: 'Twin Alpha' })).toBeVisible()
     await expect(page.locator('.browse-row', { hasText: 'Twin Beta' })).toBeVisible()
   })
+
+  test('the box rail says a match is pending, not "No match", while the chooser awaits a pick (owner report, 2026-09-28)', async ({
+    page,
+  }) => {
+    // THE OWNER'S REPORT: a search for a card's full name answered "no searches found".
+    // MEASURED CAUSE: `activeGroups` (BoxBrowse.tsx) is deliberately EMPTY_GROUPS while a
+    // multi-printing chooser awaits a pick — on purpose, so a box is a no-op to enter before
+    // one — but the rail's own box count and each box's meta text read `activeGroups` too,
+    // so a real match (both `Mind Rune` copies are in Box 1) drew as "0 of 1 box" and
+    // "No match". `do_search`/`kit/match.ts` themselves are not the cause: they answer the
+    // SAME two groups for the full name and for a truncated one alike (verified against the
+    // real Riftbound fixture, both at a handful of cards and at its full ~10,000 rows).
+    await open(page)
+    await page.getByPlaceholder('Search').fill('Mind Rune')
+
+    const chooser = page.locator('.browse-variants')
+    await expect(chooser).toBeVisible()
+
+    await expect(page.getByText('1 of 1 box', { exact: false })).toBeVisible()
+    await expect(page.locator('.browse-boxcell', { hasText: 'No match' })).toHaveCount(0)
+    await expect(page.locator('.browse-boxcell', { hasText: 'pick a printing' })).toBeVisible()
+  })
 })

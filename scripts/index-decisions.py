@@ -1,37 +1,42 @@
 #!/usr/bin/env python3
-"""Generate CLAUDE.md's decision index from `docs/decisions/`.
+"""Register every unregistered `docs/decisions/` entry into `docs/decisions/ORDER.json`.
 
-THE INDEX IS DERIVED AND WAS HAND-MAINTAINED. Every entry appended to the corpus also
-needed a line typed into CLAUDE.md, in the right place, spelled the same way — which is the
-second half of the conflict the split exists to remove, and the half a directory does not
-fix by itself. Two branches adding two files no longer collide in the corpus; without this
-they still collide in the index.
+FORMERLY ALSO WROTE CLAUDE.md'S DECISION INDEX. That half is retired: CLAUDE.md no longer
+hand-carries an index for a corpus this size to drift against. `make map ARGS=--decisions`
+renders the same id-and-title list straight off the corpus's own headings, on demand, so
+there is no second copy left for a branch's entry to collide on or go missing from. This
+file's remaining job is the manifest half, which a rendered view cannot replace: a branch
+still adds only its own entry FILE, and something still has to fold that file into the
+corpus's shared ORDER — this generator, at claim time, is that something.
 
-WRITE-TIME, NEVER CHECK-TIME. D18 draws that line and this file is on the writing side of
-it: it may edit CLAUDE.md and is therefore not on the commit path. The checking side is
-`make docs-audit`'s `decision index` row, which computes what the index should say and
-compares, and blocks. The two are deliberately separate programs — a generator that also
-gated could satisfy itself, which is the exact failure D16 is written against.
+WRITE-TIME, NEVER CHECK-TIME (D18). This file may edit `docs/decisions/ORDER.json` and is
+therefore not on the commit path. The corpus's own non-vacuity floor (`corpus_is_empty` in
+`scripts/docs-audit.py`) is the checking side, and the two stay separate programs — a
+generator that also gated could satisfy itself, which is the exact failure D16 is written
+against.
 
-THE HEADING IS THE SOURCE. Titles come from the `## D<id> — <title>` line inside each entry
-file, never from the filename: a slug is lossy, truncated to 58 characters and sometimes
+THE HEADING IS THE SOURCE. An entry's id and title come from its own `## D<id> — <title>`
+line, never from the filename: a slug is lossy, truncated to 58 characters and sometimes
 disambiguated with a numeric suffix, and it is a convenience for a human running `ls`.
 
-ORDER IS THE MANIFEST'S. `docs/decisions/ORDER.json` records the order the chunks sat in
-when they were one document, because three of them are not entries — Deferred, Someday and
-the v1 bug table sat between D79 and D80 and still do. `decision index` reconciles the index
-against the headings IN ORDER, so this has to emit that order rather than a sort.
+the v1 bug table sat between D79 and D80 and still do. This file no longer emits that order
+into CLAUDE.md either — `decision index`'s own row is retired, the check side alongside the
+write side, now that `make map ARGS=--decisions` renders the same list off the corpus (D60
+amended) — but the manifest half stays, because a rendered view still needs a manifest to
+render from.
 
 DEBTS REUSE THIS EXACT MACHINERY, PARAMETERIZED, NOT A SECOND COPY. `docs/debts/` joined the
 claim path (D140's own scheme) on the owner's word — the debts corpus was hand-numbered
 before, `docs/DEBTS.md`'s own index hand-typed alongside it, which is the same collision this
-file was built to remove for decisions. `IndexSpec` below is the one difference between the
-two: which corpus module to load, which directory/manifest it owns, which file holds the
-index block, and whether the id CAPTURED FROM THE HEADING already carries its own letter
-(a decision's does: `## D<n>` captures `D<n>`) or needs one prefixed onto it (a debt's does
-not: `## 188` — or, once claimed through this scheme, `## DEBT<n>` — captures a bare number
-either way, and the index always wants `DEBT<n>`). `DECISION_SPEC` is every call site's
-default, so no existing caller's behaviour moves.
+file was built to remove for decisions. UNLIKE DECISIONS, `docs/DEBTS.md` KEEPS A WRITTEN
+INDEX — no rendered view has replaced it yet, so `rewrite_index` still regenerates it at
+claim time. `IndexSpec` below is the one difference between the two corpora: which corpus
+module to load, which directory/manifest it owns, which file holds the index block (or would,
+for decisions, if anything still read it), and whether the id CAPTURED FROM THE HEADING
+already carries its own letter (a decision's does: `## D<n>` captures `D<n>`) or needs one
+prefixed onto it (a debt's does not: `## 188` — or, once claimed through this scheme,
+`## DEBT<n>` — captures a bare number either way, and the index always wants `DEBT<n>`).
+`DECISION_SPEC` is every call site's default, so no existing caller's behaviour moves.
 """
 
 from __future__ import annotations
@@ -178,12 +183,26 @@ def main(argv: List[str]) -> int:
                     help="operate on docs/debts/ + docs/DEBTS.md instead of decisions")
     args = ap.parse_args(argv)
     spec = DEBT_SPEC if args.debts else DECISION_SPEC
-    stub = ROOT / spec.stub_file
 
     moved = normalize(ROOT, args.write, spec)
     if moved:
         print(f"manifest: {len(moved)} entr{'y' if len(moved) == 1 else 'ies'} "
               f"{'appended' if args.write else 'would be appended'}: {', '.join(moved)}")
+    else:
+        print("manifest is current — nothing unregistered")
+
+    # DECISIONS STOP HERE. CLAUDE.md no longer carries a decision index (D60 amended) — `make
+    # map ARGS=--decisions` renders that list off the corpus, on demand, so there is no stub
+    # left for this generator to rewrite. `docs/DEBTS.md` still hand-carries one, so the debt
+    # spec's own `stub_file` still gets regenerated below.
+    if spec is not DEBT_SPEC:
+        if not moved:
+            return 0
+        if not args.write:
+            print("\npreview only — pass --write to apply")
+        return 0
+
+    stub = ROOT / spec.stub_file
     lines = stub.read_text(encoding="utf-8").split("\n")
     start, stop = locate(lines, spec)
     have = [b for b in lines[start:stop]]
@@ -191,13 +210,6 @@ def main(argv: List[str]) -> int:
     if have == want:
         print(f"index is current — {len(want)} entries, no change")
         return 0
-    added = [w for w in want if w not in have]
-    gone = [h for h in have if h not in want and h.strip()]
-    print(f"index would change: {len(have)} lines -> {len(want)}")
-    for line in added[:10]:
-        print("  +", line[:100])
-    for line in gone[:10]:
-        print("  -", line[:100])
     if not args.write:
         print("\npreview only — pass --write to apply")
         return 0

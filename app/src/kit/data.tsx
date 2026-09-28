@@ -16,7 +16,7 @@ import './data.css'
 /* The pure half — the status tones and the box order — lives in `dataRules.ts`, so a spec and a
  * non-React caller can import it without a stylesheet. It is re-exported here: this file is
  * still the one place a screen imports a data primitive from. */
-export { STATUS_TONES, UNNAMED_BOX, boxesMostRecentFirst } from './dataRules'
+export { STATUS_TONES, UNNAMED_BOX, boxesMostRecentFirst, boxTitle } from './dataRules'
 export type { BoxRecency, StatusKind, StatusTone } from './dataRules'
 
 /* THE KIT'S DATA PRIMITIVES: how a figure, a card, a box, a place, a status and a filter are

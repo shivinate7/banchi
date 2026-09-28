@@ -4,6 +4,7 @@ import type { Place, SectionDetail } from './types'
 import {
   clamp,
   graduationStep,
+  nonEmptySections,
   sectionBlankSentence,
   sectionDepthOf,
   sentenceOf,
@@ -61,7 +62,18 @@ export function PositionBar({
   sections,
   sectionDepth = false,
 }: PositionBarProps) {
-  const spans = spansOf(place, sections)
+  /* F9 (the owner's report, 2026-09-27): THE RULER HIDES AN EMPTY SECTION. `sections` also
+     reaches `BoxOps.tsx:BoxIdentity`'s own box-header track through the same `spansOf`, and
+     that reading filters too, with its own `nonEmptySections` call keyed to the walk's
+     selected row rather than to a `Place`. The Shelf view (`BoxShelf.tsx`, `?view=shelf`),
+     Capture's own picker and the section move targets are the ones that stay untouched: none
+     of the three reads `sections_detail` through `spansOf` at all. So the filter here is
+     applied to the copy handed to THIS component's own `spansOf` call, never inside `spansOf`
+     itself, and only under `sectionDepth`: the one mode that draws the strip, the caption and
+     the ruler. `nonEmptySections` never drops the section the card being drawn stands in, or
+     left from. */
+  const visibleSections = sectionDepth && sections !== undefined ? nonEmptySections(place, sections) : sections
+  const spans = spansOf(place, visibleSections)
   const sentence = sentenceOf(place, persona)
   const parts = sentencePartsOf(place, persona)
   const depth = sectionDepth ? sectionDepthOf(place) : null
@@ -72,8 +84,17 @@ export function PositionBar({
 
   /* THE STRIP'S CAPTION IS THE SECTION AMONG THE BOX'S SECTIONS once the ruler above carries the
      card's own count: one count per instrument, and section numbers throughout. Without the
-     ruler the caption is the card's own `Card 5 of 12`. */
-  const sectionCount = sections !== undefined && sections.length > 0 ? sections.length : null
+     ruler the caption is the card's own `Card 5 of 12`.
+
+     F9: THE DENOMINATOR IS THE HIGHEST NON-EMPTY SECTION NUMBER, NEVER A COUNT OF THEM. Section
+     numbers never renumber when an empty one hides (the owner's rule), so a middle section
+     hidden by a gap must not shrink `N` below a section this card panel still draws — `Section
+     10 of 9` would be worse than the stale `of 11` this amends. The highest surviving number is
+     always at least as large as any section still on screen. */
+  const sectionCount =
+    visibleSections !== undefined && visibleSections.length > 0
+      ? Math.max(...visibleSections.map((detail) => detail.section))
+      : null
   const boxCaption =
     sectionDepth && place.section !== null
       ? sectionCount === null

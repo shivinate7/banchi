@@ -1,0 +1,1848 @@
+{
+  "_about": "THE SHRINKING OFFENDER LIST for `make docs-audit`'s `identifier spelling` row, markdown half (D280's pattern; owner's ruling, test-audit plan, 2026-09-27: \"Shrinking offender list now\"). files: file -> lane (who owes the fix) and SPELLING -> entries. An entry is the British word itself, lower-cased, one per occurrence (a word twice in one file is listed twice). A decision entry is keyed by its file tail (docs/decisions/*-<slug>.md, scripts/ste_measure.py:list_key), so a claim that numbers it moves nothing. The row FAILS on a British word this list does not name, on an entry that matches nothing now (stale: delete it), and on an entry the list at the merge-base with origin/main did not hold (growth), unless its rule is not in `rules` at the merge-base. A new file starts clean. `make offenders-prune` deletes stale entries and never adds one. Never add an entry to excuse new prose: the write-time STE hook and this row both exist so new markdown is American from the moment it is written. `docs/gates/` is excluded outright, never listed here.",
+  "rules": [
+    "SPELLING"
+  ],
+  "files": {
+    ".claude/skills/text-density/SKILL.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "AGENTS.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviour",
+        "catalogue",
+        "honoured",
+        "judgement",
+        "labelled"
+      ]
+    },
+    "CLAUDE.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviour",
+        "catalogue",
+        "honoured",
+        "judgement",
+        "labelled"
+      ]
+    },
+    "HANDOFF.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement",
+        "recognises"
+      ]
+    },
+    "code-card-fork/AGENTS.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviour",
+        "catalogue",
+        "honoured",
+        "judgement",
+        "labelled"
+      ]
+    },
+    "code-card-fork/CLAUDE.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviour",
+        "catalogue",
+        "honoured",
+        "judgement",
+        "labelled"
+      ]
+    },
+    "docs/CODES-DECISIONS.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "realised"
+      ]
+    },
+    "docs/DESIGN.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "acknowledgement",
+        "acknowledgement",
+        "acknowledgement",
+        "acknowledgement",
+        "acknowledgement",
+        "cataloguing",
+        "centred",
+        "colour",
+        "honoured",
+        "judgement",
+        "labelled",
+        "labelled",
+        "labelled",
+        "travelled"
+      ]
+    },
+    "docs/debts/001-the-reverse-direction-five-checks-walk-docs-code-and.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled",
+        "labelled"
+      ]
+    },
+    "docs/debts/008-recorded-and-correctly-unfixed.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "honoured",
+        "optimisation"
+      ]
+    },
+    "docs/debts/014-a-pooled-card-reaches-the-pricing-table-and-the-box-walk.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "travelling"
+      ]
+    },
+    "docs/debts/016-the-browser-fleet-is-locked-and-the-rest-of-the-load-is.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "serialises"
+      ]
+    },
+    "docs/debts/022-a-control-shrunk-inside-its-own-sticky-bar-is-invisible.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centre",
+        "centre",
+        "centre"
+      ]
+    },
+    "docs/debts/023-a-sale-fixture-that-moves-after-the-press-is-only-wrong.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "neighbour"
+      ]
+    },
+    "docs/debts/026-the-intelligent-mail-barcode-encoder-is-written-correct.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/debts/029-the-drawers-tap-sweep-is-skipped-because-it-races-itself.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centre"
+      ]
+    },
+    "docs/debts/033-an-answered-queue-entry-can-never-resurface-even-when-wrong.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue"
+      ]
+    },
+    "docs/debts/034-the-catalogue-cache-never-expires-on-a-membership-claim.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue"
+      ]
+    },
+    "docs/debts/044-pokemontcg-io-is-deprecated-and-this-repo-does-not-call-it.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue"
+      ]
+    },
+    "docs/decisions/*-a-archive-press-resume.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-a-archive-store-checks.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue"
+      ]
+    },
+    "docs/decisions/*-a-box-has-an-index-nobody-sees-because-the-number-on-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "mislabelled",
+        "relabelled"
+      ]
+    },
+    "docs/decisions/*-a-branch-is-judged-by-what-it-lands-and-a-file-put-back.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "honoured",
+        "initialiser",
+        "neighbouring",
+        "standardise"
+      ]
+    },
+    "docs/decisions/*-a-card-is-counted-in-its-section.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centre",
+        "neighbour",
+        "neighbour",
+        "neighbour",
+        "neighbour",
+        "neighbours",
+        "neighbours"
+      ]
+    },
+    "docs/decisions/*-a-card-leaves-a-box-through-a-third-door-moved-not-sold.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "generalised"
+      ]
+    },
+    "docs/decisions/*-a-card-leaves-inventory-by-a-state-retired-and-a-bad.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "cancelled"
+      ]
+    },
+    "docs/decisions/*-a-card-nobody-has-named-is-not-a-landmark-and-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "neighbour",
+        "neighbour",
+        "neighbour",
+        "neighbour",
+        "neighbour",
+        "recognise"
+      ]
+    },
+    "docs/decisions/*-a-card-that-will-not-settle-is-photographed-off-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centre",
+        "centre",
+        "neighbours"
+      ]
+    },
+    "docs/decisions/*-a-citation-names-a-symbol.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "honour"
+      ]
+    },
+    "docs/decisions/*-a-claim-a-screen-names-is-a-claim-a-screen-can-fix-and.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled"
+      ]
+    },
+    "docs/decisions/*-a-claim-on-the-cards.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "synchronise"
+      ]
+    },
+    "docs/decisions/*-a-claim-race-order.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-a-departed-cards-label-names-the-record-because-two-of.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "ellipsises",
+        "grey",
+        "recognised"
+      ]
+    },
+    "docs/decisions/*-a-departed-record-is-buried-not-kept-the-box-goes-and-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "modelled"
+      ]
+    },
+    "docs/decisions/*-a-document-is-checked-as-a-document-and-every-markdown.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-a-gain-step-is-the-stand-rescaled.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement",
+        "labelled",
+        "quantisation"
+      ]
+    },
+    "docs/decisions/*-a-generator-may-write-nothing-that-writes-may-gate-a.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "generalises",
+        "judgement",
+        "judgement",
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-a-hint-is-evidence-about-its-own-card-and-how-wide-to-ask.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue"
+      ]
+    },
+    "docs/decisions/*-a-hover-is-an-alpha-because-the-same-paint-over-three.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "colour",
+        "generalise",
+        "grey"
+      ]
+    },
+    "docs/decisions/*-a-janitor-autonomy.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-a-join-time-name-cross-check.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue"
+      ]
+    },
+    "docs/decisions/*-a-line-closes-three-ways-and-only-one-of-them-claims-a.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "recognise",
+        "recognises"
+      ]
+    },
+    "docs/decisions/*-a-loop-nobody-is-listening-to.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "signalling"
+      ]
+    },
+    "docs/decisions/*-a-name-tolerance-fit.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue"
+      ]
+    },
+    "docs/decisions/*-a-pokemon-run-names-its-sets-or-the-fetch-refuses.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviours",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "labelled"
+      ]
+    },
+    "docs/decisions/*-a-press-changes-what-is-on-the-screen-never-where-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviour",
+        "capitalisations",
+        "ellipsises",
+        "neighbours"
+      ]
+    },
+    "docs/decisions/*-a-price-is-a-fact-about-a-listing-and-the-store-remembers.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "generalise",
+        "honour",
+        "licence"
+      ]
+    },
+    "docs/decisions/*-a-ratchet-per-file.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "honoured"
+      ]
+    },
+    "docs/decisions/*-a-refusal-that-reaches-nobody.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "defence",
+        "generalises",
+        "honoured",
+        "honoured",
+        "neighbouring",
+        "serialise"
+      ]
+    },
+    "docs/decisions/*-a-renumbered-entry-takes-its-citations-with-it-and-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement",
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-a-row-that-examined-nothing-says-so.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "generalised"
+      ]
+    },
+    "docs/decisions/*-a-rule-with-no-reader-is-advice.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement",
+        "mechanised",
+        "mechanised",
+        "mechanised"
+      ]
+    },
+    "docs/decisions/*-a-runs-reason-for-adding-nothing-is-a-heading-the-rows.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "travelling",
+        "travelling"
+      ]
+    },
+    "docs/decisions/*-a-sealed-ledger-archive-subjects.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogues"
+      ]
+    },
+    "docs/decisions/*-a-section-with-no-reader-is-deleted-or-given-one-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "summarised"
+      ]
+    },
+    "docs/decisions/*-a-session-may-stop-what-it-started-and-the-checkout-is.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "neighbouring"
+      ]
+    },
+    "docs/decisions/*-a-ste-ratchet.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue",
+        "judgement",
+        "recogniser",
+        "recogniser",
+        "recognisers"
+      ]
+    },
+    "docs/decisions/*-a-tracked-symlink-is-a-path-baked-into-the-tree-and-a.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "cancelled",
+        "recognised"
+      ]
+    },
+    "docs/decisions/*-a-typed-price-is-cleared-by-a-press.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue",
+        "judgement",
+        "labelled",
+        "neighbouring",
+        "recognise"
+      ]
+    },
+    "docs/decisions/*-above-the-desk-a-screen-asks-its-column-and-browser-zoom.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "rasterises"
+      ]
+    },
+    "docs/decisions/*-an-interactive-elements-feedback-is-the-products-not-each.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "colour",
+        "colour",
+        "colour",
+        "colour",
+        "travelling",
+        "travelling"
+      ]
+    },
+    "docs/decisions/*-archive-live-catalogue-lookup-at-join-time.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue"
+      ]
+    },
+    "docs/decisions/*-archive-refusals-to-review-queue.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "honours"
+      ]
+    },
+    "docs/decisions/*-capture-always-asks.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviour",
+        "relabelling"
+      ]
+    },
+    "docs/decisions/*-demo-mirror.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue"
+      ]
+    },
+    "docs/decisions/*-duplicates-aggregate-by-sku-at-join-time.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled",
+        "unrecognised"
+      ]
+    },
+    "docs/decisions/*-every-copy-tcgplayer-does-not-hold-is-one-worklist-and-a.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled"
+      ]
+    },
+    "docs/decisions/*-every-row-in-the-collapsed-rail-draws-one-glyph-on-one.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centred",
+        "centred"
+      ]
+    },
+    "docs/decisions/*-gross-sales-retrospective.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled",
+        "labelled"
+      ]
+    },
+    "docs/decisions/*-guard-self-test-scope.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-hash-before-decode.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour"
+      ]
+    },
+    "docs/decisions/*-history-scoped-to-box.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "optimiser"
+      ]
+    },
+    "docs/decisions/*-home-owed-line.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled",
+        "relabelled",
+        "relabelled"
+      ]
+    },
+    "docs/decisions/*-icon-buttons.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centre",
+        "centred",
+        "centred",
+        "colour"
+      ]
+    },
+    "docs/decisions/*-merge-hang-two-causes.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "recognised"
+      ]
+    },
+    "docs/decisions/*-money-stays-mono.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "colour",
+        "colour",
+        "colour"
+      ]
+    },
+    "docs/decisions/*-name-and-number-agree.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "catalogue"
+      ]
+    },
+    "docs/decisions/*-name-beats-a-disputed-number.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "recognised"
+      ]
+    },
+    "docs/decisions/*-no-typed-interpunct-on-screen.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "generalises",
+        "generalises"
+      ]
+    },
+    "docs/decisions/*-nothing-is-deleted-to-lower-a-price-the-quantity-is-not-a.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-one-filter-control.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour"
+      ]
+    },
+    "docs/decisions/*-one-forgiving-search-matcher.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviour",
+        "behaviour",
+        "behaviour",
+        "neighbours"
+      ]
+    },
+    "docs/decisions/*-one-link-always-live-and-the-restart-discipline-becomes.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "acknowledgement",
+        "signalled",
+        "signalling"
+      ]
+    },
+    "docs/decisions/*-page-scaffold.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-palette-go-to.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled",
+        "relabelled"
+      ]
+    },
+    "docs/decisions/*-per-box-read.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "serialises"
+      ]
+    },
+    "docs/decisions/*-pricehistory-resolves-by-sku.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviour"
+      ]
+    },
+    "docs/decisions/*-pricing-rebuilt-to-the-reinterview.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-readings-table.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-revenue-slice.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "colours"
+      ]
+    },
+    "docs/decisions/*-run-binds-to-bid.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "favour"
+      ]
+    },
+    "docs/decisions/*-shell-mistakes.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "honoured",
+        "honoured",
+        "honoured",
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-sku-name-contradictions.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "modelled"
+      ]
+    },
+    "docs/decisions/*-sku-number-contradictions.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "mislabelled"
+      ]
+    },
+    "docs/decisions/*-staleness-is-a-filter-and-not-a-gate-the-record-holds.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "artefact",
+        "behaviour",
+        "catalogue",
+        "catalogue",
+        "materialisation",
+        "materialised",
+        "synthesising"
+      ]
+    },
+    "docs/decisions/*-tcg-price-history-user-agent-block.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-text-shape-checks.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-the-band-is-copies-rather-than-skus-the-drawer-is-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "artefacts"
+      ]
+    },
+    "docs/decisions/*-the-boot-header-says-the-code-changed-nothing-says-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "acknowledgements",
+        "generalises",
+        "travelling"
+      ]
+    },
+    "docs/decisions/*-the-cameras-automatic-functions-are-inputs-to-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "stabilisation"
+      ]
+    },
+    "docs/decisions/*-the-catalog-is-near-mint-by-rule-because-it-was-only-ever.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement",
+        "neighbours",
+        "travelled"
+      ]
+    },
+    "docs/decisions/*-the-claim-is-spent-on-the-oldest-copies-because-a-card.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-the-corner-is-settled-by-geometry-and-a-variable-nothing.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centre"
+      ]
+    },
+    "docs/decisions/*-the-demo-inflates-its-own-history-and-the-present-is-left.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "relabelled"
+      ]
+    },
+    "docs/decisions/*-the-drawer-scrolls-above-its-foot.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centre",
+        "centre",
+        "centre"
+      ]
+    },
+    "docs/decisions/*-the-export-is-a-property-of-the-game.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue",
+        "catalogue",
+        "generalised"
+      ]
+    },
+    "docs/decisions/*-the-faces-are-vendored-and-the-suites-allow-list-is-two.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "licence"
+      ]
+    },
+    "docs/decisions/*-the-filtered-export-is-fetched-and-completeness-is-a.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "acknowledgement",
+        "acknowledgements"
+      ]
+    },
+    "docs/decisions/*-the-fixture-carries-a-per-run-name-because-the-process.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "signalling"
+      ]
+    },
+    "docs/decisions/*-the-front-page-says-what-is-owed-and-the-library-is-drawn.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "colour"
+      ]
+    },
+    "docs/decisions/*-the-live-export-is-fetched-and-the-second-standing.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue"
+      ]
+    },
+    "docs/decisions/*-the-loaded-docs-are-dense-american-technical-english-and.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-the-number-a-screen-draws-is-composed-once-and-the-set.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "normalising"
+      ]
+    },
+    "docs/decisions/*-the-number-is-claimed-at-the-merge-because-what-main-has.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "generalises",
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-the-order-is-taken-once-and-a-sale-may-not-retake-it.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviours"
+      ]
+    },
+    "docs/decisions/*-the-order-ledger-is-two-maps-and-the-sync-writes-only-one.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behavioural",
+        "behaviourally",
+        "cancelled",
+        "recognises",
+        "recognising",
+        "recognising",
+        "serialised"
+      ]
+    },
+    "docs/decisions/*-the-order-screen-comes-before-the-transport-and-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "organised",
+        "organising",
+        "organising"
+      ]
+    },
+    "docs/decisions/*-the-photo-url-names-a-photograph-because-a-slots-occupant.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-the-photograph-is-cropped-to-the-card-the-focus-is.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "centre"
+      ]
+    },
+    "docs/decisions/*-the-pipelines-rows-can-be-the-wrong-card-so-the-export-is.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "honours"
+      ]
+    },
+    "docs/decisions/*-the-pixel-budget-is-spent-on-the-card-not-the-desk.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement",
+        "travelling"
+      ]
+    },
+    "docs/decisions/*-the-presence-gate-is-a-distance-from-this-sessions-own.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled"
+      ]
+    },
+    "docs/decisions/*-the-pricing-answer-is-one-file-for-the-store-and-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centralising",
+        "initialiser",
+        "memoised"
+      ]
+    },
+    "docs/decisions/*-the-primary-checkout-syncs-itself.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "generalise",
+        "memoised",
+        "neighbour"
+      ]
+    },
+    "docs/decisions/*-the-qr-is-the-whole-identification-the-product-is-a-claim.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "realised"
+      ]
+    },
+    "docs/decisions/*-the-queue-is-refreshed-where-it-stands.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "artefact",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "normalises",
+        "recognisable"
+      ]
+    },
+    "docs/decisions/*-the-rarity-claim-does-three-jobs-and-one-of-them-pays-for.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "favours"
+      ]
+    },
+    "docs/decisions/*-the-reading-goes-on-every-row-because-the-operator.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "optimised"
+      ]
+    },
+    "docs/decisions/*-the-reconcile-is-store-wide-and-what-it-writes-is-live.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "cancelled"
+      ]
+    },
+    "docs/decisions/*-the-refusal-goes-where-the-damage-is-so-the-primary.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "modelled"
+      ]
+    },
+    "docs/decisions/*-the-restore-asks-which-drawer-not-which-number-and-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "ellipsised",
+        "ellipsises",
+        "recognise",
+        "relabelled"
+      ]
+    },
+    "docs/decisions/*-the-review-answer-gets-an-undo-window-and-the-list-stops.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "acknowledgement",
+        "acknowledgement",
+        "travelling"
+      ]
+    },
+    "docs/decisions/*-the-rule-only-ever-marks-down-the-operator-may-point.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "honour"
+      ]
+    },
+    "docs/decisions/*-the-sale-is-one-press-and-the-button-becomes-the-way-back.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "acknowledgement"
+      ]
+    },
+    "docs/decisions/*-the-section-is-the-ruler-and-the-box-is-the-margin-note.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centred",
+        "centres",
+        "colour",
+        "desynchronised",
+        "modelled",
+        "modelled",
+        "neighbours",
+        "neighbours"
+      ]
+    },
+    "docs/decisions/*-the-set-is-a-stored-fact-and-the-hint-was-never-one.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue"
+      ]
+    },
+    "docs/decisions/*-the-setup-outlives-the-browser-the-box-list-is-ordered-by.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "emphasised",
+        "generalised",
+        "generalised",
+        "recognise"
+      ]
+    },
+    "docs/decisions/*-the-shell-is-a-rail-a-palette-and-a-reference-sheet-and.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled"
+      ]
+    },
+    "docs/decisions/*-the-shipping-lane-is-three-lanes-and-the-third-answer-is.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-the-status-requirement-is-answered-by-a-remembered-tick.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "materialises",
+        "recognised"
+      ]
+    },
+    "docs/decisions/*-the-store-of-record-is-sqlite-and-a-write-is-one.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "serialised"
+      ]
+    },
+    "docs/decisions/*-the-suite-is-sharded-and-never-widened-a-sleep-is-a-wait.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "cancelled",
+        "cancelled",
+        "honours"
+      ]
+    },
+    "docs/decisions/*-the-sweep-asks-what-the-verdict-answers.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement",
+        "signalled"
+      ]
+    },
+    "docs/decisions/*-the-tab-bar-has-one-height.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centre",
+        "centre"
+      ]
+    },
+    "docs/decisions/*-the-thumb-floor-is-the-kits-the-measurement-is-the-hit.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centre",
+        "centre",
+        "centre",
+        "centre",
+        "centre",
+        "centre",
+        "centre",
+        "centre"
+      ]
+    },
+    "docs/decisions/*-the-undo-stack-is-the-sitting-not-the-drawer.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "unlabelled"
+      ]
+    },
+    "docs/decisions/*-the-wait-is-about-the-claim-commit-and-an-answer-it-has.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviour"
+      ]
+    },
+    "docs/decisions/*-token-literals-are-pinned.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "colour",
+        "judgement"
+      ]
+    },
+    "docs/decisions/*-turn-end-drops-the-harness-and-code-cards-fold-in.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "recognised"
+      ]
+    },
+    "docs/decisions/*-two-agreeing-signals-release-the-rarity-claim-and-the.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue"
+      ]
+    },
+    "docs/decisions/*-worktree-node-modules.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour"
+      ]
+    },
+    "docs/decisions/_someday-worth-doing-blocking-nothing.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "generalise",
+        "judgement",
+        "realised",
+        "realised",
+        "realised"
+      ]
+    },
+    "docs/reviews/memory-migration-2026-09-27/PENDING-DEBTS.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviour",
+        "catalogue"
+      ]
+    },
+    "docs/reviews/memory-migration-2026-09-27/REPORT.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue"
+      ]
+    },
+    "docs/reviews/test-audit-2026-09-27/TIERS.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue"
+      ]
+    },
+    "docs/reviews/test-audit-2026-09-27/check-hooks.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "generalised",
+        "neighbouring"
+      ]
+    },
+    "docs/reviews/test-audit-2026-09-27/docs-audit.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue",
+        "catalogue",
+        "catalogue"
+      ]
+    },
+    "docs/reviews/test-audit-2026-09-27/harness-gates-ci.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled"
+      ]
+    },
+    "docs/reviews/test-audit-2026-09-27/specs.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "neighbour"
+      ]
+    },
+    "docs/reviews/ux-2026-09-20/FOLLOW-UPS.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "recognises"
+      ]
+    },
+    "docs/reviews/ux-2026-09-20/HANDOFF.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "recolour"
+      ]
+    },
+    "docs/reviews/ux-2026-09-20/STATE.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "judgement"
+      ]
+    },
+    "docs/reviews/ux-2026-09-20/TASTE-CALLS.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "colour",
+        "judgement",
+        "neighbour"
+      ]
+    },
+    "docs/reviews/ux-2026-09-20/codes.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "colour",
+        "colour",
+        "colours",
+        "parameterised",
+        "tokenised"
+      ]
+    },
+    "docs/reviews/ux-2026-09-20/pricing.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "colour",
+        "colour",
+        "defence",
+        "neighbour",
+        "neighbouring"
+      ]
+    },
+    "docs/reviews/ux-2026-09-20/product.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "colour"
+      ]
+    },
+    "docs/reviews/ux-2026-09-20/sales.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour"
+      ]
+    },
+    "docs/reviews/ux-2026-09-20/system.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "cancelled"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/CONSOLIDATED.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "centred",
+        "centred",
+        "colour",
+        "colour",
+        "colour",
+        "colour",
+        "colours",
+        "generalises",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "greys",
+        "greys",
+        "judgement",
+        "labelled",
+        "labelled",
+        "labelled",
+        "labelled",
+        "labelled",
+        "labelled",
+        "labelled",
+        "neighbour",
+        "neighbour",
+        "neighbour",
+        "neighbour",
+        "neighbours",
+        "neighbours",
+        "neighbours",
+        "neighbours",
+        "neighbours",
+        "relabelled"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/ICON-MAP.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled",
+        "labelled"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/LANES.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "neighbours"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/REAL-TEST.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/RULINGS.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "judgement",
+        "labelled",
+        "neighbours",
+        "neighbours",
+        "relabelled"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/STATE.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/access.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "grey",
+        "grey",
+        "grey",
+        "labelled",
+        "labelled"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/coherence.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "centre",
+        "centred",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "unlabelled"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/copy.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/cyberpunk-blind.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "grey"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/density.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "grey",
+        "grey",
+        "judgement",
+        "judgement",
+        "judgement",
+        "judgement",
+        "judgement",
+        "judgement",
+        "judgement",
+        "judgement",
+        "judgement",
+        "judgement",
+        "judgement"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/filtering.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "capitalised",
+        "grey",
+        "grey",
+        "labelled"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/held-inventory-review.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "colour",
+        "grey",
+        "grey",
+        "labelled"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/held-orders-review.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centred",
+        "defence"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/interaction.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviours",
+        "behaviours",
+        "behaviours",
+        "centred",
+        "centred"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/locating.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "colour",
+        "colour",
+        "colours",
+        "colours",
+        "defence",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "grey",
+        "neighbour",
+        "neighbour",
+        "neighbour",
+        "neighbour",
+        "neighbour",
+        "neighbour",
+        "neighbours",
+        "neighbours",
+        "neighbours",
+        "neighbours",
+        "neighbours",
+        "neighbours",
+        "neighbours",
+        "neighbours",
+        "neighbours",
+        "neighbours"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/loop.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "defence",
+        "labelled",
+        "labelled"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/orders-a/PLAN.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "neighbour",
+        "neighbour",
+        "neighbours",
+        "neighbours",
+        "neighbours"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/pricing-deliberation.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/sales-directions.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled"
+      ]
+    },
+    "docs/reviews/ux-2026-09-23/visual.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "defence",
+        "grey",
+        "neighbours"
+      ]
+    },
+    "docs/specs/audit-retirement.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "favours",
+        "generalises",
+        "generalises",
+        "judgement",
+        "judgement",
+        "judgement",
+        "normalise",
+        "normalise"
+      ]
+    },
+    "docs/specs/box-drawings.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "artefact",
+        "defence",
+        "labelled",
+        "summarising"
+      ]
+    },
+    "docs/specs/capture-app.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "unlabelled"
+      ]
+    },
+    "docs/specs/capture-server.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "generalisation",
+        "generalises",
+        "labelled",
+        "serialise"
+      ]
+    },
+    "docs/specs/card-variants.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue",
+        "catalogue",
+        "catalogue"
+      ]
+    },
+    "docs/specs/code-cards.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "realised",
+        "realised"
+      ]
+    },
+    "docs/specs/demo.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue",
+        "catalogue"
+      ]
+    },
+    "docs/specs/emit-reconcile-placement.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "neighbouring",
+        "totalling"
+      ]
+    },
+    "docs/specs/iconography.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled",
+        "labelled"
+      ]
+    },
+    "docs/specs/identity-follows-sku.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "neighbour"
+      ]
+    },
+    "docs/specs/logo.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centre",
+        "centre",
+        "centre",
+        "centreline",
+        "colours",
+        "favour",
+        "grey",
+        "greys",
+        "honoured",
+        "honoured",
+        "judgement",
+        "judgement",
+        "judgement",
+        "judgement",
+        "labelled",
+        "labelled",
+        "optimises"
+      ]
+    },
+    "docs/specs/mechanization-backlog.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "artefact",
+        "behaviour",
+        "behaviour",
+        "behavioural",
+        "canonicalise",
+        "canonicalise",
+        "generalise",
+        "generalised",
+        "judgement",
+        "judgement",
+        "judgement",
+        "judgement",
+        "mechanisable",
+        "mechanised",
+        "mechanising",
+        "neighbour",
+        "neighbour",
+        "recognise",
+        "recognising",
+        "summarise"
+      ]
+    },
+    "docs/specs/motion-trigger.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "centre",
+        "centre",
+        "centre",
+        "labelled",
+        "labelled",
+        "labelled",
+        "neighbour",
+        "neighbours",
+        "polariser",
+        "quantisation",
+        "synchronisation",
+        "synthesised"
+      ]
+    },
+    "docs/specs/multi-game.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "catalogue",
+        "greyed",
+        "judgement",
+        "normalisation",
+        "normalise",
+        "normalises",
+        "summarised"
+      ]
+    },
+    "docs/specs/order-flow.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "acknowledgement",
+        "acknowledgement",
+        "cancelled",
+        "judgements",
+        "travelled",
+        "travelling"
+      ]
+    },
+    "docs/specs/order-pipeline.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled",
+        "optimisation",
+        "summarised"
+      ]
+    },
+    "docs/specs/order-walk-plan.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "behaviours",
+        "greyed",
+        "labelled",
+        "minimisation",
+        "minimisation",
+        "minimised",
+        "neighbour",
+        "neighbour",
+        "neighbours",
+        "neighbours",
+        "neighbours",
+        "neighbours"
+      ]
+    },
+    "docs/specs/revenue-next.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled",
+        "labelled",
+        "labelled",
+        "normalises"
+      ]
+    },
+    "docs/specs/revenue-plan.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "cancelled",
+        "modelled"
+      ]
+    },
+    "docs/specs/revenue.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "neighbouring"
+      ]
+    },
+    "docs/specs/stale-listings.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "artefact",
+        "catalogue",
+        "honour",
+        "materialises"
+      ]
+    },
+    "docs/specs/store-scaling.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "materialises",
+        "modelled"
+      ]
+    },
+    "docs/specs/store-scaling/00-phases.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "finalised"
+      ]
+    },
+    "docs/specs/store-scaling/01-guard.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "materialise",
+        "modelled",
+        "modelled"
+      ]
+    },
+    "docs/specs/store-scaling/02-per-box-read.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "materialised",
+        "materialises",
+        "parameterisation",
+        "serialises",
+        "serialises"
+      ]
+    },
+    "docs/specs/store-scaling/03-history.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "denormalised",
+        "optimiser"
+      ]
+    },
+    "docs/specs/store-scaling/04-copies-out.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "honoured",
+        "materialised"
+      ]
+    },
+    "docs/specs/store-scaling/07-value-and-aggregates.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "materialise",
+        "materialises"
+      ]
+    },
+    "docs/specs/store-scaling/08-search-fts5.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "materialises",
+        "modelled",
+        "modelled"
+      ]
+    },
+    "docs/specs/subbox-capture.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "modelled"
+      ]
+    },
+    "docs/specs/tcgplayer-portal-api.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "parameterised"
+      ]
+    },
+    "docs/specs/ui-redesign-options.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "artefacts",
+        "centres",
+        "generalised",
+        "labelled"
+      ]
+    },
+    "docs/specs/ui-research.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "formalise",
+        "honour",
+        "synthesised"
+      ]
+    },
+    "docs/specs/ux-overhaul-2026-09-23.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "labelled"
+      ]
+    },
+    "docs/specs/verification-cost.md": {
+      "lane": "docs-sweep",
+      "SPELLING": [
+        "behaviour",
+        "judgement"
+      ]
+    }
+  }
+}

@@ -24,6 +24,7 @@ import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
+import { CardLocations } from './CardLocations'
 import { describeFailure, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
@@ -34,6 +35,7 @@ import type {
   PullTarget,
   SearchCopy,
   SearchGroup,
+  SectionDetail,
   WalkPlan,
   WalkPlanCopy,
   WalkPlanStop,
@@ -196,6 +198,48 @@ function sectionsOf(plan: WalkPlan | null, rows: readonly WalkRow[]): WalkSectio
   return out
 }
 
+/** `Inventory.tsx`'s own `loneGroup` and the old `TakeBlock`'s `group`, restated: a
+ *  `SearchGroup` synthesised from one take's wire fields, over WHICHEVER copies the caller
+ *  hands it — every on-hand copy for the pane's own `currentGroup`, or just this stop's `here`
+ *  copies for one `WalkList` line (A4) — in the WIRE's own order, never re-sorted here, and
+ *  drawn with `preserveOrder` below so `CardLocations` never re-sorts it either. `on_hand`
+ *  stays the take's TRUE store-wide count regardless of which subset `copies` draws, because a
+ *  line's own group still answers "how many are there", not "how many are here".
+ *  `facts` OVERLAYS A COPY'S REFRESHED PLACE (D58's renumbering after a sale elsewhere in the
+ *  same box) — the same map both callers share, off the one hook. */
+function groupOf(take: WalkPlanTake, copies: readonly WalkPlanCopy[], facts: ReadonlyMap<string, Place>): SearchGroup {
+  return {
+    sku: take.sku,
+    names: take.name === null ? [] : [take.name],
+    number: null,
+    printed_total: null,
+    number_display: take.number_display,
+    set_hint: null,
+    set: take.set,
+    rarity: take.rarity,
+    condition: take.condition,
+    listed: take.listed ?? { pushed: 0, staged: 0, live: 0 },
+    sold_here: take.sold_here ?? 0,
+    on_hand: take.copies.length,
+    listable: 0,
+    live_as_of: take.live_as_of ?? null,
+    // NEVER READ HERE. A synthesised group, one take and never ranked against another.
+    rank: 0,
+    copies: copies.map((copy): SearchCopy => {
+      const fresh = facts.get(copy.key)
+      return {
+        key: copy.key,
+        state: copy.state,
+        state_at: null,
+        has_photo: copy.has_photo,
+        capture_id: copy.capture_id,
+        cid: copy.cid,
+        place: fresh ?? copy.place,
+      }
+    }),
+  }
+}
+
 /* ------------------------------------------------------------------ one receipt (a Mark sold) */
 
 /** ONE PULL, RECORDED — no clock (`docs/specs/undo.md` §2-3, D164): a receipt names the write a
@@ -321,37 +365,7 @@ export function useOrderWalk({
    *  re-sorts it either. */
   const currentGroup: SearchGroup | null = useMemo(() => {
     if (currentRow === null) return null
-    const { take } = currentRow
-    return {
-      sku: take.sku,
-      names: take.name === null ? [] : [take.name],
-      number: null,
-      printed_total: null,
-      number_display: take.number_display,
-      set_hint: null,
-      set: take.set,
-      rarity: take.rarity,
-      condition: take.condition,
-      listed: { pushed: 0, staged: 0, live: 0 },
-      sold_here: 0,
-      on_hand: take.copies.length,
-      listable: 0,
-      live_as_of: null,
-      // NEVER READ HERE. A synthesised group, one take and never ranked against another.
-      rank: 0,
-      copies: take.copies.map((copy): SearchCopy => {
-        const fresh = facts.get(copy.key)
-        return {
-          key: copy.key,
-          state: copy.state,
-          state_at: null,
-          has_photo: copy.has_photo,
-          capture_id: copy.capture_id,
-          cid: copy.cid,
-          place: fresh ?? copy.place,
-        }
-      }),
-    }
+    return groupOf(currentRow.take, currentRow.take.copies, facts)
   }, [currentRow, facts])
 
   /** THE CURRENT CARD, WHOLE (§13: inventory's card pane, unchanged) — the real `InventoryCard`
@@ -405,7 +419,7 @@ export function useOrderWalk({
     if (next !== undefined) setCurrent(next.rowKey)
   }
 
-  const onSell = (copy: SearchCopy) => {
+  const onSell = (copy: SearchCopy, forTake?: WalkPlanTake) => {
     if (busyCopy !== null) return
     /* THE CARD PANE OFFERS MARK SOLD ON EVERY COPY OF THE TAKE, D212's own copies list — not
        only the ones physically AT this stop (`here: true`). `rows` flattens only the `here`
@@ -414,9 +428,15 @@ export function useOrderWalk({
        5, D171 again): no request, no toast, nothing. `currentRow` is the take the pane is
        standing on regardless of which of its copies was pressed, and every copy the pane
        draws a button for belongs to that one take (`currentGroup.copies` is `take.copies`
-       whole) — so it is the right anchor for every press this function makes. */
-    if (currentRow === null) return
-    const { take } = currentRow
+       whole) — so it is the right anchor for every press the PANE makes.
+
+       A4 ADDS A SECOND CALLER: `WalkList`'s own rows, one per take, drawn beside the pane
+       rather than only inside it. A row there can belong to a DIFFERENT take than the one the
+       pane happens to be showing, so `currentRow.take` is the wrong anchor for it — `forTake`
+       is how that caller names its own take explicitly. Omitted, the pane's own behaviour is
+       unchanged. */
+    const take = forTake ?? currentRow?.take
+    if (take === undefined) return
     const order = pickOrderFor(take, ordersByKey, recorded.get(take.sku) ?? new Map())
     if (order === null) {
       /* D171: a refusal that reaches nobody did not happen. This pass's own tally may be
@@ -561,6 +581,10 @@ export function useOrderWalk({
     receipts,
     soldKeys,
     newestUndoKey,
+    /** THE REFRESHED PLACES (A4), so `WalkList`'s own per-line groups can read the same
+     *  post-sale facts the pane already does — `groupOf`'s own overlay, shared rather than
+     *  copied. */
+    facts,
   }
 }
 
@@ -614,6 +638,8 @@ export function WalkList({
   collapsed = false,
   owedBySku,
   showBuyers,
+  sections,
+  onPick,
 }: {
   readonly walk: OrderWalk
   readonly hideSold: boolean
@@ -621,6 +647,14 @@ export function WalkList({
   /** What the walked orders still want of each SKU, across every stop. The "of N". */
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
+  /** Each box's own divider layout (A4), the SAME one `getBoxes()` read `Orders.tsx` already
+   *  turns into a map for the pane's own `CardLocations` — never a second read for the walk
+   *  list's copies. Optional; the strip is honest without it (`PositionBar`'s own contract). */
+  readonly sections?: ReadonlyMap<number, readonly SectionDetail[]>
+  /** LANE A5, Q4: on a phone, a tap opens the card in a sheet. `Orders.tsx` passes this only
+   *  while its own column reads narrow — `WalkList` never reads a width itself. Undefined at a
+   *  desk width, where the pane sits beside the walk already and needs no sheet to open. */
+  readonly onPick?: () => void
 }) {
   /* THE OWNER'S RULING, 2026-09-27: THE PRESS FOLDS, NOT THE SALE. Turning Hide picked ON is
    * itself allowed to fold every row picked SO FAR, right then — D118 permits this, because
@@ -684,20 +718,17 @@ export function WalkList({
                   const current = line.rows.some((row) => row.rowKey === walk.current)
                   const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
                   const next = line.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? line.rows[0]
-                  /* FINDING #16 (the Opus review round): the struck-out row is reached only
-                   * through the card pane before this — the operator had to re-select the take
-                   * to find its own copy's Undo. `newestUndoKey` names the one reversible copy
-                   * store-wide (no clock, see above), so a line carrying it draws its own Undo
-                   * beside the row instead of nesting a second button inside `orders-walk-press`
-                   * (D57: the row's own control becomes Undo). */
-                  const undoRow = line.rows.find((row) => row.copy.key === walk.newestUndoKey)
                   return (
                     <li className={done ? 'orders-walk-line is-done' : 'orders-walk-line'} key={line.takeKey}>
                       <button
                         className="orders-walk-press"
                         type="button"
                         aria-current={current ? 'true' : undefined}
-                        onClick={() => next !== undefined && walk.select(next.rowKey)}
+                        onClick={() => {
+                          if (next === undefined) return
+                          walk.select(next.rowKey)
+                          onPick?.()
+                        }}
                       >
                         <span className="orders-walk-slot">
                           {slots.length === 0 ? '—' : slots.map((slot) => `#${slot}`).join(', ')}
@@ -724,17 +755,29 @@ export function WalkList({
                         </span>
                         {showBuyers ? <span className="orders-walk-for">{takeBuyers(line.take)}</span> : null}
                       </button>
-                      {undoRow === undefined ? null : (
-                        <IconButton
-                          icon="undo"
-                          label="Undo"
-                          name={`Undo: ${undoRow.copy.place.label === null ? undoRow.copy.key : sayPlace(undoRow.copy.place.label)}`}
-                          className="orders-walk-line-undo"
-                          busy={walk.busyCopy === undoRow.copy.key}
-                          disabled={walk.busyCopy !== null && walk.busyCopy !== undoRow.copy.key}
-                          onClick={() => walk.undoCopy(undoRow.copy.key)}
-                        />
-                      )}
+                      {/* A4: EVERY here-COPY, AS INVENTORY DRAWS IT (the owner's Q3, "full
+                       * detail on every row") — box, section and card, the neighbours, the
+                       * strip and the ruler, and Mark sold, reused whole from `CardLocations`
+                       * rather than forked (`docs/decisions/D-orders-walk-rejoins-inventory.md`).
+                       * `head={false}` draws the rows alone: the heading, the stats and the SKU
+                       * line already sit above, in this same button. FINDING #16 (the Opus
+                       * review round) is answered by THIS, not by a row-level Undo of its own
+                       * any more — `renderAction` puts `RowAction` on every copy here exactly as
+                       * it sits in the pane, so the struck-out copy's own Undo is drawn right
+                       * where the copy is, never only in the pane above. */}
+                      <CardLocations
+                        group={groupOf(line.take, line.rows.map((row) => row.copy), walk.facts)}
+                        persona="owner"
+                        onSell={walk.onSell}
+                        busyKey={walk.busyCopy}
+                        soldKeys={walk.soldKeys}
+                        sections={sections}
+                        currentKey={walk.currentRow?.copy.key}
+                        preserveOrder
+                        head={false}
+                        className="walk-pick-where"
+                        renderAction={(copy) => <RowAction walk={walk} copy={copy} take={line.take} />}
+                      />
                     </li>
                   )
                 })}
@@ -749,8 +792,10 @@ export function WalkList({
 
 /** The press on a copy row: an icon in every row (the iconography rule, a press repeated per
  *  row), its name carrying the place so thirty rows never announce the same word. `Undo` stands
- *  only on the newest sale (`newestUndoKey`). */
-export function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly copy: SearchCopy }) {
+ *  only on the newest sale (`newestUndoKey`). `take` names which take this copy is being sold
+ *  against (A4): the pane omits it, since `onSell` falls back to the row it is showing, but a
+ *  `WalkList` row names its own take explicitly — it may not be the one the pane is on. */
+export function RowAction({ walk, copy, take }: { readonly walk: OrderWalk; readonly copy: SearchCopy; readonly take?: WalkPlanTake }) {
   const receipt = walk.receipts.get(copy.key)
   const busy = walk.busyCopy === copy.key
   const where = copy.place.label === null ? copy.key : sayPlace(copy.place.label)
@@ -763,7 +808,7 @@ export function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly c
       name={`${undo ? 'Undo' : 'Mark sold'}: ${where}`}
       busy={busy}
       disabled={walk.busyCopy !== null && !busy}
-      onClick={() => (undo ? walk.undoCopy(copy.key) : walk.onSell(copy))}
+      onClick={() => (undo ? walk.undoCopy(copy.key) : walk.onSell(copy, take))}
     />
   )
 }

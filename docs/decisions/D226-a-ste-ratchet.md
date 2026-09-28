@@ -240,4 +240,29 @@ code today, as it always has. It does not yet read markdown prose for spelling �
 is lane L2's work, which waits on the owner. Until L2 lands, markdown prose has no spelling
 reader at all.
 
+### Amended 2026-09-27 — the row is CUT
+
+Owner's ruling (test-audit plan, row 92, `docs/reviews/test-audit-2026-09-27/TIERS.md`):
+"Row 92, `ste offenders`, and its list `scripts/ste-offenders.json`: CUT. The write-time
+STE hook lints new prose. This needs dated amendments to D226, D229 and D280 (the prose
+ratchet decisions) in the lane that cuts it." Lane L2 deletes the `ste offenders` row,
+`scripts/ste-offenders.json` and `scripts/docs-audit.py:check_ste_offenders`.
+
+The vendored linter, the four error rules and the four exemption classes stay in
+`scripts/ste_measure.py`. The `line anchor offenders` row still reads `list_key` from
+there. This amendment rewrites nothing else in this entry.
+
+### Amended 2026-09-27 — markdown prose is measured, not built
+
+Lane L2 tried the extension the note above waits on. Extending `spelling_findings` to
+`.md` and running it over the tracked tree found 727 British-spelling words in 226 files
+(catalogue 80, judgement 67, and the rest of the -ise/-our/-re family). The test-audit
+plan's own rule is "fix them only if fewer than about 30. Otherwise stop and ask."
+
+727 is far past that line. Lane L2 built the measurement, then stopped. It did not wire a
+markdown scan into `identifier spelling`, and it did not rewrite the backlog by hand.
+
+The open question waits on the owner. Options: an offender list over the backlog, on this
+entry's own D280 pattern. A scoped subset. A bulk rewrite pass.
+
 ---

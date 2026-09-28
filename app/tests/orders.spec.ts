@@ -1005,7 +1005,7 @@ test('a copy another line already holds is drawn as spoken for, and is not offer
        than a `stubWalkPlan` call after — see that option's comment for the race it closes. */
     walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ copies: [walkPlanCopy({ capture_id: 'cap-a' })] })] })]),
   })
-  await expect(page.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+  await expect(page.locator('.browse-card').getByRole('button', { name: 'Mark sold' })).toBeVisible()
 
   /* THE PROMISED ONE IS NOT — it is not takeable, so `hidePicks` never touches it, and it is
      right where `OrderDetail`'s own list always drew it. ONE ROW, not two: the free copy above
@@ -1051,7 +1051,7 @@ test('the pull sends the capture_id of the row that was pressed, and its own pos
 
   /* THE SECOND ROW, DELIBERATELY. Pressing the first would pass against a screen that sent
      `picks[0]` for every row — the exact bug this case exists to catch. */
-  await page.locator('.card-locations-row').nth(1).getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.browse-card').locator('.card-locations-row').nth(1).getByRole('button', { name: 'Mark sold' }).click()
 
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
@@ -1137,9 +1137,19 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
   })
 
   /* AT 390, THE LIST AND THE CARD PANE ARE TWO STOPS, not one screen: `.orders-walk-press`
-     opens the row a phone shows one at a time. Desktop draws both, which is why the older
-     case here never had to do this. */
+     opens the row in a sheet (Q4, `docs/decisions/D-orders-walk-rejoins-inventory.md`) — a
+     phone never draws the pane inline. Desktop draws both at once, which is why the older
+     case here never had to do this. THE SHEET MOUNTS ON THE NEXT TICK (`useLeave`'s own
+     `useEffect`, kit/index.tsx), so `.browse-card` is awaited rather than read the instant
+     the click's promise resolves — reading it too early once measured an empty pane (zero
+     rects) as this press's own "before". */
   await page.getByRole('button', { name: /Volcanion/ }).click()
+  await expect(page.locator('.browse-card')).toBeVisible()
+  /* THE SHEET'S OWN ROWS ENTER WITH `bn-stagger` (`kit.css`'s `bn-page-in`), the same entrance
+     `motionSettled.ts` exists for — freshly mounted here, where the pane used to sit still on
+     the page from the very first render. `before` read mid-animation once moved every row up
+     ~5px against a `before` that settled by the time `after` was read a whole click later. */
+  await settleMotion(page)
 
   /* THE PRESSED BUTTON'S OWN SUBTREE IS EXEMPT (its icon and label are meant to change, from
      `Mark sold` to `Undo` — D118 is about the REST of the page, never the control itself).
@@ -1153,28 +1163,45 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
      load (D263's own rule, ported from Inventory's box walk) — the document never gets
      shorter, so there is nothing left for a browser's scroll clamp to react to, and nothing
      left for this pin to hide. */
+  /* PANE-RELATIVE, NOT PAGE-ABSOLUTE (lane A5: the pane moved off the page, into a sheet). The
+     old compensation folded out `window.scrollY` alone, on the premise that `.browse-card` sat
+     inline on the page and only the WINDOW's own scroll position ever moved under it (A4's own
+     finding: a click far down the walk list makes Chromium scroll the target toward the middle
+     of the viewport before dispatching the synthetic click). A `Sheet` is fixed to the viewport
+     and scrolls ITS OWN content instead, so `window.scrollY` no longer answers for the pane's
+     own coordinate space at all — every rect read a ~300px jump on the very same press this
+     comment used to wave through. Subtracting `.browse-card`'s OWN top/left, rather than adding
+     back a page scroll, answers the real question either way: does anything move RELATIVE TO
+     THE PANE ITSELF (D118), regardless of whether the pane's ancestor is the page or a sheet. */
   const rectsOf = () =>
     page.locator('.browse-card').evaluate((el) => {
+      const base = el.getBoundingClientRect()
       const controls = [...el.querySelectorAll('.card-locations-action')]
       return [...el.querySelectorAll('*')]
         .filter((node) => !controls.some((control) => control === node || control.contains(node)))
-        .map((node) => {
-          const r = node.getBoundingClientRect()
-          return `${r.top}:${r.left}:${r.width}:${r.height}`
-        })
+        .map((node) => node.getBoundingClientRect())
+        /* A ZERO-AREA NODE PAINTS NOTHING, so comparing it against the pane's own origin would
+           read it as having moved when nothing did (found alongside the scroll fix above: one
+           such node reads a bare `0:0` on purpose, at both polls). */
+        .filter((r) => r.width > 0 || r.height > 0)
+        /* ROUNDED, the convention this suite already reads rects by (`brand.spec.ts`,
+           `gallery.spec.ts`, `filters.spec.ts`) — one icon glyph on the pane settles a
+           hairline (~0.00001px) off its first paint, floating-point noise from the browser's
+           own sub-pixel layout, never a real D118 shift. */
+        .map((r) => `${Math.round(r.top - base.top)}:${Math.round(r.left - base.left)}:${Math.round(r.width)}:${Math.round(r.height)}`)
     })
   const before = await rectsOf()
   /* THE WALK LIST'S OWN JUMP (the plan's own repro: "the page shrinks and the view jumps
      about 48px" — one row's height). The card pane's rects, checked below, sit ABOVE the
-     walk list and a scroll position already at 0 never clamps, so that check alone can pass
-     even on the old, buggy code (measured: it does). Tricksy Tentacles' own row, the row
-     BELOW Volcanion's in the list, is the one a real fold moves — this is the direct,
-     environment-independent measurement of the same defect. */
+     walk list, so that check alone can pass even on the old, buggy code (measured: it does).
+     Tricksy Tentacles' own row, the row BELOW Volcanion's in the list, is the one a real fold
+     moves — this is the direct, environment-independent measurement of the same defect.
+     Document-absolute for the same reason `rectsOf` is, above. */
   const nextRowTop = () =>
-    page.locator('.orders-walk-line', { hasText: 'Tricksy Tentacles' }).evaluate((el) => el.getBoundingClientRect().top)
+    page.locator('.orders-walk-line', { hasText: 'Tricksy Tentacles' }).evaluate((el) => Math.round(el.getBoundingClientRect().top + window.scrollY))
   const nextRowTopBefore = await nextRowTop()
 
-  const action = page.getByRole('button', { name: /^Mark sold/ })
+  const action = page.locator('.browse-card').getByRole('button', { name: /^Mark sold/ })
   await action.click()
   await expect
     .poll(async () => (await page.getByRole('button', { name: /^Undo/ }).count()) > 0)
@@ -1272,7 +1299,7 @@ test('Hide picked folds at the PRESS, not the sale (owner ruling, 2026-09-27)', 
   await expect(page.locator('.orders-walk-line')).toHaveCount(2)
 
   // Sell Volcanion (the default landing card). The row must NOT fold at once (UN-6's own fix).
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
   await expect(page.locator('.orders-walk-tools .bn-hidetoggle-count')).toHaveText('1')
   await expect(page.locator('.orders-walk-line')).toHaveCount(2)
@@ -1287,7 +1314,7 @@ test('Hide picked folds at the PRESS, not the sale (owner ruling, 2026-09-27)', 
 
   // Sell Tricksy Tentacles while Hide picked is already on: it stays in place, this time.
   await page.getByRole('button', { name: /Tricksy Tentacles/ }).click()
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
   await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
   await expect(page.locator('.orders-walk-tools .bn-hidetoggle-count')).toHaveText('2')
   await expect(page.locator('.orders-walk-line')).toHaveCount(1)
@@ -1313,15 +1340,27 @@ test('finding #16 (the Opus review round) — the struck-out row in the walk lis
   await expect(walkLine).not.toHaveClass(/is-done/)
   await expect(walkLine.getByRole('button', { name: /^Undo/ })).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  /* Q4: on a phone the card is a sheet, opened by a tap on the row — never drawn inline. */
+  await page.getByRole('button', { name: /Volcanion/ }).click()
+  await expect(page.locator('.browse-card')).toBeVisible()
+  await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
   await expect(walkLine).toHaveClass(/is-done/)
+
+  /* THE SHEET'S OWN SCRIM SITS OVER THE LIST WHILE IT IS OPEN (the kit's one overlay contract,
+   * `kit/overlay.tsx`) — closing it first is what proves the finding: the list's row answers
+   * for itself, with no pane open over it at all, not merely a second Undo drawn inside one. */
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.orders-card-sheet')).toBeHidden()
 
   const undo = walkLine.getByRole('button', { name: /^Undo/ })
   await expect(undo).toBeVisible()
   await undo.click()
 
   await expect(walkLine).not.toHaveClass(/is-done/)
-  await expect(page.getByRole('button', { name: 'Mark sold' })).toBeVisible()
+
+  /* THE PANE AGREES, reopened the same way (Q4): still the same one row, not a second story. */
+  await page.getByRole('button', { name: /Volcanion/ }).click()
+  await expect(page.locator('.browse-card').getByRole('button', { name: 'Mark sold' })).toBeVisible()
 })
 
 /* -------------------------------------------------------------------------------------- 5 */
@@ -1354,7 +1393,7 @@ test('the receipt names where the card just was, never the departed label the sa
     walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
 
   /* THE RECEIPT IS A TOAST NOW, which is the owner's ruling and changes nothing this case is
      about: it is still composed at the moment of the press, it still has to name the place the
@@ -1392,7 +1431,7 @@ test('U undoes the newest pull, on the Pull stage', async ({ page }) => {
     walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
@@ -1429,7 +1468,7 @@ test('finding #11 (the Opus review round) — `U` still undoes the newest pull a
     walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
@@ -1478,7 +1517,7 @@ test('finding #8 (the Opus review round) — a pull already reversed elsewhere r
     })
   })
 
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
@@ -1512,7 +1551,7 @@ test('u typed into the buyer search field does not undo the pull', async ({ page
     walkPlan: walkPlanOf([walkPlanStop()]),
   })
 
-  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
   await expect
     .poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length)
     .toBe(1)
@@ -1568,8 +1607,8 @@ test('a pooled copy is drawn as pooled rather than as a position (D24)', async (
   /* `CardLocations.tsx:OwnerRows`'s own pooled row, reused whole (lane A3): the game's display
    *  name leads, and the literal word is lowercase `pooled` — this screen types no wording of
    *  its own for it any more. */
-  await expect(page.locator('.card-locations-row')).toContainText('Pokémon code cards')
-  await expect(page.locator('.card-locations-row')).toContainText('pooled')
+  await expect(page.locator('.browse-card').locator('.card-locations-row')).toContainText('Pokémon code cards')
+  await expect(page.locator('.browse-card').locator('.card-locations-row')).toContainText('pooled')
 
   /* AND NO PHOTOGRAPH ANYWHERE ON THIS SCREEN. A pooled capture's photo is a live code and a
      bearer instrument (D24, CLAUDE.md's opsec rule), and this screen draws no `<img>` at all —
@@ -2454,21 +2493,34 @@ test('the buyer list is not a scroll box of its own, and no hint sits on its row
   await expect(page.locator(VIEW)).not.toContainText('step through buyers')
 })
 
-/* THE LIST AND THE WALK ARE ON THE PAGE AT 1440, 820 AND 720 (UX-169, UX-194). 720 is the owner's
- * half-width Chrome, which gets the desktop rail (Q2), so it gets the desktop layout too. */
+/* THE LIST AND THE WALK ARE ON THE PAGE AT 1440, 820 AND 720 (UX-169, UX-194) — LAYOUT R
+ * (`docs/decisions/D-orders-walk-rejoins-inventory.md`, Q1). 1440 is the three-column desk
+ * (buyers | walk | card). 820 and 720 sit inside Orders' own 560-999 mid range (the app shell's
+ * own rail collapses to 64px there, D289 rule 3's "720 is a desk" is about a DIFFERENT
+ * breakpoint, `#/inventory`'s own 640, and never widens Orders' 1000px one) — Inventory's own
+ * two-column skeleton: the buyer rail sits above the walk, in the same column, and the card
+ * pane sits beside that column, sticky. */
 for (const [width, height] of [
   [1440, 900],
   [820, 1180],
   [720, 900],
 ] as const) {
-  test(`at ${width}, the buyer list sits beside the walk`, async ({ page }) => {
+  const desk = width >= 1000
+  test(`at ${width}, the buyer list sits ${desk ? 'beside the walk' : 'above the walk, beside the card'}`, async ({ page }) => {
     await page.setViewportSize({ width, height })
     await open(page, { orders: threeBuyerPayload() })
     const buyers = await page.locator('.orders-buyers').boundingBox()
     const walk = await page.locator('.orders-walk').boundingBox()
-    if (buyers === null || walk === null) throw new Error('the buyer list or the walk did not lay out')
-    expect(walk.x, 'the walk does not sit to the right of the buyer list').toBeGreaterThan(buyers.x + buyers.width - 1)
-    expect(walk.width, 'the walk is squeezed').toBeGreaterThan(300)
+    const card = await page.locator('.orders-cardcol').boundingBox()
+    if (buyers === null || walk === null || card === null) throw new Error('the buyer list, the walk or the card did not lay out')
+    if (desk) {
+      expect(walk.x, 'the walk does not sit to the right of the buyer list').toBeGreaterThan(buyers.x + buyers.width - 1)
+      expect(walk.width, 'the walk is squeezed').toBeGreaterThan(300)
+    } else {
+      expect(walk.x, 'the walk stays in the buyer rail column, not beside it').toBeLessThan(buyers.x + buyers.width)
+      expect(walk.y, 'the walk sits under the buyer rail').toBeGreaterThan(buyers.y + buyers.height - 1)
+      expect(card.x, 'the card sits beside the rail column').toBeGreaterThan(buyers.x + buyers.width - 1)
+    }
     await expect(page.locator('.orders-buyerchip')).toBeHidden()
   })
 }
@@ -3489,7 +3541,7 @@ test('four presses over two orders go to the order pickOrderFor names, smallest 
     },
   })
 
-  const markSold = page.locator('.card-locations-row').getByRole('button', { name: 'Mark sold' })
+  const markSold = page.locator('.browse-card').locator('.card-locations-row').getByRole('button', { name: 'Mark sold' })
   for (let n = 0; n < 4; n++) {
     /* WAIT FOR THE BUTTON COUNT TO FALL, NOT ONLY FOR THE WIRE — the wire records a request
        the instant it fires, before the state update `onSell`'s own `then` makes lands, so a
@@ -3538,7 +3590,7 @@ test('a tie between two orders is not won by the one with no placed_at', async (
     },
   })
 
-  await page.locator('.card-locations-row').getByRole('button', { name: 'Mark sold' }).first().click()
+  await page.locator('.browse-card').locator('.card-locations-row').getByRole('button', { name: 'Mark sold' }).first().click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
   const sent = wire.find((one) => one.path.endsWith('/orders/pull'))
   expect((sent?.body as { number: string }).number).toBe('C-3')
@@ -3579,7 +3631,7 @@ test('a toast/U undo lowers the walk tally, so a later press against the same or
      a request the instant it fires, before the state update the click's own `then` makes has
      landed, so polling `pulls().length` right after a click can race that update — exactly the
      trap `expect(locator).toHaveCount` (which retries) does not fall into. */
-  const markSold = page.locator('.card-locations-row').getByRole('button', { name: 'Mark sold' })
+  const markSold = page.locator('.browse-card').locator('.card-locations-row').getByRole('button', { name: 'Mark sold' })
   await expect(markSold).toHaveCount(2)
 
   // 1. Sell the first copy.
@@ -3635,7 +3687,7 @@ test('a press on a copy that is not at any stop still records against the owing 
     pull: { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] },
   })
 
-  const copies = page.locator('.card-locations-row')
+  const copies = page.locator('.browse-card').locator('.card-locations-row')
   await expect(copies).toHaveCount(2)
   await copies.nth(1).getByRole('button', { name: 'Mark sold' }).click()
 
@@ -3658,7 +3710,7 @@ test('pressing Mark sold with no order left to fill draws the refusal sentence, 
     walkPlan: walkPlanOf([walkPlanStop({ takes: [walkPlanTake({ for: [] })] })]),
   })
 
-  await page.locator('.card-locations-row').getByRole('button', { name: 'Mark sold' }).click()
+  await page.locator('.browse-card').locator('.card-locations-row').getByRole('button', { name: 'Mark sold' }).click()
 
   await expect(page.locator('.bn-toast', { hasText: 'Nobody here still owes a copy' })).toBeVisible()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(0)
@@ -4053,7 +4105,7 @@ test('a SKU split across two stops does not advance early — the second stop ne
      by THIS stop's own copies, never a store-wide tally) still holds, over the pull count and
      the row that reads Undo, without depending on the pane switching on its own. */
   const undoBtn = page.locator('.browse-card').getByRole('button', { name: /^Undo/ })
-  const markSold = page.locator('.card-locations-row').getByRole('button', { name: 'Mark sold' })
+  const markSold = page.locator('.browse-card').locator('.card-locations-row').getByRole('button', { name: 'Mark sold' })
   await expect(markSold).toHaveCount(1)
 
   // James's own single copy — its own stop, fully satisfied on its own.

@@ -1,4 +1,11 @@
 import type { IconName } from './kit'
+/* THE PURE MODULE, NOT `./kit/data` (the barrel): `harness/tests/t7_store_and_seams.py`
+ * bundles this file alone with plain esbuild, no CSS loader, to read Home's status line
+ * without a browser. `kit/data.tsx` pulls in the whole kit (icons, overlays, `SearchField`'s
+ * own `./kit` re-import), which esbuild's bare bundle cannot resolve; `kit/dataRules.ts` is
+ * the React-free half `boxTitle` lives in for exactly this reason ("No React, so a spec can
+ * import it" — see its own header). */
+import { boxTitle } from './kit/dataRules'
 import { MISSING_FACET, missingCopies } from './orderBuyers'
 import type {
   EmptySend,
@@ -466,7 +473,7 @@ export function standing(input: StandingInput): Standing | null {
          a line that says otherwise is asking for a press that would do nothing. */
   if (live !== null && live.length > 0) {
     const one = live.length === 1 ? live[0]! : null
-    const where = one?.box ? `Box ${one.box}` : `${live.length} runs`
+    const where = one?.box ? boxTitle(one.box_name, one.box) : `${live.length} runs`
     return {
       key: 'working',
       tone: 'live',

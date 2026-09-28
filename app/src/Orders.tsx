@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 import {
   Button,
@@ -30,6 +30,7 @@ import {
 } from './kit'
 import { absoluteDate, relativeDate } from './dates'
 import { toast } from './kit/toast'
+import { boxTitle } from './kit/data'
 import { CardPane, gameWord, marketTable, photoSrc, type MarketRead, type Row } from './CardHero'
 import { CardLocations, layoutsOf } from './CardLocations'
 import { forSale } from './cardState'
@@ -39,6 +40,7 @@ import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
 import { rememberHideSold, rememberOrderFilter, storedHideSold, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
 import { hubState, setHub, touchHub, useHub, type Stage } from './OrdersHubStore'
 import { PositionLabel } from './PositionLabel'
+import { RailFrame } from './RailFrame'
 import { sayPlace } from './position'
 import { buyerKeyOf, groupBuyers, groupForOrderKey, groupMissing, lineReason, MISSING_FACET, statusOf, worstStatus, type BuyerGroup, type Status } from './orderBuyers'
 import {
@@ -1218,7 +1220,7 @@ function buildCopyMap(line: ResolvedLine, store: StoreCopies | null, claims: Cla
     if (stop === undefined) {
       stop = {
         key,
-        title: pooled ? (text(place.game_display) ? place.game_display : 'Pooled') : `Box ${pick.box}`,
+        title: pooled ? (text(place.game_display) ? place.game_display : 'Pooled') : boxTitle(place.box_name, pick.box),
         name: pooled ? 'no position' : (text(place.box_name) ? place.box_name : null),
         box: pooled ? null : pick.box,
         pooled,
@@ -2605,32 +2607,17 @@ function OrderPickPane({
   walk,
   owedBySku,
   showBuyers,
+  sections,
 }: {
   readonly walk: OrderWalk
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
+  /** Each box's own divider layout (A4: lifted to `PullStage`, one `getBoxes()` read for the
+   *  whole screen — `WalkList`'s own copy rows draw off the SAME map, never a second read of
+   *  the same fact). Optional; the strip is honest without it. */
+  readonly sections: ReadonlyMap<number, readonly SectionDetail[]>
 }) {
   const { currentRow, currentGroup, currentCard } = walk
-
-  /* THE BOX REGISTRY, ONE READ (Q3): the copies list draws the section strip and the ruler the
-   *  same way `Inventory.tsx` does, off the same `getBoxes()` call `layoutsOf` already turns
-   *  into a per-box map there. Allowed to fail without anybody hearing, same as `BoxBrowse.tsx`'s
-   *  own read — the pane draws its copies honestly with no `sections` at all. */
-  const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
-  useEffect(() => {
-    let live = true
-    getBoxes()
-      .then((summary) => {
-        if (live) setBoxRecords(Array.isArray(summary.boxes) ? summary.boxes : [])
-      })
-      .catch(() => {
-        // Deliberately nothing: see the comment above.
-      })
-    return () => {
-      live = false
-    }
-  }, [])
-  const sections = useMemo(() => (boxRecords.length === 0 ? NO_SECTIONS : layoutsOf(boxRecords)), [boxRecords])
 
   const [broken, setBroken] = useState(false)
   const [zoomed, setZoomed] = useState(false)
@@ -2792,6 +2779,53 @@ function PullStage({
 }) {
   const hub = useHub()
   const counts = payload?.resolution.counts ?? null
+
+  /* THE PHONE THRESHOLD (lane A5, layout R, Q4: "the walk, with the card in a sheet" on a
+   *  phone). A callback ref, `RailFrame`'s own pattern: the body can mount for the first time on
+   *  any render (an early return above draws no `.orders-body` at all until the payload is in),
+   *  so a plain `useRef` + one-shot effect would miss it — the node has to arrive through state
+   *  for the observer to ever attach. THESE HOOKS ARE DECLARED HERE, BEFORE EVERY EARLY RETURN
+   *  BELOW, ON PURPOSE: a hook added near this function's own end reproduces a real, pre-existing
+   *  "Rendered more hooks than during the previous render" crash on the next re-render (see
+   *  `OrderPickPane`'s own comment) — because a render that takes one of those early returns
+   *  skips every hook declared after it. Declared up here, both run on every render regardless of
+   *  which return this function takes. */
+  const [orderBody, setOrderBody] = useState<HTMLDivElement | null>(null)
+  const [narrow, setNarrow] = useState(false)
+  useLayoutEffect(() => {
+    if (orderBody === null) return
+    const read = () => setNarrow(orderBody.getBoundingClientRect().width < 560)
+    read()
+    const ro = new ResizeObserver(read)
+    ro.observe(orderBody)
+    return () => ro.disconnect()
+  }, [orderBody])
+  /** THE CARD SHEET (phone only): closed until a walk row is tapped (`WalkList`'s own `onPick`).
+   *  Left open across a pick — stepping to the next row updates the same sheet's content rather
+   *  than closing it, the way `currentRow` already re-renders the sticky desk pane in place. */
+  const [cardSheetOpen, setCardSheetOpen] = useState(false)
+
+  /* THE BOX REGISTRY, ONE READ FOR THE WHOLE SCREEN (A4, lifted out of the pane alone): the
+   *  copies list draws the section strip and the ruler the same way `Inventory.tsx` does, off
+   *  the same `getBoxes()` call `layoutsOf` already turns into a per-box map there — shared by
+   *  the pane's own `CardLocations` and the walk list's, never a second read of the same fact.
+   *  Allowed to fail without anybody hearing, same as `BoxBrowse.tsx`'s own read — both draw
+   *  their copies honestly with no `sections` at all. */
+  const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
+  useEffect(() => {
+    let live = true
+    getBoxes()
+      .then((summary) => {
+        if (live) setBoxRecords(Array.isArray(summary.boxes) ? summary.boxes : [])
+      })
+      .catch(() => {
+        // Deliberately nothing: see the comment above.
+      })
+    return () => {
+      live = false
+    }
+  }, [])
+  const sections = useMemo(() => (boxRecords.length === 0 ? NO_SECTIONS : layoutsOf(boxRecords)), [boxRecords])
 
   /* ------------------------------------------------------------- the buyer list's own view */
 
@@ -3598,7 +3632,15 @@ function PullStage({
               Picked
             </HideToggle>
           </div>
-          <WalkList walk={walk} hideSold={hideSold} collapsed={sectionsCollapsed} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} />
+          <WalkList
+            walk={walk}
+            hideSold={hideSold}
+            collapsed={sectionsCollapsed}
+            owedBySku={owedBySku}
+            showBuyers={walkedGroups.length > 1}
+            sections={sections}
+            onPick={narrow ? () => setCardSheetOpen(true) : undefined}
+          />
         </>
       )}
     </section>
@@ -3629,14 +3671,17 @@ function PullStage({
           </Button>
         </Notice>
       ) : null}
-      <div className="orders-body">
+      <div className="orders-body" ref={setOrderBody}>
         <button type="button" className="orders-skip-link" onClick={() => walkRef.current?.focus()}>
           Skip to the walk
         </button>
         <div className="orders-layout">
-          <nav className="orders-buyers" aria-label="Buyers">
+          {/* LAYOUT R (`docs/decisions/D-orders-walk-rejoins-inventory.md`, Q1/Q2): Inventory's
+              own `RailFrame`, sticky and fit to the window, its own scroll — never the page's.
+              `#/inventory`'s box list is the only other caller. */}
+          <RailFrame className="orders-buyers" role="navigation" aria-label="Buyers">
             {buyerList}
-          </nav>
+          </RailFrame>
           <button type="button" className="orders-buyerchip" aria-haspopup="dialog" onClick={() => setBuyersOpen(true)}>
             <Icon name="list" size={16} />
             <span className="orders-buyerchip-text bn-facts">
@@ -3648,11 +3693,27 @@ function PullStage({
           </button>
           {/* DOM order is the desk's visual order (buyers, walk, card), so Tab reads as the eye does. */}
           {walkColumn}
-          <div className="orders-cardcol">
-            <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} />
-          </div>
+          {/* Q4: ON A PHONE THE CARD IS A SHEET, opened by a tap on a walk row (`WalkList`'s
+              `onPick` above), never drawn inline — `narrow` is the one JS width read this file
+              needs, because a portal cannot be placed by a container query. At 560px of column
+              and up the pane goes back to its usual sticky column beside the walk. */}
+          {narrow ? null : (
+            <div className="orders-cardcol">
+              <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} />
+            </div>
+          )}
         </div>
       </div>
+      {!narrow ? null : (
+        <Sheet
+          open={cardSheetOpen}
+          onClose={() => setCardSheetOpen(false)}
+          title={walk.currentRow?.take.name ?? 'The card'}
+          className="orders-card-sheet"
+        >
+          <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} />
+        </Sheet>
+      )}
 
       <Sheet open={buyersOpen} onClose={() => setBuyersOpen(false)} title="Buyers" icon="list" className="orders-buyers-sheet">
         {buyerList}
@@ -4271,8 +4332,13 @@ function OrderLineRow({
     return copies.filter((copy) => keep.has(copy.key))
   }, [copies, unfolded])
   const folded = copies.length - shown.length
-  /* Where the folded ones are, so the control names a drawer rather than a number alone. */
-  const foldedIn = [...new Set(copies.filter((copy) => !shown.includes(copy)).map((copy) => copy.pick.box))]
+  /* Where the folded ones are, so the control names a drawer by its NAME (D259), never a bare
+     number. Deduped on the box number; the first copy seen for a box carries its name. */
+  const foldedIn = [
+    ...new Map(
+      copies.filter((copy) => !shown.includes(copy)).map((copy) => [copy.pick.box, copy.pick.place.box_name] as const),
+    ),
+  ]
 
   return (
     <li className={`orders-line orders-line-${line.reason}`}>
@@ -4387,7 +4453,9 @@ function OrderLineRow({
                 ) : (
                   <>
                     Show the other {folded} {folded === 1 ? 'copy' : 'copies'}
-                    {foldedIn.length === 1 ? ` in Box ${foldedIn[0]}` : ''}
+                    {foldedIn.length === 1 && foldedIn[0] !== undefined
+                      ? ` in ${boxTitle(foldedIn[0][1], foldedIn[0][0])}`
+                      : ''}
                   </>
                 )}
               </button>

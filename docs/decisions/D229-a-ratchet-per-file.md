@@ -105,3 +105,14 @@ delete different lines.
 
 **What is reversed: a new file.** This entry accepted a new file at its own ratio, to spare a
 re-pin. With no pin, a new file now starts clean. D280 argues why.
+
+### Amended 2026-09-27 — the row is CUT
+
+Owner's ruling (test-audit plan, row 92, `docs/reviews/test-audit-2026-09-27/TIERS.md`):
+"Row 92, `ste offenders`, and its list `scripts/ste-offenders.json`: CUT. The write-time
+STE hook lints new prose. This needs dated amendments to D226, D229 and D280 (the prose
+ratchet decisions) in the lane that cuts it." Lane L2 deletes the `ste offenders` row and
+`scripts/ste-offenders.json`.
+
+This entry's own argument against a repo-wide scalar is not touched by the cut. It stays
+the reason D280's per-sentence lists replaced a pinned ratio, for the two lists that remain.

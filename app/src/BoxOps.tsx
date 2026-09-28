@@ -29,7 +29,7 @@ import {
   releaseBoxListings,
   updateBox,
 } from './server'
-import { spansOf } from './position'
+import { nonEmptySections, spansOf } from './position'
 import { ReadingAge } from './CardLocations'
 import { readingAgo } from './cardState'
 import { Button, Icon, IconButton, Notice, Pill, Select, SectionPicker, Stat, boxesMostRecentFirst, type IconName } from './kit'
@@ -293,16 +293,25 @@ function reached(record: BoxRecord, from: number): { sections: number[]; cards: 
 export function BoxIdentity({
   record,
   at = null,
+  currentSection = null,
   actions,
 }: {
   record: BoxRecord
   /** Where the selected card sits in this box, 0..1 — the server's own `fraction`. */
   at?: number | null
+  /** The section the walk's selected card stands in — or stood in, sold, retired or moved out
+   *  from under it (D118, D181). F9 (the owner's report, 2026-09-27): an empty section drops
+   *  off this header the same way it drops off the ruler, except this one, which the walk is
+   *  standing on right now. `BoxBrowse.tsx` reads it off `selectedRow.card.place.section`,
+   *  never off `at`'s own fraction — a departed card's `fraction` goes null the moment it
+   *  leaves, but its `place.section` survives on the wire. */
+  currentSection?: number | null
   actions?: ReactNode
 }) {
   const holds = known(record.on_hand)
   const total = denominator(record)
-  const spans = spansOf(trackPlace(record, total), record.sections_detail)
+  const visibleSections = nonEmptySections({ section: currentSection }, record.sections_detail)
+  const spans = spansOf(trackPlace(record, total), visibleSections)
 
   /* THE CENSUS TRIAD (D41), BROUGHT TO THIS PANEL. `CardLocations`' own three figures — copies,
      in the boxes, live on TCGplayer — are `bn-stat` tiles: a big tabular-nums value over a
@@ -346,7 +355,9 @@ export function BoxIdentity({
       </div>
 
       {/* The track is the box: one segment per section, as wide as the cards it holds, with the
-          selected card's marker from the server's own `fraction`. */}
+          selected card's marker from the server's own `fraction`. F9: an empty section is not
+          one of these segments, except the one `currentSection` names — `visibleSections`
+          filtered it out above, so `spans` and its own `aria-label` count already agree. */}
       {spans.length === 0 ? null : (
         <div
           className="boxops-track"
@@ -358,7 +369,12 @@ export function BoxIdentity({
               className="boxops-span"
               key={`${span.start}-${span.end}`}
               style={{ flexGrow: span.end - span.start + 1 }}
-              title={`Section ${i + 1}${record.sections_detail[i]?.name ? `: ${record.sections_detail[i]?.name}` : ''}, cards #${span.start}–#${span.end}`}
+              // `spans` and `visibleSections` are the SAME FILTERED LIST, in the same order
+              // (`spansOf` is a 1:1 map over the array it is handed) — never `record.
+              // sections_detail`, which is unfiltered and would misalign the moment an empty
+              // section hides (F9). `span.section` is the real section number, never `i + 1`,
+              // for the same reason: a hidden section makes position disagree with number.
+              title={`Section ${span.section}${visibleSections[i]?.name ? `: ${visibleSections[i]?.name}` : ''}, cards #${span.start}–#${span.end}`}
             />
           ))}
           {at === null ? null : (

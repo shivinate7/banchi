@@ -1120,27 +1120,31 @@ def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
 
 
 def settle_corpus(root: Path, write: bool) -> List[str]:
-    """Write the two DERIVED things at claim time: the manifest's order and the index.
+    """Write the one DERIVED thing at claim time: the manifest's order.
 
-    THE MERGE IS THE ONE MOMENT EITHER IS KNOWABLE, which is exactly D140's argument for the
-    number and the reason both belong here rather than on a branch. A branch adding an entry
-    would otherwise have to append to a shared JSON array and add a line to CLAUDE.md's index
-    at the position every other such branch touches — two more collisions, in the change that
-    exists to remove one.
+    THE MERGE IS THE ONE MOMENT THIS IS KNOWABLE, which is exactly D140's argument for the
+    number and the reason it belongs here rather than on a branch. A branch adding an entry
+    would otherwise have to append to a shared JSON array at the position every other such
+    branch touches — one more collision, in the change that exists to remove one.
 
     So a branch carries its entry FILE and nothing shared. Corpus membership is derived by
-    `decisions_corpus.order()`/`debts_corpus.order()` until this runs, and each index is
-    regenerated from the headings that exist after the claim — including the number this
-    claim just allocated, which is why it runs AFTER the substitution and the rename rather
-    than beside them.
+    `decisions_corpus.order()`/`debts_corpus.order()` until this runs, and each manifest is
+    appended from the headings that exist after the claim — including the number this claim
+    just allocated, which is why it runs AFTER the substitution and the rename rather than
+    beside them.
 
-    D18 PUTS THIS ON THE WRITING SIDE and keeps the checking side elsewhere: `decision index`
-    and `debt index` still compute their own index independently and block, and each is a
-    different program. A generator that also gated could satisfy itself.
+    CLAUDE.md'S DECISION INDEX IS RETIRED (D60 amended). `make map ARGS=--decisions` renders
+    the same id-and-title list off the corpus itself, on demand, never a stored copy — so
+    nothing here writes CLAUDE.md, and nothing ever will again. `docs/DEBTS.md` KEEPS ITS
+    WRITTEN INDEX — no rendered view has replaced it — so the debt kind's own stub still gets
+    regenerated here, the one asymmetry between the two `IndexSpec`s
+    (`scripts/index-decisions.py`). `debt` reused decisions' own scheme (the owner's word:
+    assign numbers at merge, the way decisions already do) rather than a second settling
+    mechanism.
 
-    BOTH DIRECTORY KINDS SETTLE HERE, ONE `IndexSpec` EACH (`scripts/index-decisions.py`).
-    `debt` reused decisions' own scheme (the owner's word: assign numbers at merge, the way
-    decisions already do) rather than a second settling mechanism.
+    D18 PUTS THIS ON THE WRITING SIDE and keeps the checking side elsewhere: `debt index`
+    still computes its own index independently and blocks, a different program. A generator
+    that also gated could satisfy itself.
     """
     moved: List[str] = []
     try:
@@ -1152,16 +1156,20 @@ def settle_corpus(root: Path, write: bool) -> List[str]:
         gen_spec.loader.exec_module(index)
     except Exception as exc:                       # a tree without the generator still claims
         return [f"(index generator not runnable: {exc})"]
-    for kind_spec, manifest, stub_label in (
-        (index.DECISION_SPEC, DECISIONS_MANIFEST, "CLAUDE.md (decision index regenerated)"),
-        (index.DEBT_SPEC, DIR_KINDS["debt"].manifest,
+    # CLAUDE.md NEVER APPEARS HERE. `index.DECISION_SPEC`'s manifest is folded (below), and its
+    # `rewrite_index` is never called — that half is retired along with the stub it used to
+    # write. `index.DEBT_SPEC` is the one kind whose stub (`docs/DEBTS.md`) still gets
+    # regenerated, because nothing renders that index yet.
+    for kind_spec, manifest, rewrite, stub_label in (
+        (index.DECISION_SPEC, DECISIONS_MANIFEST, False, None),
+        (index.DEBT_SPEC, DIR_KINDS["debt"].manifest, True,
          "docs/DEBTS.md (debt index regenerated)"),
     ):
         try:
             appended = index.normalize(root, write, kind_spec)
             if appended:
                 moved.append(f"{manifest} (+{len(appended)} entry)")
-            if index.rewrite_index(root, write, kind_spec):
+            if rewrite and index.rewrite_index(root, write, kind_spec):
                 moved.append(stub_label)
         except Exception as exc:            # a tree without that corpus still claims the rest
             moved.append(f"({kind_spec.corpus_script} not settled: {exc})")

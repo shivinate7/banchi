@@ -2520,7 +2520,8 @@ COMPONENTS = [
                         "the tree was tested.",
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
-                "governed_by": ["D16", "D18", "D136", "D141", "D196", "D215", "D275", "D284", "D261"],
+                "governed_by": ["D16", "D18", "D136", "D141", "D196", "D215", "D261", "D275",
+                                "D284", "D-reap-stops-only-its-own"],
                 "note": "THE LIST IS DERIVED AND HAS A READER: `make docs-audit`'s `browser "
                         "scope` row reconciles SCOPE against Playwright's config, Vite's "
                         "config, every code string in app/tests and app/src naming a tracked "
@@ -2812,14 +2813,49 @@ COMPONENTS = [
                         "the root, or a relative token that resolves against the process's own "
                         "cwd to an existing FILE under it. It passes over this session's own "
                         "chain and any LINKED WORKTREE nested inside this checkout, and PRINTS "
-                        "both with their reason.",
+                        "both with their reason. SINCE THE 2026-09-27 AMENDMENT, `OURS` (under "
+                        "this checkout) is narrowed a second way by WHOSE it is: "
+                        "`_read_owner_marks` reads `.serve/owners/*.json` (written by "
+                        "`scripts/reap_mark.py`) and walks `_descendants` down from each live "
+                        "root, and `_ownership_verdict` decides whether THIS caller — read from "
+                        "`CLAUDE_CODE_SESSION_ID` — may stop a pid tagged that way. A bare "
+                        "`--confirm` from the top-level session is D127's original sweep, "
+                        "untouched; the same bare `--confirm` from a subagent stops only pids "
+                        "tagged with its OWN session id, and an explicit `pid:`/`port:`/"
+                        "`match:` may still take an UNTAGGED pid but never one tagged to another "
+                        "session, for either caller.",
                 # D127 is the decision. D53 is the process it exists to protect — the main
                 # checkout's supervisor and its children are refused even from inside the main
                 # checkout, which is the one place this file overrules its own rule. D111 is
                 # the neighbouring notion it deliberately shares reasoning with rather than
-                # duplicating. D18 keeps its self-test off the commit path: it signals.
+                # duplicating. D18 keeps its self-test off the commit path: it signals. D175 is
+                # the neighbouring "whose is this" question this file now answers more finely
+                # than D175's own any-session reading. D-reap-stops-only-its-own is the
+                # 2026-09-27 amendment itself.
                 "governed_by": ["D169", "D18", "D43",
-                                "D53", "D88", "D111", "D127"],
+                                "D53", "D88", "D111", "D127", "D175",
+                                "D-reap-stops-only-its-own"],
+            },
+            "reap_mark.py": {
+                "does": "stamps the process a launcher is about to become with the session that "
+                        "started it — `.serve/owners/<pid>.json`, `{pid, owner, label, "
+                        "startedAt}` — so `reap.py` can tell WHOSE a process is, not only "
+                        "whether it is under this checkout. ONE SHELL LINE IS THE WHOLE "
+                        "MECHANISM: a Makefile recipe line is `scripts/reap_mark.py <label>; "
+                        "exec <real command>` (or `; <real command>` where the launcher must "
+                        "stay alive to do cleanup, like design-check's suite-lock), so this "
+                        "script's own `os.getppid()` names the ONE shell that either `exec`s "
+                        "into the real, long-running process — same pid — or stays its direct "
+                        "parent throughout. MEASURED, NOT ASSUMED: the owner's own sketch was "
+                        "an env var read back with `ps -E`/`ps eww` on a pid this session did "
+                        "not start, and that was tried on this machine (macOS 26, Darwin "
+                        "27.0.0) and found to print no environment at all for such a process — "
+                        "so the mark is a FILE, generalising `reap.py:protected_pids`'s own "
+                        "D53 pattern rather than inventing a second one. The owner is "
+                        "`CLAUDE_CODE_SESSION_ID`, read directly rather than re-deriving D175's "
+                        "Bash-wrapper fragment, which only ever answered ANY session. Never "
+                        "installed to `~/.claude/bin` and never imported outside this checkout.",
+                "governed_by": ["D43", "D53", "D127", "D138", "D175", "D-reap-stops-only-its-own"],
             },
             "cid-selftest.py": {
                 "does": "proves D172's card name and the photograph store filed under it by "
@@ -3303,8 +3339,8 @@ COMPONENTS = [
                         "directory-token subject that must NOT be placed, the caller it must "
                         "pass over, and a real nested worktree. Mutation-tested: twenty-two "
                         "guards removed one at a time, all caught, the naming rule among them.",
-                "governed_by": ["D169", "D18", "D43",
-                                "D53", "D122", "D127", "D157"],
+                "governed_by": ["D18", "D43", "D53", "D122", "D127", "D138", "D157", "D169",
+                                "D-reap-stops-only-its-own"],
             },
             "silent-write-guard.py": {
                 "does": "the PreToolUse hook on Bash that refuses a git WRITE whose own output "
@@ -3747,32 +3783,16 @@ COMPONENTS = [
                         "beside it — the license's one condition for reuse.",
                 "governed_by": ["D226"]},
             "ste_measure.py": {
-                "does": "the STE prose check's ONE measurer, read by `scripts/docs-audit.py`'s "
-                        "`ste offenders` row. Runs the vendored linter's four ERROR-severity "
-                        "rules over caller-supplied (path, text) pairs, drops findings a named "
-                        "`EXEMPTIONS` recognizer proves are an artifact of the text's shape (a "
-                        "table cell, a decision citation, the literal \"VS Code\", `via`), and "
-                        "names each remaining one as an OFFENDER: one sentence per rule, keyed "
-                        "by a hash of its folded text (`offender_identity`), so a reflow, a "
-                        "code-span edit or a claim moves nothing. A code span, decision "
-                        "citation or `VS Code` that crosses a line break is read over the "
-                        "joined paragraph (`join_span_breaks`), never line by line. Also "
-                        "reports the per-code "
-                        "counts and errors-per-1,000-plain-words per bucket, printed and never "
-                        "gated. Never touches disk itself.",
+                "does": "the STE prose check's ONE measurer. Its `ste offenders` docs-audit "
+                        "row was CUT 2026-09-27 (test-audit plan, D226/D229/D280 amended): "
+                        "the write-time STE hook already lints new prose, so this module's "
+                        "measuring, exemption and offender-identity machinery has no caller "
+                        "left in `scripts/docs-audit.py`. It stays vendored because "
+                        "`list_key` (a decision entry keyed by its file tail, so a claim "
+                        "moves nothing) is still imported by the `line anchor offenders` "
+                        "row and by `identifier spelling`'s markdown half.",
                 "governed_by": ["D18", "D140", "D218", "D226", "D229",
                                 "D280"]},
-            "ste-offenders.json": {
-                "does": "the shrinking offender list for `make docs-audit`'s `ste offenders` "
-                        "row (D226): `rules` (the vendored linter's ERROR-severity codes) and "
-                        "file -> lane and rule -> `<hash> <label>` entries, one per offending "
-                        "sentence, only the hash compared. A decision entry is keyed by its "
-                        "file tail, so a claim moves nothing. The row fails on an unlisted "
-                        "sentence, a stale entry, and growth over the merge-base, so a new "
-                        "file starts clean. Replaced D229's per-file pinned ratio "
-                        "(D280). Shrunk by hand or by "
-                        "`make offenders-prune`, which only deletes. Never grown by a tool.",
-                "governed_by": ["D226", "D229", "D280"]},
             "line-anchor-offenders.json": {
                 "does": "the shrinking offender list for `make docs-audit`'s `line anchor "
                         "offenders` row (D245): file -> lane and `line-anchor` -> every "
@@ -3785,6 +3805,23 @@ COMPONENTS = [
                         "Shrunk by hand or by `make offenders-prune`, which only deletes. Never "
                         "grown by a tool.",
                 "governed_by": ["D229", "D245", "D280"]},
+            "markdown-spelling-allow.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `identifier "
+                        "spelling` row, markdown half (owner's ruling, test-audit plan, "
+                        "2026-09-27: \"Shrinking offender list now\"): file -> lane and "
+                        "SPELLING -> every British word that file's PROSE spells, lower-cased, "
+                        "once per occurrence. Fenced code, an inline code span and a "
+                        "single-asterisk italic quote are exempt, `docs/gates/` is excluded "
+                        "outright, and a decision entry's number is folded out of its file key "
+                        "(`ste_measure.py:list_key`) so a claim moves nothing. The row fails "
+                        "on an unlisted word, a stale entry, and growth over the merge-base "
+                        "(`only_shrinks.py`), so a new file starts clean and new prose is "
+                        "American from the moment it is written. Staged mode reads only "
+                        "staged markdown, narrower than every other markdown row here. "
+                        "Seeded 2026-09-27 with the tree's own 724 pre-existing words over "
+                        "224 files. Shrunk by hand or by `make offenders-prune`, which only "
+                        "deletes. Never grown by a tool.",
+                "governed_by": ["D60", "D226", "D280"]},
             "only_shrinks.py": {
                 "does": "THE ONE only-shrinks helper for every shrinking offender list "
                         "(D280). `list_at_merge_base` reads a list "
@@ -3892,10 +3929,10 @@ COMPONENTS = [
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D110",
                                 "D111", "D113", "D119", "D122", "D123", "D127", "D132", "D134",
                                 "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
-                                "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
-                                "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D200",
-                                "D210", "D213", "D215", "D218", "D226", "D229", "D245", "D247",
-                                "D280", "D284"],
+                                "D149", "D155", "D159", "D160", "D161", "D169", "D173", "D174",
+                                "D178", "D181", "D182", "D185", "D191", "D192", "D194", "D196",
+                                "D200", "D210", "D213", "D215", "D218", "D226", "D229", "D245",
+                                "D247", "D248", "D280", "D284"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3956,8 +3993,8 @@ COMPONENTS = [
                 # split `--unclaim` and the fixed `stale_claims` both have to read through; D186
                 # and D188 are the real, landed entries the incident this file's own docstring
                 # narrates is about.
-                "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135", "D140", "D151",
-                                "D160", "D182", "D185", "D186", "D188", "D190", "D295"],
+                "governed_by": ["D16", "D18", "D42", "D47", "D60", "D72", "D80", "D135", "D140",
+                                "D151", "D160", "D182", "D185", "D186", "D188", "D190", "D295"],
             },
             "catalog-refresh.py": {
                 "does": "build-order step 9, piece 1 (D15): shallow-clone "
@@ -4055,9 +4092,9 @@ COMPONENTS = [
                 # D160, D186 and D188 are the same worked example claim-ids.py's own entry
                 # carries — the fixture's directory-corpus arms build a real D160 shape, and
                 # the incident arm's own prose names the two real, landed entries it replays.
-                "governed_by": ["D1", "D2", "D16", "D18", "D47", "D80", "D135", "D136", "D140",
-                                "D141", "D143", "D148", "D151", "D160", "D185", "D186", "D188",
-                                "D190", "D249", "D295"],
+                "governed_by": ["D1", "D2", "D16", "D18", "D47", "D60", "D80", "D135", "D136",
+                                "D140", "D141", "D143", "D148", "D151", "D160", "D185", "D186",
+                                "D188", "D190", "D249", "D295"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -4212,9 +4249,10 @@ COMPONENTS = [
              "governed_by": ["D11", "D14", "D16", "D24"],
             },
             "decision-context.py": {
-                "does": "D17's PreToolUse hook: reads this file, lifts each governing "
-                        "decision's own bolded lead-in out of docs/DECISIONS.md, and emits "
-                        "additionalContext — never permissionDecision, which would "
+                "does": "D17's PreToolUse hook: reads this file and emits one id-and-title "
+                        "line per governing decision as additionalContext (the owner's "
+                        "2026-09-27 ruling), with `make map` for the full text — never "
+                        "permissionDecision, which would "
                         "auto-approve every Write in the project. Never blocks, never "
                         "writes, exits 0 on its own bugs, silent for files no entry covers. "
                         "Its decision_gists() is reused by status.py, never reimplemented.",
@@ -4364,28 +4402,34 @@ COMPONENTS = [
                 "governed_by": ["D16", "D18", "D80", "D160"],
             },
             "index-decisions.py": {
-                "does": "Generates CLAUDE.md's decision index from the headings in "
-                        "docs/decisions/. The index is the OTHER half of the conflict a "
-                        "directory does not fix by itself: two branches that no longer "
-                        "collide in the corpus would still collide on a hand-typed index "
-                        "line. Locates the block BY SHAPE — the first fenced block whose "
-                        "non-blank lines all look like index lines — which is the same rule "
-                        "`decision index` finds it by, so re-titling the Map section cannot "
-                        "unhook one program without unhooking the other. Previews by "
-                        "default; `--write` applies.",
-                # D18 is the whole placement: this WRITES, so it is not on the commit path,
-                # and the checking half is docs-audit's `decision index` row, which computes
-                # the same answer and blocks. Two programs on purpose — a generator that also
-                # gated could satisfy itself, which is D16's rule.
-                #
+                "does": "Folds every unregistered docs/decisions/ entry into "
+                        "docs/decisions/ORDER.json, at claim time. FORMERLY ALSO wrote "
+                        "CLAUDE.md's decision index; that half retired 2026-09-27 — "
+                        "`make map ARGS=--decisions` (scripts/map-view.py) renders the same "
+                        "id-and-title list on demand, so there is no second copy for a "
+                        "branch's entry to collide on. Previews by default; `--write` "
+                        "applies.",
+                # D18 is the whole placement: this WRITES, so it is not on the commit path.
                 # D79 and D80 are a worked example in the docstring — the two entries the
                 # three non-decision chunks sit between, which is why the order is the
                 # manifest's rather than a sort. D140 is why this runs at the merge: the
-                # index line and the manifest position are the same class of fact as the
-                # number, unknowable until then. D43 is why it takes a root — a generator
-                # hard-wired to one tree indexes the wrong checkout.
+                # manifest position is the same class of fact as the number, unknowable
+                # until then. D43 is why it takes a root — a generator hard-wired to one
+                # tree indexes the wrong checkout.
                 "governed_by": ["D16", "D18", "D43", "D60", "D79", "D80", "D140",
                                 "D160"],
+            },
+            "make-help.py": {
+                "does": "`make help` — one line per Makefile target, derived from the "
+                        "comment directly above the target's own rule. Replaces a "
+                        "hand-typed ~22 KB `@echo` block that had already drifted from "
+                        "CLAUDE.md's own copy of the same list (token-budget audit, "
+                        "2026-09-27, Q1). The summary is the comment's first sentence; a "
+                        "target with none prints a note asking for one rather than nothing.",
+                # D18: a renderer, writes nothing, gates nothing. D60 is the same "index up
+                # front, body on demand" shape this repo already uses for the decision
+                # corpus — one source, rendered rather than copied.
+                "governed_by": ["D18", "D60"],
             },
             "prose-guard.py": {
                 "does": "D60's two guards over the four docs CLAUDE.md names. `--structure` asserts "
@@ -4653,20 +4697,23 @@ COMPONENTS = [
                         "writes is already verified by a gate that runs on every commit.",
             },
             "offenders-prune.py": {
-                "does": "`make offenders-prune` — delete the STALE entries from the two "
-                        "shrinking offender lists (`ste-offenders.json`, "
-                        "`typed-interpunct-allow.json`), and re-key a listed file that git's "
+                "does": "`make offenders-prune` — delete the STALE entries from the three "
+                        "shrinking offender lists (`typed-interpunct-allow.json`, "
+                        "`line-anchor-offenders.json`, `markdown-spelling-allow.json`), and "
+                        "re-key a listed file that git's "
                         "rename detection (`git diff -M` from the merge-base with origin/main) "
-                        "says moved. It NEVER ADDS an entry, and it refuses to write a plan "
+                        "says moved. A fourth list, `ste-offenders.json`, was CUT 2026-09-27 "
+                        "(test-audit plan, D226/D229/D280 amended). It NEVER ADDS an entry, "
+                        "and it refuses to write a plan "
                         "that holds any identity more often than the list it read. Reads with "
-                        "the rows' own `_offender_list_shape`, `_offender_diff`, "
-                        "`ste_measure.measure` and `_typed_interpunct_found`, imported, so the "
+                        "the rows' own `_offender_list_shape`, `_offender_diff` and "
+                        "`_typed_interpunct_found`, imported, so the "
                         "pruner and the gate cannot disagree about what is stale. Previews; "
                         "`--write` applies. A generator that gates nothing (D18): on no hook, "
                         "and its selftest is not in `make check`, on `map-fix.py`'s precedent. "
                         "It writes a data file under scripts/, as `line-anchors-pin.py` does, "
                         "so it opens no seam in D18's list.",
-                "governed_by": ["D18", "D218", "D226", "D229",
+                "governed_by": ["D18", "D60", "D218", "D226", "D229",
                                 "D280"]},
             "repair-born-game.py": {
                 "does": "the one-off repair for the F1 defect: a card born with `game IS "
@@ -4839,7 +4886,7 @@ COMPONENTS = [
                         "fixtures and writes nothing (D18). `--routes` prints ROUTES as JSON for "
                         "app/tests/scaffold.spec.ts, so the spec and the check read one table "
                         "with one reader.",
-                "governed_by": ["D18", "D173", "D275", "D280", "D288"]},
+                "governed_by": ["D18", "D173", "D259", "D275", "D280", "D288"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "
@@ -6182,7 +6229,7 @@ COMPONENTS = [
                                              "`boxesMostRecentFirst` (this browser's hand, then the "
                                              "newest box by `bid`, then the number). No React, so a "
                                              "spec can import it.",
-                                     "governed_by": ["D132", "D142", "D145"]},
+                                     "governed_by": ["D132", "D142", "D145", "D259"]},
             "src/kit/data.specimens.tsx": {"does": "every data primitive in every state a screen "
                                                    "can put it in, on invented data. The kit page "
                                                    "mounts `DataSpecimens`; `tests/kit-data/` "
@@ -6831,8 +6878,8 @@ COMPONENTS = [
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D36", "D41", "D52", "D56", "D58", "D65", "D67", "D81", "D92",
                             "D117", "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145",
-                            "D153", "D164", "D170", "D172", "D196", "D218", "D260", "D264", "D286",
-                            "D299"]},
+                            "D153", "D164", "D170", "D172", "D196", "D218", "D259", "D260", "D264",
+                            "D286", "D299"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -7070,7 +7117,7 @@ COMPONENTS = [
                         "body between a fixed heading and a fixed press, sized 640px wide "
                         "because that is what the command's own longest line measures.",
                 "governed_by": ["D5", "D9", "D13", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
-                                "D41", "D46", "D50", "D117", "D118", "D162", "D259",
+                                "D41", "D46", "D50", "D117", "D118", "D123", "D162", "D259",
                                 "D291"],
             },
             "src/Inventory.tsx": {
@@ -7234,7 +7281,7 @@ COMPONENTS = [
                         "off the wire.",
                 "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
                                 "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115",
-                                "D132", "D134", "D196", "D218", "D259", "D299",
+                                "D118", "D132", "D134", "D181", "D196", "D218", "D259", "D299",
                                 "D300"],
             },
             "src/BoxOps.css": {
@@ -7374,8 +7421,8 @@ COMPONENTS = [
                                         "string to split: a section name may itself contain ` · ` "
                                         "(D132).",
                                 "governed_by": ["D5", "D10", "D20", "D24", "D30", "D41", "D58",
-                                                "D68", "D118", "D132", "D155", "D194", "D218",
-                                                "D259", "D260", "D299"]},
+                                                "D68", "D118", "D132", "D155", "D181", "D194",
+                                                "D218", "D259", "D260", "D299"]},
             "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
                                             "its fill, graduations, edge labels and crossing pin, the "
                                             "demoted box strip with the caret that replaced the "
@@ -8129,8 +8176,9 @@ COMPONENTS = [
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
                                                "D118", "D123", "D132", "D159", "D171", "D181",
                                                "D192", "D193", "D194", "D195", "D196", "D203",
-                                               "D209", "D212", "D218", "D220", "D221", "D274",
-                                               "D285", "D296", "D-orders-walk-rejoins-inventory"]},
+                                               "D209", "D212", "D218", "D220", "D221", "D259",
+                                               "D274", "D285", "D296",
+                                               "D-orders-walk-rejoins-inventory"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8138,7 +8186,7 @@ COMPONENTS = [
                                "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69",
                                                "D113", "D114", "D117", "D118", "D123", "D193",
                                                "D195", "D196", "D203", "D212", "D221", "D270",
-                                               "D274", "D-orders-walk-rejoins-inventory"]},
+                                               "D274", "D289", "D-orders-walk-rejoins-inventory"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -8415,8 +8463,8 @@ COMPONENTS = [
                                         "Box 4` cannot be read as three drawers rather than five.",
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
                                 # box whose number a run still remembers; D56 is the entry.
-                                "governed_by": ["D145", "D10", "D20", "D48", "D56", "D142",
-                                                "D180"]},
+                                "governed_by": ["D10", "D20", "D48", "D56", "D142", "D145", "D180",
+                                                "D218", "D259"]},
             "src/money.ts": {"does": "A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and "
                                      "`roundsToNothing`. Extracted from src/RunsComposer.tsx "
                                      "unchanged on 2026-09-11, when the run panel began "
@@ -8584,7 +8632,8 @@ COMPONENTS = [
                                          "once per box in the cart, capped so they stay chip-sized on a "
                                          "full-width route rather than spanning it.",
                                  "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48",
-                                                 "D50", "D54", "D64", "D76", "D86", "D117", "D218"]},
+                                                 "D50", "D54", "D64", "D76", "D86", "D117", "D123",
+                                                 "D218", "D291"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
@@ -8829,6 +8878,25 @@ COMPONENTS = [
                         "minimal one-copy fixture rather than `inventory.spec.ts`'s fixed box, "
                         "so a section count is a parameter. Run by `make design-check`.",
                 "governed_by": ["D118", "D155", "D260"],
+            },
+            "tests/empty-section.spec.ts": {
+                "does": "F9 (the owner's report, 2026-09-27, `docs/reviews/ux-2026-09-23/"
+                        "PLAN-PR4-PR5.md`): a section with no card on hand does not draw in the "
+                        "walk's own strip OR in `BoxOps.tsx:BoxIdentity`'s own box-header track "
+                        "(the review round, 2026-09-27 — that header is the walk's own "
+                        "always-visible box top, never \"Manage box\"), and the caption's "
+                        "denominator is the highest non-empty section number rather than a "
+                        "count of every declared one, so a hidden middle section cannot shrink "
+                        "`N` below a section still drawn. A move target (`BoxOps.tsx`'s \"Move "
+                        "to box\" section picker) still draws the destination's own declared-"
+                        "but-empty section, because that reading never goes through `spansOf`/"
+                        "`nonEmptySections` at all. Selling the only card of a section keeps that "
+                        "section drawn on both instruments while the walk still stands on it "
+                        "(D118, D181) — `nonEmptySections`'s own \"keep current\" exemption, "
+                        "proved live against a dynamic fixture, never a static one. Stubs its own "
+                        "minimal fixtures, the way `section-ruler.spec.ts` does. Run by "
+                        "`make design-check`.",
+                "governed_by": ["D57", "D58", "D118", "D181", "D260", "D264"],
             },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
@@ -9390,7 +9458,8 @@ COMPONENTS = [
                                                      "D114", "D118", "D123", "D132", "D171", "D181",
                                                      "D193", "D194", "D196", "D203", "D209", "D212",
                                                      "D218", "D220", "D221", "D263", "D274", "D285",
-                                                     "D296", "D-orders-walk-rejoins-inventory"]},
+                                                     "D289", "D296",
+                                                     "D-orders-walk-rejoins-inventory"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "

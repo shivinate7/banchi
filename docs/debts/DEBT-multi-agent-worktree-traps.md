@@ -51,7 +51,7 @@ lost.
 **A command's byte count is not its token cost.** The Bash tool persists large output to a
 file. It shows only a roughly 2 KB preview of the FIRST bytes. A 2.7 MB output and a 52 KB
 output both persist the same way. Never infer a token cost from a byte count alone. Probe the
-tool's real behaviour on a known size first. A verdict printed last, in a long run, costs an
+tool's real behavior on a known size first. A verdict printed last, in a long run, costs an
 extra turn to find.
 
 **`scripts/janitor.py --confirm`'s liveness oracle is the home directory's own Claude

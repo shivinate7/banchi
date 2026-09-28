@@ -23,7 +23,7 @@ commits as the same git user. Every session authenticates as the same GitHub acc
 filters nothing useful here. Identify a session's own PR by branch name instead.
 
 **Never leave `main` checked out in a worktree.** It changes which local-half command `make
-merge` picks. That silently changes behaviour for every other session sharing this clone.
+merge` picks. That silently changes behavior for every other session sharing this clone.
 Branch off `main` at once if a `git checkout` lands there.
 
 **A hand-resolved merge conflict needs the full `make docs-audit`, never a syntax check.** A
