@@ -273,19 +273,6 @@ export function useOrderWalk({
   const rows = useMemo(() => rowsOf(plan), [plan])
   const sections = useMemo(() => sectionsOf(plan, rows), [plan, rows])
 
-  /** D263 (ported from `BoxBrowse.tsx`'s box walk) + D118: a sold line stays exactly where
-   *  it is — still drawn, still marked `is-done` — for as long as THIS plan is loaded. D132's
-   *  original timing folded a line "the moment the walk steps off it," which D118 overturned:
-   *  pressing onto the NEXT row folded the PREVIOUS one under that very click, so the new row
-   *  slid up to meet the pointer (the UN-6 defect). Folding now waits for the walk's own NEXT
-   *  LOAD — a fresh plan — never a press. `planTakeKeys` is every take THIS plan holds; a
-   *  plan can never itself land with a take already satisfied (the solver only plans one
-   *  still owed), and the same `keysSig` change that hands this walk a fresh plan already
-   *  empties `receipts` above — so a freshly loaded plan never has anything left to fold in
-   *  the first place. `WalkList` keeps any line in this set drawn regardless of `soldKeys`,
-   *  which is why Mark sold, by itself, removes nothing from the list. */
-  const planTakeKeys = useMemo(() => new Set(rows.map((row) => row.takeKey)), [rows])
-
   const [current, setCurrent] = useState<string | null>(null)
   /* LANDING, THE SAME MOMENT INVENTORY'S OWN BOX WALK PICKS ITS FIRST CARD: the first row of a
      freshly landed plan. Keyed off the plan's own identity (a new object from a new fetch),
@@ -561,7 +548,6 @@ export function useOrderWalk({
     plan,
     rows,
     sections,
-    planTakeKeys,
     current,
     currentRow,
     currentGroup,
@@ -596,6 +582,17 @@ function takeLinesOf(rows: readonly WalkRow[]): WalkTakeLine[] {
   return out
 }
 
+/** Every copy the wanted count is asking for has a receipt against it. Shared by the press's
+ *  own snapshot (below) and each line's `is-done` styling — one formula, not two. */
+function pickedAllOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>): boolean {
+  return line.rows.filter((row) => soldKeys.has(row.copy.key)).length >= line.take.wanted
+}
+
+/** Every take key across every section, flat — what a press of Hide picked snapshots. */
+function allTakeLinesOf(sections: readonly WalkSection[]): WalkTakeLine[] {
+  return sections.flatMap((section) => takeLinesOf(section.rows))
+}
+
 /** Who a take is for, in words: the buyers' names, once each. */
 export function takeBuyers(take: WalkPlanTake): string {
   const names: string[] = []
@@ -625,6 +622,32 @@ export function WalkList({
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
 }) {
+  /* THE OWNER'S RULING, 2026-09-27: THE PRESS FOLDS, NOT THE SALE. Turning Hide picked ON is
+   * itself allowed to fold every row picked SO FAR, right then — D118 permits this, because
+   * the fold is the PRESS's own result, not a side effect of some other action. A sale made
+   * while it is already on stays drawn, marked sold, until the NEXT press (off then on again
+   * re-snapshots) or the walk's own next load (a fresh plan) — D263 ruling 2, unchanged from
+   * this file's earlier fix. This is `BoxBrowse.tsx`'s `enteredLive` shape, ported again: a
+   * snapshot taken at one deliberate moment, held fixed until that moment repeats, never
+   * recomputed on every render — which is what made the previous `planTakeKeys` a tautology
+   * (it recomputed from the very data it was meant to hold still against). */
+  const [foldedKeys, setFoldedKeys] = useState<ReadonlySet<string>>(new Set())
+  const wasHiding = useRef(hideSold)
+  const planRef = useRef(walk.plan)
+  useEffect(() => {
+    if (walk.plan !== planRef.current) {
+      planRef.current = walk.plan
+      setFoldedKeys(new Set())
+    } else if (hideSold && !wasHiding.current) {
+      const picked = new Set<string>()
+      for (const line of allTakeLinesOf(walk.sections)) {
+        if (pickedAllOf(line, walk.soldKeys)) picked.add(line.takeKey)
+      }
+      setFoldedKeys(picked)
+    }
+    wasHiding.current = hideSold
+  }, [hideSold, walk.plan, walk.sections, walk.soldKeys])
+
   if (walk.loading && walk.plan === null) {
     return (
       <Loading rows={4} label="Reading the walk" />
@@ -644,15 +667,7 @@ export function WalkList({
     <ul className="orders-walk-list" aria-label="The cards to pick, in the order the boxes are walked">
       {walk.sections.map((section) => {
         const lines = takeLinesOf(section.rows)
-        const pickedAll = (line: WalkTakeLine) =>
-          line.rows.filter((row) => walk.soldKeys.has(row.copy.key)).length >= line.take.wanted
-        /* D263 (ported) + D118: `walk.planTakeKeys` is every take THIS PLAN holds, so a line
-         * marked sold mid-plan is never dropped here — it stays drawn, `is-done`, until the
-         * walk is handed a genuinely different plan (see `useOrderWalk`'s own comment on
-         * `planTakeKeys`, above). `hideSold` still gates a line that arrived ALREADY done on
-         * a plan this hook has not itself loaded (there is no such case today, but the check
-         * is the real rule, not a placeholder for it). */
-        const shown = hideSold ? lines.filter((line) => !pickedAll(line) || walk.planTakeKeys.has(line.takeKey)) : lines
+        const shown = hideSold ? lines.filter((line) => !foldedKeys.has(line.takeKey)) : lines
         if (shown.length === 0) return null
         return (
           <li className="orders-walk-group" key={section.key}>

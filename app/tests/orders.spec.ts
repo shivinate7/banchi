@@ -1194,6 +1194,98 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
   expect(await nextRowTop()).toBe(nextRowTopBefore)
 })
 
+test('Hide picked folds at the PRESS, not the sale (owner ruling, 2026-09-27)', async ({ page }) => {
+  /* UN-6 above fixed the jump by never folding on a sale. The review round then found the
+   * fix had gone too far: `hideSold` could no longer fold anything at all, because the same
+   * event that lets a row go sold (a Mark sold press) is the only event the old code folded
+   * on. The owner's ruling restores a real fold, moved to a different press: turning Hide
+   * picked ON folds every row picked SO FAR, right then — D118 allows this, because the fold
+   * is the toggle's own result. A sale recorded while it is already on stays put until the
+   * NEXT press or the walk's own next load (D263 ruling 2, unchanged). */
+  const SKU_B = '9191487'
+  const lineB = line({
+    sku: SKU_B,
+    wanted: 1,
+    owed: 1,
+    fulfilled: 0,
+    outstanding: 1,
+    on_hand: 1,
+    line: { sku: SKU_B, quantity: 1, name: 'Tricksy Tentacles', number: '008', printing: 'Normal', condition: 'Near Mint', rarity: 'Rare', unit_price: '1.24', kind: 'single' },
+    picks: [
+      pick({
+        card_name: 'Tricksy Tentacles',
+        card_number: '008',
+        box: 3,
+        index: 22,
+        capture_id: 'cap-b',
+        place: place({ box: 3, index: 22, slot: 18, card: 18, label: 'Box 3, Section 2, Card 18' }),
+      }),
+    ],
+  })
+  await open(page, {
+    orders: payloadOf(
+      [
+        order({
+          wanted: 2,
+          lines: [line().line, lineB.line],
+          progress: [
+            ...order().progress,
+            { sku: SKU_B, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
+          ],
+        }),
+      ],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [line(), lineB] }],
+    ),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({ wanted: 1, copies: [walkPlanCopy({ capture_id: 'cap-a' })] }),
+          walkPlanTake({
+            sku: SKU_B,
+            name: 'Tricksy Tentacles',
+            wanted: 1,
+            copies: [
+              walkPlanCopy({
+                box: 3,
+                index: 22,
+                slot: 18,
+                card: 18,
+                label: 'Box 3, Section 2, Card 18',
+                capture_id: 'cap-b',
+              }),
+            ],
+          }),
+        ],
+      }),
+    ]),
+  })
+
+  // Hide picked defaults ON (D132). Nothing sold yet, so both rows show.
+  await expect(page.locator('.orders-walk-line')).toHaveCount(2)
+
+  // Sell Volcanion (the default landing card). The row must NOT fold at once (UN-6's own fix).
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
+  await expect(page.locator('.orders-walk-tools .bn-hidetoggle-count')).toHaveText('1')
+  await expect(page.locator('.orders-walk-line')).toHaveCount(2)
+
+  // Toggle Hide picked off, then on: the ON press is what folds Volcanion's row, right now.
+  const hideToggle = page.getByRole('button', { name: /^Hide picked/ })
+  await hideToggle.click()
+  await expect(page.locator('.orders-walk-line')).toHaveCount(2)
+  await hideToggle.click()
+  await expect(page.locator('.orders-walk-line')).toHaveCount(1)
+  await expect(page.locator('.orders-walk-line')).toHaveText(/Tricksy Tentacles/)
+
+  // Sell Tricksy Tentacles while Hide picked is already on: it stays in place, this time.
+  await page.getByRole('button', { name: /Tricksy Tentacles/ }).click()
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
+  await expect(page.locator('.orders-walk-tools .bn-hidetoggle-count')).toHaveText('2')
+  await expect(page.locator('.orders-walk-line')).toHaveCount(1)
+  await expect(page.locator('.orders-walk-line')).toHaveText(/Tricksy Tentacles/)
+})
+
 test('finding #16 (the Opus review round) — the struck-out row in the walk list, at 390, carries its own Undo', async ({
   page,
 }) => {
