@@ -120,6 +120,13 @@ Closing it needs one transaction across two stores, `store.sqlite` and
 `inventory/prices.json`. Round 4 does not build that. This one gap is what stays open. Named
 in a code comment at the posting call in `cli/cmd_reprice.py:_apply`, and here.
 
+**A second window, found by round 4's review and accepted.** The excepts in `_apply` catch
+`Exception`. A `KeyboardInterrupt` is a `BaseException`, so it skips them. A Ctrl-C inside the
+final rename leaves the new price in the corpus, no `import.csv`, no posting, and the temp
+file on disk. The reviewer reproduced it. The timing is narrow, and the press is one the owner
+starts by hand. To close it, catch `BaseException` round the final rename and its restore,
+then raise again.
+
 **The check.** Eight harness cases in `harness/tests/t7_store_and_seams.py`
 (`check_undo_until_built_on`), named `T7-RACE (DEBT48)`.
 
