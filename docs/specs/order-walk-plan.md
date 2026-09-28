@@ -1183,7 +1183,8 @@ k.walk_order)`.
 
 A change to `walk_order` itself can change which stops the solver picks on a tie. That would
 change what the walk holds, not only its order. So `plan` alone changes. It already holds
-`inventory`. Its new key is `(pooled flag, name key of inventory.box_title(box), section)`.
+`inventory`. Its new key is `(pooled flag, density, name key of inventory.box_title(box),
+section)`: density first, and the box name in natural order breaks a tie only.
 `store/master.py:box_title` composes a box's name, the same function the refusals already
 use. Pooled stops stay last.
 

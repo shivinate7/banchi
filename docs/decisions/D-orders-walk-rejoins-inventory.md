@@ -29,12 +29,12 @@ does not revert to the card-then-walk order the first mockup drew. The walk is w
 steps through at the shelf.
 
 **Q5, the walk order.** Density first, box name breaks a tie. The owner asked whether the
-walk already sorted by density. It was right to ask. D220's own owner quote says it should.
+walk already sorted by density. They were right to ask. D220's own owner quote says it should.
 `pipeline/walkplan.py`'s built `plan` sorts by `walk_order`, the hidden box NUMBER, never by
 density or name. The fix keeps `walk_order` for the solver's own determinism (`_dominated`,
-`_greedy`, `solve`). It changes only `plan`'s drawn-order key, to `(pooled flag, name key of
-inventory.box_title(box), section)`, in natural order (D259, a box is shown only by its
-name). The final re-sort by the hidden box number is deleted.
+`_greedy`, `solve`). It changes only `plan`'s drawn-order key, to `(pooled flag, density,
+name key of inventory.box_title(box), section)`. Density comes first, as the spec defines it.
+The box name, in natural order, breaks a tie only (D259, a box is shown only by its name). The final re-sort by the hidden box number is deleted.
 
 **Q6, the pane's card facts.** The hero head only, D274's own shape. No Details fold sits on
 this screen. Below the head goes every on-hand copy of the card, in Inventory's own copies
