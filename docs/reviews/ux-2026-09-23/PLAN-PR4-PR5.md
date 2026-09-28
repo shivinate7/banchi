@@ -64,7 +64,10 @@ Each item gets an id, `F<n>`, and one line here. The line names its route:
   every screen. Each got DELETE or ONE WORD, with no option to keep a phrase (the owner's rule).
   196 strings: 165 ONE WORD, 31 DELETE. The list is `verbiage-blind/verbiage.csv` in this folder.
   Three cuts lose the only place a fact lives: Review's mismatch paragraph, Sales' "not profit"
-  line, and Sales' sealed footnote.
+  line, and Sales' sealed footnote. A fourth: the Fulfiller's neighbor line.
+  Owner: `Approved on cutting everything from F5`. Of the four, the owner said `rest are good to cull`.
+  Review's mismatch paragraph stays held until the owner sees an example. Numbers and names are
+  data and stay (the sweep's own rule). Lane F5 builds it.
 - F7 (from lane D1's review, logged): `archive` and `wallet` share the lock's heavy-body-low
   drawing. Only the lock got the optical re-centering.
 - F6 (logged): the owner asked whether one spacing mandate covers every kind of spacing. The
@@ -150,6 +153,10 @@ Owner, 2026-09-27: `save it in the markdown as an item for PR4B, ironically rpel
   Fulfillment `<Page>` variant, the Runs R2 entries, and the six icon entries.
 - Still listed, and waiting for visuals and plans (`lane-d/` in this folder): the top gap on
   `/`, `/review` and `/runs`, five ReviewQueue R2 entries, and the Codes filter row.
+- The owner's rulings on lane D's plan (2026-09-27): Home keeps its own top gap. Review moves to
+  the kit's top gap (`Keep Home, move Review`). Runs' entry goes, because its gap never shows.
+  Lane D2 builds Capture's gap (F4) with a head-to-body check, ReviewQueue's five controls, and
+  Codes' filter row.
 - Lane D1: the lock glyph sits low in its drawing (`kit/Icon.tsx`, `lock`). Lane K nudged one
   Pricing button 1px as a bandaid. Fix the glyph, and remove the nudge.
 
