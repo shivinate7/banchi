@@ -6421,7 +6421,7 @@ COMPONENTS = [
                                       "mistake would happen, and asserts nothing about the "
                                       "rendering. No Playwright spec covers this screen yet.",
                               "governed_by": ["D14", "D20", "D24", "D33", "D56", "D70", "D172",
-                                              "D218", "D259", "D272"]},
+                                              "D218", "D259", "D270", "D272"]},
             "src/Codes.css": {"does": "the code screen's look. The two lanes are the first "
                                       "numbers drawn, because they are the decision; the "
                                       "duplicate panel takes the one non-hairline border in "
