@@ -85,6 +85,12 @@
  *                            the row `FilterBar` exists to be. FILE-LEVEL, not per-element: it
  *                            answers "does this file's toolbar go through FilterBar at all",
  *                            not "is this exact SearchField beside that exact Select".
+ *                R2-box-number
+ *                            the Box number sweep (owner, 2026-09-27, D259): a typed
+ *                            `` `Box ${n}` `` or `'Box ' + n` outside `kit/dataRules.ts`
+ *                            (`boxTitle`'s own file) and `position.ts` (the owner's own
+ *                            exclusion). A box is shown only by its name; the number is
+ *                            `boxTitle`'s one fallback, never composed a second time.
  *
  * THE EXCEPTIONS ARE A SHRINKING OFFENDER LIST, NEVER A PINNED COUNT (the owner's ruling on Q3,
  * 2026-09-23). `scripts/kit-adoption-allow.json`'s `static` block is file -> rule -> lane: the
@@ -199,6 +205,11 @@ export const SPECIMEN_FILES = ['app/src/Gallery.tsx']
  *  owner's own rows — a component-level exemption is not this reader's shape, so that branch
  *  is read by the owner's rule like any other, a known gap named here rather than hidden. */
 export const FULFILLER_FILES = ['app/src/Fulfillment.tsx', 'app/src/PullConfirm.tsx']
+/** THE TWO FILES R2-BOX-NUMBER MAY NOT SEE (D259, the Box number sweep, 2026-09-27): the box
+ *  drawer's own name-or-number composer (`kit/dataRules.ts:boxTitle`) and `position.ts`, which
+ *  the owner named excluded from this sweep on its own word. Every other file composes a box
+ *  label through `boxTitle` rather than typing the fallback a second time. */
+export const BOX_TITLE_FILES = ['app/src/kit/dataRules.ts', 'app/src/position.ts']
 const ALLOW_FILE = 'scripts/kit-adoption-allow.json'
 /** R2-icon-only-button's clause (c): a `Button` whose literal label starts with one of these,
  *  and whose `variant` cannot be shown to be always `primary` or `danger-solid` — the two
@@ -253,6 +264,7 @@ export const RULES = {
   'R2-header-actions': 'more than one worded <Button> in a <Page>/<PageHeader> actions slot (the rest must be IconButtons or a More menu)',
   'R2-filter-row': 'a hand-built filter row (a SearchField beside a facet control) that does not go through the kit FilterBar',
   'R2-undo-key': "a screen binding the U key itself outside kit/undo.ts (use useUndoHotkey)",
+  'R2-box-number': "a typed `Box ${...}` (or `'Box ' + ...`) outside kit/dataRules.ts and position.ts (use boxTitle)",
 }
 
 /** R2-header-actions: the tags whose `actions` prop draws a page header (`Page.tsx`'s and
@@ -562,6 +574,11 @@ export const SEARCHISH = /\b(search|find|filter|look ?up)/i
 export const DATE_OPTIONS = ['dateStyle', 'timeStyle', 'year', 'month', 'day', 'weekday', 'hour', 'minute', 'second', 'era', 'timeZoneName', 'hour12', 'hourCycle', 'dayPeriod']
 /** R2-money: text that ends in a dollar sign, then at most white space, right before a value. */
 const DOLLAR_END = /\$\s*$/
+/** R2-box-number: text that ends in the word `Box`, then at least one space, right before a
+ *  value — a typed box-number display (`\`Box ${n}\``, `'Box ' + n`) the owner ruled out (D259):
+ *  `boxTitle` is the one place that still types the fallback. `\b` keeps a longer word ending
+ *  in "box" (a compound like "Toolbox") from matching. */
+const BOX_HEAD = /\bBox\s+$/
 
 /** The object literals among a call's arguments, as a map of key -> initializer. */
 function optionObjects(args) {
@@ -592,6 +609,17 @@ function endsInDollar(expr) {
   if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) return DOLLAR_END.test(e.text)
   if (ts.isTemplateExpression(e)) return false
   if (ts.isBinaryExpression(e) && e.operatorToken.kind === ts.SyntaxKind.PlusToken) return endsInDollar(e.right)
+  return false
+}
+
+/** R2-box-number's own `endsInDollar`: does this expression end in a string literal matching
+ *  BOX_HEAD, e.g. `'Box '` or `'... Box '`? Same shape, a different word. */
+function endsInBoxWord(expr) {
+  const e = unwrap(expr)
+  if (!e) return false
+  if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) return BOX_HEAD.test(e.text)
+  if (ts.isTemplateExpression(e)) return false
+  if (ts.isBinaryExpression(e) && e.operatorToken.kind === ts.SyntaxKind.PlusToken) return endsInBoxWord(e.right)
   return false
 }
 
@@ -820,6 +848,7 @@ function scanFile(rel, sf) {
     if (rule === 'R2-class' && SPECIMEN_FILES.includes(rel)) return
     if (rule === 'R2-icon-only-button' && (SPECIMEN_FILES.includes(rel) || FULFILLER_FILES.includes(rel))) return
     if (rule === 'R2-filter-row' && SPECIMEN_FILES.includes(rel)) return
+    if (rule === 'R2-box-number' && BOX_TITLE_FILES.includes(rel)) return
     hits.push({ rule, line: lineOf(sf, node), detail })
   }
   /* R2-filter-row is a FILE-LEVEL question (does this file's own toolbar go through FilterBar
@@ -915,6 +944,8 @@ function scanFile(rel, sf) {
       }
     } else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken && endsInDollar(n.left)) {
       add('R2-money', n, "`'$' + ...`")
+    } else if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken && endsInBoxWord(n.left)) {
+      add('R2-box-number', n, "`'Box ' + ...`")
     } else if ((ts.isNewExpression(n) || ts.isCallExpression(n)) && isIntlNumberFormat(n.expression) && asksCurrency(n.arguments)) {
       add('R2-money', n, "Intl.NumberFormat with style 'currency'")
     } else if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === 'toLocaleString') {
@@ -934,6 +965,7 @@ function scanFile(rel, sf) {
       let before = n.head.text
       for (const span of n.templateSpans) {
         if (DOLLAR_END.test(before)) add('R2-money', span.expression, callsToFixed(span.expression) ? '`$${... .toFixed(...)}`' : '`$${...}`')
+        if (BOX_HEAD.test(before)) add('R2-box-number', span.expression, '`Box ${...}`')
         before = span.literal.text
       }
     }
@@ -1432,6 +1464,18 @@ function selfTest() {
     const ok = outcome(tree({ 'app/src/money.ts': 'export const s = (n) => `$${n.toFixed(2)}`\n', 'app/src/P.tsx': 'export const p = (n) => `${n.toFixed(1)}%`\n' }))
     return has(red.unlisted, 'app/src/S.tsx', 'R2-money') && green(ok)
   })
+  add('`Box ${n}` in a screen is red; boxTitle() and a name-only template are green', () => {
+    const red = outcome(tree({ 'app/src/S.tsx': 'export const s = (n) => `Box ${n}`\n' }))
+    const ok = outcome(tree({ 'app/src/S.tsx': "import { boxTitle } from './kit/data'\nexport const s = (n, name) => boxTitle(name, n)\n" }))
+    const notBoxWord = outcome(tree({ 'app/src/S.tsx': 'export const s = (n) => `Toolbox ${n}`\n' }))
+    return has(red.unlisted, 'app/src/S.tsx', 'R2-box-number') && green(ok) && green(notBoxWord)
+  })
+  add("`'Box ' + n` in a screen is red (R2-box-number)", () =>
+    has(outcome(tree({ 'app/src/S.tsx': "export const s = (n) => 'Box ' + n\n" })).unlisted, 'app/src/S.tsx', 'R2-box-number'))
+  add('`Box ${n}` inside kit/dataRules.ts (boxTitle\'s own file) is green', () =>
+    green(outcome(tree({ 'app/src/kit/dataRules.ts': 'export const boxTitle = (name, n) => name || `Box ${n}`\n' }))))
+  add('`Box ${n}` inside position.ts (the owner\'s own exclusion) is green', () =>
+    green(outcome(tree({ 'app/src/position.ts': 'export const s = (n) => `Box ${n}`\n' }))))
   add('an allow entry naming an unknown rule is refused', () => outcome(tree({}), { static: { 'app/src/Home.tsx': { R9: 'home' } } }).errors.length === 1)
   add('an allow entry with no lane is refused', () => outcome(tree({}), { static: { 'app/src/Home.tsx': { R1: '' } } }).errors.length === 1)
   add('a ROUTES table this reader cannot read is a loud failure, never a pass', () => {

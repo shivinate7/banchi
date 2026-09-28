@@ -50,6 +50,7 @@ import {
   touchBox,
 } from './deviceMemory'
 import type { CaptureSetup, SectionPick } from './deviceMemory'
+import { boxTitle } from './kit/data'
 import { captureBoxLabel } from './runScope'
 // The one thing this screen takes from the library drawing: how long a pause has to be
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
@@ -2155,9 +2156,14 @@ export function CaptureScreen() {
               'browser remembered the number before it started recording which box that was, ' +
               'and a deleted box hands its number to the next one. Nothing is selected; pick ' +
               'the drawer in front of you.'
-          : `Box ${found.box} is a different drawer now — the one you last captured into was ` +
-              'deleted, and its number went to this one. Nothing is selected; pick the drawer ' +
-              'in front of you.',
+          : /* D259 OVERRIDES D153'S OWN ARGUMENT FOR THIS SENTENCE, which used to type
+               `Box ${found.box}` on the ground that the number was the two drawers' one shared
+               fact. The owner's later ruling leaves no exception: the box is named by its
+               current label, `boxTitle`'s answer, even in a sentence about the number's own
+               reallocation. */
+            `${boxTitle(found.name, found.box)} is a different drawer now — the one you last ` +
+              'captured into was deleted, and its number went to this one. Nothing is ' +
+              'selected; pick the drawer in front of you.',
       )
       setOpenField('box')
       return
@@ -4490,7 +4496,7 @@ export function CaptureScreen() {
                 {boxOffer === null ? null : (
                   <Opt
                     on={false}
-                    name={boxOffer.box === null ? (boxOffer.name ?? '') : `Box ${boxOffer.box}`}
+                    name={boxOffer.box === null ? (boxOffer.name ?? '') : boxTitle(boxOffer.name, boxOffer.box)}
                     trail="New"
                     trailWord
                     onPick={() => void createOfferedBox()}

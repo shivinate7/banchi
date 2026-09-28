@@ -19,6 +19,7 @@ import type {
 } from './types'
 import { useCardCrop } from './cardCrop'
 import { Button, cropStyle, Icon, Kbd, Loading, Page, type IconName } from './kit'
+import { boxTitle } from './kit/data'
 import { dayMonth, weekdayDate } from './dates'
 import { pricingTileNote, runsOwingPrice, sendCounts, standing, type Standing } from './standing'
 import { DEMO_HISTORY_SCALE, inflate, photographed, ribbon, sittings, type Ribbon } from './storeHistory'
@@ -190,12 +191,12 @@ function plural(n: number, one: string, many = `${one}s`): string {
 }
 
 /** A BOX IS SHOWN BY ITS NAME, EVERYWHERE (the owner's ruling, 2026-09-23) — never a bare
- *  number standing for the drawer. `Box ${box.box}` is the one exception the ruling itself
- *  names: the owner's own default for a box nobody has named yet ("it can default to count+1
- *  Box as a default name"), so this is what the STORE will hand back once the backfill lands
- *  and never a second, different-looking guess drawn here in the meantime. */
+ *  number standing for the drawer. `boxTitle` is `store/numbers.py:box_title` mirrored: the
+ *  owner's own default for a box nobody has named yet ("it can default to count+1 Box as a
+ *  default name"), so this is what the STORE will hand back once the backfill lands and never
+ *  a second, different-looking guess drawn here in the meantime. */
 function boxDisplayName(box: { readonly name: string | null; readonly box: number }): string {
-  return box.name ?? `Box ${box.box}`
+  return boxTitle(box.name, box.box)
 }
 
 type Stage = {

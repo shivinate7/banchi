@@ -53,7 +53,7 @@ import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
 import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows, type SortValue } from './kit'
-import { UNNAMED_BOX } from './kit/data'
+import { boxTitle, UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
 import { storedBoxRecency, touchBox } from './deviceMemory'
@@ -236,8 +236,7 @@ function tierHasLive(tier: readonly SearchGroup[], frozen: FrozenRank): boolean 
 function shelfLabel(shelf: Shelf, name?: string | null): string {
   if (shelf === 'pooled') return 'Pooled'
   if (shelf === 'unplaced') return 'No box'
-  if (name !== undefined && name !== null && name.trim() !== '') return name.trim()
-  return `Box ${shelf}`
+  return boxTitle(name, shelf)
 }
 
 /* What a 36px tile can say about a box (D132): the first word of its name, at most four
@@ -2088,9 +2087,9 @@ export function BoxBrowse({
                 <span className="browse-boxcell-text">
                   <span
                     className="browse-boxcell-name"
-                    title={typeof cell === 'number' ? (record?.name ?? `Box ${cell}`) : shelfLabel(cell)}
+                    title={typeof cell === 'number' ? boxTitle(record?.name, cell) : shelfLabel(cell)}
                   >
-                    {typeof cell === 'number' ? (record?.name ?? `Box ${cell}`) : shelfLabel(cell)}
+                    {typeof cell === 'number' ? boxTitle(record?.name, cell) : shelfLabel(cell)}
                   </span>
                   {/* The lock beside the row already says sealed; the meta keeps to the count. */}
                   <span className="browse-boxcell-meta">

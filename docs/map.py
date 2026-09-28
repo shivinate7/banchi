@@ -4873,7 +4873,7 @@ COMPONENTS = [
                         "fixtures and writes nothing (D18). `--routes` prints ROUTES as JSON for "
                         "app/tests/scaffold.spec.ts, so the spec and the check read one table "
                         "with one reader.",
-                "governed_by": ["D18", "D173", "D275", "D280", "D288"]},
+                "governed_by": ["D18", "D173", "D259", "D275", "D280", "D288"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "
@@ -6216,7 +6216,7 @@ COMPONENTS = [
                                              "`boxesMostRecentFirst` (this browser's hand, then the "
                                              "newest box by `bid`, then the number). No React, so a "
                                              "spec can import it.",
-                                     "governed_by": ["D132", "D142", "D145"]},
+                                     "governed_by": ["D132", "D142", "D145", "D259"]},
             "src/kit/data.specimens.tsx": {"does": "every data primitive in every state a screen "
                                                    "can put it in, on invented data. The kit page "
                                                    "mounts `DataSpecimens`; `tests/kit-data/` "
@@ -6865,8 +6865,8 @@ COMPONENTS = [
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D36", "D41", "D52", "D56", "D58", "D65", "D67", "D81", "D92",
                             "D117", "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145",
-                            "D153", "D164", "D170", "D172", "D196", "D218", "D260", "D264", "D286",
-                            "D299"]},
+                            "D153", "D164", "D170", "D172", "D196", "D218", "D259", "D260", "D264",
+                            "D286", "D299"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -8163,8 +8163,9 @@ COMPONENTS = [
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
                                                "D118", "D123", "D132", "D159", "D171", "D181",
                                                "D192", "D193", "D194", "D195", "D196", "D203",
-                                               "D209", "D212", "D218", "D220", "D221", "D274",
-                                               "D285", "D296", "D-orders-walk-rejoins-inventory"]},
+                                               "D209", "D212", "D218", "D220", "D221", "D259",
+                                               "D274", "D285", "D296",
+                                               "D-orders-walk-rejoins-inventory"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8449,8 +8450,8 @@ COMPONENTS = [
                                         "Box 4` cannot be read as three drawers rather than five.",
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
                                 # box whose number a run still remembers; D56 is the entry.
-                                "governed_by": ["D145", "D10", "D20", "D48", "D56", "D142",
-                                                "D180"]},
+                                "governed_by": ["D10", "D20", "D48", "D56", "D142", "D145", "D180",
+                                                "D218", "D259"]},
             "src/money.ts": {"does": "A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and "
                                      "`roundsToNothing`. Extracted from src/RunsComposer.tsx "
                                      "unchanged on 2026-09-11, when the run panel began "

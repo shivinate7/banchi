@@ -3,6 +3,9 @@
   "static": {
     "app/src/Pricing.tsx": {
       "R2-undo-key": "pricing: the field-scoped complement `useUndoHotkey` cannot reach on its own -- the shared hook yields to an editable target by design, so a price field's own onKey answers U while the cursor sits inside it (the window-level U is still useUndoHotkey, unaffected)"
+    },
+    "app/src/CaptureScreen.tsx": {
+      "R2-box-number": "the box picker's search-match suffix (D153): the number is drawn only as the answer to a typed number search, never as a box label, and D153's own text argues why -- a deliberate, kept design rather than a migration debt."
     }
   },
   "runtime": {
