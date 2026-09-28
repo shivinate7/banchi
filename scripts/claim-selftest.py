@@ -582,6 +582,32 @@ def main() -> int:
            "named concretely: the file whose citation broke PR #462's merge is in the set",
            "")
 
+        print("\n  -- and it skips what git ignores, not only what SKIP names --")
+        # `demo`, `app/demo` and `app/public/demo` are gitignored build output (D295), and
+        # none of the three was ever in `SKIP` — a branch that had built the demo locally
+        # handed this walk 24-133 MB of JSON it had no business reading, a demo build never
+        # holds a citation the claim commit could need to rewrite (owner's ruling,
+        # 2026-09-27). THE FIXTURE IS WRITTEN AND REMOVED BY THIS CASE, so it holds whether
+        # or not a demo has actually been built in this worktree.
+        demo_dir = claimer.ROOT / "app" / "demo"
+        made_demo_dir = not demo_dir.exists()
+        demo_dir.mkdir(parents=True, exist_ok=True)
+        ignored_fixture = demo_dir / "claim-selftest-fixture.json"
+        ignored_fixture.write_text('{"not": "a citation"}\n', encoding="utf-8")
+        try:
+            walked_with_demo = {
+                str(p.relative_to(claimer.ROOT)) for p in claimer.text_files(claimer.ROOT)
+            }
+            ok("app/demo/claim-selftest-fixture.json" not in walked_with_demo,
+               "a gitignored file under app/demo/, never named in SKIP, is not walked", "")
+        finally:
+            ignored_fixture.unlink(missing_ok=True)
+            if made_demo_dir:
+                try:
+                    demo_dir.rmdir()
+                except OSError:
+                    pass
+
         print("\n  -- one slug is not allowed to be eaten by another --")
         # One fixture slug is a PREFIX of the other. An unbounded substitution
         # rewrites the shorter inside the longer and leaves a number with a tail
