@@ -10851,7 +10851,6 @@
     "docs/specs/demo.md": {
       "lane": "docs-sweep",
       "STE001": [
-        "02dc356216 Nothing derived from the demo is committed — `app/demo/bundle.json` is…",
         "093171f9ba Each refusal is thrown as a real `ServerError` in the server's own enve…",
         "1796d5bea3 `.github/workflows/demo.yml`'s build step derives this from the reposit…",
         "1826f37a86 **SYNTHETIC**, as originally designed — the photographs, to be drawn by…",
@@ -10860,7 +10859,6 @@
         "2f4ce2e8bd A guard that fires on the word for a secret keeps firing on documentati…",
         "30a6358910 The pipeline join that resolves a card against those exports, and the p…",
         "3f305c6285 Forking the app to build a public copy would duplicate the other 55,000…",
-        "4a01c81856 What `demo-freshness` is for is a local one: a `make demo-preview` runn…",
         "4d78efc0c5 `server/capture_server.py` is over thirteen thousand lines, and a secon…",
         "4dcb7ddd20 Nothing is persisted — a reload starts the demo over, which is the righ…",
         "4e7940bafc **Verified against the code, and the correction this entry exists partl…",
@@ -10886,7 +10884,6 @@
         "ce2976c85b A runtime flag — reading an environment variable or a query parameter a…",
         "f6ede9f9cd `PKMNSCAN_HOME` unset means the checkout's own store, which is somebody…",
         "f8ddb4c645 Press one and the store visibly changes underneath: the counters, the q…",
-        "fb917d6a13 `make demo` / `demo-seed` / `demo-record` / `demo-static` / `demo-previ…",
         "fc7cfc5644 This file is that argument's home — it existed only as prose inside `CL…"
       ],
       "STE006": [

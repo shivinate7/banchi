@@ -94,8 +94,9 @@ refuses loudly rather than guessing.
 
 **Amended (L5, 2026-09-27).** The test-audit plan's Q5, the owner's ruling: "Cut the old
 seed guards." `demo-seed`/`demo-record`/`demo` stay, a generator anyone can run on demand.
-Their determinism guards — `demo-determinism-selftest` (ran in `make check`) and
-`demo-determinism` (ran on every demo publish, `.github/workflows/demo.yml`) — are retired.
-Both proved only the INVENTED seed's own determinism, never the mirror's, and this entry
-already said nothing ships from that seed. `demo-freshness` is untouched: it is not gated
-in `check` or `demo.yml` either, so it was never one of the guards this ruling names.
+C4 named three guards over that seed's own bundle, `app/demo/bundle.json`. The published
+mirror has never read that bundle since this entry. `demo-determinism-selftest` ran in
+`make check`. `demo-determinism` ran on every demo publish, `.github/workflows/demo.yml`.
+`demo-freshness` gated neither, but read the same dead bundle. All three retire together.
+`demo-determinism.py` and `demo-freshness.py` are gone from the tree. None of the three ever
+tested the mirror this entry publishes.

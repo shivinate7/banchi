@@ -5172,18 +5172,6 @@ COMPONENTS = [
                 # the first time and why its stand-in changed off `/home`.
                 "governed_by": ["D18", "D183", "D295"],
             },
-            "demo-freshness.py": {
-                "does": "whether app/demo/bundle.json still describes the wire it was recorded "
-                        "against, by comparing a digest of app/src/types.ts and "
-                        "app/src/server.ts. On no gate: the bundle is not committed and CI "
-                        "rebuilds it from source on every push, so what is left is a local "
-                        "preview serving a recording that predates the last edit.",
-                # D18: reads two files, writes nothing, so it is safe on a path that decides
-                # anything. D16 is the shape — a mechanical check for a claim that would
-                # otherwise fail silently, because a stale bundle renders BLANK rather than
-                # erroring.
-                "governed_by": ["D16", "D18"],
-            },
             "stockimages-cache-selftest.py": {
                 "does": "proves `pipeline/stockimages.py`'s disk cache offline, both ways: a "
                         "`Market` whose fetcher always raises `Offline` (the same failure "
@@ -5315,8 +5303,7 @@ COMPONENTS = [
                         "`min-height: 100dvh` and a taller viewport makes a taller document.",
                 # D5 is who the render is for and D13 is what it renders. D18 is why it is
                 # not on the commit path: it writes. D16 is the shape of what was added —
-                # a mechanical check for a claim that would otherwise fail silently, which
-                # is the same reason demo-freshness exists two entries up.
+                # a mechanical check for a claim that would otherwise fail silently.
                 "governed_by": ["D5", "D13", "D16", "D18"],
             },
             "views.txt": {

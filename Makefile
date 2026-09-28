@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -325,7 +325,6 @@ help:
 	@echo "  make demo-static  demo-mirror-install, then a static build to dist-demo/."
 	@echo "                    DEMO_BASE=<path> is where it will be served from."
 	@echo "  make demo-preview serve dist-demo/ exactly as a static host would."
-	@echo "  make demo-freshness  whether the bundle still matches the wire it recorded."
 	@echo "  make lint         eslint over app/, ruff over the Python packages (D82)."
 	@echo "  make typecheck    tsc --noEmit over app/"
 	@echo
@@ -2013,16 +2012,12 @@ demo-preview:
 	$(NPM_GUARD)
 	@cd app && DEMO_BASE=$(DEMO_BASE) npx vite preview --outDir ../dist-demo --port 4173 --strictPort
 
-# Whether app/demo/bundle.json still describes the wire it was recorded against. On no gate
-# at all: the bundle is not committed and CI rebuilds it from source on every push, so the
-# only staleness left is a local preview serving a recording that predates your last edit.
-# Worth one command; not worth failing `make check` over.
-demo-freshness:
-	@$(PYTHON) scripts/demo-freshness.py
-
-# `demo-determinism`, which compared two `make demo` runs' recorded CONTENT byte for byte,
-# is RETIRED (D295 amended, L5, 2026-09-27, the test-audit plan's Q5 — "cut the old seed
-# guards"). It proved only the invented seed's own determinism, and nothing ships from that
-# seed. It found a real defect once — 97 `bound_at` values differed between two runs before
-# `bind_sku` took an `at` parameter, invisible to `demo-freshness` above — recorded here so
-# the finding is not lost with the target.
+# `demo-freshness`, which compared app/demo/bundle.json against the wire it was recorded
+# against, and `demo-determinism`, which compared two `make demo` runs' recorded CONTENT
+# byte for byte, are BOTH RETIRED (D295 amended, L5, 2026-09-27, the test-audit plan's Q5 —
+# "cut the old seed guards"). Neither ever gated a commit or a publish. Both proved only the
+# invented seed's own bundle, which the published demo has not built from since D295 — the
+# published mirror never goes near `app/demo/bundle.json`. `demo-determinism` found a real
+# defect once — 97 `bound_at` values differed between two runs before `bind_sku` took an
+# `at` parameter, invisible to `demo-freshness` — recorded here so the finding is not lost
+# with the targets.

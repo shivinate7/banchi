@@ -11,9 +11,9 @@ gets published. Read §13 first for what changed and why.
 search, the graveyard, the price histories and the value bands (§3, §5, §8, §8a).
 
 **STATUS, 2026-09-13: BUILT and LIVE.** `make demo` / `demo-seed` / `demo-record` /
-`demo-static` / `demo-preview` / `demo-freshness` are all real, all re-runnable, and the
-published page (`shivinate7.github.io/banchi`) is rebuilt by `.github/workflows/demo.yml` on
-every push to `main` that touches what it is built from. This file is that argument's home —
+`demo-static` / `demo-preview` are all real and all re-runnable. The published page
+(`shivinate7.github.io/banchi`) is rebuilt by `.github/workflows/demo.yml` on every push to
+`main` that touches what it is built from. This file is that argument's home —
 it existed only as prose inside `CLAUDE.md`'s command reference until this entry, verified
 against the code rather than carried forward from memory. **Re-verified against the tree
 on 2026-09-19** before landing: every mechanism below still holds, and three figures that
@@ -339,18 +339,19 @@ is the same argument this repo makes everywhere else about a guard nobody trusts
 prints what it matched, so a real failure does not require reproducing the build by hand to
 diagnose.
 
-## 10. Freshness has no gate, on purpose
+## 10. The old freshness guard is retired (D295 amended, L5, 2026-09-27)
 
-`make demo-freshness` (`scripts/demo-freshness.py`) compares a digest of `app/src/types.ts` and
-`app/src/server.ts` against what `app/demo/bundle.json` was recorded against. **It is not in
-`make check`.** Nothing derived from the demo is committed — `app/demo/bundle.json` is built
-fresh by CI on every push to `main` that touches the paths `.github/workflows/demo.yml` lists
-(`app/**`, `server/**`, `store/**`, `pipeline/**`, `cli/**`, `identify/**`, `geometry/**`,
-`codes/**`, `fixtures/**`, `demo-assets/**`, every script under `scripts/` whose name starts
-with `demo-` or `demo_`, `Makefile`, the workflow file itself) — so the published copy
-cannot go stale. What `demo-freshness` is
-for is a local one: a `make demo-preview` running against a recording made before your last
-edit, which this command catches without needing a `make check` failure to do it.
+`demo-freshness` (once `demo-freshness.py`) used to compare a digest of
+`app/src/types.ts` and `app/src/server.ts` against what `app/demo/bundle.json` was recorded
+against. It never gated `make check`. Nothing derived from the demo was committed. CI built
+`app/demo/bundle.json` fresh on every push to `main` that touched the paths
+`.github/workflows/demo.yml` lists (`app/**`, `server/**`, `store/**`, `pipeline/**`,
+`cli/**`, `identify/**`, `geometry/**`, `codes/**`, `fixtures/**`, `demo-assets/**`, every
+script under `scripts/` whose name starts with `demo-` or `demo_`, `Makefile`, the workflow
+file itself). So the published copy could not go stale. The published mirror never reads
+`app/demo/bundle.json` at all, so this guard tested only the invented seed's own recorder
+(the test-audit plan's Q5: "cut the old seed guards"). `demo-seed` / `demo-record` / `demo`
+stay, as a generator anyone can run on demand.
 
 ## 11. What republishes, and why nothing is ever queued
 
