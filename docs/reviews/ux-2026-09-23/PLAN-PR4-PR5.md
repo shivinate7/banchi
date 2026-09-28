@@ -197,6 +197,8 @@ G, T and PR 5:
 - H: `it'll be the epilogue of PR4`.
 - H, on the first mockups (current, A, B, C, desktop only): `all of the H concepts tend to just pick one color and stick to it, when the power of cyberpunk is its fusion of several loud color schema contrasting and clashing`. So no single-accent concept is the answer.
 - H, same round: `neon noir was the closest of the dynamism though if i had to pick one`, then `none were good tho`. Neon Noir is the starting point, not the answer.
+- H round 2 (owner, same day): `Mockup round 2: fusion (Recommended)`. Three multi-color concepts on Neon Noir's ground, Pricing and Home, desktop only.
+- The Box number sweep (owner, same day): `In PR 4B, after A3 and F5 (Recommended)`. One Sonnet lane adds a shared browser `boxTitle`. It fixes the screens that show a box number: the Orders copy map, the run scope, the rescue, Capture and Home's status line. A check refuses a new typed `Box ${`. D259 (a box is shown only by its name) governs.
 - Walk density: `Cards to pick at the stop (what's built)`.
 - Test-audit Q1, the tiers: `Three tiers, agent proposes, you approve (Recommended)`. Q2: `Yes (Recommended)`.
 - Start now: `L1, L3, L6, L7`. The owner asked for the other three options explained first.
