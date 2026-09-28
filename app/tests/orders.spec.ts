@@ -4678,9 +4678,13 @@ test('landing view: a sale does not re-sort the list or drop the buyer whose las
   })
   await expect(page.locator('.orders-index-row')).toHaveCount(2)
   const before = await buyerNames(page)
+  /* WAIT ON THE RE-READ, NEVER A CLOCK: the assertions below mean nothing until the post-sale
+     answer has been read and drawn (the headline then names the short line). */
+  const reread = page.waitForResponse((r) => /\/orders$/.test(new URL(r.url()).pathname) && r.request().method() === 'GET')
   await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
+  await reread
+  await expect(page.locator(VIEW)).toContainText('short')
   await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
-  await page.waitForTimeout(800) /* the pull's own re-read lands after the press */
   await expect(page.locator('.orders-index-row')).toHaveCount(2)
   expect(await buyerNames(page)).toEqual(before)
 })
@@ -4696,9 +4700,13 @@ test('landing view: the last sale leaves the buyer on screen', async ({ page }) 
     walkPlan: volcanionPlan(),
     landing: true,
   })
+  /* WAIT ON THE RE-READ, NEVER A CLOCK: the assertions below mean nothing until the post-sale
+     answer has been read and drawn (the headline then names the short line). */
+  const reread = page.waitForResponse((r) => /\/orders$/.test(new URL(r.url()).pathname) && r.request().method() === 'GET')
   await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
+  await reread
+  await expect(page.locator(VIEW)).toContainText('short')
   await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
-  await page.waitForTimeout(800) /* the pull's own re-read lands after the press */
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Ada Lovelace')
   await expect(page.locator('.orders-index-row')).toHaveAttribute('aria-current', 'true')
