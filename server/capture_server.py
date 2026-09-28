@@ -16166,7 +16166,9 @@ class CaptureHandler(BaseHTTPRequestHandler):
         # LOAD-BEARING. `_inflight` is what `drain()` waits on, and a request queued for a slot
         # has not started and cannot finish — counting it would make the drain wait on work that
         # is not happening and then kill it, which is the failure this whole bound is about.
-        if not _slots.acquire(timeout=files.LOCK_TIMEOUT_SECONDS):
+        lane = PHOTO_LANE and self.command == "GET" and self.path.startswith(("/photo/", "/assets/"))
+        gate = _photo_slots if lane else _slots
+        if not gate.acquire(timeout=files.LOCK_TIMEOUT_SECONDS):
             self._fail(
                 HTTPStatus.SERVICE_UNAVAILABLE,
                 "server_busy",
@@ -16264,7 +16266,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
             )
         finally:
             _inflight_leave()
-            _slots.release()
+            gate.release()
 
     def do_OPTIONS(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler's naming
         """The preflight. It answers 204 for any path, and now not for any origin.
@@ -17363,6 +17365,10 @@ _inflight = 0
 # drain window, which is exactly the guarantee the drain needs and did not have.
 REQUEST_SLOTS = 4
 _slots = threading.BoundedSemaphore(REQUEST_SLOTS)
+# PROTOTYPE (perf/photo-lane-probe, NEVER MERGED): photo and asset GETs take their own bound.
+PHOTO_LANE = os.environ.get("PKMNSCAN_PHOTO_LANE") == "on"
+PHOTO_SLOTS = int(os.environ.get("PKMNSCAN_PHOTO_SLOTS") or 4)
+_photo_slots = threading.BoundedSemaphore(PHOTO_SLOTS)
 
 
 def slots_in_use() -> int:
@@ -17453,12 +17459,28 @@ class CaptureServer(ThreadingHTTPServer):
     # the only thing still bounding execution. T7 asserts the invariant, not the transport.
     _pool: Optional[concurrent.futures.ThreadPoolExecutor] = None
 
+    _photo_pool: Optional[concurrent.futures.ThreadPoolExecutor] = None
+
     def process_request(self, request, client_address) -> None:
         if self._pool is None:
             self._pool = concurrent.futures.ThreadPoolExecutor(
                 max_workers=REQUEST_SLOTS, thread_name_prefix="capture"
             )
-        self._pool.submit(self._serve_one, request, client_address)
+            self._photo_pool = concurrent.futures.ThreadPoolExecutor(
+                max_workers=PHOTO_SLOTS, thread_name_prefix="photo"
+            )
+        pool = self._pool
+        if PHOTO_LANE:
+            # PROTOTYPE (perf/photo-lane-probe, NEVER MERGED): peek the request line to pick a pool.
+            try:
+                request.settimeout(0.2)
+                head = request.recv(64, socket.MSG_PEEK)
+                request.settimeout(None)
+                if head.startswith((b"GET /photo/", b"GET /assets/")):
+                    pool = self._photo_pool
+            except OSError:
+                pass
+        pool.submit(self._serve_one, request, client_address)
 
     def _serve_one(self, request, client_address) -> None:
         """`ThreadingMixIn.process_request_thread`'s body, run on a pooled worker instead."""
