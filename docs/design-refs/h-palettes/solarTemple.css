@@ -1,0 +1,107 @@
+/* Solar Temple — A sun cult’s ruin at dusk: temple gold on obsidian stone, an oasis of turquoise, and a mosaic of lapis in the fading blood-orange light. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bn-bg: #0e0a06;
+  --bn-surface: #17110a;
+  --bn-surface-2: #0a0704;
+  --bn-surface-3: #241a0d;
+  --bn-surface-glass: rgba(23, 17, 10, 0.72);
+  --bn-hover: rgba(251, 243, 232, 0.05);
+
+  --bn-ink: #fbf3e8;
+  --bn-ink-2: #e0cdb4;
+  --bn-ink-3: #b39d81;
+  --bn-ink-4: #8f7c65;
+
+  --bn-line: rgba(255, 220, 170, 0.10);
+  --bn-line-strong: rgba(255, 220, 170, 0.20);
+  --bn-line-focus: rgba(255, 191, 63, 0.6);
+
+  --bn-accent: #ffbf3f;
+  --bn-accent-hover: #ffd06e;
+  --bn-accent-press: #e6a418;
+  --bn-accent-tint: rgba(255, 191, 63, 0.16);
+  --bn-accent-tint-2: rgba(255, 191, 63, 0.26);
+  --bn-on-accent: #160e02;
+
+  --bn-live: #ff5a2e;
+  --bn-live-tint: rgba(255, 90, 46, 0.18);
+
+  --bn-ok: #2de0c2;
+  --bn-ok-tint: rgba(45, 224, 194, 0.16);
+  --bn-warn: #e8a33d;
+  --bn-warn-tint: rgba(232, 163, 61, 0.16);
+  --bn-danger: #e8355a;
+  --bn-danger-tint: rgba(232, 53, 90, 0.16);
+  --bn-money: #ffe066;
+
+  --bn-pill-ink-accent: #ffd06e;
+  --bn-pill-ink-ok: #2de0c2;
+  --bn-pill-ink-warn: #e8a33d;
+  --bn-pill-ink-danger: #e8355a;
+  --bn-pill-ink-live: #ff5a2e;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(255, 191, 63, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(255, 90, 46, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(255, 191, 63, 0.65);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #241a0d;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  /* the camera/photo stage keeps its own accent apart from the UI's, so the
+     capture screen clashes on purpose against the shell around it */
+  --bn-stage-accent: #3b6bd8;
+  --bn-stage-accent-hover: rgba(59, 107, 216, 1);
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+}
+
+/* ---- nav groups: each rail section takes its own hue (color only) ---- */
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(2) .bn-nav-group-label { color: #2de0c2; }
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(2) .bn-nav-link[aria-current='page'] {
+  color: #2de0c2;
+  background: rgba(45, 224, 194, 0.14);
+  box-shadow: inset 2px 0 0 #2de0c2;
+}
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(2) .bn-nav-link:hover { color: #2de0c2; }
+
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(3) .bn-nav-group-label { color: #e05a2e; }
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(3) .bn-nav-link[aria-current='page'] {
+  color: #e05a2e;
+  background: rgba(224, 90, 46, 0.14);
+  box-shadow: inset 2px 0 0 #e05a2e;
+}
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(3) .bn-nav-link:hover { color: #e05a2e; }
+
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(4) .bn-nav-group-label { color: #8a5bff; }
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(4) .bn-nav-link[aria-current='page'] {
+  color: #8a5bff;
+  background: rgba(138, 91, 255, 0.14);
+  box-shadow: inset 2px 0 0 #8a5bff;
+}
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(4) .bn-nav-link:hover { color: #8a5bff; }
+
+/* Home link (ungrouped, index 1) keeps the primary accent as its own job */
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(1) .bn-nav-link[aria-current='page'] {
+  color: #ffbf3f;
+  background: var(--bn-accent-tint);
+  box-shadow: inset 2px 0 0 #ffbf3f;
+}
+
+/* segmented tabs (Pricing's To send / Live, etc.) alternate two clashing hues */
+:root[data-theme='dark'] .bn-seg-item[aria-selected='true'],
+:root[data-theme='dark'] .bn-seg-item.active {
+  color: #160e02;
+  background: #ffbf3f;
+}
+:root[data-theme='dark'] .bn-seg-item:nth-of-type(2)[aria-selected='true'],
+:root[data-theme='dark'] .bn-seg-item:nth-of-type(2).active {
+  background: #e05a2e;
+}
