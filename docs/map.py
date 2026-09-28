@@ -9292,8 +9292,8 @@ COMPONENTS = [
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
                 "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
-                                "D124", "D125", "D134", "D174", "D192", "D276", "D259",
-                                "D273", "D298"]},
+                                "D124", "D125", "D134", "D174", "D192", "D259", "D273", "D276",
+                                "D298", "D301"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
