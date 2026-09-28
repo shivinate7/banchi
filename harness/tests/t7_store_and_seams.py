@@ -1088,6 +1088,14 @@ def check_next_index_sql(checks: Checks) -> None:
         with Store().write() as snapshot:
             snapshot.inventory.allocate_capture(3, cid=fake_cid("nx-w"))
             checks.equal(snapshot.inventory.next_index(3), 2, "a write session answers by the walk")
+            # IN-PLACE MUTATION, the one shape the source's index cannot see: a write session
+            # must answer from the live object, never from the stale column.
+            snapshot.inventory.cards["3/1"].index = 8
+            checks.equal(
+                snapshot.inventory.next_index(3), 9,
+                "a card moved in place inside a write session is seen (no fast path there)",
+            )
+            snapshot.inventory.cards["3/1"].index = 1
             snapshot.inventory.cards["6/1"] = master.Card(box="six", index=1)
         checks.raises(
             master.BadPosition, lambda: Store().read().inventory.next_index(1),
