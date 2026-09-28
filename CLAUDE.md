@@ -602,13 +602,10 @@ Rationale, sales strategy, and open questions: `docs/CODES-DECISIONS.md`.
   (`ARGS=<n>` with no `--confirm`) never waits, and is never this clause's business.
 - **A CITATION NAMES A SYMBOL, NEVER A LINE.** A line number rots on the next edit above it.
   Write a decision id, a section, or the `module.symbol` form the `paths` row verifies. That
-  form takes no `.py` before the symbol. Mechanized by three `make docs-audit` rows. `line
-  anchors` refuses a line past the file's end, and any anchor into a split-record stub. `line
-  anchor offenders` refuses an anchor that `scripts/line-anchor-offenders.json` does not list.
-  That list only shrinks. A new file starts clean, unless the anchor moved out of another
-  file. `line anchor allowlist` refuses an exemption in `scripts/docs-audit-line-allow.txt`
-  that has stopped being true. The rot rate printed beside them is MEASURED and never gated.
-  A citation pointing at a real line whose content has moved stays invisible, which D149
+  form takes no `.py` before the symbol. Mechanized by one `make docs-audit` row, `line
+  anchors`. It refuses every `path:N` and `path:N-M` in every markdown file, with no list of
+  exceptions. It runs at commit. A dated record that must quote a line writes it in words, as
+  in "line 182, column 81". A citation of a symbol that has moved stays invisible, which D149
   ruled no check can see.
 - **A screen answers to the system**: `--bn-*` tokens only, verified at 1440, 820 and 390,
   light and dark. `docs/DESIGN.md` is the record. `make docs-audit`'s `design tokens` row

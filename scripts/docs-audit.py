@@ -212,10 +212,7 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
     # `harness tests` at zero means TESTS is empty, `pkmnscan commands` at zero means
     # COMMANDS is, and `decision ids` at zero means the corpus is unreadable.
     "paths": ("staged", "counts the references it resolved out of the staged documents"),
-    "line anchors": (
-        "staged",
-        "counts the `path:N`/`path:N-M` line anchors it found in the staged documents",
-    ),
+    "line anchors": ("staged", "counts the staged documents it read for a line anchor"),
     "make targets": ("staged", "counts the `make` references it found in the staged documents"),
     "identifier spelling": (
         "staged",
@@ -236,10 +233,6 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
     "allowlist": (
         "always",
         "an empty docs-audit-allow.txt is the ideal state, not a broken reader",
-    ),
-    "line anchor allowlist": (
-        "always",
-        "an empty docs-audit-line-allow.txt is the ideal state, not a broken reader",
     ),
     "evidence freshness": (
         "always",
@@ -682,9 +675,7 @@ def path_candidates(line: str) -> List[str]:
 # `path_candidates` above cannot see the suffix at all: `:` is not in `_CANDIDATE_RE`'s
 # character class, so `docs/GATES.md:884` is extracted as the bare path `docs/GATES.md`
 # and the `paths` row above reports "references resolve" having never read the `:884`.
-# Measured over the staged docs: 713 line-anchored references, 13 past their target's end,
-# and — the narrower, structurally blind case Clause B exists for — 2 landing on a real
-# line of a split-record stub whose content moved elsewhere in the same split.
+# The `line anchors` row further down refuses every one of them.
 #
 # A NEW EXTRACTOR, NOT A WIDENED `_CANDIDATE_RE`. Three call sites depend on
 # `path_candidates` returning a list of plain strings, and folding a line-suffix onto that
@@ -1156,508 +1147,49 @@ def check_allowlist(report: Report, allowed: Dict[str, str]) -> None:
 
 # --------------------------------------------------------------------- line anchors
 
-# THE STUB ROSTER, DERIVED FROM THE CORPUS MODULES THAT REPLACED EACH STUB, NEVER TYPED.
-# `docs/DECISIONS.md`, `docs/DEBTS.md` and `docs/GATES.md` are index stubs since the split
-# (D160 and its two siblings): their records live one file each under `docs/decisions/`,
-# `docs/debts/` and `docs/gates/`, and each corpus module names both halves itself —
-# `STUB` (the file that is read by nothing) and `DIRECTORY` (where the content actually
-# lives) — because a reader that wrote its own reason for that had already drifted once.
-# A typed three-filename list here would be a fourth copy of a fact the repo already
-# states twice; reading `STUB` off the modules keeps this row unable to disagree with
-# them, at the cost of failing outright — never guessing a name — the moment one of the
-# three is missing or has lost that shape.
-_STUB_CORPUS_MODULES: Tuple[str, ...] = (
-    "decisions_corpus.py", "debts_corpus.py", "gates_corpus.py",
-)
-
-
-def _split_record_stubs() -> Optional[Set[Path]]:
-    """Every split-record stub path, or `None` when the roster could not be derived.
-
-    `None` is not "no stubs" — it is "this row cannot say", the same split every corpus
-    reader in this file already makes for `corpus_is_empty`. A caller that treated a
-    failed import as zero stubs would silently stop checking Clause B the moment one of
-    the three sibling modules broke, which is exactly the kind of quiet narrowing this
-    whole task exists to remove one level up.
-    """
-    stubs: Set[Path] = set()
-    for name in _STUB_CORPUS_MODULES:
-        module = _sibling(name)
-        if module is None:
-            return None
-        stub = getattr(module, "STUB", None)
-        directory = getattr(module, "DIRECTORY", None)
-        if not isinstance(stub, Path) or not isinstance(directory, Path):
-            return None
-        stubs.add(stub)
-    return stubs
-
-
-class ResolvedAnchor(NamedTuple):
-    """One line-anchored citation, resolved to a real repo path the same way `check_paths`
-    resolves a bare one — `.git/` excluded, a first segment outside `top_level_names()`
-    dropped. `sentence` is the doc's own line text, kept for the rot reader below so it
-    never has to re-walk the documents a second time."""
-
-    doc: Path
-    line: int
-    candidate: str
-    target: Path
-    start: int
-    end: Optional[int]
-    sentence: str
-
-
-def resolved_line_anchors(docs: Sequence[Path]) -> List[ResolvedAnchor]:
-    """Every line anchor in `docs`, resolved. Pure over its arguments plus the real repo's
-    `top_level_names()` — no Report — so `--self-test` can call it once and feed the
-    result to `line_anchor_findings` and `line_anchor_rot` without re-walking `docs`
-    three times for three different questions."""
+# ONE ROW, ONE RULE: NO MARKDOWN FILE CITES A LINE NUMBER. D245 (a citation names a symbol, not a
+# line) and the owner's ruling of 2026-09-27, "convert and collapse". The lane that converted the
+# last 776 anchors (2026-09-28) deleted the three rows that once policed them: the shape check
+# (line past the end, line in a split-record stub), the shrinking offender list, and the
+# allowlist. Nothing is left to list, so the row refuses every `path:N` and `path:N-M`.
+#
+# `line_anchor_candidates` is the extractor, above. `resolve_candidate` keeps the same three
+# suppressions `paths` has (a route, a placeholder, a first segment that is not a real top-level
+# entry), so `POST /pipeline/value:200` and `localhost:8000` are not anchors. `.git/` is skipped
+# as `paths` skips it. THERE IS NO EXEMPTION LIST. A dated record that must quote a line writes
+# it in words ("line 182, column 81"), which no `path:N` shape matches. The fix for a refusal is
+# a symbol (`module.symbol`, no `.py`), a section heading or a decision id.
+def line_anchor_hits(docs: Sequence[Path]) -> List[Tuple[Path, int, str]]:
+    """`(document, line number, anchor text)` for every line anchor in `docs`. Pure over its
+    arguments plus the real repo's `top_level_names()`, so `--self-test` can drive it."""
     tops = top_level_names()
-    out: List[ResolvedAnchor] = []
+    hits: List[Tuple[Path, int, str]] = []
     for doc in docs:
         for number, line in enumerate(read(doc).splitlines(), start=1):
             for anchor in line_anchor_candidates(line):
                 target = resolve_candidate(anchor.path, doc, tops)
-                if target is None:
+                if target is None or rel(target).split("/")[0] == ".git":
                     continue
-                # Same exclusion `check_paths` makes, for the same reason — see its own
-                # comment: `.git` is git's own storage, not repo content, and a linked
-                # worktree makes `.git` a FILE rather than a directory.
-                if rel(target).split("/")[0] == ".git":
-                    continue
-                candidate_text = f"{anchor.path}:{anchor.start}"
+                text = f"{anchor.path}:{anchor.start}"
                 if anchor.end is not None:
-                    candidate_text += f"-{anchor.end}"
-                out.append(
-                    ResolvedAnchor(
-                        doc, number, candidate_text, target, anchor.start, anchor.end, line,
-                    )
-                )
-    return out
+                    text += f"-{anchor.end}"
+                hits.append((doc, number, text))
+    return hits
 
 
-def line_anchor_findings(
-    anchors: Sequence[ResolvedAnchor], stubs: Set[Path]
-) -> Tuple[List[Tuple[ResolvedAnchor, Finding]], List[Finding]]:
-    """(Clause A findings paired with their anchor, Clause B findings) for anchors whose
-    TARGET FILE ALREADY EXISTS — a line anchor into a file that does not exist at all is
-    the `paths` row's own finding, and is never re-reported here.
-
-    Clause A pairs each finding with its anchor so the caller can apply
-    `scripts/docs-audit-line-allow.txt` — keyed on the CITATION TEXT, one specific number,
-    never a bare path — without this function knowing the allowlist exists.
-
-    Clause B fires only on an anchor Clause A did NOT already catch: an anchor whose
-    number is past the stub's end is Clause A's finding, and Clause B exists precisely for
-    the anchor that survives that check because the stub happens to still be long enough
-    to contain the number — a real line, holding unrelated text, because the record it
-    once held moved to another file in the same split. Checking both unconditionally would
-    double-report the same citation under two clauses for no new information.
-
-    SHAPE ONLY. Clause A and Clause B both answer "does this number make sense", never
-    "is this the right number" — see `check_line_anchors`'s own docstring for the
-    measurement that answers the second question and the row that reports it without
-    gating on it.
-    """
-    clause_a: List[Tuple[ResolvedAnchor, Finding]] = []
-    clause_b: List[Finding] = []
-    for anchor in anchors:
-        if not exists(anchor.target):
-            continue
-        total = len(read(anchor.target).splitlines())
-        upper = anchor.end if anchor.end is not None else anchor.start
-        if anchor.start > total or upper > total:
-            clause_a.append((
-                anchor,
-                Finding(
-                    f"{rel(anchor.doc)}:{anchor.line}",
-                    f"`{anchor.candidate}` cites line {anchor.candidate.split(':', 1)[1]} "
-                    f"of {rel(anchor.target)}, which has only {total} line(s).\n"
-                    f"Fix the reference, or add it to "
-                    f"scripts/docs-audit-line-allow.txt with a reason if it is a "
-                    f"deliberate record of a past citation.",
-                ),
-            ))
-            continue
-        if anchor.target in stubs:
-            clause_b.append(
-                Finding(
-                    f"{rel(anchor.doc)}:{anchor.line}",
-                    f"`{anchor.candidate}` is a line anchor into {rel(anchor.target)}, a "
-                    f"split-record stub — its records live one file each under the "
-                    f"directory beside it, so a line number into the stub is never the "
-                    f"content it names, even when the number itself resolves.",
-                )
-            )
-    return clause_a, clause_b
-
-
-LINE_ANCHOR_ALLOWLIST = ROOT / "scripts" / "docs-audit-line-allow.txt"
-
-
-def load_line_allowlist() -> Dict[str, str]:
-    """Same shape and the same self-cleaning discipline as `load_allowlist()` (see
-    `scripts/docs-audit-allow.txt`'s own header), keyed on the CITATION TEXT
-    (`path:N`/`path:N-M`) rather than a bare path — Clause A's subject is one specific
-    number, and two different anchors into the same file are two different claims, each
-    needing its own reason and its own staleness check."""
-    if not exists(LINE_ANCHOR_ALLOWLIST):
-        return {}
-    entries: Dict[str, str] = {}
-    for line in read(LINE_ANCHOR_ALLOWLIST).splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        path, _, reason = stripped.partition("#")
-        entries[path.strip()] = reason.strip()
-    return entries
-
-
-def check_line_anchor_allowlist(report: Report, allowed: Dict[str, str]) -> None:
-    """Self-cleaning, mirroring `check_allowlist` for this file's one entry kind: an
-    anchor that WAS past its target's end and now is not, because the target grew (or the
-    citation was corrected) underneath it. There is no test-id or identifier kind here —
-    every entry in this file is a line anchor, or it is not a valid entry at all."""
-    tops = top_level_names()
-    findings: List[Finding] = []
-    for entry, reason in sorted(allowed.items()):
-        match = _LINE_ANCHOR_RE.fullmatch(entry)
-        if match is None:
-            findings.append(
-                Finding(
-                    rel(LINE_ANCHOR_ALLOWLIST),
-                    f"`{entry}` is not shaped like a `path:N` or `path:N-M` line anchor, "
-                    f"so this file cannot say whether it is stale.",
-                )
-            )
-            continue
-        target = resolve_candidate(match.group("path"), ROOT / "docs" / "DECISIONS.md", tops)
-        if target is None or not exists(target):
-            continue
-        total = len(read(target).splitlines())
-        start = int(match.group("start"))
-        upper = int(match.group("end")) if match.group("end") else start
-        if start <= total and upper <= total:
-            findings.append(
-                Finding(
-                    rel(LINE_ANCHOR_ALLOWLIST),
-                    f"`{entry}` now resolves — {rel(target)} has {total} line(s) — so the "
-                    f"entry is stale — delete the line.\n"
-                    f"It was allowed because: {reason or '(no reason recorded)'}",
-                )
-            )
-    report.add(
-        "line anchor allowlist", MECHANICAL, findings,
-        f"{len(allowed)} entries, none stale", scanned=len(allowed),
-    )
-
-
-# THE ROT READER. A MEASUREMENT, NEVER A GATE — added on the coordinator's own instruction
-# that a published number needs a checked reader (D173; CLAUDE.md's "give every published
-# number and path a checked reader"), so the rot rate this task's own brief quotes (89% of
-# 206 checkable code anchors) is RECOMPUTED here rather than typed into a decision entry
-# and left to rot exactly like the citations it describes.
-#
-# THE PROBE CHECKS SHAPE-ADJACENT EVIDENCE, NEVER MEANING. D149 measured the nearest
-# mechanical proxy for "is this citation about what it says it is" — matching a quoted
-# span against a section — at one genuine catch against three false alarms, over 38 real
-# citations, and declined to build it: "no check can read what a sentence is about." This
-# reader is the same kind of proxy, one step narrower (an identifier the sentence already
-# names in backticks, not a quoted phrase), and it inherits the same limit. A MISS IS
-# EVIDENCE, NOT PROOF: a sentence may legitimately name a symbol that lives a few lines
-# away from where it happens to be discussed, or in a caller, a type, or a sibling
-# function the cited line calls. Four hand checks during this task were all genuine
-# misses (`_blank_number_by_name` cited at 1192, really at 1384; `do_pipeline_scope` at
-# 2455, really 6537; `bandOf` at 340, really 472; `pokemon_code` at 689, absent) — four is
-# a spot check, not a validation of this probe, and this docstring says so rather than
-# letting the row's own green or red text imply more than four data points support.
-_ROT_WINDOW = 5
-_ROT_NOISE = {"self", "None", "True", "False", "cls"}
-_BACKTICK_SPAN_RE = re.compile(r"`([^`]*)`")
-_ROT_TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-
-
-def _path_derived_tokens(path_text: str) -> Set[str]:
-    """Identifiers this reader must never award as evidence, because they come from the
-    CITATION'S OWN PATH rather than from anything the sentence says about the code.
-
-    MEASURED, AND IT IS NOT A SMALL EFFECT. Before this exclusion existed, `` `pipeline/
-    join.py:1192-1195` `` contributed the tokens `pipeline` and `join`, and `join` matches
-    near almost any line of `join.py` by construction — the file's own name is not
-    evidence that the CITED LINE is the right one. Over this repo's real corpus: 59 of 155
-    raw hits (38%) were carried SOLELY by a token derived from the anchor's own path, and
-    excluding them also moves the not-checkable count from 14 to 132 — 118 sentences name
-    no identifier at all except the citation itself, and counting those as checkable was
-    the same failure from the other direction: folding "nothing to check" into a passing
-    denominator, which is exactly what D149's own closing line warns against ("a pattern
-    that finds nothing reports nothing, and nothing reads as green").
-
-    Every 4+ character word out of the full path text AND its bare filename/stem — a
-    citation of `server/capture_server.py:200` must not score a hit on the word `server`
-    or `capture_server` appearing near line 200 of that same file, which it almost always
-    will.
-    """
-    tokens: Set[str] = set()
-    for text in (path_text, Path(path_text).name, Path(path_text).stem):
-        tokens.update(token for token in _ROT_TOKEN_RE.findall(text) if len(token) >= 4)
-    return tokens
-
-
-def _rot_identifiers(sentence: str, exclude: Set[str] = frozenset()) -> List[str]:
-    """Identifiers (4+ characters) the citing sentence names in backticks, in order, de-
-    duplicated, obvious noise excluded, and — since the fix above — every token in
-    `exclude` (the anchor's own path-derived tokens, from `_path_derived_tokens`) also
-    excluded. Returns `[]` when the sentence names nothing else — the caller's job is to
-    count that as NOT CHECKABLE and never fold it into the denominator as a pass, which is
-    D149's own closing lesson: "a pattern that finds nothing reports nothing, and nothing
-    reads as green.\""""
-    out: List[str] = []
-    seen: Set[str] = set()
-    for span in _BACKTICK_SPAN_RE.findall(sentence):
-        for token in _ROT_TOKEN_RE.findall(span):
-            if len(token) < 4 or token in _ROT_NOISE or token in seen or token in exclude:
-                continue
-            seen.add(token)
-            out.append(token)
-    return out
-
-
-def _rot_verdict(
-    lines: Sequence[str], start: int, end: Optional[int], identifiers: Sequence[str]
-) -> str:
-    """`"hit"` | `"miss"` | `"not-checkable"` | `"past-eof"` for one line anchor into code
-    whose target file exists, isolated from I/O so `--self-test` can drive it with plain
-    lists rather than real files on disk.
-
-    `"not-checkable"` when the sentence names no identifier — never silently treated as a
-    pass. `"past-eof"` when the anchor's own number is beyond the file (Clause A's own
-    question, answered again here because this reader is handed the raw line count rather
-    than `check_line_anchors`'s own Clause A verdict, and the two must never be able to
-    disagree about the same anchor). Otherwise a WINDOW of `_ROT_WINDOW` lines on each side
-    of the cited line or range — "in either direction", per the brief — is searched for any
-    named identifier as a whole word; any match is a `"hit"`, and none is a `"miss"`.
-    """
-    if not identifiers:
-        return "not-checkable"
-    upper = end if end is not None else start
-    if start > len(lines) or upper > len(lines):
-        return "past-eof"
-    lo = max(1, start - _ROT_WINDOW)
-    hi = min(len(lines), upper + _ROT_WINDOW)
-    window = "\n".join(lines[lo - 1:hi])
-    for ident in identifiers:
-        if re.search(r"\b" + re.escape(ident) + r"\b", window):
-            return "hit"
-    return "miss"
-
-
-def line_anchor_rot(anchors: Sequence[ResolvedAnchor]) -> Dict[str, object]:
-    """hit / miss / not-checkable / past-eof counts and the miss RATE, over line anchors
-    into CODE (target suffix is not `.md`) whose target file exists.
-
-    EVERY IDENTIFIER DERIVED FROM THE ANCHOR'S OWN PATH IS EXCLUDED before the window
-    search (`_path_derived_tokens`) — see that function's own docstring for the measured
-    reason (59 of 155 raw hits, 38%, were carried solely by the citation naming its own
-    file). Without the exclusion this reader answers a different, easier question — "does
-    this file's own name appear near the line it names itself" — which is nearly always
-    yes and proves nothing about whether the LINE NUMBER is right.
-
-    `rate` is `miss / (hit + miss)` — `not-checkable` and `past-eof` anchors are excluded
-    from both the numerator and the denominator, never counted as a pass. `rate` is `None`
-    when nothing was checkable, which the caller must print as `n/a`, never as `0%` — a
-    probe that found nothing to check is not evidence of a clean corpus. The exclusion
-    above also moves the not-checkable count up (14 → 132, measured): a sentence whose
-    ONLY backticked content is the citation itself now correctly reports it has named no
-    OTHER identifier, rather than crediting the citation with checking itself.
-    """
-    counts: Dict[str, int] = {"hit": 0, "miss": 0, "not-checkable": 0, "past-eof": 0}
-    for anchor in anchors:
-        if anchor.target.suffix == ".md" or not exists(anchor.target):
-            continue
-        exclude = _path_derived_tokens(anchor.candidate.split(":", 1)[0])
-        identifiers = _rot_identifiers(anchor.sentence, exclude)
-        lines = read(anchor.target).splitlines()
-        verdict = _rot_verdict(lines, anchor.start, anchor.end, identifiers)
-        counts[verdict] += 1
-    checkable = counts["hit"] + counts["miss"]
-    rate = round(counts["miss"] / checkable, 3) if checkable else None
-    result: Dict[str, object] = dict(counts)
-    result["checkable"] = checkable
-    result["rate"] = rate
-    return result
-
-
-def check_line_anchors(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
-    """`:N` and `:N-M` line-anchor citations, over Clause A (the line must exist) and
-    Clause B (never into a split-record stub) — see the section header above this
-    function's own neighbours for the measurement, and D149 for the boundary this row
-    deliberately does not cross (see the next paragraph).
-
-    SHAPE ONLY, AND THIS ROW MUST NEVER BE READ AS MORE THAN THAT. A citation pointing at
-    a real line whose content has since moved is INVISIBLE to Clause A and Clause B alike,
-    and this row reports every one of them green, correctly, because neither clause's job
-    is to read what the cited line says. Clause B is the one slice where shape and meaning
-    happen to coincide: a stub is ALWAYS the wrong file for a record's content,
-    independent of what the number is, so "shape" (which file) is enough to answer
-    "meaning" (is the citation right) for that one case only. The `line anchor rot`
-    figures folded into this row's own summary are a MEASUREMENT of the gap this
-    paragraph names, never a gate on it — see `line_anchor_rot`'s own docstring.
-
-    TWO HONEST NUMBERS, NOT ONE, AND THEY ARE NOT RECONCILED. The task's own brief quoted
-    89% (183 of 206) from a STRICTER probe — a backtick span that is a single bare
-    identifier, denominator 206. `line_anchor_rot` below is a LOOSER probe — any 4+ char
-    identifier anywhere in a backtick span, path-derived tokens excluded, denominator 317
-    — and measures roughly 70% (221 of 317) on the same tree. The two populations
-    genuinely differ (a citing sentence with a bare identifier alongside other backticked
-    text is checkable to the second probe and not the first), so this docstring reports a
-    RANGE with both definitions named rather than picking one number to publish. What is
-    not in doubt, under either definition, is the direction: most checkable line anchors
-    on this tree name a symbol that has moved.
-    """
-    stubs = _split_record_stubs()
-    if stubs is None:
-        report.add(
-            "line anchors", MECHANICAL,
-            [
-                Finding(
-                    "scripts/decisions_corpus.py",
-                    "the split-record stub roster could not be derived from "
-                    "decisions_corpus.py, debts_corpus.py and gates_corpus.py — one is "
-                    "missing, or does not carry both STUB and DIRECTORY. Clause B (a line "
-                    "anchor into a split-record stub) cannot run without it.",
-                )
-            ],
-            "stub roster unavailable, so nothing was checked", scanned=0,
+def check_line_anchors(report: Report, docs: Sequence[Path]) -> None:
+    """No document in `docs` may write `path:N` or `path:N-M`. Tier 1: it blocks at commit."""
+    findings = [
+        Finding(
+            f"{rel(doc)}:{number}",
+            f"`{text}` cites a line number, and a line number rots on the next edit above it. "
+            "Cite a symbol (`module.symbol`, no `.py`), a section or a decision id instead.",
         )
-        return
-
-    anchors = resolved_line_anchors(docs)
-    clause_a_all, clause_b = line_anchor_findings(anchors, stubs)
-    clause_a = [finding for anchor, finding in clause_a_all if anchor.candidate not in allowed]
-    allowed_count = len(clause_a_all) - len(clause_a)
-    findings = clause_a + clause_b
-
-    rot = line_anchor_rot(anchors)
-    rate = rot["rate"]
-    rate_note = f"{rate * 100:.1f}%" if rate is not None else "n/a"
-    summary = (
-        f"{len(anchors)} line anchors checked, {len(clause_a)} past the target's end "
-        f"({allowed_count} allowed), {len(clause_b)} into a split-record stub. "
-        f"MEASURED, NEVER GATED: of {rot['checkable']} checkable code anchors (naming an "
-        f"identifier of 4+ chars in backticks), {rot['miss']} land away from it "
-        f"({rate_note} miss rate) — {rot['not-checkable']} named no identifier and are not "
-        f"counted, {rot['past-eof']} are past the target's end and already counted above. "
-        f"A miss is evidence, not proof — see `line_anchor_rot`'s own docstring."
-    )
-    report.add("line anchors", MECHANICAL, findings, summary, scanned=len(anchors))
-
-
-# ------------------------------------------------ line anchor offenders (D245, D280)
-
-# CLAUSE C: A SHRINKING OFFENDER LIST OF LINE ANCHORS, NEVER A PINNED COUNT. The owner's ruling,
-# 2026-09-24, "convert both of the last pins": D229's per-file count is retired here the way the
-# typed-dot count and the prose ratio were. A count let a new anchor pass wherever an old one was
-# fixed in the same file, and it needed a person to re-pin it. The list names every anchor.
-#
-# `scripts/line-anchor-offenders.json` is file -> lane and `line-anchor` -> entries. An entry is
-# the anchor as written, `path:N` or `path:N-M`, once per occurrence (`line_anchor_identity`).
-# THE ENTRY SURVIVES THE EDITS THAT DO NOT TOUCH THE ANCHOR, the way the prose list does:
-#   - an edit elsewhere in the file, or a reflow, moves no anchor's text;
-#   - a claim (D140) turns `docs/decisions/D-<slug>.md` into `docs/decisions/D<n>-<slug>.md`.
-#     Both the anchor's decision path and a decision entry's own file key fold to
-#     `docs/decisions/*-<slug>.md`, so a claim moves nothing.
-# An edit to the anchor itself (a new line number) is a new identity: the old entry goes stale,
-# and the new text cannot be listed, because that is growth. The fix is a symbol, never a line.
-#
-# "LEAVE NOTHING ALONE" STILL HOLDS (the owner's ruling for this clause): every anchor
-# `line_anchor_candidates` extracts is listed, resolving or not. `line anchors` has its own
-# findings for a dangling one.
-#
-# GROWTH IS THE SHARED HELPER'S (`scripts/only_shrinks.py`), counted over the whole list, as the
-# prose list counts it. So a paragraph moved to another file carries its anchors and adds
-# nothing. A new file starts clean: an anchor in it is growth, unless the same anchor left
-# another file in the same branch.
-LINE_ANCHOR_OFFENDERS = ROOT / "scripts" / "line-anchor-offenders.json"
-LINE_ANCHOR_RULE = "line-anchor"
-_DECISION_PATH_ID = re.compile(r"(docs/decisions/)D[0-9]*-")
-
-
-def line_anchor_identity(anchor: LineAnchor) -> str:
-    """One list entry: the anchor as written, with a decision entry's number folded out of its
-    path (`docs/decisions/*-<slug>.md`), so a claim moves no identity."""
-    path = _DECISION_PATH_ID.sub(r"\1*-", anchor.path)
-    return f"{path}:{anchor.start}" + (f"-{anchor.end}" if anchor.end is not None else "")
-
-
-def _line_anchor_found(docs: Sequence[Path]) -> Dict[str, Dict[str, List[str]]]:
-    """list key -> {LINE_ANCHOR_RULE: every anchor in that document, once per occurrence}.
-    A decision entry is keyed by its file tail (`ste_measure.list_key`), as the prose list is."""
-    ste_measure = _sibling("ste_measure.py")
-    list_key = ste_measure.list_key if ste_measure is not None else (lambda path: path)
-    found: Dict[str, Dict[str, List[str]]] = {}
-    for doc in docs:
-        entries = [line_anchor_identity(anchor) for line in read(doc).splitlines()
-                   for anchor in line_anchor_candidates(line)]
-        if entries:
-            found.setdefault(list_key(rel(doc)), {}).setdefault(LINE_ANCHOR_RULE, []).extend(entries)
-    return {key: {rule: sorted(es) for rule, es in per.items()} for key, per in found.items()}
-
-
-def check_line_anchor_offenders(report: Report) -> None:
-    """Clause C. No markdown file may write a `path:N` line anchor that
-    `scripts/line-anchor-offenders.json` does not name. See the section header above.
-
-    Three failures, as every shrinking list has: an unlisted anchor, a stale entry, and growth
-    over the list at the merge-base with origin/main (`only_shrinks.growth`, via
-    `_offender_growth`). READS THE WHOLE TRACKED MARKDOWN TREE, staged or not. D18: the row
-    only reads. `make offenders-prune` deletes stale entries and never adds one."""
-    found = _line_anchor_found(markdown_files())
-    total = sum(len(es) for per in found.values() for es in per.values())
-    rules = {LINE_ANCHOR_RULE}
-    list_rel = rel(LINE_ANCHOR_OFFENDERS)
-    document, unreadable = _read_offender_list(LINE_ANCHOR_OFFENDERS)
-    if document is None:
-        report.add(
-            "line anchor offenders", MECHANICAL,
-            [Finding(list_rel, f"{unreadable}, so no anchor can be told listed from new "
-                               f"({total} line anchors found). Restore the list from git.")],
-            "no offender list", scanned=len(found),
-        )
-        return
-    listed, lanes, shape_errors = _offender_list_shape(document, rules)
-    findings = [Finding(list_rel, error) for error in shape_errors]
-    unlisted, stale = _offender_diff(found, listed)
-    for file, _rule, anchor in unlisted:
-        findings.append(Finding(
-            file,
-            f"cites {anchor!r} by line number, and {list_rel} does not list it. A line number "
-            "rots on the next edit above it. Cite a symbol, a section or a decision id instead. "
-            "Never add an entry to excuse a new anchor."))
-    for file, _rule, anchor in stale:
-        findings.append(Finding(
-            f"{list_rel}: {file}",
-            f"lists {anchor!r} for lane {lanes.get(file, '?')!r}, and {file} no longer cites it. "
-            "Delete the entry (`make offenders-prune`): the list only shrinks."))
-
-    base_doc, where = _offender_list_at_merge_base(list_rel)
-    if base_doc is None:
-        growth_note = f" Only-shrinks not compared: {where}. Failing open."
-    else:
-        base_listed, _, _ = _offender_list_shape(base_doc, rules)
-        refused, _allowed = _offender_growth(base_listed, listed, rules, rules)
-        for line in refused:
-            findings.append(Finding(
-                list_rel, f"gained {line} over the merge-base {where}. Cite a symbol instead of "
-                          "excusing the anchor."))
-        growth_note = f" Only-shrinks compared against the merge-base {where}."
-
-    listed_count = sum(len(es) for per in listed.values() for es in per.values())
+        for doc, number, text in line_anchor_hits(docs)
+    ]
     report.add(
-        "line anchor offenders", MECHANICAL, findings,
-        f"{total} line anchors over {len(found)} files; {listed_count} listed over "
-        f"{len(listed)} files; {len(unlisted)} unlisted, {len(stale)} stale.{growth_note}",
-        scanned=len(found),
+        "line anchors", MECHANICAL, findings,
+        f"{len(docs)} documents read, no line anchor", scanned=len(docs),
     )
 
 
@@ -17843,78 +17375,32 @@ def self_test() -> int:
         "a placeholder segment suppresses the match, same as `path_candidates`",
     )
 
-    print("\nline anchors: Clause A fires past the target's end, in range is clean")
+    print("\nline anchors: the one row refuses any path:N or path:N-M, and nothing else")
     with tempfile.TemporaryDirectory() as tmp:
-        target = Path(tmp) / "target.py"
-        target.write_text("\n".join(f"line {n}" for n in range(1, 11)) + "\n", encoding="utf-8")
         doc = Path(tmp) / "fake.md"
-
-        in_range = ResolvedAnchor(doc, 1, "target.py:10", target, 10, None, "cites `target.py:10`")
-        past_end = ResolvedAnchor(doc, 2, "target.py:11", target, 11, None, "cites `target.py:11`")
-        clause_a, clause_b = line_anchor_findings([in_range, past_end], set())
-        ok(len(clause_a) == 1 and clause_a[0][0] is past_end,
-           "only the past-the-end anchor is a Clause A finding", str(clause_a))
-        ok(not clause_b, "no stub involved, so Clause B is silent")
-
-        print("\nline anchors: a range anchor's UPPER bound past the end fires, not just the lower")
-        range_ok = ResolvedAnchor(doc, 3, "target.py:8-10", target, 8, 10, "cites `target.py:8-10`")
-        range_past = ResolvedAnchor(doc, 4, "target.py:8-11", target, 8, 11, "cites `target.py:8-11`")
-        clause_a, _ = line_anchor_findings([range_ok, range_past], set())
-        ok(len(clause_a) == 1 and clause_a[0][0] is range_past,
-           "the range whose upper bound is past the end is the one finding", str(clause_a))
-
-        print("\nline anchors: Clause B fires on a stub even when the number resolves")
-        stub_hit = ResolvedAnchor(doc, 5, "target.py:3", target, 3, None, "cites `target.py:3`")
-        clause_a, clause_b = line_anchor_findings([stub_hit], {target})
-        ok(not clause_a, "the number is in range, so Clause A is silent", str(clause_a))
-        ok(len(clause_b) == 1, "the target is a registered stub, so Clause B fires", str(clause_b))
-
-        # THE SAME ANCHOR, PAST THE END *AND* INTO A STUB, IS CLAUSE A'S ALONE — Clause B
-        # only answers for an anchor Clause A did not already catch, so double-reporting
-        # one citation under two clauses never happens.
-        stub_and_past = ResolvedAnchor(doc, 6, "target.py:99", target, 99, None, "x")
-        clause_a, clause_b = line_anchor_findings([stub_and_past], {target})
-        ok(len(clause_a) == 1 and not clause_b,
-           "past-the-end wins over stub membership — one finding, not two",
-           f"clause_a={clause_a} clause_b={clause_b}")
-
-    print("\nline anchors: the stub roster is derived from the corpus modules, never typed")
-    stubs = _split_record_stubs()
-    ok(stubs is not None, "the roster derives from decisions/debts/gates_corpus.py", str(stubs))
-    if stubs is not None:
-        ok(
-            {ROOT / "docs" / "DECISIONS.md", ROOT / "docs" / "DEBTS.md", ROOT / "docs" / "GATES.md"}
-            == stubs,
-            "the three known stubs, exactly",
-            str(stubs),
-        )
-
-    print("\nline anchor allowlist is self-cleaning, mirroring check_allowlist's own discipline")
-    with tempfile.TemporaryDirectory() as tmp:
-        target = Path(tmp) / "short.md"
-        target.write_text("one\ntwo\nthree\n", encoding="utf-8")
-        # A REAL REPO PATH IS NEEDED for `resolve_candidate` to accept the entry at all —
-        # `docs/DECISIONS.md` is a real, small, stable file (the split-record stub itself),
-        # the same trick `check_paths`'s own self-test uses real repo files for.
-        real_target = ROOT / "docs" / "DECISIONS.md"
-        real_total = len(read(real_target).splitlines())
-
-        report = Report()
-        check_line_anchor_allowlist(report, {f"docs/DECISIONS.md:{real_total + 500}": "test"})
-        ok(not report.checks[0].findings,
-           "an entry still past the end is not stale", str(report.checks[0].findings))
-
-        report = Report()
-        check_line_anchor_allowlist(report, {"docs/DECISIONS.md:1": "test"})
-        ok(len(report.checks[0].findings) == 1,
-           "an entry whose anchor now resolves is reported stale",
-           str(report.checks[0].findings))
-
-        report = Report()
-        check_line_anchor_allowlist(report, {"not a line anchor at all": "test"})
-        ok(len(report.checks[0].findings) == 1,
-           "a malformed entry is reported rather than silently ignored",
-           str(report.checks[0].findings))
+        for cited, label in (
+            ("cites `server/capture_server.py:123` here", "a single-line anchor is refused"),
+            ("cites `server/capture_server.py:123-130` here", "a range anchor is refused"),
+        ):
+            doc.write_text(cited + "\n", encoding="utf-8")
+            report = Report()
+            check_line_anchors(report, [doc])
+            ok(len(report.checks[0].findings) == 1, label, str(report.checks[0].findings))
+        for clean, label in (
+            ("cites `server/capture_server.do_search` here", "the symbol form is clean"),
+            ("cites `server/capture_server.py`, line 123, here", "a line written in words is clean"),
+            ("POST /pipeline/value:200 is a route", "a route is not an anchor"),
+            ("open localhost:8000 in a browser", "a host and port is not an anchor"),
+        ):
+            doc.write_text(clean + "\n", encoding="utf-8")
+            report = Report()
+            check_line_anchors(report, [doc])
+            ok(not report.checks[0].findings, label, str(report.checks[0].findings))
+    report = Report()
+    check_line_anchors(report, markdown_files())
+    ok(not report.checks[0].findings and report.checks[0].scanned > 0,
+       "no tracked markdown file cites a line number, and the row read some",
+       str(report.checks[0].findings[:3]))
 
     # THE ONE ONLY-SHRINKS HELPER'S OWN SELF-TEST, run here so it rides `make check`'s
     # `audit-self-test` rather than a target nothing calls. `kit-adoption.mjs --self-test`
@@ -17923,142 +17409,6 @@ def self_test() -> int:
     helper = _only_shrinks()
     ok(helper is not None and helper.self_test() == 0,
        "scripts/only_shrinks.py loads and its own self-test is clean")
-
-    print("\nline anchor offenders: the identity, the list comparison and growth, in memory")
-    anchor_rules = {LINE_ANCHOR_RULE}
-    one = line_anchor_candidates("See scripts/serve.py:120 and docs/GATES.md:10-12 here.")
-    ok([line_anchor_identity(a) for a in one] == ["scripts/serve.py:120", "docs/GATES.md:10-12"],
-       "an entry is the anchor as written, a range included",
-       f"{[line_anchor_identity(a) for a in one]}")
-    # BUILT FROM PARTS, never spelled: a decision-path token in this file is read as a
-    # citation by `repo map`.
-    slug_path = "docs/decisions/" + "D" + "-a-slug.md:7"
-    claimed_path = "docs/decisions/" + "D" + "301-a-slug.md:7"
-    ok([line_anchor_identity(a) for a in line_anchor_candidates(slug_path)]
-       == [line_anchor_identity(a) for a in line_anchor_candidates(claimed_path)]
-       == ["docs/decisions/*-a-slug.md:7"],
-       "a claim that numbers a decision moves no anchor's identity")
-    ANCHORS = {"docs/a.md": {LINE_ANCHOR_RULE: ["scripts/x.py:1", "scripts/x.py:1", "scripts/y.py:9"]}}
-    ok(_offender_diff(ANCHORS, ANCHORS) == ([], []), "the tree and the list agree")
-    renumbered = {"docs/a.md": {LINE_ANCHOR_RULE: ["scripts/x.py:1", "scripts/x.py:1", "scripts/y.py:10"]}}
-    unlisted, stale = _offender_diff(renumbered, ANCHORS)
-    ok(unlisted == [("docs/a.md", LINE_ANCHOR_RULE, "scripts/y.py:10")]
-       and stale == [("docs/a.md", LINE_ANCHOR_RULE, "scripts/y.py:9")],
-       "RED: an anchor given a new line number is a new offender and a stale entry — the fix "
-       "is a symbol, never a fresh number", f"{unlisted} {stale}")
-    third = {"docs/a.md": {LINE_ANCHOR_RULE: ANCHORS["docs/a.md"][LINE_ANCHOR_RULE] + ["scripts/x.py:1"]}}
-    unlisted, _ = _offender_diff(third, ANCHORS)
-    ok(unlisted == [("docs/a.md", LINE_ANCHOR_RULE, "scripts/x.py:1")],
-       "RED: a third copy of an anchor listed twice is unlisted", f"{unlisted}")
-    refused, _ = _offender_growth(ANCHORS, third, anchor_rules, anchor_rules)
-    ok(len(refused) == 1 and "scripts/x.py:1" in refused[0],
-       "RED: listing it anyway is growth, refused by the shared helper", f"{refused}")
-    new_doc = {**ANCHORS, "docs/new.md": {LINE_ANCHOR_RULE: ["scripts/z.py:3"]}}
-    refused, _ = _offender_growth(ANCHORS, new_doc, anchor_rules, anchor_rules)
-    ok(len(refused) == 1 and "scripts/z.py:3" in refused[0],
-       "RED: a brand-new file with an anchor is growth — a new file starts clean", f"{refused}")
-    moved = {"docs/b.md": ANCHORS["docs/a.md"]}
-    ok(_offender_growth(ANCHORS, moved, anchor_rules, anchor_rules) == ([], []),
-       "a paragraph moved to another file carries its anchors and is not growth")
-    ok(_offender_growth(ANCHORS, {"docs/a.md": {LINE_ANCHOR_RULE: ["scripts/x.py:1"]}},
-                        anchor_rules, anchor_rules) == ([], []),
-       "a list that only lost entries is not growth")
-
-    # `derived numbers` self-tests removed with the row (test-audit plan Q2, 2026-09-28).
-
-    print("\nrot probe: identifiers, the verdict, and the arm that fails on purpose")
-    ok(_rot_identifiers("no backticks here at all") == [],
-       "a sentence with no backticked span names no identifier")
-    ok(_rot_identifiers("uses `self`, `None` and `abc` — all too short or noise") == [],
-       "noise and short tokens are excluded even inside backticks",
-       str(_rot_identifiers("uses `self`, `None` and `abc` — all too short or noise")))
-    ok(_rot_identifiers("calls `do_pipeline_scope()` from the route") == ["do_pipeline_scope"],
-       "a real identifier inside a call expression is extracted",
-       str(_rot_identifiers("calls `do_pipeline_scope()` from the route")))
-
-    print("\nrot probe: the citation's own path never counts as its own evidence")
-    ok(_path_derived_tokens("pipeline/join.py") == {"pipeline", "join"},
-       "the full path and its stem both contribute tokens",
-       str(_path_derived_tokens("pipeline/join.py")))
-    exclude = _path_derived_tokens("pipeline/join.py")
-    # THE COORDINATOR'S OWN FIXTURE: a sentence whose ONLY backticked span IS the
-    # citation must score NOT-CHECKABLE, never a hit carried by the file naming itself.
-    ok(_rot_identifiers("see `pipeline/join.py:1192-1195`", exclude) == [],
-       "a sentence with no OTHER identifier than the citation itself names nothing "
-       "checkable — `join` and `pipeline` are excluded as path-derived",
-       str(_rot_identifiers("see `pipeline/join.py:1192-1195`", exclude)))
-    # AND A REAL, OTHER IDENTIFIER BESIDE THE CITATION STILL COUNTS.
-    ok(_rot_identifiers(
-        "`pipeline/join.py:1192` calls `do_pipeline_scope`", exclude
-    ) == ["do_pipeline_scope"],
-       "a genuine second identifier beside the citation is still extracted",
-       str(_rot_identifiers("`pipeline/join.py:1192` calls `do_pipeline_scope`", exclude)))
-
-    join_lines = [f"line {n}" for n in range(1, 2000)]
-    join_lines[1191] = "def join_positions():"  # line 1192 — the word `join` sits right here
-    citation_only_anchor = ResolvedAnchor(
-        Path("x.md"), 1, "pipeline/join.py:1192", Path("pipeline/join.py"), 1192, None,
-        "see `pipeline/join.py:1192` for the join key",
-    )
-    with tempfile.TemporaryDirectory() as tmp:
-        code = Path(tmp) / "join.py"
-        code.write_text("\n".join(join_lines) + "\n", encoding="utf-8")
-        anchor = citation_only_anchor._replace(target=code)
-        rot = line_anchor_rot([anchor])
-        # THE ARM THAT FAILS ON PURPOSE, PER THE COORDINATOR: an implementation that
-        # scores this as a hit is exactly the bug reported (the file's own name matching
-        # near the cited line). The fixed reader must call it not-checkable.
-        ok(rot["not-checkable"] == 1 and rot["hit"] == 0 and rot["miss"] == 0,
-           "a citation whose only backticked identifier is its own path scores "
-           "not-checkable, never a free hit off the filename",
-           str(rot))
-
-    rot_lines = [f"line {n}" for n in range(1, 31)]
-    rot_lines[19] = "def do_pipeline_scope():"  # line 20, 1-indexed
-    ok(_rot_verdict(rot_lines, 20, None, ["do_pipeline_scope"]) == "hit",
-       "the identifier sits exactly on the cited line")
-    ok(_rot_verdict(rot_lines, 15, None, ["do_pipeline_scope"]) == "hit",
-       "the identifier is within the window, a few lines off the cited one")
-    # THE ARM THAT FAILS ON PURPOSE. A prober that always answered "hit" — the exact
-    # failure D149 records for its own broken JSON-key probe, where "a pattern that finds
-    # nothing reports nothing, and nothing reads as green" — would pass every case above
-    # AND this one. This fixture cites a real identifier that is genuinely nowhere near
-    # the cited line, and the real prober must say so.
-    ok(_rot_verdict(rot_lines, 1, None, ["do_pipeline_scope"]) == "miss",
-       "an identifier far from the cited line is a genuine miss — "
-       "a naive always-hit stand-in would pass this fixture and every one above it, "
-       "which is exactly why this fixture exists")
-    ok(_rot_verdict(rot_lines, 20, None, []) == "not-checkable",
-       "no identifier at all is NOT CHECKABLE, never silently a hit")
-    ok(_rot_verdict(rot_lines, 100, None, ["do_pipeline_scope"]) == "past-eof",
-       "a start past the file's own length is past-eof, not a miss")
-    ok(_rot_verdict(rot_lines, 25, 100, ["do_pipeline_scope"]) == "past-eof",
-       "a range whose upper bound is past the end is past-eof too")
-
-    print("\nrot probe: the aggregate excludes docs targets, not-checkable and past-eof from the rate")
-    with tempfile.TemporaryDirectory() as tmp:
-        code = Path(tmp) / "code.py"
-        code.write_text("\n".join(rot_lines) + "\n", encoding="utf-8")
-        doc_target = Path(tmp) / "some.md"
-        doc_target.write_text("\n".join(rot_lines) + "\n", encoding="utf-8")
-        anchors = [
-            ResolvedAnchor(doc, 1, "code.py:20", code, 20, None,
-                            "cites `do_pipeline_scope` at code.py:20"),  # hit
-            ResolvedAnchor(doc, 2, "code.py:1", code, 1, None,
-                            "cites `do_pipeline_scope` at code.py:1"),  # miss
-            ResolvedAnchor(doc, 3, "code.py:5", code, 5, None, "no identifier here"),  # not-checkable
-            ResolvedAnchor(doc, 4, "code.py:500", code, 500, None,
-                            "cites `do_pipeline_scope` at code.py:500"),  # past-eof
-            ResolvedAnchor(doc, 5, "some.md:20", doc_target, 20, None,
-                            "cites `do_pipeline_scope` at some.md:20"),  # excluded: docs target
-        ]
-        rot = line_anchor_rot(anchors)
-        ok(rot["hit"] == 1 and rot["miss"] == 1 and rot["not-checkable"] == 1
-           and rot["past-eof"] == 1,
-           "each bucket counts exactly the fixture built for it", str(rot))
-        ok(rot["checkable"] == 2 and rot["rate"] == 0.5,
-           "the rate is miss / (hit + miss) only — not-checkable, past-eof and the "
-           "docs-target anchor never enter the denominator", str(rot))
 
     print("\nast readers handle the real files")
     runner = ROOT / "harness" / "run.py"
@@ -20507,8 +19857,6 @@ TIER: Dict[str, int] = {
     "paths": 2,
     "allowlist": 1,
     "line anchors": 1,
-    "line anchor allowlist": 1,
-    "line anchor offenders": 3,
     "make targets": 1,
     "commands roster": 1,
     "pkmnscan commands": 1,
@@ -20634,13 +19982,8 @@ def audit(staged_only: bool, commit_only: bool = False) -> Report:
         check_paths(report, docs, allowed)
     if _run_at_commit("allowlist", commit_only):
         check_allowlist(report, allowed)
-    line_allowed = load_line_allowlist()
     if _run_at_commit("line anchors", commit_only):
-        check_line_anchors(report, docs, line_allowed)
-    if _run_at_commit("line anchor allowlist", commit_only):
-        check_line_anchor_allowlist(report, line_allowed)
-    if _run_at_commit("line anchor offenders", commit_only):
-        check_line_anchor_offenders(report)
+        check_line_anchors(report, docs)
     if _run_at_commit("make targets", commit_only):
         check_make_targets(report, docs)
     if _run_at_commit("commands roster", commit_only):

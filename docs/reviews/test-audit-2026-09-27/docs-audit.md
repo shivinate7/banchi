@@ -297,7 +297,7 @@ One short section per row, in the order the audit runs them.
 
 **Subjects this run:** 777 line anchors over 44 files. 777 listed over 44 files. 0 unlisted, 0 stale. Only-shrinks compared against the merge-base 3a71c57a.
 
-**Protects:** No markdown file may write a `path:N` line anchor that `scripts/line-anchor-offenders.json` does not already list. A shrinking-only ratchet (777 entries today) on top of `line anchors`.
+**Protects:** No markdown file may write a `path:N` line anchor that the offender list does not already list. A shrinking-only ratchet (777 entries today) on top of `line anchors`.
 
 **Product or docs:** DOCS/PROCESS
 

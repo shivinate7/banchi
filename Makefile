@@ -328,8 +328,8 @@ map-fix-selftest:
 	@python3 scripts/map-fix.py --selftest
 
 # A DELETING GENERATOR, AND IT GATES NOTHING (D18; D-ratchets-become-offender-lists). It deletes
-# the STALE entries from the three shrinking offender lists, scripts/typed-interpunct-allow.json,
-# scripts/line-anchor-offenders.json and scripts/markdown-spelling-allow.json, and re-keys a
+# the STALE entries from the two shrinking offender lists, scripts/typed-interpunct-allow.json
+# and scripts/markdown-spelling-allow.json, and re-keys a
 # file that git's rename detection says moved. It never adds an entry. It reads with the rows'
 # own functions, imported, so the pruner and the gates cannot disagree about what is stale.
 # Previews. ARGS=--write applies.

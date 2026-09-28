@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """ONLY SHRINKS: the one helper every shrinking offender list reads (D280).
 
-Four lists use it. `scripts/docs-audit.py` imports it for the `ste offenders`, `typed
-interpunct` and `line anchor offenders` rows. `scripts/kit-adoption.mjs` cannot import Python,
+Three lists use it. `scripts/docs-audit.py` imports it for the `typed interpunct` and
+`identifier spelling` rows. `scripts/kit-adoption.mjs` cannot import Python,
 so it runs this file as a command and reads JSON back. Before this file there were three
 copies of the same rules, one in JavaScript, and a fix to one did not reach the others.
 
