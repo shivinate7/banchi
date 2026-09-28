@@ -85,7 +85,7 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
   5440-7600** (the `_answer_origin` / `_clearing_event` / `_sale_origin` / `_retirement_origin`
   / `_sell` / `do_retire` block) or `store/db.py` lines 1190-1260 (the `history`/
   `events_named` block). Check `git log --oneline -5 -- server/capture_server.py store/db.py`
-  and `make coordinator` before starting if this plan is being split across sessions.
+  and check the repo state before starting if this plan is being split across sessions.
 - **Independent of the `_copies_out` item** (item 4 in the plan) — different table
   (`cards`/`listings`, not `events`), different file region.
 - Reads `docs/specs/store-scaling.md` (item 3's own paragraph, §1's table row) and

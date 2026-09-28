@@ -128,7 +128,7 @@ owner sees, what reaches TCGplayer, or what reaches a buyer.
 | C2 | `claim-stale` out of `make check` and `ci-check` | process | 10.2s. `make merge` already runs `claim-ids.py --stale` (`scripts/merge-pr.py`). D140's title: the number is claimed at the merge. | D161, the same list. |
 | C3 | `entry budget` advisory row | process | 28 standing questions on every run. Nobody acts on them. A guard that goes red when nothing is wrong is spent. | D60: "`entry budget` is **advisory**, printing and allowing." |
 | C4 | `demo-determinism-selftest`, the demo.yml determinism step, `demo-freshness` | process | They test the invented seed. Nothing ships from it now. On Q5. Landed as L5: all three retired, `demo-freshness.py` and `demo-determinism.py` deleted, D295 amended. | D295 (before amendment): "make demo-determinism still tests the OLD invented seed's determinism, not the mirror's." |
-| C5 | `coordinator-selftest`, `scripts/coordinator.py`, `scripts/heartbeat.py`, `make heartbeat` | process | The heartbeat last wrote on 2026-09-16. Nothing schedules it. On Q6. | D200 and D171 argue the heartbeat. The lane quotes the sentences. |
+| C5 | the retired coordinator selftest, `scripts/coordinator.py`, `scripts/heartbeat.py` | process | The heartbeat last wrote on 2026-09-16. Nothing schedules it. On Q6. | D200 and D171 argue the heartbeat. The lane quotes the sentences. |
 
 ### Merge
 

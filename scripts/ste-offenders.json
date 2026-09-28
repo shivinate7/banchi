@@ -2264,7 +2264,6 @@
         "43ef99ac27 `reap.py:_segments` truncates at the first `<<` instead, which is right…",
         "4585a09718 **That is the residue, and it is smaller than the rule it replaces** —…",
         "4c7ac40679 A regex over the raw string catches the incident and cannot make that d…",
-        "4d1a42df76 **`make coordinator` is deliberately not in `make check`**, on `make la…",
         "5597c96ee8 **The self-test reproduces the incident before it asserts anything abou…",
         "6de40796a5 `shlex.whitespace_split` treats a newline as ordinary whitespace, so th…",
         "76dfbd2a01 That is the predicate: **a write whose stdout or stderr goes to `/dev/n…",
@@ -2280,7 +2279,6 @@
         "bd0294bd3e `2>/dev/null` hides every byte the hook prints; `>/dev/null` hides `[br…",
         "beea8b67b4 **A heredoc that is never terminated drops the rest of the command**, w…",
         "cb843bba7e A required context that is missing is `not ready`; **one that reported…",
-        "ced47b9353 **Every figure is read from the repository or from the GitHub API at th…",
         "d3d955adba **Two arms survived for a worse reason and were closed rather than argu…",
         "d940b008ff That is `scripts/status.py`'s rule, and here it is the same sentence as…",
         "f3de157eb5 **A rule that tells a session to check its work is a rule the session c…",
@@ -3478,8 +3476,7 @@
         "fcc91942c9 Two intermediate drafts, produced before this one, built a **client-sid…"
       ],
       "STE006": [
-        "124bc15613 `scripts/heartbeat.py` runs once and exits; nothing in it loops, sleeps…",
-        "2000438583 There is no `make` target that backgrounds anything; `make heartbeat` r…"
+        "124bc15613 `scripts/heartbeat.py` runs once and exits; nothing in it loops, sleeps…"
       ]
     },
     "docs/decisions/*-history-scoped-to-box.md": {

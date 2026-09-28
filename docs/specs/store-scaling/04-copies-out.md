@@ -71,7 +71,7 @@ every input this repo's tests already exercise.
   merging either).
 - **If run concurrently with any branch editing `cli/resolve.py` lines 429–735** (the
   `LiveReading`/`_live_by_sku`/`_copies_out`/`_oldest_first`/`_committed_keys` block), check
-  `git log --oneline -5 -- cli/resolve.py` and `make coordinator` before starting.
+  `git log --oneline -5 -- cli/resolve.py` before starting.
 
 ## Read first
 
