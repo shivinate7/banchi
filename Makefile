@@ -1609,7 +1609,7 @@ lan-check:
 # `up` takes them too, for `--no-watch` and for `--restart`, which is the bounce now.
 up:
 	$(PORT_CLAIM)
-	@$(PYTHON) scripts/serve.py up $(ARGS)
+	@python3 scripts/reap_mark.py up; exec $(PYTHON) scripts/serve.py up $(ARGS)
 
 down:
 	@$(PYTHON) scripts/serve.py down $(ARGS)
@@ -1632,7 +1632,7 @@ launch-agent:
 dev:
 	$(NPM_GUARD)
 	$(PORT_CLAIM)
-	@npm --prefix app run dev
+	@python3 scripts/reap_mark.py dev; exec npm --prefix app run dev
 
 # Foreground and blocking, like any server. An agent that runs this in the foreground hangs
 # its own turn — the Stop hook runs the harness at turn end and never gets there — so
@@ -1653,7 +1653,7 @@ dev:
 server:
 	@$(PYTHON) scripts/serve.py guard-foreground
 	$(PORT_CLAIM)
-	@$(PYTHON) server/capture_server.py
+	@python3 scripts/reap_mark.py server; exec $(PYTHON) server/capture_server.py
 
 # The manifest is an INPUT and lives beside the script that reads it. It used to point at
 # captures/views.txt, which .gitignore excludes wholesale — so the one file that says which
@@ -1712,7 +1712,7 @@ design-check:
 	$(NPM_GUARD)
 	$(PORT_CLAIM)
 	@rm -f .serve/design-check.json
-	@python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
+	@python3 scripts/reap_mark.py design-check; python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # The lock itself, exercised by violating it — a holder, a refusal, a wait, and a holder
 # killed with -9 to prove the OS releases what it took. In `check`, never in the git hook: it
@@ -1757,7 +1757,7 @@ design-check-quiet:
 	$(NPM_GUARD)
 	$(PORT_CLAIM)
 	@rm -f .serve/design-check.json
-	@DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
+	@python3 scripts/reap_mark.py design-check; DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # eslint over app/, config and rules in app/eslint.config.js. It began 2026-08-13 as the two
 # guards docs/DECISIONS.md's v1 bug table promised — no `facingMode` (bug 3), no `split(",")`

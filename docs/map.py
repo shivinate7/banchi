@@ -2518,7 +2518,8 @@ COMPONENTS = [
                         "the tree was tested.",
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
-                "governed_by": ["D16", "D18", "D136", "D141", "D196", "D215", "D275", "D284", "D261"],
+                "governed_by": ["D16", "D18", "D136", "D141", "D196", "D215", "D261", "D275",
+                                "D284", "D-reap-stops-only-its-own"],
                 "note": "THE LIST IS DERIVED AND HAS A READER: `make docs-audit`'s `browser "
                         "scope` row reconciles SCOPE against Playwright's config, Vite's "
                         "config, every code string in app/tests and app/src naming a tracked "
@@ -2810,14 +2811,49 @@ COMPONENTS = [
                         "the root, or a relative token that resolves against the process's own "
                         "cwd to an existing FILE under it. It passes over this session's own "
                         "chain and any LINKED WORKTREE nested inside this checkout, and PRINTS "
-                        "both with their reason.",
+                        "both with their reason. SINCE THE 2026-09-27 AMENDMENT, `OURS` (under "
+                        "this checkout) is narrowed a second way by WHOSE it is: "
+                        "`_read_owner_marks` reads `.serve/owners/*.json` (written by "
+                        "`scripts/reap_mark.py`) and walks `_descendants` down from each live "
+                        "root, and `_ownership_verdict` decides whether THIS caller — read from "
+                        "`CLAUDE_CODE_SESSION_ID` — may stop a pid tagged that way. A bare "
+                        "`--confirm` from the top-level session is D127's original sweep, "
+                        "untouched; the same bare `--confirm` from a subagent stops only pids "
+                        "tagged with its OWN session id, and an explicit `pid:`/`port:`/"
+                        "`match:` may still take an UNTAGGED pid but never one tagged to another "
+                        "session, for either caller.",
                 # D127 is the decision. D53 is the process it exists to protect — the main
                 # checkout's supervisor and its children are refused even from inside the main
                 # checkout, which is the one place this file overrules its own rule. D111 is
                 # the neighbouring notion it deliberately shares reasoning with rather than
-                # duplicating. D18 keeps its self-test off the commit path: it signals.
+                # duplicating. D18 keeps its self-test off the commit path: it signals. D175 is
+                # the neighbouring "whose is this" question this file now answers more finely
+                # than D175's own any-session reading. D-reap-stops-only-its-own is the
+                # 2026-09-27 amendment itself.
                 "governed_by": ["D169", "D18", "D43",
-                                "D53", "D88", "D111", "D127"],
+                                "D53", "D88", "D111", "D127", "D175",
+                                "D-reap-stops-only-its-own"],
+            },
+            "reap_mark.py": {
+                "does": "stamps the process a launcher is about to become with the session that "
+                        "started it — `.serve/owners/<pid>.json`, `{pid, owner, label, "
+                        "startedAt}` — so `reap.py` can tell WHOSE a process is, not only "
+                        "whether it is under this checkout. ONE SHELL LINE IS THE WHOLE "
+                        "MECHANISM: a Makefile recipe line is `scripts/reap_mark.py <label>; "
+                        "exec <real command>` (or `; <real command>` where the launcher must "
+                        "stay alive to do cleanup, like design-check's suite-lock), so this "
+                        "script's own `os.getppid()` names the ONE shell that either `exec`s "
+                        "into the real, long-running process — same pid — or stays its direct "
+                        "parent throughout. MEASURED, NOT ASSUMED: the owner's own sketch was "
+                        "an env var read back with `ps -E`/`ps eww` on a pid this session did "
+                        "not start, and that was tried on this machine (macOS 26, Darwin "
+                        "27.0.0) and found to print no environment at all for such a process — "
+                        "so the mark is a FILE, generalising `reap.py:protected_pids`'s own "
+                        "D53 pattern rather than inventing a second one. The owner is "
+                        "`CLAUDE_CODE_SESSION_ID`, read directly rather than re-deriving D175's "
+                        "Bash-wrapper fragment, which only ever answered ANY session. Never "
+                        "installed to `~/.claude/bin` and never imported outside this checkout.",
+                "governed_by": ["D43", "D53", "D127", "D175", "D-reap-stops-only-its-own"],
             },
             "cid-selftest.py": {
                 "does": "proves D172's card name and the photograph store filed under it by "
@@ -3301,8 +3337,8 @@ COMPONENTS = [
                         "directory-token subject that must NOT be placed, the caller it must "
                         "pass over, and a real nested worktree. Mutation-tested: twenty-two "
                         "guards removed one at a time, all caught, the naming rule among them.",
-                "governed_by": ["D169", "D18", "D43",
-                                "D53", "D122", "D127", "D157"],
+                "governed_by": ["D18", "D43", "D53", "D122", "D127", "D157", "D169",
+                                "D-reap-stops-only-its-own"],
             },
             "silent-write-guard.py": {
                 "does": "the PreToolUse hook on Bash that refuses a git WRITE whose own output "

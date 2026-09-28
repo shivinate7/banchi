@@ -388,6 +388,155 @@ def protected_pids(main: str) -> Set[int]:
     return _descendants(roots)
 
 
+# --------------------------------------------------------------------------- session ownership
+#
+# D127 answers "is this pid under this checkout". IT SAYS NOTHING ABOUT WHICH SESSION, because
+# D43's premise was that one checkout holds one session — every process a session needs to kill
+# is under ITS checkout, and everything it must not kill is under somebody else's. THE 2026-09-27
+# INCIDENT BROKE THAT PREMISE: an agent's own worktree vanished, it carried on inside ANOTHER
+# session's worktree, and `make reap ARGS=--confirm` there stopped that session's own
+# `scripts/revert-audit.py` pre-push check along with everything else it found. Two sessions CAN
+# stand in one checkout, so "under the checkout" is no longer a fine enough question, and this
+# section answers the finer one: under the checkout AND started by THIS session.
+#
+# THE OWNER'S OWN SKETCH — AN ENV VAR, READ BACK WITH `ps -E`/`ps eww` ON A PID THIS FILE DID NOT
+# START — WAS MEASURED AND FOUND FALSE ON THIS MACHINE. `ps eww -p <pid>` prints no environment
+# column at all for a process this session did not invoke `ps` from directly, root or not
+# (macOS 26, Darwin 27.0.0) — a real `subprocess.Popen` child carrying a marker in its own
+# environment came back with nothing readable. So an owner tag cannot be read back from the
+# process table after the fact, whatever the sketch assumed about an older macOS.
+#
+# WHAT WORKS INSTEAD NEEDED NO NEW PRIMITIVE, ONLY THIS FILE'S OWN PATTERN ONE REGISTER DOWN.
+# `protected_pids` above already solves this exact shape for D53's one supervisor: a marker FILE
+# under `.serve/`, holding a pid, walked DOWN with `_descendants` to reach children the marker was
+# written before. `scripts/reap_mark.py` generalises it from "the one supervisor" to "whichever
+# session's launcher wrote it" — one JSON file per launched root under `.serve/owners/`, and this
+# reads the whole directory rather than one fixed name. See that file's own docstring for why the
+# mark is written from the SAME shell that becomes, or stays the parent of, the real process —
+# a sibling Make recipe line would record a pid already gone by the time anyone reads it.
+#
+# THE OWNER IS `CLAUDE_CODE_SESSION_ID` — A PRIMITIVE THAT ALREADY EXISTS AND ALREADY PROPAGATES.
+# Every child of a Claude Code session inherits it by ordinary fork/exec, which is not the
+# `ps -E` read-back the sketch assumed and which this file measured does not work. It answers
+# WHICH session; D175's Bash-wrapper argv fragment only ever answered ANY session, because no
+# per-session id existed on this machine when D175 was written. This does not replace that
+# fragment — it answers a question D175 never asked.
+_OWNER_MARKS_DIRNAME = os.path.join(".serve", "owners")
+
+
+def caller_id() -> str:
+    """This process's own session id, or "" when it has none — a bare terminal, a CI runner, or
+    a Claude Code version that has not shipped this env var. An empty id matches no tag, ever
+    (see `_ownership_verdict`): the direction of every unknown in this file is refusal, never a
+    guess that an empty caller and an empty owner are somehow the same session."""
+    return os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+
+
+def is_top_level_caller() -> bool:
+    """Is THIS process the orchestrator — the session a person is directly driving — rather than
+    a subagent doing bounded work in a lane?
+
+    MEASURED, NOT ASSUMED, on a real spawned subagent (this file's own author, while building
+    this section): Claude Code sets `CLAUDE_CODE_CHILD_SESSION=1` on a subagent and leaves it
+    unset on the session a person types into, and `CLAUDE_CODE_HOST_SESSION_ID` corroborates it
+    — on a subagent it names the ORCHESTRATOR's own session id, which differs from
+    `CLAUDE_CODE_SESSION_ID` (this process's own); a top-level session has nothing above it to
+    name, so the host id is absent or equal to its own.
+
+    THE DEFAULT IS THE NARROW READING. Absence of the child-session marker is not proof of the
+    top level — a bare terminal, CI, or a future Claude Code build that spells this differently
+    all read that way too — so this returns true only when EVERY signal available agrees. A
+    false "narrow" costs an orchestrator one refused blanket sweep it can still target
+    explicitly; a false "top level" is the incident this section exists to close.
+    """
+    if os.environ.get("CLAUDE_CODE_CHILD_SESSION") == "1":
+        return False
+    session = caller_id()
+    if not session:
+        return False  # nothing to be a top-level SESSION about
+    host = os.environ.get("CLAUDE_CODE_HOST_SESSION_ID", "")
+    return not host or host == session
+
+
+def _read_owner_marks(root: str) -> Dict[int, str]:
+    """pid -> the session id recorded for its launched root, walked down to every descendant.
+
+    Reads every `.serve/owners/*.json` `scripts/reap_mark.py` left behind, keeps only the ones
+    whose recorded pid is STILL ALIVE — a corpse's mark says nothing about who runs under that
+    pid now, if anything does — and walks `_descendants` from each to cover children spawned
+    after the mark was written (`make dev`'s Vite, `make design-check`'s Playwright). A pid this
+    finds nothing about is simply absent from the result, which the caller reads as untagged —
+    the same "missing evidence is never a guess" rule the rest of this file already keeps.
+    """
+    marks: Dict[int, str] = {}
+    if not root:
+        return marks
+    owners_dir = Path(root) / _OWNER_MARKS_DIRNAME
+    if not owners_dir.is_dir():
+        return marks
+    roots: Dict[int, str] = {}
+    for marker in sorted(owners_dir.glob("*.json")):
+        try:
+            record = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        pid = record.get("pid")
+        owner = record.get("owner")
+        if not isinstance(pid, int) or not isinstance(owner, str):
+            continue
+        with contextlib.suppress(OSError):
+            os.kill(pid, 0)
+            roots[pid] = owner
+    for root_pid, owner in roots.items():
+        for descendant in _descendants({root_pid}):
+            # First writer wins on a genuine collision. The ordinary case is disjoint trees —
+            # one live server per marked root — and this file has no way to prefer one claim
+            # over another when it is not, so it does not pretend to.
+            marks.setdefault(descendant, owner)
+    return marks
+
+
+def _ownership_verdict(pid: int, owner_map: Dict[int, str], caller: str,
+                        explicit: bool, top_level: bool) -> Tuple[bool, str]:
+    """May THIS caller stop `pid`, given who marked it? Returns (allowed, why).
+
+    THE ORCHESTRATOR'S BLANKET SWEEP IS UNTOUCHED, ON THE OWNER'S OWN WORD, 2026-09-27: "Blanket
+    for the orchestrator and limited to its own tagged processes for an agent." So `make reap
+    ARGS=--confirm` with no target named, run by the top-level session, is exactly D127's
+    original behaviour — the checkout, minus the caller's own chain — with NO ownership check at
+    all, tagged-by-another included. That is a deliberate, informed gap: it does not close the
+    exact incident if the wandering session had been the orchestrator itself rather than a
+    subagent, and this file's own header and the amendment on D127 both say so rather than
+    burying it in this one `if`.
+
+    EVERY OTHER CASE IS NARROWED, IN THE ORDER THAT MATTERS:
+
+    1. Tagged with the caller's OWN id — always allowed. The ordinary case: a session stopping
+       the server it just started.
+    2. Tagged with a DIFFERENT, non-empty id — never allowed. Naming a pid on purpose does not
+       un-own it, and D127's own asymmetry says a false refusal costs one sentence where a false
+       permission costs somebody their process.
+    3. Untagged (no mark, or a mark with an empty owner — started before this change, by hand,
+       or by a launcher run outside a Claude Code session) and NAMED EXPLICITLY (`pid:`, `port:`
+       or `match:`) — allowed. The caller pointed at exactly this process; that is the same act
+       of judgement `pid:`/`port:`/`match:` already stood for before ownership existed.
+    4. Untagged and reached only by a subagent's BLANKET sweep (no target named) — refused. THE
+       INCIDENT ITSELF: a subagent that wandered into the wrong checkout and ran a bare
+       `--confirm` must not clear everything it finds there merely because none of it carries a
+       tag yet (every process started before this change is exactly that).
+    """
+    if not explicit and top_level:
+        return True, "the orchestrator's blanket sweep covers the checkout (D127, unchanged)"
+    owner = owner_map.get(pid, "")
+    if owner and caller and owner == caller:
+        return True, "started by this session"
+    if owner and owner != caller:
+        return False, "owned by another session ({0})".format(owner)
+    if explicit:
+        return True, "untagged, named explicitly"
+    return False, "untagged; a subagent's blanket sweep never stops an untagged process"
+
+
 # ------------------------------------------------------------------------------- the verdict
 
 
@@ -855,8 +1004,23 @@ def hook(payload: dict) -> int:
     root = checkout_root(os.getcwd())
     main = main_checkout(root)
     targets = verdict_for(intent.pids, root, main)
+    owner_map = _read_owner_marks(root)
+    caller = caller_id()
+    # A RAW `kill`/`pkill`/`killall` ALWAYS NAMES ITS TARGET, exactly as `pid:`/`port:`/`match:`
+    # do on `make reap`'s command line — so it is judged by the EXPLICIT branch of
+    # `_ownership_verdict` regardless of whether this session is the orchestrator or a subagent.
+    # The narrowing the owner asked for on 2026-09-27 is about `make reap`'s BLANKET default,
+    # which a raw shell command has no equivalent of: there is no "kill everything" spelling this
+    # hook would let through in the first place.
+    owner_bad = []
+    for target in targets:
+        if target.verdict != OURS:
+            continue
+        allowed, reason = _ownership_verdict(target.pid, owner_map, caller, True, False)
+        if not allowed:
+            owner_bad.append((target, reason))
     bad = [t for t in targets if t.verdict in (MAIN, OUTSIDE, UNKNOWN)]
-    if not bad and not intent.unresolved:
+    if not bad and not owner_bad and not intent.unresolved:
         return 0
 
     lines = ["BLOCKED: this would signal a process this session did not start."]
@@ -866,6 +1030,10 @@ def hook(payload: dict) -> int:
             lines.append("      {0}".format(_short(target.command)))
         if target.where:
             lines.append("      {0}".format(target.where))
+    for target, reason in owner_bad:
+        lines.append("  pid {0} — {1}".format(target.pid, reason))
+        if target.command:
+            lines.append("      {0}".format(_short(target.command)))
     for token in intent.unresolved:
         lines.append("  `{0}` — this guard cannot tell what pid that names, so it cannot tell "
                      "whose it is.".format(token))
@@ -939,29 +1107,50 @@ def _targets_from_args(specs: Sequence[str], root: str, mine: int) -> Tuple[List
 
 
 def reap(specs: Sequence[str], root: str, main: str, confirm: bool) -> int:
-    """Signal what is ours; report, in full, what is not.
+    """Signal what is ours and owned by this session; report, in full, what is not.
 
     THE REFUSALS ARE PRINTED RATHER THAN SWALLOWED, and that is the difference between this and
     a `pkill` that quietly does the right thing on a good day. A session that asked for a port
     and got one kill and one refusal has learned the thing the incident had to teach.
+
+    OWNERSHIP NARROWS `OURS`, IT NEVER WIDENS IT. A pid still has to be under this checkout
+    first (`verdict_for`, unchanged) — this only decides which of THOSE this particular caller
+    may actually stop. See `_ownership_verdict` for the four cases, and its own docstring for
+    the 2026-09-27 narrowing: a bare `--confirm` (no target named) is the orchestrator's full
+    checkout sweep exactly as D127 built it, and a subagent's own tag alone otherwise.
     """
     mine = os.getpid()
     pids, how = _targets_from_args(specs, root, mine)
     pids = [pid for pid in dict.fromkeys(pids) if pid != mine]
     targets = verdict_for(pids, root, main)
+    owner_map = _read_owner_marks(root)
+    caller = caller_id()
+    explicit = bool(specs)
+    top_level = is_top_level_caller()
 
     print("reap — this checkout is {0}".format(
         root or "NOWHERE: {0} is not a workspace, so nothing here is ours".format(os.getcwd())))
     for note in how:
         print("  resolved: {0}".format(note))
+    print("  caller: {0}, {1}".format(
+        "session {0}".format(caller) if caller else "no session id",
+        "orchestrator (blanket sweep unrestricted)" if top_level else "subagent (tag-only "
+        "blanket sweep)"))
     print("")
 
-    ours = [t for t in targets if t.verdict == OURS]
+    ours_all = [t for t in targets if t.verdict == OURS]
+    killable = []
+    owner_blocked = []
+    for target in ours_all:
+        allowed, reason = _ownership_verdict(target.pid, owner_map, caller, explicit, top_level)
+        (killable if allowed else owner_blocked).append((target, reason))
     refused = [t for t in targets if t.verdict in (MAIN, OUTSIDE, UNKNOWN)]
-    for target in ours:
+
+    for target, reason in killable:
         print("  {0}  pid {1}  {2}".format(
             "stopped   " if confirm else "would stop", target.pid, _short(target.command)))
         print("              {0}".format(target.where))
+        print("              {0}".format(reason))
         if confirm:
             # THE GROUP ONLY WHEN THIS PROCESS LEADS IT — `janitor.py`'s rule, and its argument
             # applies unchanged: a supervisor's children should go with it, and `serve.py`
@@ -973,16 +1162,21 @@ def reap(specs: Sequence[str], root: str, main: str, confirm: bool) -> int:
                     os.killpg(target.pid, signal.SIGTERM)
                 else:
                     os.kill(target.pid, signal.SIGTERM)
+    for target, reason in owner_blocked:
+        print("  REFUSED     pid {0}  {1}".format(target.pid, _short(target.command)))
+        print("              {0}".format(reason))
+        if target.where:
+            print("              {0}".format(target.where))
     for target in refused:
         print("  REFUSED     pid {0}  {1}".format(target.pid, _short(target.command)))
         print("              {0}".format(_REFUSED[target.verdict]))
         if target.where:
             print("              {0}".format(target.where))
-    if not ours and not refused:
+    if not killable and not owner_blocked and not refused:
         print("  nothing to stop.")
     print("")
-    if ours and not confirm:
-        print("  --confirm to stop the {0} above.".format(len(ours)))
+    if killable and not confirm:
+        print("  --confirm to stop the {0} above.".format(len(killable)))
         return 1
     return 0
 
@@ -990,10 +1184,18 @@ def reap(specs: Sequence[str], root: str, main: str, confirm: bool) -> int:
 def explain(specs: Sequence[str], root: str, main: str) -> int:
     mine = os.getpid()
     pids, _ = _targets_from_args(specs, root, mine)
+    owner_map = _read_owner_marks(root)
+    caller = caller_id()
+    explicit = bool(specs)
+    top_level = is_top_level_caller()
     for target in verdict_for(pids, root, main):
         print("pid {0}  {1}".format(target.pid, target.verdict.upper()))
         print("  {0}".format(_short(target.command) or "(gone)"))
         print("  {0}".format(target.where or "no path this file could place"))
+        if target.verdict == OURS:
+            allowed, reason = _ownership_verdict(target.pid, owner_map, caller, explicit,
+                                                  top_level)
+            print("  {0} — {1}".format("KILLABLE" if allowed else "OWNERSHIP-BLOCKED", reason))
     return 0
 
 
