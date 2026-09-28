@@ -66,7 +66,8 @@ Each item gets an id, `F<n>`, and one line here. The line names its route:
   Three cuts lose the only place a fact lives: Review's mismatch paragraph, Sales' "not profit"
   line, and Sales' sealed footnote. A fourth: the Fulfiller's neighbor line.
   Owner: `Approved on cutting everything from F5`. Of the four, the owner said `rest are good to cull`.
-  Review's mismatch paragraph stays held until the owner sees an example. Numbers and names are
+  Review's mismatch paragraph: the owner approved `middle option approved for the cut mismatch+data`,
+  so it becomes "Mismatch: <photo reading> / <matched listing>". Numbers and names are
   data and stay (the sweep's own rule). Lane F5 builds it.
 - F7 (from lane D1's review, logged): `archive` and `wallet` share the lock's heavy-body-low
   drawing. Only the lock got the optical re-centering.
