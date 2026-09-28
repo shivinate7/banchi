@@ -2156,14 +2156,17 @@ export function CaptureScreen() {
               'browser remembered the number before it started recording which box that was, ' +
               'and a deleted box hands its number to the next one. Nothing is selected; pick ' +
               'the drawer in front of you.'
-          : /* D259 OVERRIDES D153'S OWN ARGUMENT FOR THIS SENTENCE, which used to type
-               `Box ${found.box}` on the ground that the number was the two drawers' one shared
-               fact. The owner's later ruling leaves no exception: the box is named by its
-               current label, `boxTitle`'s answer, even in a sentence about the number's own
-               reallocation. */
-            `${boxTitle(found.name, found.box)} is a different drawer now — the one you last ` +
-              'captured into was deleted, and its number went to this one. Nothing is ' +
-              'selected; pick the drawer in front of you.',
+          : /* D153's OWN EXCEPTION SURVIVES D259, confirmed by this file's own test
+               ("it says it by number... naming the box now at it (`Epics`) would be telling
+               the operator their drawer is something it has never been"). The number is the
+               one fact the two drawers share, and this sentence is ABOUT the number's own
+               reallocation, not a label identifying the current drawer — D259's "never a bare
+               number standing for the drawer" is about identifying a box, which this is not.
+               Allow-listed in kit-adoption for the same reason the picker's search suffix is
+               (below). */
+            `Box ${found.box} is a different drawer now — the one you last captured into was ` +
+              'deleted, and its number went to this one. Nothing is selected; pick the drawer ' +
+              'in front of you.',
       )
       setOpenField('box')
       return
