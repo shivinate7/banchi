@@ -1615,7 +1615,9 @@ async function openCard(page: Page, name: string): Promise<void> {
  *  being real and associated is half of what makes the control usable — a lookup that would
  *  still pass with the `<label>` deleted is not measuring the thing it looks like it does. */
 function searchBox(page: Page): Locator {
-  return page.getByLabel('Type the name of the card')
+  /* F5 verbiage cut: SearchField's fulfiller label is now 'Search' (row 191), shared with
+     the owner's own label — the persona split in LABEL is gone. */
+  return page.getByLabel('Search')
 }
 
 /** The list screen with a name typed into it, waited out to the given number of copies.
@@ -2016,39 +2018,14 @@ test('a SKU the boxes cannot fill at all gets a count, not a dead end', async ({
   await battery(page, 'order with a shortfall SKU')
 })
 
-/* fulfiller.md finding 2: "Charizard" names a game (Pokemon) that may hold none of this
- * store's cards -- D21 makes game a per-card claim, not a fixed catalog, and this store's
- * fixture is Iono/Eiscue/Pidgeot ex/Charizard ex on purpose so no one name can stand for the
- * whole thing. The placeholder now has to be drawn from `cards`, in box-walk order, rather
- * than a name typed into the component. */
-test('the search hint names a real card from this store, not a fixed example', async ({ page }) => {
-  await openList(page)
-  await expect(page.getByPlaceholder(/^For example, /)).toHaveAttribute(
-    'placeholder',
-    'For example, Iono',
-  )
-})
-
-/* UX-055: the placeholder is a card's own name and has no length ceiling — "Promising Future"
- * measured long enough at 390px, 24px font, to hard-clip mid-word ("Piercing Li") before this
- * fix. `overflow`/`text-overflow: ellipsis` reaches a placeholder the same way it reaches
- * typed text, so this asserts the computed style directly rather than a screenshot: the fix
- * is the STYLE, and it holds regardless of which card's name happens to be the example. */
-test('the search placeholder ends in an honest ellipsis at 390px, never a raw mid-word cut', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  await openList(page, [], { orders: MULTI_ORDER, plan: MULTI_PLAN })
-  const input = page.getByPlaceholder(/^For example, /)
-  await expect(input).toHaveAttribute('placeholder', 'For example, Promising Future')
-  // `overflow` ALONE IS NOT ASSERTED: Chromium normalizes a text `<input>`'s COMPUTED
-  // `overflow` to `clip` regardless of the author's declared value (a quirk over form
-  // controls' own internal scrolling), so a check against `hidden` can never go red —
-  // reverting the rule entirely still reads `clip`. `text-overflow` is the one property that
-  // actually reports whether the fix is in effect.
-  const textOverflow = await input.evaluate((node) => window.getComputedStyle(node).textOverflow)
-  expect(textOverflow).toBe('ellipsis')
-})
+/* F5 verbiage cut (row 191, verdict DELETE): the placeholder these two tests defended
+ * ("For example, <a real card's name>", drawn from `cards` so no fixed name like
+ * "Charizard" could misname the store) is gone outright. The field label above it already
+ * says what to type (row 190: "Type the name of the card" -> "Search"), so the reviewer
+ * judged the worked example a nicety, not a thing the Fulfiller needs to operate the
+ * field. Both tests — the "real card, not a fixed example" case and the 390px ellipsis
+ * case UX-055 fixed — tested a placeholder that no longer exists, so they are deleted with
+ * it rather than updated to assert an empty string. */
 
 /* UX-101: this screen has no shell (D5), so the owner's own `?` sheet (`App.tsx`) cannot open
  * here at all -- and the dead `/` row that once claimed otherwise for this screen is deleted

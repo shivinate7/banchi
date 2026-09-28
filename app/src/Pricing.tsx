@@ -3014,7 +3014,10 @@ function PricingRow({
           {!source.copies || copiesLine === null ? null : (
             <span
               className="pricing-copies"
-              title={sku.over_cap ? `The runs claim ${sku.claimed_add}. ${sku.add_to_quantity} can go.` : undefined}
+              /* F5 verbiage cut (row 97): the visible span below already says "sendable" —
+                 this tooltip said "can go" for the same fact and would read as a second word
+                 for one idea. */
+              title={sku.over_cap ? `The runs claim ${sku.claimed_add}. ${sku.add_to_quantity} sendable.` : undefined}
             >
               {copiesLine}
             </span>

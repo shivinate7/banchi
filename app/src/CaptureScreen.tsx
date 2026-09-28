@@ -5355,8 +5355,13 @@ export function CaptureScreen() {
             >
               {!camera.started ? (
                 <>
+                  {/* F5 verbiage cut, corrected: this button sits inside the "Camera" field it
+                      opens (the row above already reads "Camera Closed"), so "Camera" here
+                      collided with that row's own accessible name — same problem the reason
+                      for row 65 argued away by icon alone, wrong for THIS one nested spot.
+                      "Connect" names the action without repeating the field's own label. */}
                   <Button variant="primary" size="sm" icon="camera" onClick={camera.retry}>
-                    Camera
+                    Connect
                   </Button>
                 </>
               ) : (

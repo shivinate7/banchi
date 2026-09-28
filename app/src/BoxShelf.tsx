@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { Button, FailureNotice, Icon, IconButton, Segmented, useUndoHotkey } from './kit'
+import { UNNAMED_BOX } from './kit/data'
 import { Page } from './kit/Page'
 import { describeFailure, getBoxes, getInventoryBox, moveSectionsBatch, undoSectionMove } from './server'
 import type { Failure } from './server'
@@ -99,7 +100,7 @@ function bySection(cardsOf: readonly InventoryCard[]): Map<number, InventoryCard
 
 function boxName(record: WorkingBox): string {
   if (record.name) return record.name
-  return record.box < 0 ? 'New box' : 'Untitled'
+  return record.box < 0 ? 'New box' : UNNAMED_BOX
 }
 
 /** The sections a lift takes, first and last ordinal. */

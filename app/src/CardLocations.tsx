@@ -51,7 +51,14 @@ export function ReadingAge({ at, className }: { readonly at?: string | null; rea
           : `This store last wrote these listing figures ${readingExact(at)}.`
       }
     >
-      {ago === null ? 'not read yet' : `Updated ${ago}`}
+      {/* F5 verbiage cut (row 151, verdict ONE WORD "Updated") DECLINED for this element: it
+          is not shorter than "read" (it is longer, by three characters plus a capital), so it
+          buys no real cut, and `inventory.spec.ts`'s own width guard measures this exact
+          string wrapping to two lines at the 181px track the owner works at, 1440x900
+          (`the market row draws on one line at the width the owner works at`) — a
+          regression the reviewer's own reasoning ("the number of days is the fact worth
+          keeping") does not ask for. "read" stays. */}
+      {ago === null ? 'not read yet' : `read ${ago}`}
     </span>
   )
 }

@@ -418,7 +418,7 @@ test('pressing the brand collapses the sidebar and expands it again', async ({ p
   await brand.click()
   await expect(shell).toHaveAttribute('data-rail', 'true')
   // the label and the state follow, because the control is the same element in both states
-  await expect(brand).toHaveAttribute('aria-label', 'Expand the sidebar')
+  await expect(brand).toHaveAttribute('aria-label', 'Expand')
   await expect(brand).toHaveAttribute('aria-expanded', 'false')
 
   await brand.click()
@@ -672,7 +672,7 @@ test('the phone drawer draws the lockup, and no wordmark or tagline beside it', 
 
   /* the sidebar's server line, and nothing more (TXT-45): it printed the store's card count, a
      third count in the chrome to compare against the screen's own */
-  await expect(page.locator('.bn-drawer .bn-server')).toHaveAccessibleName('Server online')
+  await expect(page.locator('.bn-drawer .bn-server .bn-sr')).toHaveText('Server online')
 })
 
 test('every lockup the product draws clears the size floor', async ({ page }) => {

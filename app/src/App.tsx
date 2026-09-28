@@ -754,7 +754,7 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
           autoComplete="off"
           spellCheck={false}
           value={query}
-          placeholder="Search"
+          placeholder="Query"
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {

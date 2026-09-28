@@ -3176,7 +3176,7 @@ test('a row with nothing sold since draws exactly what it drew before', async ({
     skus: [sku({ listing: { pushed: 0, staged: 0, live: 4, sold_here: 0 } })],
   })
   const live = page.locator('.pricing-row .pricing-live').first()
-  await expect(live).toContainText('4 live')
+  await expect(live).toContainText('4 listed')
   await expect(live).not.toContainText('when read')
 })
 
@@ -3201,7 +3201,7 @@ test('a listing frozen before the counter existed draws the reading, not NaN', a
     skus: [sku({ sku: '9191230', name: 'Smite', listing: { pushed: 1, staged: 0, live: 1 } })],
   })
   const live = page.locator('.pricing-row .pricing-live').first()
-  await expect(live).toContainText('1 live')
+  await expect(live).toContainText('1 listed')
   await expect(live).not.toContainText('NaN')
   /* AND NO "SOLD SINCE" CLAUSE. An absent counter is not a counter reading zero-point-something
      — the row must draw byte-identically to the one above it, which is the pre-D115 rendering
@@ -3231,7 +3231,7 @@ test('a figure typed on a row rides the send keyed by that SKU, the deck counts 
   const wire = await open(page, { worklist: SPAN })
   const field = page.getByLabel(LEBLANC_QTY)
   await expect(field).toHaveAttribute('placeholder', '3')
-  const before = (await page.locator('.pricing-bar-says').innerText()).match(/(\d+) cop/)
+  const before = (await page.locator('.pricing-bar-says').innerText()).match(/(\d+) ready/)
   const copiesBefore = Number(before?.[1])
   expect(Number.isFinite(copiesBefore)).toBe(true)
 
@@ -3239,8 +3239,8 @@ test('a figure typed on a row rides the send keyed by that SKU, the deck counts 
   /* THE DECK FOLLOWS THE FIELD, before anything is pressed: one fewer copy would go, and the
      sentence says a card is at a figure typed by hand — which is the account the operator reads
      before deciding to press. */
-  await expect(page.locator('.pricing-bar-says')).toContainText(`${copiesBefore - 1} cop`)
-  await expect(page.locator('.pricing-bar-says')).toContainText('1 at a quantity you typed')
+  await expect(page.locator('.pricing-bar-says')).toContainText(`${copiesBefore - 1} ready`)
+  await expect(page.locator('.pricing-bar-says')).toContainText('1 typed')
 
   await sendPress(page).click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
@@ -3268,7 +3268,7 @@ test('a figure past what can go is clamped on the way out, 0 takes the row out o
   await open(page, { worklist: SPAN })
   const leblanc = page.getByLabel(LEBLANC_QTY)
   const dunsparce = page.getByLabel(DUNSPARCE_QTY)
-  const outBefore = (await page.locator('.pricing-bar-says').innerText()).match(/(\d+) cop/)
+  const outBefore = (await page.locator('.pricing-bar-says').innerText()).match(/(\d+) ready/)
   const copiesBefore = Number(outBefore?.[1])
 
   /* CLAMPED, NOT REFUSED: the server would name "asked 9, only 3 can go"; the screen does not
@@ -3279,14 +3279,14 @@ test('a figure past what can go is clamped on the way out, 0 takes the row out o
 
   /* ZERO IS A REAL ANSWER and the row leaves the count of rows that would go, without a hold. */
   await leblanc.fill('0')
-  await expect(page.locator('.pricing-bar-says')).toContainText(`${copiesBefore - 3} cop`)
-  await expect(page.locator('.pricing-bar-says')).toContainText('1 at a quantity you typed')
+  await expect(page.locator('.pricing-bar-says')).toContainText(`${copiesBefore - 3} ready`)
+  await expect(page.locator('.pricing-bar-says')).toContainText('1 typed')
 
   /* ESCAPE PUTS ONE ROW BACK, the way it puts a price field back. */
   await leblanc.focus()
   await leblanc.press('Escape')
   await expect(leblanc).toHaveValue('')
-  await expect(page.locator('.pricing-bar-says')).toContainText(`${copiesBefore} cop`)
+  await expect(page.locator('.pricing-bar-says')).toContainText(`${copiesBefore} ready`)
   await expect(dunsparce).toHaveValue('')
 })
 
@@ -3901,7 +3901,7 @@ test('the screen is on its own route, on the kit page, and draws the run it was 
   await expect(page.locator(`${VIEW} h1`)).toHaveText('Pricing')
   await expect(page.locator('.pricing-row')).toHaveCount(1)
   /* THE SLIM BAR IS THE VERDICT (D277, Q4): what is ready, in one sentence, beside the press. */
-  await expect(page.locator('.pricing-bar-says')).toHaveText('3 copies ready')
+  await expect(page.locator('.pricing-bar-says')).toHaveText('3 ready')
   /* THE RULE AND THE CUT-OFF ARE ONE LINE (Q5), and the figure is stated once. */
   const line = page.locator('.pricing-rule-line')
   await expect(line).toContainText('New cards list at market')
@@ -3942,11 +3942,11 @@ test('the rows that need the owner come first, each with its reason, and the res
   await expect(flags.nth(0)).toHaveText('100% over market')
   await expect(page.locator('.pricing-group').nth(1).locator('.pricing-flag')).toHaveCount(0)
   /* THE BAR NAMES WHAT STAYS BACK (Q3). */
-  await expect(page.locator('.pricing-bar-says')).toContainText('1 needs a price')
+  await expect(page.locator('.pricing-bar-says')).toContainText('1 need a price')
   /* AND ITS COPIES ARE NOT READY (the delta review, R3-1): four rows of three copies go, the
      unpriced row's three do not. The bar and the press both say twelve, which is what the file
      will carry. */
-  await expect(page.locator('.pricing-bar-says')).toContainText('12 copies ready')
+  await expect(page.locator('.pricing-bar-says')).toContainText('12 ready')
   await expect(sendPress(page)).toHaveText('Send 12 copies to TCGplayer')
 })
 
@@ -4207,7 +4207,9 @@ test('on a phone the bar is one line pinned above the tab bar, and More opens th
 
 test('Write the file keeps its words and its place while it writes', async ({ page }) => {
   const wire = await open(page, { sendDelayMs: 1500 })
-  await page.getByRole('button', { name: /^Download (the file instead|file)$/ }).click()
+  /* F5 verbiage cut deleted the UX-007 long/short split ("Download the file instead" /
+     "Download file"): one word, "Download", now fits both the phone and the desk. */
+  await page.getByRole('button', { name: 'Download' }).click()
   const press = page.getByRole('button', { name: 'Write the file' })
   const before = await press.boundingBox()
   await press.click()
@@ -4267,7 +4269,7 @@ test('with nothing ready, the send press is disabled', async ({ page }) => {
     skus: [sku({ sku: '5', name: 'Unpriced', bucket: 'no_market_data', snap: { market: null, direct_low: null, low: null, low_with_shipping: null, now: null } })],
     decisions: { rule: 'match', basis: 'market', threshold: '0.49', sub_threshold: { flat: '0.49' }, overrides: {} },
   })
-  await expect(page.locator('.pricing-bar-says')).toContainText('needs a price')
+  await expect(page.locator('.pricing-bar-says')).toContainText('need a price')
   await expect(page.locator('.send-press')).toBeDisabled()
 })
 

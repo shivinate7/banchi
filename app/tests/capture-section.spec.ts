@@ -263,7 +263,7 @@ async function open(
   await page.keyboard.type('5')
   await page.keyboard.press('Enter')
   await page.keyboard.press('v')
-  await page.getByLabel('Rig').getByRole('button', { name: 'Camera' }).click()
+  await page.getByLabel('Rig').getByRole('button', { name: 'Connect' }).click()
   await page.locator('.capture-opt').filter({ hasText: /Canvas Cam Link/ }).click()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeEnabled()

@@ -435,7 +435,7 @@ async function open(
      Camera field draws it where `V` just put the operator. All three call `camera.retry`, so
      the choice is about which control this file drives rather than about which one works —
      and the field is the one the keypress above opened. */
-  await page.getByLabel('Rig').getByRole('button', { name: 'Camera' }).click()
+  await page.getByLabel('Rig').getByRole('button', { name: 'Connect' }).click()
   await page.locator('.capture-opt').filter({ hasText: /Canvas Cam Link/ }).click()
   await page.keyboard.press('Escape')
   /* THE SHUTTER, BY ITS NAME. It was `.pull-confirm` — a class borrowed from another screen's
@@ -551,7 +551,7 @@ test('U undoes a divider while no card is behind it', async ({ page }) => {
   const wire = await open(page)
   await shoot(page, 2)
 
-  await page.getByRole('button', { name: 'Section' }).click()
+  await page.getByRole('button', { name: 'Section', exact: true }).click()
   await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
     'Section',
   )
@@ -583,7 +583,7 @@ test('U after S on a box with a sold card takes out only that divider (F2)', asy
   }
   const wire = await open(page, { boxes: [DIVIDED, BOX4], nextIndex: { '3': 7 } })
 
-  await page.getByRole('button', { name: 'Section' }).click()
+  await page.getByRole('button', { name: 'Section', exact: true }).click()
   await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
     'Section',
   )
@@ -600,7 +600,7 @@ test('U after S on a box with a sold card takes out only that divider (F2)', asy
 test('a stale U after an editor save is refused, said, and not retried', async ({ page }) => {
   const wire = await open(page)
   await shoot(page, 2)
-  await page.getByRole('button', { name: 'Section' }).click()
+  await page.getByRole('button', { name: 'Section', exact: true }).click()
   await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
     'Section',
   )
@@ -623,7 +623,7 @@ test('a capture behind the divider is built on it, and U reaches the capture ins
 }) => {
   const wire = await open(page)
   await shoot(page, 2)
-  await page.getByRole('button', { name: 'Section' }).click()
+  await page.getByRole('button', { name: 'Section', exact: true }).click()
   // The third card, into the same box the divider was opened in — the fixture's own
   // allocator is already at 3, and `shoot`'s helper assumes a fresh box starting at 1.
   await shootInto(page, 3, 3, 1)
@@ -1228,7 +1228,7 @@ test('removing a middle row deletes that card alone, and the later ones survive 
   await drops(page).nth(2).click()
 
   await expect(page.getByRole('heading', { name: 'Remove just this card?' })).toBeVisible()
-  await page.getByRole('button', { name: 'Remove' }).click()
+  await page.getByRole('button', { name: 'Remove this card' }).click()
 
   await expect(rows(page)).toHaveCount(4)
   expect(wire.removes).toEqual(['/inventory/3/3/remove'])
@@ -1258,7 +1258,7 @@ test('removing the newest row costs nothing else — no shift, and the note says
   await shoot(page, 2)
 
   await drops(page).nth(0).click()
-  await page.getByRole('button', { name: 'Remove' }).click()
+  await page.getByRole('button', { name: 'Remove this card' }).click()
 
   await expect(rows(page)).toHaveCount(1)
   expect(wire.removes).toEqual(['/inventory/3/2/remove'])
@@ -1274,7 +1274,7 @@ test('a blocked removal reaches the operator as a sentence naming what blocked i
   await shoot(page, 5)
 
   await drops(page).nth(2).click()
-  await page.getByRole('button', { name: 'Remove' }).click()
+  await page.getByRole('button', { name: 'Remove this card' }).click()
 
   // NOTHING LEFT THE LIST. The refusal changed nothing, which is the whole point of a route
   // that checks before it writes a single file.

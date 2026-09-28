@@ -518,12 +518,15 @@ test('the step is announced on the sidebar and documented in the shortcuts sheet
   const sheet = page.locator('.app-keys[role="dialog"]')
   await expect(sheet).toBeVisible()
 
-  /* Both caps, in one row, described by a sentence rather than left as two glyphs. Read as
-     text off the sheet's own rows: the keycaps there are bare `<kbd>` and NOT aria-hidden,
-     which is the difference between a reference and a decoration. */
+  /* All four caps, in one row, described by a word rather than left as glyphs. F5 verbiage
+     cut merged the arrow-pair row and its no-arrow-keyboard alternate into one row of
+     alternatives (`⌘←/⌘→/⌘↑/⌘↓`, all doing "Navigate") — the same row this test already
+     reads, now with two more caps in it. Read as text off the sheet's own rows: the keycaps
+     there are bare `<kbd>` and NOT aria-hidden, which is the difference between a reference
+     and a decoration. */
   const stepRow = sheet.locator('.app-keys-row', { has: page.locator('kbd', { hasText: '⌘←' }) })
   await expect(stepRow).toHaveCount(1)
-  await expect(stepRow.locator('kbd')).toHaveText(['⌘←', '⌘→'])
+  await expect(stepRow.locator('kbd')).toHaveText(['⌘←', '⌘→', '⌘↑', '⌘↓'])
   await expect(stepRow.locator('.app-keys-does')).not.toBeEmpty()
 
   await page.keyboard.press('Escape')

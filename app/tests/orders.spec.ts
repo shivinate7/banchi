@@ -2437,7 +2437,7 @@ test('"Walk N" ticks every row, and "Stop" clears them', async ({ page }) => {
   /* SEVERAL BUYERS: the head says so, never one buyer's name (UX-230). */
   await expect(page.locator('.orders-walk-title')).toHaveText('3 buyers')
 
-  await page.getByRole('button', { name: 'Stop walking all' }).click()
+  await page.getByRole('button', { name: 'Stop' }).click()
   await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
 })
 
@@ -4137,8 +4137,10 @@ test('Manage says once what each stand-down press does, in words, with no code o
   expect(text).not.toContain('no_copies_on_hand')
   expect(text).not.toContain('#/inventory')
   expect(text).not.toContain('0 sold')
-  /* THE BRAND AS TCGplayer, whatever case the feed sent it in. */
-  expect(text).toContain('TCGplayer says')
+  /* THE BRAND AS TCGplayer, whatever case the feed sent it in. F5 verbiage cut (row 111): the
+     per-order feed-word span no longer quotes the marketplace's own status beside its name
+     (the status pill already carries that fact), so this only checks the brand name itself. */
+  expect(text).toContain('TCGplayer')
 })
 
 /* ------------------------------------------------------------ a buyer finished (UX-197) */

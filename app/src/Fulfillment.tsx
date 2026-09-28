@@ -1369,11 +1369,17 @@ export function Fulfillment() {
         {today}
 
         <div className="ff-search" data-clear={hunting ? 'true' : 'false'}>
-          {/* No autoFocus: a software keyboard would cover the first thing he reads. */}
+          {/* No autoFocus: a software keyboard would cover the first thing he reads.
+              F5 verbiage cut (row 191) deleted the worked-example placeholder ("For example,
+              <a real card's name>"). SearchField's own default placeholder, "Card name,
+              number or SKU", is fine for the owner but fails this screen's own banned-word
+              list (D196: no pipeline noun in his words) — so this screen still names its own
+              placeholder, just without the machine word. */}
           <SearchField
             value={query}
             onChange={setQuery}
             persona="fulfiller"
+            placeholder="Card name or number"
           />
           {hunting ? (
             <button
@@ -1449,7 +1455,11 @@ export function Fulfillment() {
                   <span className="ff-h2-icon">
                     <Icon name="cart" size={18} />
                   </span>
-                  Queue
+                  {/* F5 verbiage cut (row 192): the CSV's own word, "Queue", is a pipeline
+                      noun this screen's own banned-word list refuses (D196) — wrong for this
+                      element. "Pick" reads with the cart icon and matches the per-card
+                      heading's own vocabulary (row 193) instead. */}
+                  Pick
                 </h2>
                 <div className="ff-found ff-owed-list">
                   {shownOwed.map((item, at) => {

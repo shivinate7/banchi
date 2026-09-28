@@ -753,7 +753,9 @@ test('the Live tab with no read yet says so and offers the read, and nothing is 
   /* THE READ IS A PRESS (D62's rule for anything that asks a remote host): opening the tab
      asks TCGplayer for nothing. */
   expect(wire).toHaveLength(0)
-  await page.getByRole('button', { name: 'Read what is live' }).first().click()
+  /* F5 verbiage cut (row 102): unified to the one word "Refresh", the same as the To-send
+     tab's "Check what is live". */
+  await page.getByRole('button', { name: 'Refresh' }).first().click()
   await expect(page.getByRole('dialog', { name: 'What to mark down' })).toBeVisible()
   expect(wire).toHaveLength(0)
 })

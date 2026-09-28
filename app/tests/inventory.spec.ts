@@ -1136,8 +1136,8 @@ async function open(
  *  the shape `openBoxOps` above takes and for the same reason: a test that wants card rows says
  *  so, and the fold tests below can still assert the state every other test starts from. */
 async function expandAll(page: Page) {
-  /* EVERY SHUT FOLD, PRESSED, rather than the one control that says "expand all". That control
-     is still there and still does this, but it now reads "collapse all" whenever ANY section is
+  /* EVERY SHUT FOLD, PRESSED, rather than the one control that says "Expand". That control
+     is still there and still does this, but it now reads "Collapse" whenever ANY section is
      open — and one always is on arrival, because the walk opens the section its planted
      selection sits in. Pressing the folds themselves is the same act and does not depend on
      which word the summary is wearing. */
@@ -2541,7 +2541,7 @@ test('the walk arrives with only the planted selection\'s section open, and the 
   /* THIS TEST USED TO BE `sections start collapsed, and the one holding the selection is open`,
    * and it asserted nth(0) expanded with three rows drawn. That was the bug, not the contract.
    * The loader plants a selection on the first row and an effect opened its section for it, so
-   * the screen arrived PARTLY expanded while the control beside it offered `expand all` — the
+   * the screen arrived PARTLY expanded while the control beside it offered `Expand` — the
    * first press expanded, and only the second reached the collapsed list the press was for.
    * Measured on box 1 (3 sections, 53 cards) before the fix: 25 rows on load, 53 after one
    * press, 0 after two. The owner reported it as "you gotta click it once or twice for it to be
@@ -2558,23 +2558,23 @@ test('the walk arrives with only the planted selection\'s section open, and the 
    * sits in — the rule this file asserts a few cases down, that the mark is never on a row
    * nobody can see, applied to the first mark as well as to a moved one — and everything else
    * arrives shut. What made the old behaviour a bug was not the open section: it was that the
-   * control beside it said `expand all` while a section was already expanded, so the first press
+   * control beside it said `Expand` while a section was already expanded, so the first press
    * did nothing a person could see and the second was the one that worked.
    *
    * SO THE CONTROL IS WHAT IS PINNED HERE, and that is the stronger half of the old assertion:
    * it names the press it is about to perform. One section open, every other shut, and a control
-   * that says `collapse all` because collapsing is what pressing it does. */
+   * that says `Collapse` because collapsing is what pressing it does. */
   await expect(folds.nth(0)).toHaveAttribute('aria-expanded', 'true')
   await expect(folds.nth(1)).toHaveAttribute('aria-expanded', 'false')
   // Section 1 holds five of the seven records, and section 2's two are folded away.
   await expect(page.locator('.browse-row')).toHaveCount(5)
   await expect(page.locator('.browse-row[aria-current="true"]')).toBeVisible()
 
-  const fold = page.getByRole('button', { name: /collapse all/i })
+  const fold = page.locator('.browse-quiet').getByText(/^collapse$/i)
   await expect(fold).toBeVisible()
   await fold.click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /expand all/i })).toBeVisible()
+  await expect(page.locator('.browse-quiet').getByText(/^expand$/i)).toBeVisible()
 
   /* And nothing is lost by shutting it: the selected card's copies, its photograph and its two
      doors out of inventory are all still drawn beside the list. Only its ROW is folded. */
@@ -2613,16 +2613,16 @@ test('UX-227 — the walk keeps the row it steps onto in view, down to the last 
   expect(await page.evaluate(() => window.scrollY)).toBe(0)
 })
 
-test('expand all opens every section and collapse all shuts them', async ({ page }) => {
+test('Expand opens every section and Collapse shuts them', async ({ page }) => {
   await open(page)
 
   /* THE WALK ARRIVES WITH ONE SECTION OPEN — the planted selection's — so the roster begins by
-     shutting it. The control names that press rather than offering `expand all` over a screen
+     shutting it. The control names that press rather than offering `Expand` over a screen
      that is already partly expanded, which is the owner's own report and the case above. */
-  await page.getByRole('button', { name: 'collapse all' }).click()
+  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'expand all' }).click()
+  await page.locator('.browse-quiet').getByText('Expand', { exact: true }).click()
   /* SEVEN ROWS AND FIVE CARDS ON HAND (D58). The walk draws every RECORD the box holds,
      departed ones included — a sold card is still findable, still reversible past its
      twenty-second window, and still where the operator remembers it. What it does not draw
@@ -2635,31 +2635,31 @@ test('expand all opens every section and collapse all shuts them', async ({ page
    * "which is what makes collapsed-by-default safe rather than hostile". It was neither: the
    * owner reported the fold as clickable and doing nothing, and this was half the reason —
    * `isOpen` re-opened the selected section on every render, so an explicit fold recorded a
-   * close that the next paint discarded. A control whose label says `collapse all` and which
+   * close that the next paint discarded. A control whose label says `Collapse` and which
    * leaves a section open is not safe, it is lying.
    *
    * The invariant the override carried is real and did not go: the mark must never sit on a
    * row nobody can see. It moved to where it belongs, an effect that opens the landing
    * section when the selection MOVES — asserted below. Navigation is an automatic
    * consequence; folding is an act; they are not decided in the same expression. */
-  await page.getByRole('button', { name: 'collapse all' }).click()
+  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'expand all' }).click()
+  await page.locator('.browse-quiet').getByText('Expand', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(7)
-  await page.getByRole('button', { name: 'collapse all' }).click()
+  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
 
   /* ONE PRESS FROM A PARTIAL STATE, which is the other half of the owner's report and the half
    * a collapsed default does not fix on its own. A step into a shut section opens it, so the
    * walk is partly expanded again a single arrow key later — and while the control read
-   * `expand all` from there, reaching a collapsed list still cost two presses. It now reads ANY
+   * `Expand` from there, reaching a collapsed list still cost two presses. It now reads ANY
    * rather than EVERY, so it always names what one press will do. */
   await page.locator('.browse-list').focus()
   await page.keyboard.press('End')
   await expect(page.locator('.browse-row')).toHaveCount(2)
 
-  await expect(page.getByRole('button', { name: 'collapse all' })).toBeVisible()
-  await page.getByRole('button', { name: 'collapse all' }).click()
+  await expect(page.locator('.browse-quiet').getByText('Collapse', { exact: true })).toBeVisible()
+  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 })
 
@@ -2669,7 +2669,7 @@ test('a search opens every section holding a match, and clearing it gives the wa
   await open(page)
   /* Shut, so what the query opens is the query's doing and not the walk's own planted
      selection. */
-  await page.getByRole('button', { name: 'collapse all' }).click()
+  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
   /* The owner's second ask, verbatim: "i want if i search for a card, all results of that card
@@ -2704,7 +2704,7 @@ test('moving the selection opens the section it lands in, so the mark is never h
    * to open whatever it lands in — otherwise collapsed-by-default would let the walk put the
    * mark on a row nobody can see, which is the failure the old render-time override was
    * written to prevent and the one thing that must survive its removal. */
-  await page.getByRole('button', { name: 'collapse all' }).click()
+  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
   await page.locator('.browse-list').focus()
@@ -2742,7 +2742,7 @@ test('a copy row draws how far into the box AND how far into the section', async
   const first = bars.nth(0).locator('.position-bar-text')
   /* NO "SO FAR" ON THE BOX LINE (owner's ruling, 2026-09-19 — see the case below this one for
      the full argument): `#1 of 5`, not `#1 of 5 so far`. */
-  await expect(first.nth(0)).toHaveText('Section 1 of 2')
+  await expect(first.nth(0)).toHaveText('Position 1 of 2')
   /* SETTLED SECTION, SO THE DENOMINATOR IS SLOTS. Section 1 runs 1..3 and the box holds 5, so
      its far bound is a divider with cards behind it: three slots today and three next week —
      said now on the row's own header (`Card 1 of 3`), never restated here (the owner's
@@ -2751,7 +2751,7 @@ test('a copy row draws how far into the box AND how far into the section', async
   await expect(rows.nth(0).locator('.card-locations-identity')).toContainText('Card 1 of 3')
 
   const second = bars.nth(1).locator('.position-bar-text')
-  await expect(second.nth(0)).toHaveText('Section 1 of 2')
+  await expect(second.nth(0)).toHaveText('Position 1 of 2')
   await expect(bars.nth(1).locator('.position-bar-text-section')).toHaveCount(0)
   await expect(rows.nth(1).locator('.card-locations-identity')).toContainText('Card 3 of 3')
 
@@ -2782,7 +2782,7 @@ test('the last section of an open box counts what is in it, and the box line dro
    * second ruling the same evening — "drop it everywhere" — reached the section line too: a
    * growing section reads `card 2 of 2`, a settled one `card 2 of 2 slots`. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
-  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Section 2 of 2')
+  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Position 2 of 2')
   /* THE CARD RULER'S OWN CAPTION IS OMITTED HERE (the owner's Direction-B build, 2026-09-25):
      the header now says `Card 2 of 2` once, and this section carries no name, so there is
      nothing left for this caption to say. */
@@ -2809,7 +2809,7 @@ test('the card with no group gets both depths too', async ({ page }) => {
    * so the bars below are the ROW's, in the same shape every identified card gets. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar).toHaveCount(1)
-  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Section 1 of 2')
+  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Position 1 of 2')
   await expect(bar.locator('.position-bar-text-section')).toHaveCount(0)
 
   /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D71). This test reaches
@@ -3174,18 +3174,21 @@ test('the operations are rows on one edge, and the delete is the only bordered o
   await expect(page.locator('.boxops-group-danger')).toContainText('Danger')
 
   /* AND THE BAR IS BORDERED, which is the half of this case's own name that nothing asserted.
-     The loop above proves the rows are bare and the lines below prove the bar says `no undo`;
-     between them the title claims the delete is the ONLY bordered one, and `.boxops-bar` losing
-     its `1px solid var(--ink)` would have left every assertion here green while the one step of
-     emphasis this palette allows went missing. All four sides, because it encloses — that is
-     the distinction the rows are measured against. */
+     The loop above proves the rows are bare; between them the title claims the delete is the
+     ONLY bordered one, and `.boxops-bar` losing its `1px solid var(--ink)` would have left
+     every assertion here green while the one step of emphasis this palette allows went
+     missing. All four sides, because it encloses — that is the distinction the rows are
+     measured against. */
   /* And it opens its own paragraph rather than firing: the press that spends is inside the
      confirmation, which is the case below. */
   await expect(bar).toHaveAttribute('aria-expanded', 'false')
 
-  /* `no undo` is said BEFORE the panel that spends a paragraph on it, and it is what keeps a
-     full-measure bordered control from being a short label beside 220px of white. */
-  await expect(bar.locator('.boxops-op-detail')).toHaveText('no undo')
+  /* F5 verbiage cut (row 175, DELETE): `no undo` is gone from this caption. The reviewer's own
+     reasoning — irreversibility is already signalled twice over, by the red "Danger" heading
+     and the bordered row asserted above — holds, and D288's OWN concern (a press that cannot
+     be undone keeps its words) is about the button's own label, "Delete", spelled out in
+     full above, not this secondary caption. */
+  await expect(bar.locator('.boxops-op-detail')).toHaveCount(0)
 })
 
 // ------------------------------------------------------------------------- the mass-select
@@ -3509,7 +3512,7 @@ test('the mid-box delete aims with the target’s own capture id and reports the
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Thievul' }).nth(1).click()
   await openCardOps(page)
-  await page.getByRole('menuitem', { name: 'Remove this card…' }).click()
+  await page.getByRole('menuitem', { name: 'Remove' }).click()
   await page.getByRole('button', { name: 'Delete this card' }).click()
 
   const removed = wire.find((sent) => sent.path.endsWith('/remove'))
@@ -3586,7 +3589,7 @@ test('and the photograph follows the shift, because the URL names the capture', 
   await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?card=cap-3$/)
 
   await openCardOps(page)
-  await page.getByRole('menuitem', { name: 'Remove this card…' }).click()
+  await page.getByRole('menuitem', { name: 'Remove' }).click()
   await page.getByRole('button', { name: 'Delete this card' }).click()
 
   /* After: the SAME slot, a different card, and therefore a different URL — so the picture
@@ -3719,7 +3722,7 @@ test('a sold or retired card is not offered the mid-box delete at all', async ({
      `do_remove_card` refuses a sold card by name, because deleting it would erase the record of
      a departure D10 makes permanent. */
   await openCardOps(page)
-  await expect(page.getByRole('menuitem', { name: 'Remove this card…' })).toHaveCount(0)
+  await expect(page.getByRole('menuitem', { name: 'Remove' })).toHaveCount(0)
   await expect(page.getByRole('menuitem', { name: 'Correct' })).toBeVisible()
 })
 
@@ -4983,7 +4986,7 @@ test('D300 — BoxOps "Move to box" (the whole box or a range) also requires a s
 
   await openBoxOps(page)
   await page.getByRole('button', { name: /^Move,/ }).click()
-  const move = page.getByRole('button', { name: 'Move', exact: true })
+  const move = page.locator('.boxops-sheet').getByRole('button', { name: 'Move', exact: true })
 
   await page.locator('.bn-field .bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
@@ -5019,7 +5022,7 @@ test('D300 — a stale section on BoxOps Move re-opens the pick with one plain s
   await page.locator('.bn-field .bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
   await page.locator('.bn-section-pick-item').click()
-  const move = page.getByRole('button', { name: 'Move', exact: true })
+  const move = page.locator('.boxops-sheet').getByRole('button', { name: 'Move', exact: true })
   await move.click()
 
   await expect(page.locator('.boxops-sheet')).toContainText('there is no default place inside the box')
@@ -5111,7 +5114,7 @@ test('F2 — the visible sentence names the section, and a divider key sits behi
   await page.locator('.bn-field .bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
   await page.locator('.bn-section-pick-item').click()
-  await page.getByRole('button', { name: 'Move', exact: true }).click()
+  await page.locator('.boxops-sheet').getByRole('button', { name: 'Move', exact: true }).click()
 
   /* THE VISIBLE SENTENCE NAMES WHAT THE OWNER SAW, and a divider key never reaches it
    * (D196): the row read "Section 1", so the sentence says "Section 1", never "divider 33". */
@@ -5169,7 +5172,7 @@ test('F1 — a stale section on BoxOps Move reads the boxes again, so the re-pic
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
   await expect(page.locator('.bn-section-pick-count')).toHaveText('40 cards')
   await page.locator('.bn-section-pick-item').click()
-  await page.getByRole('button', { name: 'Move', exact: true }).click()
+  await page.locator('.boxops-sheet').getByRole('button', { name: 'Move', exact: true }).click()
 
   /* THE RE-PICK OFFERS THE LIVE LIST: the sheet asked `GET /boxes` again after the refusal,
    * and the section now reads 41 cards — the answer a stale, un-refetched list could never
@@ -5180,7 +5183,7 @@ test('F1 — a stale section on BoxOps Move reads the boxes again, so the re-pic
    * The old divider is gone from the fresh list, so nothing may still read as picked, and
    * Move must read disabled again until the owner picks from the LIVE row. */
   await expect(page.locator('.bn-section-pick-item[aria-checked="true"]')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Move', exact: true })).toBeDisabled()
+  await expect(page.locator('.boxops-sheet').getByRole('button', { name: 'Move', exact: true })).toBeDisabled()
 })
 
 test('the neighbours are ranked, not joined — the names are the only thing drawn at ink', async ({
