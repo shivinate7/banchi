@@ -8882,6 +8882,15 @@ COMPONENTS = [
                         "`make design-check`.",
                 "governed_by": ["D57", "D58", "D118", "D181", "D260", "D264"],
             },
+            "tests/photo-cache.spec.ts": {
+                "does": "Home and Review draw every photograph by name (`D172`), on the first "
+                        "visit and on the revisit: a slot URL is what the browser re-requests "
+                        "on every visit, a by-card URL is `immutable`. A route-fulfilled stub "
+                        "is never HTTP-cached, so this asserts the address shape, and harness "
+                        "T7 `check_photo_cache` holds the header and the 304. Run by "
+                        "`make design-check`.",
+                "governed_by": ["D172"],
+            },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
                         "`margin: 0 auto` centered a screen with a lower `--bn-page-max` "
@@ -9263,7 +9272,7 @@ COMPONENTS = [
                         "re-add the link and all 20 brand cases fail naming the URL. Not "
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
-                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
+                "governed_by": ["D16", "D37", "D172", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
                                 "D124", "D125", "D134", "D174", "D192", "D259", "D273", "D276",
                                 "D298", "D301"]},
             "tests/fontsReady.ts": {

@@ -178,6 +178,8 @@ function card(over: {
       section_gaps: 0,
     },
     photo: `photos/${over.box}/${over.index}.jpg`,
+    /* THE CARD'S OWN NAME, as `_card_row` sends it (D172): 64 hex, so screens address by name. */
+    cid: (over.box * 1000 + over.index).toString(16).padStart(64, '0'),
     set_hint: 'ME01',
     metadata_finish: 'normal',
     game: 'pokemon',
@@ -407,6 +409,9 @@ async function stubCropPreview(page: Page): Promise<void> {
 }
 
 async function stubStore(page: Page): Promise<void> {
+  await page.route(/\/photo\/by-card\//, (route) =>
+    route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG }),
+  )
   await page.route(/\/photo\/\d+\/\d+/, (route) =>
     route.fulfill({ status: 200, contentType: 'image/svg+xml', body: PHOTO_SVG }),
   )
@@ -556,6 +561,7 @@ async function stubStore(page: Page): Promise<void> {
           index: 1,
           label: 'Box 2, Section 1, Card 1',
           photo: 'photos/2/1.jpg',
+          cid: (2001).toString(16).padStart(64, '0'),
           read: { name: 'Volcanion', number: '025', printed_total: '132', set_hint: 'ME01' },
           confidence: null,
           reason: 'no_catalog_row',
