@@ -9554,7 +9554,7 @@ COMPONENTS = [
                         "in its own header once a fifth period option existed. Not a harness "
                         "test; `make design-check` runs it.",
                 "governed_by": ["D50", "D62", "D89", "D103", "D118", "D159", "D193", "D201", "D214",
-                                "D217", "D225", "D281", "D298", "D301"],
+                                "D217", "D225", "D271", "D281", "D298", "D301"],
             },
             "tests/demo-coverage.spec.ts": {
                 "does": "the BUILT public demo (`dist-demo/`), served on this checkout's own "

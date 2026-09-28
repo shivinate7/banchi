@@ -12,6 +12,7 @@ import {
 import { moneyGrouped } from './money'
 import { absoluteDate, monthOf, saleDate, weekOf } from './dates'
 import { useCardCropWhenSeen } from './cardCrop'
+import { matchQuery } from './kit/match'
 import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
 import './Revenue.css'
@@ -953,8 +954,7 @@ export function Revenue() {
     }
     const rows = Array.from(by.values())
     const byView = rows.filter((row) => (view === 'all' ? true : isSealed(row.kind, row.condition) === (view === 'sealed')))
-    const q = query.trim().toLowerCase()
-    const filtered = q === '' ? byView : byView.filter((row) => row.name.toLowerCase().includes(q))
+    const filtered = byView.filter((row) => matchQuery(query, { text: [row.name] }))
     return filtered.slice().sort((a, b) => {
       const base = compareProducts(a, b, sortKey)
       return sortDir === 'asc' ? base : -base

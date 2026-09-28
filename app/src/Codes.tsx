@@ -22,6 +22,7 @@ import type {
   LotResult,
 } from './types'
 import { Button, EmptyState, FilterBar, Icon, IconButton, Loading, Notice, Page, Pill, ReloadButton, Segmented, Select, Sheet, Stat, type FilterFacet, type FilterValue, type IconName } from './kit'
+import { matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { absoluteDate } from './dates'
 import './Codes.css'
@@ -581,19 +582,10 @@ export function Codes() {
 
   const rows = useMemo(() => {
     if (ledger === null) return []
-    const needle = filter.trim().toLowerCase()
     return ledger.entries.filter((e) => {
       if (stateFilter !== 'all' && e.state !== stateFilter) return false
       if (laneFilter !== 'all' && laneOf(e) !== laneFilter) return false
-      if (!needle) return true
-      return (
-        e.code.toLowerCase().includes(needle) ||
-        (e.product_display ?? '').toLowerCase().includes(needle) ||
-        (e.set_hint ?? '').toLowerCase().includes(needle) ||
-        (e.order_id ?? '').toLowerCase().includes(needle) ||
-        (e.buyer ?? '').toLowerCase().includes(needle) ||
-        e.state.includes(needle)
-      )
+      return matchQuery(filter, { text: [e.code, e.product_display, e.set_hint, e.order_id, e.buyer, e.state] })
     })
   }, [ledger, filter, stateFilter, laneFilter])
 

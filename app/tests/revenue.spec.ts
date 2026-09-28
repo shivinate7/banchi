@@ -243,6 +243,18 @@ test('the search field narrows the product table by name', async ({ page }) => {
   expect(await productNames(page)).toEqual(['Pikachu VMAX'])
 })
 
+/* D271: ONE FORGIVING MATCHER FOR EVERY SEARCH FIELD, ON THE SERVER AND IN THE BROWSER. This
+ * screen's own filter once ran a plain `row.name.toLowerCase().includes(q)`, so it answered
+ * only the exact word order and never the matcher `app/src/kit/match.ts` already gives every
+ * other list. Word order is rule 3 of that matcher: "EVERY TOKEN MUST MATCH, IN ANY ORDER" —
+ * a query is never a substring of the whole name. */
+test('the search field is the shared matcher, not a substring test (D271)', async ({ page }) => {
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  await page.getByPlaceholder('Search').fill('ex charizard')
+  expect(await productNames(page)).toEqual(['Charizard ex'])
+})
+
 test('a name that fell back to its SKU draws in mono; a real name does not', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
