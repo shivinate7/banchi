@@ -7545,6 +7545,24 @@ COMPONENTS = [
                                          "`ReviewQueue.css`'s `.review-catalog*`/`.review-candidate*` "
                                          "for the picker rows.",
                                  "governed_by": ["D94", "D117", "D118", "D252"]},
+            "src/RailFrame.tsx": {"does": "the rail's own sticky frame, lifted out of "
+                                          "`BoxBrowse.tsx` (lane A2b, "
+                                          "`docs/reviews/ux-2026-09-23/orders-a/PLAN.md`'s "
+                                          "component reuse map: \"Inventory passes its box list "
+                                          "and walk. Orders passes its buyer list.\"). MOVED "
+                                          "WHOLE: the `<div className=\"browse-map\">` wrapper "
+                                          "and D289 rule 2's own measure (\"the rail's top at "
+                                          "rest, and the rail's height is the window less that "
+                                          "top\", UX-227) — pure over the wrapper's own DOM node "
+                                          "and its parent, no closure over `BoxBrowse.tsx`'s "
+                                          "state. `BoxBrowse.css`'s `.browse-map` rule is "
+                                          "untouched and still names the CSS var this file sets "
+                                          "(`--browse-rail-rest`), so the default `className` "
+                                          "keeps `#/inventory` pixel-identical. `ref` is a "
+                                          "normal prop (React 19, no `forwardRef`), because "
+                                          "`BoxBrowse.tsx` still needs the mounted node to "
+                                          "scroll the selected box row into view within it.",
+                                  "governed_by": ["D31", "D96", "D220", "D289"]},
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
                                               "its sold action. D7's fungibility made visible — every "
                                               "unsold copy is offered, and the listed quantity is read "
