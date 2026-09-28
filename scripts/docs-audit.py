@@ -11888,6 +11888,33 @@ _DECISION_CITE_RE = re.compile(r"\bD\d{1,4}\b|\bC\d{1,4}\b|\(D-[A-Za-z0-9][A-Za-
 _CLI_INVOCATION_RE = re.compile(r"`?\bpkmnscan\b(?:\s+[\w.-]+)*`?", re.I)
 
 
+UNKNOWN_NO_TOOLCHAIN = "unknown: app/node_modules missing, run make worktree-setup"
+
+
+def _user_strings_toolchain_missing() -> bool:
+    """True only when `node` or the app's own TypeScript is ABSENT (a read that could not run).
+
+    Distinct from a toolchain that is present and broke (bad exit, timeout, bad JSON):
+    `_run_user_strings` answers None for both, and only this one is "unknown", never a finding.
+    """
+    return shutil.which("node") is None or not APP_TS_COMPILER.exists()
+
+
+def _add_toolchain_row(report, check: str, peers: str) -> None:
+    """The `_run_user_strings` None branch: ADVISORY when absent, MECHANICAL when it broke."""
+    if _user_strings_toolchain_missing():
+        report.add(check, ADVISORY, [Finding(rel(USER_STRINGS_SCRIPT), UNKNOWN_NO_TOOLCHAIN)],
+                   "toolchain unavailable, so nothing was read", scanned=0)
+        return
+    report.add(
+        check, MECHANICAL,
+        [Finding(rel(USER_STRINGS_SCRIPT),
+                 "could not run — `node` and `app/node_modules/typescript` are present but "
+                 f"`scripts/user-strings.mjs` failed (exit, timeout or unreadable output); {peers}")],
+        "toolchain broke, so nothing was read", scanned=0,
+    )
+
+
 def _run_user_strings(args: List[str]) -> Optional[List[Dict[str, object]]]:
     """Shell out to scripts/user-strings.mjs; None when the toolchain cannot run it.
 
@@ -12084,25 +12111,14 @@ def check_no_mechanism_on_screen(report: Report) -> None:
     its summary is a snapshot of the tree at the moment `make docs-audit` ran, not a claim
     that the front end has already been made to comply.
 
-    Toolchain-missing is reported as a finding rather than a silent `scanned=0`, because
-    `make check` already needs `node` and `app/node_modules/typescript` for `lint` and
-    `typecheck` — a machine that cannot run those cannot honestly claim this row passed
-    either.
+    Toolchain-missing is reported as an ADVISORY finding (`UNKNOWN_NO_TOOLCHAIN`) rather than
+    a silent `scanned=0`: a read that could not run is unknown, never clear and never broken.
+    A toolchain that is PRESENT and fails stays MECHANICAL (`_add_toolchain_row`).
     """
     strings = _run_user_strings([])
     if strings is None:
-        report.add(
-            "no mechanism on screen", MECHANICAL,
-            [
-                Finding(
-                    rel(USER_STRINGS_SCRIPT),
-                    "could not run — `node` or `app/node_modules/typescript` is missing. "
-                    "`npm install` in app/ first; this row needs the same toolchain "
-                    "`make lint` and `make typecheck` already require.",
-                )
-            ],
-            "toolchain unavailable, so nothing was read", scanned=0,
-        )
+        _add_toolchain_row(report, "no mechanism on screen",
+                           "this row needs the same toolchain `make lint` and `make typecheck` require.")
         return
     allow = _machine_words_allow()
     findings, used = _no_mechanism_findings(strings, allow)
@@ -12453,18 +12469,8 @@ def check_typed_interpunct(report: Report) -> None:
     """
     strings = _run_user_strings(list(TYPED_INTERPUNCT_EXTRACT_ARGS))
     if strings is None:
-        report.add(
-            "typed interpunct", MECHANICAL,
-            [
-                Finding(
-                    rel(USER_STRINGS_SCRIPT),
-                    "could not run — `node` or `app/node_modules/typescript` is missing. "
-                    "`npm install` in app/ first; this row needs the same toolchain "
-                    "`make lint`, `make typecheck` and `no mechanism on screen` already require.",
-                )
-            ],
-            "toolchain unavailable, so nothing was read", scanned=0,
-        )
+        _add_toolchain_row(report, "typed interpunct",
+                           "this row needs the same toolchain `no mechanism on screen` requires.")
         return
 
     hits = _typed_interpunct_hits(strings)
@@ -19154,6 +19160,31 @@ def self_test() -> int:
             "  return <p>Waiting on the pipeline to answer.</p>\n"
             "}\n",
         )
+
+        # THE UNKNOWN PATH: absent toolchain is ADVISORY, a present-but-broken one stays MECHANICAL.
+        _saved = (APP_TS_COMPILER, _run_user_strings, _user_strings_toolchain_missing)
+        try:
+            for _row_fn, _name in ((check_no_mechanism_on_screen, "no mechanism on screen"),
+                                   (check_typed_interpunct, "typed interpunct")):
+                globals()["APP_TS_COMPILER"] = fixture_dir / "absent" / "typescript.js"
+                _r = Report()
+                _row_fn(_r)
+                _row = [c for c in _r.checks if c.check == _name][0]
+                ok(_row.severity == ADVISORY and UNKNOWN_NO_TOOLCHAIN in _row.findings[0].message,
+                   f"{_name}: an absent toolchain is ADVISORY unknown, never MECHANICAL")
+                globals()["APP_TS_COMPILER"] = _saved[0]
+                globals()["_run_user_strings"] = lambda _a: None
+                globals()["_user_strings_toolchain_missing"] = lambda: False
+                _r = Report()
+                _row_fn(_r)
+                _row = [c for c in _r.checks if c.check == _name][0]
+                ok(_row.severity == MECHANICAL and UNKNOWN_NO_TOOLCHAIN not in _row.findings[0].message,
+                   f"{_name}: a present toolchain that fails stays MECHANICAL")
+                globals()["_run_user_strings"] = _saved[1]
+                globals()["_user_strings_toolchain_missing"] = _saved[2]
+        finally:
+            (globals()["APP_TS_COMPILER"], globals()["_run_user_strings"],
+             globals()["_user_strings_toolchain_missing"]) = _saved
 
         strings = _run_user_strings(["--dir", str(fixture_dir)])
         ok(strings is not None, "the extractor runs over a throwaway fixture tree",

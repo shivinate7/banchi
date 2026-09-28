@@ -38961,12 +38961,16 @@ def _m_files(dirs) -> Dict[str, List[Tuple[str, int, str]]]:
     return out
 
 
+class _ToolchainMissing(Exception):
+    """`app/node_modules` is absent: a read that could not run, never a failure."""
+
+
 def _m_home(worklists: Dict[str, dict]) -> Dict[str, dict]:
     """Home's line, tile and run chips for each worklist, off `app/src/standing.ts` itself."""
     root = Path(__file__).resolve().parents[2]
     esbuild = root / "app" / "node_modules" / ".bin" / "esbuild"
-    if not esbuild.exists():
-        raise RuntimeError("app/node_modules is not installed (npm --prefix app ci); Home cannot be read")
+    if not esbuild.exists() or shutil.which("node") is None:
+        raise _ToolchainMissing()
     with tempfile.TemporaryDirectory() as tmp:
         bundle = Path(tmp) / "standing.mjs"
         subprocess.run(
@@ -39087,6 +39091,9 @@ def check_send_matrix(checks: Checks) -> None:
 
     try:
         home = _m_home(worklists)
+    except _ToolchainMissing:
+        checks.note("unknown: app/node_modules missing, run make worktree-setup")
+        return
     except (RuntimeError, OSError, subprocess.CalledProcessError) as exc:
         checks.ok(False, "Home can be read for every matrix case", str(exc))
         return

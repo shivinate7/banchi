@@ -128,6 +128,8 @@ launch-config:
 # `make worktree-setup` copies no secret. `.env` reaches each Claude Code worktree through
 # `.worktreeinclude` instead (owner's ruling, 2026-09-28), with `.claude/settings.local.json`
 # and `.codex/config.toml`. T1 does not need it once the cache is warm.
+# `--foreground`: a needed `npm ci` finishes before this target returns (the SessionStart hook
+# omits the flag and backgrounds it); a current install is skipped, so a rerun is cheap.
 # The cache/mirror/node_modules provisioning below is shared with scripts/worktree-guard.sh
 # (the SessionStart hook) via scripts/worktree-provision.sh — see that script's header for
 # why: this used to be a second copy of the same cp/ln/python-one-liner sequence, and D47's
@@ -143,7 +145,7 @@ worktree-setup:
 		exit 1; \
 	fi; \
 	$(MAKE) --no-print-directory venv; \
-	bash scripts/worktree-provision.sh "$$main"
+	bash scripts/worktree-provision.sh --foreground "$$main"
 	@echo "worktree ready. \`make harness\` should now be green without spending anything."
 
 # scripts/worktree-provision.sh's app/node_modules clone/install/staleness logic
