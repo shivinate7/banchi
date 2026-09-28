@@ -53,7 +53,6 @@ NEEDS = {
     "lsof": "lsof, which macOS ships. It is how a pid's working directory and a port's "
             "holders are read; absent, reap-selftest's port cases cannot be posed at all.",
     "sh": "any POSIX sh.",
-    "vale": "the vale binary — `brew install vale`. Absent, the target reports and exits 0.",
     "ruff": "ruff, installed by `make venv` from requirements.txt (D82). RUFF_GUARD fails "
             "loudly rather than letting the target no-op.",
 }
@@ -97,31 +96,6 @@ CHECKS = (
         "why_off_commit_path": "",
         "gates": True,
         "governed_by": ("D16", "D18"),
-    },
-    {
-        "target": "claim-stale",
-        "runs": "python3 scripts/claim-ids.py --stale",
-        "asserts": "No id this branch ADDS since its merge base with `origin/main` — decision "
-                   "heading, code-card `C` entry, or build-order step — has been taken on "
-                   "that ref in the meantime. The claimer is a no-op once a branch has "
-                   "claimed: there is no slug left, so it says `nothing to do` while the "
-                   "number it allocated may have been taken by main since. That happened "
-                   "TWICE on 2026-09-11 — #262 and #265 on one id, #265 and #270 on the next "
-                   "— and a person reading PR titles was the only thing that caught either. "
-                   "It REPORTS and never repairs, because an un-claim has to happen before a "
-                   "merge and never after. It can only ever under-report against a stale "
-                   "`origin/main`, never over-report, and a clone with no `origin/main` at "
-                   "all is allowed and says so.",
-        "needs": ("python3", "git"),
-        "writes": "",
-        "commit_path": False,
-        "why_off_commit_path": "It asks about `origin/main`, which a commit never consults "
-                               "and a fresh clone may not have — `revert-guard`'s reason, "
-                               "and the same answer. `make merge` is where it is worth the "
-                               "most, because the fetch immediately above it makes the answer "
-                               "current; `make check` is the earlier, cheaper warning.",
-        "gates": True,
-        "governed_by": ("D16", "D42", "D80", "D140"),
     },
     {
         "target": "revert-guard",
@@ -375,26 +349,6 @@ CHECKS = (
         "why_off_commit_path": "It runs node, and the git hook runs a bare python3.",
         "gates": True,
         "governed_by": ("D18", "D82"),
-    },
-    {
-        "target": "vale",
-        "runs": "git ls-files '*.md' | xargs vale --no-exit",
-        "asserts": "Prose style over every TRACKED markdown file (D74). IT NEVER GATES, twice "
-                   "over: `--no-exit` swallows its findings' status, and a missing binary "
-                   "reports and exits 0 so `make check` still runs on a machine without it.",
-        "needs": ("vale",),
-        "writes": "",
-        "commit_path": False,
-        "why_off_commit_path": "vale is a third-party Go binary, and the pre-commit hook runs a "
-                               "bare python3 (D18). A commit gate needing software PRESENT "
-                               "would make the three opsec rules depend on it too.",
-        "why_off_ci": "the binary is not on the GitHub runner, and it never gated anyway — "
-                      "`--no-exit` swallows its status. `make ci-check` is what a fresh clone "
-                      "can PROVE, so a target that proves nothing there is left out rather "
-                      "than run for the shape of it. The one declared difference between the "
-                      "two recipes, and `check registry` refuses a second without a sentence.",
-        "gates": False,
-        "governed_by": ("D18", "D60", "D74"),
     },
     {
         "target": "typecheck",
@@ -1448,7 +1402,7 @@ def table() -> str:
         )
     lines += [
         "",
-        "  gates   a finding here fails `make check`. `vale` deliberately does not.",
+        "  gates   a finding here fails `make check`.",
         "  commit  scripts/githooks/pre-commit runs it, so it decides whether a commit",
         "          proceeds. D18: nothing that WRITES may ever be in this column.",
         "",

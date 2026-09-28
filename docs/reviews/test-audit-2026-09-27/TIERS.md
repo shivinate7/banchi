@@ -203,6 +203,35 @@ Treat it as "well under a second, on the evidence available," not a per-row read
 | 108 | `subject counts` | 2 | A row silently examines zero subjects and reports a false "ok". | ~0.1s* | Meta-check over the other rows, not a direct navigation harm. |
 | 109 | `coupling` | 3 | Already advisory, staged-only. A large change to pipeline, harness, or the Makefile lands with no matching doc update. | ~0.1s* | Already scoped to the real diff, already cheap. Fine to leave as-is either way. |
 
+## The owner's rulings (2026-09-27)
+
+The tier model and every row not named below stand as proposed. The owner's words are quoted.
+
+- **Line anchors, rows 3, 4 and 5 plus `line anchor allowlist`:** `yeah convert and collapse`.
+  A lane converts the old line anchors (about 88, in 44 files) to symbol citations. Then one
+  Tier 1 row refuses any line anchor. The four rows merge into it. The parent CLAUDE.md asks
+  for the same thing: cite by id, never by path and line.
+- **Row 20, `entry budget`:** CUT.
+- **Row 48, `gates structure`:** CUT. Gating retired, and `gates-selftest` proves the set is
+  complete.
+- **Row 92, `ste offenders`, and its list `scripts/ste-offenders.json`:** CUT. The write-time
+  STE hook lints new prose. This needs dated amendments to D226, D229 and D280 (the prose
+  ratchet decisions) in the lane that cuts it.
+- **Rows 51 and 52, `game coverage` and its allowlist:** both to Tier 3.
+- **Row 15, `decision ids in code`:** folds into row 14, `decision ids`, as one blocking row.
+- **Row 47, `map sections`:** Tier 3.
+- **Row 60, `mac icon grid`:** Tier 2, inside L8's logo family.
+- **Row 49, `build order mirror`:** a later lane makes the build order one source. Then the row
+  goes.
+- **Q8, merge 16 rows into 4:** `Yes, as L8 (Recommended)`.
+- **Row 17 and CLAUDE.md's decision index:** `Derived view + pointer (Recommended)`. A lane
+  adds `make map ARGS=--decisions`, which prints the index from each entry's own heading. The
+  copy in CLAUDE.md becomes one line that names the command, and row 17 is cut. The parent
+  rule it follows: never load a long document whole, and read a rendered view instead.
+  The owner then declined keeping the 288 entries that govern code (it saves about 1.2 KB of
+  26 KB). The same lane amends D60's conversational-path paragraph, whose premise (60 lines,
+  3,929 bytes) measured 301 lines and 26,420 bytes on 2026-09-27.
+
 ## Next
 
 - Owner reviews the tier column and the "Rows I was unsure about" table, and rules or

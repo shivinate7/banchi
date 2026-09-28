@@ -69,7 +69,7 @@ make serve-scope    # what `make serve-selftest` reads, and whether this branch 
                     #   checkout with a STUB app/, so no screen change can reach it.
                     #   `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every skip.
 make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
-                    #   measurement). What each of twenty-three guard and product self-tests reads. A
+                    #   measurement). What each of twenty-five guard and product self-tests reads. A
                     #   sixteenth, `pricearchive-selftest`, joined 2026-09-23 on the
                     #   owner's word: "once it's done, it only needs to be tested when
                     #   touched." Six more joined the same day, once that sixteenth's own
@@ -84,6 +84,9 @@ make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
                     #   `#/product`, `cards contradictions`). `match-selftest` joined
                     #   2026-09-27 on the owner's word (owner ruling Q3, test-audit plan): "Yes,
                     #   path-gate it." It is a product test, deterministic over what it imports.
+                    #   `browser-scope-selftest` and `port-slots-selftest` joined the same day
+                    #   (test-audit plan P1): same shape as the rest of the roster, so no new
+                    #   word was needed.
                     #   ARGS=list [--target <name>], or
                     #   ARGS="classify --target <name> --base <rev>".
                     #   D247 is the argument. A guard
@@ -122,8 +125,8 @@ make offenders-prune # a generator that only DELETES (D18). It removes the stale
                     #   git's rename detection says moved. It never adds an entry. It reads
                     #   with the rows' own functions. Previews. ARGS=--write applies. On no
                     #   hook. `make offenders-prune-selftest` proves it, NOT in `make check`.
-make harness        # all TEN verification tests (T1-T9 and T11); the Stop hook runs it at
-                    #   turn end. RECOUNT from harness/run.py's TESTS list. THERE IS NO T10:
+make harness        # all TEN verification tests (T1-T9 and T11). RECOUNT from harness/run.py's
+                    #   TESTS list. THERE IS NO T10:
                     #   that id belongs to the shelved IMB encoder (DEBT26), and this repo
                     #   renumbers its own ids and never another branch's.
 make up             # THE server, detached — ONE PROCESS (D138). Serves app/dist/ and the API
@@ -242,13 +245,13 @@ make demo-static    # demo-mirror-install, then a static build to dist-demo/. `d
                     #   `demo-record` above still work; they are just not what this builds
                     #   from any more.
 make demo-preview   # serve dist-demo/ as a static host would.
-make check          # harness + docs-audit + claim-stale + revert-guard +
+make check          # harness + docs-audit + revert-guard +
                     #   port-agreement + set-hint-agreement + readiness-agreement +
                     #   screen-freshness +
                     #   screen-freshness-selftest + sigil-check +
                     #   css-var-check + css-var-check-selftest + token-literal-check +
                     #   kit-adoption + ignore-check +
-                    #   lint + vale + typecheck + audit-self-test +
+                    #   lint + typecheck + audit-self-test +
                     #   mutate-anchors +
                     #   githooks-selftest + merge-selftest + revert-selftest +
                     #   claim-selftest + decisions-selftest + debts-selftest +
@@ -311,7 +314,7 @@ make kit-adoption-selftest  # that checker, on in-memory fixtures in both direct
 make port-slots-selftest  # two throwaway trees forced into one port slot, a real Vite and a
                     #   real Playwright in each. A run in one tree refuses the other's server.
                     #   After a claim, each tree holds its own slot. Writes under `mktemp -d`.
-make ci-check       # `check` minus `vale`, the slice a fresh clone can prove.
+make ci-check       # subset of check for a fresh clone.
 make catalog-refresh  # STEP 9 PIECE 1 (D15): re-clone pokemon-tcg-data, refresh
                     #   vendor/pokemon-tcg-data/. Writes. Never gates. ARGS=--dry-run.
 make catalog-index  # STEP 9 PIECE 2: build catalog.sqlite. Cards join to sets BY FILENAME,
@@ -545,9 +548,9 @@ hand-typed hash list.
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
-157<!-- derived:app_src_file_count --> files under `app/src`: none read the
+156<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
-283<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
+281<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before
