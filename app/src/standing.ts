@@ -101,7 +101,7 @@ export function corpusAnswer(book: PricingCorpus, row: Pick<PricingSku, 'sku' | 
   if (answer === null || answer === undefined) return undefined
   /* AN ANSWER ON THE `price` CHANNEL COUNTS ON EVERY ROW, a hold or a typed price. `join` reads
    * it before it asks whether the row has a market price, so a card whose market went blank
-   * still lists at the price typed before (the owner's DEBT42 ruling, "Screen shows $5.16").
+   * still lists at the price typed before (the owner's ruling, "Screen shows $5.16").
    * The `unknown` channel counts only on a row with no market price, as `join` reads it. */
   if (answer.channel !== 'unknown') return answer.value
   return row.bucket === 'no_market_data' ? answer.value : undefined
@@ -161,8 +161,9 @@ const NO_ANSWERS: PricingCorpus = { policy: {}, skus: {} }
  *  card that needs a price. Here so the harness's send matrix reads the same words. */
 export function emptySendTitle(empty: EmptySend): string {
   const { needs_price: price, under_cut_off: cut, live } = empty
-  if (price > 0 && cut === 0 && live === 0) return 'Every card on this list needs a price first, so nothing was sent.'
-  if (cut > 0 && price === 0 && live === 0) {
+  const capped = empty.capped ?? 0
+  if (price > 0 && cut === 0 && live === 0 && capped === 0) return 'Every card on this list needs a price first, so nothing was sent.'
+  if (cut > 0 && price === 0 && live === 0 && capped === 0) {
     return 'Every priced card on this list is under the cut-off, and this send lists only the cards above it, so nothing was sent.'
   }
   const said = ['Nothing was sent.']
@@ -173,6 +174,12 @@ export function emptySendTitle(empty: EmptySend): string {
   if (live > 0) {
     const names = empty.live_names.slice(0, 5).join(', ') + (empty.live_names.length > 5 ? ` and ${empty.live_names.length - 5} more` : '')
     said.push(`TCGplayer already had every copy of ${live} ${live === 1 ? 'card' : 'cards'}${names ? ` (${names})` : ''}.`)
+  }
+  if (capped > 0) {
+    // DEBT37'S WORDING GAP 2: a card `--cap` closed had no clause here at all, silently
+    // dropped from a title that named every other reason. Never folded into `live` above —
+    // a capped card was never confirmed live, which is what `live` says.
+    said.push(`${capped} ${capped === 1 ? 'card is' : 'cards are'} held at this send's cap.`)
   }
   return said.join(' ')
 }

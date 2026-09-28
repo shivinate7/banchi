@@ -679,3 +679,38 @@ test('both themes: the table stays usable and sortable in dark', async ({ page }
   await expect(page.getByRole('columnheader', { name: 'Copies' })).toHaveAttribute('aria-sort', 'descending')
   expect(await productNames(page)).toEqual(['Charizard ex', 'Pikachu VMAX', '9199999'])
 })
+
+test('a sold row with no own photo draws the stock photo, not the plain tile (F2)', async ({ page }) => {
+  // The owner: "why does the sales page not pull the icons like you are able to do on sets
+  // and pricing?" `stub`'s own default answers no photo of either kind (D89 usually reclaims
+  // the own one) — this overrides only `stock_photos`, the catalogue photo D301's resolver
+  // answers, off `sku='9100001'`, Charizard ex's own SKU and the top podium tile here.
+  const STOCK_URL = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
+  // THE BROWSER MUST NEVER REACH AN OUTSIDE HOST — `sealEveryTest`'s own `sealOutside`
+  // refuses every request that is not this checkout's two ports, so the fixture's own
+  // `stock_photos` URL is answered from a route stub, exactly like `pricing.spec.ts`'s own
+  // stock-image case.
+  await page.route(STOCK_URL, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>',
+    }),
+  )
+  await stub(page, generalOrders())
+  await page.route(/\/skus\/photos\?/, (route) =>
+    json(route, { photos: {}, stock_photos: { '9100001': STOCK_URL } }),
+  )
+  await open(page)
+  const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
+  await expect(thumb.locator('img')).toHaveAttribute('src', STOCK_URL)
+  await expect(thumb).not.toHaveAttribute('data-missing', 'true')
+})
+
+test('a sold row with no photo of either kind still draws the plain tile', async ({ page }) => {
+  await stub(page, generalOrders())
+  await open(page)
+  const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
+  await expect(thumb).toHaveAttribute('data-missing', 'true')
+  await expect(thumb.locator('img')).toHaveCount(0)
+})

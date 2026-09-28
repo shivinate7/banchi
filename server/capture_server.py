@@ -318,7 +318,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from codes import products  # noqa: E402
-from pipeline import games, join, setnames, tcgcsv  # noqa: E402
+from pipeline import games, join, setnames, stockimages, tcgcsv  # noqa: E402
 from pipeline import orders as order_engine  # noqa: E402
 from pipeline import routing  # noqa: E402
 from pipeline import skus as sku_fill  # noqa: E402
@@ -12045,16 +12045,34 @@ def _copy_row(places: _Places, card: master.Card) -> dict:
 SKUS_PHOTOS_LIMIT = 40
 
 
-def do_skus_photos(skus: Sequence[str]) -> dict:
+def do_skus_photos(
+    skus: Sequence[str], images: Optional["stockimages.StockImages"] = None
+) -> dict:
     """The first on-hand copy WITH a photograph, for each named SKU — `#/revenue`'s
     thumbnail lookup (D298). A sold card's own photograph is usually gone
     (D89 reclaims it on purpose), so a sales row asks for ANOTHER copy of the same SKU
     still on the shelf. `Inventory.copies_on_hand`'s own box-walk order decides which copy
     that is; the first one carrying a real photograph wins, using the same `photo_for`
-    predicate `_copy_row` already applies rather than a second copy of it. A SKU with no
-    photographed copy on hand is simply ABSENT from the answer, never a guess and never a
-    stand-in image — the client's own fallback tile covers that case. Free and read-only,
-    like `do_search` above: no lock, one bounded pass per requested SKU.
+    predicate `_copy_row` already applies rather than a second copy of it. Free and
+    read-only, like `do_search` above: no lock, one bounded pass per requested SKU.
+
+    `images`, WHEN GIVEN, ANSWERS `stock_photos` FOR A SKU WITH NO OWN PHOTO (F2, the
+    owner: *"why does the sales page not pull the icons like you're able to do on sets and
+    pricing?"*). A SKU's own photo is checked FIRST and always wins — it is a photo of the
+    exact copy this store held, closer to the truth than a catalogue's stock image ever is.
+    Only a SKU that loses that check is looked up in `snapshot.skus.entries` (D258's own
+    table) for the `product_line`/`set_name`/`number`/`product_name` `url_for`/
+    `url_for_product` need. A SKU with a `number` is a single card and reuses `url_for`
+    exactly as `#/pricing` and Sets do; a SKU with none is SEALED PRODUCT (D223, D231 —
+    Pokemon included) and reuses `url_for_product` (F2's own addition) instead. Both answer
+    `None` on a join miss, which simply omits the SKU from `stock_photos` too — the client's
+    plain-tile fallback still covers that case, and this route still opens no socket when
+    handed no resolver (`images is None`, the harness's own bare-call posture).
+
+    THE TWO OUTCOMES SHIP IN SEPARATE FIELDS SO THE CLIENT KNOWS WHICH KIND IT HAS: `photos`
+    (unchanged shape, `{box, index, cid}`, this store's own photograph) and `stock_photos`
+    (`{sku: url}`, a hotlinked catalogue image, D301's same posture — never downloaded,
+    never mirrored). A SKU never appears in both.
 
     REFUSES OVER `SKUS_PHOTOS_LIMIT` (round 2 review): the client's own cap bounds what it
     SENDS, never what this route would do with a longer list a different caller sent.
@@ -12066,11 +12084,14 @@ def do_skus_photos(skus: Sequence[str]) -> dict:
             f"{len(skus)} SKUs in one call, and this route answers at most "
             f"{SKUS_PHOTOS_LIMIT}. Ask in smaller batches.",
         )
-    inventory = Store().read().inventory
+    snapshot = Store().read()
+    inventory = snapshot.inventory
     out: Dict[str, dict] = {}
+    stock: Dict[str, str] = {}
     for sku in skus:
-        if not sku or sku in out:
+        if not sku or sku in out or sku in stock:
             continue
+        found = False
         for card in inventory.copies_on_hand(sku):
             path = photo_for(inventory, card)
             if path is None:
@@ -12080,8 +12101,23 @@ def do_skus_photos(skus: Sequence[str]) -> dict:
                 "index": card.index,
                 "cid": card.cid if photos.is_photo_cid(card.cid) else None,
             }
+            found = True
             break
-    return {"photos": out}
+        if found or images is None:
+            continue
+        sku_row = snapshot.skus.entries.get(sku)
+        if sku_row is None:
+            continue
+        if sku_row.number:
+            game = games.game_for_product_line(sku_row.product_line)
+            url = images.url_for(game, sku_row.set_name, sku_row.number) if game else None
+        else:
+            url = images.url_for_product(
+                sku_row.product_line, sku_row.set_name, sku_row.product_name
+            )
+        if url:
+            stock[sku] = url
+    return {"photos": out, "stock_photos": stock}
 
 
 def do_search(query: str) -> dict:
@@ -12345,15 +12381,19 @@ def do_search(query: str) -> dict:
                 # headroom against a ceiling nobody asked for.
                 "listable": on_hand,
                 "copies": [_copy_row(places, card) for card in copies],
-                "_rank": rank,
+                # KEPT ON THE WIRE, NOT DELETED AFTER THE SORT (F8, 2026-09-27). A screen
+                # ranking boxes or a landing row by pile size needs to know which groups
+                # share this group's own rank tier, so pile size decides only inside one
+                # tier rather than across all of them — `app/src/BoxBrowse.tsx`'s
+                # `bestLiveTier`. The value means nothing on its own; it exists only to be
+                # compared for equality against another group's.
+                "rank": rank,
             }
         )
 
     # Rank first, then the name the group is most likely to be recognised by, then the SKU
     # so the order is total and two runs of the same query cannot swap two rows.
-    groups.sort(key=lambda g: (g["_rank"], (g["names"] or [""])[0].lower(), g["sku"]))
-    for group in groups:
-        del group["_rank"]
+    groups.sort(key=lambda g: (g["rank"], (g["names"] or [""])[0].lower(), g["sku"]))
 
     if loose:
         loose.sort(key=lambda c: (str(c.box), str(c.index)))
@@ -12386,6 +12426,9 @@ def do_search(query: str) -> dict:
                 # — which is the honest thing for it to say rather than a bare cap.
                 "listable": loose_on_hand,
                 "copies": [_copy_row(places, card) for card in loose],
+                # APPENDED AFTER THE SORT ABOVE, SO ITS OWN RANK NEVER FED IT — worse than
+                # every real rank, matching where it has always landed.
+                "rank": _RANK_SUBSTRING + 1,
             }
         )
 
@@ -14113,7 +14156,7 @@ def _walk_plan_stop(
                 box_total = sample["box_total"]
                 break
         else:
-            box_name = None
+            box_name = inventory.box_title(stop.box)
             section_name = None
     else:
         box_name = None
@@ -16331,8 +16374,13 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, do_search(query[0]))
             if path == "/skus/photos":
                 # `#/revenue`'s thumbnail lookup — see `do_skus_photos`'s own header.
+                # `pipeline_routes.STOCK_IMAGES`, the one resolver instance, same as
+                # `do_pipeline_sets`/`do_pipeline_worklist` above — never a second one.
                 asked = parse_qs(parsed.query, keep_blank_values=True).get("sku") or []
-                return self._json(HTTPStatus.OK, do_skus_photos(asked))
+                return self._json(
+                    HTTPStatus.OK,
+                    do_skus_photos(asked, images=pipeline_routes.STOCK_IMAGES),
+                )
             # D34's preflight. Matched BEFORE `_BOXES_ITEM_RE`'s explainer below, which
             # would otherwise answer a real route with "there is no GET /boxes/<n>" — that
             # regex is anchored one segment shorter, so it cannot match this path, and the

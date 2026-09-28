@@ -2104,7 +2104,7 @@ test('UN-12 (the delta review round) — a hold on a no-market-price SKU is ONE 
   await expect.poll(() => sent()).toMatchObject({ value: '5.16', channel: 'unknown', at: '2026-09-01T10:00:00.000+00:00' })
 })
 
-test('DEBT42 — a typed price on a row whose market went blank is shown, because the send lists at it', async ({
+test('a typed price on a row whose market went blank is shown, because the send lists at it', async ({
   page,
 }) => {
   /* THE OWNER'S RULING, "Screen shows $5.16". The price sits on the `price` channel and the

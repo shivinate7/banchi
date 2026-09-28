@@ -2,7 +2,7 @@
 
 **Prose checking is scoped to what a file is, not to how much of it a session reads.** Ruled 2026-08-30, after a sweep of `docs/` found two defect classes that no row of `make docs-audit` was structurally able to see.
 
-**`make vale` ran over four files while `.vale.ini` always said `[*.md]`.** The target was the narrow half of that disagreement, so `docs/specs/` and `docs/design-refs/` had never been linted: **35 `AmericanSpelling` errors** had accumulated there, none reachable by any check in this repo. The file list is now `git ls-files '*.md'`, so a new document is linted the day it is committed rather than the day somebody remembers to add it to a target.
+**Vale ran over four files while `.vale.ini` always said `[*.md]`.** The target was the narrow half of that disagreement, so `docs/specs/` and `docs/design-refs/` had never been linted: **35 `AmericanSpelling` errors** had accumulated there, none reachable by any check in this repo. The file list is now `git ls-files '*.md'`, so a new document is linted the day it is committed rather than the day somebody remembers to add it to a target.
 
 **D60's scope is an argument about density, never a license to leave prose unspelled.** That entry rules on the four docs because they were `@`-loaded and cost tokens on every turn. Spelling costs nothing to check and is wrong in the same way everywhere, so the two scopes were never the same scope and the target had silently conflated them.
 
@@ -35,5 +35,13 @@
 ### What this is not
 
 **It is not a claim that the docs are now current.** It is two mechanisms and one sweep. `docs/DEBTS.md` cluster 1 still holds the five docs-to-code checks that walk one way, and this entry does not touch them — they are blocked on a decision about advisory severity that this row's existence does not settle.
+
+### Amended 2026-09-27 — Vale retired
+
+Vale was retired 2026-09-27 (L3, owner's ruling: "Retire it, keep American spelling in
+docs-audit"). `docs-audit`'s `identifier spelling` row reads code today, as it always has.
+It does not yet read markdown prose for spelling — that half is lane L2's work, which waits
+on the owner. Until L2 lands, markdown prose has no spelling reader at all: Vale's old
+advisory watch over `.md` files is gone and nothing has replaced it.
 
 ---

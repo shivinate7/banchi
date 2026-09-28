@@ -78,4 +78,11 @@ Frozen because a parser reads them: the `## D<n> — <title>` heading with its d
 
 **What landed with it.** The 119 identifiers renamed in place across 24 files — `_artefacts` to `_artifacts`, `summarise` to `summarize`, `humanise` to `humanize`, `_normalise_origin`, the `cancelled` flags, the test locals — and the three documents that named `_artefacts` following it.
 
+### Amended 2026-09-27 — Vale retired
+
+Vale was retired 2026-09-27 (L3, owner's ruling: "Retire it, keep American spelling in
+docs-audit"). `docs-audit`'s `identifier spelling` row reads code today, as it always has.
+It does not yet read markdown prose for spelling — that half is lane L2's work, which waits
+on the owner. Until L2 lands, markdown prose has no spelling reader at all.
+
 ---

@@ -123,3 +123,11 @@ the widths 1440, 820, 720 and 390.
 ### What is still open
 
 - CLAUDE.md's hub note changes in the docs-sweep lane, not here.
+
+### Amended 2026-09-27: HOR-33's one-scroll ruling is reversed
+
+Q3's full location detail on every pick row needs Inventory's own width. Layout R gives the
+walk its own column and puts the buyer list back in Inventory's rail frame. The buyer list
+now scrolls on its own again, sticky, inside that rail. This reverses HOR-33 above, which
+ruled one page scroll for the buyer list, the walk and the page together.
+D-orders-walk-rejoins-inventory records the owner's answers in full, on 2026-09-27.

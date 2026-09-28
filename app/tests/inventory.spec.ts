@@ -7393,6 +7393,104 @@ test('D132 — the copies list, the rail and the landing lead with the section h
   await expect(page.locator('.card-locations-row.is-current .card-locations-identity')).toHaveAttribute('aria-label', 'Box 2, Section 2, Card 1')
 })
 
+/* ============================================================== F8: rank before pile size
+ *
+ * THE OWNER'S REPORT, 2026-09-27: searching "hand hammer" showed "Jayce, Hammer in Hand" first,
+ * and Hand Hammer's own copies did not surface until another box was picked by hand.
+ * `server/match.py`/`_match_rank` already ranks Hand Hammer (a NAME PREFIX) ahead of Jayce (a
+ * bare SUBSTRING match on its own name) — `do_search` sorts `groups` by that rank before the
+ * answer ever reaches the wire. The defect was `BoxBrowse.tsx` pooling every matched group's
+ * live pile by shelf with no regard for which one the server ranked better, so a weaker match
+ * with a bigger pile buried a stronger one that was in stock.
+ *
+ * A second report the same day, same shape: "shadow" showed a Zed card ahead of the card
+ * actually named Shadow — a name-prefix match against a bare substring one. One fixture proves
+ * both, because neither the query text nor the card names are what decides it: `rank` is. */
+
+/** A `SearchGroup` built by hand, WITH `rank` (F8) — `searchAnswer` above predates the field
+ *  and every group it builds ties at the same `undefined` rank, which is exactly why those
+ *  cases still pass unchanged: one tier, pooled, precisely today's rule for a fixture that
+ *  never asked to be ranked. This one asks. */
+function rankedGroup(sku: string, rank: number, cards: Cards) {
+  const copies = Object.entries(cards)
+    .filter(([, held]) => held.sku === sku)
+    .map(([key, held]) => ({ key, state: held.state, state_at: held.state_at, has_photo: true, place: held.place }))
+  const onHand = copies.filter((copy) => !GONE.includes(copy.state)).length
+  return {
+    sku,
+    names: [
+      ...new Set(
+        Object.values(cards)
+          .filter((held) => held.sku === sku && held.name !== null)
+          .map((held) => held.name as string),
+      ),
+    ],
+    number: '090',
+    printed_total: '132',
+    set_hint: 'ME01',
+    condition: 'Near Mint',
+    listed: { pushed: 0, staged: 0, live: 0 },
+    sold_here: 0,
+    live_as_of: null,
+    on_hand: onHand,
+    listable: onHand,
+    rank,
+    copies,
+  }
+}
+
+test('F8 — the rail and the landing lead with the best-ranked match, never the biggest live pile', async ({ page }) => {
+  /* One live Hand Hammer in box 2, three live Jayce, Hammer in Hand in box 7 — the smaller
+   * pile is the one the server ranked better. */
+  const cards: Cards = {
+    '2/1': card({ index: 1, state: 'identified', name: 'Hand Hammer', sku: '9001001', section: 1, sectionStart: 1, sectionEnd: 1 }),
+    '7/38': card({ index: 38, state: 'identified', name: 'Jayce, Hammer in Hand', sku: '9001002', section: 1, sectionStart: 1, sectionEnd: 40, box: 7, boxName: 'ME01 spares', boxTotal: 40 }),
+    '7/39': card({ index: 39, state: 'identified', name: 'Jayce, Hammer in Hand', sku: '9001002', section: 1, sectionStart: 1, sectionEnd: 40, box: 7, boxName: 'ME01 spares', boxTotal: 40 }),
+    '7/40': card({ index: 40, state: 'identified', name: 'Jayce, Hammer in Hand', sku: '9001002', section: 1, sectionStart: 1, sectionEnd: 40, box: 7, boxName: 'ME01 spares', boxTotal: 40 }),
+  }
+  /* SERVER ORDER, exactly `do_search`'s own sort (rank ascending): Hand Hammer (1) before
+   * Jayce (2). */
+  const store: Store = {
+    cards,
+    search: (query) => ({ query, groups: [rankedGroup('9001001', 1, cards), rankedGroup('9001002', 2, cards)] }),
+  }
+  await open(page, TWO_BOXES, store, () => PRICING, SALE, { route: '/#/inventory?box=2', hideSold: null })
+  await page.getByRole('searchbox').fill('hand hammer')
+
+  /* WAIT FOR THE ANSWER TO LAND, NOT FOR A GUESS AT ITS TIMING. Box 2 is already both the
+   * FIRST tile and `aria-current` from the deep link before any search runs — asserting
+   * either straight after `fill` would pass on a stale, pre-search DOM exactly as readily as
+   * on a correct one. The match count only draws once `results` has actually landed, and
+   * every reader below (`order`, `cells`) is derived off that same state in the same render,
+   * so this is the earliest point a check here can trust what it sees. */
+  await expect(page.locator('.browse-boxcell-meta').first()).toContainText(/match/)
+
+  /* THE RAIL LEADS WITH BOX 2 (Hand Hammer), never box 7 (Jayce's three-copy pile). */
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 commons/)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 commons/)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-identity')).toHaveAttribute('aria-label', 'Box 2, Section 1, Card 1')
+})
+
+test('F8 — the top match being sold says so, with a press that reveals it', async ({ page }) => {
+  /* Hand Hammer's one copy has sold. Jayce, Hammer in Hand still has one live, in another box —
+   * so the walk has somewhere live to go, and the banner is what says the BEST match is gone. */
+  const cards: Cards = {
+    '2/1': card({ index: 1, state: 'sold', name: 'Hand Hammer', sku: '9002001', section: 1, sectionStart: 1, sectionEnd: 1 }),
+    '7/38': card({ index: 38, state: 'identified', name: 'Jayce, Hammer in Hand', sku: '9002002', section: 1, sectionStart: 1, sectionEnd: 40, box: 7, boxName: 'ME01 spares', boxTotal: 40 }),
+  }
+  const store: Store = {
+    cards,
+    search: (query) => ({ query, groups: [rankedGroup('9002001', 1, cards), rankedGroup('9002002', 2, cards)] }),
+  }
+  await open(page, TWO_BOXES, store, () => PRICING, SALE, { route: '/#/inventory?box=7', hideSold: null })
+  await page.getByRole('searchbox').fill('hand hammer')
+
+  await expect(page.locator('.browse-topsold')).toContainText('Hand Hammer: 1 copy, all sold')
+  await expect(page.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Show sold cards' }).click()
+  await expect(page.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
+})
+
 /* ------------------------------------------------------- the order stops moving under a sale
  *
  * THE OWNER'S REPORT: "i search a card it's ranked by the most of the card in a certain section,

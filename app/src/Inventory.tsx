@@ -28,7 +28,7 @@ import {
 import { BoxBrowse, type Row } from './BoxBrowse'
 import { BoxShelf, ShelfSwitch, type InventoryView } from './BoxShelf'
 import { useViewParam } from './kit/viewState'
-import { CardLocations } from './CardLocations'
+import { CardLocations, layoutsOf } from './CardLocations'
 import { InventorySets } from './InventorySets'
 import { PositionBar } from './PositionBar'
 import { PositionLabel } from './PositionLabel'
@@ -100,20 +100,6 @@ const NO_LAYOUTS: ReadonlyMap<number, readonly SectionDetail[]> = new Map()
  * this store looked. `GET /search` carries the counts and no stamp, so the age is joined here
  * out of the same store record; see `CardLocations.tsx:ReadingAge`. */
 const NO_LISTINGS: Readonly<Record<string, Listing>> = {}
-
-/* Each box's divider layout, keyed by box number, out of the registry `BoxBrowse` already
- * read. Keyed by `box` so one box's dividers can never be handed to another box's card. */
-function layoutsOf(records: readonly BoxRecord[]): ReadonlyMap<number, readonly SectionDetail[]> {
-  const out = new Map<number, readonly SectionDetail[]>()
-  for (const record of records) {
-    if (record === null || typeof record !== 'object') continue
-    if (typeof record.box !== 'number' || !Number.isFinite(record.box)) continue
-    const detail: unknown = record.sections_detail
-    if (!Array.isArray(detail) || detail.length === 0) continue
-    out.set(record.box, detail as readonly SectionDetail[])
-  }
-  return out
-}
 
 function refusalCode(err: unknown): string {
   return err instanceof ServerError ? err.code : ''
@@ -242,6 +228,10 @@ function loneGroup(row: Row, copy: SearchCopy): SearchGroup {
     live_as_of: null,
     on_hand: held,
     listable: held,
+    // WORSE THAN EVERY REAL RANK, matching `do_search`'s own loose-bag group
+    // (`server/capture_server.py:_RANK_SUBSTRING + 1`) — this fiction was never found by a
+    // search rank at all.
+    rank: 3,
     copies: [copy],
   }
 }

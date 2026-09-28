@@ -13,7 +13,8 @@
  * the base path is answered from `dist-demo/` and nothing reaches Vite). With
  * `DEMO_PREVIEW_URL` set — for example `http://localhost:4173` while `make demo-preview`
  * runs — each file is fetched from that preview server instead, so the same assertions read
- * what the preview serves. Either way the page itself talks to one origin only, and
+ * what the preview serves. Either way the page itself talks to its own origin and to one named
+ * outside host, `tcgplayer-cdn.tcgplayer.com` (DEBT47, closed — see the allow-list below), and
  * `sealEveryTest` still refuses anything else.
  *
  * SKIPPED, BY NAME, WHEN THERE IS NO BUILD. `make design-check` does not build the demo, so a
@@ -34,7 +35,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DEV_URL } from '../devPort'
-import { sealEveryTest } from './shell'
+import { isOutside, sealEveryTest } from './shell'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DIST = join(HERE, '..', '..', 'dist-demo')
@@ -52,31 +53,36 @@ function basePath(): string {
 
 const REFUSAL = 'Not in this demo.'
 
-// A ONE-PIXEL STUB, NEVER THE GUARD. `pipeline/stockimages.py` (D301) hotlinks Riftbound and
-// One Piece stock images straight from `tcgplayer-cdn.tcgplayer.com` — that is the design, not
-// a leak, and the published page really does load them. `sealOutside` (shell.ts) exists to
-// catch every OTHER outside request, and widening its allow-list to a real vendor host would
-// weaken it for every spec that imports it, not only this one. So this file alone routes that
-// one host to a local image, registered AFTER `sealEveryTest()` — Playwright checks the most
-// recently registered handler first, so this answers before `sealOutside`'s catch-all ever
-// sees the request.
-const STUB_PIXEL = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64',
-)
-
-sealEveryTest()
-
-test.beforeEach(async ({ page }) => {
-  await page.route('https://tcgplayer-cdn.tcgplayer.com/**', (route) =>
-    route.fulfill({ contentType: 'image/png', body: STUB_PIXEL }),
-  )
-})
+// THE ONE NAMED HOST, NEVER A STUB (DEBT47, closed). `pipeline/stockimages.py` (D301)
+// hotlinks Riftbound and One Piece stock images straight from `tcgplayer-cdn.tcgplayer.com` —
+// that is the design, not a leak, and the published page really does load them. A one-pixel
+// stub used to answer in its place, which tested a rule the shipped page does not follow: the
+// owner's own words, "isn't that a scenario of revising the test like the test is the wrong
+// test to keep now?" So this file names the one host it is allowed to actually reach —
+// `sealOutside`'s own `allowOutside` option (shell.ts), never a widened default there, which
+// would weaken the seal for every OTHER spec that imports it — and lets the real request land.
+// `the seal still refuses a host not on the allow list` below proves every other outside host
+// is refused exactly as before.
+sealEveryTest({ allowOutside: ['tcgplayer-cdn.tcgplayer.com'] })
 
 test.skip(!BUILT && !REQUIRED, 'no dist-demo/ in this checkout: run `make demo-static` first')
 
 test('the demo was built', () => {
   expect(BUILT, 'DEMO_REQUIRED=1 and there is no dist-demo/index.html').toBe(true)
+})
+
+// A UNIT TEST OF THE PREDICATE, NOT A LIVE FETCH — the reason is `sealOutside`'s own
+// mechanism: it both ABORTS and RECORDS an outside request, and this file's own `afterEach`
+// (`sealEveryTest`, shell.ts) fails any test that leaves a recorded escape behind, on purpose.
+// So a case that deliberately drove a second host through the real page would trip that
+// blanket assertion regardless of what it itself expected, which is the wrong test to write
+// against a guard built to fail loudly. `isOutside` is the whole rule the seal applies; reading
+// it directly proves the allow-list names exactly one host and nothing wider.
+test('the seal still refuses a host that is not on the allow list', () => {
+  const allowed = new URL('https://tcgplayer-cdn.tcgplayer.com/product/684215_200w.jpg')
+  const other = new URL('https://example.com/anything')
+  expect(isOutside(allowed, ['tcgplayer-cdn.tcgplayer.com'])).toBe(false)
+  expect(isOutside(other, ['tcgplayer-cdn.tcgplayer.com'])).toBe(true)
 })
 
 /** Serve the built demo on this checkout's own origin, the way a static host would. On the

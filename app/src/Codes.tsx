@@ -21,10 +21,9 @@ import type {
   LotReceipt,
   LotResult,
 } from './types'
-import { Button, EmptyState, Icon, IconButton, Loading, Notice, Page, Pill, ReloadButton, Segmented, Select, Sheet, Stat, type IconName } from './kit'
+import { Button, EmptyState, FilterBar, Icon, IconButton, Loading, Notice, Page, Pill, ReloadButton, Segmented, Select, Sheet, Stat, type FilterFacet, type FilterValue, type IconName } from './kit'
 import { toast } from './kit/toast'
 import { absoluteDate } from './dates'
-import { SearchField } from './SearchField'
 import './Codes.css'
 
 /* CODES — the code-card track on a route of its own (D14, D70).
@@ -609,6 +608,49 @@ export function Codes() {
     return counts
   }, [ledger, stateFilter])
 
+  /* R2-filter-row (D270): State and Lane through the kit's own FilterBar/FilterChips, not a
+     hand-rolled `.codes-chip` row. Both stay single-select (`multiple: false`), matching the
+     old chips' behavior exactly -- FacetChip's own single-select rule already clears a picked
+     option on a second click, which is what the Lane chips did by hand before
+     (`cur === l.value ? 'all' : l.value`). State never had that "All" entry as a real option;
+     it is now the facet's own unpicked state, same idea. The counts are the exact same
+     numbers the old chips read: `ledger.counts` for State, `laneCounts` (already state-aware)
+     for Lane -- no new arithmetic, only a new control. */
+  const stateFacet: FilterFacet = useMemo(
+    () => ({
+      key: 'state',
+      label: 'State',
+      multiple: false,
+      options: STATES.filter((s) => s.value !== 'all').map((s) => ({
+        value: s.value,
+        label: s.label,
+        count: ledger?.counts[s.value] ?? 0,
+      })),
+    }),
+    [ledger],
+  )
+  const laneFacet: FilterFacet = useMemo(
+    () => ({
+      key: 'lane',
+      label: 'Lane',
+      multiple: false,
+      options: LANES.map((l) => ({ value: l.value, label: l.label, count: laneCounts[l.value] })),
+    }),
+    [laneCounts],
+  )
+  const filterFacets = useMemo(() => [stateFacet, laneFacet], [stateFacet, laneFacet])
+  const filterValue: FilterValue = useMemo(
+    () => ({
+      state: stateFilter === 'all' ? [] : [stateFilter],
+      lane: laneFilter === 'all' ? [] : [laneFilter],
+    }),
+    [stateFilter, laneFilter],
+  )
+  const onFilterChange = useCallback((next: FilterValue) => {
+    setStateFilter(((next.state?.[0] as StateFilter | undefined) ?? 'all'))
+    setLaneFilter(((next.lane?.[0] as LaneFilter | undefined) ?? 'all'))
+  }, [])
+
   /* WHICH BOXES HOLD THE UNCLAIMED CODES, and what the rest of each box already says.
    *
    * `lanes.unclaimed` is the figure the banner draws and it is a count of HELD codes with no
@@ -1162,16 +1204,6 @@ export function Codes() {
                   Lots <Pill>{lots.length.toLocaleString()}</Pill>
                 </button>
               </div>
-              {tab === 'codes' ? (
-                <SearchField
-                  value={filter}
-                  onChange={setFilter}
-                  persona="owner"
-                  label="Find a code"
-                  placeholder="Find a code, product, set or order"
-                  controlHeight="bar"
-                />
-              ) : null}
             </div>
 
             {tab === 'lots' ? (
@@ -1191,49 +1223,23 @@ export function Codes() {
               )
             ) : (
               <>
-                <div className="codes-toolbar">
-                  <div className="codes-chips" role="group" aria-label="State">
-                    {STATES.map((s) => {
-                      const n = s.value === 'all' ? ledger.total : (ledger.counts[s.value] ?? 0)
-                      return (
-                        <button
-                          key={s.value}
-                          type="button"
-                          className="codes-chip"
-                          aria-pressed={stateFilter === s.value}
-                          onClick={() => setStateFilter(s.value)}
-                        >
-                          {s.label}
-                          <span className="codes-chip-n">{n.toLocaleString()}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <span className="codes-toolbar-sep" aria-hidden="true" />
-                  <div className="codes-chips" role="group" aria-label="Lane">
-                    {LANES.map((l) => (
-                      <button
-                        key={l.value}
-                        type="button"
-                        className={`codes-chip is-${l.value}`}
-                        aria-pressed={laneFilter === l.value}
-                        onClick={() => setLaneFilter((cur) => (cur === l.value ? 'all' : l.value))}
-                      >
-                        <i className="codes-chip-dot" />
-                        {l.label}
-                        <span className="codes-chip-n">{laneCounts[l.value].toLocaleString()}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <span className="bn-spacer" />
-                  <IconButton
-                    size="sm"
-                    icon={revealAll ? 'eyeOff' : 'eye'}
-                    label={revealAll ? 'Hide codes' : 'Reveal codes'}
-                    pressed={revealAll}
-                    onClick={() => setRevealAll((r) => !r)}
-                  />
-                </div>
+                <FilterBar
+                  className="codes-filterbar"
+                  facets={filterFacets}
+                  value={filterValue}
+                  onChange={onFilterChange}
+                  count={{ shown: rows.length, total: ledger.total, noun: { one: 'code', many: 'codes' } }}
+                  search={{ query: filter, onChange: setFilter, placeholder: 'Find a code, product, set or order', label: 'Find a code' }}
+                  beside={
+                    <IconButton
+                      size="sm"
+                      icon={revealAll ? 'eyeOff' : 'eye'}
+                      label={revealAll ? 'Hide codes' : 'Reveal codes'}
+                      pressed={revealAll}
+                      onClick={() => setRevealAll((r) => !r)}
+                    />
+                  }
+                />
 
                 {rows.length === 0 ? (
                   <EmptyState

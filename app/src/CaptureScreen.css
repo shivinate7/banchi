@@ -10,17 +10,24 @@
   --cap-last-w: 320px;
   /* What the page spends above the shell, so the two frames fit the fold: top pad, the
      kit's own <Page> header (title row plus the odometer actions, which can be two lines),
-     its bottom margin, then the gap before the shell. 96px is a DELIBERATE OVER-ESTIMATE
+     its bottom margin, then straight into the shell. 96px is a DELIBERATE OVER-ESTIMATE
      (R1, UX-048) — the old hand-rolled 48px head is gone with the header it measured, and
      this screen no longer owns the header's own height to measure exactly. Erring high
      costs a few idle pixels under the viewfinder; erring low pushes it under the fold. The
      screenshots this lane took at four widths are the check that this estimate holds — a
-     tighter number wants a real measurement, not another guess. */
+     tighter number wants a real measurement, not another guess.
+     NO `+ var(--cap-gap)` TERM (F4, 2026-09-27): this flex column's only two children are the
+     kit's own header and `.bn-page-body`, so a flex `gap` here stacked on top of the header's
+     own `margin-bottom` between those same two elements — 28px measured at 1440 (16 margin +
+     12 gap) and 20px at 390 (8 margin + 12 gap), against every other screen's 16-24px. The
+     `gap` below is deleted; the header's `margin-bottom` is the only spacing now, matching
+     every other screen and `app/tests/scaffold.spec.ts`'s new `headGap` assertion. Removing it
+     only gives idle pixels back to the viewfinder (never overflow): `--cap-head-h` was already
+     an over-estimate, so this budget stays conservative. */
   --cap-head-h: 96px;
-  --cap-chrome: calc(var(--bn-page-top) + var(--cap-head-h) + var(--cap-gap) + var(--bn-4));
+  --cap-chrome: calc(var(--bn-page-top) + var(--cap-head-h) + var(--bn-4));
   display: flex;
   flex-direction: column;
-  gap: var(--cap-gap);
   min-height: 100dvh;
   /* D272/D275, the follow-up lane after PR 2: the kit's own top gap, same as every other
      screen -- measured to still clear the fold at 390x754 and 1440x900 (`--bn-page-top` is
@@ -1376,8 +1383,11 @@
 @media (max-width: 767px) {
   /* D272/D275: was `var(--bn-3)` (12px). `--bn-page-top` is 16px here (the token's own
      767px rule), and the phone `.capture-stage` height below is a fixed clamp() budget, not
-     this `--cap-chrome` calc -- it is re-measured for the 4px difference in the same commit. */
-  .capture.bn-page { padding: var(--bn-page-top) var(--bn-4) var(--bn-4); gap: var(--bn-3); }
+     this `--cap-chrome` calc -- it is re-measured for the 4px difference in the same commit.
+     NO `gap` HERE EITHER (F4, 2026-09-27): this repeated the same page-level flex gap the base
+     rule carried, doubling the header's own `margin-bottom` again on phone (8px + 12px = 20px
+     measured). Deleted; the phone stage clamp() below is re-measured for the 12px this frees. */
+  .capture.bn-page { padding: var(--bn-page-top) var(--bn-4) var(--bn-4); }
   /* The lamp and the box sentence are drawn again inside the stage, 20px lower; the h1 and
      the odometer both show here now (Page's own header, R1, UX-048) — the old
      `.capture-head-text { display: none }` this replaced hid the title text entirely, which
@@ -1438,7 +1448,14 @@
        is 40px plus the card's own 2px row gap, 42px the budget above never re-measured for —
        confirmed against the CI failure this constant fixes: shutter bottom 610.765625 at
        390x667 with the 34px inset, 41.77px into a tab bar starting at 569. 412px (370 + 42)
-       and a 168px floor (210 - 42) restore the same ~4px cushion with the new row counted. */
+       and a 168px floor (210 - 42) restore the same ~4px cushion with the new row counted.
+
+       NOT RE-TUNED, 2026-09-27 (F4): the base rule above dropped a page-level flex `gap` that
+       doubled the header's own `margin-bottom` (this budget's own "gap 12 above it" term). That
+       frees about 12px this constant does not claim, left as extra slack rather than nudged
+       tighter — `app/tests/phone.spec.ts`'s shutter case is still green with it left alone, and
+       this constant has been re-measured five times already; spending more of its cushion is a
+       separate, deliberate move, not a side effect of the gap fix. */
     height: clamp(168px, calc(100dvh - 412px - var(--bn-tabbar-h)), 560px);
     max-height: none;
     align-self: stretch;

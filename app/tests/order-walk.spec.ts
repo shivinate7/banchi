@@ -298,6 +298,18 @@ async function open(page: Page): Promise<Wire[]> {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(oneOpenOrder()) })
   })
 
+  // THE BOX REGISTRY (lane A3): the pane's own copies list reads it for the section strip and
+  // the ruler, the way `Inventory.tsx` does — never stubbed here before this lane's `getBoxes()`
+  // read. Empty is honest: `PositionBar` draws without a layout, and no case in this file needs
+  // a real one.
+  await page.route(/\/boxes(\?.*)?$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ boxes: [], facet_cells: [] }),
+    })
+  })
+
   await page.goto(VIEW_ROUTE)
   await expect(page.locator(VIEW)).toBeVisible()
   return wire
@@ -310,10 +322,13 @@ sealEveryTest()
 test('only the newest pull in the walk offers Undo — the older one reads Sold', async ({ page }) => {
   const wire = await open(page)
 
-  const rows = page.locator('.orders-card-copy')
+  /* `.card-locations-row` is `CardLocations.tsx`'s own copy row, reused whole
+   * (`docs/decisions/D-orders-walk-rejoins-inventory.md`, lane A3) — the old `.orders-card-copy`
+   * pane forked its own rows, and that fork is deleted. */
+  const rows = page.locator('.card-locations-row')
   /* THE SLOT HOLDS EVERY STATE (D118): the Mark sold icon, the Undo icon and the Sold pill all
      fit the one reserved width, so a press never moves the place beside it. */
-  const slotWidth = () => rows.nth(0).locator('.orders-card-action').evaluate((el) => Math.round(el.getBoundingClientRect().width))
+  const slotWidth = () => rows.nth(0).locator('.card-locations-action').evaluate((el) => Math.round(el.getBoundingClientRect().width))
   const atRest = await slotWidth()
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
@@ -340,7 +355,7 @@ test('a newer pull is what ends the older one’s Undo, not any span of time', a
      screen HAD before this fix — per-copy granularity the owner declined) would fail exactly
      here rather than being read as "the newest one also happens to work". */
   const wire = await open(page)
-  const rows = page.locator('.orders-card-copy')
+  const rows = page.locator('.card-locations-row')
 
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
@@ -361,7 +376,7 @@ test('the newest pull stays undoable well past the old twenty-second window', as
      happens: 25 real seconds pass on the fake clock and the newest pull's `Undo` is untouched. */
   await page.clock.install()
   const wire = await open(page)
-  const rows = page.locator('.orders-card-copy')
+  const rows = page.locator('.card-locations-row')
 
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
@@ -377,7 +392,7 @@ test('the newest pull stays undoable well past the old twenty-second window', as
 
 test('undoing the newest pull returns it to Mark sold, and the older copy stays Sold', async ({ page }) => {
   const wire = await open(page)
-  const rows = page.locator('.orders-card-copy')
+  const rows = page.locator('.card-locations-row')
 
   await rows.nth(0).getByRole('button', { name: 'Mark sold' }).click()
   await expect.poll(() => wire.filter((one) => one.path.endsWith('/orders/pull')).length).toBe(1)
@@ -406,9 +421,35 @@ test('the walk\'s card pane carries no listing-correction control — Inventory 
    * `correct-answer.spec.ts` proves on `#/inventory`, are never drawn here. */
   await open(page)
 
-  await expect(page.locator('.orders-card-pane')).toBeVisible()
+  await expect(page.locator('.browse-card')).toBeVisible()
   // The details table is #/inventory's (UX-169): the walk's pane never draws it, nor its control.
   await expect(page.locator('.browse-details')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Correct' })).toHaveCount(0)
   await expect(page.locator('.card-correction')).toHaveCount(0)
+})
+
+/* -------------------------------------------------------------------------------------- 6 */
+
+test('a walk row fills the pane with the hero head, the photo, and every on-hand copy — the chosen one first, no Details fold', async ({
+  page,
+}) => {
+  /* PLAN.md's point 4 test, answered by `docs/decisions/D-orders-walk-rejoins-inventory.md`'s
+   * Q6 (the owner: "we don't need details on this screen") rather than PLAN.md's own
+   * recommendation — the whole Details fold is never drawn here. `twoCopyPlan()` puts two
+   * on-hand copies on the current row's take, both `here: true`, `3/21` first. */
+  await open(page)
+
+  // The hero head — `CardHero.tsx:CardHeroHead`, reused whole.
+  await expect(page.getByRole('heading', { name: 'Volcanion' })).toBeVisible()
+  // The photo — `CardHero.tsx:PhotoPanel`.
+  await expect(page.locator('img.browse-photo')).toBeVisible()
+
+  // Every on-hand copy, in `CardLocations`, the walk's chosen copy first and marked current.
+  const rows = page.locator('.card-locations-row')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0)).toHaveAttribute('aria-current', 'true')
+  await expect(rows.nth(1)).not.toHaveAttribute('aria-current', 'true')
+
+  // No Details fold on this screen.
+  await expect(page.locator('.browse-details')).toHaveCount(0)
 })

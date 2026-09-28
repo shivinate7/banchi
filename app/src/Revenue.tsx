@@ -716,15 +716,31 @@ const THUMB_FOCUS = 0.34
  *  photo gets the same crop treatment as if this screen were `CardLocations.tsx` (review
  *  round, item 9b: the podium was drawing the raw, uncropped desk photo — drawer walls and
  *  all — instead of asking for the one rectangle every other screen already asks for). */
-function RowThumb({ sku, name, photos, size }: { readonly sku: string; readonly name: string; readonly photos: Readonly<Record<string, SkuPhotoEntry>>; readonly size: 'sm' | 'md' | 'lg' }) {
+function RowThumb({
+  sku,
+  name,
+  photos,
+  stockPhotos,
+  size,
+}: {
+  readonly sku: string
+  readonly name: string
+  readonly photos: Readonly<Record<string, SkuPhotoEntry>>
+  /** F2: a hotlinked catalogue photo (D301) for a SKU with no own photographed copy —
+   *  the same `image_url` field Sets and Pricing already draw theirs from. `crop` never
+   *  applies to it: the rig's own crop rectangle describes THIS store's photograph, not a
+   *  catalogue image, so it draws through the SAME `CardThumb` with `crop={null}`. */
+  readonly stockPhotos: Readonly<Record<string, string>>
+  readonly size: 'sm' | 'md' | 'lg'
+}) {
   const entry = photos[sku]
   const at = entry === undefined ? null : { box: entry.box, index: entry.index }
   const host = useRef<HTMLSpanElement | null>(null)
   const crop = useCardCropWhenSeen(at, host)
-  const src = entry === undefined ? null : photoUrl(entry.box, entry.index, entry.cid)
+  const src = entry !== undefined ? photoUrl(entry.box, entry.index, entry.cid) : (stockPhotos[sku] ?? null)
   return (
     <span ref={host} style={{ display: 'contents' }}>
-      <CardThumb src={src} alt={name} size={size} crop={crop} focus={THUMB_FOCUS} />
+      <CardThumb src={src} alt={name} size={size} crop={entry === undefined ? null : crop} focus={THUMB_FOCUS} />
     </span>
   )
 }
@@ -827,6 +843,10 @@ export function Revenue() {
   // tracks which SKUs this screen has already requested so a re-render never repeats a call,
   // without making the fetch effect depend on its own answer.
   const [photos, setPhotos] = useState<Readonly<Record<string, SkuPhotoEntry>>>({})
+  // F2 (the owner: "why does the sales page not pull the icons like you're able to do on
+  // sets and pricing?"): a stock (catalogue) photo for a SKU with no own photographed copy
+  // on hand — the SAME resolver Sets and Pricing already draw theirs from, never a second one.
+  const [stockPhotos, setStockPhotos] = useState<Readonly<Record<string, string>>>({})
   const asked = useRef<Set<string>>(new Set())
 
   // UNSOLD STOCK (D236) — same posture as `prices`, own loading/failure state, never touching
@@ -951,7 +971,9 @@ export function Revenue() {
     let alive = true
     getSkuPhotos(skus)
       .then((found) => {
-        if (alive) setPhotos((prev) => ({ ...prev, ...found }))
+        if (!alive) return
+        setPhotos((prev) => ({ ...prev, ...found.photos }))
+        setStockPhotos((prev) => ({ ...prev, ...found.stockPhotos }))
       })
       .catch(() => {
         // A failed thumbnail lookup falls back to the plain tile CardThumb already draws for
@@ -1304,7 +1326,7 @@ export function Revenue() {
             {podium.map((p, i) => (
               <article className="revenue-tile" key={p.sku}>
                 <div className="revenue-tile-art">
-                  <RowThumb sku={p.sku} name={p.name} photos={photos} size="lg" />
+                  <RowThumb sku={p.sku} name={p.name} photos={photos} stockPhotos={stockPhotos} size="lg" />
                   <span className="revenue-tile-rank">{i + 1}</span>
                 </div>
                 <div className="revenue-tile-body">
@@ -1374,7 +1396,7 @@ export function Revenue() {
                 {board.map((p, i) => (
                   <li key={p.sku}>
                     <span className="revenue-board-rk">{i + 4}</span>
-                    <RowThumb sku={p.sku} name={p.name} photos={photos} size="sm" />
+                    <RowThumb sku={p.sku} name={p.name} photos={photos} stockPhotos={stockPhotos} size="sm" />
                     <div className="revenue-board-who">
                       <ProductLink sku={p.sku} name={p.name}>
                         <span className="revenue-tile-name" title={p.nameIsSku ? undefined : short(p).full}>

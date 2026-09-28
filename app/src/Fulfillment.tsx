@@ -284,6 +284,8 @@ function owedGroup(item: Owed): SearchGroup {
     on_hand: item.copies.length,
     listable: item.copies.length,
     live_as_of: item.liveAsOf,
+    // NEVER READ HERE. A synthesised group, one card and never ranked against another.
+    rank: 0,
     copies: item.copies.map(
       (copy): SearchCopy => ({
         key: copy.key,

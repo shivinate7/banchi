@@ -5416,17 +5416,11 @@ def do_pricing_corpus_write(payload: dict) -> dict:
     # THE STALE-WRITE REFUSAL. Absent means "did not read one", which is the terminal user
     # editing the file and PUTting it back, and it is allowed — the guard is for a client that
     # DID read a revision and is now behind, which is the only case that can silently destroy
-    # somebody else's write.
+    # somebody else's write. CHECKED AGAIN BELOW, INSIDE THE LOCK (DEBT48): a check made here,
+    # before this call waits for another writer's lock, reads a revision that is about to go
+    # stale the moment it waits — the check would pass, the wait would happen, and the write
+    # would still land on top of whatever the lock-holder just wrote.
     offered = payload.get("revision")
-    if isinstance(offered, str) and offered:
-        current = _corpus_revision()
-        if current and offered != current:
-            raise PipelineRefusal(
-                HTTPStatus.CONFLICT,
-                "corpus_moved",
-                "The pricing file changed since this screen read it — another tab, or an edit "
-                "on disk. Reload before saving, or this write would revert it.",
-            )
 
     document = payload.get("corpus")
     if not isinstance(document, dict):
@@ -5458,12 +5452,27 @@ def do_pricing_corpus_write(payload: dict) -> dict:
     # replaces it — the same posture `do_pipeline_worklist` takes. Every answer then reads as
     # new and is stamped, which is the honest answer when there is no `before` to compare
     # against.
-    previous = corpus.Corpus()
-    with contextlib.suppress(decisions.MalformedDecisions, ValueError):
-        previous = corpus.Corpus.read()
-    corpus.stamp_answers(previous, book, master.now())
+    # THE STORE LOCK, THE ONE PRIMITIVE, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT48). `book`
+    # above is a document this call already parsed from whatever was on disk a moment ago; the
+    # "before" read that decides what gets stamped, and the write that replaces the file, must
+    # happen as one unit or a concurrent writer's edit — `POST /pricing/clear`, `POST
+    # /pricing/restore`, or either CLI writer — can land in the gap and be silently discarded.
+    with files.exclusive(files.inventory_dir()):
+        if isinstance(offered, str) and offered:
+            current = _corpus_revision()
+            if current and offered != current:
+                raise PipelineRefusal(
+                    HTTPStatus.CONFLICT,
+                    "corpus_moved",
+                    "The pricing file changed since this screen read it — another tab, or "
+                    "an edit on disk. Reload before saving, or this write would revert it.",
+                )
+        previous = corpus.Corpus()
+        with contextlib.suppress(decisions.MalformedDecisions, ValueError):
+            previous = corpus.Corpus.read()
+        corpus.stamp_answers(previous, book, master.now())
 
-    written = book.write()
+        written = book.write()
     return {
         "ok": True,
         "written": str(written),
@@ -5591,48 +5600,57 @@ def do_pricing_clear(payload: dict) -> dict:
     time in TypeScript against money. The predicate stays in Python and the screen presses a
     button.
     """
-    _clear_revision_guard(payload)
     scope = _clear_scope(payload)
     window = _clear_window(payload)
 
-    try:
-        book = corpus.Corpus.read()
-    except (decisions.MalformedDecisions, ValueError) as exc:
-        # A CORPUS THIS PARSER CANNOT READ IS A REFUSAL HERE, WHERE `PUT /pricing` LETS THE
-        # WRITE THROUGH. That route REPLACES the document, so an unreadable one is what is
-        # being fixed; this one reads the document to decide what to destroy inside it, and
-        # deciding that against a file nothing could parse is the one thing it must not do.
-        raise PipelineRefusal(
-            HTTPStatus.CONFLICT, "corpus_unreadable", str(exc)
-        ) from None
+    # THE STORE LOCK, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT48): the corpus read that
+    # decides what is clearable, the write that removes it, and the clears file that records
+    # the undo, as one unit — the same primitive `PUT /pricing` and `POST /pricing/restore`
+    # now take, never a second lock. `_clear_revision_guard` runs INSIDE it, checked against
+    # the revision as of the moment this call actually gets to act, not the moment it started
+    # waiting for another writer's lock — a check made before the wait reads a revision that
+    # goes stale the instant it waits, and would pass right past the writer this is guarding
+    # against.
+    with files.exclusive(files.inventory_dir()):
+        _clear_revision_guard(payload)
+        try:
+            book = corpus.Corpus.read()
+        except (decisions.MalformedDecisions, ValueError) as exc:
+            # A CORPUS THIS PARSER CANNOT READ IS A REFUSAL HERE, WHERE `PUT /pricing` LETS THE
+            # WRITE THROUGH. That route REPLACES the document, so an unreadable one is what is
+            # being fixed; this one reads the document to decide what to destroy inside it, and
+            # deciding that against a file nothing could parse is the one thing it must not do.
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT, "corpus_unreadable", str(exc)
+            ) from None
 
-    plan = corpus.clearable(
-        book, now=master.now(), skus=scope, older_than_days=window
-    )
-    cleared = {
-        sku: {
-            "value": book.answers[sku].value,
-            **({"at": book.answers[sku].at} if book.answers[sku].at else {}),
-            **(
-                {"from_run": book.answers[sku].from_run}
-                if book.answers[sku].from_run
-                else {}
-            ),
+        plan = corpus.clearable(
+            book, now=master.now(), skus=scope, older_than_days=window
+        )
+        cleared = {
+            sku: {
+                "value": book.answers[sku].value,
+                **({"at": book.answers[sku].at} if book.answers[sku].at else {}),
+                **(
+                    {"from_run": book.answers[sku].from_run}
+                    if book.answers[sku].from_run
+                    else {}
+                ),
+            }
+            for sku in plan.skus
         }
-        for sku in plan.skus
-    }
 
-    if plan.skus:
-        # WRITTEN ONLY WHEN SOMETHING GOES. A press that selects nothing must not move the
-        # digest: the screen holds a revision, and re-writing a byte-identical document would
-        # still change nothing while a write that DID change the file would leave every other
-        # open tab stale for a press that did nothing.
-        for sku in plan.skus:
-            del book.answers[sku]
-        book.write()
-        # THE UNDO OUTLIVES THE TOAST (UN-11). The answers go to a side file, so a reload
-        # can still restore them. A clear that removes nothing leaves the older one alone.
-        clear_id = corpus.write_last_clear(cleared, int(time.time()))
+        if plan.skus:
+            # WRITTEN ONLY WHEN SOMETHING GOES. A press that selects nothing must not move the
+            # digest: the screen holds a revision, and re-writing a byte-identical document would
+            # still change nothing while a write that DID change the file would leave every other
+            # open tab stale for a press that did nothing.
+            for sku in plan.skus:
+                del book.answers[sku]
+            book.write()
+            # THE UNDO OUTLIVES THE TOAST (UN-11). The answers go to a side file, so a reload
+            # can still restore them. A clear that removes nothing leaves the older one alone.
+            clear_id = corpus.write_last_clear(cleared, int(time.time()))
 
     return {
         "ok": True,
@@ -5676,134 +5694,141 @@ def do_pricing_restore(payload: dict) -> dict:
     and date here, a hold with a forged `before.at` among them. A SKU the corpus already
     answers is still refused per row. The general write is `PUT /pricing` and it is unchanged.
     """
-    _clear_revision_guard(payload)
     answers = payload.get("answers")
     stored = None
-    if payload.get("last_clear") is True and answers is None:
-        # THE NEWEST CLEAR NO SEND HAS BUILT ON, READ BACK OFF THE SERVER (UN-11), so a reload
-        # or an expired toast does not lose the way back.
-        kept = corpus.read_clears()
-        if not kept:
-            raise PipelineRefusal(
-                HTTPStatus.CONFLICT,
-                "no_clear_to_restore",
-                "There is no cleared price to put back.",
+    # THE STORE LOCK, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT48): resolving which clear is
+    # meant, the corpus read, the per-SKU decision, the write, and the drop, as one unit — the
+    # same primitive `PUT /pricing` and `POST /pricing/clear` now take, never a second lock.
+    # `_clear_revision_guard` runs INSIDE it, for the same reason `do_pricing_clear` moved it
+    # in: checked before the wait for another writer's lock, it reads a revision that is
+    # stale by the time the wait ends, and passes right past the writer it exists to catch.
+    with files.exclusive(files.inventory_dir()):
+        _clear_revision_guard(payload)
+        if payload.get("last_clear") is True and answers is None:
+            # THE NEWEST CLEAR NO SEND HAS BUILT ON, READ BACK OFF THE SERVER (UN-11), so a reload
+            # or an expired toast does not lose the way back.
+            kept = corpus.read_clears()
+            if not kept:
+                raise PipelineRefusal(
+                    HTTPStatus.CONFLICT,
+                    "no_clear_to_restore",
+                    "There is no cleared price to put back.",
+                )
+            stored = _newest_restorable()
+            if stored is None:
+                _refuse_built_on(kept[-1])
+            answers = stored["cleared"]
+        elif answers is None and payload.get("clear") is not None:
+            # ONE KEPT CLEAR, BY ITS ID, off the server's own copy: the notice's row for it.
+            stored = next(
+                (row for row in corpus.read_clears() if row["id"] == str(payload["clear"])), None
             )
-        stored = _newest_restorable()
-        if stored is None:
-            _refuse_built_on(kept[-1])
-        answers = stored["cleared"]
-    elif answers is None and payload.get("clear") is not None:
-        # ONE KEPT CLEAR, BY ITS ID, off the server's own copy: the notice's row for it.
-        stored = next(
-            (row for row in corpus.read_clears() if row["id"] == str(payload["clear"])), None
-        )
-        if stored is None:
-            raise PipelineRefusal(
-                HTTPStatus.CONFLICT,
-                "no_clear_to_restore",
-                "That clear is not kept any more, so there is nothing to put back.",
-            )
-        if _clear_built_on(stored):
-            _refuse_built_on(stored)
-        answers = stored["cleared"]
-    if not isinstance(answers, dict):
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "restore_invalid",
-            "Send {\"answers\": {\"<sku>\": {\"value\": …}}} — the `cleared` map a clear "
-            "answered with.",
-        )
-    if len(answers) > MAX_CLEAR_SKUS:
-        raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST,
-            "restore_invalid",
-            f"{len(answers)} answers is more than one press can restore ({MAX_CLEAR_SKUS}).",
-        )
-
-    # ONLY WHAT A KEPT CLEAR TOOK COMES BACK, verbatim, before anything is read or written.
-    # The request names its clear (`clear`, the id its clear answered with). With no name, the
-    # newest kept clear that holds every row sent is the one meant.
-    if stored is None:
-        named = payload.get("clear")
-        candidates = [
-            row for row in corpus.read_clears() if named is None or row["id"] == str(named)
-        ]
-        stored = next(
-            (row for row in reversed(candidates) if _clear_holds(row, answers)), None
-        )
-        if stored is None:
-            raise PipelineRefusal(
-                HTTPStatus.CONFLICT,
-                "restore_not_cleared",
-                "These prices are not the ones a kept clear took, so nothing was put back.",
-            )
-        # UNTIL IT IS BUILT ON, the one test every undo here uses, for the toast's door too.
-        if _clear_built_on(stored):
-            _refuse_built_on(stored)
-
-    try:
-        book = corpus.Corpus.read()
-    except (decisions.MalformedDecisions, ValueError) as exc:
-        raise PipelineRefusal(
-            HTTPStatus.CONFLICT, "corpus_unreadable", str(exc)
-        ) from None
-
-    # A NEWER KEPT CLEAR THAT TOOK THE SAME SKU HOLDS THE LATER ANSWER ("until it's built
-    # on"). Clear A took 5.00, the owner typed 6.00, clear B took 6.00: restoring A first must
-    # not put 5.00 back, or B's restore then skips it and the 6.00 is lost. So A skips it, and
-    # B keeps it.
-    kept = corpus.read_clears()
-    ids = [row["id"] for row in kept]
-    if stored["id"] in ids:
-        newer = {
-            sku
-            for row in kept[ids.index(stored["id"]) + 1:]
-            for sku in row["cleared"]
-        }
-    else:
-        # A CONCURRENT REQUEST DROPPED THIS CLEAR BETWEEN THE EARLIER READ THAT CHOSE `stored`
-        # AND THIS ONE. `drop_clear` only runs once every SKU the clear held is already back
-        # (see below), and `book`, read just above, already carries that request's write — so
-        # there is nothing "newer" left to name here. The per-SKU loop finds each SKU already
-        # in `book.answers` and skips it under that same name, never a crash over an id
-        # `ids.index` can no longer find.
-        newer = set()
-    restored: List[str] = []
-    skipped: List[dict] = []
-    for sku, row in sorted(answers.items()):
-        key = str(sku)
-        if not isinstance(row, dict) or "value" not in row:
+            if stored is None:
+                raise PipelineRefusal(
+                    HTTPStatus.CONFLICT,
+                    "no_clear_to_restore",
+                    "That clear is not kept any more, so there is nothing to put back.",
+                )
+            if _clear_built_on(stored):
+                _refuse_built_on(stored)
+            answers = stored["cleared"]
+        if not isinstance(answers, dict):
             raise PipelineRefusal(
                 HTTPStatus.BAD_REQUEST,
                 "restore_invalid",
-                f"{key}: each answer must be an object carrying a `value`.",
+                "Send {\"answers\": {\"<sku>\": {\"value\": …}}} — the `cleared` map a clear "
+                "answered with.",
             )
-        if key in newer:
-            # A LATER CLEAR HOLDS THIS SKU'S OWN, NEWER ANSWER. That clear is its way back,
-            # not this one.
-            skipped.append({"sku": key, "reason": "newer_clear"})
-            continue
-        if key in book.answers:
-            # THE OPERATOR TYPED THIS SKU AGAIN SINCE THE CLEAR (or, on the race above, a
-            # concurrent restore already put it back). Either way the corpus already holds
-            # the answer that counts.
-            skipped.append({"sku": key, "reason": "answered_since"})
-            continue
-        book.answers[key] = corpus.Answer(
-            value=row["value"],
-            at=row.get("at"),
-            from_run=row.get("from_run"),
-        )
-        restored.append(key)
+        if len(answers) > MAX_CLEAR_SKUS:
+            raise PipelineRefusal(
+                HTTPStatus.BAD_REQUEST,
+                "restore_invalid",
+                f"{len(answers)} answers is more than one press can restore ({MAX_CLEAR_SKUS}).",
+            )
 
-    if restored:
-        book.write()
-    # THE STORED CLEAR GOES ONCE EVERY ANSWER IT HOLDS IS BACK, whichever door restored
-    # them: the toast's own map, or the stored one. A price typed since counts as back, and
-    # so does one a newer kept clear holds: that clear is its way back.
-    if all(sku in book.answers or sku in newer for sku in stored["cleared"]):
-        corpus.drop_clear(stored["id"])
+        # ONLY WHAT A KEPT CLEAR TOOK COMES BACK, verbatim, before anything is read or written.
+        # The request names its clear (`clear`, the id its clear answered with). With no name, the
+        # newest kept clear that holds every row sent is the one meant.
+        if stored is None:
+            named = payload.get("clear")
+            candidates = [
+                row for row in corpus.read_clears() if named is None or row["id"] == str(named)
+            ]
+            stored = next(
+                (row for row in reversed(candidates) if _clear_holds(row, answers)), None
+            )
+            if stored is None:
+                raise PipelineRefusal(
+                    HTTPStatus.CONFLICT,
+                    "restore_not_cleared",
+                    "These prices are not the ones a kept clear took, so nothing was put back.",
+                )
+            # UNTIL IT IS BUILT ON, the one test every undo here uses, for the toast's door too.
+            if _clear_built_on(stored):
+                _refuse_built_on(stored)
+
+        try:
+            book = corpus.Corpus.read()
+        except (decisions.MalformedDecisions, ValueError) as exc:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT, "corpus_unreadable", str(exc)
+            ) from None
+
+        # A NEWER KEPT CLEAR THAT TOOK THE SAME SKU HOLDS THE LATER ANSWER ("until it's built
+        # on"). Clear A took 5.00, the owner typed 6.00, clear B took 6.00: restoring A first must
+        # not put 5.00 back, or B's restore then skips it and the 6.00 is lost. So A skips it, and
+        # B keeps it.
+        kept = corpus.read_clears()
+        ids = [row["id"] for row in kept]
+        if stored["id"] in ids:
+            newer = {
+                sku
+                for row in kept[ids.index(stored["id"]) + 1:]
+                for sku in row["cleared"]
+            }
+        else:
+            # A CONCURRENT REQUEST DROPPED THIS CLEAR BETWEEN THE EARLIER READ THAT CHOSE `stored`
+            # AND THIS ONE. `drop_clear` only runs once every SKU the clear held is already back
+            # (see below), and `book`, read just above, already carries that request's write — so
+            # there is nothing "newer" left to name here. The per-SKU loop finds each SKU already
+            # in `book.answers` and skips it under that same name, never a crash over an id
+            # `ids.index` can no longer find.
+            newer = set()
+        restored: List[str] = []
+        skipped: List[dict] = []
+        for sku, row in sorted(answers.items()):
+            key = str(sku)
+            if not isinstance(row, dict) or "value" not in row:
+                raise PipelineRefusal(
+                    HTTPStatus.BAD_REQUEST,
+                    "restore_invalid",
+                    f"{key}: each answer must be an object carrying a `value`.",
+                )
+            if key in newer:
+                # A LATER CLEAR HOLDS THIS SKU'S OWN, NEWER ANSWER. That clear is its way back,
+                # not this one.
+                skipped.append({"sku": key, "reason": "newer_clear"})
+                continue
+            if key in book.answers:
+                # THE OPERATOR TYPED THIS SKU AGAIN SINCE THE CLEAR (or, on the race above, a
+                # concurrent restore already put it back). Either way the corpus already holds
+                # the answer that counts.
+                skipped.append({"sku": key, "reason": "answered_since"})
+                continue
+            book.answers[key] = corpus.Answer(
+                value=row["value"],
+                at=row.get("at"),
+                from_run=row.get("from_run"),
+            )
+            restored.append(key)
+
+        if restored:
+            book.write()
+        # THE STORED CLEAR GOES ONCE EVERY ANSWER IT HOLDS IS BACK, whichever door restored
+        # them: the toast's own map, or the stored one. A price typed since counts as back, and
+        # so does one a newer kept clear holds: that clear is its way back.
+        if all(sku in book.answers or sku in newer for sku in stored["cleared"]):
+            corpus.drop_clear(stored["id"])
 
     return {
         "ok": True,

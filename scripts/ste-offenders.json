@@ -216,7 +216,6 @@
         "58d79baf01 Unpriced is deliberately not the bottom band: `pipeline/routing.py` hol…",
         "59d644d966 `--bn-accent` is indigo and means *press this*; `--bn-live` is vermilio…",
         "5a39a507dd An alpha (`ink 8%`), an alias (`= ink in both themes`), a duration, an…",
-        "5a6c138fdd `app/tests/fulfillment.spec.ts` asserts every row of the table below on…",
         "5b776a309a Left to size itself it grew by 88px on the press, the grid re-laid out…",
         "5cf0965585 This is the failure mode with a face on it, and it is worth naming beca…",
         "5da979b4de The screen now looks the card up in the export it was joined against, s…",
@@ -232,7 +231,6 @@
         "716c690a00 The label had to be 20px or more because the constraints table puts tha…",
         "7740d46326 They are grouped by the JOB rather than by the value, they all carry th…",
         "77ce8debe0 That was worth an escape hatch on the review queue, where a candidate l…",
-        "785cf2cdea It is the kit rather than a component sheet now, it is reachable from t…",
         "7896e48383 That is the half worth defending: a skip that persisted would be a thir…",
         "7a76baa058 The half of the old rule that survives is the half that paid: **the tit…",
         "7bd0cd4af3 It exists because two kinds of card cannot be answered at all, and with…",
@@ -269,7 +267,6 @@
         "98793b352f The alternative — two deliberately different visual worlds — was consid…",
         "9aa4465f2b `#/runs` is a route of its own and takes the kit's page chrome like eve…",
         "9b4ff3d3bd His view reaches it by a different road — his one tap is the SECOND ste…",
-        "9bc2adffaf The palette is gone and the component is not: `app/src/PullConfirm.tsx`…",
         "9c12309ef4 `store/queues.py:sort_key` gained a **starvation tier ahead of price**…",
         "9d43f59e81 A card with ten candidate rows is rare enough that reaching for the mou…",
         "9e84b8e3c4 What that run could *not* test is the one number called out below: its…",
@@ -359,7 +356,6 @@
         "57fabfc896 A viewfinder and a photograph of a card are looked at, not read; a ligh…",
         "59d644d966 `--bn-accent` is indigo and means *press this*; `--bn-live` is vermilio…",
         "5a39a507dd An alpha (`ink 8%`), an alias (`= ink in both themes`), a duration, an…",
-        "5a6c138fdd `app/tests/fulfillment.spec.ts` asserts every row of the table below on…",
         "5ca31ceb8f Two or three rounds gets to a production layout; zero rounds gets the g…",
         "63212e6faa Measured in a browser at 1440x900 against a populated queue: the photog…",
         "77ce8debe0 That was worth an escape hatch on the review queue, where a candidate l…",
@@ -473,58 +469,6 @@
       "STE006": [
         "8896536ba3 `startswith(\"Pass:\")` misses `**Pass**:`, the spelling `docs/GATES.md`…",
         "ef60897da4 **Fixed by parsing the legend** (`_S9_BRACKET`) and resolving the name…"
-      ]
-    },
-    "docs/debts/005-the-departed-card-on-screen.md": {
-      "lane": "docs-sweep",
-      "STE001": [
-        "0a6572454b `app/src/Inventory.tsx`'s `Action` returns `primary || copy.state !== '…",
-        "2b64480c2a `app/src/Gallery.tsx` now carries `DEPARTED` (`slot: null`) and `POOLED…",
-        "2cfab6db84 The three surviving bands — 479, 619 and 470 — each carry their measure…",
-        "36095882d2 And `Action`'s **other** call site, the lone-copy branch, has no state…",
-        "4ab279cfbf Mutation: drop `container-name` from `.kit-copies` and it reports `\"pla…",
-        "4bf2136afb The comment above it states the reasoning: a copy row's own state pill…",
-        "5360c7f489 `copies` was found because someone looked; `pane` (`BoxBrowse.css`) and…",
-        "95d4f5f3ea The product's copies pane is in the NARROW band at 1440 (608px), which…",
-        "abc87937a9 **The original entry is kept below** because its argument is still the…",
-        "aeac614f36 Comparing the resolved cascade rather than asserting a class is the poi…",
-        "b7324599f0 **The design nobody had ever seen was the worse one**, so lowering the…",
-        "bf187d02b6 **They can never disagree, because the second is derived from the first…",
-        "d7e5d75509 It does not grow past 756 because the chain above it is fixed: `.bn-pag…",
-        "db6e2f4f5a **The product cannot produce that shape at any width**, which makes it…",
-        "e058257f85 A docs-audit row would be the wrong instrument — re-implementing `isDep…",
-        "e4312207e5 Each departed row draws the word twice at 11px about 40px apart: `.card…",
-        "eb0c3ba13f **Owner only, deliberately** — every `@container copies` rule is scoped…",
-        "f807b4fc6d `primary` is now the phone action bar alone, which has no state pill be…",
-        "f95bba9baa `app/src/CardLocations.css` answers to `@container copies` in four plac…",
-        "faefaa7785 Forced to 820px the unreachable layout squeezes the position bar into a…",
-        "ffa7bb759d Measured on this tree at viewport widths of 1440, 1920 and 2560, `.inve…"
-      ],
-      "STE006": [
-        "4dbe5914a6 Two cases were added because someone noticed they were missing; a third…",
-        "5360c7f489 `copies` was found because someone looked; `pane` (`BoxBrowse.css`) and…",
-        "f7bf38429e At 390 the address collapsed to one word a line and `ME01 commons` clip…",
-        "f807b4fc6d `primary` is now the phone action bar alone, which has no state pill be…"
-      ]
-    },
-    "docs/debts/006-measured-against-one-rig-or-not-at-all-closed-2026-09-09.md": {
-      "lane": "docs-sweep",
-      "STE001": [
-        "01d463e8d2 Over all 1,625 photographs in the owner's six boxes, `detect_card` retu…",
-        "03d85f51e0 Boxes 5 and 6 were captured after D#'s fitting too and decline NONE, so…",
-        "0eb962aa96 Box 1's smallest crop is `area 0.3002` against a `SMALL_CROP_AREA` of `…",
-        "26b6d853ef Deleting the section takes that row's subject with it and the check sta…",
-        "3a572305b4 That is operator evidence rather than a scored run — no second corpus w…",
-        "665e51222b That is the one thing here that was never about lighting: a false ACCEP…",
-        "73c6d42f35 The 2026-09-05 corpus run is the only published account of `detect_card…",
-        "83b8c830f3 **The owner closed it directly, 2026-09-09**: the rig has been rebuilt…",
-        "8fdfa3702a This section was open on the ground that `detect_card`'s border search…",
-        "df300de62e **The corpus figure this row reads is republished here rather than lost…",
-        "f1944c853c A false ACCEPT is the dangerous one, and no count in that file can see…",
-        "fa1e256cc3 The twenty-way case is what found `request_queue_size` at its default o…"
-      ],
-      "STE006": [
-        "369e30d554 D# wrote both down as fitted facts; this is the first time they have be…"
       ]
     },
     "docs/debts/007-the-preview-crops-the-card-and-the-one-check-that-looks.md": {
@@ -842,25 +786,6 @@
         "8bb2861b94 `.runs-detail` is already a container, so `.runs-body` becoming one is…"
       ]
     },
-    "docs/debts/018-the-suite-fetches-three-typefaces-from-google-fonts-on.md": {
-      "lane": "docs-sweep",
-      "STE001": [
-        "13eac748a8 It wanted the same three families at the same weights and already `<lin…",
-        "4fa1134b3f Six `woff2` binaries under `app/src/fonts/`, declared by `app/src/fonts…",
-        "5777d33a5f The one external URL left in `app/src` is an `href` in `Markdown.tsx` p…",
-        "585682ce5e **Nothing renders either group on any gate**, and that was verified rat…",
-        "5f46e7d30d `app/tests/fontsReady.ts:settleFonts` awaits `document.fonts.ready` and…",
-        "63978c06b4 Checked the way a person opens it — from a `file://` URL, where a font…",
-        "6594bb50bf What it was is an undeclared outside dependency in the suite that decid…",
-        "8ec4647af6 `docs/design-refs/*.html` wants **ten families** — 782 KB of `latin`+`l…",
-        "bbe8fc5d77 The bytes are the ones `fonts.gstatic.com` was serving, which is why no…",
-        "fc75ad0f73 **Found 2026-09-08 while surveying `make design-check`'s flake rate, an…"
-      ],
-      "STE006": [
-        "48f57a3cb5 A fetch cannot move a verdict there; it can only show a person a fallba…",
-        "5f46e7d30d `app/tests/fontsReady.ts:settleFonts` awaits `document.fonts.ready` and…"
-      ]
-    },
     "docs/debts/019-the-revert-guard-is-exact-and-three-shapes-of-reversal.md": {
       "lane": "docs-sweep",
       "STE001": [
@@ -997,51 +922,6 @@
       ],
       "STE008": [
         "064a726c22 I don't want to land it, I don't want it lost.\"* This section is the sh…"
-      ]
-    },
-    "docs/debts/027-two-get-inventory-call-sites-were-store-wide-site-1-is.md": {
-      "lane": "docs-sweep",
-      "STE001": [
-        "06f8365ea3 The scan inside `do_inventory_copies` is still a full, unfiltered pass…",
-        "0d6e60ae6f These numbers are close to `docs/specs/store-scaling.md` §1's own `Inve…",
-        "1e1bd50dd5 What is smaller is not the scan — it is the WIRE: the client no longer…",
-        "24ae6b5193 Scoping the fetch to \"the boxes an order's resolver picks name\" would s…",
-        "2fe24a1781 There is no set of boxes and no set of SKUs to scope the fetch to; the…",
-        "3366f52693 (D#/D#'s \"no order in hand\" fallback) lists every sellable card across…",
-        "33bfa5178a **Measured, on `docs/specs/store-scaling.md` §1's own method (five runs…",
-        "61da902490 That is a correctness regression (fewer copies drawn than exist), not m…",
-        "8d48f52929 **And the wire, which is the half the operator's own browser pays for**…",
-        "9cfc9e2a9e `scripts/docs-audit.py`'s `unscoped walk` guard (item 1) pins this: `UN…",
-        "b1e22b3bac The `unscoped walk` guard (item 1) watches `server/*.py` and `store/mas…",
-        "b3df32b743 This paragraph is site 1's own record of what changed; neither decision…",
-        "b4329d233c `POST /inventory/copies` (`server/capture_server.py:do_inventory_copies…",
-        "e42598b084 **Why site 2 (and the resolver's own picks, for site 1) could not be bo…",
-        "e96bcf1c51 This entry's own conclusion (§27, unchanged) is to leave site 2 as the…",
-        "f79bee704a `#/inventory` and Home's hero deck moved to `GET /inventory/<box>` and…"
-      ],
-      "STE006": [
-        "2fe24a1781 There is no set of boxes and no set of SKUs to scope the fetch to; the…",
-        "7952661502 27 — Two `GET /inventory` call sites were store-wide; site 1 is closed,…",
-        "8d48f52929 **And the wire, which is the half the operator's own browser pays for**…",
-        "b1e22b3bac The `unscoped walk` guard (item 1) watches `server/*.py` and `store/mas…",
-        "b3df32b743 This paragraph is site 1's own record of what changed; neither decision…",
-        "f79bee704a `#/inventory` and Home's hero deck moved to `GET /inventory/<box>` and…"
-      ]
-    },
-    "docs/debts/028-pkmnscan-rescue-is-reachable-from-no-screen-and-the.md": {
-      "lane": "docs-sweep",
-      "STE001": [
-        "144638bc9d The owner's same-day ruling that raw machine text may never reach a scr…",
-        "2d9a5523fb So the press was for a shrinking, legacy set — one run at the time — an…",
-        "4863ffccd0 Original text, kept for the record — **why it was deferred rather than…",
-        "4fd9897334 `#/pricing`'s \"over a deleted box\" sentence used to tell the operator,…",
-        "b1b6d26d83 On 2026-09-13 the owner hit the sentence, could not act on it from the…",
-        "b98e9a844c `POST /pipeline/runs/<name>/rescue` (free, preview by default, `write`…"
-      ],
-      "STE006": [
-        "144638bc9d The owner's same-day ruling that raw machine text may never reach a scr…",
-        "b98e9a844c `POST /pipeline/runs/<name>/rescue` (free, preview by default, `write`…",
-        "dced48999b PR #347 made the sentence go away once a joined rescue exists; it did n…"
       ]
     },
     "docs/debts/029-the-drawers-tap-sweep-is-skipped-because-it-races-itself.md": {
@@ -2384,7 +2264,6 @@
         "43ef99ac27 `reap.py:_segments` truncates at the first `<<` instead, which is right…",
         "4585a09718 **That is the residue, and it is smaller than the rule it replaces** —…",
         "4c7ac40679 A regex over the raw string catches the incident and cannot make that d…",
-        "4d1a42df76 **`make coordinator` is deliberately not in `make check`**, on `make la…",
         "5597c96ee8 **The self-test reproduces the incident before it asserts anything abou…",
         "6de40796a5 `shlex.whitespace_split` treats a newline as ordinary whitespace, so th…",
         "76dfbd2a01 That is the predicate: **a write whose stdout or stderr goes to `/dev/n…",
@@ -2400,7 +2279,6 @@
         "bd0294bd3e `2>/dev/null` hides every byte the hook prints; `>/dev/null` hides `[br…",
         "beea8b67b4 **A heredoc that is never terminated drops the rest of the command**, w…",
         "cb843bba7e A required context that is missing is `not ready`; **one that reported…",
-        "ced47b9353 **Every figure is read from the repository or from the GitHub API at th…",
         "d3d955adba **Two arms survived for a worse reason and were closed rather than argu…",
         "d940b008ff That is `scripts/status.py`'s rule, and here it is the same sentence as…",
         "f3de157eb5 **A rule that tells a session to check its work is a rule the session c…",
@@ -2743,37 +2621,7 @@
     },
     "docs/decisions/*-a-send-is-a-cart-of-boxes-a-run-is-still-one-box.md": {
       "lane": "docs-sweep",
-      "STE001": [
-        "03c3371b26 Two presses over one selection were two different paths, neither saw th…",
-        "0d8e890df9 Because `_resolve_scope` creates a symlink directory per ticked selecti…",
-        "1365c72c7a `_parse_preflight` answers `None` where a line did not appear — deliber…",
-        "13ef0eaa39 Adding box 7 to a cart does not touch what box 3 means, so the rule now…",
-        "1a6a36dffc The RESPONSE is always a list too — a shape that changed with the reque…",
-        "1b5bc9c108 The whole cost of this entry is the list shape on the wire and the per-…",
-        "1cd8618f0e The read-side widening D#'s amendment gives the finish claim and D# giv…",
-        "32a47bfec3 The first recommendation was ONE RUN over several boxes, on the argumen…",
-        "3731c1ee6d Two runs over DIFFERENT boxes stay legal and unblocked — the Batch API…",
-        "3856d841dc Built 2026-08-29 on the owner's instruction after being told what the p…",
-        "3e43cf2fa6 `RunPanel.tsx` computed a three-way partition — live, this box, other b…",
-        "497dc42956 D#'s validate-everything-then-write-everything with an invoice instead…",
-        "51c6b07d9c It compares box numbers now, read from the manifest's scope first and f…",
-        "51ca4cf532 That works for a whole box — `captures/cards/box3` both times — and can…",
-        "5834ce9a8a That entry drops the ticked selection whenever a box is picked on `#/ru…",
-        "6e72397a97 That is the case an operator cannot tell apart from a double-click at t…",
-        "819f86e069 `app/src/server.ts` already records that the app may not compute rules…",
-        "86a720e106 Bounded at four workers, and the cart itself at sixteen boxes: each leg…",
-        "9089050ed3 So a screen with a box selected threw the grouping away and drew the se…",
-        "9d9a80ab3f The response names what STARTED and what did not, and the screen draws…",
-        "aac201dc1f Nothing downstream learns a new shape, and that is the property worth p…",
-        "ac3ce73dac Every box gets its own run directory, its own manifest scope, its own q…",
-        "b28b5ecd91 A preflight decodes and crops every photograph in its box — measured at…",
-        "c60215105e N calls from the screen would be N confirms for one operator decision,…",
-        "da1a7e792b What decides it is that a run carries a **reading**, a `--bypass` rulin…",
-        "deab19bde9 They are separate read-only processes over a lock-free snapshot and `--…",
-        "e4e2a853c8 Recorded here because the tempting alternative — refusing the whole res…"
-      ],
       "STE006": [
-        "1b5bc9c108 The whole cost of this entry is the list shape on the wire and the per-…",
         "b421ecf263 D# — A send is a cart of boxes; a run is still one box"
       ]
     },
@@ -3372,35 +3220,6 @@
         "f114ca47d4 Codex's file was written 2026-09-09; `.claude/settings.json` gained a `…"
       ]
     },
-    "docs/decisions/*-copy-ratchet.md": {
-      "lane": "docs-sweep",
-      "STE001": [
-        "03c2387bb2 The only way a ceiling rises is `node scripts/copy-budget.mjs --pin`, r…",
-        "09092869a5 The fix waits for `.bn-view`'s own text to stop changing (two reads 150…",
-        "0b4abdf4a4 A route whose ceiling was pinned this way will need `--pin` again the d…",
-        "0c55d1c416 Mutation-tested: `COPY_BUDGET_MUTATE='#/pricing'` makes the spec inject…",
-        "2809f08cd8 This is not a second pass over the same ground: a session that rewords…",
-        "281601b56d None of the four is copy creep — nothing under `app/src` changed — and…",
-        "2adbd64ce7 Five `seedPopulated*` functions each register a `page.route` stub carry…",
-        "35f0058616 **The owner's ruling, 2026-09-13:** *\"less text is always better than m…",
-        "3eb5ddda85 Left to a diff alone it would just be numbers: `#/runs` fell from 68 to…",
-        "639c887504 That was refused for one reason: a live number is not reproducible in C…",
-        "71e67b55d6 **The region counted is `.bn-view`** — `App.tsx`'s own wrapper around `…",
-        "7f95be2bef It contains no counting logic of its own — it sets `COPY_BUDGET_PIN=1`…",
-        "9c66148699 It renders every owner route at 1440 in the fixture `wide.spec.ts` and…",
-        "add0481f8e The first build measured `#/inventory` at either 156 or 158 words acros…",
-        "b39c3b56a4 The other four rose because a populated screen draws real content an em…",
-        "b43c3c3799 `app/tests/routeFixtures.ts` is a new, shared module holding the fixtur…",
-        "bceb2e27f9 **Routes are discovered off `routesFromNav`**, the same argument `curso…",
-        "eb2831a85a The fixture that renders every route is a small, shared store (two boxe…",
-        "eb7651f9ef That is the opposite of a ratchet: D#'s whole design is that the only w…",
-        "eebdb8ef10 The guard has no opinion on that; it only forces the question into the…"
-      ],
-      "STE006": [
-        "b43c3c3799 `app/tests/routeFixtures.ts` is a new, shared module holding the fixtur…",
-        "eebdb8ef10 The guard has no opinion on that; it only forces the question into the…"
-      ]
-    },
     "docs/decisions/*-duplicates-aggregate-by-sku-at-join-time.md": {
       "lane": "docs-sweep",
       "STE001": [
@@ -3657,8 +3476,7 @@
         "fcc91942c9 Two intermediate drafts, produced before this one, built a **client-sid…"
       ],
       "STE006": [
-        "124bc15613 `scripts/heartbeat.py` runs once and exits; nothing in it loops, sleeps…",
-        "2000438583 There is no `make` target that backgrounds anything; `make heartbeat` r…"
+        "124bc15613 `scripts/heartbeat.py` runs once and exits; nothing in it loops, sleeps…"
       ]
     },
     "docs/decisions/*-history-scoped-to-box.md": {
@@ -5199,7 +5017,6 @@
         "59f82c4f7d The first — a grid row under `:has(.bn-receipt)` — was written, looked…",
         "5fa6f97351 It builds the group instead: `Inventory.tsx:loneGroup`, shaped **field…",
         "670f14bfe9 `GET /search` matches on SKU or name and refuses an empty query, so a c…",
-        "676971122e `9439765` — PR #221, *\"The cap is a ceiling on copies live\"*, merged 20…",
         "6fc117618e What changes is the **sentence**: a group with no SKU draws no live fig…",
         "710562df96 Re-pointing that assertion at the row would have compared 11px against…",
         "7ce2791027 It is replaced by a comment saying so and pointing at the case that can…",
@@ -10851,7 +10668,6 @@
     "docs/specs/demo.md": {
       "lane": "docs-sweep",
       "STE001": [
-        "02dc356216 Nothing derived from the demo is committed — `app/demo/bundle.json` is…",
         "093171f9ba Each refusal is thrown as a real `ServerError` in the server's own enve…",
         "1796d5bea3 `.github/workflows/demo.yml`'s build step derives this from the reposit…",
         "1826f37a86 **SYNTHETIC**, as originally designed — the photographs, to be drawn by…",
@@ -10860,7 +10676,6 @@
         "2f4ce2e8bd A guard that fires on the word for a secret keeps firing on documentati…",
         "30a6358910 The pipeline join that resolves a card against those exports, and the p…",
         "3f305c6285 Forking the app to build a public copy would duplicate the other 55,000…",
-        "4a01c81856 What `demo-freshness` is for is a local one: a `make demo-preview` runn…",
         "4d78efc0c5 `server/capture_server.py` is over thirteen thousand lines, and a secon…",
         "4dcb7ddd20 Nothing is persisted — a reload starts the demo over, which is the righ…",
         "4e7940bafc **Verified against the code, and the correction this entry exists partl…",
@@ -10886,7 +10701,6 @@
         "ce2976c85b A runtime flag — reading an environment variable or a query parameter a…",
         "f6ede9f9cd `PKMNSCAN_HOME` unset means the checkout's own store, which is somebody…",
         "f8ddb4c645 Press one and the store visibly changes underneath: the counters, the q…",
-        "fb917d6a13 `make demo` / `demo-seed` / `demo-record` / `demo-static` / `demo-previ…",
         "fc7cfc5644 This file is that argument's home — it existed only as prose inside `CL…"
       ],
       "STE006": [
@@ -11359,7 +11173,6 @@
         "801b1a4b22 The honest alternative is a DECLARATION rather than a check — a ruling…",
         "806dd08e92 Nothing unseeable — this is a GAP rather than an impossibility, and it…",
         "8098527d12 Half (b) prints both numbers every run; a verdict file it cannot read,…",
-        "81d40f01a4 So the eye pass §6 itself calls the ONLY thing that can settle a false…",
         "826d766408 A compaction leaves no artifact in the tree and none in the transcript,…",
         "8340154c46 (b) COUNT THE WORK: when PW_ARGS names spec files, the recipe compares…",
         "8504cbcf21 the undo press is aimed by `capture_id` (D#/D#), not by the drawn numbe…",

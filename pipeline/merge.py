@@ -97,6 +97,11 @@ class Plan:
     # Every SKU a run matched and this plan writes no row for, with the reason. Never silent:
     # `CLAUDE.md` forbids dropping a card without saying so.
     dropped: "OrderedDict[str, str]" = field(default_factory=OrderedDict)
+    # EVERY MERGED MATCH, DROPPED OR NOT. `dropped` above carries the reason string alone,
+    # and `cli/cmd_emit.py` needs the match itself to ask `match.capped` for the empty-send
+    # headline's cap count (DEBT37's wording gap 2) — the same reason `skus` above carries
+    # `MergedSku.match` rather than a second copy of what it says.
+    matches: Dict[str, join.SkuMatch] = field(default_factory=dict)
 
     def rows(self, *, listed_only: bool = False) -> List[MergedSku]:
         """The SKUs a file would carry, in the order they were merged.
@@ -190,12 +195,9 @@ def _merged_match(sku: str, legs: Sequence[Leg]) -> join.SkuMatch:
             if all(leg.match.live_out is None for leg in legs)
             else max(leg.match.live_out or 0 for leg in legs)
         ),
-        # THE GUARD'S READING, the same on every leg (`cli/cmd_emit.py:_apply_guard`).
-        guard_live=(
-            None
-            if all(leg.match.guard_live is None for leg in legs)
-            else max(leg.match.guard_live or 0 for leg in legs)
-        ),
+        # ANY LEG'S GUARD TRIM CARRIES, the same way `_apply_guard` writes it onto every leg
+        # sharing one SKU (`cli/cmd_emit.py:_apply_guard`'s own comment on the union).
+        guard_trimmed=any(leg.match.guard_trimmed for leg in legs),
     )
 
 
@@ -313,7 +315,7 @@ NO_PRICE_YET = "no market price, and no price typed yet"
 #: and the marker the send route reads to answer `needs_price` rather than `nothing_to_send`.
 ONLY_UNPRICED = "nothing to send: every card left needs a price first"
 
-#: What a send says when no card it matched adds a copy, and no price is owed (DEBT35). One
+#: What a send says when no card it matched adds a copy, and no price is owed. One
 #: sentence for the single-run path and the merged one. Both exit 1 on it, and both name each
 #: card's own reason under it. The send route reads it to answer `nothing_to_send`.
 NOTHING_NEW = "nothing new to send: every card left is already at TCGplayer, held back, or has no room"
@@ -326,14 +328,24 @@ HELD_BACK = "held back or answered unlisted"
 LIVE_ALREADY = "TCGplayer already holds every copy on hand"
 
 
-def empty_send_sentence(needs_price: int = 0, under_cut_off: int = 0, live: int = 0) -> str:
+def empty_send_sentence(
+    needs_price: int = 0, under_cut_off: int = 0, live: int = 0, capped: int = 0
+) -> str:
     """The one line an empty send ends on, worded from the reasons it has (R6-9).
 
     A send with one reason keeps that reason's own sentence. A send with several names every
-    one, so a card the guard trimmed is never hidden behind a card that needs a price."""
-    if needs_price and not (under_cut_off or live):
+    one, so a card the guard trimmed is never hidden behind a card that needs a price.
+
+    `capped` IS ITS OWN REASON, APART FROM `live` (DEBT37's wording gap 2). Before this, a
+    card `--cap` closed had no clause here at all: the headline counted `needs_price`,
+    `under_cut_off` and `live` (a guard trim) and silently dropped every card whose reason was
+    the cap, even though `pipeline/join.py:SkuMatch.nothing_to_add` named it correctly on its
+    own line the whole time. `live` says TCGplayer has confirmed every copy; `capped` never
+    claims that — the card may be pending a reconcile, or genuinely at the send's own ceiling —
+    so the two stay apart rather than folding one into the other's count."""
+    if needs_price and not (under_cut_off or live or capped):
         return ONLY_UNPRICED
-    if under_cut_off and not (needs_price or live):
+    if under_cut_off and not (needs_price or live or capped):
         return ONLY_UNDER_CUT
     parts = []
     if needs_price:
@@ -344,6 +356,11 @@ def empty_send_sentence(needs_price: int = 0, under_cut_off: int = 0, live: int 
                      f"cut-off {'are' if under_cut_off != 1 else 'is'} held back by --listed-only")
     if live:
         parts.append(f"TCGplayer already holds every copy of {live} card{'s' if live != 1 else ''}")
+    if capped:
+        parts.append(
+            f"{capped} card{'s' if capped != 1 else ''} "
+            f"{'are' if capped != 1 else 'is'} held at this send's cap"
+        )
     return "nothing to send: " + ", and ".join(parts)
 
 
@@ -417,6 +434,7 @@ def plan(
     unanswered = set(choice.unanswered)
 
     out = Plan()
+    out.matches = dict(merged)
     for sku, legs in legs_by_sku.items():
         match = merged[sku]
         if sku not in priced:

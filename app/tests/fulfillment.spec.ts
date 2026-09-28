@@ -12,8 +12,10 @@ import { settleMotion } from './motionSettled'
  * twice, redesign the flow", has no instrument at all except him using it. So the numbers are
  * what can be checked, and they are checked here without exception.
  *
- * `app/tests/pull-confirm.spec.ts` covers three of these rows against step 6's one component.
- * This file covers all nine against the view, and follows that spec's one methodological
+ * `the pull-confirm component, every state the real view cannot show` (below, folded from
+ * `app/tests/pull-confirm.spec.ts`, test-audit lane L6, M1) covers three of these rows against
+ * step 6's one component, on the states this view can never put on screen. This file covers
+ * all nine against the view, and follows that block's one methodological
  * rule: EVERY RATIO IS COMPUTED FROM THE RENDERED COLOURS, never compared against a number
  * published in docs/DESIGN.md. A test that reads its expected value out of the thing it is
  * checking checks nothing, and a token edited in tokens.css without being re-argued in the
@@ -40,8 +42,9 @@ const UNDO_FLOOR_MS = 10_000 // "Undo  present on every mark-sold, >= 10s window
 /* THE ROUTE THIS VIEW IS MOUNTED AT, and the one thing in this file a compiler cannot check.
  *
  * `App.tsx` owns the ROUTES table and is not this session's to edit. Hash form, verbatim,
- * for the reason the pull-confirm spec records at its own constant: a path-style
- * '/fulfillment' is served index.html by Vite, mounts the app with an empty hash and renders
+ * for the reason the pull-confirm describe block below records at its own `GALLERY` constant:
+ * a path-style '/fulfillment' is served index.html by Vite, mounts the app with an empty hash
+ * and renders
  * the capture screen — a passing navigation to the wrong view. The `openList` helper below
  * asserts the view is actually on screen before any test measures anything, so a route that
  * has not been registered fails there and loudly rather than as nine confusing measurements
@@ -952,10 +955,11 @@ async function stubServer(page: Page, wire: Wire[], mood: Mood = {}): Promise<St
 type Rgb = { r: number; g: number; b: number; a: number }
 
 /* Parsed with one regex and no `split(',')`. eslint bans that call across this app — v1 bug 2,
- * naive CSV parsing — and the pull-confirm spec needed a named exemption in
- * `app/eslint.config.js` to use it on a color string. A regex needs no exemption, which is
- * the better shape for a rule whose whole point is that nobody should have to decide when it
- * does not apply. */
+ * naive CSV parsing — which used to need a named exemption in `app/eslint.config.js` for the
+ * old `pull-confirm.spec.ts`'s own `split(',')` version of this parser, before this fold.
+ * A regex needs no exemption, which is the better shape for a rule whose whole point is that
+ * nobody should have to decide when it does not apply — the exemption block is deleted, per
+ * its own instruction, now that the spec it named has stopped splitting colours. */
 const RGB = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,/]+([\d.]+))?\s*\)$/
 
 function parseRgb(value: string): Rgb | null {
@@ -1282,8 +1286,9 @@ async function fatTargets(page: Page, where: string, hasControls = true): Promis
   }
 
   // Every pair, not just the vertically adjacent ones. Two controls side by side are the case
-  // the pull-confirm spec could not reach with one component, and the case a list of rows plus
-  // a panel above them creates as soon as anything is laid out in a row.
+  // the pull-confirm block's own gap test (below) cannot reach with a stack of one component,
+  // and the case a list of rows plus a panel above them creates as soon as anything is laid
+  // out in a row.
   for (let i = 0; i < found.length; i += 1) {
     for (let j = i + 1; j < found.length; j += 1) {
       const a = found[i]!
@@ -3365,4 +3370,128 @@ test('a copy sold here since the count is said in his words', async ({ page }) =
      one, which is the shelf disagreement D7 exists to prevent, on the one screen where a
      person is standing at the shelf. */
   await expect(view(page)).toContainText('1 for sale')
+})
+
+/* ---------------------------------------------------------------------------------------
+ * FOLDED FROM `app/tests/pull-confirm.spec.ts` (test-audit lane L6, item M1). That file
+ * measured step 6's ONE COMPONENT, before any real screen carried it — the same table rows
+ * quoted at the top of this file, against `#/gallery`'s specimens rather than against this
+ * view. It named this file as the one that would cover it once a view existed: "the rest ...
+ * arrive with the views that carry them at step 7."
+ *
+ * THE DEFAULT STATE'S OWN NUMBERS ARE NOT REPEATED HERE. `battery()` already measures the
+ * real `.pull-confirm` button in that state — the tap target, the gap, the label size, the
+ * contrast — every time it draws mid-flow ('pulled' above, 'search pulled' below). Moving
+ * those three assertions here would check the same rendered pixels twice under a new name.
+ *
+ * WHAT ONLY THE GALLERY CAN SHOW IS `disabled` AND `keyHint`. `PullConfirm.tsx`'s own doc
+ * comment: `disabled` is "Never true in the Fulfillment view" and `keyHint` is "Owner-side
+ * only" — omitted here, which is exactly the Fulfillment case. So this view can never put
+ * either state on screen, and the component's own contract for them has no other witness.
+ * The adjacent-gap and key-hint tests are the same shape: properties of the SPECIMEN SHEET's
+ * layout and of the component's own `keyHint` branch, neither reachable from `/#/fulfillment`.
+ *
+ * A SEPARATE `beforeEach`, NOT `sealEveryTest({ store: true })` FOR THE WHOLE FILE. Unlike
+ * this file's own route, `/#/gallery` renders the owner's shell — a sidebar, a command
+ * palette — which this file's own comment above says the Fulfiller's route never draws and
+ * never needed stubbed. Widening the file's shared seal config to feed that shell by default
+ * would be answering routes for every one of the tests above that has no reason to reach
+ * them. This block's own hook adds exactly what `/#/gallery` reads on mount instead.
+ */
+test.describe('the pull-confirm component, every state the real view cannot show', () => {
+  /* THE GALLERY'S OWN ROUTE, hash form, verbatim. A path-style '/gallery' is served
+   * index.html by Vite, mounts the app with an empty hash, and renders the capture screen —
+   * a passing navigation to the wrong view, exactly the trap `VIEW_ROUTE` above is written
+   * against. The `beforeEach` below asserts the default specimen is on screen before any
+   * test measures anything, so a route this wrong fails there and loudly. */
+  const GALLERY = '/#/gallery'
+
+  /** Every state the gallery renders, by its data-specimen name — `Gallery.tsx`'s own
+   *  comment keeps these four in this order for the gap test below. */
+  const KIT_STATES = ['pressed', 'disabled', 'with-key'] as const
+
+  function kitButtonFor(page: Page, state: string): Locator {
+    return page.locator(`[data-specimen="${state}"] .pull-confirm`)
+  }
+
+  test.beforeEach(async ({ page }) => {
+    /* THE SHELL'S OWN READS, on a route that (unlike `/#/fulfillment`) draws it. Shapes
+       borrowed from `shell.ts`'s own small-store fixture, which `pull-confirm.spec.ts` took
+       through `sealEveryTest({ store: true })` before this fold. */
+    await page.route(/\/boxes$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ boxes: [] }),
+      }),
+    )
+    await page.route(/\/inventory$/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ version: 2, cards: {}, boxes: {}, listings: {} }),
+      }),
+    )
+    await page.goto(GALLERY)
+    await expect(kitButtonFor(page, 'default')).toBeVisible()
+  })
+
+  for (const state of KIT_STATES) {
+    test(`${state}: tap target is at least ${TARGET_FLOOR}x${TARGET_FLOOR}px`, async ({ page }) => {
+      const box = await kitButtonFor(page, state).boundingBox()
+      expect(box, 'the button has no layout box').not.toBeNull()
+      expect(box!.height).toBeGreaterThanOrEqual(TARGET_FLOOR)
+      expect(box!.width).toBeGreaterThanOrEqual(TARGET_FLOOR)
+    })
+
+    test(`${state}: label is at least ${BODY_FLOOR}px`, async ({ page }) => {
+      const size = await kitButtonFor(page, state).evaluate(
+        (node) => window.getComputedStyle(node).getPropertyValue('font-size'),
+      )
+      expect(Number.parseFloat(size)).toBeGreaterThanOrEqual(BODY_FLOOR)
+    })
+
+    test(`${state}: label on fill clears ${CONTRAST_FLOOR}:1`, async ({ page }) => {
+      const button = kitButtonFor(page, state)
+      const styleOf = (property: string) =>
+        button.evaluate((node, prop) => window.getComputedStyle(node).getPropertyValue(prop), property)
+      const fill = parseRgb(await styleOf('background-color'))
+      const label = parseRgb(await styleOf('color'))
+      expect(fill, `unreadable fill on ${state}`).not.toBeNull()
+      expect(label, `unreadable label color on ${state}`).not.toBeNull()
+      // A transparent fill would make the ratio below meaningless — and it is exactly what
+      // a stylesheet that failed to load looks like. Assert the fill is really there first.
+      expect(fill!.a, 'the fill is not opaque, so the measured ratio is not the one on screen')
+        .toBe(1)
+      expect(label!.a).toBe(1)
+      expect(contrastRatio(fill!, label!)).toBeGreaterThanOrEqual(CONTRAST_FLOOR)
+    })
+  }
+
+  test(`adjacent tap targets are at least ${GAP_FLOOR}px apart`, async ({ page }) => {
+    // The gallery stacks its four specimens (default, pressed, disabled, with-key), so this
+    // measures the vertical gaps — the one shape the real view, with a single button on
+    // screen at a time, cannot produce.
+    const ALL_STATES = ['default', 'pressed', 'disabled', 'with-key'] as const
+    const boxes = await Promise.all(ALL_STATES.map((state) => kitButtonFor(page, state).boundingBox()))
+
+    for (const [index, box] of boxes.entries()) {
+      expect(box, `${ALL_STATES[index]} has no layout box`).not.toBeNull()
+    }
+
+    for (let index = 1; index < boxes.length; index += 1) {
+      const previous = boxes[index - 1]!
+      const current = boxes[index]!
+      const gap = current.y - (previous.y + previous.height)
+      expect(gap, `${ALL_STATES[index - 1]} -> ${ALL_STATES[index]}`).toBeGreaterThanOrEqual(GAP_FLOOR)
+    }
+  })
+
+  test('the key hint is owner-side only, and absent by default', async ({ page }) => {
+    // docs/DESIGN.md: "Every choice shows its key ... The Fulfiller's screens are touch and
+    // show none." This asserts the direction PullConfirm's own contract resolves that in:
+    // no chip with no `keyHint` prop, one chip with one.
+    await expect(kitButtonFor(page, 'default').locator('kbd')).toHaveCount(0)
+    await expect(kitButtonFor(page, 'with-key').locator('kbd')).toHaveCount(1)
+  })
 })
