@@ -4,7 +4,7 @@
 
 ### 1. Refunds: subtract what the operator already told this store, and say what that mechanism has actually caught
 
-`closed_reason` rode on every order line's `progress` since D113. This screen never read it. `store/orders.py:174`'s own words for `not_shipping`: a refund or a cancellation, nothing will go. A sale later reversed stayed counted as revenue forever. There was no decrement and no flag. `docs/specs/revenue-next.md` §2 names this the most consequential finding in the file.
+`closed_reason` rode on every order line's `progress` since D113. This screen never read it. `store/orders.CLOSE_NOT_SHIPPING`'s own words for `not_shipping`: a refund or a cancellation, nothing will go. A sale later reversed stayed counted as revenue forever. There was no decrement and no flag. `docs/specs/revenue-next.md` §2 names this the most consequential finding in the file.
 
 **The fix reads data already on the wire.** `salesOf` now matches each line's SKU against that order's own `progress` list. A line closed `not_shipping` is dropped from the total. It is counted in a new `refundExcluded` tally. No new route. No wire change. No widening of `server/order_transport.py`'s allowlist — the owner's ruling on the marketplace's own `refunds` field stands. This reads a value the store already had and was throwing away.
 

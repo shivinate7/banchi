@@ -9,7 +9,7 @@ twice on PR #375's head (7m54s, 7m40s) and again on that PR's claim commit; shar
 passed every time; the full suite passed locally on the same tree, 633 of 634, the single
 failure being an unrelated word-count pin. Every failure is identical:
 
-    ✘ tests/phone.spec.ts:541:1 › every drawer route is reachable by tap, at two phone heights
+    ✘ tests/phone.spec.ts (line 541, column 1) › every drawer route is reachable by tap, at two phone heights
     Error: page.goto: net::ERR_ABORTED; maybe frame was detached?
 
 Three identical failures is not DEBTS §8's one-in-thirteen flake, and reading it as one is the

@@ -23,16 +23,16 @@ a full singles-track profile:
 
 | field | `pipeline/games.py` | consequence |
 |---|---|---|
-| `located` | `False` (`pipeline/games.py:446`) | no label, no slot |
-| `catalogued` | `True` (`pipeline/games.py:461`) | passes the only join-path filter there is |
-| `join_key` | `name_only` (`pipeline/games.py:449`) | a real strategy, not `not_joined` |
+| `located` | `False` (`pipeline/games.GAMES`) | no label, no slot |
+| `catalogued` | `True` (`pipeline/games.GAMES`) | passes the only join-path filter there is |
+| `join_key` | `name_only` (`pipeline/games.GAMES`) | a real strategy, not `not_joined` |
 | `prompt` | `pokemon_code_v1` | it is submitted to the paid Batch |
 
-`pipeline/join.py:1039` routes `name_only` to a working `KeyStrategy`; the entry beside it,
-`NOT_JOINED: None` at `pipeline/join.py:1040`, is what a game that never joins looks like, and
-`misc` is its only holder (`pipeline/games.py:736`). And `identify` does not merely tolerate a
-code card — `cli/cmd_identify.py:397` names `CODE_GAME = "pokemon_code"` and
-`cli/cmd_identify.py:426` builds C8's code ledger out of code cards that went through the
+`pipeline/join.JOIN_KEY_STRATEGIES` routes `name_only` to a working `KeyStrategy`; the entry beside it,
+`NOT_JOINED: None` in the same table, is what a game that never joins looks like, and
+`misc` is its only holder (`pipeline/games.GAMES`). And `identify` does not merely tolerate a
+code card — `cli/cmd_identify.CODE_GAME` names `CODE_GAME = "pokemon_code"` and
+`cli/cmd_identify._code_ledger_lines` builds C8's code ledger out of code cards that went through the
 paid run. **The singles pipeline has a code-card lane by design.**
 
 `codes/__init__.py` states the schema half in as many words: no second capture path, the same
@@ -40,28 +40,28 @@ server, the same store, "`located: False` is the whole of the schema difference"
 
 ### The chain, end to end
 
-1. **Capture.** `server/capture_server.py:1034`'s `photo_path(box, index)` has no game
+1. **Capture.** `server/capture_server.py`'s `photo_path(box, index)` has no game
    dimension. A code card's photograph lands in `captures/cards/box<n>/<index>.jpg` beside
    every located card's.
-2. **Scope.** A run's scope is the whole box directory (`server/pipeline_routes.py:275`) or a
-   symlink set keyed by index alone (`server/pipeline_routes.py:220`). No game is consulted.
+2. **Scope.** A run's scope is the whole box directory (`server/pipeline_routes.py`) or a
+   symlink set keyed by index alone (`server/pipeline_routes.py`). No game is consulted.
 3. **Join.** The one exclusion on the resolve path is `games.is_catalogued`
-   (`cli/resolve.py:689`, `cli/resolve.py:1384`), and `pokemon_code` is catalogued.
-   `cli/resolve.py:404`'s pooled skip is inside `box_views`, a **label renderer**, not a run
+   (two call sites in `cli/resolve.py`), and `pokemon_code` is catalogued.
+   the pooled skip in `cli/resolve.box_views` is inside `box_views`, a **label renderer**, not a run
    filter.
-4. **The table.** `cli/cmd_join.py:194` writes `positions: [{box, index, label}]` for every
+4. **The table.** `cli/cmd_join.py` writes `positions: [{box, index, label}]` for every
    matched SKU across every game join, with no `located` test.
-5. **The merge.** `server/pipeline_routes.py:1836` de-duplicates positions across runs on
+5. **The merge.** `server/pipeline_routes.py` de-duplicates positions across runs on
    `(box, index)` and never asks whether one is located.
-6. **The screen.** `app/src/Pricing.tsx:764` draws a thumbnail per row and
-   `app/src/Pricing.tsx:2637` the full-size photo in the drawer, both off `positions[n]`.
+6. **The screen.** `app/src/Pricing.tsx` draws a thumbnail per row and
+   the full-size photo in the drawer, both off `positions[n]`.
 
 **IT HAS ALREADY HAPPENED, AND THE REPO SAYS SO IN THE PAST TENSE.**
-`server/pipeline_routes.py:1470` records that pooled cards "do reach a join and did land in
+`server/pipeline_routes.py` records that pooled cards "do reach a join and did land in
 this table wearing `Box N · Section N · Card M`", and
-`harness/tests/t7_store_and_seams.py:11336` asserts it as a live property today. What that fix
+`harness/tests/t7_store_and_seams.py` asserts it as a live property today. What that fix
 changed was the **caption**: `_relabel_positions` swaps `Position.label` for `join.place_text`
-and, in its own words at `server/pipeline_routes.py:1458`, leaves `box` and `index` travelling
+and, in its own words in `server/pipeline_routes._relabel_positions`, leaves `box` and `index` travelling
 "exactly as stored" — which are the two integers `photoUrl` is aimed by.
 
 ### The pattern, stated once
@@ -69,19 +69,18 @@ and, in its own words at `server/pipeline_routes.py:1458`, leaves `box` and `ind
 **`located: false` suppresses the position label and the position bar on every owner screen,
 and the photograph on none of them.** Four call sites, one shape:
 
-- `app/src/Inventory.tsx:654` draws the pooled sentence in place of a label; the retire
-  dialog's `<img>` at `app/src/Inventory.tsx:836` is unguarded, and the `located` test at
-  `app/src/Inventory.tsx:849` suppresses only `PositionBar`.
-- `app/src/CardLocations.tsx:484` drops the bar for a pooled copy; the `<img>` at
-  `app/src/CardLocations.tsx:464` above it is unguarded.
-- `app/src/position.ts:119` returns null for a pooled place. It sat inside
+- `app/src/Inventory.tsx` draws the pooled sentence in place of a label; the retire
+  dialog's `<img>` in the same file is unguarded, and its `located` test suppresses only `PositionBar`.
+- `app/src/CardLocations.tsx` drops the bar for a pooled copy; the `<img>` above it
+  is unguarded.
+- `app/src/position.ts` returns null for a pooled place. It sat inside
   `app/src/PositionBar.tsx` until 2026-09-06, when the position arithmetic moved out of the
   component so React Refresh could update it in place; the guard itself is unchanged.
-- `server/capture_server.py:2295` and `server/capture_server.py:2569` serve a pooled row
+- two places in `server/capture_server.py` serve a pooled row
   "undecorated but not bare" — no flat `label`, and `box`, `index` and `photo` all present.
 
 The wire makes the client-side version of this hard on purpose and by accident:
-`app/src/types.ts:1630` types a position as `{box, index, label}` with **no `located` and no
+`app/src/types.ts` types a position as `{box, index, label}` with **no `located` and no
 `game`**, so `#/pricing` could not filter what it draws even if it wanted to — the only pooled
 signal reaching it is a string inside `label`.
 
@@ -89,13 +88,13 @@ signal reaching it is a string inside `label`.
 
 | route | verdict | evidence |
 |---|---|---|
-| `#/inventory` | **live, and deliberate** | `app/src/BoxBrowse.tsx:79` gives pooled cards their own `Pooled` shelf and `app/src/BoxBrowse.tsx:115` a `Pooled · <game>` section header; `PhotoPanel` draws `app/src/BoxBrowse.tsx:1771`'s `photoUrl` checking only `photo === null` and `photo_reclaimed_at`. The screen is BUILT to walk them. |
-| `#/pricing` | **live** | the chain above. Also: `app/src/Pricing.tsx:782` starts `picked` empty, which D86 defines as "every open run", so the manifest's no-`?run=` render draws the worklist and its thumbnails, not a picker. |
-| `#/` | **live, and the weakest link** | `app/src/Home.tsx:125` builds `photoUrl` from a box's `next_index` high-water mark and consults no card record at all, so `located` is not knowable there. `app/src/Home.tsx:156`'s second pass filters on photo, capture time, state and name — not on `located` — though `InventoryCard` carries both `game` and `place`. |
-| `#/runs` | **real reach, gated render** | `app/src/RunsComposer.tsx:692` draws the crop-preview sample, and `server/pipeline_routes.py:917` picks it out of the box's whole capture directory with no game filter. **Three gates hold in a bare render** and this entry first said "live" without them: the composer is a modal (`app/src/RunsComposer.tsx:430`), `stage` opens on `'boxes'` (`:115`), and the preview is not even fetched unless `scoped` (`:190`). `scripts/views.txt` states them; the reach is real and the screenshot is not the way it leaks. |
+| `#/inventory` | **live, and deliberate** | `app/src/BoxBrowse.tsx` gives pooled cards their own `Pooled` shelf and a `Pooled · <game>` section header; `PhotoPanel` draws its `photoUrl` checking only `photo === null` and `photo_reclaimed_at`. The screen is BUILT to walk them. |
+| `#/pricing` | **live** | the chain above. Also: `app/src/Pricing.tsx` starts `picked` empty, which D86 defines as "every open run", so the manifest's no-`?run=` render draws the worklist and its thumbnails, not a picker. |
+| `#/` | **live, and the weakest link** | `app/src/Home.deckFromBoxes` builds `photoUrl` from a box's `next_index` high-water mark and consults no card record at all, so `located` is not knowable there. `app/src/Home.deckFromCards`'s second pass filters on photo, capture time, state and name — not on `located` — though `InventoryCard` carries both `game` and `place`. |
+| `#/runs` | **real reach, gated render** | `app/src/RunsComposer.tsx` draws the crop-preview sample, and `server/pipeline_routes.py` picks it out of the box's whole capture directory with no game filter. **Three gates hold in a bare render** and this entry first said "live" without them: the composer is a modal (`app/src/RunsComposer.tsx`), `stage` opens on `'boxes'`, and the preview is not even fetched unless `scoped`. `scripts/views.txt` states them; the reach is real and the screenshot is not the way it leaks. |
 | `#/gallery` | **formality, genuinely discharged** | `app/src/Gallery.tsx` replaced `photoUrl` with `SPECIMEN_PHOTO` through `CardLocations`'s `photoSrc` seam on 2026-09-06, and its pooled fixture carries `has_photo: false`. The reach `_photo_reach` still reports is through that seam. |
 
-**`app/tests/inventory.spec.ts:4357` does not answer this**, though it reasons about pooled
+**`app/tests/inventory.spec.ts` does not answer this**, though it reasons about pooled
 boxes: its subject is a box with `fill: 0` in the box REGISTRY, which is how a box of code
 cards looks in the shelf LIST. The cards themselves are on the `Pooled` shelf, drawn in full.
 
@@ -121,7 +120,7 @@ PREDICTED.** Four questions where there were two: `#/gallery`, `#/`, `#/runs` an
 `#/inventory` is absent because its line was dropped, not because it was exempted.
 
 **One shape already exists and it is the one to copy.** `app/src/Fulfillment.tsx` drops a pooled
-copy from the view outright — `app/src/Fulfillment.tsx:272`, `:437`, `:545` — rather than
+copy from the view outright — at three places in `app/src/Fulfillment.tsx` — rather than
 suppressing its label, and `app/tests/fulfillment.spec.ts` asserts it in a titled test. That is
 the only exclusion in the product that a photograph cannot get past.
 
@@ -163,6 +162,6 @@ options above are costed and ready; none of them is more than a small filter and
 
 **What is NOT recommended is the sentence that makes all of this go away**: "code cards go
 through `scan`, so no pooled card is ever joined". It reads as a design constraint and it is
-not enforced anywhere — the registry, `cli/cmd_identify.py:397` and
-`harness/tests/t7_store_and_seams.py:11336` each contradict it. If the owner wants it to be
+not enforced anywhere — the registry, `cli/cmd_identify.CODE_GAME` and
+`harness/tests/t7_store_and_seams.py` each contradict it. If the owner wants it to be
 true, the place to make it true is `pipeline/games.py` or `cli/resolve.py`, not `CLAUDE.md`.
