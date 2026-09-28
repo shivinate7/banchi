@@ -41,6 +41,32 @@ export function clamp(value: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, value))
 }
 
+/** F9 (the owner's report, 2026-09-27): "if a section has no cards in it ... I don't want it
+ *  included in my inventory view ... it messes with my reverse count since it doesn't
+ *  actually exist yet." Empty means `count === 0` — no card on hand, the same rule the box map
+ *  already draws by (`BoxShelf.tsx`'s `data-empty`) — except the section the card being drawn
+ *  stands in, or left from, which is never hidden even at zero on hand: a departed card's own
+ *  ruler still needs a section to stand on, and selling the walk's own current card must not
+ *  make its section vanish out from under the person looking at it (D118, D181).
+ *
+ *  A SECTION EMPTIED BY A SALE READS THE SAME AS ONE NEVER CAPTURED INTO, EXCEPT WHERE THIS
+ *  FUNCTION'S OWN `current` NAMES IT. `count` only ever counts cards ON HAND (D58), so a
+ *  section the caller is not currently standing on cannot be told "sold out" from "never
+ *  filled" — both hide. Capture, the Shelf view (`?view=shelf`) and the section move targets
+ *  read `sections_detail` directly and are untouched, so a sold-out or fresh section is still
+ *  there to fill, rename or delete; only a ruler that draws THIS function's own filtered list
+ *  stops drawing it.
+ *
+ *  `current` TAKES ONLY THE SECTION NUMBER, never a full `Place`, so a caller with no one
+ *  card in mind — `BoxOps.tsx:BoxIdentity`'s own box-header track, which reads the WALK's
+ *  selected row rather than a `Place` of its own — can call this too. */
+export function nonEmptySections(
+  current: { section: number | null },
+  sections: readonly SectionDetail[],
+): readonly SectionDetail[] {
+  return sections.filter((detail) => detail.count > 0 || detail.section === current.section)
+}
+
 /**
  * The segments to draw, from the box's own spans where they are known and from this card's
  * section where they are not. With a `Place` alone the segments are the three runs the record

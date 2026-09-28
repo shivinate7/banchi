@@ -2605,32 +2605,17 @@ function OrderPickPane({
   walk,
   owedBySku,
   showBuyers,
+  sections,
 }: {
   readonly walk: OrderWalk
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
+  /** Each box's own divider layout (A4: lifted to `PullStage`, one `getBoxes()` read for the
+   *  whole screen — `WalkList`'s own copy rows draw off the SAME map, never a second read of
+   *  the same fact). Optional; the strip is honest without it. */
+  readonly sections: ReadonlyMap<number, readonly SectionDetail[]>
 }) {
   const { currentRow, currentGroup, currentCard } = walk
-
-  /* THE BOX REGISTRY, ONE READ (Q3): the copies list draws the section strip and the ruler the
-   *  same way `Inventory.tsx` does, off the same `getBoxes()` call `layoutsOf` already turns
-   *  into a per-box map there. Allowed to fail without anybody hearing, same as `BoxBrowse.tsx`'s
-   *  own read — the pane draws its copies honestly with no `sections` at all. */
-  const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
-  useEffect(() => {
-    let live = true
-    getBoxes()
-      .then((summary) => {
-        if (live) setBoxRecords(Array.isArray(summary.boxes) ? summary.boxes : [])
-      })
-      .catch(() => {
-        // Deliberately nothing: see the comment above.
-      })
-    return () => {
-      live = false
-    }
-  }, [])
-  const sections = useMemo(() => (boxRecords.length === 0 ? NO_SECTIONS : layoutsOf(boxRecords)), [boxRecords])
 
   const [broken, setBroken] = useState(false)
   const [zoomed, setZoomed] = useState(false)
@@ -2792,6 +2777,28 @@ function PullStage({
 }) {
   const hub = useHub()
   const counts = payload?.resolution.counts ?? null
+
+  /* THE BOX REGISTRY, ONE READ FOR THE WHOLE SCREEN (A4, lifted out of the pane alone): the
+   *  copies list draws the section strip and the ruler the same way `Inventory.tsx` does, off
+   *  the same `getBoxes()` call `layoutsOf` already turns into a per-box map there — shared by
+   *  the pane's own `CardLocations` and the walk list's, never a second read of the same fact.
+   *  Allowed to fail without anybody hearing, same as `BoxBrowse.tsx`'s own read — both draw
+   *  their copies honestly with no `sections` at all. */
+  const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
+  useEffect(() => {
+    let live = true
+    getBoxes()
+      .then((summary) => {
+        if (live) setBoxRecords(Array.isArray(summary.boxes) ? summary.boxes : [])
+      })
+      .catch(() => {
+        // Deliberately nothing: see the comment above.
+      })
+    return () => {
+      live = false
+    }
+  }, [])
+  const sections = useMemo(() => (boxRecords.length === 0 ? NO_SECTIONS : layoutsOf(boxRecords)), [boxRecords])
 
   /* ------------------------------------------------------------- the buyer list's own view */
 
@@ -3598,7 +3605,7 @@ function PullStage({
               Picked
             </HideToggle>
           </div>
-          <WalkList walk={walk} hideSold={hideSold} collapsed={sectionsCollapsed} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} />
+          <WalkList walk={walk} hideSold={hideSold} collapsed={sectionsCollapsed} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} />
         </>
       )}
     </section>
@@ -3649,7 +3656,7 @@ function PullStage({
           {/* DOM order is the desk's visual order (buyers, walk, card), so Tab reads as the eye does. */}
           {walkColumn}
           <div className="orders-cardcol">
-            <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} />
+            <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} sections={sections} />
           </div>
         </div>
       </div>

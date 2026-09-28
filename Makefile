@@ -328,10 +328,15 @@ map-fix-selftest:
 	@python3 scripts/map-fix.py --selftest
 
 # A DELETING GENERATOR, AND IT GATES NOTHING (D18; D-ratchets-become-offender-lists). It deletes
-# the STALE entries from the two shrinking offender lists, scripts/ste-offenders.json and
-# scripts/typed-interpunct-allow.json, and re-keys a file that git's rename detection says
-# moved. It never adds an entry. It reads with the rows' own functions, imported, so the two
-# cannot disagree about what is stale. Previews. ARGS=--write applies.
+# the STALE entries from the three shrinking offender lists, scripts/typed-interpunct-allow.json,
+# scripts/line-anchor-offenders.json and scripts/markdown-spelling-allow.json, and re-keys a
+# file that git's rename detection says moved. It never adds an entry. It reads with the rows'
+# own functions, imported, so the pruner and the gates cannot disagree about what is stale.
+# Previews. ARGS=--write applies.
+# A fourth list, scripts/ste-offenders.json, was cut 2026-09-27 (test-audit plan): the
+# write-time STE hook already lints new prose, so the `ste offenders` row was retired with it
+# (D226; D229; D280 amended). scripts/markdown-spelling-allow.json joined the same day (owner's
+# ruling: "Shrinking offender list now"), over the `identifier spelling` row's markdown half.
 #
 # NOT A PREREQUISITE OF ANYTHING, never wired to a hook, and its self-test is not in
 # `make check`, on `map-fix`'s precedent above: the rows that read these lists already run on
@@ -1452,7 +1457,7 @@ launch-agent:
 dev:
 	$(NPM_GUARD)
 	$(PORT_CLAIM)
-	@npm --prefix app run dev
+	@python3 scripts/reap_mark.py dev; exec npm --prefix app run dev
 
 # Foreground and blocking, like any server. An agent that runs this in the foreground hangs
 # its own turn — the Stop hook runs the harness at turn end and never gets there — so
@@ -1473,7 +1478,7 @@ dev:
 server:
 	@$(PYTHON) scripts/serve.py guard-foreground
 	$(PORT_CLAIM)
-	@$(PYTHON) server/capture_server.py
+	@python3 scripts/reap_mark.py server; exec $(PYTHON) server/capture_server.py
 
 # The manifest is an INPUT and lives beside the script that reads it. It used to point at
 # captures/views.txt, which .gitignore excludes wholesale — so the one file that says which
@@ -1532,7 +1537,7 @@ design-check:
 	$(NPM_GUARD)
 	$(PORT_CLAIM)
 	@rm -f .serve/design-check.json
-	@python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
+	@python3 scripts/reap_mark.py design-check; python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # The lock itself, exercised by violating it — a holder, a refusal, a wait, and a holder
 # killed with -9 to prove the OS releases what it took. In `check`, never in the git hook: it
@@ -1577,7 +1582,7 @@ design-check-quiet:
 	$(NPM_GUARD)
 	$(PORT_CLAIM)
 	@rm -f .serve/design-check.json
-	@DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
+	@python3 scripts/reap_mark.py design-check; DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # eslint over app/, config and rules in app/eslint.config.js. It began 2026-08-13 as the two
 # guards docs/DECISIONS.md's v1 bug table promised — no `facingMode` (bug 3), no `split(",")`

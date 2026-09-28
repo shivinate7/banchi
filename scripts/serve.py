@@ -52,6 +52,7 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import envfile  # noqa: E402
 import primary_sync  # noqa: E402
+import reap_mark  # noqa: E402 — `do_up` marks its detached child directly, see that file's header
 from server import ports  # noqa: E402
 from store import files as store_files  # noqa: E402
 
@@ -1691,11 +1692,19 @@ def do_up(args: argparse.Namespace) -> int:
     argv = [python_executable(), str(Path(__file__).resolve()), "run"]
     if args.no_watch:
         argv.append("--no-watch")
-    subprocess.Popen(
+    supervisor = subprocess.Popen(
         argv, cwd=str(REPO_ROOT),
         stdin=subprocess.DEVNULL, stdout=handle, stderr=subprocess.STDOUT,
         start_new_session=True,
     )
+    # MARK THE REAL CHILD, NOT THIS PROCESS. `do_up` itself returns within about a second of
+    # here — D138's whole point, a detached supervisor rather than a blocking terminal — so a
+    # mark on `os.getppid()` (the `make up` recipe's own shell) would name a process that is
+    # already gone by the time anyone reads it, and the supervisor it orphaned is unreachable
+    # from it (2026-09-27 review, reproduced: a mark on the wrapper, the server on another
+    # pid). `reap_mark.write_mark` is the same writer every foreground launcher uses; this is
+    # the one caller that must hand it a pid instead of reading `os.getppid()` itself.
+    reap_mark.write_mark(str(REPO_ROOT), supervisor.pid, "up")
     took = wait_for_port(ports.capture_port(), READY_SECONDS)
     if took < 0:
         print(f"the capture server did not answer within {READY_SECONDS:.0f}s.")

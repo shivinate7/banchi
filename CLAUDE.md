@@ -73,6 +73,9 @@ make up             # the server, detached — one process (D138). ARGS=--restar
 make reap           # stop what THIS session started, and nothing else (D127). Previews with
                     #   no argument. ARGS="--confirm", "port:N --confirm", "match:X --confirm"
                     #   or "pid:N --confirm" target one process, only if it is ours.
+                    #   NARROWED 2026-09-27 (D-reap-stops-only-its-own): a subagent's bare
+                    #   --confirm stops only pids tagged with ITS OWN session id; the
+                    #   orchestrator's bare --confirm is unchanged.
 make janitor-install # copy the sweep and reap to the user's home Claude bin directory.
 make merge          # merge a PR and move main onto it (D42). ARGS=<n> previews.
                     #   ARGS="<n> --confirm" merges. Owner must name the session an
@@ -702,6 +705,17 @@ itself. "Solved" with no bucket named is refused. Bold labels in one quoted bloc
 never a code fence. Start with the point. No task restatement.
 
 - Run `make harness` before saying something works. Show the output.
+- Keep UI/UX at the forefront of any screen work (owner's ruling, 2026-09-02: *"experience
+  is everything."*). Run a design pass before you build a screen. Review the built screen
+  against that pass before you call it done.
+- Reserve Opus for planning. Reserve it for an adversarial review of a path touching money,
+  TCGplayer or the store's data. Reserve it for a builder redesigning a whole flow, or
+  resolving a hard merge. Sonnet builds and reviews every ordinary screen lane, fix round and
+  delta review by default (owner's ruling, 2026-09-24).
+- A builder commits and pushes its own branch after every pass, even when a check is red.
+  Each commit message ends with a `Done:` line and a `Next:` line. The `Next:` line names
+  what is left, in order, so a lane can resume from its branch alone (owner's ruling,
+  2026-09-24).
 
 ### Writing a brief
 
