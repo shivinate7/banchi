@@ -456,10 +456,17 @@ test('every rendered control tells the pointer what it is, its hover response ea
      every control the product gains — but far enough below to survive ordinary drift and far
      enough above the 40-odd an all-empty store draws that no fixture regression can hide under
      it. */
-  expect(total, 'the sweep classified almost nothing — are `shell.ts`\'s fixtures still populating every screen?')
+  /* THREE FLOORS, ONE REPORT (test-audit L7 review fix, 2026-09-28). The walk above is shared,
+     so its failures must be too: a hard assertion that THROWS on a broken floor stops the test
+     right there, and a second, unrelated broken floor stays invisible until the next run fixes
+     the first. `.soft` runs every check below regardless of an earlier one's outcome and fails
+     the test at the END, naming all of them together — the same guarantee the three separate
+     `test()` cases gave for free before this file paid for the walk once. Every check below is
+     unchanged; only the matcher call is soft now. */
+  expect.soft(total, 'the sweep classified almost nothing — are `shell.ts`\'s fixtures still populating every screen?')
     .toBeGreaterThan(300)
 
-  expect(
+  expect.soft(
     wrong,
     `${wrong.length} of ${total} controls say the wrong thing to the pointer:\n${wrong.join('\n')}`,
   ).toHaveLength(0)
@@ -469,12 +476,12 @@ test('every rendered control tells the pointer what it is, its hover response ea
      this into a walk over nothing — green, instantly, forever. Measured on this worktree
      2026-09-06 at 300 rule-element pairs; the floor is set well under it so ordinary drift does
      not trip it, and well over the handful an all-empty store would leave. */
-  expect(elementsChecked, 'the walk checked almost nothing — are the stylesheets still loading?')
+  expect.soft(elementsChecked, 'the walk checked almost nothing — are the stylesheets still loading?')
     .toBeGreaterThan(100)
-  expect(rulesWalked, 'no repainting :hover rule was found at all — is the CSSOM read still valid?')
+  expect.soft(rulesWalked, 'no repainting :hover rule was found at all — is the CSSOM read still valid?')
     .toBeGreaterThan(20)
 
-  expect(
+  expect.soft(
     repaintOffenders,
     `${repaintOffenders.length} hover rules repaint a control without easing it:\n${repaintOffenders.join('\n')}`,
   ).toHaveLength(0)
@@ -484,9 +491,9 @@ test('every rendered control tells the pointer what it is, its hover response ea
      which is zero once the product is clean — a liveness check that goes to zero the moment the
      thing it guards is fixed is not a liveness check. Measured over the eleven routes: 1,600-odd
      pointer-state rules, so 50 is a floor a broken CSSOM read cannot clear. */
-  expect(reflowWalked, 'no pointer-state rule was walked at all — is the CSSOM read still valid?')
+  expect.soft(reflowWalked, 'no pointer-state rule was walked at all — is the CSSOM read still valid?')
     .toBeGreaterThan(50)
-  expect(
+  expect.soft(
     reflowOffenders,
     `${reflowOffenders.length} pointer states re-lay out the page:\n${[...new Set(reflowOffenders)].join('\n')}`,
   ).toHaveLength(0)
