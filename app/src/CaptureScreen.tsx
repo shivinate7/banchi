@@ -1237,6 +1237,8 @@ export function CaptureScreen() {
        *  number in any of them changed — the sentence names the range that shifted. Null
        *  for the ordinary S at the back, which renumbers nothing. */
       renumbered: { from: number; to: number } | null
+      /** A normal no-op (an empty section), drawn quiet rather than as an error. */
+      quiet?: boolean
     }) | null
   >(null)
   const [sectionBusy, setSectionBusy] = useState(false)
@@ -3364,7 +3366,22 @@ export function CaptureScreen() {
         // the layout before it (D58) — reload the sitting and patch the strip by key.
         if (renumbered !== null) void refreshShotLabels()
       } catch (err) {
-        setSectionNote({ done: false, place: null, renumbered: null, ...describe(err) })
+        // An empty section is a normal no-op, not a fault (owner, 2026-09-28): one quiet
+        // sentence naming the section. The server stays the judge, so a stale client count
+        // can never block a good press. Every other refusal keeps the server's own words.
+        const empty = err instanceof ServerError && err.code === 'section_empty'
+        setSectionNote({
+          done: false,
+          place: null,
+          renumbered: null,
+          quiet: empty,
+          ...(empty
+            ? {
+                text: `${priorPicked === null && priorLast === null ? 'This section' : `Section ${(priorPicked ?? priorLast)!.section}`} is still empty. Capture a card first.`,
+                code: null,
+              }
+            : describe(err)),
+        })
       } finally {
         sectionBusyRef.current = false
         setSectionBusy(false)
@@ -4364,7 +4381,6 @@ export function CaptureScreen() {
                 <p className={noteSaved.done ? 'capture-quiet capture-note-ok' : 'capture-refused'}>
                   {noteSaved.done ? <Icon name="check" size={13} /> : <Icon name="alert" size={13} />}
                   {noteSaved.text}
-                  {noteSaved.code === null ? null : <span className="capture-halt-code"> {noteSaved.code}</span>}
                 </p>
               )}
             </div>
@@ -4701,8 +4717,8 @@ export function CaptureScreen() {
               Section
             </Button>
             {sectionNote === null ? null : (
-              <p className={sectionNote.done ? 'capture-quiet capture-note-ok' : 'capture-refused'}>
-                {sectionNote.done ? <Icon name="check" size={13} /> : <Icon name="alert" size={13} />}
+              <p className={sectionNote.done ? 'capture-quiet capture-note-ok' : sectionNote.quiet ? 'capture-quiet' : 'capture-refused'}>
+                {sectionNote.done ? <Icon name="check" size={13} /> : sectionNote.quiet ? null : <Icon name="alert" size={13} />}
                 {sectionNote.text}
                 {sectionNote.place === null ? null : (
                   <>
@@ -4714,9 +4730,6 @@ export function CaptureScreen() {
                       <span className="capture-list-part">from card {sectionNote.place.fromCard}</span>
                     </span>
                   </>
-                )}
-                {sectionNote.code === null ? null : (
-                  <span className="capture-halt-code"> {sectionNote.code}</span>
                 )}
               </p>
             )}
@@ -4885,9 +4898,6 @@ export function CaptureScreen() {
                     <PositionLabel label={undoNote.position} flow="run" />
                   </span>
                 </>
-              )}
-              {undoNote.code === null ? null : (
-                <span className="capture-halt-code"> {undoNote.code}</span>
               )}
             </p>
           )}

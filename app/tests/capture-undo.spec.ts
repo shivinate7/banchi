@@ -710,7 +710,7 @@ test('a capture built on its sitting refuses, and offers Manage box', async ({ p
   await page.keyboard.press('u')
 
   await expect(page.locator('.capture-refused')).toContainText('This sitting has ended')
-  await expect(page.locator('.capture-halt-code')).toHaveText('capture_built_on')
+  await expect(page.locator('.capture-halt-code')).toHaveCount(0)
   const fix = page.getByRole('button', { name: 'Manage box' })
   await expect(fix).toBeVisible()
 
@@ -816,7 +816,7 @@ test('a walk that is refused partway says how far it got, in the server’s own 
 
   // The server's sentence, verbatim, and its machine string beside it (docs/DESIGN.md).
   await expect(page.locator('.capture-refused')).toContainText('is the newest card in box 3')
-  await expect(page.locator('.capture-halt-code')).toHaveText('undo_not_newest')
+  await expect(page.locator('.capture-halt-code')).toHaveCount(0)
 })
 
 /* THE ONE UNDO TARGET THIS SESSION NEVER SAW A CAPTURE RESPONSE FOR, which is the only row in
@@ -1288,7 +1288,7 @@ test('a blocked removal reaches the operator as a sentence naming what blocked i
   // the operator" means on this screen (`describe()`, matched by every other refusal here).
   const refusal = page.locator('.capture-undo .capture-refused')
   await expect(refusal).toContainText('card 6 is sold')
-  await expect(page.locator('.capture-halt-code')).toHaveText('renumber_blocked')
+  await expect(page.locator('.capture-halt-code')).toHaveCount(0)
 
   // NO REGISTERED WORD FOR THE MECHANISM (D196): the sentence the operator reads never says
   // "capture id" or names the route, only what blocked it and why.

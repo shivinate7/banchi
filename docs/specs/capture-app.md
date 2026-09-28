@@ -524,16 +524,26 @@ index. So the sentence above still holds, and the store chooses the place inside
 **Superseded 2026-09-25: a box has no seal and no capacity (D299).**
 
 **It refuses rather than guessing**: a second press with nothing captured between
-(`section_empty` — the divider you want is already there). A divider already declared past
+(`section_empty` — the divider you want is already there; drawn quiet, since 2026-09-28,
+as "Section N is still empty. Capture a card first."). A divider already declared past
 the next card was `section_ahead` until 2026-09-26. The next card goes behind it now, so
 `section_empty` answers it (D10). A sealed box (`box_closed`) went with the seal. Each is a sentence beside the control and
 never a halt: §5.5 stops the run when a card may have gone past unrecorded, and a refused
-divider changed nothing.
+divider changed nothing. No note beside a control prints a reason code (D196); only a
+halt's "What the server said" does.
 
 **No dialog, and `U` is the undo.** `U` takes S's divider back out while it is the last one
 and no card is behind it (UN-15). After that, the remedy is the dividers editor on
 `#/inventory`, and a `resectioned` history line carries the layout it moved from. A confirm on the screen the owner shoots a box from at feeder pace is
 what `docs/DESIGN.md` refuses in as many words.
+
+### 5.7 — Owner's touch-ups, 2026-09-28
+
+- **Empty-section S.** A normal no-op, not an error: one quiet sentence, no reason code. The
+  button stays enabled — the server is the judge, and a stale client count must never block a
+  good press. The shared fix: undo, note and section notes no longer draw `code` at all.
+  `machine-words.spec` sweeps loaded screens only, so `capture-claims.spec.ts` asserts the
+  error state itself.
 
 ## 6. trigger-seam
 

@@ -711,13 +711,16 @@ test('a refused divider is a sentence beside the control, and never a halt', asy
 
   await page.keyboard.press('s')
 
-  /* The server's own sentence, verbatim, beside the button — docs/DESIGN.md's copy rule for
-     the owner's screens, and the shape the undo refusal already takes. The machine string
-     rides with it so what was seen on screen is greppable. */
-  await expect(page.locator('.capture-section .capture-refused')).toContainText(
-    'already starts at card 41',
-  )
-  await expect(page.locator('.capture-section .capture-halt-code')).toHaveText('section_empty')
+  /* OWNER, 2026-09-28: an empty section is a normal no-op. One capitalised sentence, quiet
+     (not the red refusal), and no machine string anywhere on the screen. `machine-words.spec`
+     sweeps loaded screens only and never an error state, so this is where the raw reason
+     code is caught: any snake_case token in the visible text is red. */
+  const note = page.locator('.capture-section .capture-quiet').filter({ hasText: 'still empty' })
+  await expect(note).toHaveText(/^Section \d+ is still empty\. Capture a card first\.$/)
+  await expect(page.locator('.capture-section .capture-refused')).toHaveCount(0)
+  await expect(page.locator('.capture-halt-code')).toHaveCount(0)
+  const visible = await page.locator('.bn-view').evaluate((el) => (el as HTMLElement).innerText)
+  expect(visible).not.toMatch(/\b[a-z]+_[a-z_]+\b/)
 
   /* AND THE RUN IS NOT HALTED. Spec 5.5 stops the run when a card may have gone past
      unrecorded; a refused divider changed nothing at all. The halt banner is the thing that
