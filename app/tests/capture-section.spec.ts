@@ -922,3 +922,38 @@ for (const [width, height] of [
     await expect(sectionRow(page)).toContainText('Section 12 of 12')
   })
 }
+
+/* PHONE CASE (coordinator, 2026-09-28): on opening, the whole list, its own header row
+ * included, sits between the top bar and the tab bar. Measured right after the open, before
+ * any scroll of the list. */
+for (const [width, height] of [
+  [550, 800],
+  [390, 844],
+] as const) {
+  test(`the open list fits between the top bar and the tab bar at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await open(page, {
+      spans: manySections(12),
+      boxes: [
+        {
+          ...BOX,
+          sections: manySections(12).map((s) => s.start),
+          sections_detail: manySections(12),
+        },
+      ],
+    })
+    await sectionRow(page).click()
+    const pinned = page.locator('.capture-open-pinned')
+    await expect(pinned).toBeVisible()
+    await page.waitForTimeout(500) // the open's own scroll settles
+    const tabTop = (await page.locator('.bn-tabbar').boundingBox())!.y
+    const topBarBottom = (await page.locator('.bn-topbar').boundingBox())!.y +
+      (await page.locator('.bn-topbar').boundingBox())!.height
+    const list = (await pinned.boundingBox())!
+    expect(list.y + list.height).toBeLessThanOrEqual(tabTop)
+    expect(list.y).toBeGreaterThanOrEqual(topBarBottom)
+    const header = (await pinned.locator('> .capture-row').boundingBox())!
+    expect(header.y).toBeGreaterThanOrEqual(list.y)
+    expect(header.y + header.height).toBeLessThanOrEqual(list.y + list.height)
+  })
+}
