@@ -11,16 +11,6 @@
      under another with a ragged edge. */
 }
 .pricing-tabs { flex: none; }
-/* THE LOCK GLYPH'S OWN WEIGHT SITS LOW IN ITS BOX (the owner's review, 2026-09-26: "the lock
-   icon and label look off-center"). Its bounding box is centered against the label already —
-   measured, the icon's box and the button's are both exactly centered — but the shape a person
-   READS as "the lock" is the solid body, and that body sits in the LOWER half of the glyph's
-   own square (kit/Icon.tsx's `lock` path), with only a thin open shackle above it. A person
-   weighs the solid shape, not the empty one, so the icon reads as sitting low against "Held N"
-   even though geometry says otherwise. Nudged here, scoped to this one control, rather than in
-   the shared glyph every lock icon in the app draws from (14 call sites, `Icon.tsx`) — this
-   lane owns Pricing alone. */
-.pricing-held-filter .bn-icon { transform: translateY(-1px); }
 
 .pricing-body {
   display: flex;

@@ -54,8 +54,24 @@ const PATHS = {
   scan: 'M3 8V5a2 2 0 0 1 2-2h3 M16 3h3a2 2 0 0 1 2 2v3 M21 16v3a2 2 0 0 1-2 2h-3 M8 21H5a2 2 0 0 1-2-2v-3 M7 12h10',
   pin: 'M12 22s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z M12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   divider: 'M4 12h16 M8 4v4 M8 16v4 M16 4v4 M16 16v4',
-  lock: 'M6 11h12v10H6z M9 11V7a3 3 0 0 1 6 0v4',
-  unlock: 'M6 11h12v10H6z M9 11V7a3 3 0 0 1 5.5-1.7',
+  /* RE-CENTERED, 2026-09-27 (the owner's review, 2026-09-26: "the lock icon and label look
+     off-center", `docs/reviews/ux-2026-09-23/PLAN-PR4-PR5.md` section D). The bounding box of
+     the original artwork (`M6 11h12v10H6z M9 11V7a3 3 0 0 1 6 0v4`) sat within half a unit of
+     the viewBox's own center — measured, that half-unit is under a third of a rendered pixel
+     at this icon's usual 14px size — yet the icon still read as sitting low against a label
+     (Pricing's own bandaid, a scoped `translateY(-1px)`, `7c145028`). The reason a centered
+     BOUNDING BOX still reads low: the body is a nearly-closed rectangle at these small render
+     sizes, and a person weighs that solid-looking mass far more than the thin open shackle
+     above it — an OPTICAL center, not a geometric one. Measured directly (an alpha-weighted
+     pixel centroid over a supersampled render of the real glyph, `app/tests/gallery.spec.ts`'s
+     temporary probe for this round): the un-nudged glyph's rendered ink sits 0.77px below its
+     button's true center at 14px. Shifting the whole path up by 1.3 viewBox units (a rigid
+     translation, so the shape and stroke weight are untouched) put that measured centroid
+     within 0.1px of center, and the fix is IN THE SHARED GLYPH — every one of the 14 call
+     sites `7c145028` deliberately left alone gets it, and the Pricing-only nudge is deleted
+     (`Pricing.css`, `Pricing.tsx`). */
+  lock: 'M6 9.7h12v10H6z M9 9.7V5.7a3 3 0 0 1 6 0v4',
+  unlock: 'M6 9.7h12v10H6z M9 9.7V5.7a3 3 0 0 1 5.5-1.7',
   flag: 'M5 21V4 M5 4h12l-2 4 2 4H5',
   filter: 'M3 5h18l-7 8v6l-4 2v-8z',
   columns: 'M4 4h16v16H4z M12 4v16',
