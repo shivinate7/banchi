@@ -468,6 +468,8 @@ no-dialog rule is argued for ONE card still within reach of the hand that fed it
 that deletes five has to make the five visible instead. The count is also the row's ordinal,
 which is what lets one chip say both; the top row carries its key instead.
 
+**Owner's ruling, 2026-09-28: an open Section or Box list shows in front of the Recent strip and the sibling cards, and scrolls.** The cap stays. The list stays out of flow (D118).
+
 **A refused walk stops at the refusal and says how far it got**, because the cards that went
 and the cards that did not both leave the list, and the count is then the only thing that
 says where the operator is. **Where the server is ahead of this session the stack is one row
