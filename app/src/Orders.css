@@ -303,18 +303,18 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   color: var(--bn-ink-2);
 }
 .orders-walk-sectcount { margin-left: auto; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); font-variant-numeric: tabular-nums; }
-.orders-walk-rows { list-style: none; display: flex; flex-direction: column; gap: 2px; }
-/* FINDING #16 (the Opus review round): a done line carrying the newest undoable copy draws
-   its own Undo as a SIBLING of the press, never nested inside it — a native <button> cannot
-   hold a second one. */
-.orders-walk-line { display: flex; align-items: center; gap: var(--bn-1); }
+.orders-walk-rows { list-style: none; display: flex; flex-direction: column; gap: var(--bn-3); }
+/* A4: the press stays one flex item, and the copies underneath it (`.walk-pick-where`) wrap
+   onto their own full-width row rather than sitting beside it — the shape
+   `docs/reviews/ux-2026-09-23/orders-a/mock.css` already worked out. */
+.orders-walk-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1); }
 .orders-walk-press {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas: 'slot name pick' '. for for';
   align-items: center;
   gap: 2px var(--bn-3);
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   min-height: var(--bn-control-h-lg);
   padding: var(--bn-2) var(--bn-3);
@@ -324,7 +324,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   background: transparent;
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
-.orders-walk-line-undo { flex: none; }
+.orders-walk-line > .walk-pick-where { flex: 1 0 100%; }
 .orders-walk-press:hover { background: var(--bn-hover); }
 .orders-walk-press[aria-current='true'] { background: var(--bn-accent-tint); }
 .orders-walk-slot { grid-area: slot; min-width: 4ch; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bn-ink-2); }
@@ -350,10 +350,21 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-walk-line.is-done .orders-walk-pick { color: var(--bn-ok); }
 .orders-walk-empty { padding: var(--bn-3); font-size: var(--bn-fs-md); }
 
+/* ---- every here-copy, under its own row (A4, point 3) --------------------------------
+   `docs/decisions/D-orders-walk-rejoins-inventory.md`. `CardLocations` is reused whole, head
+   off — this block is only the seam `mock.css` already measured: its own `copies` container
+   (so a narrow walk column gets the same reflow `#/inventory`'s rail does, never the width
+   `.orders-walk` happens to have at the desk), a tighter row gap than the pane's own list, and
+   a box name that keeps one line here, since the walk names the take's own card once already. */
+.walk-pick-where { margin: 0 0 var(--bn-2) var(--bn-2); container: copies / inline-size; }
+.walk-pick-where .card-locations-rows { gap: var(--bn-1); }
+.walk-pick-where .card-locations-row { padding-block: var(--bn-2); }
+.walk-pick-where .card-locations-identity-box { white-space: nowrap; }
+
 /* ---- the card pane: `CardHero.tsx:CardPane` and `CardLocations.tsx:CardLocations`, reused
    whole (`docs/decisions/D-orders-walk-rejoins-inventory.md`, lane A3) ---------------------
    Their own CSS lives in `CardHero.css` and `CardLocations.css`. This screen adds nothing of
-   its own: no `.orders-card-*` class draws any more. */
+   its own beyond `.walk-pick-where` above: no `.orders-card-*` class draws any more. */
 
 /* ---- 40px hit areas at every width (UX-267) ------------------------------------------ */
 .orders-walkall,
