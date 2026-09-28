@@ -8836,6 +8836,19 @@ COMPONENTS = [
                         "so a section count is a parameter. Run by `make design-check`.",
                 "governed_by": ["D118", "D155", "D260"],
             },
+            "tests/empty-section.spec.ts": {
+                "does": "F9 (the owner's report, 2026-09-27, `docs/reviews/ux-2026-09-23/"
+                        "PLAN-PR4-PR5.md`): a section with no card on hand does not draw in the "
+                        "walk's own strip, and the caption's denominator is the highest "
+                        "non-empty section number rather than a count of every declared one, so "
+                        "a hidden middle section cannot shrink `N` below a section still drawn. "
+                        "The same box's Manage sheet (`BoxOps.tsx:BoxIdentity`) still draws "
+                        "every declared section, empty one included, because that reading shares "
+                        "no code with `PositionBar.tsx`'s own filter. Stubs its own minimal "
+                        "one-copy fixture, the way `section-ruler.spec.ts` does. Run by "
+                        "`make design-check`.",
+                "governed_by": ["D58", "D260", "D264"],
+            },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
                         "`margin: 0 auto` centered a screen with a lower `--bn-page-max` "
