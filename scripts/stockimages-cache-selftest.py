@@ -43,6 +43,11 @@ POKEMON_GROUP_ID = 54321
 SEALED_PRODUCT_NAME = "Scarlet & Violet Elite Trainer Box"
 SEALED_IMAGE_URL = "https://tcgplayer-cdn.tcgplayer.com/product/sealed-example.jpg"
 
+# A NAME COLLISION (review round, 2026-09-27): two distinct products sharing one name in one
+# group. A `setdefault`-first-wins dict would silently answer the first one's photo; the fix
+# is `ProductIndex.find`'s own ambiguity refusal, which must answer `None` here instead.
+COLLIDING_PRODUCT_NAME = "Booster Box"
+
 
 def _seed(cache_dir: Path) -> None:
     def write(slug: str, payload: dict) -> None:
@@ -67,7 +72,11 @@ def _seed(cache_dir: Path) -> None:
                 {
                     "imageUrl": IMAGE_URL,
                     "extendedData": [{"name": "Number", "value": NUMBER}],
-                }
+                    "productId": 70001,
+                },
+                # THE NAME-COLLISION FIXTURE — same name, two different products, no number.
+                {"imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/collide-a.jpg", "name": COLLIDING_PRODUCT_NAME, "productId": 70002},
+                {"imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/collide-b.jpg", "name": COLLIDING_PRODUCT_NAME, "productId": 70003},
             ]
         },
     )
@@ -79,7 +88,11 @@ def _seed(cache_dir: Path) -> None:
         f"tcgcsv/{POKEMON_CATEGORY_ID}/{POKEMON_GROUP_ID}/products",
         {
             "results": [
-                {"imageUrl": SEALED_IMAGE_URL, "name": SEALED_PRODUCT_NAME},
+                # `productId` IS REQUIRED (review round, 2026-09-27): a name-based lookup
+                # resolves through `pricehistory.ProductIndex`, which is keyed by id — a
+                # product with no id cannot be found by name either, matching a real tcgcsv
+                # payload, where every product always carries one.
+                {"imageUrl": SEALED_IMAGE_URL, "name": SEALED_PRODUCT_NAME, "productId": 90001},
             ]
         },
     )
@@ -110,12 +123,18 @@ def _url_for_product(cache_dir: Path, product_line: str, set_name: str, product_
     un-warmed first call would race that background thread and answer `None` even from a
     warm disk cache. `games.game_for_product_line` is `url_for_product`'s own first step,
     reused here rather than re-typed, to get the `(game, set_name)` pair `warm()` needs.
+
+    `allow_pokemon=True` (review round, 2026-09-27): `warm()` refuses a Pokemon pair by
+    default — a Pokemon CARD never needs this cache, and warming every Pokemon set at
+    startup for nothing was the second finding that round caught — so the one caller
+    allowed to ask for a Pokemon SEALED product's warm says so explicitly, the same way
+    `_tcgcsv_name_lookup` itself does.
     """
     market = pricehistory.Market(cache_dir=cache_dir, fetcher=_offline)
     images = stockimages.StockImages(market=market)
     game = games.game_for_product_line(product_line)
     if game is not None:
-        for thread in images.warm([(game, set_name)]):
+        for thread in images.warm([(game, set_name)], allow_pokemon=True):
             thread.join(timeout=5)
     return images.url_for_product(product_line, set_name, product_name)
 
@@ -149,7 +168,17 @@ def main() -> int:
         assert riftbound_sealed_miss is None, "a sealed-product NAME miss must answer None, never a guess"
         unregistered = _url_for_product(Path(warm_dir), "Not A Real Product Line", "Anywhere", "Anything")
         assert unregistered is None, "a product_line no game claims must answer None, never a guess"
+        # THE NAME-COLLISION CASE (review round, 2026-09-27): two products share one name in
+        # one group. A wrong fix answers the first one's photo; the right one refuses.
+        colliding = _url_for_product(
+            Path(warm_dir), "Riftbound League of Legends Trading Card Game", SET_NAME, COLLIDING_PRODUCT_NAME
+        )
+        assert colliding is None, (
+            "two products sharing one name in one group must answer None, never either "
+            "one's photo — got %r" % (colliding,)
+        )
     print("GREEN proved: warm cache -> %s (Pokemon sealed, no vendored row needed)" % SEALED_IMAGE_URL)
+    print("GREEN proved: a name collision answers None, never a guess")
     return 0
 
 

@@ -38830,7 +38830,7 @@ def check_sales_stock_photo_fallback(checks: Checks) -> None:
                 return {"results": [{"name": "Scarlet & Violet", "groupId": 501}]}
             if url.endswith("/3/501/products"):
                 return {"results": [
-                    {"imageUrl": "https://img/etb.jpg", "name": "Scarlet & Violet Elite Trainer Box"},
+                    {"imageUrl": "https://img/etb.jpg", "name": "Scarlet & Violet Elite Trainer Box", "productId": 900001},
                 ]}
             if url.endswith("/89/groups"):
                 return {"results": [{"name": "Vendetta", "groupId": 24698}]}
@@ -38839,15 +38839,24 @@ def check_sales_stock_photo_fallback(checks: Checks) -> None:
                     {
                         "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
                         "extendedData": [{"name": "Number", "value": "SP3/006"}],
+                        "productId": 705996,
                     },
-                    {"imageUrl": "https://img/rift-booster.jpg", "name": "Vendetta Booster Box"},
+                    {"imageUrl": "https://img/rift-booster.jpg", "name": "Vendetta Booster Box", "productId": 900002},
+                    # A NAME COLLISION (review round, 2026-09-27): two distinct products
+                    # sharing one name in this same group. `url_for_product` must refuse
+                    # rather than answer either one's photo.
+                    {"imageUrl": "https://img/collide-a.jpg", "name": "Vendetta Booster Case", "productId": 900003},
+                    {"imageUrl": "https://img/collide-b.jpg", "name": "Vendetta Booster Case", "productId": 900004},
                 ]}
             raise AssertionError(f"unexpected fetch: {url}")
         return fetcher
 
     images = stockimages.StockImages(market=pricehistory.Market(cache_dir=None, fetcher=make_fetcher()))
+    # `allow_pokemon=True`: THE ONE NAMED EXCEPTION `warm`'s own docstring argues for — see
+    # `check_stock_images_pokemon_warm_refusal` below for the DEFAULT case (no exception),
+    # which is finding 2's own proof.
     for pair in (("pokemon", "Scarlet & Violet"), ("riftbound", "Vendetta")):
-        for thread in images.warm([pair]):
+        for thread in images.warm([pair], allow_pokemon=True):
             thread.join(timeout=5)
 
     checks.equal(
@@ -38868,6 +38877,15 @@ def check_sales_stock_photo_fallback(checks: Checks) -> None:
         images.url_for_product("Pokemon", "Scarlet & Violet", "No Such Product"),
         None,
         "a sealed-product NAME miss is None, never a guess",
+    )
+    checks.equal(
+        images.url_for_product(
+            "Riftbound League of Legends Trading Card Game", "Vendetta", "Vendetta Booster Case"
+        ),
+        None,
+        "TWO PRODUCTS SHARING ONE NAME IN ONE GROUP answer None — never a guess at the "
+        "first product a group happens to list (review round, 2026-09-27: a `setdefault` "
+        "by-name dict answered the first one silently, breaking D301's own 'never a guess')",
     )
 
     with isolated_home():
@@ -38983,6 +39001,79 @@ def check_sales_stock_photo_fallback(checks: Checks) -> None:
                 and "unregistered-sku" not in threaded["stock_photos"],
                 "a SKU whose product line no game claims is absent from both fields too",
             )
+
+
+def check_stock_images_pokemon_warm_refusal(checks: Checks) -> None:
+    """Finding 2, review round 2026-09-27: `warm_stock_images`'s startup pairs are every
+    distinct `(game, set_name)` among IDENTIFIED CARDS, Pokemon singles included — `url_for`
+    never reads this cache for a Pokemon CARD (it answers off the vendored tree instead), so
+    warming it at startup was a real tcgcsv fetch, per Pokemon set the store holds, for
+    nothing, on every restart. `warm()` refuses a Pokemon pair BY DEFAULT, restored here;
+    only `_tcgcsv_name_lookup`'s own sealed-product lookup may ask for one, by naming
+    `allow_pokemon=True` explicitly — this compares the two calls directly, which is the
+    real mechanism `warm_stock_images` and `_tcgcsv_name_lookup` each choose between.
+    """
+    checks.note("")
+    checks.note("POKEMON STARTUP WARM REFUSAL — warm(), allow_pokemon (F2, finding 2, review round 2026-09-27)")
+
+    calls: List[str] = []
+
+    def counting_fetcher(url: str):
+        calls.append(url)
+        if url.endswith("/categories"):
+            return {"results": [{"name": "Pokemon", "categoryId": 3}]}
+        if url.endswith("/3/groups"):
+            return {"results": [
+                {"name": "Scarlet & Violet", "groupId": 1},
+                {"name": "Paldea Evolved", "groupId": 2},
+                {"name": "Obsidian Flames", "groupId": 3},
+            ]}
+        if url.endswith("/3/1/products") or url.endswith("/3/2/products") or url.endswith("/3/3/products"):
+            return {"results": []}
+        raise AssertionError(f"unexpected fetch: {url}")
+
+    # THREE DISTINCT POKEMON SETS — the shape `warm_stock_images` would build from a store
+    # that has identified Pokemon cards across three sets, the case the review round asked
+    # to be shown.
+    pairs = [
+        ("pokemon", "Scarlet & Violet"),
+        ("pokemon", "Paldea Evolved"),
+        ("pokemon", "Obsidian Flames"),
+    ]
+    images = stockimages.StockImages(market=pricehistory.Market(cache_dir=None, fetcher=counting_fetcher))
+
+    # AFTER (the shipped default, no caller names an exception) — `warm_stock_images` calls
+    # exactly this, unchanged by F2.
+    default_threads = images.warm(pairs)
+    for thread in default_threads:
+        thread.join(timeout=5)
+    checks.equal(
+        len(default_threads), 0,
+        "warm() schedules NOTHING for a Pokemon pair by default — 0 of 3 threads started",
+    )
+    checks.equal(
+        len(calls), 0,
+        f"and NO REQUEST reaches tcgcsv at all — measured {len(calls)} requests at startup, "
+        "against 5 before this fix, below (the bug: every restart fetched every Pokemon "
+        "set for a lookup url_for never makes)",
+    )
+
+    # BEFORE (what the bug did, and the one path that is STILL SUPPOSED to reach here — a
+    # Pokemon SEALED lookup, `_tcgcsv_name_lookup`'s own named exception).
+    forced_threads = images.warm(pairs, allow_pokemon=True)
+    checks.equal(
+        len(forced_threads), 3,
+        "allow_pokemon=True is the one named exception, and schedules every pair asked",
+    )
+    for thread in forced_threads:
+        thread.join(timeout=5)
+    checks.equal(
+        len(calls), 5,
+        f"and THIS is what the bug did at every restart, unconditionally: measured "
+        f"{len(calls)} real tcgcsv requests for 3 Pokemon sets (1 categories + 1 groups, "
+        "both shared and cached after the first pair, + 1 products call per set) — 0 with "
+        "the refusal restored, against 5 on a cold process before it was",
+    )
 
 
 def run() -> Result:
@@ -39137,6 +39228,7 @@ def run() -> Result:
     check_pipeline_sets(checks)
     check_stock_images(checks)
     check_sales_stock_photo_fallback(checks)
+    check_stock_images_pokemon_warm_refusal(checks)
     # The box map's cases live in a sibling file (D264). Imported here, not at the top,
     # because that file imports its fixtures from this one.
     from harness.tests import t7_box_map

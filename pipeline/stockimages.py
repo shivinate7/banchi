@@ -36,10 +36,14 @@ blocking for the fetch. `warm` is the one scheduling primitive: `server/capture_
 calls it once at server start with every `(game, set_name)` pair the store holds, and
 `_tcgcsv_lookup` calls it again, inertly, on every read past the key's own TTL — the SAME
 mechanism serves the start-up prime and the periodic refresh, so there is no second, polling
-thread to keep in step with it. A Pokemon CARD is never resolved here: its number reads local
-disk in well under a millisecond and was never the slow one this exists for. A Pokemon SEALED
-PRODUCT (F2, below) is a different question the vendored tree cannot answer at all, and IS
-scheduled through this same cache.
+thread to keep in step with it. `warm` REFUSES A POKEMON PAIR BY DEFAULT, and that default
+still matters: a Pokemon CARD's number reads local disk in well under a millisecond and was
+never the slow one this exists for, so warming it at startup would be a real fetch for
+nothing (measured, 2026-09-27 review: 5 wasted requests for 3 Pokemon sets on this
+checkout's own test fixture — 1 categories, 1 groups, 3 products — against 0 with the
+refusal restored). A Pokemon SEALED PRODUCT (F2, below) is a different question the
+vendored tree cannot answer at all, and reaches this cache too — but only reactively,
+through `_tcgcsv_name_lookup`'s own named exception, never at startup.
 
 SEALED PRODUCT (F2, 2026-09-27): a Sales row can carry no card number at all — a booster box,
 an ETB. `url_for_product` answers that question by PRODUCT NAME instead of number, off the
@@ -65,6 +69,7 @@ from pipeline.pricehistory import (
     EXTENDED_NUMBER,
     PriceHistoryError,
     Market,
+    ProductIndex,
     extended,
 )
 
@@ -193,19 +198,30 @@ class _PokemonImages:
 
 
 class _ImageIndex(NamedTuple):
-    """One tcgcsv group's products, indexed the two ways a row can ask for a photo.
+    """One tcgcsv group's products, indexed for a photo lookup two ways.
 
-    `by_number` is a single card's key, as `_fetch_tcgcsv` always built. `by_name` is F2's
-    own addition (the owner: *"why does the sales page not pull the icons"*, for a SEALED
-    product — a booster box, an ETB — which carries no card number at all. Both come off the
-    SAME payload walk, so a sealed product's image never costs a second fetch beyond a
-    single already-cached group's own products list. `join.name_index_key`, the fold
-    `pipeline/pricehistory.py:ProductIndex.by_name` already uses for the same ambiguity a
-    blank-number row raises (D35's shape) — reused rather than re-typed.
+    `by_number` is a single card's key, as `_fetch_tcgcsv` always built — `setdefault`,
+    first-product-wins, same posture as before. `products`/`urls_by_product_id` are F2's own
+    addition (the owner: *"why does the sales page not pull the icons"*), for a SEALED
+    product — a booster box, an ETB — which carries no card number at all.
+
+    A NAME LOOKUP REUSES `pricehistory.ProductIndex.find` RATHER THAN A SECOND AMBIGUITY
+    RULE (review round, 2026-09-27): a first build kept a `by_name: Dict[str, str]` here,
+    `setdefault`, first-wins — the SAME shape `by_number` uses. That is wrong for a name:
+    `ProductIndex.build`/`.find` already answer `None` when more than one product in a group
+    shares a name (D35's shape, the blank-`Number` rung), and a `setdefault` copy of that
+    same ambiguity silently answered the FIRST product's photo instead of refusing — D301's
+    own rule, "a miss answers `None`, never a guess", broken by a second, worse copy of logic
+    that already existed. `products` is built straight off the SAME payload `by_number`
+    reads; `urls_by_product_id` is the only new index — a `productId`, unambiguous by
+    definition, is never the thing two products can collide on, so it needs no ambiguity
+    rule of its own. `_tcgcsv_name_lookup` composes the two: `products.find("", name)` for
+    the id, this dict for the URL.
     """
 
     by_number: Dict[str, str]
-    by_name: Dict[str, str]
+    products: ProductIndex
+    urls_by_product_id: Dict[int, str]
 
 
 class StockImages:
@@ -270,10 +286,13 @@ class StockImages:
                     self._ttl,
                 )
         except (PriceHistoryError, KeyError):
-            return _ImageIndex(by_number={}, by_name={})
+            return _ImageIndex(
+                by_number={}, products=ProductIndex(by_number={}, by_name={}), urls_by_product_id={}
+            )
+        results = payload.get("results") or ()
         by_number: Dict[str, str] = {}
-        by_name: Dict[str, str] = {}
-        for product in payload.get("results") or ():
+        urls_by_product_id: Dict[int, str] = {}
+        for product in results:
             url = product.get("imageUrl")
             if not url:
                 continue
@@ -285,13 +304,23 @@ class StockImages:
                 # `ProductIndex.find` refuses on, here just kept rather than raised, because
                 # a photo miss costs a blank tile and not a wrong listing.
                 by_number.setdefault(join.number_index_key(number), str(url))
-            name = product.get("name")
-            if name:
-                # A SEALED PRODUCT (F2, no `Number` cell) resolves here instead — the same
-                # `setdefault`-first-wins posture, and the same reason: two products sharing
-                # a name in one group is an ambiguity a blank tile survives.
-                by_name.setdefault(join.name_index_key(str(name)), str(url))
-        return _ImageIndex(by_number=by_number, by_name=by_name)
+            try:
+                product_id = int(product["productId"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            # KEYED ON `productId`, NEVER ON NAME: a `productId` is unique by definition, so
+            # this dict alone can never be the thing that answers a wrong picture — the
+            # ambiguity a shared NAME can raise is `products.find`'s question, not this one's.
+            urls_by_product_id.setdefault(product_id, str(url))
+        # SAME PAYLOAD, A SECOND WALK — `ProductIndex.build` derives its own `by_number`/
+        # `by_name` from `results` again rather than being handed the loop above's output,
+        # so this class's own ambiguity rule (`find`, D35's shape) is reused verbatim rather
+        # than re-encoded from a dict this module built by hand.
+        return _ImageIndex(
+            by_number=by_number,
+            products=ProductIndex.build(results),
+            urls_by_product_id=urls_by_product_id,
+        )
 
     def _warm_one(self, game: str, set_name: str) -> None:
         """One background fetch, and the only place `_cache`/`_pending` are written.
@@ -300,7 +329,9 @@ class StockImages:
         a pair stuck `_pending` forever is a pair `warm()` never schedules again (D-demo-
         stock-images: this is what turned one race into a PERMANENT cold cache).
         """
-        index = _ImageIndex(by_number={}, by_name={})
+        index = _ImageIndex(
+            by_number={}, products=ProductIndex(by_number={}, by_name={}), urls_by_product_id={}
+        )
         try:
             index = self._fetch_tcgcsv(game, set_name)
         finally:
@@ -308,7 +339,9 @@ class StockImages:
                 self._cache[(game, set_name)] = (time.time(), index)
                 self._pending.discard((game, set_name))
 
-    def warm(self, pairs: Iterable[Tuple[str, str]]) -> List[threading.Thread]:
+    def warm(
+        self, pairs: Iterable[Tuple[str, str]], *, allow_pokemon: bool = False
+    ) -> List[threading.Thread]:
         """Schedule a background fetch for every `(game, set_name)` pair not already fresh.
 
         THE ONE SCHEDULING PRIMITIVE, called two ways. `server/capture_server.py:serve`
@@ -322,19 +355,29 @@ class StockImages:
         production caller (`serve`) never does, and a harness test does, which is what
         makes the warm deterministic there without a sleep.
 
-        SCHEDULES POKEMON NOW TOO (F2, amending the premise below): a Pokemon CARD's number
-        still reads local disk in `_PokemonImages` and never reaches this cache, but a
-        Pokemon SEALED product (no number) has no vendored source at all and answers only
-        through `url_for_product`'s tcgcsv walk — see `docs/decisions/D301-stock-images.md`.
-        `server/pipeline_routes.py:warm_stock_images`'s startup pairs come from `inventory.
-        cards` alone (D299: sealed product is never captured, so it is never in that table),
-        so this only widens what the REACTIVE path (`_tcgcsv_lookup`/`_tcgcsv_name_lookup`
-        below, on a miss) may schedule — startup warming is unchanged in practice.
+        STILL NEVER SCHEDULES POKEMON BY DEFAULT, and this default is load-bearing rather
+        than a leftover (review round, 2026-09-27, caught before merge): a Pokemon CARD's
+        number reads local disk in `_PokemonImages` and never reaches this cache, so warming
+        it would be a real tcgcsv fetch for a lookup `url_for` never makes.
+        `server/pipeline_routes.py:warm_stock_images`'s startup pairs are every distinct
+        `(game, set_name)` among IDENTIFIED CARDS — Pokemon singles included, one request per
+        distinct Pokemon set the store holds, on every restart, for nothing. Measured on this
+        checkout's own harness fixture (`check_stock_images_pokemon_warm_refusal`): 3
+        Pokemon sets among on-hand cards, 5 real tcgcsv requests at startup with the skip
+        removed (1 categories, 1 groups, 3 products), 0 with it back.
+
+        `allow_pokemon=True` IS THE ONE NAMED EXCEPTION, and only `_tcgcsv_name_lookup` below
+        passes it: a Pokemon SEALED PRODUCT (no number) has no vendored source at all and
+        answers only through `url_for_product`'s tcgcsv walk (F2, `docs/decisions/
+        D301-stock-images.md`'s amendment). `warm_stock_images`'s startup pairs come from
+        `inventory.cards` alone (D299: sealed product is never captured, so it is never in
+        that table) and never pass this flag, so a Pokemon sealed lookup is warmed only
+        reactively, on the request that actually asks for one — never at startup.
         """
         started: List[threading.Thread] = []
         now = time.time()
         for game, set_name in pairs:
-            if not game or not set_name:
+            if not game or not set_name or (game == POKEMON_KEY and not allow_pokemon):
                 continue
             key = (game, set_name)
             with self._lock:
@@ -363,13 +406,26 @@ class StockImages:
 
     def _tcgcsv_name_lookup(self, game: str, set_name: str, product_name: str) -> Optional[str]:
         """`_tcgcsv_lookup`'s twin for a SEALED product: same cache entry, same
-        cold/stale/fresh posture, `by_name` instead of `by_number`."""
+        cold/stale/fresh posture, `ProductIndex.find` instead of a number-keyed dict.
+
+        `find("", product_name)` IS THE AMBIGUITY REFUSAL, REUSED RATHER THAN RETYPED
+        (review round, 2026-09-27): an empty `number` sends every real card straight past
+        the number rung — `join.number_index_key("")` folds to `""`, which `find` treats as
+        no key to look up — onto the SAME name rung a blank-`Number` row already uses (D35's
+        shape). Two products sharing a name in one group there means `len(hits) != 1`, which
+        `find` answers `None` for — never a guess at the first one.
+        """
         with self._lock:
             entry = self._cache.get((game, set_name))
-        self.warm([(game, set_name)])
+        # `allow_pokemon=True`: THE ONE CALLER THAT MAY WARM A POKEMON PAIR — see `warm`'s
+        # own docstring for why the default refuses one and why this call is the exception.
+        self.warm([(game, set_name)], allow_pokemon=True)
         if entry is None:
             return None
-        return entry[1].by_name.get(join.name_index_key(product_name))
+        product_id = entry[1].products.find("", product_name)
+        if product_id is None:
+            return None
+        return entry[1].urls_by_product_id.get(product_id)
 
     def url_for(self, game: str, set_name: str, number: str) -> Optional[str]:
         """The image for one card, or `None` on a join miss, a cold cache, or an
