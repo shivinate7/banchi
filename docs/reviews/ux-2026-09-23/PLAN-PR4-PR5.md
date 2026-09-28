@@ -54,18 +54,18 @@ PASS, with `cd app && npx tsc --noEmit` at the merge.
 
 | Lane | Branch | What | State |
 |---|---|---|---|
-| B3 | `ux/pr4b-B3` | A refused markdown apply writes nothing | Round 3: the outer file rename sat outside the error guard, and a failure there kept the price with no file. Fixing, then a re-review. |
+| B3 | `ux/pr4b-B3` | A refused markdown apply writes nothing | MERGED (49e12373) after four rounds. The listing file lands last, and a failed rename restores the old price. A Ctrl-C window is named in DEBT48. |
 | F5 | `ux/pr4b-F5` | Cut the excess words. Numbers and names stay. Review's mismatch line becomes "Mismatch: photo reading / matched listing". | Building. Then a review. |
 | D2 | `ux/pr4b-D2` | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | Building. Then a review. |
-| P5 | `ux/pr4b-P5` | Stub D48 and D194 to one line each. Delete debts 5, 6, 18, 28, 35 and 42. Split DEBT27, or delete it if D279 removed its call. | Review PASS. DEBT27 keeps its open half (the Fulfiller's screen still loads the whole store). DEBT6 is kept in part, because a docs-audit row reads five figures from it. Rebasing onto `ux/pr4b` after a plan-file conflict, then merge. |
+| P5 | `ux/pr4b-P5` | Stub D48 and D194 to one line each. Delete debts 5, 6, 18, 28, 35 and 42. Split DEBT27, or delete it if D279 removed its call. | MERGED (afc2ca83). DEBT27 keeps its open half. DEBT6 is kept in part, because a docs-audit row reads five figures from it. |
 | A3 | `ux/pr4b-A3` | The Orders pane becomes `CardPane`, with no Details fold | Building. Then a review. |
-| A6 | `ux/pr4b-A6` | No `Box <n>` fallback in the walk | Built. Review running. |
+| A6 | `ux/pr4b-A6` | No `Box <n>` fallback in the walk | MERGED (633aff52). |
 | L1 | `ux/pr4b-L1` | Cut T7's idle waits | Building. Then a review. |
-| L3 | `ux/pr4b-L3` | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | Built. Review running. |
-| L5 | `ux/pr4b-L5` | Cut the old demo seed guards, keep the generator | Built (kept `demo-freshness`, a judgement call). Review running. |
-| L6 | `ux/pr4b-L6` | DEBT47 closed, pull-confirm folded into fulfillment | Building. Then a review. |
+| L3 | `ux/pr4b-L3` | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | Review FAIL: 4 of 7 items done. A Sonnet builder finishes C2, P1, F5 and the decision amendments. |
+| L5 | `ux/pr4b-L5` | Cut the old demo seed guards, keep the generator | MERGED (7481619a). `demo-freshness` retired too, because C4 names it. |
+| L6 | `ux/pr4b-L6` | DEBT47 closed, pull-confirm folded into fulfillment | MERGED (29c32166). |
 | L7 | `ux/pr4b-L7` | Measure the slow CI shard, then one route sweep | MERGED (ed07efd9), after one FAIL: the folded floors now report every failure in one run. Shard 2 is slow from `icon-button.spec.ts` re-rendering the gallery per test. |
-| L10 | `ux/pr4b-L10` | Heartbeat and coordinator retired | Review FAIL: docs-audit red (map entries and dead target names left). Fixing, then a re-review. |
+| L10 | `ux/pr4b-L10` | Heartbeat and coordinator retired | Two FAILs fixed (docs-audit, the shell guard's advice). Re-review running. |
 | Q1 tiers | merged | A proposed tier for each docs-audit row: `docs/reviews/test-audit-2026-09-27/TIERS.md`. 65 Tier 1, 22 Tier 2, 13 Tier 3, 9 CUT, 7 unsure. | Waiting for the owner, together with Q8's merge families (PLAN.md item M3). No docs-audit lane starts before that. |
 
 ## Still to come
