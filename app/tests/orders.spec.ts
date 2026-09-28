@@ -4622,6 +4622,12 @@ test('a fresh landing shows only pullable buyers, and one click widens it', asyn
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Alice')
   await expect(page.locator('.orders-index-row')).toHaveAttribute('aria-current', 'true')
+  /* THE HIDDEN SET AND THE HEADLINE'S PICK COUNT COME FROM ONE ARITHMETIC (`pickOf`): Alice holds
+     the one pick, Bob's line is short, so the headline names both and the list is the picks' buyers. */
+  const headline = (await page.locator(VIEW).innerText()).match(/(\d+) pick and (\d+) short/)
+  expect(headline).not.toBeNull()
+  expect(Number(headline![1])).toBe(1)
+  expect(Number(headline![2])).toBe(1)
   await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
   await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('1 of 2 buyers')
   await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('Hide unpullable')
@@ -4639,4 +4645,61 @@ test('a fresh landing shows only pullable buyers, and one click widens it', asyn
   await page.goto(`${VIEW_ROUTE}?show=short`)
   await page.reload()
   await expect(page.locator('.orders-index-row')).toContainText('Bob')
+})
+
+/* A SALE MAY NOT RE-SHAPE THE LANDING LIST UNDER THE HAND (D181, D118). Both cases land with no
+ * `?pullable=0`. The pull's answer leaves the buyer open with nothing on hand, so the buyer stops
+ * being pullable; membership is frozen when the view was taken, so the row and the selection stay. */
+function nothingOnHandAfter(): OrdersPayload {
+  const empty = line({ reason: 'no_copies_on_hand', outstanding: 1, on_hand: 0, picks: [], fulfilled: 0 })
+  return payloadOf(
+    [order({ wanted: 2, recorded: 1 })],
+    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [empty] }],
+  )
+}
+
+async function buyerNames(page: Page): Promise<string[]> {
+  return page.locator('.orders-index-row .orders-index-number').allTextContents()
+}
+
+test('landing view: a sale does not re-sort the list or drop the buyer whose last card it took', async ({ page }) => {
+  const nora = secondBuyerPayload()
+  let pulled = false
+  const emptied = nothingOnHandAfter()
+  const after = payloadOf([emptied.orders[0]!, nora.payload.orders[1]!], [emptied.resolution.orders[0]!, nora.resolved])
+  await open(page, {
+    orders: () => (pulled ? after : nora.payload),
+    pull: () => {
+      pulled = true
+      return { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] }
+    },
+    walkPlan: volcanionPlan(),
+    landing: true,
+  })
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+  const before = await buyerNames(page)
+  await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
+  await page.waitForTimeout(800) /* the pull's own re-read lands after the press */
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+  expect(await buyerNames(page)).toEqual(before)
+})
+
+test('landing view: the last sale leaves the buyer on screen', async ({ page }) => {
+  let pulled = false
+  await open(page, {
+    orders: () => (pulled ? nothingOnHandAfter() : oneOpenOrder()),
+    pull: () => {
+      pulled = true
+      return { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] }
+    },
+    walkPlan: volcanionPlan(),
+    landing: true,
+  })
+  await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
+  await page.waitForTimeout(800) /* the pull's own re-read lands after the press */
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Ada Lovelace')
+  await expect(page.locator('.orders-index-row')).toHaveAttribute('aria-current', 'true')
 })

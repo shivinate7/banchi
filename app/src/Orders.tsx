@@ -941,6 +941,11 @@ function joinPhrases(parts: string[]): string {
  *  product). `pick + short + elsewhere === owed`, always, because every line's `outstanding`
  *  falls in exactly one of `resolved` (counted in `pick`), the two "none left" reasons, or
  *  the two "needs a look" reasons. `docs/specs/order-walk-plan.md` states this identity. */
+/** The cards of one line that are on hand to pull: what it still owes, less what the resolver
+ *  could not offer. The one home of this arithmetic (the headline, the walk's count and the
+ *  landing view's "pullable" all read it). */
+const pickOf = (line: ResolvedLine): number => Math.max(0, line.owed - line.outstanding)
+
 function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]): ReactNode {
   const owed = open.reduce((sum, order) => sum + Math.max(0, order.wanted - order.recorded), 0)
   const buyers = new Set(open.map(buyerKeyOf)).size
@@ -951,7 +956,7 @@ function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]
   let elsewhere = 0
   for (const order of open) {
     for (const line of byKey.get(order.key)?.lines ?? []) {
-      pick += Math.max(0, line.owed - line.outstanding)
+      pick += pickOf(line)
       const reason = lineReason(order, line)
       if (reason === 'short' || reason === 'no_copies_on_hand') short += line.outstanding
       else if (reason !== 'resolved') elsewhere += line.outstanding
@@ -3040,8 +3045,13 @@ function PullStage({
      stays: the default hides open buyers only. */
   const groupPullable = (group: BuyerGroup) =>
     group.open.length === 0 ||
-    group.open.some((order) => (answers.get(order.key)?.lines ?? []).some((line) => line.owed - line.outstanding > 0))
-  const passesPullable = (group: BuyerGroup) => !hideUnpullable || groupPullable(group)
+    group.open.some((order) => (answers.get(order.key)?.lines ?? []).some((line) => pickOf(line) > 0))
+  /* MEMBERSHIP IS FROZEN WHEN TAKEN (D181, D118): a sale that takes a buyer's last on-hand card
+     must not drop the buyer from the list under the hand. `pinned` is who was pullable when the
+     view was last set by an explicit input (the same moment `take` below is retaken), and stays
+     shown until the next one. A buyer who BECOMES pullable still shows at once. */
+  const kept = (group: BuyerGroup) => groupPullable(group) || pinned.has(group.key)
+  const passesPullable = (group: BuyerGroup) => !hideUnpullable || kept(group)
   const passesHide = (group: BuyerGroup) => passesHideUnknown(group, hideUnknown, answers) && passesPullable(group)
   /* SEVERAL PICKS, ONE FACET (owner's ruling 2026-09-28, D270): a group passes when it matches ANY
      picked value. "Done" is read against the closed groups, every other value against the open
@@ -3103,6 +3113,17 @@ function PullStage({
     [drawerPlan, drawerCounts],
   )
 
+  const basisSig = [sort.key, sort.dir, shows.join(','), statuses.join(','), query, hideUnknown, hideUnpullable, drawerPlan !== null].join('\u0000')
+  const [pinSig, setPinSig] = useState<string | null>(null)
+  const [pinned, setPinned] = useState<ReadonlySet<string>>(new Set())
+  /* PINNED ONLY GROWS WITHIN ONE VIEW: a buyer seen pullable is pinned at once (the first read
+     may land after the view was taken), and a sale can only remove pull, never a pin. */
+  const pinsNow = pinSig === basisSig ? pinned : new Set<string>()
+  const toPin = allGroups.filter((group) => groupPullable(group) && !pinsNow.has(group.key))
+  if (pinSig !== basisSig || toPin.length > 0) {
+    setPinSig(basisSig)
+    setPinned(new Set([...pinsNow, ...toPin.map((group) => group.key)]))
+  }
   const base = allGroups.filter(inBase)
   const freshShownGroups = sortGroups(
     base.filter((group) => passesFeed(group) && passesSearch(group) && passesHide(group) && passesShow(group)),
@@ -3129,7 +3150,6 @@ function PullStage({
      freeze still holds against one. Always `false` outside `sort.key === 'drawers'`
      (`drawerPlan` is nulled the moment another key is picked), so this term is inert for
      every other sort. */
-  const basisSig = [sort.key, sort.dir, shows.join(','), statuses.join(','), query, hideUnknown, hideUnpullable, drawerPlan !== null].join('\u0000')
   const [takeSig, setTakeSig] = useState<string | null>(null)
   const [take, setTake] = useState<GroupTake>(new Map())
   if (takeSig !== basisSig) {
@@ -3172,7 +3192,7 @@ function PullStage({
   const unknownCount = base.filter((group) => groupHasUnseenLine(group, answers)).length
   const unpullableCount = base.filter(
     (group) =>
-      !groupPullable(group) &&
+      !kept(group) &&
       passesFeed(group) &&
       passesSearch(group) &&
       passesShow(group) &&
@@ -3624,7 +3644,7 @@ function PullStage({
     }
   }
   const cardsToPull = [...walkedKeys].reduce(
-    (sum, key) => sum + (answers.get(key)?.lines ?? []).reduce((s, line) => s + Math.max(0, line.owed - line.outstanding), 0),
+    (sum, key) => sum + (answers.get(key)?.lines ?? []).reduce((s, line) => s + pickOf(line), 0),
     0,
   )
 
