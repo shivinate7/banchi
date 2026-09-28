@@ -143,7 +143,11 @@
    both built for the full page `#/runs` used to be. A 420px drawer squeezed that content into
    a column it was never measured against, moving rows and panel heights the D118 floors this
    content already carries (`run-panel.spec.ts`) assert have not moved. Wide, not narrow. */
-.review-runs-sheet { width: min(1100px, 96vw); }
+/* `container-name: runs` (test-audit C3, `breakpoint columns`). RunPanel's master/detail
+   split asks THIS element's own width, not the outer viewport — this sheet is the column
+   RunPanel actually draws inside, and it does not track the window 1:1 (it caps at 1100px,
+   and drops to 100vw below the phone/tablet seam below). */
+.review-runs-sheet { width: min(1100px, 96vw); container-type: inline-size; container-name: runs; }
 @media (max-width: 767px) {
   .review-runs-sheet { width: 100vw; }
 }

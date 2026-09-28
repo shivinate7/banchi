@@ -10,18 +10,30 @@
   gap: var(--bn-5);
   align-items: start;
 }
-/* ALWAYS ONE COLUMN (test-audit C3, `breakpoint columns`). This used to widen to a
-   master/detail split past a 1024px OUTER viewport, but this screen has rendered inside
-   `.bn-sheet` since D291 (Review's own runs sheet) — a fixed panel capped at
-   `min(420px, 100vw)` that never reaches 1024px no matter how wide the window gets. The
-   two-column regime could not have drawn since D291 landed; this is the discharge, not a
-   COLUMN-BLIND exemption, because the rule was never a real reason about the window — it
-   was a stale premise. The list is the screen; a run opens as a pushed page, at every width.
-   With no run open the "pick a run" panel is not drawn — it would only repeat, under the
-   list, the list the thumb just scrolled past, and the list's own empty state carries
-   Identify. */
-.runs-body[data-open='true'] .runs-master { display: none; }
-.runs-body:not([data-open='true']) .runs-detail { display: none; }
+/* CONTAINER, NOT VIEWPORT (test-audit C3, `breakpoint columns`). This used to widen to a
+   master/detail split past a 1024px OUTER viewport. That was wrong even before D291: this
+   screen has never drawn full-width, only inside `.bn-shell-main`. It is doubly wrong now —
+   ReviewQueue.css's `.review-runs-sheet` is `min(1100px, 96vw)`, not the 420px default, so
+   the two-column regime still draws, but the question was always this SHEET's width, never
+   the window's. `.review-runs-sheet` carries `container-name: runs` (ReviewQueue.css) and
+   the query below asks it directly — the fix the row's own docstring recommends (D123, the
+   way `BoxBrowse.css` and `Pricing.css` already do). 700px is comfortably past the master
+   column's own floor (`minmax(250px, 320px)`) plus a readable detail pane and the gap. */
+@container runs (min-width: 700px) {
+  .runs-body { grid-template-columns: minmax(250px, 320px) minmax(0, 1fr); }
+  .runs-back { display: none; }
+  /* NO RUN OPEN: THE LIST IS THE SCREEN AT EVERY WIDTH (UX-148). A "pick a run" panel beside it
+     only described the list it sat next to. */
+  .runs-body:not([data-open='true']) { grid-template-columns: minmax(0, 1fr); }
+  .runs-body:not([data-open='true']) .runs-detail { display: none; }
+}
+/* Under the two-column width the list is the screen; a run opens as a pushed page. With no
+   run open the "pick a run" panel is not drawn — it would only repeat, under the list, the
+   list the thumb just scrolled past, and the list's own empty state carries Identify. */
+@container runs (max-width: 699px) {
+  .runs-body[data-open='true'] .runs-master { display: none; }
+  .runs-body:not([data-open='true']) .runs-detail { display: none; }
+}
 /* Thumb sizes on phones. The kit's phone bump for `.bn-seg-item` is dead — kit.css sets 36px
    inside its phone block and then the base rule's 28px comes later in the same file at equal
    specificity and wins — so every screen carrying a Segmented lifts it locally (Runs.css:30,
