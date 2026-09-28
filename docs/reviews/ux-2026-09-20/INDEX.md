@@ -1,6 +1,6 @@
 # Desktop UI/UX review, 2026-09-20
 
-**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `a925e60a` (2026-09-20), which is `the commit that added this review`. The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `a925e60a` (2026-09-20), which is the commit that added this review. The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
 
 
 Sixteen per-screen logs from four agents working in parallel against the owner's live

@@ -40,11 +40,11 @@ server, the same store, "`located: False` is the whole of the schema difference"
 
 ### The chain, end to end
 
-1. **Capture.** `server/capture_server.py`'s `photo_path(box, index)` has no game
+1. **Capture.** `server/capture_server.py`'s `photo_path(box, index)` (as of `a115bc92`) has no game
    dimension. A code card's photograph lands in `captures/cards/box<n>/<index>.jpg` beside
    every located card's.
-2. **Scope.** A run's scope is the whole box directory (`_resolve_scope` in `server/pipeline_routes.py`) or a
-   symlink set keyed by index alone (`_scope_dir` in `server/pipeline_routes.py`). No game is consulted.
+2. **Scope.** A run's scope is the whole box directory (`_resolve_scope` in `server/pipeline_routes.py`, as of `a115bc92`) or a
+   symlink set keyed by index alone (`_scope_dir` in `server/pipeline_routes.py`, as of `a115bc92`). No game is consulted.
 3. **Join.** The one exclusion on the resolve path is `games.is_catalogued`
    (`cli/resolve._games_needed` and `cli/resolve.load`), and `pokemon_code` is catalogued.
    the pooled skip in `cli/resolve.box_views` is inside `box_views`, a **label renderer**, not a run

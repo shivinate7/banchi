@@ -1,6 +1,6 @@
 # STE false-positive survey: what the ratchet's exemptions rest on
 
-**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `6195e859` (2026-09-19), which is `the parent of the commit that brought this survey into the repo`. The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `6195e859` (2026-09-19), which is the parent of the commit that brought this survey into the repo. The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
 
 
 **STATUS: EVIDENCE, RECORDED.** This is the survey D226
