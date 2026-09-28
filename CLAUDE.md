@@ -143,6 +143,9 @@ make reap           # stop what THIS session started, and nothing else. Previews
                     #   argument or --confirm. ARGS="--confirm" stops every process this
                     #   checkout started. ARGS="port:5484 --confirm", "match:vite --confirm"
                     #   or "pid:12345 --confirm" target one process, only if it is ours.
+                    #   NARROWED 2026-09-27 (D-reap-stops-only-its-own): a bare --confirm from
+                    #   a subagent stops only pids tagged with ITS OWN session id (written by
+                    #   scripts/reap_mark.py); the orchestrator's bare --confirm is unchanged.
                     #   RESOLVES the real targets with pgrep and lsof, read-only, and judges
                     #   each pid by whether it lives under this checkout (D127) — never a
                     #   text match on the command, which is how `pkill -f` once killed the
