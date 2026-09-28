@@ -23154,8 +23154,8 @@ def check_schema_eleven_then_twelve(checks: Checks) -> None:
         return stamp, tables, views, columns, skus_rows
 
     checks.equal(
-        db.SCHEMA_VERSION, 13,
-        "the current schema is 13: skus at 11, send_claims at 12, the order key at 13 (D265)",
+        db.SCHEMA_VERSION, 14,
+        "the current schema is 14: skus at 11, send_claims at 12, the order key at 13 (D265), the price summary at 14 (D219)",
     )
 
     # --- a store at 10 has neither table -------------------------------------------------
