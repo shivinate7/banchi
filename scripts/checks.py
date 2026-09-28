@@ -269,6 +269,28 @@ CHECKS = (
         "governed_by": ("D18", "D173"),
     },
     {
+        "target": "hand-search-selftest",
+        "runs": "python3 scripts/hand-search-selftest.py",
+        "asserts": "app/eslint.config.js's HAND_SEARCH_RULES sees every shape D271 names, "
+                   "on the real `npx eslint --stdin`: each of `includes`/`startsWith`/"
+                   "`endsWith`/`indexOf` is a finding when the receiver is folded "
+                   "(`toLowerCase` or `toLocaleLowerCase`), and is not a finding bare — the "
+                   "round-one rule caught only `.includes` over `.toLowerCase`, and let the "
+                   "other three methods and `toLocaleLowerCase` through silently. Two cases "
+                   "prove the fold on the ARGUMENT instead of the receiver "
+                   "(`x.includes(y.toLowerCase())`) is caught too. An "
+                   "eslint-disable-next-line exemption still silences a real hit, and the "
+                   "same finding under `tests/` is not a finding (the tests/-exemption "
+                   "block).",
+        "needs": ("python3", "node", "app deps"),
+        "writes": "",
+        "commit_path": False,
+        "why_off_commit_path": "it shells out to the real `npx eslint`, so it needs node — "
+                               "not armed in scripts/githooks/pre-commit, `make check` only.",
+        "gates": True,
+        "governed_by": ("D18", "D271"),
+    },
+    {
         "target": "token-literal-check",
         "runs": "python3 scripts/token-literal-check.py",
         "asserts": "A CSS literal exactly equal to a design token's value, in its own "

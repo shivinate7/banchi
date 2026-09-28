@@ -4822,6 +4822,25 @@ COMPONENTS = [
                 # the mechanization rule this check exists to satisfy for a defect class that
                 # was, until now, only found by hand.
                 "governed_by": ["D18", "D173"]},
+            "hand-search-selftest.py": {
+                "does": "`make hand-search-selftest` — proves app/eslint.config.js's "
+                        "HAND_SEARCH_RULES sees the shape it is for, on fixtures over the "
+                        "real `npx eslint --stdin` (F11c, the reviewer's own finding: the "
+                        "round-one rule matched only `x.toLowerCase().includes(y)` and let "
+                        "`.startsWith`/`.endsWith`/`.indexOf`, `.toLocaleLowerCase()`, and a "
+                        "fold on the ARGUMENT instead of the receiver "
+                        "(`x.includes(y.toLowerCase())`) through silently). Twelve cases: one "
+                        "red and one green per method, two argument-folded reds, an "
+                        "eslint-disable-next-line exemption staying green, and the tests/ "
+                        "exemption block staying green. Not on the guard-scope roster: its "
+                        "real subject is a JS config file no Python import can name, so "
+                        "`derive_subjects` has nothing to read — argued in the script's "
+                        "own header, the same reason css-var-check-selftest and "
+                        "kit-adoption-selftest are also absent from that roster. Ungated in "
+                        "`make check`, alongside those two.",
+                # D271 is the search-matcher rule the eslint guard exists to enforce; D18 is
+                # why the self-test may sit on the commit path at all (it writes nothing).
+                "governed_by": ["D18", "D247", "D271"]},
             "token-literal-check.py": {
                 "does": "`make token-literal-check` — a CSS literal exactly equal to a design "
                         "token's value, in its own property family (2026-09-20 UX review, "
@@ -4900,24 +4919,17 @@ COMPONENTS = [
                 # Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D7", "D16", "D17", "D18", "D25", "D26", "D36", "D42", "D43",
-                                "D44", "D47",
-                                "D48",
-                                "D53", "D54", "D58", "D60", "D62", "D63", "D64", "D65", "D67",
-                                "D68",
-                                "D74", "D76",
-                                "D80", "D82", "D83", "D86", "D87", "D88", "D89", "D92", "D104",
-                                "D111", "D122",
-                                "D123", "D127", "D129", "D133", "D135", "D137", "D138", "D139",
-                                "D140",
-                                "D141", "D146", "D149", "D158", "D159", "D160", "D162", "D166",
-                                "D167",
+                "governed_by": ["D7", "D16", "D17", "D18", "D25", "D26", "D36", "D42", "D43", "D44",
+                                "D47", "D48", "D53", "D54", "D58", "D60", "D62", "D63", "D64",
+                                "D65", "D67", "D68", "D74", "D76", "D80", "D82", "D83", "D86",
+                                "D87", "D88", "D89", "D92", "D104", "D111", "D122", "D123", "D127",
+                                "D129", "D133", "D135", "D137", "D138", "D139", "D140", "D141",
+                                "D146", "D149", "D158", "D159", "D160", "D162", "D166", "D167",
                                 "D171", "D172", "D173", "D176", "D178", "D183", "D189", "D212",
-                                "D213", "D215",
-                                "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
-                                "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
-                                "D247", "D250", "D252", "D253", "D254", "D255",
-                                "D256", "D261", "D268", "D275"],
+                                "D213", "D215", "D219", "D222", "D223", "D224", "D225", "D226",
+                                "D227", "D229", "D233", "D234", "D236", "D237", "D239", "D240",
+                                "D242", "D243", "D247", "D250", "D252", "D253", "D254", "D255",
+                                "D256", "D261", "D268", "D271", "D275"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
@@ -6218,7 +6230,7 @@ COMPONENTS = [
                                          "in the kit's own panel, never the native OS menu, every "
                                          "facet usable in any order.",
                                  "governed_by": ["D5", "D50", "D118", "D132", "D212", "D218",
-                                                 "D221", "D259"]},
+                                                 "D221", "D259", "D271"]},
             "src/kit/data.css": {"does": "the data primitives' styles. One height for every control "
                                          "in a filter bar (`--bn-control-h`) and one width floor "
                                          "and cap. Mono for machine strings only.",
@@ -6472,7 +6484,7 @@ COMPONENTS = [
                                       "mistake would happen, and asserts nothing about the "
                                       "rendering. No Playwright spec covers this screen yet.",
                               "governed_by": ["D14", "D20", "D24", "D33", "D56", "D70", "D172",
-                                              "D218", "D259", "D270", "D272"]},
+                                              "D218", "D259", "D270", "D271", "D272"]},
             "src/Codes.css": {"does": "the code screen's look. The two lanes are the first "
                                       "numbers drawn, because they are the decision; the "
                                       "duplicate panel takes the one non-hairline border in "
@@ -8178,7 +8190,7 @@ COMPONENTS = [
                                                "D118", "D123", "D132", "D159", "D171", "D181",
                                                "D192", "D193", "D194", "D195", "D196", "D203",
                                                "D209", "D212", "D218", "D220", "D221", "D259",
-                                               "D274", "D285", "D296",
+                                               "D271", "D274", "D285", "D296",
                                                "D-orders-walk-rejoins-inventory"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "

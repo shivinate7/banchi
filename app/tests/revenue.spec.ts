@@ -281,6 +281,14 @@ test('the search field also finds a row by its set name (F11b)', async ({ page }
   expect(await productNames(page)).toEqual(['Pikachu VMAX'])
 })
 
+/* F11c: the SKU half of the same fix, on the fixture's own SKU ('9200002', Pikachu VMAX). */
+test('the search field also finds a row by its SKU (F11c)', async ({ page }) => {
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  await page.getByPlaceholder('Search').fill('9200002')
+  expect(await productNames(page)).toEqual(['Pikachu VMAX'])
+})
+
 test('a name that fell back to its SKU draws in mono; a real name does not', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')

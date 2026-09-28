@@ -2377,7 +2377,10 @@ function BacklogPrompt({
      which is right: a cancellation is `not_shipping` and a decision, not a backlog. */
   const candidates = useMemo(
     /* A NULL STATUS IS NOT A CANDIDATE EITHER, which falls out of the positive match rather than
-       needing its own guard: the feed said nothing, so nothing here says it has gone. */
+       needing its own guard: the feed said nothing, so nothing here says it has gone.
+       D271: 'shipped' is a fixed wire-status word, not a typed query, so this is not a
+       hand-rolled search. */
+    // eslint-disable-next-line no-restricted-syntax -- fixed wire-status word, not a typed query.
     () => open.filter((row) => (row.status ?? '').trim().toLowerCase().startsWith('shipped')),
     [open],
   )

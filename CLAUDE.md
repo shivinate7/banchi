@@ -113,7 +113,8 @@ make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
 make check          # harness + docs-audit + revert-guard + port-agreement + set-hint-agreement +
                     #   readiness-agreement + screen-freshness + screen-freshness-selftest +
-                    #   sigil-check + css-var-check + css-var-check-selftest + token-literal-check +
+                    #   sigil-check + css-var-check + css-var-check-selftest +
+                    #   hand-search-selftest + token-literal-check +
                     #   kit-adoption + ignore-check + lint + typecheck + audit-self-test +
                     #   mutate-anchors + githooks-selftest + merge-selftest + revert-selftest +
                     #   claim-selftest + decisions-selftest + debts-selftest + gates-selftest +
@@ -135,6 +136,9 @@ make check          # harness + docs-audit + revert-guard + port-agreement + set
 make css-var-check  # a `var(--x)` with no fallback where `--x` is defined nowhere.
                     #   PKMNSCAN_CSS_VARS=off skips it.
 make css-var-check-selftest  # that checker, on fixtures in both directions.
+make hand-search-selftest  # D271's eslint HAND_SEARCH_RULES, proved on fixtures over the
+                    #   real `npx eslint --stdin`. Not on the guard-scope roster: its
+                    #   subject is a JS config file, and no Python import can name it.
 make token-literal-check  # a CSS literal equal to a design token's value, in its own
                     #   property family (D256). Ratcheted per file. PKMNSCAN_TOKEN_LITERALS=off
                     #   skips it.

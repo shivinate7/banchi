@@ -334,6 +334,7 @@ export function CardLine({
   if (set) facts.push({ key: 'set', node: <span className="bn-cardline-set">{set}</span> })
   if (number) facts.push({ key: 'number', node: <span className="bn-cardline-number">{number}</span> })
   if (condition) facts.push({ key: 'condition', node: <span className="bn-cardline-finish">{condition}</span> })
+  // D271: two stored facts compared, not a typed query, so this is not a hand-rolled search.
   // eslint-disable-next-line no-restricted-syntax -- comparing two stored facts, not a typed query.
   if (finish && !(condition ?? '').toLowerCase().includes(finish.toLowerCase())) {
     facts.push({ key: 'finish', node: <span className="bn-cardline-finish">{finish}</span> })
