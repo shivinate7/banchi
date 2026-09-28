@@ -17,8 +17,8 @@ const HOTKEY = '/'
 
 /** What the field is called, per persona. His is an instruction and the owner's is a name. */
 const LABEL: Record<Persona, string> = {
-  owner: 'Search cards',
-  fulfiller: 'Type the name of the card',
+  owner: 'Search',
+  fulfiller: 'Search',
 }
 
 export type SearchFieldProps = {

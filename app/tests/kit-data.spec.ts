@@ -272,7 +272,7 @@ test('a separator is drawn, never typed, and a screen reader hears a comma', asy
 test('a box is drawn by its name and never by its number', async ({ page }) => {
   await open(page, 1440, 'light')
   const boxes = page.locator('[data-specimen="Box"] .bn-boxlabel')
-  await expect(boxes).toHaveText(['RB Epics', 'Mixed Singles', 'Unnamed box'])
+  await expect(boxes).toHaveText(['RB Epics', 'Mixed Singles', 'Untitled'])
   await expect(page.locator('[data-specimen="Box"]')).not.toContainText(/Box \d/)
 })
 

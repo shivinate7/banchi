@@ -293,33 +293,16 @@ function sentence(entry: QueueEntryWire): Segment[] {
        * entry written before `found_by` existed answers null here and takes the shorter
        * wording rather than naming a row on a guess. */
       const rowName = text(numberMatch(entry.candidates)?.name ?? entry.candidates[0]?.name)
-      const offersBoth = entry.candidates.some((row) => row.found_by === 'name')
-      const head: Segment[] =
-        name === null
-          ? [say('The name on this photograph could not be checked against the listing below. ')]
-          : rowName === null
-            ? [say('This photograph reads as '), cardName(name), say(', which is not what the listing below is called. ')]
-            : [
-                say('This photograph reads as '),
-                cardName(name),
-                say(number === null ? ', but the listing it matched is ' : ', but '),
-                ...(number === null ? [] : [value(number), say(' is ')]),
-                value(rowName),
-                say('. '),
-              ]
-      return [
-        ...head,
-        say('The number and the name came off the same card and they disagree — one was misread. Check against the photograph before answering.'),
-        /* BOTH READINGS ARE ON THE LIST SINCE 2026-09-12, so the sentence says which is
-         * which. Only where the name actually found something: a card whose name matched no
-         * row still offers the number's row alone, and promising a second reading that is
-         * not there would be worse than the silence it replaced. */
-        ...(offersBoth
-          ? [
-              say(' Both readings are below — what the name found first, then what the number found. Neither is assumed right: the photograph settles it.'),
-            ]
-          : []),
-      ]
+      /* F5 verbiage cut, the owner's ruling on the one held row of the review: the two
+       * names are data and stay; the words that used to carry them ("This photograph reads
+       * as ... but the listing it matched is ...") are cut to "Mismatch: <read> / <listing>".
+       * A card whose name matched no row at all still gets the read name alone, since there
+       * is no second value to put after the slash. */
+      return name === null
+        ? [say('The name on this photograph could not be checked against the listing below. ')]
+        : rowName === null
+          ? [say('Mismatch: '), cardName(name)]
+          : [say('Mismatch: '), cardName(name), say(' / '), value(rowName)]
     }
 
     default:
@@ -336,7 +319,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
 const QUESTIONS: Readonly<Record<string, string>> = {
   no_catalog_row: 'Which listing is this card?',
   metadata_not_stocked: 'Which finish is stocked?',
-  rarity_claim_mismatch: 'Is this the right card at all?',
+  rarity_claim_mismatch: 'Mismatch?',
   detected_finish_not_stocked: 'Which finish is this?',
   ambiguous_no_signal: 'Which finish is this?',
   duplicate_condition: 'Which of the two listings?',
@@ -346,7 +329,7 @@ const QUESTIONS: Readonly<Record<string, string>> = {
   set_ambiguous: 'Which set is it from?',
   card_not_detected: 'What is in this photograph?',
   number_unread_name_matched: 'Is this the listing it matched?',
-  name_disputed: 'Is this the right card at all?',
+  name_disputed: 'Mismatch?',
   no_market_data: 'Is this the card?',
   /* `pipeline/routing.py:LISTING_DISPUTED` (identity-follows-sku.md §7.3, lane 2): a held
    * card from `cards identity --write` — the read disputes the SKU it is bound to, and
@@ -1542,7 +1525,7 @@ export function ReviewQueue() {
                  `everyone.length`, the same number the Queue button's own badge shows
                  (D164's counter), so the two never disagree again. */
               <>
-                <strong>{done}</strong> done, <strong>{everyone.length}</strong> to go
+                Progress <strong>{done}</strong> of <strong>{everyone.length}</strong>
               </>
             )}
             {counts !== null && counts.parked > 0 ? <span className="review-progress-parked">{counts.parked} parked</span> : null}
@@ -2092,7 +2075,7 @@ function Card({
         <Photo row={row} absent={photoAbsent} onAbsent={onPhotoAbsent} />
         <p className="review-next" title={next === null ? undefined : `${text(next.entry.read.name) ?? 'not identified'} ${priceText(next.entry.market)} ${reasonLabel(next.entry.reason)}`}>
           {next === null ? (
-            <span className="review-next-empty">Last in the queue</span>
+            <span className="review-next-empty">Last</span>
           ) : (
             <>
               <span className="review-next-label">Next</span>
@@ -2114,10 +2097,18 @@ function Card({
             {retired ? <Icon name="history" size={20} className="review-question-mark" /> : null}
             {questionFor(entry.reason)}
           </h2>
-          <p className="review-question-sub">
-            {reasonLabel(entry.reason)}
-            {row.shadow === undefined ? null : <Pill tone="warn">also {row.shadow}</Pill>}
-          </p>
+          {/* F5 verbiage cut: `name_disputed` shares its headline with `rarity_claim_mismatch`
+              ("Mismatch?"), and its own reason label ("The read name matches no listing") only
+              restated it a second time with no new fact — the mismatch paragraph below (the
+              owner's F5 ruling, the "middle option" for this cut: keep the two names as data,
+              "Mismatch: <read> / <listing>") is the one place that says WHICH two reads
+              disagree. Every other reason keeps its label here. */}
+          {entry.reason === 'name_disputed' && row.shadow === undefined ? null : (
+            <p className="review-question-sub">
+              {entry.reason === 'name_disputed' ? null : reasonLabel(entry.reason)}
+              {row.shadow === undefined ? null : <Pill tone="warn">also {row.shadow}</Pill>}
+            </p>
+          )}
         </div>
 
         <Claims entry={entry} claims={claims} />
@@ -2178,7 +2169,7 @@ function Card({
               disabled={busy}
               aria-expanded={looking}
             >
-              {looking ? 'Back to listings' : phone ? 'Search TCGplayer' : 'Search TCGplayer\'s list'}
+              {looking ? 'Back to listings' : 'Search'}
             </Button>
           )}
           {/* ICON-MAP (review): words at every width, including the phone — dropped
@@ -2251,14 +2242,6 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
         <Icon name="eye" size={12} />
         <span className="review-chip-key">Confidence</span>
         <span className="review-chip-value">{humanize(confidence)}</span>
-      </span>,
-    )
-  }
-  if (entry.reason === 'rarity_claim_mismatch' || entry.reason === 'name_disputed') {
-    chips.push(
-      <span key="rarity" className="review-chip review-chip-warn">
-        <Icon name="alert" size={12} />
-        These rows may be another card
       </span>,
     )
   }
@@ -2560,8 +2543,7 @@ function Facts({ row }: { row: Row }) {
     <details className="review-details">
       <summary className="review-details-summary">
         <Icon name="chevronRight" size={14} className="review-details-caret" />
-        This read
-        <span className="review-details-hint">what the run recorded about this card</span>
+        Details
       </summary>
       <dl className="review-facts">
         {facts.map((fact) => (
@@ -2661,7 +2643,7 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
       <PositionCaption label={entry.label} box={entry.box} cid={entry.cid} place={entry.place} />
       <span className="review-stage-hint" aria-hidden="true">
         <Icon name="scan" size={12} />
-        1:1 under the pointer
+        Zoomed
       </span>
     </>
   )

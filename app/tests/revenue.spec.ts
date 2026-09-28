@@ -239,7 +239,7 @@ test('the Name column sorts, and a second click is the exact reverse of the firs
 test('the search field narrows the product table by name', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByPlaceholder('Find what you sold').fill('pikachu')
+  await page.getByPlaceholder('Search').fill('pikachu')
   expect(await productNames(page)).toEqual(['Pikachu VMAX'])
 })
 
@@ -271,8 +271,8 @@ test('the current month is marked in progress on the strip', async ({ page }) =>
   await open(page, '?period=all')
   const current = page.locator('.revenue-month-col[data-current="true"]')
   await expect(current).toContainText('Sep 2026')
-  await expect(current).toContainText('so far')
-  await expect(page.locator('.revenue-month-col:has-text("so far")')).toHaveCount(1)
+  await expect(current).toContainText('Partial')
+  await expect(page.locator('.revenue-month-col:has-text("Partial")')).toHaveCount(1)
 })
 
 test('a drill-down opens a product row into the orders behind it, and closes again', async ({ page }) => {
@@ -302,7 +302,7 @@ test('sort, search and the month filter all round-trip through the URL, includin
   await open(page, '?period=all')
 
   await page.getByRole('columnheader', { name: 'Name' }).getByRole('button').click()
-  await page.getByPlaceholder('Find what you sold').fill('char')
+  await page.getByPlaceholder('Search').fill('char')
   await page.locator('.revenue-month-col', { hasText: 'Jul 2026' }).click()
 
   await expect(page).toHaveURL(/[?&]sort=name&dir=asc/)
@@ -312,7 +312,7 @@ test('sort, search and the month filter all round-trip through the URL, includin
   await page.reload()
   await expect(page.locator('main.revenue')).toBeVisible()
   await expect(page.getByRole('columnheader', { name: 'Name' })).toHaveAttribute('aria-sort', 'ascending')
-  await expect(page.getByPlaceholder('Find what you sold')).toHaveValue('char')
+  await expect(page.getByPlaceholder('Search')).toHaveValue('char')
   await expect(page.locator('.revenue-active-filter')).toContainText('Jul 2026 only')
   expect(await productNames(page)).toEqual(['Charizard ex'])
 })
@@ -384,14 +384,14 @@ test('a previous period that sums to exactly zero never renders Infinity% or NaN
   expect(text).toContain('$5.00 more')
 })
 
-test('the like-for-like wording appears when there is nothing to compare against over the same stretch', async ({ page }) => {
+test('the like-for-like case draws no prior-period line at all, when there is nothing to compare against over the same stretch', async ({ page }) => {
   // Every sale is in 2026 — "this year" compared against the same number of days last year
-  // finds nothing there at all, which is a different sentence from finding nothing ever.
+  // finds nothing there at all. F5 verbiage cut (row 127): this in-progress case is now a
+  // deleted sentence, not a shortened one — the month strip's own absent bar already shows
+  // it, so `.revenue-verdict-prior` does not render at all here.
   await stub(page, generalOrders())
   await open(page, '?period=ytd')
-  await expect(page.locator('.revenue-verdict-prior')).toHaveText(
-    'So far, nothing is recorded for the period before this one.',
-  )
+  await expect(page.locator('.revenue-verdict-prior')).toHaveCount(0)
 })
 
 test('no horizontal scroll at 390, with Custom selected — the fifth period option is the widest state', async ({ page }) => {
@@ -448,7 +448,7 @@ test('a line closed as refunded is subtracted from the total, and the count is s
   )
   // The two exclusions are NEVER conflated: no order here carries a Canceled status, so
   // that sentence states zero rather than folding this line's count into it.
-  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('0 orders were canceled by the marketplace and left out.')
+  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('0 excluded')
   expect(await productNames(page)).toEqual(['Charizard ex'])
 })
 
@@ -469,7 +469,7 @@ test('a line closed for a DIFFERENT reason (shipped_elsewhere) is not excluded',
   // (review round, item 6): a note about a habit that has never once caught anything reads
   // as a warning rather than a fact, so it draws only once the count is real.
   await expect(page.locator('.revenue-verdict-refunded')).toHaveCount(0)
-  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('0 orders were canceled by the marketplace and left out.')
+  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('0 excluded')
 })
 
 test('the owner\'s real store has zero not_shipping lines today, and the screen still says so honestly', async ({ page }) => {
@@ -494,7 +494,7 @@ test('the owner\'s real store has zero not_shipping lines today, and the screen 
     }),
   ])
   await open(page, '?period=all')
-  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('1 order was canceled by the marketplace and left out.')
+  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('1 excluded')
   // D281 (review round, item 6): the refund sentence does not draw at zero.
   await expect(page.locator('.revenue-verdict-refunded')).toHaveCount(0)
 })

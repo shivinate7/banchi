@@ -228,6 +228,10 @@ function loneGroup(row: Row, copy: SearchCopy): SearchGroup {
     live_as_of: null,
     on_hand: held,
     listable: held,
+    // WORSE THAN EVERY REAL RANK, matching `do_search`'s own loose-bag group
+    // (`server/capture_server.py:_RANK_SUBSTRING + 1`) — this fiction was never found by a
+    // search rank at all.
+    rank: 3,
     copies: [copy],
   }
 }
@@ -1142,7 +1146,7 @@ function Action({
         <IconButton
           size="xl"
           icon="moveTo"
-          label="Move to another box"
+          label="Move"
           disabled={busyKey !== null}
           onClick={() => onMove(copy)}
         />

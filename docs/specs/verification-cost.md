@@ -483,3 +483,20 @@ same tree measured 66.4 s with all fifteen and `serve-selftest` skipping. That i
 27-second cut on that hardware. It does not restate the 163.85 s / 76.6 s figures above,
 taken on a different Mac — both are real, independently measured numbers.
 
+## 12. The spec→file map for `design-check`, measured directly (2026-09-19)
+
+§6B rejected a per-spec local filter by argument. A follow-up session measured it directly,
+over the 30 PRs merged just before it (#363-#392). A derived map (imports plus route hashes,
+with a shared surface counting as every spec) narrows only 6 of the 30. Nineteen touch a
+shared file: `server.ts`, `types.ts`, `App.tsx`, `App.css` or `deviceMemory.ts`. The median
+saving is 0. No CI failure on those 30 PRs would have gone uncaught. §6B's rejection holds on
+this evidence too, not only on the argument.
+
+**The hosted runner is 4 vCPU and 15 GB**, not the 2 vCPU DEBT8 and D136 assumed. The repo
+went public on 2026-09-11, and the runner shape changed with it. `--workers=1` leaves half
+the runner idle. Raising it needs its own flake measurement first. DEBT8's flake rate is
+1-in-13 at one worker, and doubling workers is the direction D136 already argues against.
+
+The local suite, one worker, on the Mac that measured this: 11.7 minutes for 668 cases. Five
+specs — `run-panel`, `inventory`, `fulfillment`, `pricing`, `orders` — are 71% of that time.
+

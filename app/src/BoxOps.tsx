@@ -93,8 +93,8 @@ function oldestReading(listings: Readonly<Record<string, Listing>>): string | nu
 function readingBound(at: string | null): string | null {
   const ago = readingAgo(at)
   if (ago === null) return null
-  if (ago === 'just now') return 'read just now'
-  return `read within ${ago.replace(/ ago$/, '')}`
+  if (ago === 'just now') return 'Recent'
+  return `Recent, ${ago.replace(/ ago$/, '')}`
 }
 
 /** One write at a time: `Store.write()` takes the file lock per call. */
@@ -612,10 +612,10 @@ export function BoxOps({
         {editing === null ? (
           <>
             <section className="boxops-group">
-              <h3 className="bn-label">About this box</h3>
+              <h3 className="bn-label">Overview</h3>
               <dl className="boxops-census">
                 <Census label="Captured" value={record.cards} />
-                <Census label="On hand" value={known(record.on_hand)} />
+                <Census label="Stored" value={known(record.on_hand)} />
                 <Census label="Sold" value={record.sold} />
                 <Census label="Retired" value={record.retired} />
                 <Census label="Moved" value={record.moved} />
@@ -660,7 +660,7 @@ export function BoxOps({
                 <Op icon="pencil" label="Rename" detail={record.name ?? 'unnamed'} busy={busy} onClick={() => startEdit('name')} />
                 <Op
                   icon="divider"
-                  label="Edit sections"
+                  label="Sections"
                   detail={
                     record.sections.length === 0
                       ? 'not declared'
@@ -671,13 +671,13 @@ export function BoxOps({
                 />
                 <Op
                   icon="pencil"
-                  label="Name sections"
+                  label="Naming"
                   detail={
                     record.sections_detail.length === 0
                       ? 'declare sections first'
                       : (() => {
                           const named = record.sections_detail.filter((detail) => detail.name).length
-                          return named === 0 ? 'none named' : `${named} of ${record.sections_detail.length} named`
+                          return named === 0 ? 'Unnamed' : `${named} of ${record.sections_detail.length} named`
                         })()
                   }
                   busy={busy}
@@ -694,14 +694,14 @@ export function BoxOps({
                   {selection.length > 0 ? (
                     <Pill tone="accent">{selection.length} ticked</Pill>
                   ) : (
-                    <span className="boxops-group-note">whole box</span>
+                    <span className="boxops-group-note">All</span>
                   )}
                 </h3>
                 <div className="boxops-ops">
                   {selection.length > 0 || record.cards > 0 ? (
                     <Op
                       icon="pencil"
-                      label="Set claims"
+                      label="Claims"
                       detail={
                         selection.length > 0
                           ? `${selection.length} ticked`
@@ -714,7 +714,7 @@ export function BoxOps({
                   {selection.length > 0 || (record.on_hand ?? 0) > 0 ? (
                     <Op
                       icon="moveTo"
-                      label="Move to box"
+                      label="Move"
                       detail={
                         selection.length > 0
                           ? `${selection.length} ticked`
@@ -1590,7 +1590,7 @@ function ReleaseListings({
       <Op
         icon="flag"
         danger
-        label="Release listing hold"
+        label="Release"
         detail={count(record.listed, 'card', 'cards')}
         said={`Release the listing hold on ${count(record.listed, 'card', 'cards')}…`}
         busy={false}
@@ -1734,7 +1734,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
       <Op
         icon="image"
         danger
-        label="Reclaim photographs"
+        label="Reclaim"
         detail={count(record.sold, 'sold card', 'sold cards')}
         said={`Reclaim the photographs of ${count(record.sold, 'sold card', 'sold cards')} in ${record.name ?? UNNAMED_BOX}…`}
         busy={false}
@@ -1859,8 +1859,7 @@ function DeleteBox({
       <Op
         icon="trash"
         danger
-        label="Delete this box…"
-        detail="no undo"
+        label="Delete"
         busy={false}
         expanded={open}
         onClick={() => setOpen((held) => !held)}

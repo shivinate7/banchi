@@ -267,7 +267,7 @@ test('the confirm control is reachable on #/inventory for a held card, and its u
   // Both presses share one reserved slot (D118) — the correction's own "Wrong card?" stays
   // beside this one, never replaced by it.
   const rightCard = page.getByRole('button', { name: 'The listing is right' })
-  const wrongCard = page.getByRole('button', { name: 'Wrong card?' })
+  const wrongCard = page.getByRole('button', { name: 'Correct' })
   await expect(rightCard).toBeVisible()
   await expect(wrongCard).toBeVisible()
 

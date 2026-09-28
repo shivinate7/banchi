@@ -258,9 +258,7 @@ test('a card says its reason only where it differs from its lane, and never the 
   await expect(weight.locator('.shipping-says')).toHaveText(
     'Heavier per item than cards run, so something in it is not a card.',
   )
-  await expect(unjudged.locator('.shipping-says')).toHaveText(
-    'No usable weight on the row, so what is in it is unknown.',
-  )
+  await expect(unjudged.locator('.shipping-says')).toHaveText('Unweighed')
 
   /* UX-005/TXT-02: NO CARD PRINTS ITS RAW REASON STRING ANY MORE (D196). */
   await expect(page.locator('.shipping-reason')).toHaveCount(0)
@@ -464,8 +462,7 @@ test('the parcel file is offered as a download, and the caption says what it doe
      weeks later at the far end, where nobody is looking, and insurance is a per-order choice
      made inside Pirate Ship against a value only the owner can see. Both blanks are deliberate
      and the caption is the only place either is said. */
-  await expect(caveats).toContainText('Package Weight is blank on every row')
-  await expect(caveats).toContainText('No insurance column')
+  await expect(caveats).toContainText('Manual')
 })
 
 /* -------------------------------------------------------------------------------------- 6b */

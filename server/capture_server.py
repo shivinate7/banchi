@@ -12381,15 +12381,19 @@ def do_search(query: str) -> dict:
                 # headroom against a ceiling nobody asked for.
                 "listable": on_hand,
                 "copies": [_copy_row(places, card) for card in copies],
-                "_rank": rank,
+                # KEPT ON THE WIRE, NOT DELETED AFTER THE SORT (F8, 2026-09-27). A screen
+                # ranking boxes or a landing row by pile size needs to know which groups
+                # share this group's own rank tier, so pile size decides only inside one
+                # tier rather than across all of them — `app/src/BoxBrowse.tsx`'s
+                # `bestLiveTier`. The value means nothing on its own; it exists only to be
+                # compared for equality against another group's.
+                "rank": rank,
             }
         )
 
     # Rank first, then the name the group is most likely to be recognised by, then the SKU
     # so the order is total and two runs of the same query cannot swap two rows.
-    groups.sort(key=lambda g: (g["_rank"], (g["names"] or [""])[0].lower(), g["sku"]))
-    for group in groups:
-        del group["_rank"]
+    groups.sort(key=lambda g: (g["rank"], (g["names"] or [""])[0].lower(), g["sku"]))
 
     if loose:
         loose.sort(key=lambda c: (str(c.box), str(c.index)))
@@ -12422,6 +12426,9 @@ def do_search(query: str) -> dict:
                 # — which is the honest thing for it to say rather than a bare cap.
                 "listable": loose_on_hand,
                 "copies": [_copy_row(places, card) for card in loose],
+                # APPENDED AFTER THE SORT ABOVE, SO ITS OWN RANK NEVER FED IT — worse than
+                # every real rank, matching where it has always landed.
+                "rank": _RANK_SUBSTRING + 1,
             }
         )
 

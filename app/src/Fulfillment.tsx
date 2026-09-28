@@ -284,6 +284,8 @@ function owedGroup(item: Owed): SearchGroup {
     on_hand: item.copies.length,
     listable: item.copies.length,
     live_as_of: item.liveAsOf,
+    // NEVER READ HERE. A synthesised group, one card and never ranked against another.
+    rank: 0,
     copies: item.copies.map(
       (copy): SearchCopy => ({
         key: copy.key,
@@ -415,14 +417,6 @@ function byBox(cards: Sellable[]): BoxGroup[] {
     }
   }
   return [...groups.values()].sort((a, b) => a.box - b.box)
-}
-
-function greeting(): string {
-  const hour = new Date().getHours()
-  if (hour < 5) return 'Good evening'
-  if (hour < 12) return 'Good morning'
-  if (hour < 18) return 'Good afternoon'
-  return 'Good evening'
 }
 
 function count(n: number, one: string, many: string): string {
@@ -752,17 +746,6 @@ export function Fulfillment() {
     return map
   }, [owed, ordersByKey])
 
-  /** A real card from THIS store for the search field's example, rather than a name from a
-   *  game that may hold none of this store's cards (D21 — game is a per-card claim, not a
-   *  fixed catalog). Prefers what he is already holding — an owed card — so the hint matches
-   *  the card he is most likely to try next; falls back to any named card on hand, and to a
-   *  generic noun when the store has named nothing yet. */
-  const exampleCardName = useMemo(() => {
-    const owedNamed = owed.find((item) => item.name !== NO_NAME)?.name ?? null
-    if (owedNamed !== null) return owedNamed
-    return (cards ?? []).find((card) => card.name !== NO_NAME)?.name ?? null
-  }, [owed, cards])
-
   /** The order's own copy of a card wherever one exists, so a card reached through a box or a
    *  search is still sold through the order that is waiting for it. */
   const claim = useCallback(
@@ -936,7 +919,7 @@ export function Fulfillment() {
             }}
           >
             <Icon name="hand" size={24} />
-            Pull this card
+            Pull
           </button>
         )
       }
@@ -1055,7 +1038,6 @@ export function Fulfillment() {
     <header className="ff-head">
       <Logo size={44} className="ff-mark" />
       <div className="ff-head-text">
-        <p className="fulfillment-say ff-greeting">{greeting()}.</p>
         <h1 className="fulfillment-title ff-title">Cards to pull</h1>
       </div>
     </header>
@@ -1221,7 +1203,7 @@ export function Fulfillment() {
                  is kept for the sale, which is the press that writes. */
               <button className="ff-step" type="button" onClick={() => setPulledKey(chosen.key)}>
                 <Icon name="hand" size={24} />
-                Pull this card
+                Pull
               </button>
             )}
           </div>
@@ -1366,20 +1348,12 @@ export function Fulfillment() {
           <div className="ff-today-text">
             <p className="ff-today-figure">
               <b className="ff-today-num">{totalWanted.toLocaleString()}</b>{' '}
-              <span className="ff-today-words">
-                {totalWanted === 1 ? 'copy to pick' : 'copies to pick'}
-              </span>
-            </p>
-            <p className="fulfillment-say ff-today-say">
-              For {count(openOrderKeys.length, 'order', 'orders')}, listed below with every
-              copy the store holds.
+              <span className="ff-today-words">pick</span>
             </p>
             {shortfallCount === 0 ? null : (
               <p className="fulfillment-say ff-today-warn">
                 <Icon name="alert" size={18} className="ff-today-warn-icon" />
-                {count(shortfallCount, 'more copy', 'more copies')}{' '}
-                {shortfallCount === 1 ? 'is' : 'are'} not in the boxes. Ask for help with{' '}
-                {shortfallCount === 1 ? 'it' : 'those'}.
+                {shortfallCount.toLocaleString()} unlocated
               </p>
             )}
           </div>
@@ -1397,14 +1371,17 @@ export function Fulfillment() {
         {today}
 
         <div className="ff-search" data-clear={hunting ? 'true' : 'false'}>
-          {/* No autoFocus: a software keyboard would cover the first thing he reads. */}
+          {/* No autoFocus: a software keyboard would cover the first thing he reads.
+              F5 verbiage cut (row 191) deleted the worked-example placeholder ("For example,
+              <a real card's name>"). SearchField's own default placeholder, "Card name,
+              number or SKU", is fine for the owner but fails this screen's own banned-word
+              list (D196: no pipeline noun in his words) — so this screen still names its own
+              placeholder, just without the machine word. */}
           <SearchField
             value={query}
             onChange={setQuery}
             persona="fulfiller"
-            placeholder={
-              exampleCardName === null ? "For example, a card's name" : `For example, ${exampleCardName}`
-            }
+            placeholder="Card name or number"
           />
           {hunting ? (
             <button
@@ -1475,12 +1452,18 @@ export function Fulfillment() {
             )}
 
             {owed.length === 0 ? null : (
-              <section className="ff-owed" aria-label="Cards to pick">
+              <section className="ff-owed" aria-label="Pick">
                 <h2 className="ff-h2">
                   <span className="ff-h2-icon">
                     <Icon name="cart" size={18} />
                   </span>
-                  Cards to pick
+                  {/* F5 verbiage cut (row 192): the CSV's own word, "Queue", is a pipeline
+                      noun this screen's own banned-word list refuses (D196) — wrong for this
+                      element. "Pick" reads with the cart icon and matches the per-card
+                      heading's own vocabulary (row 193) instead. The section's own
+                      `aria-label` is kept in step with this visible heading, per the review's
+                      finding that it had drifted to the pre-cut three-word text. */}
+                  Pick
                 </h2>
                 <div className="ff-found ff-owed-list">
                   {shownOwed.map((item, at) => {
@@ -1495,7 +1478,7 @@ export function Fulfillment() {
                           <b className="ff-owed-pick-num">Pick {item.wanted}</b>
                           {item.refs.length < 2 ? null : (
                             <span className="ff-owed-pick-for">
-                              for {count(item.refs.length, 'order', 'orders')}
+                              , {count(item.refs.length, 'order', 'orders')}
                             </span>
                           )}
                         </p>

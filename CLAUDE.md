@@ -550,9 +550,9 @@ hand-typed hash list.
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
-157<!-- derived:app_src_file_count --> files under `app/src`: none read the
+156<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
-282<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
+281<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before
@@ -978,6 +978,17 @@ itself. "Solved" with no bucket named is refused. Bold labels in one quoted bloc
 never a code fence. Start with the point. No task restatement.
 
 - Run `make harness` before saying something works. Show the output.
+- Keep UI/UX at the forefront of any screen work (owner's ruling, 2026-09-02: *"experience
+  is everything."*). Run a design pass before you build a screen. Review the built screen
+  against that pass before you call it done.
+- Reserve Opus for planning. Reserve it for an adversarial review of a path touching money,
+  TCGplayer or the store's data. Reserve it for a builder redesigning a whole flow, or
+  resolving a hard merge. Sonnet builds and reviews every ordinary screen lane, fix round and
+  delta review by default (owner's ruling, 2026-09-24).
+- A builder commits and pushes its own branch after every pass, even when a check is red.
+  Each commit message ends with a `Done:` line and a `Next:` line. The `Next:` line names
+  what is left, in order, so a lane can resume from its branch alone (owner's ruling,
+  2026-09-24).
 
 ### Writing a brief
 

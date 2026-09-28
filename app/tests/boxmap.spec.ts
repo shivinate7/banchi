@@ -102,9 +102,9 @@ test('read-only: every box is drawn horizontally, Back/Front replaces the senten
   expect(widths[2]).toBeGreaterThan(widths[1] ?? 0)
 })
 
-test('Edit layout enters edit mode; a queued drop writes nothing until Confirm, which sends the whole draft once', async ({ page }) => {
+test('Layout enters edit mode; a queued drop writes nothing until Confirm, which sends the whole draft once', async ({ page }) => {
   const sent = await openShelf(page)
-  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Layout' }).click()
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
   await expect(page.getByRole('button', { name: 'Old Box', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
@@ -130,19 +130,19 @@ test('Edit layout enters edit mode; a queued drop writes nothing until Confirm, 
 
 test('Cancel throws the whole draft away: nothing is sent, and the map returns to read-only', async ({ page }) => {
   const sent = await openShelf(page)
-  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Layout' }).click()
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
   await page.getByRole('button', { name: /Put Uncommons just on the far side of Promos/ }).click()
   await page.getByRole('button', { name: 'Cancel' }).click()
   expect(sent).toHaveLength(0)
-  await expect(page.getByRole('button', { name: 'Edit layout' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Layout' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Move section/ })).toHaveCount(0)
 })
 
 test('the keyboard alone moves a section in edit mode, and Esc puts it down', async ({ page }) => {
   await openShelf(page)
-  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Layout' }).click()
   const grip = page.getByRole('button', { name: 'Move section Signatures of RB Origins' })
   await grip.focus()
   await page.keyboard.press('Enter')
@@ -160,7 +160,7 @@ test('the keyboard alone moves a section in edit mode, and Esc puts it down', as
 
 test('a pointer drag queues a drop on the gap under the pointer', async ({ page }) => {
   await openShelf(page)
-  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Layout' }).click()
   await page.getByRole('button', { name: 'Move section Commons of RB Origins' }).click()
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
   const block = page.locator('.shelf-pair .shelf-block[data-lifted="true"]').first()
@@ -178,7 +178,7 @@ test('a pointer drag queues a drop on the gap under the pointer', async ({ page 
 
 test('the whole box queues as a merge, and New box queues a split', async ({ page }) => {
   const sent = await openShelf(page)
-  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Layout' }).click()
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
   await page.getByRole('button', { name: 'This and the next' }).click()
   await page.getByRole('button', { name: 'New box' }).click()
@@ -190,7 +190,7 @@ test('the whole box queues as a merge, and New box queues a split', async ({ pag
 
 test('every press on the map is 40px or more', async ({ page }) => {
   await openShelf(page)
-  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Layout' }).click()
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
   const sizes = await page
@@ -216,7 +216,7 @@ test('a stale draft is refused whole, and the map reads again', async ({ page })
   await page.goto(ROUTE)
   await settleFonts(page)
   await expect(page.locator('.shelf-box')).toHaveCount(3)
-  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Layout' }).click()
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
   await page.getByRole('button', { name: /Put Uncommons just on the far side of Promos/ }).click()
@@ -252,7 +252,7 @@ async function stubCards(page: Page): Promise<void> {
 test('a lifted section shows its cards, and a range queues into the draft (no write until Confirm)', async ({ page }) => {
   await stubCards(page)
   const sent = await openShelf(page)
-  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Layout' }).click()
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
   await page.getByRole('button', { name: 'Some cards' }).click()
   const list = page.getByRole('list', { name: 'The cards in this section' })
@@ -275,7 +275,7 @@ test('a lifted section shows its cards, and a range queues into the draft (no wr
 test('a mixed draft — a section and a range — sends both in one Confirm', async ({ page }) => {
   await stubCards(page)
   const sent = await openShelf(page)
-  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Layout' }).click()
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
   await page.getByRole('button', { name: 'Some cards' }).click()
   const list = page.getByRole('list', { name: 'The cards in this section' })
@@ -300,7 +300,7 @@ test('a mixed draft — a section and a range — sends both in one Confirm', as
 test('a box the draft already touched cannot offer Some cards a second time', async ({ page }) => {
   await stubCards(page)
   await openShelf(page)
-  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Layout' }).click()
   await page.getByRole('button', { name: 'Move section Commons of RB Origins' }).click()
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
   await page.getByRole('button', { name: /at the end of Mixed Singles nearest you/ }).click()
@@ -315,7 +315,7 @@ test('a box the draft already touched cannot offer Some cards a second time', as
 test('a box the draft already changed cannot be chosen as a range destination either', async ({ page }) => {
   await stubCards(page)
   await openShelf(page)
-  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Layout' }).click()
   // Queue a section move that touches Mixed Singles (box 2) as a destination.
   await page.getByRole('button', { name: 'Move section Old of Old Box' }).click()
   await page.getByRole('button', { name: 'Mixed Singles', exact: true }).click()
@@ -345,7 +345,7 @@ test('a stale draft on the card path is refused whole, the same way a section dr
   await page.goto(ROUTE)
   await settleFonts(page)
   await expect(page.locator('.shelf-box')).toHaveCount(3)
-  await page.getByRole('button', { name: 'Edit layout' }).click()
+  await page.getByRole('button', { name: 'Layout' }).click()
   await page.getByRole('button', { name: 'Move section Uncommons of RB Origins' }).click()
   await page.getByRole('button', { name: 'Some cards' }).click()
   await page.getByRole('list', { name: 'The cards in this section' }).getByRole('button', { name: /u1/ }).click()

@@ -150,7 +150,6 @@ export function Graveyard() {
       title="Graveyard"
       icon="history"
       className="graveyard"
-      lede="Sold and retired cards."
       actions={<ReloadButton onReload={() => void load()} busy={retrying} />}
       loading={rows === null && failure === null}
       status={
@@ -170,7 +169,7 @@ export function Graveyard() {
           <div className="graveyard-toolbar">
             <Segmented value={filter} options={FILTERS.map((f) => ({ value: f.value, label: `${f.label} (${counts[f.value]})` }))} onChange={setFilter} label="Filter by how a card left" />
             <span className="bn-spacer" />
-            <SearchField value={query} onChange={setQuery} persona="owner" label="Find in the graveyard" placeholder="Find a card, SKU or box" />
+            <SearchField value={query} onChange={setQuery} persona="owner" label="Find in the graveyard" placeholder="Search" />
           </div>
         ) : undefined
       }
@@ -282,7 +281,7 @@ export function Graveyard() {
           {shown < visible.length ? (
             <div className="graveyard-more">
               <span className="bn-muted">
-                Showing {windowed.length.toLocaleString()} of {visible.length.toLocaleString()}
+                Shown {windowed.length.toLocaleString()} of {visible.length.toLocaleString()}
               </span>
               <Button variant="ghost" size="sm" onClick={() => setShown((n) => n + ROW_WINDOW)}>
                 Show {Math.min(ROW_WINDOW, visible.length - shown).toLocaleString()} more
