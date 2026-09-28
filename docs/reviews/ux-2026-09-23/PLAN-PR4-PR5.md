@@ -92,7 +92,8 @@ Logged, waiting for the owner's word:
 Before PR 4B merges:
 
 - Main is red. The docs audit's `id claims` row fails on main's unclaimed slug
-  `D-demo-stock-images`. A small records PR claims it.
+  `D-demo-stock-images`, because PR #476 merged without its claim. The owner: `Fold it into PR 4B`.
+  So PR 4B's merge claims it. Check at merge time that `make merge` claims a slug main already holds.
 - The final head: the PR, green CI, and `make merge`. Vale is retired, so no local step runs.
 
 After PR 4B merges:
@@ -189,3 +190,5 @@ G, T and PR 5:
 - Start now: `L1, L3, L6, L7`. The owner asked for the other three options explained first.
 - Vale: `Retire it, keep American spelling in docs-audit (Recommended)`. Lane L3 removes Vale.
   The spelling row learns markdown in lane L2. So the final head no longer runs `make vale`.
+- Old demo seed: `Cut the old seed guards`. Lane L5. The heartbeat and coordinator: `Retire both (Recommended)`. Lane L10.
+- Q8: `you haven't shown me the changes made to docs audit`. No docs-audit change is made yet. The owner sees the tier list and the merge families before any lane changes it.
