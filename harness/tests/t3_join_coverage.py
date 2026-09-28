@@ -530,8 +530,9 @@ def _check_committed_from_counts(c, export) -> None:
             c.equal(held.backstock, 5, "and every uncommitted copy stays backstock, not two")
             c.ok(
                 held.live_positions == []
-                and "run reconcile --live first" in (held.nothing_to_add or ""),
-                f"and the reason names the remedy. Got: {held.nothing_to_add!r}",
+                and "read what is live, then send again" in (held.nothing_to_add or ""),
+                f"and the reason names the remedy, in the screen's own words rather than the "
+                f"CLI's own flag (D196). Got: {held.nothing_to_add!r}",
             )
 
     # --- THE SAME SHELF, NO CAP ASKED FOR (D7, rewritten 2026-09-07). `_committed_keys`'s
@@ -931,10 +932,11 @@ def _check_overrun_is_named(c, export) -> None:
         )
         said = match.nothing_to_add or ""
         c.ok(
-            "3 cop" in said and "run reconcile --live first" in said,
+            "3 cop" in said and "read what is live, then send again" in said,
             f"AND THE REASON NAMES THE PENDING COUNT AND THE REMEDY, not the cap: three copies "
-            f"sent since the live reading is why nothing goes, and the fix is to reconcile, "
-            f"never a bigger cap. Got: {said!r}",
+            f"sent since the live reading is why nothing goes, and the fix is to read what is "
+            f"live again, never a bigger cap — in the screen's own words, not the CLI's flag "
+            f"(D196). Got: {said!r}",
         )
         c.ok(
             "of the 2 this SKU may have out" not in said and "already out against" not in said,

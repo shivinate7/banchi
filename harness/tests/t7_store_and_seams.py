@@ -38111,7 +38111,7 @@ def _m_cases() -> Dict[str, dict]:
             "live": {_M_D: 1, _M_R: 1, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 0,
             "files": {"import.csv": [d_mix]},
             "says": [f"{_M_R} — {_M_LIVE}"],
-            "never": [_M_ASKED0, "run reconcile --live first", "1 live, at the cap of 1"],
+            "never": [_M_ASKED0, "read what is live, then send again", "1 live, at the cap of 1"],
             "route": None,
             "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price",
                      "tile": "3 ready"},
@@ -38139,7 +38139,7 @@ def _m_cases() -> Dict[str, dict]:
             "layout": layout, "market": _M_MIX, "flags": ["--cap", "5"],
             "setup": ["--quantity", f"{_M_D}=1"], "reconcile": {_M_D: 1},
             "exit": 0, "files": {"import.csv": [(_M_D, 2, "2.06")]},
-            "says": [], "never": [_M_ASKED0, "run reconcile --live first"], "route": None,
+            "says": [], "never": [_M_ASKED0, "read what is live, then send again"], "route": None,
             "home": {"line": "send 2 copies to TCGplayer", "behind": None,
                      "tile": "2 copies ready to send"},
         }
@@ -38150,7 +38150,7 @@ def _m_cases() -> Dict[str, dict]:
             "setup": ["--quantity", f"{_M_D}=1"], "reconcile": {_M_D: 1},
             "exit": 1, "files": {"import.csv": [(_M_D, 1, "2.06")]},
             "says": [f"{_M_D} — 1 live, at the cap of 1"],
-            "never": [_M_ASKED0, "run reconcile --live first"],
+            "never": [_M_ASKED0, "read what is live, then send again"],
             "route": ("nothing_to_send", ["already at TCGplayer"]),
             # HOME READS NO CAP AT ALL (`do_pipeline_worklist` never asks `--cap` for), so it
             # still counts the two backstock copies as ready — the SAME reason `capguard`'s
@@ -38163,7 +38163,7 @@ def _m_cases() -> Dict[str, dict]:
             "setup": ["--cap", "2"], "reconcile": {_M_D: 2},
             "exit": 1, "files": {"import.csv": [(_M_D, 2, "2.06")]},
             "says": [f"{_M_D} — 2 live, over the 1 this send asked for"],
-            "never": [_M_ASKED0, "run reconcile --live first"],
+            "never": [_M_ASKED0, "read what is live, then send again"],
             "route": ("nothing_to_send", ["already at TCGplayer"]),
             "home": {"line": "send 1 copy to TCGplayer", "behind": None,
                      "tile": "1 copy ready to send"},
@@ -38182,7 +38182,7 @@ def _m_cases() -> Dict[str, dict]:
             "layout": layout, "market": _M_MIX, "flags": ["--cap", "5"],
             "setup": ["--quantity", f"{_M_D}=2", "--quantity", f"{_M_R}=0"],
             "exit": 0, "files": {"import.csv": [r_mix]},
-            "says": [f"{_M_D} — 2 copies sent since the live reading — run reconcile --live first"],
+            "says": [f"{_M_D} — 2 copies sent and not yet seen live — read what is live, then send again"],
             "never": [_M_ASKED0, _M_LIVE, "1 live, at the cap of"], "route": None,
             "home": {"line": "send 2 copies to TCGplayer", "behind": "1 card needs a price",
                      "tile": "2 ready"},
@@ -38201,7 +38201,7 @@ def _m_cases() -> Dict[str, dict]:
             # THE SETUP PRESS'S FILE STAYS (D54): Dunsparce at 2, the reverse holo at 1.
             "exit": 1, "files": {"import.csv": [(_M_D, 2, "2.06"), r_mix]},
             "says": [
-                f"{_M_D} — 2 copies sent since the live reading — run reconcile --live first",
+                f"{_M_D} — 2 copies sent and not yet seen live — read what is live, then send again",
                 f"{_M_R} — {_M_SENT}",
                 _M_A,
                 "nothing to send: 1 card needs a price first, and 1 card is held at this "
@@ -38229,8 +38229,8 @@ def _m_cases() -> Dict[str, dict]:
             "live": {_M_D: 3}, "named": None,
             # THE SETUP PRESS'S FILE STAYS (D54): one Dunsparce, from before the reconcile.
             "exit": 1, "files": {"import.csv": [(_M_D, 1, "2.06")]},
-            "says": [f"{_M_D} — the live guard leaves no room for this card on hand"],
-            "never": [_M_ASKED0, "1 live, at the cap of 1", "run reconcile --live first"],
+            "says": [_M_LIVE],
+            "never": [_M_ASKED0, "1 live, at the cap of 1", "read what is live, then send again"],
             "route": ("nothing_to_send", ["already at TCGplayer"]),
             "home": {"line": "send 2 copies to TCGplayer", "behind": None,
                      "tile": "2 copies ready to send"},

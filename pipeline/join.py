@@ -2363,8 +2363,14 @@ class SkuMatch:
             # different causes that `asked` cannot carry apart on its own. `guard_trimmed`
             # is the second field that lets this method tell them apart, rather than reading
             # every zero as a typed hold the operator never asked for.
+            #
+            # SAME WORDS AS THE VISIBLE TRIM (D196, on review): this is the one case that
+            # trim naming misses (the cap had already made `would` read zero, so
+            # `sendguard.trims()` never saw a trim to name), but the FACT is identical —
+            # TCGplayer already holds every copy on hand — so it reads exactly like the
+            # ordinary trim rather than naming the guard, a mechanism no screen exposes.
             if self.guard_trimmed:
-                return "the live guard leaves no room for this card on hand"
+                return "TCGplayer already holds every copy on hand"
             return "this send asked for none of this card"
         # EVERY SENTENCE BELOW NAMES A CAP, SO NONE OF THEM MAY BE REACHED WITHOUT ONE (D7, rewritten).
         # With no cap `add_to_quantity` is `len(uncommitted_positions)`, so reaching this line
@@ -2378,11 +2384,17 @@ class SkuMatch:
         # `--cap` is refused for this card outright while a copy sent since is still pending —
         # no copy is silently maxed or summed across two readings any more (DEBT37). `pending`
         # is `nothing_to_add`'s own name for the same gap `_cap_pending` tests.
+        #
+        # THE REMEDY IS WORDED AS THE SCREEN'S OWN ACTION (D196, on review). `pkmnscan
+        # reconcile --live` is the CLI door to it; `#/pricing`'s Live tab has its own door,
+        # the "Read what is live" press (`app/src/Pricing.tsx:readAgain`, over
+        # `reconcileLive`). Naming the CLI flag on a wire field a screen renders would put a
+        # pipeline-internal noun in front of an operator who never sees a flag.
         pending = self.copies_out - self.live_now
         if pending > 0:
             return (
-                f"{pending} cop{'y' if pending == 1 else 'ies'} sent since the live reading — "
-                f"run reconcile --live first"
+                f"{pending} cop{'y' if pending == 1 else 'ies'} sent and not yet seen live — "
+                f"read what is live, then send again"
             )
         # ONCE RECONCILED, THE STORE'S ONE READING IS THE TRUE COUNT, AND THE CAP READS IT
         # ALONE. `min` was hiding exactly this figure (D7, amended 2026-09-08): a cap is a
