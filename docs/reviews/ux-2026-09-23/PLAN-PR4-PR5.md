@@ -190,7 +190,7 @@ drifted from it. The owner's final direction:
 
 1. Inventory's left rail becomes the Orders buyer list, with checkboxes and "Walk all N buyers".
 2. The walk list keeps its style: grouped by section in the solver's order, with "Pick N of M".
-   Sort by box NAME, then section. Today `walkplan.Stop.walk_order` sorts by the hidden box
+   Sort by density, with box NAME only as the tie-break (Q5 below). Today `walkplan.Stop.walk_order` sorts by the hidden box
    number, so "WB1 R3" can come before "WB1 R1". D259 (a box is shown only by its name)
    governs.
 3. Every pick row carries Inventory's location detail. That detail is the box, section and
@@ -212,7 +212,10 @@ Do a design pass first, and show the owner a mockup.
 - Q2: the buyer list scrolls in a sticky rail, as Inventory does.
 - Q6, the pane: `we don't need details on this screen`. The pane keeps D274's hero head only.
 - Q7: the PNGs stay outside the repo, because the pre-commit opsec hook refuses images.
-- Q5, the walk order: open. The owner asked: `i thought we sort formulaically be density of the cards available in a section?`
+- Q5, the walk order. The owner asked: `i thought we sort formulaically be density of the cards available in a section?`
+  They were right: D220 and the walk spec rule density. Then the owner chose: `Density first, name breaks ties (Recommended)`.
+  So point 2 above changes: the solver's density order stands, box name in natural order breaks
+  a tie only, and the final re-sort by the hidden box number goes.
 - Lane E's Hide picked (owner, same day): `The press folds picked rows`. Lane E builds it.
 - Lane A's own plan: `orders-a/PLAN.md` in this folder, on branch `ux/pr4b-A-design`.
 
