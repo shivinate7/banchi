@@ -239,6 +239,7 @@ function salesOf(
 /** The condition string carries the finish (CLAUDE.md: "the grade stays on every row"). A
  *  foil printing is one whose condition names it — never a guess off the card's own name. */
 function isFoil(condition: string | null): boolean {
+  // eslint-disable-next-line no-restricted-syntax -- 'foil' is a fixed word, not a typed query.
   return condition !== null && condition.toLowerCase().includes('foil')
 }
 
@@ -954,7 +955,9 @@ export function Revenue() {
     }
     const rows = Array.from(by.values())
     const byView = rows.filter((row) => (view === 'all' ? true : isSealed(row.kind, row.condition) === (view === 'sealed')))
-    const filtered = byView.filter((row) => matchQuery(query, { text: [row.name] }))
+    const filtered = byView.filter((row) =>
+      matchQuery(query, { text: [row.name, row.setName], skus: [row.sku] }),
+    )
     return filtered.slice().sort((a, b) => {
       const base = compareProducts(a, b, sortKey)
       return sortDir === 'asc' ? base : -base

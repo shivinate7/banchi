@@ -186,6 +186,28 @@ const LOCAL_STORAGE_RULES = [
   { selector: 'Literal[value="localStorage"]', message: LOCAL_STORAGE },
 ]
 
+const HAND_SEARCH =
+  'D271: every search field uses `matchQuery`/`filterByQuery` from app/src/kit/match.ts, ' +
+  'never its own `.toLowerCase().includes()`. That call folds only case, not accents or ' +
+  'punctuation, tests one token instead of the shared word-order and digit rules, and ' +
+  'drifts from the server\'s own `match_query`. A fixed constant on the right (a literal ' +
+  'like `\'foil\'`) is not a typed query — silence this line with a one-line comment ' +
+  'saying so, the way app/src/Revenue.tsx and app/src/kit/data.tsx already do.'
+
+/* One shape: `x.toLowerCase().includes(y)`. Narrower than a bare ban on `.includes()`,
+ * which fires on ordinary array membership everywhere in this codebase — the `.toLowerCase()`
+ * in front is what marks a case-folded string comparison, which is what a hand-rolled
+ * search is. Two known non-query uses are silenced at the call site rather than exempted
+ * by file, the same choice `LOCAL_STORAGE_RULES` argues against for a store-wide ban: a
+ * fixed word like `'foil'` on the right is not a typed query, and the comment says so
+ * where a reviewer is already looking. */
+const HAND_SEARCH_RULES = [
+  {
+    selector: 'CallExpression[callee.property.name="includes"][callee.object.callee.property.name="toLowerCase"]',
+    message: HAND_SEARCH,
+  },
+]
+
 export default tseslint.config(
   {
     /* node_modules is ignored by flat config already. These three are build and test
@@ -207,6 +229,26 @@ export default tseslint.config(
        * plugin package or a local rule module plus a `plugins` entry in this file, and
        * buys nothing here: esquery expresses both shapes directly, and the message field
        * carries everything a rule's `meta.messages` would. */
+      'no-restricted-syntax': [
+        'error',
+        ...FACING_MODE_RULES,
+        ...SPLIT_COMMA_RULES,
+        ...TWO_ARG_THEN_RULES,
+        ...LOCAL_STORAGE_RULES,
+        ...HAND_SEARCH_RULES,
+      ],
+    },
+  },
+  {
+    /* HAND_SEARCH_RULES DOES NOT REACH `tests/`: a Playwright spec asserting a device-storage
+     * key's own casing, or proving a key absent from it, is not a screen matching a typed
+     * query, and the first false positive this rule hit was exactly that
+     * (`app/tests/capture-claims.spec.ts`, `fulfillment.spec.ts`, `moneyFace.ts`,
+     * `review.spec.ts`). D271 governs what a SCREEN does, and every screen lives under
+     * `src/`. This block re-declares the array without HAND_SEARCH_RULES, the same
+     * exempt-by-file shape the next block below uses for useCamera.ts/deviceMemory.ts. */
+    files: ['tests/**/*.ts', 'tests/**/*.tsx'],
+    rules: {
       'no-restricted-syntax': [
         'error',
         ...FACING_MODE_RULES,

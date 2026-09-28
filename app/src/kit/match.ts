@@ -48,6 +48,10 @@
  *     of a field's compact form: `hooh` finds `Ho-Oh ex`, `porygonz` finds `Porygon-Z`.
  *     Text fields are what the row draws: a name, a set, a condition (`Damaged`), a buyer, a
  *     note, an order label, a box name.
+ *  8. RAW. A field marked raw is compared as a plain, case-folded substring, with none of rule
+ *     7's word rules: a digit run in the MIDDLE of an unbroken alphanumeric run still matches.
+ *     This is for a code-card code (Codes, the owner's ruling, 2026-09-28: "keep substring on
+ *     codes"), whose digits are not separate words the way a name's are.
  *
  * PURE. No React, no state, no network: the same function answers in a spec and on a screen. */
 
@@ -62,6 +66,10 @@ export type MatchFields = {
   /** The boxes the row is in. Only the NAME is matched, as text (rules 5 and 7); `box` is
    *  kept so a caller can hand the record over whole, and is never searched. */
   readonly boxes?: readonly { readonly box: number; readonly name?: string | null }[]
+  /** A plain, case-folded substring field, rule 8: no word rules, so a digit run mid-segment
+   *  still matches. Use only where the query is meant to find any fragment of the string, not
+   *  a name a person reads in words (a code-card code, not a card name). */
+  readonly raw?: readonly (string | null | undefined)[]
 }
 
 const APOSTROPHES = /['’ʼ`´]/gu
@@ -134,6 +142,8 @@ type Prepared = {
   readonly words: readonly { readonly raw: string; readonly bare: string }[]
   readonly numbers: readonly NumberParts[]
   readonly skus: readonly string[]
+  /** Rule 8: compact (folded, no spaces) raw fields, for a plain substring test. */
+  readonly rawCompact: readonly string[]
 }
 
 function prepare(fields: MatchFields): Prepared {
@@ -156,6 +166,7 @@ function prepare(fields: MatchFields): Prepared {
         return { whole, first, second: second ?? null }
       }),
     skus: (fields.skus ?? []).filter(present).map((sku) => String(sku).trim()),
+    rawCompact: (fields.raw ?? []).filter(present).map(compactText).filter((one) => one !== ''),
   }
 }
 
@@ -218,10 +229,17 @@ function textMatch(raw: string, row: Prepared): boolean {
   return HAS_LETTER.test(compact) && row.compact.some((field) => field.includes(compact))
 }
 
-/** Rules 4 to 7 for one token alone. */
+/** Rule 8, for one raw token: a plain, case-folded substring, no word rules. */
+function rawSubstringMatch(token: string, row: Prepared): boolean {
+  const needle = compactText(token)
+  return needle !== '' && row.rawCompact.some((field) => field.includes(needle))
+}
+
+/** Rules 4 to 8 for one token alone. */
 function tokenMatch(raw: string, row: Prepared): boolean {
   if (SKU_SHAPE.test(raw) && row.skus.some((sku) => sku.startsWith(raw))) return true
   if (numberMatch(raw, row)) return true
+  if (rawSubstringMatch(raw, row)) return true
   if (raw.startsWith('/')) return false
   return textMatch(raw, row)
 }

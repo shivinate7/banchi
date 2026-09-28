@@ -255,6 +255,32 @@ test('the search field is the shared matcher, not a substring test (D271)', asyn
   expect(await productNames(page)).toEqual(['Charizard ex'])
 })
 
+/* LANE F11b: this screen's search now also matches the SKU and the set name, not the
+ * product name alone. */
+test('the search field also finds a row by its set name (F11b)', async ({ page }) => {
+  await stub(page, [
+    ...generalOrders().slice(0, 2),
+    orderRow({
+      number: 'ORD-1003',
+      placed_at: '2026-08-05T09:00:00+00:00',
+      status: 'Shipped',
+      lines: [
+        line({
+          sku: '9200002',
+          name: 'Pikachu VMAX',
+          quantity: 2,
+          unit_price: '8.00',
+          set_name: 'Sword & Shield: Vivid Voltage',
+        }),
+      ],
+    }),
+    ...generalOrders().slice(3),
+  ])
+  await open(page, '?period=all')
+  await page.getByPlaceholder('Search').fill('vivid voltage')
+  expect(await productNames(page)).toEqual(['Pikachu VMAX'])
+})
+
 test('a name that fell back to its SKU draws in mono; a real name does not', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')

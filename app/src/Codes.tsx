@@ -585,7 +585,10 @@ export function Codes() {
     return ledger.entries.filter((e) => {
       if (stateFilter !== 'all' && e.state !== stateFilter) return false
       if (laneFilter !== 'all' && laneOf(e) !== laneFilter) return false
-      return matchQuery(filter, { text: [e.code, e.product_display, e.set_hint, e.order_id, e.buyer, e.state] })
+      return matchQuery(filter, {
+        text: [e.product_display, e.set_hint, e.order_id, e.buyer, e.state],
+        raw: [e.code],
+      })
     })
   }, [ledger, filter, stateFilter, laneFilter])
 
