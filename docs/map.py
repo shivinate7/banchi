@@ -4613,15 +4613,15 @@ COMPONENTS = [
                         "`serve scope` audit row fails until this list follows.",
             },
             "guard-scope.py": {
-                "does": "does this branch reach what one of fifteen guard self-tests proves? "
+                "does": "does this branch reach what one of the gated self-tests proves? "
                         "THE SECOND PATH GATE IN THIS REPO, on the owner's word, 2026-09-20. "
                         "`classify --target <name>` exits 0 to run and 3 to skip, and each of "
-                        "the fifteen recipes is its own caller. Unlike `serve-scope.py`'s "
+                        "the gated recipes is its own caller. Unlike `serve-scope.py`'s "
                         "hand-curated `SCOPE` against a separately hand-curated `CARRY`, "
                         "`derive_subjects()` reads each self-test's own source on every call — "
                         "every local-package import and every `Path`-style chain, plus a regex "
                         "for the four shell scripts — so there is no second list to drift. "
-                        "`ROSTER` names which fifteen targets are gated, on `serve-scope.py`'s "
+                        "`ROSTER` names which targets are gated (`make guard-scope ARGS=list` prints them), on `serve-scope.py`'s "
                         "own precedent of naming its one target by hand. It imports the "
                         "globbing and the recipe narrowing from `browser-scope.py`. "
                         "`PKMNSCAN_GUARD_SCOPE=off` runs every target regardless.",
