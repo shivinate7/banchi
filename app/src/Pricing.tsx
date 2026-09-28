@@ -2352,7 +2352,6 @@ export function Pricing() {
           variant={filterHeld ? 'primary' : 'default'}
           aria-pressed={filterHeld}
           onClick={() => setFilterHeld((on) => !on)}
-          className="pricing-held-filter"
         >
           {`Held ${held.length}`}
         </Button>
