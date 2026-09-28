@@ -2464,6 +2464,44 @@ def main() -> int:
                   "read — this arm proves the fix against the commit this branch actually "
                   "forked from, not a fabricated 'before')")
 
+        print("\n  -- and docs-audit refuses a NUMBERED record a branch allocates itself --")
+        # THE EXACT DEFECT `DEBT-pricing-corpus-five-unlocked-writers` WAS: a branch writing
+        # `docs/debts/048-....md` straight, never a slug, so `scripts/claim-ids.py` could
+        # independently plan the same number for a pending slug elsewhere.
+        # `scripts/docs-audit.py:check_numbered_record_growth`
+        # is the mechanized refusal (D140) — proved here against a real repo, because the
+        # question is a real `git merge-base`/`git ls-tree` against `origin/main`, not a
+        # fixture `check_numbered_record_growth` could be fooled by.
+        ntmp = tmp / "numbered-growth"
+        ntmp.mkdir()
+        nwork = build_split(ntmp)
+        git(nwork, "checkout", "-q", "-b", "feature-numbered")
+        write(nwork, "docs/debts/048-a-branch-allocated-this-number.md",
+              "## 48 — a branch allocated this number\n\nbody\n")
+        git(nwork, "add", "-A")
+        git(nwork, "commit", "-qm", "a branch writes a numbered debt directly")
+
+        audit = docs_audit_module()
+        audit.ROOT = nwork
+        report = audit.Report()
+        audit.check_numbered_record_growth(report)
+        row = next(r for r in report.checks if r.check == "numbered record growth")
+        ok(len(row.findings) == 1 and
+           "048-a-branch-allocated-this-number.md" in row.findings[0].where,
+           "a numbered debt file the merge-base with origin/main does not carry is refused",
+           "\n".join(f.where + ": " + f.message for f in row.findings))
+
+        # AND SILENT ON MAIN ITSELF — the branch's own numbered files are exactly what main
+        # already carries once HEAD sits at origin/main, so `merge-base == HEAD` and nothing
+        # is new growth. Proves the row does not fire on every numbered file in the tree.
+        git(nwork, "checkout", "-q", "main")
+        clean_report = audit.Report()
+        audit.check_numbered_record_growth(clean_report)
+        clean_row = next(r for r in clean_report.checks if r.check == "numbered record growth")
+        ok(not clean_row.findings,
+           "on main itself, with no branch growth, the row finds nothing",
+           "\n".join(f.where for f in clean_row.findings))
+
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))
     return 1 if FAIL else 0

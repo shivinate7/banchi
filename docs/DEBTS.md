@@ -124,5 +124,5 @@ DEBT44 pokemontcg.io is deprecated (ends 2027-03-01), and `pipeline/stockimages.
 DEBT45 no page lists what each test protects, so the owner cannot confirm the tests are current
 DEBT46 a search with a typo finds nothing, and no near match is offered
 DEBT47 ~~the demo's network guard blocks the stock images the demo now loads on purpose~~ — CLOSED 2026-09-27, fixed as recommended
-DEBT48 ~~the pricing corpus has five unlocked writers~~ — CLOSED 2026-09-27, fixed as recommended
+DEBT-pricing-corpus-five-unlocked-writers ~~the pricing corpus has five unlocked writers~~ — CLOSED 2026-09-27, fixed as recommended
 ```

@@ -3434,6 +3434,61 @@ def check_id_claims(report: Report) -> None:
                    ", claimed at the merge" if unclaimed and not on_main() else ""))
 
 
+# ---------------------------------------------- a numbered record is claimed at merge, never on a branch
+
+# `id claims` ABOVE CATCHES A MALFORMED SLUG. It says nothing about a branch that skips the
+# slug entirely and writes the number itself — a `docs/decisions/D<n>-*.md` or
+# `docs/debts/<n>-*.md` file with a real number in its own name, D140's exact violation
+# ("never allocate a numbered record on a branch. Write a slug. Claim the number at merge.").
+# That is how `DEBT-pricing-corpus-five-unlocked-writers` collided: lane B2 added
+# `docs/debts/048-...md` straight, and `scripts/claim-ids.py` independently planned the
+# SAME number for a pending slug.
+#
+# THE QUESTION IS THE MERGE-BASE'S OWN, so a file main already carried before this branch
+# forked is not new growth — only a numbered file THIS BRANCH adds is. FAILS OPEN exactly
+# like `only_shrinks.list_at_merge_base`: no merge-base scans nothing and says so, rather
+# than refusing every numbered file in a tree with no `origin/main` to compare against.
+_NUMBERED_DECISION_FILE = re.compile(r"^D[0-9]+-")
+_NUMBERED_DEBT_FILE = re.compile(r"^[0-9]+-")
+
+
+def check_numbered_record_growth(report: Report) -> None:
+    findings: List[Finding] = []
+    base = git("merge-base", _MERGE_BASE_REFERENCE, "HEAD").strip()
+    if not base:
+        report.add("numbered record growth", MECHANICAL, findings,
+                    summary="no merge-base with origin/main — fails open, nothing checked")
+        return
+
+    scanned = 0
+    for directory, pattern, kind in (
+        ("docs/decisions", _NUMBERED_DECISION_FILE, "decision"),
+        ("docs/debts", _NUMBERED_DEBT_FILE, "debt"),
+    ):
+        base_names = set(
+            Path(p).name for p in
+            git("ls-tree", "-r", "--name-only", base, "--", directory).splitlines()
+        )
+        dirpath = ROOT / directory
+        if not dirpath.is_dir():
+            continue
+        for path in sorted(dirpath.glob("*.md")):
+            if not pattern.match(path.name):
+                continue
+            scanned += 1
+            if path.name not in base_names:
+                findings.append(Finding(
+                    f"{directory}/{path.name}",
+                    f"is a NUMBERED {kind} record this branch adds, and the merge-base "
+                    f"with origin/main does not carry it (D140). A branch never allocates "
+                    f"a number — write a slug instead and `scripts/claim-ids.py` claims "
+                    f"the number at the merge.",
+                ))
+    report.add("numbered record growth", MECHANICAL, findings,
+               scanned=scanned,
+               summary=f"{len(findings)} branch-added numbered record(s), {scanned} checked")
+
+
 # --------------------------------------------------- the claimer speaks the same vocabulary
 
 # TWO DECLARATIONS AND A READER, this repo's standing answer to a shape it keeps meeting.
@@ -22004,6 +22059,7 @@ def audit(staged_only: bool) -> Report:
     check_decision_ids(report, docs)
     check_decision_structure(report)
     check_id_claims(report)
+    check_numbered_record_growth(report)
     check_claim_vocabulary(report)
     check_entry_budget(report)
     check_debts_headings(report)

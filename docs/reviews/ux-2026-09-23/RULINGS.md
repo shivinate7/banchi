@@ -769,7 +769,7 @@ Lane E and A:
 
 Lane B2 and C:
 
-- OWNER (2026-09-27), B2, DEBT48, verbatim: "yes build now".
+- OWNER (2026-09-27), B2, DEBT-pricing-corpus-five-unlocked-writers, verbatim: "yes build now".
 - OWNER (2026-09-27), C, DEBT37, paraphrase: send a Sonnet agent to see what remains on DEBT37 and how to fix it. The owner then asked why `emit --cap` overshoots at all, and proposed a cap works only once the store has read TCGplayer's live count. RULING: `emit --cap` refuses a card unless the store's live reading is newer than every copy sent since. Lane C built it (D7 amended, DEBT37 and DEBT24).
 
 Lane D and the feedback items:
