@@ -273,6 +273,19 @@ export function useOrderWalk({
   const rows = useMemo(() => rowsOf(plan), [plan])
   const sections = useMemo(() => sectionsOf(plan, rows), [plan, rows])
 
+  /** D263 (ported from `BoxBrowse.tsx`'s box walk) + D118: a sold line stays exactly where
+   *  it is — still drawn, still marked `is-done` — for as long as THIS plan is loaded. D132's
+   *  original timing folded a line "the moment the walk steps off it," which D118 overturned:
+   *  pressing onto the NEXT row folded the PREVIOUS one under that very click, so the new row
+   *  slid up to meet the pointer (the UN-6 defect). Folding now waits for the walk's own NEXT
+   *  LOAD — a fresh plan — never a press. `planTakeKeys` is every take THIS plan holds; a
+   *  plan can never itself land with a take already satisfied (the solver only plans one
+   *  still owed), and the same `keysSig` change that hands this walk a fresh plan already
+   *  empties `receipts` above — so a freshly loaded plan never has anything left to fold in
+   *  the first place. `WalkList` keeps any line in this set drawn regardless of `soldKeys`,
+   *  which is why Mark sold, by itself, removes nothing from the list. */
+  const planTakeKeys = useMemo(() => new Set(rows.map((row) => row.takeKey)), [rows])
+
   const [current, setCurrent] = useState<string | null>(null)
   /* LANDING, THE SAME MOMENT INVENTORY'S OWN BOX WALK PICKS ITS FIRST CARD: the first row of a
      freshly landed plan. Keyed off the plan's own identity (a new object from a new fetch),
@@ -548,6 +561,7 @@ export function useOrderWalk({
     plan,
     rows,
     sections,
+    planTakeKeys,
     current,
     currentRow,
     currentGroup,
@@ -632,7 +646,13 @@ export function WalkList({
         const lines = takeLinesOf(section.rows)
         const pickedAll = (line: WalkTakeLine) =>
           line.rows.filter((row) => walk.soldKeys.has(row.copy.key)).length >= line.take.wanted
-        const shown = hideSold ? lines.filter((line) => !pickedAll(line)) : lines
+        /* D263 (ported) + D118: `walk.planTakeKeys` is every take THIS PLAN holds, so a line
+         * marked sold mid-plan is never dropped here — it stays drawn, `is-done`, until the
+         * walk is handed a genuinely different plan (see `useOrderWalk`'s own comment on
+         * `planTakeKeys`, above). `hideSold` still gates a line that arrived ALREADY done on
+         * a plan this hook has not itself loaded (there is no such case today, but the check
+         * is the real rule, not a placeholder for it). */
+        const shown = hideSold ? lines.filter((line) => !pickedAll(line) || walk.planTakeKeys.has(line.takeKey)) : lines
         if (shown.length === 0) return null
         return (
           <li className="orders-walk-group" key={section.key}>
