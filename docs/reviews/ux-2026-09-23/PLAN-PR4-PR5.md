@@ -10,7 +10,7 @@ PR 5's work now lives inside PR 4B. Owner: `bring everything that was PR5 into P
 
 - The orchestrator plans, briefs, verifies and merges. It never builds product code.
 - The integration branch is `ux/pr4b`. Each lane branches from it and merges back. PR 4B is
-  one PR from it. Its worktree for records is `.claude/worktrees/pr4b-plan`.
+  one PR from it. Its worktree for records is `.claude/worktrees/pr4b-orch`.
 - Session grants lapse with their session. A new session asks the owner again for the merge
   grant and the model cap. This session's grants are in the log below.
 - Cadence (owner, 2026-09-26): each lane gets one review, and a re-review only after a FAIL. A
@@ -59,7 +59,9 @@ PR 5's work now lives inside PR 4B. Owner: `bring everything that was PR5 into P
 | L7 | Measure the slow CI shard, then one route sweep | Merged (ed07efd9), after one FAIL |
 | L8 | docs-audit merges 16 rows into families, 107 to 93 (M3, Q8) | Merged (db207f3c) |
 | L10 | Heartbeat and coordinator retired | Merged (4c58fbfb) |
-| L11 | `match-selftest` joins the path gate | Review PASS |
+| L12 | docs-audit rows block by tier, 11 rows cut, commit hook 8.63s to 6.12s | Merged (bd88525f) |
+| debt48 | B2's debt becomes a slug, and `numbered record growth` refuses a record numbered on a branch | Merged (c5766886) |
+| L11 | `match-selftest` joins the path gate | Merged (568f81a2) |
 | P5 | Stub D48 and D194 to one line each. Delete debts 5, 6, 18, 28, 35 and 42 | Merged (afc2ca83) |
 | R | `make reap` stops only processes tagged with the caller's id | Merged (215dd646) |
 | T-claude | `CLAUDE.md` cut from 112 KB to 58 KB. The decision index is a rendered view (D60 amended) | Merged (286d4add) |
@@ -80,13 +82,9 @@ Records and studies, also merged:
 
 Earlier PRs, done: PR 3B, the demo mirror (#467 to #477), and PR 4A (#466).
 
-## In motion (state at 262f3351)
+## In motion (state at 709ef385)
 
-One lane remains open in PR 4B.
-
-| Lane | Branch | What | State |
-|---|---|---|---|
-| L12 | `ux/pr4b-L12` | The docs-audit tiers: `docs/reviews/test-audit-2026-09-27/TIERS.md`'s Tier 1-3 rulings, and Q8's merge families | Building. Merges into `ux/pr4b` after one review PASS, with `cd app && npx tsc --noEmit` at the merge. |
+Every PR 4B lane is merged. Next: open PR 4B, wait for green CI, and merge with `make merge`.
 
 ## Still to come
 
