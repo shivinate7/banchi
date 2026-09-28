@@ -146,6 +146,7 @@ def run() -> Result:
     _walk_pick_all_accepted(c)
     _walk_pick_short_completes_smallest(c)
     _progress_wire_carries_closed_fields(c)
+    _walk_plan_stop_names_box(c)
 
     return c.result()
 
@@ -644,4 +645,49 @@ def _take_order(c: Checks) -> None:
         [take.sku for take in again.stops[0].takes],
         [take.sku for take in stop.takes],
         "a plan asked for twice over the same snapshot does not reshuffle",
+    )
+
+
+def _walk_plan_stop_names_box(c: Checks) -> None:
+    """D259: A box is shown only by its name, and a stop whose takes carry no copies still
+    gets its box's name. The server sends box_name from the stop's box_title, never null,
+    even when all takes are empty.
+    """
+    # Create an inventory with a named box
+    inventory = _store([1], [])  # empty box
+    inventory.boxes["1"].name = "Demo Box"
+    ledger = _ledger({})
+
+    # Manually create a minimal walkplan.Stop-like object with no copies
+    # This represents a scenario where a stop exists but has no copies to pick
+    class MockTake:
+        def __init__(self, sku, copies):
+            self.sku = sku
+            self.copies = copies
+            self.wanted = 0
+            self.orders = []
+
+    class MockStop:
+        def __init__(self):
+            self.key = "stop:1"
+            self.box = 1
+            self.section = None
+            self.pooled = False
+            self.game = "pokemon"
+            self.game_display = None
+            self.order = 1
+            self.takes = [MockTake("A", [])]  # Take with no copies
+
+    stop = MockStop()
+    places = capture_server._Places(inventory)
+
+    # Call _walk_plan_stop directly
+    wire_stop = capture_server._walk_plan_stop(inventory, ledger, places, stop)
+
+    # Verify that box_name is set to the box's title, not null
+    c.ok(wire_stop["box_name"] is not None, "box_name should not be null even with no copies")
+    c.equal(
+        wire_stop["box_name"],
+        "Demo Box",
+        "box_name should be set to the box's stored name from box_title",
     )

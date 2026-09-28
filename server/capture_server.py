@@ -14113,7 +14113,7 @@ def _walk_plan_stop(
                 box_total = sample["box_total"]
                 break
         else:
-            box_name = None
+            box_name = inventory.box_title(stop.box)
             section_name = None
     else:
         box_name = None
