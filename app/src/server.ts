@@ -3260,17 +3260,33 @@ export async function getHoldingsValue(range: HoldingsRange = 'month'): Promise<
  *  carries a photograph, exactly `photoUrl`'s own `(box, index, cid)` triple. */
 export type SkuPhotoEntry = { box: number; index: number; cid: string | null }
 
-/** `sku -> SkuPhotoEntry`, for exactly the SKUs asked. A SKU with no photographed copy on
- *  hand is simply ABSENT — never a guess (`GET /skus/photos?sku=<s>&sku=<s>`,
- *  D298). `#/revenue`'s own reason: a sold card's own photograph is usually
+/** `getSkuPhotos`'s own answer, two fields so the caller knows which kind of photo it has
+ *  (F2, the owner: "why does the sales page not pull the icons like you're able to do on
+ *  sets and pricing?"). `photos` is unchanged (D298): this store's own photograph, keyed by
+ *  SKU. `stockPhotos` is F2's own addition — a hotlinked catalogue image (D301's same
+ *  posture, Sets and Pricing's own resolver) for a SKU with no on-hand photographed copy, a
+ *  single by number or a SEALED product by name, Pokemon included. A SKU never appears in
+ *  both. */
+export type SkuPhotos = {
+  readonly photos: Readonly<Record<string, SkuPhotoEntry>>
+  readonly stockPhotos: Readonly<Record<string, string>>
+}
+
+/** `sku -> its photo`, for exactly the SKUs asked. A SKU with no photograph of either kind
+ *  is simply ABSENT from both fields — never a guess (`GET /skus/photos?sku=<s>&sku=<s>`,
+ *  D298, amended F2). `#/revenue`'s own reason: a sold card's own photograph is usually
  *  reclaimed on purpose (D89), so a sales row's thumbnail is ANOTHER copy of the same SKU,
- *  never the one that actually sold. A plain read, costs nothing, so this screen calls it
- *  on arrival rather than gating it behind a press. */
-export async function getSkuPhotos(skus: string[]): Promise<Record<string, SkuPhotoEntry>> {
-  if (skus.length === 0) return {}
+ *  never the one that actually sold — and past that, a stock photo off the same catalogue
+ *  Sets and Pricing already read. A plain read, costs nothing, so this screen calls it on
+ *  arrival rather than gating it behind a press. */
+export async function getSkuPhotos(skus: string[]): Promise<SkuPhotos> {
+  if (skus.length === 0) return { photos: {}, stockPhotos: {} }
   const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
-  const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as { photos: Record<string, SkuPhotoEntry> }
-  return body.photos
+  const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as {
+    photos: Record<string, SkuPhotoEntry>
+    stock_photos: Record<string, string>
+  }
+  return { photos: body.photos, stockPhotos: body.stock_photos }
 }
 
 /** Every on-hand card, grouped by set, one row per distinct card with its quantity — the
