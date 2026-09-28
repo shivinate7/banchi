@@ -93,7 +93,7 @@ Before PR 4B merges:
 
 - Main is red. The docs audit's `id claims` row fails on main's unclaimed slug
   `D-demo-stock-images`. A small records PR claims it.
-- The final head: `make vale`, then the PR, green CI, and `make merge`.
+- The final head: the PR, green CI, and `make merge`. Vale is retired, so no local step runs.
 
 After PR 4B merges:
 
@@ -108,13 +108,9 @@ stale dev-server enforcement and two parent-guard bugs.
 
 ## Open questions for the owner
 
-- Density in the walk: today it counts the cards to pick at a stop. Should it count the cards a
-  section holds instead?
-- Q1: the owner asked for a less blunt tool than "process rows block in CI only".
-- Q2: whether prose that repeats a number a command prints should go, with its policing row.
+- Q1's tier list: an agent is proposing a tier per docs-audit row, for the owner to approve.
 - Q5, Q6 and Q8 from the test-audit plan.
 - Q7 is the owner's own act: turn GitHub's required status checks on again.
-- Start L1, L3, L6 and L7 now?
 - Merge the small PR that fixes main's red?
 - The cadence rule's home waits for the test-audit rulings. The two NOT MECHANIZED rules
   outside CLAUDE.md's Hard rules block are deferred.
@@ -188,3 +184,8 @@ G, T and PR 5:
 - PR 5 debts: `delete the six, split debt 27, and tell me what is left on debt 27?`
 - PR 5 into PR 4: `bring everything that was PR5 into PR4, so you can do that debt27 check now`.
 - H: `it'll be the epilogue of PR4`.
+- Walk density: `Cards to pick at the stop (what's built)`.
+- Test-audit Q1, the tiers: `Three tiers, agent proposes, you approve (Recommended)`. Q2: `Yes (Recommended)`.
+- Start now: `L1, L3, L6, L7`. The owner asked for the other three options explained first.
+- Vale: `Retire it, keep American spelling in docs-audit (Recommended)`. Lane L3 removes Vale.
+  The spelling row learns markdown in lane L2. So the final head no longer runs `make vale`.
