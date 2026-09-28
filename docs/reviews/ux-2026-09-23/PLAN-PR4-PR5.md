@@ -69,10 +69,10 @@ PASS, with `cd app && npx tsc --noEmit` at the merge.
 | F8 | `ux/pr4b-F8` | Inventory search leads with the best-ranked match, and says when it is sold | MERGED (bc66af69). |
 | G | `ux/pr4b-G` | Every staged image gets the QR scan, fail closed. `claim-selftest` skips ignored files. The tsc out-of-memory cause | Merged (73037a92). The tsc premise no longer held. |
 | L2 | `ux/pr4b-L2` | Cut `ste offenders`. Identifier spelling reads staged files only and learns markdown. S3, S4 | Building. Then a review. Then L4, L8, L12. |
-| R | `ux/pr4b-R` | `make reap` stops only processes tagged with the caller's id | Building. Then a review. |
-| F9 | `ux/pr4b-F9` | Empty sections leave the Inventory walk | Review FAIL: the box header still drew the empty section, and no test sold a section's last card. Back with the builder. |
+| R | `ux/pr4b-R` | `make reap` stops only processes tagged with the caller's id | Merged (215dd646). The owner runs `make janitor-install` once after PR 4B merges. |
+| F9 | `ux/pr4b-F9` | Empty sections leave the Inventory walk | Merged (66992bce). |
 | F10 | `ux/pr4b-F10` | Search: a complete word ("punch first", "body rune") finds nothing, and a partial word finds the card | Diagnosing. Then a review. |
-| A4 | `ux/pr4b-A4` | Walk rows carry `CardLocations` rows | Building. Then a review. Then A5. |
+| A4 | `ux/pr4b-A4` | Walk rows carry `CardLocations` rows | Merged (1736fc8e). A5 builds next. |
 | H | `ux/h-record` | Eight many-color palettes, the sheet and the method | Its own deferred PR. The screenshots join after G merges. |
 | Q1 tiers | merged | A proposed tier for each docs-audit row: `docs/reviews/test-audit-2026-09-27/TIERS.md`. 65 Tier 1, 22 Tier 2, 13 Tier 3, 9 CUT, 7 unsure. | Waiting for the owner, together with Q8's merge families (PLAN.md item M3). No docs-audit lane starts before that. |
 
