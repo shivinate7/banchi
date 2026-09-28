@@ -1426,6 +1426,19 @@ test('Clear asks first: cancel and Esc change nothing, confirm and Enter clear',
   await expect(hintRow).toContainText('None')
 })
 
+test('a held Enter that opened the Clear sheet does not confirm it', async ({ page }) => {
+  await open(page, { box: 3, bid: 23, setHint: 'MEG', finish: ['normal'] }, GAMES, HAND_BOXES)
+  await page.getByRole('button', { name: 'Clear' }).click()
+  const dialog = page.getByRole('alertdialog')
+  await expect(dialog).toBeVisible()
+  // An auto-repeated keydown, as a held key sends it.
+  await page.evaluate(() =>
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true, bubbles: true, cancelable: true })),
+  )
+  await expect(dialog).toBeVisible()
+  await expect(page.locator('.capture-row').filter({ hasText: /Set hint/ })).toContainText('MEG')
+})
+
 test('the clear is disabled while there is nothing to clear, rather than absent', async ({
   page,
 }) => {
@@ -1807,7 +1820,9 @@ test('the stage panel hugs the portrait frame: no dead side bands', async ({ pag
         return still
       })
       .toBe(true)
-    const { stage, frame } = JSON.parse(last) as { stage: { w: number }; frame: { w: number; h: number } }
+    const { stage, frame } = JSON.parse(last) as { stage: { w: number; h: number }; frame: { w: number; h: number } }
+    // The 104px head + foot + padding constant in CaptureScreen.css (`--cap-stage-w`).
+    expect(Math.abs(stage.h - frame.h - 104), `overhead at ${width}x${height}`).toBeLessThanOrEqual(2)
     // Still a 9:16 portrait frame, within a pixel of rounding.
     expect(Math.abs(frame.w / frame.h - 9 / 16)).toBeLessThan(0.01)
     // The panel is the frame plus its 16px padding each side, never the wide dark track.

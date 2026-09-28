@@ -213,6 +213,9 @@ const PROMPT_UNWRITTEN = 'unwritten'
 /** One capture made in this session: what the server recorded, and what we sent with it. */
 type Shot = {
   card: CardSummary
+  /** THE CARD NUMBER OF A SHOT WHOSE LABEL WAS RETIRED by a remove ahead of it (D67): the old
+   *  label's card minus one per slide, so the tile still names its card. Absent until a slide. */
+  cardNo?: number | null
   // The client's own copy of what accompanied this photo, NOT a server echo — the capture
   // response carries neither. Shown under the photo because the bar above shows what the
   // *next* card will get, and a stack toggled wrong is D3's expensive failure: it is
@@ -298,6 +301,8 @@ type UndoTarget = {
   sectionDiv: string | null
   /** The box's stored name, for a tile or a note when there is no rendered label (D259). */
   boxName: string | null
+  /** A slid card's own number (see `Shot.cardNo`); null everywhere else. */
+  cardNo: number | null
 }
 
 /** What to call a position on screen — the server's own rendered label, or the record's own
@@ -316,7 +321,9 @@ type UndoTarget = {
  *  `undoNote.position` — draws a bare key whole, because it peels one off a label only when
  *  there are position parts in front of it. */
 function positionText(target: UndoTarget): string {
-  return target.label ?? boxTitle(target.boxName, target.box)
+  if (target.label !== null) return target.label
+  const name = boxTitle(target.boxName, target.box)
+  return target.cardNo === null ? name : `${name}, Card ${target.cardNo}`
 }
 
 const BOX_DIGITS = /^[0-9]+$/
@@ -950,7 +957,7 @@ function undoFigure(target: UndoTarget): string | null {
   /* The card number the label names, off the one label reader (`position.ts:placePartsOf`),
      which reads the server's comma form and the old dotted one alike. No label, no figure:
      a store key is never drawn (D259) — the tile names the box instead. */
-  const card = placePartsOf(target.label)?.card ?? null
+  const card = target.cardNo ?? placePartsOf(target.label)?.card ?? null
   return card === null ? null : `#${card}`
 }
 
@@ -2203,7 +2210,7 @@ export function CaptureScreen() {
     } catch (error) {
       setBoxNote(
         error instanceof ServerError
-          ? `${error.message} (${error.code})`
+          ? error.message
           : 'The box could not be created. Check the capture server is running.',
       )
     } finally {
@@ -2289,6 +2296,8 @@ export function CaptureScreen() {
       if (event.key !== 'Enter') return
       event.preventDefault()
       event.stopPropagation()
+      // A held key's repeats are swallowed, never a confirm (and never Cancel's native click).
+      if (event.repeat) return
       setClearOpen(false)
       clearSetup()
     }
@@ -2671,7 +2680,7 @@ export function CaptureScreen() {
       // is no `cid` to address its photograph by. `photoSrc` draws it off the slot.
       return serverNewest < 1
         ? []
-        : [{ box, index: serverNewest, label: null, cid: null, captureId: null, sectionDiv: null, boxName: boxNameOf(box) }]
+        : [{ box, index: serverNewest, label: null, cid: null, captureId: null, sectionDiv: null, boxName: boxNameOf(box), cardNo: null }]
     }
 
     /* THE WHOLE SITTING, NEWEST FIRST — UN-1, the owner's own example: from capture 36, the
@@ -2689,6 +2698,7 @@ export function CaptureScreen() {
         captureId: shot.card.capture_id,
         sectionDiv: shot.card.section_div ?? null,
         boxName: boxNameOf(shot.card.box),
+        cardNo: shot.cardNo ?? null,
       }))
   }, [box, boxNameOf, nextForBox, sitting])
 
@@ -3202,6 +3212,9 @@ export function CaptureScreen() {
               shot.card.box === target.box && shot.card.index > target.index
                 ? {
                     ...shot,
+                    cardNo: (shot.cardNo ?? placePartsOf(shot.card.label)?.card ?? null) === null
+                      ? null
+                      : (shot.cardNo ?? placePartsOf(shot.card.label)?.card ?? 1) - 1,
                     card: {
                       ...shot.card,
                       index: shot.card.index - 1,

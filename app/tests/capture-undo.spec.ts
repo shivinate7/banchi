@@ -1242,8 +1242,11 @@ test('removing a middle row deletes that card alone, and the later ones survive 
      keep their server-rendered labels; the two that shifted fall back to the box's name (D259),
      because `pipeline/join.py:Position.label` composed the old string against an index that
      is no longer theirs and this screen never composes a second one (D67). */
-  await expect(rows(page).nth(0)).toHaveAttribute('aria-label', /S key$/)
-  await expect(rows(page).nth(1)).toHaveAttribute('aria-label', /S key$/)
+  // Each slid card still names ITS card (the old label's number minus one), so the two differ.
+  await expect(rows(page).nth(0)).toHaveAttribute('aria-label', /S key, Card 4$/)
+  await expect(rows(page).nth(1)).toHaveAttribute('aria-label', /S key, Card 3$/)
+  await expect(rows(page).nth(0).locator('.capture-undo-pos')).toHaveText('#4')
+  await expect(rows(page).nth(1).locator('.capture-undo-pos')).toHaveText('#3')
   await expect(rows(page).nth(2)).toHaveAttribute('aria-label', /Card 2$/)
   await expect(rows(page).nth(3)).toHaveAttribute('aria-label', /Card 1$/)
 

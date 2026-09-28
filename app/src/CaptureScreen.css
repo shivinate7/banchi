@@ -14,7 +14,7 @@
      around a narrow frame. 104px is what the head, the foot and the viewfinder's own padding
      spend around the frame (measured at 1440x900, 1280x800, 1100x900 and 820x1100: panel height
      minus frame height, 104 each time); 34px is the viewfinder's 16px side padding twice plus
-     2px of rounding. `app/tests/capture-stage.spec.ts` measures the panel against the frame, so a
+     2px of rounding. `app/tests/capture-claims.spec.ts` measures the panel and its 104px overhead against the frame, so a
      changed head or foot turns it red instead of leaving dead side bands. */
   --cap-stage-h: min(calc(100dvh - var(--cap-chrome)), 860px);
   --cap-stage-w: calc((var(--cap-stage-h) - 104px) * 9 / 16 + 34px);

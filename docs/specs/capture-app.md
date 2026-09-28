@@ -559,7 +559,7 @@ what `docs/DESIGN.md` refuses in as many words.
   from its height (`--cap-stage-w`), not a 1fr track; the freed width goes to the last-capture
   photo (desktop) and the run and last cards (tablet). The phone keeps a full-width panel: its
   height budget pins the shutter above the tab bar. Layout only: capture, motion trigger and
-  rotation are untouched. Rewrites §5.1's "live camera on the left" only in width, not order.
+  rotation are untouched. Width only. §5.1's order is unchanged.
 
 ## 6. trigger-seam
 
