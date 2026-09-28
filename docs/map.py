@@ -4212,9 +4212,10 @@ COMPONENTS = [
              "governed_by": ["D11", "D14", "D16", "D24"],
             },
             "decision-context.py": {
-                "does": "D17's PreToolUse hook: reads this file, lifts each governing "
-                        "decision's own bolded lead-in out of docs/DECISIONS.md, and emits "
-                        "additionalContext — never permissionDecision, which would "
+                "does": "D17's PreToolUse hook: reads this file and emits one id-and-title "
+                        "line per governing decision as additionalContext (the owner's "
+                        "2026-09-27 ruling), with `make map` for the full text — never "
+                        "permissionDecision, which would "
                         "auto-approve every Write in the project. Never blocks, never "
                         "writes, exits 0 on its own bugs, silent for files no entry covers. "
                         "Its decision_gists() is reused by status.py, never reimplemented.",
