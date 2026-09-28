@@ -48,7 +48,7 @@ test('the sidebar brand draws the mark, and names itself without it', async ({ p
   // was clipped and the banner covered much of the rest.
   const brand = page.locator('.bn-side .bn-brand')
   await expect(brand).toHaveJSProperty('tagName', 'BUTTON')
-  await expect(brand).toHaveAttribute('aria-label', 'Collapse the sidebar')
+  await expect(brand).toHaveAttribute('aria-label', 'Collapse')
   await expect(brand).toHaveAttribute('aria-expanded', 'true')
 
   // ONE DRAWING. It was two — the lockup and a separate rail mark, crossfading — until the
@@ -557,7 +557,7 @@ for (const rail of [
     // raced the mount and measured the OPEN sidebar — caught by this test's own `one glyph per
     // row` arm reporting `2 at 33, 204`, which is the expanded column, not the rail.
     if (rail.collapse) {
-      await page.getByRole('button', { name: 'Collapse the sidebar' }).click()
+      await page.getByRole('button', { name: 'Collapse' }).click()
       // the collapse is the precondition, so it is asserted rather than slept through: a rail
       // that never closed would otherwise be measured as though it had.
       await expect(page.locator('.bn-shell[data-rail="true"]')).toHaveCount(1)
@@ -672,7 +672,7 @@ test('the phone drawer draws the lockup, and no wordmark or tagline beside it', 
 
   /* the sidebar's server line, and nothing more (TXT-45): it printed the store's card count, a
      third count in the chrome to compare against the screen's own */
-  await expect(page.locator('.bn-drawer .bn-server')).toHaveText('Server online')
+  await expect(page.locator('.bn-drawer .bn-server')).toHaveAccessibleName('Server online')
 })
 
 test('every lockup the product draws clears the size floor', async ({ page }) => {

@@ -5,7 +5,7 @@ import { rememberRail, storedRail, storedTheme } from './deviceMemory'
 import { getStatus, onServerBoot, onServerReachable } from './server'
 import { useSearch } from './useSearch'
 import { usePoll } from './usePoll'
-import { Button, Icon, IconButton, Kbd, KeyHint, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
+import { Button, Icon, IconButton, Kbd, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
   applyTheme, openSheet, overlayOpen, readTheme, type IconName, type Theme } from './kit'
 import { BLOCK, PARAMS, ROMAN_TRACK_SOLVED } from './kit/lockupGeometry'
 import { Toaster, toast } from './kit/toast'
@@ -131,25 +131,24 @@ const REVIEW_KEYS: ScreenKeys = {
 }
 
 const PRICING_KEYS: ScreenKeys = {
-  where: 'Only while Pricing is open. Most keys work inside a price field.',
+  where: '',
   rows: [
-    { keys: ['R'], does: 'Reload the worklist', when: 'not on a phone' },
-    { keys: ['T'], does: 'Open the product view of the row under the pointer, or the focused row' },
-    { keys: ['M'], does: 'Snap the price to Market' },
-    { keys: ['L'], does: 'Snap the price to Lowest' },
-    { keys: ['N'], does: 'Snap the price to what it is now', when: 'when the card is already listed' },
-    { keys: ['H'], does: 'Hold this card back instead of pricing it' },
-    { keys: ['P'], does: 'Show the photograph of this card' },
-    { keys: ['U'], does: 'Undo the last answer, hold, or cut-off change', when: 'anywhere on the screen but a text field' },
-    { keys: ['↵'], does: 'Write this price and drop to the next card' },
-    { keys: ['⇧↵'], does: 'Write this price and go back up one' },
-    { keys: ['↑', '↓'], does: 'Write this price and move' },
-    { keys: ['Esc'], does: 'Put the standing answer back and leave the field' },
-    { keys: ['B'], does: 'Hold it because you are bullish', when: 'while the hold panel is up' },
-    { keys: ['K'], does: 'Hold it because you are keeping it', when: 'while the hold panel is up' },
-    { keys: ['X'], does: 'Hold it for a later batch', when: 'while the hold panel is up' },
-    { keys: ['↵'], does: 'Set the hold', when: 'while the hold panel is up' },
-    { keys: ['Esc'], does: 'Cancel the hold, or close the open panel' },
+    { keys: ['R'], does: 'Reload' },
+    { keys: ['T'], does: 'Open' },
+    { keys: ['M'], does: 'Market' },
+    { keys: ['L'], does: 'Lowest' },
+    { keys: ['N'], does: 'Current' },
+    { keys: ['H'], does: 'Hold' },
+    { keys: ['P'], does: 'Photo' },
+    { keys: ['U'], does: 'Undo' },
+    { keys: ['↵'], does: 'Confirm' },
+    { keys: ['⇧↵'], does: 'Back' },
+    { keys: ['↑', '↓'], does: 'Move' },
+    { keys: ['Esc'], does: 'Cancel' },
+    { keys: ['B'], does: 'Bullish' },
+    { keys: ['K'], does: 'Keeping' },
+    { keys: ['X'], does: 'Batch' },
+    { keys: ['↵'], does: 'Set' },
   ],
 }
 
@@ -739,7 +738,7 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
   }
   let index = -1
   return (
-    <Modal open={open} onClose={onClose} title="Go to" className="bn-cmdk">
+    <Modal open={open} onClose={onClose} title="Search" className="bn-cmdk">
       <div className="bn-cmdk-input">
         <Icon name="search" size={18} className="bn-muted" />
         {/* `autoFocus`, not only the kit's first-focus frame: a person types the moment the
@@ -755,7 +754,7 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
           autoComplete="off"
           spellCheck={false}
           value={query}
-          placeholder="A screen, or a card’s name"
+          placeholder="Search"
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
@@ -806,11 +805,6 @@ function CommandPalette({ open, onClose, commands }: { open: boolean; onClose: (
           </div>
         ) : null}
       </div>
-      <div className="bn-cmdk-foot">
-        <KeyHint>
-          <Kbd>↑</Kbd> <Kbd>↓</Kbd> to move, <Kbd>↵</Kbd> to open, and <Kbd>,</Kbd> then a letter jumps anywhere
-        </KeyHint>
-      </div>
     </Modal>
   )
 }
@@ -860,15 +854,14 @@ const ANYWHERE_KEYS: KeyGroup = {
   id: 'anywhere',
   title: 'Anywhere',
   icon: 'keyboard',
-  where: 'Works on every one of your screens.',
+  where: '',
   rows: [
-    { keys: ['?'], does: 'Open this sheet' },
-    { keys: ['⌘K', 'Ctrl K'], does: 'Go to a screen, or find a card' },
-    { keys: ['⌘←', '⌘→'], does: 'Step to the screen before or after this one, in workflow order' },
-    { keys: ['⌘↑', '⌘↓'], does: 'The same step, for a keyboard without arrow pairs' },
-    { keys: ['⌘.'], does: 'Collapse the sidebar to its rail, or open it again' },
-    { keys: ['R'], does: 'Reload the screen', when: 'where it has a Reload button' },
-    { keys: ['Esc'], does: 'Close whatever is over the screen' },
+    { keys: ['?'], does: 'Opens' },
+    { keys: ['⌘K', 'Ctrl K'], does: 'Search' },
+    { keys: ['⌘←', '⌘→', '⌘↑', '⌘↓'], does: 'Navigate' },
+    { keys: ['⌘.'], does: 'Toggle' },
+    { keys: ['R'], does: 'Reload' },
+    { keys: ['Esc'], does: 'Close' },
   ],
 }
 
@@ -880,19 +873,19 @@ function jumpKeys(): KeyGroup {
     id: 'jump',
     title: 'Jump to a screen',
     icon: 'zap',
-    where: 'Press the comma, then the letter.',
+    where: '',
     rows: [
       ...lettered.map((route) => ({ keys: [`,${(route.hotkey ?? '').toUpperCase()}`], does: route.label })),
-      ...unlettered.map((route) => ({ keys: ['⌘K'], does: route.label, when: 'then type its name' })),
+      ...unlettered.map((route) => ({ keys: ['⌘K'], does: route.label })),
     ],
   }
 }
 
 const PALETTE_KEYS: KeyGroup = {
   id: 'palette',
-  title: 'Go to',
+  title: 'Search',
   icon: 'command',
-  where: 'Only while Go to is open.',
+  where: 'Only while Search is open.',
   rows: [
     { keys: ['↑', '↓'], does: 'Move down the list' },
     { keys: ['↵'], does: 'Open the highlighted screen or card' },
@@ -967,9 +960,9 @@ function KeysSheet({ open, onClose, path }: { open: boolean; onClose: () => void
   const hidden = q === '' && !showAll && SHORTCUTS.length > groups.length
 
   return (
-    <Modal open={open} onClose={onClose} title="Keyboard shortcuts" icon="keyboard" className="app-keys">
+    <Modal open={open} onClose={onClose} title="Shortcuts" icon="keyboard" className="app-keys">
       <div className="app-keys-search">
-        <SearchField value={query} onChange={setQuery} persona="owner" label="Search shortcuts" placeholder="Search shortcuts" autoFocus />
+        <SearchField value={query} onChange={setQuery} persona="owner" label="Search" placeholder="Search" autoFocus />
       </div>
       <div className="app-keys-body">
         {groups.length === 0 ? <p className="app-keys-none">No shortcut matches “{query}”.</p> : null}
@@ -979,18 +972,20 @@ function KeysSheet({ open, onClose, path }: { open: boolean; onClose: () => void
               <Icon name={group.icon} size={15} />
               {group.title}
             </h3>
-            <p className="app-keys-where">
-              {group.where}
-              {group.at === undefined ? null : (
-                <>
-                  {' '}
-                  <a className="app-keys-goto" href={`#${group.at}`} onClick={onClose}>
-                    Go there
-                    <Icon name="arrowRight" size={12} />
-                  </a>
-                </>
-              )}
-            </p>
+            {group.where === '' && group.at === undefined ? null : (
+              <p className="app-keys-where">
+                {group.where}
+                {group.at === undefined ? null : (
+                  <>
+                    {' '}
+                    <a className="app-keys-goto" href={`#${group.at}`} onClick={onClose}>
+                      Open
+                      <Icon name="arrowRight" size={12} />
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
             <dl className="app-keys-rows">
               {group.rows.map((row, at) => (
                 <div key={`${group.id}-${at}`} className={row.keys.length > 3 ? 'app-keys-row app-keys-row-wide' : 'app-keys-row'}>
@@ -1009,7 +1004,7 @@ function KeysSheet({ open, onClose, path }: { open: boolean; onClose: () => void
         {hidden ? (
           <p className="app-keys-more">
             <button type="button" className="app-keys-show-all" onClick={() => setShowAll(true)}>
-              Show every screen’s keys
+              More
             </button>
           </p>
         ) : null}
@@ -1040,9 +1035,11 @@ function ServerLine({ state }: { state: ServerState }) {
   return (
     <div className="bn-server" data-state={state} title={state === 'offline' ? 'The capture server is not answering' : undefined}>
       <span className={`bn-dot ${state === 'online' ? 'bn-dot-ok' : state === 'offline' ? 'bn-dot-danger' : ''}`} />
-      <span className="bn-side-foot-text">
-        {state === 'online' ? 'Server online' : state === 'offline' ? 'Server offline' : 'Checking server…'}
-      </span>
+      {state === 'online' ? (
+        <span className="bn-sr">Server online</span>
+      ) : (
+        <span className="bn-side-foot-text">{state === 'offline' ? 'Server offline' : 'Checking server…'}</span>
+      )}
     </div>
   )
 }
@@ -1160,7 +1157,7 @@ function Sidebar({
           type="button"
           className="bn-brand"
           onClick={onToggleRail}
-          aria-label={rail ? 'Expand the sidebar' : 'Collapse the sidebar'}
+          aria-label={rail ? 'Expand' : 'Collapse'}
           aria-expanded={!rail}
         >
           {brandSlot}
@@ -1185,18 +1182,18 @@ function Sidebar({
           sized to the nav's own in App.css. */}
       <div className="bn-side-foot">
         {OWN_TAB.map((route) => (
-          <a key={route.path} className="bn-nav-link" href={`#${route.path}`} target="_blank" rel="noopener" data-tip={route.label}>
+          <a key={route.path} className="bn-nav-link" href={`#${route.path}`} target="_blank" rel="noopener" data-tip="Pull">
             <Icon name={route.icon} size={18} />
-            <span className="bn-nav-text">{route.label}</span>
+            <span className="bn-nav-text">Pull</span>
             <Icon name="external" size={14} className="bn-faint" />
           </a>
         ))}
-        <Button variant="ghost" icon="search" onClick={onPalette} data-tip="Go to" aria-haspopup="dialog">
-          <span className="bn-side-foot-text">Go to</span>
+        <Button variant="ghost" icon="search" onClick={onPalette} data-tip="Search" aria-haspopup="dialog">
+          <span className="bn-side-foot-text">Search</span>
           <Kbd>⌘K</Kbd>
         </Button>
         <Button variant="ghost" icon={theme === 'dark' ? 'sun' : 'moon'} onClick={onToggleTheme}>
-          <span className="bn-side-foot-text">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+          <span className="bn-side-foot-text">Theme</span>
         </Button>
         <ServerLine state={server} />
       </div>
@@ -1227,7 +1224,7 @@ function PhoneBar({ onPalette }: { onPalette: () => void }) {
       >
         Banchi
       </span>
-      <IconButton icon="search" label="Go to" onClick={onPalette} aria-haspopup="dialog" />
+      <IconButton icon="search" label="Search" onClick={onPalette} aria-haspopup="dialog" />
     </header>
   )
 }
@@ -1293,15 +1290,15 @@ function Drawer({ open, path, onClose, theme, onToggleTheme, server }: { open: b
         ))}
         <div className="bn-nav-group bn-drawer-more">
           {OWN_TAB.map((route) => (
-            <a key={route.path} className="bn-nav-link" href={`#${route.path}`} target="_blank" rel="noopener" onClick={onClose}>
+            <a key={route.path} className="bn-nav-link" href={`#${route.path}`} target="_blank" rel="noopener" onClick={onClose} data-tip="Pull">
               <Icon name={route.icon} size={18} />
-              <span className="bn-nav-text">{route.label}</span>
+              <span className="bn-nav-text">Pull</span>
               <Icon name="external" size={14} className="bn-faint" />
             </a>
           ))}
           <button type="button" className="bn-nav-link" onClick={onToggleTheme}>
             <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
-            <span className="bn-nav-text">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+            <span className="bn-nav-text">Theme</span>
           </button>
           <ServerLine state={server} />
         </div>
@@ -1450,7 +1447,7 @@ export function App() {
       {/* THE FIRST TAB STOP ON EVERY SCREEN (UX-092): past the sidebar, to the screen. A button,
           not an `#anchor` link: the hash is this app's router. */}
       <button type="button" className="bn-skip" onClick={focusScreen}>
-        Skip to the screen
+        Skip
       </button>
       <Sidebar
         path={path}

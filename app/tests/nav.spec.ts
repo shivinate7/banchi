@@ -769,7 +769,7 @@ test('a throwaway ROUTES row gets its nav, palette, keys, title and scaffold wit
 
   // PALETTE: its Screens group lists it, and Enter goes there
   await page.keyboard.press('Meta+k')
-  const palette = page.getByRole('dialog', { name: 'Go to' })
+  const palette = page.getByRole('dialog', { name: 'Search' })
   await expect(palette).toBeVisible()
   await palette.getByRole('combobox').fill('throwaway')
   await expect(palette.getByRole('option').first()).toHaveText(/Throwaway/)
@@ -787,7 +787,7 @@ test('a throwaway ROUTES row gets its nav, palette, keys, title and scaffold wit
   // KEYS: a jump entry, and the screen's own group, open by default on its own screen
   await page.locator('h1').focus()
   await page.keyboard.press('?')
-  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+  const sheet = page.getByRole('dialog', { name: 'Shortcuts' })
   await expect(sheet).toBeVisible()
   await expect(sheet.locator('dd', { hasText: /^Throwaway/ })).toHaveCount(1)
   await expect(sheet.getByRole('heading', { name: 'Throwaway' })).toBeVisible()
@@ -855,7 +855,7 @@ test('the palette lists every screen, off-nav ones included, and finds a card', 
     }),
   )
   await page.keyboard.press('Meta+k')
-  const palette = page.getByRole('dialog', { name: 'Go to' })
+  const palette = page.getByRole('dialog', { name: 'Search' })
   await expect(palette).toBeVisible()
 
   // every screen, the three off the nav included (UX-003)
@@ -892,7 +892,7 @@ test('a refused card search hides the Cards group and says so in one line', asyn
     }),
   )
   await page.keyboard.press('Meta+k')
-  const palette = page.getByRole('dialog', { name: 'Go to' })
+  const palette = page.getByRole('dialog', { name: 'Search' })
   await palette.getByRole('combobox').fill('abra')
   /* The line is the demo's own sentence in the published build (`__BN_DEMO__`); this dev build
      says the server did not answer. Either way it is ONE line, and no Cards group. "abra" matches
@@ -973,7 +973,7 @@ test('no global key acts under an open layer', async ({ page }) => {
 test('the first Tab reaches the skip link, and a navigation hands focus to the screen (UX-092)', async ({ page }) => {
   await open(page, RING[0])
   await page.keyboard.press('Tab')
-  const skip = page.getByRole('button', { name: 'Skip to the screen' })
+  const skip = page.getByRole('button', { name: 'Skip' })
   await expect(skip).toBeFocused()
   await page.keyboard.press('Enter')
   await expect.poll(() => page.evaluate(() => document.activeElement?.closest('.bn-view') !== null)).toBe(true)

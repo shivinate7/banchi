@@ -4248,12 +4248,12 @@ test('the keyboard sheet lists the keys the rows answer, and nothing the screen 
   await open(page)
   await page.locator(`${VIEW} h1`).click()
   await page.keyboard.press('?')
-  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+  const sheet = page.getByRole('dialog', { name: 'Shortcuts' })
   await expect(sheet).toBeVisible()
   /* THE SNAP KEYS ARE THE COLUMNS THE ROW DRAWS (m, l, and n on the Live tab), and T OPENS THE
      PRODUCT VIEW WITH ONE PRESS (the delta review, R3-4). */
-  await expect(sheet).toContainText('Open the product view')
-  await expect(sheet).toContainText('Snap the price to Lowest')
+  await expect(sheet).toContainText('Open')
+  await expect(sheet).toContainText('Lowest')
   await expect(sheet).not.toContainText('Low with shipping')
   await expect(sheet).not.toContainText('Direct low')
   await expect(sheet).not.toContainText('Hold to read')

@@ -648,8 +648,8 @@ test('the drawer has no fixed foot, and every screen in it shows without a scrol
   await expect(drawer.locator('.bn-side-foot'), 'the drawer drew a fixed foot again').toHaveCount(0)
 
   const nav = drawer.locator('.bn-nav')
-  await expect(nav.getByRole('link', { name: /Cards to pull/ })).toHaveCount(1)
-  await expect(nav.getByRole('button', { name: /mode$/ })).toHaveCount(1)
+  await expect(nav.getByRole('link', { name: 'Pull' })).toHaveCount(1)
+  await expect(nav.getByRole('button', { name: 'Theme' })).toHaveCount(1)
   await expect(nav.locator('.bn-server')).toHaveCount(1)
 
   const screens = nav.locator('a.bn-nav-link:not([target="_blank"])')

@@ -183,7 +183,7 @@ export function pricingTileNote(runsToPrice: number, readyCopies: number | null)
   const runs = runsToPrice === 1 ? 'run' : 'runs'
   if (runsToPrice === 0) {
     if (readyCopies !== null && readyCopies > 0) {
-      return `${readyCopies.toLocaleString()} ${readyCopies === 1 ? 'copy' : 'copies'} ready to send`
+      return `${readyCopies.toLocaleString()} ready`
     }
     return 'nothing to price'
   }
@@ -321,11 +321,11 @@ export function standing(input: StandingInput): Standing | null {
       key: 'unfindable',
       tone: 'danger',
       icon: 'alert',
-      lead: 'Cannot be filled',
+      lead: 'Unfillable',
       say: [
         t(' — '),
         n(unfindable),
-        t(unfindable === 1 ? ' copy missing across ' : ' copies missing across '),
+        t(' short across '),
         n(missingOrders),
         t(missingOrders === 1 ? ' order.' : ' orders.'),
       ],

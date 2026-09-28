@@ -137,7 +137,7 @@ async function visitFulfiller(page: Page): Promise<Page> {
   await openRoot(page)
   const [fulfiller] = await Promise.all([
     page.waitForEvent('popup'),
-    page.locator('.bn-side').getByRole('link', { name: /^Cards to pull/ }).first().click(),
+    page.locator('.bn-side').getByRole('link', { name: 'Pull' }).first().click(),
   ])
   await fulfiller.locator('main, body').first().waitFor()
   await fulfiller.waitForTimeout(600)
