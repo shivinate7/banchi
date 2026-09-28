@@ -47,7 +47,7 @@ Records and studies, also merged:
 
 Earlier PRs, done: PR 3B, the demo mirror (#467 to #477), and PR 4A (#466).
 
-## In motion (state at the 2026-09-27 compaction)
+## In motion (state at the third 2026-09-27 compaction, ux/pr4b at c8562273)
 
 Each lane builds on its own branch `ux/pr4b-<lane>` and merges into `ux/pr4b` after one review
 PASS, with `cd app && npx tsc --noEmit` at the merge.
@@ -55,17 +55,24 @@ PASS, with `cd app && npx tsc --noEmit` at the merge.
 | Lane | Branch | What | State |
 |---|---|---|---|
 | B3 | `ux/pr4b-B3` | A refused markdown apply writes nothing | MERGED (49e12373) after four rounds. The listing file lands last, and a failed rename restores the old price. A Ctrl-C window is named in DEBT48. |
-| F5 | `ux/pr4b-F5` | Cut the excess words. Numbers and names stay. Review's mismatch line becomes "Mismatch: photo reading / matched listing". | Building. Then a review. |
-| D2 | `ux/pr4b-D2` | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | MERGED (752d638b). The phone overlay sweep now takes the last-mounted layer. That is wrong when a sheet and its dialog mount in one commit ("Check first"). A follow-up picks the highest z-index. |
+| F5 | `ux/pr4b-F5` | Cut the excess words. Numbers and names stay. Review's mismatch line becomes "Mismatch: photo reading / matched listing". | Built, never reported. Its branch has commits. Ask for its hand-back, then a review. |
+| D2 | `ux/pr4b-D2` | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | MERGED (752d638b, plus the z-index follow-up). The phone sweep audits the topmost overlay. |
 | P5 | `ux/pr4b-P5` | Stub D48 and D194 to one line each. Delete debts 5, 6, 18, 28, 35 and 42. Split DEBT27, or delete it if D279 removed its call. | MERGED (afc2ca83). DEBT27 keeps its open half. DEBT6 is kept in part, because a docs-audit row reads five figures from it. |
-| A3 | `ux/pr4b-A3` | The Orders pane becomes `CardPane`, with no Details fold | Building. Then a review. |
+| A3 | `ux/pr4b-A3` | The Orders pane becomes `CardPane`, with no Details fold | MERGED (c8562273). The pick pane is Inventory's `CardPane`. |
 | A6 | `ux/pr4b-A6` | No `Box <n>` fallback in the walk | MERGED (633aff52). |
-| L1 | `ux/pr4b-L1` | Cut T7's idle waits | Building. Then a review. |
-| L3 | `ux/pr4b-L3` | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | Review FAIL: 4 of 7 items done. A Sonnet builder finishes C2, P1, F5 and the decision amendments. |
+| L1 | `ux/pr4b-L1` | Cut T7's idle waits | MERGED. T7 median 130s to 72s, measured by the reviewer. |
+| L3 | `ux/pr4b-L3` | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | MERGED (31355eea) after two FAILs. `make check` is 56 checks. |
 | L5 | `ux/pr4b-L5` | Cut the old demo seed guards, keep the generator | MERGED (7481619a). `demo-freshness` retired too, because C4 names it. |
 | L6 | `ux/pr4b-L6` | DEBT47 closed, pull-confirm folded into fulfillment | MERGED (29c32166). |
 | L7 | `ux/pr4b-L7` | Measure the slow CI shard, then one route sweep | MERGED (ed07efd9), after one FAIL: the folded floors now report every failure in one run. Shard 2 is slow from `icon-button.spec.ts` re-rendering the gallery per test. |
-| L10 | `ux/pr4b-L10` | Heartbeat and coordinator retired | Two FAILs fixed (docs-audit, the shell guard's advice). Re-review running. |
+| L10 | `ux/pr4b-L10` | Heartbeat and coordinator retired | MERGED (4c58fbfb). The orchestrator fixed the last stale spec line. |
+| F8 | `ux/pr4b-F8` | Inventory search leads with the best-ranked match, and says when it is sold | MERGED (bc66af69). |
+| G | `ux/pr4b-G` | Every staged image gets the QR scan, fail closed. `claim-selftest` skips ignored files. The tsc out-of-memory cause | Building. Then a review. |
+| L2 | `ux/pr4b-L2` | Cut `ste offenders`. Identifier spelling reads staged files only and learns markdown. S3, S4 | Building. Then a review. Then L4, L8, L12. |
+| R | `ux/pr4b-R` | `make reap` stops only processes tagged with the caller's id | Building. Then a review. |
+| F9 | `ux/pr4b-F9` | Empty sections leave the Inventory walk | Building. Then a review. |
+| A4 | `ux/pr4b-A4` | Walk rows carry `CardLocations` rows | Building. Then a review. Then A5. |
+| H | `ux/h-record` | Eight many-color palettes, the sheet and the method | Its own deferred PR. The screenshots join after G merges. |
 | Q1 tiers | merged | A proposed tier for each docs-audit row: `docs/reviews/test-audit-2026-09-27/TIERS.md`. 65 Tier 1, 22 Tier 2, 13 Tier 3, 9 CUT, 7 unsure. | Waiting for the owner, together with Q8's merge families (PLAN.md item M3). No docs-audit lane starts before that. |
 
 ## Still to come
