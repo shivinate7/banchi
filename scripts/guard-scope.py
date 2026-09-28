@@ -100,6 +100,7 @@ ROSTER = (
     {"target": "product-history-selftest", "test": "scripts/product-history-selftest.py"},
     {"target": "sku-number-contradictions-selftest",
      "test": "scripts/sku-number-contradictions-selftest.py"},
+    {"target": "match-selftest", "test": "scripts/match-selftest.py"},
 )
 
 TARGETS = {entry["target"] for entry in ROSTER}
