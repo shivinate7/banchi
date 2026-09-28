@@ -2449,6 +2449,9 @@ class _Places:
         # widening answers hundreds of rows, so 'ex' on a 3,000-card store spent 17s here.
         # One request, one snapshot: the order cannot move under this instance.
         self._order_cache: Dict[int, "master.BoxOrder"] = {}
+        # `_company`'s occupants mapped into order space, once per box (was once per card,
+        # O(n^2) on a box). Same lifetime and safety as `_order_cache`: one request.
+        self._company_indices: Dict[int, List[float]] = {}
 
     @classmethod
     def for_keys(
@@ -2700,7 +2703,9 @@ class _Places:
         # IN ORDER SPACE (D265). `gaps` is already orders; `at`, `start` and `end` are
         # indices, mapped here. With no order, each map is the identity.
         order = self._order(box)
-        indices = [order.of(i) for i, _ in occupants]
+        indices = self._company_indices.get(box)
+        if indices is None:
+            indices = self._company_indices[box] = [order.of(i) for i, _ in occupants]
         at = order.of(at)
         start = order.of(start)
         end = None if end is None else order.of(end)
