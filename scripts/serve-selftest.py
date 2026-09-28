@@ -56,6 +56,14 @@ CARRY = (
     # THE SUPERVISOR IS MADE OF THIS FILE TOO SINCE THE SELF-SYNC — it is in `SELF_FILES` and
     # imported at module scope, so a tree without it cannot start one at all.
     "scripts/primary_sync.py",
+    # `do_up` IMPORTS THIS AT MODULE SCOPE SINCE 7e80e3df (lane R) — it marks the real
+    # detached supervisor child directly rather than through the Makefile wrapper. A tree
+    # without it fails every `serve.py` invocation at import time, before `.serve/` is ever
+    # created, which is what turned into a FileNotFoundError on `supervisor.log` far downstream
+    # rather than the ModuleNotFoundError this actually was.
+    "scripts/reap_mark.py",
+    # `reap_mark.py` itself imports `checkout_root` and `proc_start_epoch` from here.
+    "scripts/reap.py",
     "envfile.py",
     "server",
     "store",
