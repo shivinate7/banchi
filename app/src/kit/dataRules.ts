@@ -35,8 +35,9 @@ export const STATUS_TONES: Readonly<Record<StatusKind, StatusTone>> = {
 }
 
 /** What a box with no stored name is called. Never its number (the owner's ruling,
- *  2026-09-23). */
-export const UNNAMED_BOX = 'Unnamed box'
+ *  2026-09-23). F5 verbiage cut (row 162): "Untitled" — "box" was redundant, every card in
+ *  the view this fell back for is already a box. */
+export const UNNAMED_BOX = 'Untitled'
 
 /** When this browser last reached for each box, by box number (`deviceMemory.ts`). */
 export type BoxRecency = ReadonlyMap<number, string>

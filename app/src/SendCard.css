@@ -78,9 +78,6 @@
 
 /* ON A PHONE ONLY THE PRESS STAYS ON THE FIRST LINE (UX-007). The two quiet doors take the
    whole width beneath it, so the send is never pushed off the line by its siblings. */
-.send-short {
-  display: none;
-}
 .send-more-press {
   display: none;
 }
@@ -111,12 +108,6 @@
 @media (max-width: 767px) {
   .send-press {
     flex: 1 1 100%;
-  }
-  .send-long {
-    display: none;
-  }
-  .send-short {
-    display: inline;
   }
 
   /* ON A PHONE A TAKEN-BACK WARNING IS ONE LINE: its own imperative, a press that opens the rest,

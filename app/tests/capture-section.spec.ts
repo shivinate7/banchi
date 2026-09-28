@@ -263,10 +263,10 @@ async function open(
   await page.keyboard.type('5')
   await page.keyboard.press('Enter')
   await page.keyboard.press('v')
-  await page.getByLabel('Rig').getByRole('button', { name: 'Open the camera' }).click()
+  await page.getByLabel('Rig').getByRole('button', { name: 'Connect' }).click()
   await page.locator('.capture-opt').filter({ hasText: /Canvas Cam Link/ }).click()
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('button', { name: 'Capture card', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeEnabled()
 
   return wire
 }
@@ -448,7 +448,7 @@ test('S in the middle inserts right after the pick, and later sections renumber'
   await page.keyboard.press('s')
 
   expect(wire.opens).toEqual([{ box: '5', after: '6' }])
-  await expect(page.locator('.capture-refused, .capture-note-ok').first()).toContainText('New section')
+  await expect(page.locator('.capture-refused, .capture-note-ok').first()).toContainText('Section')
   await expect(page.locator('.capture-quiet').filter({ hasText: 'Section 3 is now 4' })).toBeVisible()
   // The screen picks the new section.
   await expect(sectionRow(page)).toContainText('Section 3 of 4')
@@ -459,7 +459,7 @@ test('S at the back is the ordinary S, and sends no `after`', async ({ page }) =
   await page.keyboard.press('s')
   expect(wire.opens).toEqual([{ box: '5', after: undefined }])
   // The ordinary case renumbers nothing.
-  await expect(page.locator('.capture-refused, .capture-note-ok').first()).toContainText('New section')
+  await expect(page.locator('.capture-refused, .capture-note-ok').first()).toContainText('Section')
   await expect(page.locator('.capture-quiet').filter({ hasText: /is now/ })).toHaveCount(0)
 })
 
@@ -646,7 +646,7 @@ test('an older server with no sections_detail[].div still lets U reach the divid
   await page.keyboard.press('Enter')
 
   await page.keyboard.press('s')
-  await expect(page.locator('.capture-refused, .capture-note-ok').first()).toContainText('New section')
+  await expect(page.locator('.capture-refused, .capture-note-ok').first()).toContainText('Section')
   // THE SECTION ROW'S OWN RE-RENDER, waited on before `U` — `pendingDivider` and the trigger
   // seam's own ref both move in the same commit as this text, so this is what makes the
   // press land on the ref the S just re-armed rather than a passive effect still in flight

@@ -51,6 +51,13 @@ export function ReadingAge({ at, className }: { readonly at?: string | null; rea
           : `This store last wrote these listing figures ${readingExact(at)}.`
       }
     >
+      {/* F5 verbiage cut (row 151, verdict ONE WORD "Updated") DECLINED for this element: it
+          is not shorter than "read" (it is longer, by three characters plus a capital), so it
+          buys no real cut, and `inventory.spec.ts`'s own width guard measures this exact
+          string wrapping to two lines at the 181px track the owner works at, 1440x900
+          (`the market row draws on one line at the width the owner works at`) — a
+          regression the reviewer's own reasoning ("the number of days is the fact worth
+          keeping") does not ask for. "read" stays. */}
       {ago === null ? 'not read yet' : `read ${ago}`}
     </span>
   )
@@ -95,7 +102,7 @@ function headroom(group: SearchGroup): string {
   if (group.listable === 0) return 'No copies can go live'
   if (room > 0) return `Room for ${room} more live`
   if (room === 0) return `At the ceiling of ${group.listable}`
-  return `${-room} over the ceiling of ${group.listable}`
+  return `${-room} over ${group.listable}`
 }
 
 /** ONE LINE, EVERY FACT ONCE (the owner's ruling, 2026-09-25, Direction B): the box's name, the
@@ -434,7 +441,7 @@ function OwnerRows({
     <section className={['card-locations', 'card-locations-owner', className ?? ''].filter(Boolean).join(' ')}>
       {!head ? null : (
       <header className="card-locations-head">
-        <h3 className="bn-section-title card-locations-title">Every copy of this card</h3>
+        <h3 className="bn-section-title card-locations-title">Copies</h3>
         {/* THE ONE THING THAT RESHUFFLES THIS LIST, and it is a press rather than a consequence.
             Drawn only once the order has actually gone stale — a control offering to recompute
             an order that is already current is a button that does nothing, and a permanent one
@@ -537,7 +544,7 @@ function OwnerRows({
               <span>Not listed yet</span>
             ) : (
               <>
-                {group.listed.pushed > 0 ? <span>{group.listed.pushed} sent to TCGplayer</span> : null}
+                {group.listed.pushed > 0 ? <span>{group.listed.pushed} sent</span> : null}
                 {group.listed.staged > 0 ? <span>{group.listed.staged} waiting to go live</span> : null}
                 <span>{headroom(group)}</span>
               </>
@@ -713,7 +720,7 @@ function OwnerRows({
       </ul>
       {hidden === 0 ? null : (
         <p className="card-locations-hidden">
-          {hidden === 1 ? '1 sold copy hidden' : `${hidden} sold copies hidden`}
+          {`${hidden} hidden`}
         </p>
       )}
     </section>

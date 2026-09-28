@@ -824,7 +824,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
                 </Button>
               )}
               <Button variant="quiet" size="sm" icon="search" onClick={openPanel}>
-                Wrong card?
+                Correct
               </Button>
             </div>
           ) : (

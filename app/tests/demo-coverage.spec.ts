@@ -143,7 +143,7 @@ async function visitFulfiller(page: Page): Promise<Page> {
   await openRoot(page)
   const [fulfiller] = await Promise.all([
     page.waitForEvent('popup'),
-    page.locator('.bn-side').getByRole('link', { name: /^Cards to pull/ }).first().click(),
+    page.locator('.bn-side').getByRole('link', { name: 'Pull' }).first().click(),
   ])
   await fulfiller.locator('main, body').first().waitFor()
   await fulfiller.waitForTimeout(600)
@@ -184,7 +184,7 @@ test.describe('the published demo draws what reviewers grade', () => {
   test.afterEach(async ({ page }, testInfo) => {
     if (testInfo.status === 'passed') return
     if (testInfo.title !== 'Orders draws a walk') return
-    const walkAll = page.getByRole('button', { name: /^Walk all \d+ buyers?$/ })
+    const walkAll = page.getByRole('button', { name: /^Walk \d+$/ })
     const walkAllCount = await walkAll.count().catch(() => -1)
     const walkAllLabel =
       walkAllCount > 0
@@ -202,8 +202,8 @@ test.describe('the published demo draws what reviewers grade', () => {
       .innerText({ timeout: 3_000 })
       .catch((exc) => `<could not read main: ${String(exc).slice(0, 200)}>`)
     console.log('=== Orders draws a walk: failure evidence ===')
-    console.log('"Walk all N buyers" button count:', walkAllCount)
-    console.log('"Walk all N buyers" button label:', walkAllLabel)
+    console.log('"Walk N" button count:', walkAllCount)
+    console.log('"Walk N" button label:', walkAllLabel)
     console.log(`"${REFUSAL}" count:`, refusalCount)
     console.log('console/pageerror during this test:', ordersConsole.length === 0 ? '<none>' : '')
     for (const line of ordersConsole) console.log(' ', line)
@@ -242,10 +242,10 @@ test.describe('the published demo draws what reviewers grade', () => {
       if (screen === 'Review') {
         // `/Card \d+ of \d+/` matched no text `ReviewQueue.tsx` has ever drawn — the
         // progress line reads "Nothing is waiting." when the queue is empty and
-        // "<N> done, <M> to go" otherwise (UX-256). Invisible until this branch's own
+        // "Progress <N> of <M>" otherwise (UX-256). Invisible until this branch's own
         // re-snapshot put a real, non-empty queue in the recording for the first time.
         const empty = page.getByText('Nothing is waiting.')
-        await expect(empty.or(page.getByText(/\d+ done, \d+ to go/))).toBeVisible()
+        await expect(empty.or(page.getByText(/Progress \d+ of \d+/))).toBeVisible()
         if ((await empty.count()) > 0) {
           await expect(page.getByText(REFUSAL)).toHaveCount(0)
           return
@@ -334,7 +334,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     // STALE, REWRITTEN 2026-09-27 (D295 full mirror, plus an unrelated aria-label rename):
     // no order is ticked by default, and nothing named "cards this walk covers" exists any
     // more — `OrdersWalkPane.tsx:WalkList`'s list is now "The cards to pick, in the order
-    // the boxes are walked". Press "Walk all N buyers" first (the demo-mirror-data-build
+    // the boxes are walked". Press "Walk N" first (the demo-mirror-data-build
     // lane's walk-plan fix records exactly this "walk all" set), then read the current list.
     //
     // THE PRIOR FIX (CI run 36314954311) RAISED THE WRONG TIMEOUT. Pressing "Walk all"
@@ -348,7 +348,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     // is the knob that actually needed raising.
     test.setTimeout(60_000)
     await visit(page, 'Orders')
-    await page.getByRole('button', { name: /^Walk all \d+ buyers?$/ }).first().click()
+    await page.getByRole('button', { name: /^Walk \d+$/ }).first().click()
     const walk = page.getByRole('list', { name: /cards to pick/i })
     await expect(walk).toBeVisible({ timeout: 45_000 })
     // DEBT23's shape: the list container appearing does not mean its rows have. A bare
@@ -364,11 +364,11 @@ test.describe('the published demo draws what reviewers grade', () => {
     await visit(page, 'Review')
     // REAL, NOT STALE (2026-09-27, D295 full mirror). Whether the owner's store owes an
     // answer right now is a fact about today, so this reads the queue's own progress line
-    // ("Nothing is waiting." when empty, "<N> done, <M> to go" otherwise, UX-256 — never
+    // ("Nothing is waiting." when empty, "Progress <N> of <M>" otherwise, UX-256 — never
     // `/Card \d+ of \d+/`, which no version of ReviewQueue.tsx has drawn) rather than
     // asserting either shape by name. Answer-then-undo runs only when a card is queued;
     // an empty queue asserts the honest empty state instead of fabricating a card.
-    const label = page.getByText(/\d+ done, \d+ to go/)
+    const label = page.getByText(/Progress \d+ of \d+/)
     const empty = page.getByText('Nothing is waiting.')
     await expect(label.or(empty)).toBeVisible()
     if ((await empty.count()) > 0) {

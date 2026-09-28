@@ -957,7 +957,7 @@ test('the Show facet lists a buyer only in its own state, and each count is the 
 test('Needs a look names what to look at, in cards', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   const carol = page.locator('.orders-index-row', { hasText: 'Carol' })
-  await expect(carol).toContainText('1 card not in the store')
+  await expect(carol).toContainText('1 missing')
 })
 
 /* -------------------------------------------------------------------------------------- 3 */
@@ -1307,7 +1307,7 @@ test('finding #16 (the Opus review round) — the struck-out row in the walk lis
   /* HIDE SOLD DEFAULTS ON (D132), so a done line leaves `.orders-walk-list` entirely unless
    * turned off — the same thing `UN-6`'s own D118 case above turns off for the same reason:
    * this case is about the row's OWN control, not about what stays visible once it is done. */
-  await page.getByRole('button', { name: /^Hide picked/ }).click()
+  await page.getByRole('button', { name: /^Picked/ }).click()
 
   const walkLine = page.locator('.orders-walk-line', { hasText: 'Volcanion' })
   await expect(walkLine).not.toHaveClass(/is-done/)
@@ -2545,9 +2545,9 @@ test('at 390, the walk rows are on the page, and a tick from the sheet widens th
 /* ONE CONTROL THAT SAYS WHAT IT DOES (UX-232), with the same verb the checkboxes carry.
  * PRESSED, IT NAMES THE UNDO (review finding 4): "Walk one buyer" read as a different
  * control, not this same toggle's own off state — fixed to "Stop walking all". */
-test('"Walk all N buyers" ticks every row, and "Stop walking all" clears them', async ({ page }) => {
+test('"Walk N" ticks every row, and "Stop" clears them', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  const all = page.getByRole('button', { name: 'Walk all 3 buyers' })
+  const all = page.getByRole('button', { name: 'Walk 3' })
   await expect(all).toBeVisible()
   await expect(page.getByRole('checkbox', { name: /^Walk / })).toHaveCount(3)
   await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
@@ -2557,7 +2557,7 @@ test('"Walk all N buyers" ticks every row, and "Stop walking all" clears them', 
   /* SEVERAL BUYERS: the head says so, never one buyer's name (UX-230). */
   await expect(page.locator('.orders-walk-title')).toHaveText('3 buyers')
 
-  await page.getByRole('button', { name: 'Stop walking all' }).click()
+  await page.getByRole('button', { name: 'Stop' }).click()
   await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
 })
 
@@ -2602,10 +2602,10 @@ test('the filter bar clears the 40px thumb floor at phone width', async ({ page 
 
 /* A SORT PRESS RE-SORTS AT ONCE (FLT-01, the owner's ruling, amending D209; UX-170). Ready to
  * ship still leads, and the list says so. */
-test('the sort press re-orders the list at once, Ready to ship first, and the list says so', async ({ page }) => {
+test('the sort press re-orders the list at once, Ready first, and the list says so', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   expect(await buyerOrder(page)).toEqual(['Carol', 'Alice', 'Bob'])
-  await expect(page.locator('.orders-buyers-note')).toHaveText('Ready to ship first')
+  await expect(page.locator('.orders-buyers-note')).toHaveText('Ready')
 
   await (await openFilters(page)).getByRole('button', { name: /^Order: Newest first/ }).click()
   await closeFilters(page)
@@ -3342,7 +3342,7 @@ test('the card pane is the photograph, the pick and every copy with its place an
      own editing actions (retire, move and re-shoot are Inventory-only, §13). */
   await expect(page.locator('.browse-details')).toHaveCount(0)
   await expect(pane).not.toContainText('Pushed')
-  await expect(pane.getByRole('button', { name: 'Card actions' })).toHaveCount(0)
+  await expect(pane.getByRole('button', { name: 'Actions' })).toHaveCount(0)
   await expect(pane.getByRole('button', { name: 'Retire' })).toHaveCount(0)
 })
 
@@ -3825,7 +3825,7 @@ test('a sale does not re-sort the walk list, and this section leads', async ({ p
      off here on purpose: this case is about ORDER, not visibility, and the sold row disappearing
      under the default is a second, true, and unrelated claim that would otherwise make `before`
      and `after` differ for a reason this case is not naming. */
-  await page.getByRole('button', { name: /^Hide picked/ }).click()
+  await page.getByRole('button', { name: /^Picked/ }).click()
 
   const before = await page.locator('.orders-walk-list .browse-secttitle, .orders-walk-list .orders-walk-name').allTextContents()
 
@@ -3880,7 +3880,7 @@ test('the selected buyer row draws a spine, not a ring', async ({ page }) => {
   expect(ownStyle).toBe('none')
 })
 
-test('the walk folds every section at once, and Hide picked carries a count', async ({ page }) => {
+test('the walk folds every section at once, and Picked carries a count', async ({ page }) => {
   /* S5 — "N sections" becomes a real collapse-all/expand-all control, and the Hide sold chip
    *  now carries how many rows it would hide, matching `#/inventory`'s own `departedHere`. */
   const wire = await open(page, {
@@ -3901,7 +3901,7 @@ test('the walk folds every section at once, and Hide picked carries a count', as
   await foldButton.click()
   await expect(page.locator('.orders-walk-rows')).toHaveCount(2)
 
-  const hide = page.locator('.orders-walk-tools').getByRole('button', { name: /^Hide picked/ })
+  const hide = page.locator('.orders-walk-tools').getByRole('button', { name: /^Picked/ })
   await expect(hide).toContainText('0')
   await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
   /* UN-6 REBUILD: the sale lands in place — the row's own control reads Undo — rather than
@@ -4203,7 +4203,7 @@ test('the verdict counts copies and buyers over the same open orders (UX-167)', 
   /* THE DEFECT: lines over the open orders, buyers over every order in the ledger, so a long
      history read "611 lines across 806 buyers". Thirty done buyers must not reach the count. */
   await open(page, { orders: historyPayload() })
-  await expect(page.locator(`${VIEW} .bn-verdict`)).toHaveText('21 copies owed to 6 buyers')
+  await expect(page.locator(`${VIEW} .bn-verdict`)).toHaveText('21 owed, 6 buyers')
   await expect(page.locator('.orders-index-row')).toHaveCount(6)
 })
 
@@ -4243,8 +4243,10 @@ test('Manage says once what each stand-down press does, in words, with no code o
   expect(text).not.toContain('no_copies_on_hand')
   expect(text).not.toContain('#/inventory')
   expect(text).not.toContain('0 sold')
-  /* THE BRAND AS TCGplayer, whatever case the feed sent it in. */
-  expect(text).toContain('TCGplayer says')
+  /* THE BRAND AS TCGplayer, whatever case the feed sent it in. F5 verbiage cut (row 111): the
+     per-order feed-word span no longer quotes the marketplace's own status beside its name
+     (the status pill already carries that fact), so this only checks the brand name itself. */
+  expect(text).toContain('TCGplayer')
 })
 
 /* ------------------------------------------------------------ a buyer finished (UX-197) */

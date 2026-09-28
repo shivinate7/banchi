@@ -71,6 +71,9 @@ function realRarity(raw: string | null): string | null {
 
 type Period = '3m' | '6m' | 'ytd' | 'all' | 'custom'
 
+/* `label` feeds the composed "over <label, lowercased>" sentence below (`periodPhrase`), so
+   it keeps its full words ("this year", "all time") even where the tab itself is shorter
+   (rows 142/143: `PERIOD_TAB_LABEL`, below) — the two are read in different grammars. */
 const PERIODS: readonly { readonly value: Period; readonly label: string }[] = [
   { value: '3m', label: '3 months' },
   { value: '6m', label: '6 months' },
@@ -78,6 +81,14 @@ const PERIODS: readonly { readonly value: Period; readonly label: string }[] = [
   { value: 'all', label: 'All time' },
   { value: 'custom', label: 'Custom' },
 ]
+
+/** F5 verbiage cut (rows 142/143): "This year"/"All time" -> "Year"/"All" on the tab itself,
+ *  matching the single-word "3 months"-shape sibling tabs at rest. `PERIODS` above still
+ *  carries the long form for the "over this year" sentence it also feeds. */
+const PERIOD_TABS = PERIODS.map((p) => ({
+  ...p,
+  label: p.value === 'ytd' ? 'Year' : p.value === 'all' ? 'All' : p.label,
+}))
 
 type SortKey = 'name' | 'copies' | 'gross' | 'last'
 type SortDir = 'asc' | 'desc'
@@ -89,7 +100,7 @@ const DEFAULT_DIR: Record<SortKey, SortDir> = { name: 'asc', copies: 'desc', gro
 const SORT_LABEL: Record<SortKey, string> = { name: 'Name', copies: 'Copies', gross: 'Gross', last: 'Last sold' }
 /** The podium's own segmented labels — the mock's own wording ("A to Z", "Latest") next to
  *  the same four keys the table's own column headers already sort by. One state, two faces. */
-const SORT_SEGMENT_LABEL: Record<SortKey, string> = { name: 'A to Z', copies: 'Copies', gross: 'Gross', last: 'Latest' }
+const SORT_SEGMENT_LABEL: Record<SortKey, string> = { name: 'Alphabetical', copies: 'Copies', gross: 'Gross', last: 'Latest' }
 const SORT_KEYS: readonly SortKey[] = ['gross', 'copies', 'last', 'name']
 
 type Granularity = 'week' | 'month'
@@ -392,12 +403,14 @@ function windowsOf(
  *  back". `likeForLike` names a window this function did not choose: the caller has already
  *  cut the prior period down to the SAME number of elapsed days the current one has had, so
  *  the wording says so rather than letting a shorter slice masquerade as the whole thing. */
-function compareLine(current: number, previousRows: readonly Sale[] | null, likeForLike: boolean): string {
+function compareLine(current: number, previousRows: readonly Sale[] | null, likeForLike: boolean): string | null {
   if (previousRows === null) return 'No earlier period to compare it against yet.'
   if (previousRows.length === 0) {
-    return likeForLike
-      ? 'So far, nothing is recorded for the period before this one.'
-      : 'Nothing is recorded for the period before this one.'
+    /* F5 verbiage cut (row 127): the in-progress case is deleted outright — the month strip's
+       own absent bar already shows there is nothing before this one. The closed-period case
+       keeps its sentence, since a closed period drawing a real zero bar is a fact worth
+       stating rather than an obvious gap. */
+    return likeForLike ? null : 'Nothing is recorded for the period before this one.'
   }
   const previous = sum(previousRows)
   // `likeForLike` means THIS window is still forming, not the PRIOR one — the prior window is
@@ -1051,7 +1064,7 @@ export function Revenue() {
      own header — no socket, no run, no write). NEVER the same figure as what already sold. */
     <div className="revenue-shelf">
       <div className="revenue-shelf-head">
-        <p className="bn-eyebrow">On the shelf</p>
+        <p className="bn-eyebrow">Shelf</p>
         <ReloadButton
           onReload={() => setHoldingsRange((r) => r)}
           busy={holdingsLoading}
@@ -1077,7 +1090,7 @@ export function Revenue() {
         <>
           <Money value={Number(latestHoldingsTotal.value)} className="revenue-shelf-figure" />
           <p className="revenue-shelf-note">
-            {`Priced for ${latestHoldingsTotal.priced_names} of ${holdings.on_hand_names} names on hand, ${latestHoldingsTotal.unpriced_names} not yet.`}
+            {`${latestHoldingsTotal.priced_names} of ${holdings.on_hand_names} priced, ${latestHoldingsTotal.unpriced_names} not yet`}
           </p>
           <HoldingsSpark totals={holdings.totals} />
         </>
@@ -1087,14 +1100,10 @@ export function Revenue() {
           <p className="revenue-shelf-note">
             {holdingsHistoryLabel === null
               ? 'No history recorded for these names yet.'
-              : `History since ${holdingsHistoryLabel}, ${holdings.width_days === 1 ? 'read daily' : `read every ${holdings.width_days} days`}.`}
+              : `Since ${holdingsHistoryLabel}, ${holdings.width_days === 1 ? 'daily' : `every ${holdings.width_days} days`}`}
           </p>
-          <p className="revenue-shelf-note">
-            {`${holdings.unmarked.names} names on hand have never been priced.`}
-          </p>
-          <p className="revenue-shelf-note">
-            {`${holdings.sealed_excluded.names} sealed items are not counted here. Sales of sealed items are known; what is still on the shelf is not.`}
-          </p>
+          <p className="revenue-shelf-note">{`${holdings.unmarked.names} unpriced`}</p>
+          <p className="revenue-shelf-note">{`${holdings.sealed_excluded.names} sealed`}</p>
         </>
       )}
     </div>
@@ -1165,11 +1174,11 @@ export function Revenue() {
     <Page
       title="Sales"
       icon="dollar"
-      lede="Your gross-revenue retrospective — what sold, for how much, by name. Gross only: no fees, no cost, no profit."
+      lede="Gross"
       className="revenue"
       actions={
         <div className="revenue-period">
-          <Segmented label="Period" value={period} options={PERIODS} onChange={handlePeriod} />
+          <Segmented label="Period" value={period} options={PERIOD_TABS} onChange={handlePeriod} />
           {period === 'custom' ? (
             <div className="revenue-range">
               <div className="bn-field">
@@ -1213,7 +1222,9 @@ export function Revenue() {
           <p className="revenue-verdict-said">
             {`${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}, ${inPeriod.reduce((n, s) => n + s.quantity, 0).toLocaleString()} copies`}
           </p>
-          <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
+          {compareLine(total, inPrevious, partial) === null ? null : (
+            <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
+          )}
           {dropped === 0 ? null : (
             <p className="revenue-verdict-dropped">
               {`${dropped.toLocaleString()} ${dropped === 1 ? 'line has' : 'lines have'} no usable date and ${dropped === 1 ? 'is' : 'are'} left out of every figure here.`}
@@ -1225,9 +1236,7 @@ export function Revenue() {
               screen never claims the second mechanism has caught anything until it counts
               one. Collapsing the two into one sentence, or hiding either at zero, would say
               more than this store actually knows. */}
-          <p className="revenue-verdict-canceled">
-            {`${canceledOrders.toLocaleString()} ${canceledOrders === 1 ? 'order was' : 'orders were'} canceled by the marketplace and left out.`}
-          </p>
+          <p className="revenue-verdict-canceled">{`${canceledOrders.toLocaleString()} excluded`}</p>
           {/* D281: A NOTE ABOUT ZERO DOES NOT DRAW. "0 lines were marked ... treat it as a
               habit, not a guarantee" reads as a warning about a habit that has never once
               caught anything — at zero, this whole sentence is drawn only when it has
@@ -1266,7 +1275,7 @@ export function Revenue() {
               </span>
               <span className="revenue-month-label">
                 {b.label}
-                {b.inProgress ? <Pill size="sm" tone="accent">so far</Pill> : null}
+                {b.inProgress ? <Pill size="sm" tone="accent">Partial</Pill> : null}
               </span>
             </button>
           ))}
@@ -1288,7 +1297,7 @@ export function Revenue() {
           true of the section under any sort, so it never has to change with the segmented
           control beside it. */}
       <div className="revenue-bar-head">
-        <h2 className="bn-h2">What sold</h2>
+        <h2 className="bn-h2">Sold</h2>
         <Segmented
           label="Singles or sealed"
           value={view}
@@ -1305,7 +1314,7 @@ export function Revenue() {
           }}
         />
         <div className="revenue-search">
-          <SearchField value={query} onChange={setQuery} persona="owner" placeholder="Find what you sold" />
+          <SearchField value={query} onChange={setQuery} persona="owner" placeholder="Search" />
         </div>
       </div>
 
@@ -1335,7 +1344,7 @@ export function Revenue() {
                   <MetaLine product={p} />
                   <div className="revenue-tile-money">
                     {p.gross > 0 ? <Money value={p.gross} /> : <span className="revenue-no-price">no price recorded</span>}
-                    {pctLabel(p.gross) === null ? null : <small>{`${pctLabel(p.gross)} of gross`}</small>}
+                    {pctLabel(p.gross) === null ? null : <small>{`${pctLabel(p.gross)} share`}</small>}
                   </div>
                   {/* SHORT BLOCKS, NEVER ONE LONG SENTENCE (text-shape's own 6-word prose
                       floor): copies and the sale date are each their own block. "Last
@@ -1344,7 +1353,7 @@ export function Revenue() {
                       podium tiles land on the same day; `text-shape-allow.json` lists it
                       by route when the fixture ever produces that coincidence. */}
                   <p className="revenue-tile-foot">{copyWord(p.copies)}</p>
-                  <p className="revenue-tile-foot">{`Last sold ${saleDate(p.last)}`}</p>
+                  <p className="revenue-tile-foot">{`Sold ${saleDate(p.last)}`}</p>
                   {p.unpriced === 0 ? null : (
                     <p className="revenue-tile-foot">{`${p.unpriced} with no price`}</p>
                   )}
@@ -1352,7 +1361,7 @@ export function Revenue() {
               </article>
             ))}
             <article className="revenue-tile revenue-mix">
-              <h3 className="bn-h3">What earned it</h3>
+              <h3 className="bn-h3">Breakdown</h3>
               <div
                 className="revenue-mix-split"
                 role="img"

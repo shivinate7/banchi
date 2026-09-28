@@ -424,7 +424,7 @@ test('the walk\'s card pane carries no listing-correction control — Inventory 
   await expect(page.locator('.browse-card')).toBeVisible()
   // The details table is #/inventory's (UX-169): the walk's pane never draws it, nor its control.
   await expect(page.locator('.browse-details')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Wrong card?' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Correct' })).toHaveCount(0)
   await expect(page.locator('.card-correction')).toHaveCount(0)
 })
 

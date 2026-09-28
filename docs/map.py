@@ -7293,7 +7293,7 @@ COMPONENTS = [
                         "both are correct for the owner and neither is his.",
                 "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D28", "D31",
                                 "D32", "D57", "D69", "D83", "D93", "D94", "D125", "D172", "D192",
-                                "D193", "D212", "D218", "D259", "D265", "D275"],
+                                "D193", "D196", "D212", "D218", "D259", "D265", "D275"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -9610,8 +9610,7 @@ COMPONENTS = [
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
                                 "D136", "D142", "D155", "D159", "D172", "D181", "D192", "D194",
-                                "D196", "D213", "D218", "D259", "D299",
-                                "D300"],
+                                "D196", "D213", "D218", "D259", "D288", "D299", "D300"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

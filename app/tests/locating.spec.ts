@@ -15,8 +15,8 @@ import { sealEveryTest } from './shell'
  *     past tense.
  *   - Review's place pill opens the card, and a screen reader hears it as a sentence. It shows
  *     which end is the back and the card's neighbours (UX-228).
- *   - The neighbour sentence says back and front ("It sits in front of X and behind Y."), and an
- *     unread neighbour counts, said in words (UX-186, LOC-28).
+  *   - The neighbour sentence names back and front, "Position: X / Y" (F5 verbiage cut,
+ *     2026-09-26, amending UX-186), and an unread neighbour counts, said in words (LOC-28).
  *   - A place link pressed while Inventory is open walks to that card (a hash change, no mount).
  *
  * THE FIXTURE IS THE SERVER'S OWN ARITHMETIC, written out. One box of twelve slots, dividers at
@@ -278,7 +278,7 @@ for (const size of SIZES) {
          (UX-186): index 5 is toward the back, index 8 toward the front. */
       await expect(current.locator('.nb')).toHaveAttribute(
         'aria-label',
-        'It sits in front of Towering Combatant and behind Relentless Pursuit.',
+        'Position: Towering Combatant / Relentless Pursuit',
       )
       await expect(current.locator('.nb-side')).toHaveCount(2)
       expect(await current.locator('.nb-side').evaluateAll((els) => els.map((el) => el.getAttribute('data-side')))).toEqual([
@@ -286,14 +286,17 @@ for (const size of SIZES) {
         'front',
       ])
 
-      /* THE DEPARTED COPY names the place it left, marked and in the past tense, never worded. */
+      /* THE DEPARTED COPY names the place it left, marked, never worded. F5 verbiage cut
+         (2026-09-26): the neighbour sentence dropped its verb along with the rest of its
+         words, so the past-tense distinction UX-186 drew between a live and a departed card
+         is gone with it — "Position: X / Y" never claims a tense to get wrong. */
       const gone = page.locator('.card-locations-row.is-gone .card-locations-identity')
       await expect(gone).toHaveAttribute('data-departed', 'true')
       await expect(gone).toHaveAttribute('aria-label', 'Was at RB Origins, Section 2, Card 2')
       const strike = await gone.locator('.card-locations-identity-num').evaluate((el) => getComputedStyle(el).textDecorationLine)
       expect(strike).toContain('line-through')
       expect((await gone.innerText()).toLowerCase()).not.toMatch(/departed|sold|\bb\d+ #\d+/)
-      await expect(page.locator('.card-locations-row.is-gone .nb')).toHaveAttribute('aria-label', /^It was in front of /)
+      await expect(page.locator('.card-locations-row.is-gone .nb')).toHaveAttribute('aria-label', /^Position: /)
 
       /* A SECTION TITLE KEEPS ITS NAME WHOLE AND SAYS ITS COUNT ONCE (LOC-21). */
       /* The walk list is on the page beside the card from 820 up; below that it is in the rail sheet. */
@@ -372,7 +375,7 @@ for (const size of SIZES) {
         return part.y > before.y + 4 || (Math.abs(part.y - before.y) <= 4 && part.x > before.x)
       })
       expect(inReadingOrder, 'drawn back to front').toBe(true)
-      await expect(pill.locator('.bn-sr')).toHaveText('It sits in front of Punch First and behind Hextech Anomaly.')
+      await expect(pill.locator('.bn-sr')).toHaveText('Position: Punch First / Hextech Anomaly')
       /* The pill stays inside the page at every width: no sideways scroll at 390. */
       const box = await pill.boundingBox()
       expect(box !== null && box.x + box.width <= size.width, 'the pill fits the width').toBe(true)
@@ -399,7 +402,7 @@ test('an unread neighbour is said in words on the ladder, never as a figure (LOC
   await expect(current.locator('.nb-side[data-side="front"] .nb-unread')).toHaveText('2 unread cards')
   await expect(current.locator('.nb')).toHaveAttribute(
     'aria-label',
-    'It sits in front of Towering Combatant and behind 2 unread cards.',
+    'Position: Towering Combatant / 2 unread cards',
   )
 })
 

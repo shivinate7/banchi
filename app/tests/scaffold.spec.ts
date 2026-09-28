@@ -413,9 +413,9 @@ test('the palette and the keyboard sheet name every route', async ({ page }) => 
   await expect(palette).toBeHidden()
 
   await page.keyboard.press('?')
-  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+  const sheet = page.getByRole('dialog', { name: 'Shortcuts' })
   await expect(sheet).toBeVisible()
-  const showAll = sheet.getByRole('button', { name: /Show every screen/ })
+  const showAll = sheet.getByRole('button', { name: 'More' })
   if (await showAll.isVisible()) await showAll.click()
   /* An entry names a route when a row's own text is the route's label: "Home" in the jump
      group. The row's own text is its direct text, without the "when" note beside it. */
