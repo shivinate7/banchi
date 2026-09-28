@@ -858,6 +858,12 @@ def _apply(args, say) -> int:
         say("and sales may have moved since. Read what is live again, then price from that read.")
         return 1
 
+    # THE FAST REFUSAL, FOR THE ORDINARY CASE, BEFORE ANY BYTE IS BUILT. Checked again below,
+    # INSIDE THE LOCK, right before the write — that second check is the one that counts
+    # (DEBT48). A caller that read a revision, then waited here for CSV building and a
+    # `Store().write()` block, then waited AGAIN for another writer's corpus lock, was
+    # checking a revision that could go stale on either wait. This one only saves the work of
+    # building a file this command is about to refuse to write.
     offered_revision = getattr(args, "corpus_revision", None)
     if offered_revision:
         current = corpus.revision()
@@ -920,6 +926,25 @@ def _apply(args, say) -> int:
     # runs as a subprocess of `POST /pipeline/markdowns/<stamp>/apply` (D105), so a request to
     # `PUT /pricing` landing between the two reads below used to be silently overwritten.
     with files.exclusive(files.inventory_dir()):
+        # THE REVISION CHECK, AGAIN, NOW INSIDE THE LOCK — the one that counts. The check
+        # above ran before the CSV was built and before the `Store().write()` block for the
+        # posting, both of which take real time, and a caller that waited through either of
+        # those was checking a revision that could have gone stale on the wait. This one is
+        # fresh: nothing after it can move the file before this call's own write lands.
+        #
+        # THE WORDING DIFFERS FROM THE CHECK ABOVE ON PURPOSE. By this point `import.csv` and
+        # the sale posting are already on disk — refusing here cannot undo either, and saying
+        # "nothing is written" would be false. Only the corpus answer, the part this specific
+        # check protects, is still refused.
+        if offered_revision:
+            current = corpus.revision()
+            if current and offered_revision != current:
+                say("")
+                say("REFUSED — the pricing file changed again while this command ran. "
+                    f"{target} and the sale record for it are already written; only the "
+                    "corpus answer is refused, so the next emit would price this SKU at the "
+                    "rule price instead of this markdown. Re-read and re-apply to fix that.")
+                return 1
         before = corpus.Corpus.read()
         book = corpus.Corpus.read()
         stamp = master.now()

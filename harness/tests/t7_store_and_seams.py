@@ -6932,11 +6932,11 @@ def check_undo_until_built_on(checks: Checks) -> None:
         exit_codes: list = []
         try:
             def run_join():
-                from cli import __main__ as entry
+                from cli import __main__ as cli_entry
 
                 with quiet():
                     exit_codes.append(
-                        entry.main(["join", str(run_dir.directory), "--export", str(RIFTBOUND_EXPORT)])
+                        cli_entry.main(["join", str(run_dir.directory), "--export", str(RIFTBOUND_EXPORT)])
                     )
 
             worker = threading.Thread(target=run_join)
@@ -6954,6 +6954,93 @@ def check_undo_until_built_on(checks: Checks) -> None:
         checks.ok(
             "8888" in final and final["8888"].value == "4.50",
             "T7-RACE (DEBT48): PUT /pricing's edit survives a concurrent join",
+        )
+
+    # ------------------------------------------------ T7-RACE (DEBT48): reprice apply's own
+    # revision check, read again inside the lock
+    # `cli/cmd_reprice.py:_apply`'s `--corpus-revision` guard used to run once, before the
+    # import CSV was built and before the `Store().write()` block for the sale posting — both
+    # of which take real time. A concurrent write that moved the revision in that gap passed
+    # right by a check that had already run and would never run again. This is a different
+    # shape from the other three: the write itself was always safe (a fresh read, its own
+    # SKUs only), so nothing here can lose an edit — what could silently fail was the
+    # OPERATOR'S "the pricing file changed, reload" refusal itself.
+    #
+    # Forced by making `corpus.revision()` answer the value it was offered on its first call
+    # (so the early check passes), landing a real, unrelated corpus write of its own, then
+    # answering fresh — the real, moved revision — on every later call. The fresh answer is
+    # what the check now inside the lock reads.
+    with isolated_home() as home:
+        cards = [(3, 1, "Dunsparce", "120", "normal")]
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(run_dir.directory))
+
+        source = tcgcsv.read_export(FIXTURE_EXPORT)
+        row = dict(source.by_sku()[DUNSPARCE_SKU])
+        row[tcgcsv.LIVE_QUANTITY_COLUMN] = "2"
+        row[tcgcsv.PRICE_COLUMN] = "2.0000"
+        export = home / "live-b2race.csv"
+        tcgcsv.write_csv(export, source.header, [row])
+
+        command(checks, "reprice", "list", str(export), "--days", "7", "--percent", "10", "--write")
+        directory = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[-1]
+        tcgcsv.write_csv(
+            directory / cmd_reprice.WORKLIST,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.50"}],
+        )
+
+        offered = corpus.revision()
+        real_revision = corpus.revision
+        seen = {"n": 0}
+
+        def racing_revision(path=None):
+            seen["n"] += 1
+            if seen["n"] == 1:
+                # THE EARLY CHECK'S OWN READ. Answer with the value it was handed, so that
+                # check passes, then land a real, unrelated corpus edit before anything else
+                # reads this file again — the concurrent write the early check cannot see.
+                unrelated = corpus.Corpus.read()
+                unrelated.answers["b2race-unrelated"] = corpus.Answer(value="9.99")
+                unrelated.write()
+                return offered
+            return real_revision(path)
+
+        corpus.revision = racing_revision
+        try:
+            from cli import __main__ as cli_entry
+
+            with quiet() as said_buf:
+                code = cli_entry.main(
+                    [
+                        "reprice", "apply", str(directory / cmd_reprice.WORKLIST), "--write",
+                        "--corpus-revision", offered,
+                    ]
+                )
+            said = said_buf.getvalue()
+        finally:
+            corpus.revision = real_revision
+
+        checks.equal(
+            seen["n"], 2,
+            "T7-RACE: the revision is read twice — the early check, then the one this lane "
+            "added inside the lock",
+        )
+        checks.equal(
+            code, 1,
+            "T7-RACE (DEBT48): reprice apply refuses when the revision moves during the run, "
+            "not only when it has already moved at the start",
+        )
+        checks.ok(
+            "REFUSED" in said and "pricing file changed again" in said,
+            "and names why, distinctly from the early check's own message", said,
+        )
+        checks.ok(
+            DUNSPARCE_SKU not in corpus.Corpus.read().answers,
+            "and the markdown's own answer is never written on top of the stale premise",
         )
 
     # ------------------------------------------------ UN-14: a move, until either box changes

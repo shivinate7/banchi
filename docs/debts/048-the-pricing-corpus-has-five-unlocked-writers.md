@@ -21,22 +21,40 @@ the first releases. Both existing acquisitions close before the corpus lock open
 nests. `cli/cmd_reprice.py` has the same shape: one `Store().write()` block for the posting,
 closed, then the corpus lock.
 
-**One gap found while proving the test red.** The revision digest check
-(`_clear_revision_guard`, and the same shape inline in `do_pricing_corpus_write`) used to run
-BEFORE the lock. Picture a caller that read a revision, then waited for another writer's
-lock, then wrote. It was checking a revision already stale by the time its wait ended. The
-check passed. The wait happened. The write still landed on top of whatever the lock's holder
-had just written. All three checks now run inside the lock, right before the write they guard.
+**Four revision guards, all moved inside the lock.** `_clear_revision_guard` (used by
+`do_pricing_clear` and `do_pricing_restore`), the same shape inline in
+`do_pricing_corpus_write`, and `cli/cmd_reprice.py:_apply`'s own `--corpus-revision` check.
+All four used to run BEFORE the lock. Picture a caller that read a revision. It then waited
+for another writer's lock. Then it wrote. It was checking a revision already stale by the time
+its wait ended. The check passed. The wait happened. The write still landed on top of
+whatever the lock's holder had just written.
 
-**The check.** Two harness cases in `harness/tests/t7_store_and_seams.py`
-(`check_undo_until_built_on`), named `T7-RACE (DEBT48)`. Each patches a real `Corpus.read()`
-to sleep for exactly as long as its own call now holds the lock. Both run on real threads,
-against the real flock, never a stubbed lock. One forces a restore against a `PUT /pricing`
-write. One forces the same shape against a real `pkmnscan join`. Both writer-B calls use a
-fresh revision and retry once on `corpus_moved` — the real client's own recovery path, never a
-silent overwrite. Proven RED against a `.bak` copy of the pre-lock files, never `git
-checkout`: both cases failed on the code as it stood before this fix. Proven GREEN against the
-fix. `make harness` passes, all ten tests.
+The fourth guard, in `cmd_reprice.py`, was found by lane B2's strict review. The first three
+were already fixed and closed by then. CSV building and a `Store().write()` block for the sale
+posting both sit between its early check and the corpus lock. That is the same shape as the
+other three. The guard keeps its early check, for the fast, ordinary-case refusal before any
+byte is built. It gained a second, fresh check too, right before the write. That second check
+is the one that counts. It cannot undo the CSV or the posting, both already on disk by then.
+Its refusal names that, rather than falsely claiming nothing was written.
+
+**The check.** Three harness cases in `harness/tests/t7_store_and_seams.py`
+(`check_undo_until_built_on`), named `T7-RACE (DEBT48)`.
+
+Two patch a real `Corpus.read()`. Each sleeps for exactly as long as its own call now holds
+the lock. Both run on real threads, against the real flock, never a stubbed lock. One forces a
+restore against a `PUT /pricing` write. One forces the same shape against a real `pkmnscan
+join`. Both writer-B calls use a fresh revision. Each retries once on `corpus_moved` — the
+real client's own recovery path, never a silent overwrite.
+
+The third needs no thread. It patches `corpus.revision()` itself. On its first call it answers
+the value `pkmnscan reprice apply --corpus-revision` was offered. It then lands a real,
+concurrent corpus edit. On every call after, it answers the real, moved revision. This proves
+the command refuses once the second check runs, where the first alone would have let it
+through.
+
+Proven RED against a `.bak` copy of the pre-fix files, never `git checkout`. All three cases
+failed on the code as it stood before each fix. Proven GREEN against the fix. `make harness`
+passes, all ten tests.
 
 **The finding, as it was recorded.** Lane B2
 (`docs/reviews/ux-2026-09-23/PLAN-PR4-PR5.md`) named one race. `do_pricing_restore` read the
