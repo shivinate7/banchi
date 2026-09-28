@@ -62,14 +62,16 @@ export function PositionBar({
   sections,
   sectionDepth = false,
 }: PositionBarProps) {
-  /* F9 (the owner's report, 2026-09-27): THE RULER HIDES AN EMPTY SECTION, AND ONLY THE RULER.
-     `sections` also reaches `BoxOps.tsx:BoxIdentity`'s own box-header track through the same
-     `spansOf`, and that reading is out of this lane's scope — Capture, Manage box and the
-     section move targets all still show every declared section. So the filter is applied HERE,
-     to the copy handed to this component's own `spansOf` call, never inside `spansOf` itself,
-     and only under `sectionDepth`: the one mode that draws the strip, the caption and the
-     ruler this report is about. `nonEmptySections` never drops the section the card being
-     drawn stands in, or left from. */
+  /* F9 (the owner's report, 2026-09-27): THE RULER HIDES AN EMPTY SECTION. `sections` also
+     reaches `BoxOps.tsx:BoxIdentity`'s own box-header track through the same `spansOf`, and
+     that reading filters too, with its own `nonEmptySections` call keyed to the walk's
+     selected row rather than to a `Place`. The Shelf view (`BoxShelf.tsx`, `?view=shelf`),
+     Capture's own picker and the section move targets are the ones that stay untouched: none
+     of the three reads `sections_detail` through `spansOf` at all. So the filter here is
+     applied to the copy handed to THIS component's own `spansOf` call, never inside `spansOf`
+     itself, and only under `sectionDepth`: the one mode that draws the strip, the caption and
+     the ruler. `nonEmptySections` never drops the section the card being drawn stands in, or
+     left from. */
   const visibleSections = sectionDepth && sections !== undefined ? nonEmptySections(place, sections) : sections
   const spans = spansOf(place, visibleSections)
   const sentence = sentenceOf(place, persona)

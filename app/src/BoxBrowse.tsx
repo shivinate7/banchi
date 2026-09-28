@@ -2136,6 +2136,11 @@ export function BoxBrowse({
                     ? (selectedRow.card.place?.fraction ?? null)
                     : null
                 }
+                currentSection={
+                  selectedRow !== null && selectedRow.card.box === shelfBox.box
+                    ? (selectedRow.card.place?.section ?? null)
+                    : null
+                }
                 actions={
                   <IconButton
                     size="sm"
