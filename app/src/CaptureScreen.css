@@ -372,6 +372,15 @@
      nothing to stop it. Capped and scrollable, never clipped mid-row. */
   max-height: min(420px, calc(100dvh - 200px));
   overflow-y: auto;
+  /* The whole list, header row included, fits between the phone's bars: the shell's own
+     tokens, zero where it draws no bar. */
+  max-height: min(
+    420px,
+    calc(100dvh - 200px),
+    calc(100dvh - var(--bn-topbar-h) - var(--bn-tabbar-h) - var(--bn-4))
+  );
+  scroll-margin-top: calc(var(--bn-topbar-h) + var(--bn-2));
+  scroll-margin-bottom: calc(var(--bn-tabbar-h) + var(--bn-2));
 }
 /* OWNER'S RULING, 2026-09-28: the open list goes in FRONT and scrolls. The overlay's own
    z-index is scoped to `.capture-card`'s stacking context (its animation makes one), so the

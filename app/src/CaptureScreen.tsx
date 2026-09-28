@@ -808,6 +808,7 @@ function OpenField({
   if (size === 'lg') classes.push('capture-open-lg')
   if (pin === true) classes.push('capture-open-pinned')
   const bodyRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   /* UX-138: every field agrees on where focus goes when it opens, now — the body's own
    *  first control. Box and Set hint already did this by hand, through their own refs (kept:
    *  Set hint's effect also loads the set vocabulary, which is not this component's job to
@@ -819,10 +820,23 @@ function OpenField({
   useEffect(() => {
     bodyRef.current
       ?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex]')
-      ?.focus()
+      ?.focus({ preventScroll: true })
+    /* The list itself comes into view, and nothing else moves: it scrolls only when an edge
+       is past a bar, and `.capture-open-pinned`'s scroll-margin keeps it clear of the bar.
+       `block: 'nearest'` was tried first and does nothing here: Chromium counts a box whose
+       edge is inside the window as seen and ignores the fixed bar over it. */
+    const root = rootRef.current
+    if (root !== null) {
+      const rect = root.getBoundingClientRect()
+      const margin = parseFloat(getComputedStyle(root).scrollMarginBottom) || 0
+      if (rect.bottom > window.innerHeight - margin) root.scrollIntoView({ block: 'end' })
+      else if (rect.top < (parseFloat(getComputedStyle(root).scrollMarginTop) || 0)) {
+        root.scrollIntoView({ block: 'start' })
+      }
+    }
   }, [])
   return (
-    <div className={classes.join(' ')}>
+    <div className={classes.join(' ')} ref={rootRef}>
       <button
         type="button"
         className={typeof k === 'string' ? 'capture-row' : 'capture-row capture-row-keypair'}
