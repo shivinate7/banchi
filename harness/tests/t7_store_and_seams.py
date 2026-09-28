@@ -25675,6 +25675,20 @@ def check_listing_commands(checks: Checks) -> None:
             "emit UPSERTS the position first, so the identity write lands somewhere",
         )
         checks.equal(
+            landed.get("7/1").game,
+            "pokemon",
+            "F1'S DEFECT (owner's report, 2026-09-27: two sets of Unleashed, the 99-card one "
+            "with no photos). `_stamp_single` resolves this SAME match's game two lines "
+            "before it births this position, to pass `bind_sku`'s `expected_product_line` — "
+            "but never carried it into the `Card(...)` that upserts the position itself, so "
+            "a never-seen position born through `emit` was born with `game IS NULL`. "
+            "`server/pipeline_routes.py:do_pipeline_sets` groups on `(game, set_name)`, so a "
+            "null game formed a second, photo-less group — `pipeline/stockimages.py:url_for` "
+            "returns no photo for one. A card `join` HAS seen before its emit never showed "
+            "this: `allocate_capture` already stamped a game at the capture screen, so this "
+            "birth site is the one place D21's claim was silently dropped rather than carried",
+        )
+        checks.equal(
             landed.listing_for(ARTICUNO_SKU).pushed,
             1,
             "and the copy is counted exactly once against the SKU",
