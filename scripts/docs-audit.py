@@ -142,7 +142,7 @@ COUPLING_MIN_LINES = 20
 
 
 class Finding(NamedTuple):
-    where: str  # "README.md:27", or just a filename
+    where: str  # a file and its line number, or just a filename
     message: str
 
 
@@ -591,7 +591,7 @@ _PLACEHOLDER = re.compile(r"[<>*?{}]")
 _ROUTE = re.compile(r"\b(?:GET|POST|PUT|DELETE|PATCH|HEAD)\s+(/[A-Za-z0-9_./<>-]*)")
 # A QUOTED STRING THAT BEGINS WITH A SLASH IS A ROUTE TOO, since 2026-09-12. The method
 # rule above covers prose; code in a fenced block spells the same route the way the
-# dispatcher does — `if path == "/pipeline/value":` at capture_server.py:10748, a JS
+# dispatcher does — `if path == "/pipeline/value":` in `server/capture_server`'s dispatcher, a JS
 # template `` `/pipeline/value?${q}` `` in server.ts — and a playbook that mirrors the
 # code was blocked for describing it correctly. No repo path is ever spelled with a
 # leading slash inside quotes: every reference this check exists for is relative
@@ -673,8 +673,8 @@ def path_candidates(line: str) -> List[str]:
 
 # `path:N` and `path:N-M` — a citation naming a specific line or range inside a file, and
 # `path_candidates` above cannot see the suffix at all: `:` is not in `_CANDIDATE_RE`'s
-# character class, so `docs/GATES.md:884` is extracted as the bare path `docs/GATES.md`
-# and the `paths` row above reports "references resolve" having never read the `:884`.
+# character class, so a `docs/GATES.md` citation with a line suffix is extracted as the bare path `docs/GATES.md`
+# and the `paths` row above reports "references resolve" having never read the suffix.
 # The `line anchors` row further down refuses every one of them.
 #
 # A NEW EXTRACTOR, NOT A WIDENED `_CANDIDATE_RE`. Three call sites depend on
@@ -1147,49 +1147,117 @@ def check_allowlist(report: Report, allowed: Dict[str, str]) -> None:
 
 # --------------------------------------------------------------------- line anchors
 
-# ONE ROW, ONE RULE: NO MARKDOWN FILE CITES A LINE NUMBER. D245 (a citation names a symbol, not a
-# line) and the owner's ruling of 2026-09-27, "convert and collapse". The lane that converted the
-# last 776 anchors (2026-09-28) deleted the three rows that once policed them: the shape check
-# (line past the end, line in a split-record stub), the shrinking offender list, and the
-# allowlist. Nothing is left to list, so the row refuses every `path:N` and `path:N-M`.
-#
-# `line_anchor_candidates` is the extractor, above. `resolve_candidate` keeps the same three
-# suppressions `paths` has (a route, a placeholder, a first segment that is not a real top-level
-# entry), so `POST /pipeline/value:200` and `localhost:8000` are not anchors. `.git/` is skipped
-# as `paths` skips it. THERE IS NO EXEMPTION LIST. A dated record that must quote a line writes
-# it in words ("line 182, column 81"), which no `path:N` shape matches. The fix for a refusal is
-# a symbol (`module.symbol`, no `.py`), a section heading or a decision id.
-def line_anchor_hits(docs: Sequence[Path]) -> List[Tuple[Path, int, str]]:
-    """`(document, line number, anchor text)` for every line anchor in `docs`. Pure over its
-    arguments plus the real repo's `top_level_names()`, so `--self-test` can drive it."""
-    tops = top_level_names()
+# ONE ROW, ONE RULE: NO DOCUMENT AND NO CODE COMMENT CITES A LINE NUMBER. D245 (a citation names a
+# symbol, not a line), its amendment, and the owner's ruling of 2026-09-28. The row refuses three
+# shapes, in every tracked markdown file and in the COMMENTS of every tracked code file:
+#   1. `dir/file.ext:N` and `:N-M` (the extractor `line_anchor_candidates`, above);
+#   2. `file.ext:N`, no directory (`_BARE_FILE_ANCHOR_RE`);
+#   3. a bare `:N` or `:N-M` in a paragraph (a comment block) that has already named a file
+#      (`_FRAGMENT_RE`), which is how a spec writes "`store/db.py` ... at line 1279" in the older, refused form.
+# NOT ANCHORS, and proved so by `--self-test`: a time (`10:30`), a ratio (`3:1`), a slice
+# (`x[:5]`), a format spec (`{:5d}`), `host:port` (a word before the colon), and a port a
+# paragraph names bare (`_PORTS`, the ports this repo serves). A CSS pseudo-selector is not a
+# digit run. Code scope is by file type: `#` comments in .py, `//` and block comments in
+# .ts/.tsx/.js/.mjs, block comments alone in .css. THERE IS NO EXEMPTION LIST. A record that must
+# quote a line writes it in words ("line 182, column 81"). The fix for a refusal is a symbol
+# (`module.symbol`, no `.py`; "`module.Class`'s `method`" for a method; a CSS selector), a
+# section heading or a decision id.
+_ANCHOR_EXTS = r"(?:py|ts|tsx|css|md|mjs|js|json|toml|yml|yaml|sh|html)"
+_BARE_FILE_ANCHOR_RE = re.compile(
+    r"(?<![\w/.@-])(?P<path>[A-Za-z0-9_-][A-Za-z0-9_.-]*\." + _ANCHOR_EXTS + r"):"
+    r"(?P<start>[0-9]+)(?:-(?P<end>[0-9]+))?(?![\w:])"
+)
+_FILE_TOKEN_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]*\." + _ANCHOR_EXTS + r"\b")
+_FRAGMENT_RE = re.compile(
+    r"(?<![\w:/.)\]\[{-])(?<!\d):(?P<start>[0-9]+)(?:-(?P<end>[0-9]+))?(?![\w:])"
+)
+_PORTS = frozenset({80, 443, 3000, 5173, 8000, 8080})
+_CODE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".mjs", ".css")
+
+
+def code_files() -> List[Path]:
+    return _walk(ROOT, _CODE_SUFFIXES)
+
+
+def comment_units(path: Path, text: str) -> List[Tuple[int, Optional[str]]]:
+    """`(line number, comment text or None)` per line of a code file. `None` is a line with no
+    comment, which ends a paragraph. Scope by file type, comment text only."""
+    lines = text.splitlines()
+    found: Dict[int, str] = {}
+    if path.suffix == ".py":
+        try:
+            for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+                if tok.type == tokenize.COMMENT:
+                    found[tok.start[0]] = tok.string
+        except (tokenize.TokenError, IndentationError, SyntaxError):
+            pass
+    else:
+        pattern = r"/\*.*?\*/" if path.suffix == ".css" else r"/\*.*?\*/|(?<!:)//[^\n]*"
+        for m in re.finditer(pattern, text, re.S):
+            first = text.count("\n", 0, m.start())
+            for offset, piece in enumerate(m.group(0).split("\n")):
+                found[first + offset + 1] = found.get(first + offset + 1, "") + " " + piece
+    return [(n, found.get(n)) for n in range(1, len(lines) + 1)]
+
+
+def anchor_hits_in_units(
+    units: Sequence[Tuple[int, Optional[str]]], doc: Path, tops: Set[str]
+) -> List[Tuple[Path, int, str]]:
+    """Every line anchor in `units`, all three shapes. Pure over its arguments plus `tops`."""
     hits: List[Tuple[Path, int, str]] = []
-    for doc in docs:
-        for number, line in enumerate(read(doc).splitlines(), start=1):
-            for anchor in line_anchor_candidates(line):
-                target = resolve_candidate(anchor.path, doc, tops)
-                if target is None or rel(target).split("/")[0] == ".git":
-                    continue
-                text = f"{anchor.path}:{anchor.start}"
-                if anchor.end is not None:
-                    text += f"-{anchor.end}"
-                hits.append((doc, number, text))
+    cited = False
+    for number, text in units:
+        if text is None or not text.strip():
+            cited = False
+            continue
+        for anchor in line_anchor_candidates(text):
+            target = resolve_candidate(anchor.path, doc, tops)
+            if target is None or rel(target).split("/")[0] == ".git":
+                continue
+            hit = f"{anchor.path}:{anchor.start}"
+            hits.append((doc, number, hit + (f"-{anchor.end}" if anchor.end is not None else "")))
+        clean = _ROUTE.sub(" ", text)
+        clean = _QUOTED_ROUTE.sub(" ", clean)
+        clean = _PLACEHOLDER.sub(" ", clean)
+        for m in _BARE_FILE_ANCHOR_RE.finditer(clean):
+            hits.append((doc, number, m.group(0)))
+        if _FILE_TOKEN_RE.search(clean):
+            cited = True
+        if cited:
+            for m in _FRAGMENT_RE.finditer(clean):
+                if int(m.group("start")) not in _PORTS:
+                    hits.append((doc, number, m.group(0)))
     return hits
 
 
-def check_line_anchors(report: Report, docs: Sequence[Path]) -> None:
-    """No document in `docs` may write `path:N` or `path:N-M`. Tier 1: it blocks at commit."""
+def line_anchor_hits(docs: Sequence[Path], code: Sequence[Path] = ()) -> List[Tuple[Path, int, str]]:
+    """`(file, line number, anchor text)` for every line anchor in `docs` (markdown, whole text)
+    and in the comments of `code`. Pure over its arguments plus the real repo's
+    `top_level_names()`, so `--self-test` can drive it."""
+    tops = top_level_names()
+    hits: List[Tuple[Path, int, str]] = []
+    for doc in docs:
+        units = list(enumerate(read(doc).splitlines(), start=1))
+        hits += anchor_hits_in_units(units, doc, tops)
+    for path in code:
+        hits += anchor_hits_in_units(comment_units(path, read(path)), path, tops)
+    return hits
+
+
+def check_line_anchors(report: Report, docs: Sequence[Path], code: Sequence[Path] = ()) -> None:
+    """No document in `docs` and no comment in `code` may cite a line number. Tier 1."""
     findings = [
         Finding(
             f"{rel(doc)}:{number}",
             f"`{text}` cites a line number, and a line number rots on the next edit above it. "
             "Cite a symbol (`module.symbol`, no `.py`), a section or a decision id instead.",
         )
-        for doc, number, text in line_anchor_hits(docs)
+        for doc, number, text in line_anchor_hits(docs, code)
     ]
     report.add(
         "line anchors", MECHANICAL, findings,
-        f"{len(docs)} documents read, no line anchor", scanned=len(docs),
+        f"{len(docs)} documents and {len(code)} code files read, no line anchor",
+        scanned=len(docs) + len(code),
     )
 
 
@@ -2297,7 +2365,7 @@ def is_slug(identifier: str) -> bool:
 
 # A RUFF SUPPRESSION IS NOT A CITATION, AND AT THREE DIGITS IT LOOKS EXACTLY LIKE ONE.
 # Three real lines carry a pydocstyle code whose number is three digits long —
-# server/tcg_export.py:332, server/order_transport.py:610 and server/pipeline_routes.py:1643
+# `server/tcg_export`, `server/order_transport` and `server/pipeline_routes` (one each)
 # — and mccabe's complexity code joins them the moment anyone writes one. The two-digit cap
 # could not reach their third digit, so widening it turns every one into a citation of an
 # entry that does not exist. That is exactly why docs/DEBTS.md kept the cap rather than
@@ -2658,7 +2726,7 @@ _LOOSE_SLUG_HEADING_DEBT = re.compile(r"^##\s+(DEBT-\S+)")
 _STRICT_SLUG_HEADING_DEBT = re.compile(r"^##\s+DEBT" + _ID_SLUG + r"\b")
 # NOT `\bstep `: a hyphen is a non-word character, so `\b` fires INSIDE `runs-step` and
 # a React className pairing two such words reads as a citation of the second one.
-# Measured on app/src/RunPanel.tsx:165, which is the only such pair in the tree and was
+# Measured on `app/src/RunPanel.tsx`, which is the only such pair in the tree and was
 # enough to make this row wrong on its first run.
 _STEP_CITATION = re.compile(r"(?<![-\w])step (" + _STEP_SLUG + r")\b")
 
@@ -3593,7 +3661,7 @@ _UNSCOPED_WALK_SINGLE_FILES: Tuple[Path, ...] = (
 
 # The three method names that always materialise every row when called on something
 # ending in `.cards` (`Rows` is a `MutableMapping`; these three take no filter argument
-# under any Rows signature — see store/rows.py:213-266), plus `select`, which only
+# under any Rows signature — see `store/rows.Rows`), plus `select`, which only
 # materialises everything when called with NO keyword arguments (a keyword is a filter:
 # `equals` in `Rows.select`).
 _UNSCOPED_METHODS = frozenset({"values", "items", "distinct"})
@@ -11879,7 +11947,7 @@ _REPO_EXT_RE = re.compile(r"\b[\w-]+\.(?:sqlite|jsonl|json)\b")
 _DECISION_CITE_RE = re.compile(r"\bD\d{1,4}\b|\bC\d{1,4}\b|\(D-[A-Za-z0-9][A-Za-z0-9-]*\)")
 
 # A CLI INVOCATION, BACKTICKED OR BARE (D210's own finding). This row had no
-# key for `Pricing.tsx:4468`'s "Run `pkmnscan rescue` to rebind it." — a backticked command
+# key for `Pricing.tsx`'s "Run `pkmnscan rescue` to rebind it." — a backticked command
 # is not a decision citation, not one of `_REPO_TOP_DIRS` followed by a slash, and not a
 # `.json`/`.sqlite`/`.jsonl` filename, so it passed this row clean while naming this
 # product's own CLI on screen. `pkmnscan` is the checkout's own name (CLAUDE.md's naming
@@ -17375,31 +17443,75 @@ def self_test() -> int:
         "a placeholder segment suppresses the match, same as `path_candidates`",
     )
 
-    print("\nline anchors: the one row refuses any path:N or path:N-M, and nothing else")
+    print("\nline anchors: the one row refuses path:N, file.ext:N and a bare :N, and nothing else")
     with tempfile.TemporaryDirectory() as tmp:
         doc = Path(tmp) / "fake.md"
         for cited, label in (
             ("cites `server/capture_server.py:123` here", "a single-line anchor is refused"),
             ("cites `server/capture_server.py:123-130` here", "a range anchor is refused"),
+            ("cites `Revenue.css:81` here", "a file.ext:N with no directory is refused"),
+            ("cites Revenue.css:81-90 here", "a bare file.ext:N-M range is refused"),
+            ("`store/db.py` opens it (`:1279`) and", "a bare :N after a cited file is refused"),
+            ("`store/db.py` opens it at `:1279-1290` and", "a bare :N-M after a cited file is refused"),
         ):
             doc.write_text(cited + "\n", encoding="utf-8")
             report = Report()
             check_line_anchors(report, [doc])
             ok(len(report.checks[0].findings) == 1, label, str(report.checks[0].findings))
+        doc.write_text("`store/db.py` is named here.\nIt opens at `:1279` and more.\n", encoding="utf-8")
+        report = Report()
+        check_line_anchors(report, [doc])
+        ok(len(report.checks[0].findings) == 1, "a bare :N in the same paragraph as a file is refused")
         for clean, label in (
             ("cites `server/capture_server.do_search` here", "the symbol form is clean"),
             ("cites `server/capture_server.py`, line 123, here", "a line written in words is clean"),
             ("POST /pipeline/value:200 is a route", "a route is not an anchor"),
             ("open localhost:8000 in a browser", "a host and port is not an anchor"),
+            ("`make dev` serves `app/dev.py` on `:5173` here", "a bare port after a file is not an anchor"),
+            ("see `store/db.py`, meeting at 10:30 today", "a time is not an anchor"),
+            ("see `store/db.py`, a 3:1 ratio and 4.5:1 floor", "a ratio is not an anchor"),
+            ("see `store/db.py` and rows[:5] and {:5d}", "a slice and a format spec are not anchors"),
+            ("see `store/db.py` at http://example.com:8080/x", "a URL with a port is not an anchor"),
+            ("see `app/src/a.css` for a:hover and ::before and :nth-child(2)", "a pseudo-selector is not an anchor"),
+            ("`:1279` alone, with no file named in this paragraph", "a bare :N with no cited file is not read"),
         ):
             doc.write_text(clean + "\n", encoding="utf-8")
             report = Report()
             check_line_anchors(report, [doc])
             ok(not report.checks[0].findings, label, str(report.checks[0].findings))
+        for name, planted, label in (
+            ("a.py", "x = 1  # see `cli/resolve.py:669` for it\n", ".py comment path:N is refused"),
+            ("a.py", "x = 1  # see Revenue.css:81 for it\n", ".py comment file.ext:N is refused"),
+            ("a.py", "# `cli/resolve.py` holds it\n# at `:669` here\n", ".py comment bare :N is refused"),
+            ("a.ts", "const x = 1 // see `app/src/Runs.css:319`\n", ".ts // comment is refused"),
+            ("a.tsx", "/* see Runs.css:319\n   more */\n", ".tsx block comment is refused"),
+            ("a.css", "/* see `app/src/Runs.tsx:319` */\n", ".css block comment is refused"),
+        ):
+            code = Path(tmp) / name
+            code.write_text(planted, encoding="utf-8")
+            report = Report()
+            check_line_anchors(report, [], [code])
+            ok(len(report.checks[0].findings) == 1, label, str(report.checks[0].findings))
+        for name, planted, label in (
+            ("a.py", 'x = "cli/resolve.py:669"  # clean\n', ".py string outside a comment is not read"),
+            ("a.py", "# meets at 10:30, a 3:1 ratio, host:8000\n", ".py comment time, ratio, host:port are clean"),
+            ("a.css", "a:hover { color: red } /* clean */\n.b::before { content: 'x' }\n", ".css pseudo-selectors are clean"),
+            ("a.ts", "const u = 'http://x.com:8080/a' // clean\n", ".ts URL with a port is clean"),
+        ):
+            code = Path(tmp) / name
+            code.write_text(planted, encoding="utf-8")
+            report = Report()
+            check_line_anchors(report, [], [code])
+            ok(not report.checks[0].findings, label, str(report.checks[0].findings))
     report = Report()
     check_line_anchors(report, markdown_files())
     ok(not report.checks[0].findings and report.checks[0].scanned > 0,
        "no tracked markdown file cites a line number, and the row read some",
+       str(report.checks[0].findings[:3]))
+    report = Report()
+    check_line_anchors(report, [], code_files())
+    ok(not report.checks[0].findings and report.checks[0].scanned > 0,
+       "no tracked code comment cites a line number, and the row read some",
        str(report.checks[0].findings[:3]))
 
     # THE ONE ONLY-SHRINKS HELPER'S OWN SELF-TEST, run here so it rides `make check`'s
@@ -19983,7 +20095,10 @@ def audit(staged_only: bool, commit_only: bool = False) -> Report:
     if _run_at_commit("allowlist", commit_only):
         check_allowlist(report, allowed)
     if _run_at_commit("line anchors", commit_only):
-        check_line_anchors(report, docs)
+        staged_code = code_files()
+        if staged_only:
+            staged_code = [f for f in staged_code if rel(f) in staged]
+        check_line_anchors(report, docs, staged_code)
     if _run_at_commit("make targets", commit_only):
         check_make_targets(report, docs)
     if _run_at_commit("commands roster", commit_only):
