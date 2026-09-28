@@ -7,11 +7,6 @@
 .orders-stage { display: flex; flex-direction: column; gap: var(--bn-4); min-width: 0; }
 /* Add orders and Cards to pull: two small squares on the filter bar's line. */
 .orders-store-controls { display: inline-flex; align-items: center; gap: var(--bn-2); }
-.orders-card-market { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-/* The mono face's own side-bearing sits tighter than Inter's, so the real space in the markup
-   between the figure and the word "market" read as none at 390 (review finding 8). A hair of
-   margin restores the gap without touching the text. */
-.orders-card-market .bn-money { color: var(--bn-ink-2); margin-right: 0.2em; }
 
 /* ---- the layout: buyers, the walk, the card (UX-169, UX-194, D274)
    THE WALK GETS THE HEIGHT. There is one scroll, the page's (UX-201): no column scrolls on its
@@ -116,12 +111,17 @@
 /* ---- WALK MODE (the owner's ruling, 2026-09-24) -------------------------------------------
    While a buyer is walked (`?walk=1`) and the page's column is under 1000px, everything the walk
    does not need folds away: the title and the walk line share one slim row, the verdict, the
-   filter bar, the buyer list, the order header and the walk's tools hide, and the card pane
-   becomes one thin row. The walk takes the rest. Entering and leaving is a navigation (D118).
-   At 1000px and wider the three columns stay. The verdict hides there too: while one buyer is
-   walked, the store's total is not what the hand needs. */
+   filter bar, the buyer list, the order header and the walk's tools hide. The walk takes the
+   rest. Entering and leaving is a navigation (D118). At 1000px and wider the three columns stay.
+   The verdict hides there too: while one buyer is walked, the store's total is not what the hand
+   needs.
+
+   THE CARD PANE'S OWN NARROW SHAPE IS LANE A5'S — `docs/decisions/D-orders-walk-rejoins-inventory.md`,
+   Q4: the walk with the card in a sheet on a phone — the thin-row collapse this used to do
+   (`.orders-card-thin`) went with `WalkCardPane`, which drew it. `.browse-card` is
+   `Inventory.tsx`'s own pane now, and it draws itself in full here until A5 gives it a phone
+   shape of its own. */
 .orders-walkline { display: none; }
-.orders-card-thin { display: none; }
 .orders-hub.is-walking .bn-verdict { display: none; }
 @container bn-page (max-width: 999px) {
   .orders-hub.is-walking .bn-page-head {
@@ -149,9 +149,6 @@
     grid-template-rows: auto;
     gap: var(--bn-2);
   }
-  .orders-stage.is-walking .orders-card-pane { padding: var(--bn-1) var(--bn-2); gap: 0; }
-  .orders-stage.is-walking .orders-card-pane > :not(.orders-card-thin) { display: none; }
-  .orders-stage.is-walking .orders-card-thin { display: flex; }
   .orders-stage.is-walking .orders-walk-list { gap: var(--bn-2); }
 }
 .orders-walkchip {
@@ -173,35 +170,6 @@
 .orders-walkchip-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orders-walkchip-text > span:first-child { font-weight: 600; }
 .orders-walkleave { flex: none; }
-/* The thin card row: thumbnail, name, place and the Mark sold icon. The thumbnail opens the
-   photograph. */
-.orders-card-thin { align-items: center; gap: var(--bn-3); min-height: var(--bn-control-h-lg); }
-.orders-card-thumb {
-  flex: none;
-  width: var(--bn-control-h-lg);
-  height: var(--bn-control-h-lg);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border-radius: var(--bn-r);
-  background: var(--bn-surface-2);
-  color: var(--bn-ink-3);
-}
-.orders-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.orders-card-thin-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
-.orders-card-thin-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.orders-card-thin-name.is-unnamed { color: var(--bn-ink-3); font-style: italic; }
-/* THE SHORT PILL SITS BESIDE "Pick N", never on a line of its own under it (the review round's
-   finding 7): `.orders-card-thin-text` is a flex COLUMN, so a pill placed as its own third
-   child fell to its own row, under the place line, rather than beside it. This row holds the
-   place text and the pill together; the place text alone shrinks and ellipses, the pill never
-   does. */
-.orders-card-thin-meta { display: flex; align-items: center; gap: var(--bn-2); min-width: 0; }
-.orders-card-thin-place { flex: 1 1 auto; min-width: 0; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.orders-card-thin-meta .bn-pill { flex: none; }
-.orders-card-thin-action { flex: none; }
-.orders-card-thin-action .bn-btn { min-height: var(--bn-control-h-lg); min-width: var(--bn-control-h-lg); }
 
 /* ---- the buyer list (UX-199, UX-201, UX-231, UX-232) --------------------------------- */
 .orders-buyers-head {
@@ -382,44 +350,14 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-walk-line.is-done .orders-walk-pick { color: var(--bn-ok); }
 .orders-walk-empty { padding: var(--bn-3); font-size: var(--bn-fs-md); }
 
-/* ---- the card pane: the photograph, the pick, every copy (UX-169) --------------------- */
-.orders-card-pane { display: flex; flex-direction: column; gap: var(--bn-4); padding: var(--bn-4); }
-.orders-card-top { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--bn-4); align-items: start; }
-/* The photograph keeps the card's own shape at the column's width, over the tall phone frame the
-   shared photo panel draws below 768px: on this screen the walk, not the photograph, takes the
-   height. */
-.orders-card-shot .bn-photo { width: 100%; height: auto; max-width: 100%; aspect-ratio: 63 / 88; }
-.orders-card-shot { min-width: 0; }
-.orders-card-text { display: flex; flex-direction: column; gap: var(--bn-1); min-width: 0; }
-.orders-card-name { font-size: var(--bn-fs-lg); overflow-wrap: anywhere; }
-.orders-card-name.is-unnamed { color: var(--bn-ink-3); font-style: italic; }
-.orders-card-sub { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-.orders-card-pick { font-size: var(--bn-fs-md); color: var(--bn-ink-2); }
-.orders-card-pick strong { color: var(--bn-ink); font-weight: 700; }
-.orders-card-for { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); overflow-wrap: anywhere; }
-.orders-card-copies { list-style: none; display: flex; flex-direction: column; border-top: 1px solid var(--bn-line); }
-.orders-card-copy {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--bn-3);
-  min-height: calc(var(--bn-control-h) + var(--bn-2));
-  padding: var(--bn-1) var(--bn-2);
-  border-bottom: 1px solid var(--bn-line);
-}
-.orders-card-copy.is-current { background: var(--bn-accent-tint); }
-.orders-card-place { min-width: 0; }
-/* The action slot holds the widest of its states, so a press never moves the row (D118). */
-.orders-card-action { flex: none; display: inline-flex; justify-content: flex-end; min-width: 4.5rem; }
-@container orders (min-width: 1000px) {
-  .orders-card-top { grid-template-columns: minmax(0, 1fr); }
-  .orders-card-shot { max-width: 260px; }
-}
+/* ---- the card pane: `CardHero.tsx:CardPane` and `CardLocations.tsx:CardLocations`, reused
+   whole (`docs/decisions/D-orders-walk-rejoins-inventory.md`, lane A3) ---------------------
+   Their own CSS lives in `CardHero.css` and `CardLocations.css`. This screen adds nothing of
+   its own: no `.orders-card-*` class draws any more. */
 
 /* ---- 40px hit areas at every width (UX-267) ------------------------------------------ */
 .orders-walkall,
-.orders-walk-tools .bn-btn,
-.orders-card-action .bn-btn:not(.bn-icon-btn) { min-height: var(--bn-control-h-lg); }
+.orders-walk-tools .bn-btn { min-height: var(--bn-control-h-lg); }
 
 /* ---- the stand-down legend, said once per sheet (UX-240) ------------------------------ */
 .orders-manage-legend {

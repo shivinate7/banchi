@@ -4113,7 +4113,7 @@ COMPONENTS = [
                 # once, deliberately, with a re-measured T1.
                 "governed_by": ["D15", "D16", "D23", "D39", "D40", "D90", "D96", "D105", "D194",
                                 "D218", "D226", "D229", "D245", "D248", "D271", "D277", "D280",
-                                "D284"],
+                                "D284", "D-orders-walk-rejoins-inventory"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "
@@ -8209,7 +8209,7 @@ COMPONENTS = [
                                                "D118", "D123", "D132", "D159", "D171", "D181",
                                                "D192", "D193", "D194", "D195", "D196", "D203",
                                                "D209", "D212", "D218", "D220", "D221", "D274",
-                                               "D285", "D296"]},
+                                               "D285", "D296", "D-orders-walk-rejoins-inventory"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8217,7 +8217,7 @@ COMPONENTS = [
                                "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69",
                                                "D113", "D114", "D117", "D118", "D123", "D193",
                                                "D195", "D196", "D203", "D212", "D221", "D270",
-                                               "D274"]},
+                                               "D274", "D-orders-walk-rejoins-inventory"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -8257,40 +8257,30 @@ COMPONENTS = [
                                                 "a person.",
                                         "governed_by": ["D5", "D61", "D66", "D69", "D73", "D94",
                                                         "D218", "D221", "D292"]},
-            "src/OrdersWalkPane.tsx": {"does": "`docs/specs/order-walk-plan.md` §13, \"Orders "
-                                           "is inventory's screen with orders in the rail\": "
-                                           "replaces `OrdersWalk.tsx` whole, not adapted. There "
-                                           "is no more frozen pass — `useOrderWalk` re-fetches "
-                                           "`POST /orders/walk-plan` LIVE whenever the walked "
-                                           "set (the selected order plus every ticked one) "
-                                           "changes, the same way selecting a box opens it. "
-                                           "`WalkList` draws the plan's boxes and sections in "
-                                           "`BoxBrowse.css`'s own `.browse-list`/`.browse-row` "
-                                           "shape, one row per physical pick (`here: true` "
-                                           "copy); `WalkMainPane` is inventory's own card pane "
-                                           "— `CardLocations` with `preserveOrder`, over a "
-                                           "`SearchGroup` synthesised from the current row's "
-                                           "take, exactly as `Inventory.tsx`'s `loneGroup` and "
-                                           "the old `TakeBlock` built one. `Mark sold` is the "
-                                           "one write, `WalkPullFn`/`WalkUndoFn` restated from "
-                                           "the deleted file, and it records against an owing "
-                                           "order via `pickOrderFor`'s live-tally rule "
-                                           "(unchanged from `OrdersWalk.tsx`). `hideHeader`, "
-                                           "`rowOverride` and `rowAttrs` — added to "
-                                           "`CardLocations.tsx` only for the deleted file's own "
-                                           "one-line collapsed row — are deleted with it; "
-                                           "`preserveOrder` stays, the trap this rebuild's own "
-                                           "brief named first (never re-sort the walk).",
+            "src/OrdersWalkPane.tsx": {"does": "the walk's own hook and list, over "
+                                           "`docs/specs/order-walk-plan.md` §13: "
+                                           "`useOrderWalk` re-fetches `POST /orders/walk-plan` "
+                                           "LIVE whenever the walked set (the selected order "
+                                           "plus every ticked one) changes, the same way "
+                                           "selecting a box opens it, and `WalkList` draws the "
+                                           "plan's boxes and sections, one row per physical "
+                                           "pick (`here: true` copy). THE CARD PANE MOVED OUT "
+                                           "(lane A3, `D-orders-walk-rejoins-inventory`): "
+                                           "`Orders.tsx:OrderPickPane` composes it from "
+                                           "`CardHero.tsx:CardPane` and "
+                                           "`CardLocations.tsx:CardLocations`, reused whole. "
+                                           "`pickFigureOf`, `RowAction` and `takeBuyers` stay "
+                                           "exported from here because `Orders.tsx` still needs "
+                                           "them: the \"Pick N of M\" figure, and the one press "
+                                           "(Mark sold / Undo) `CardLocations`'s own "
+                                           "`renderAction` slot calls per copy. `WalkCardPane` "
+                                           "and its `orders-card-*` classes are deleted, not "
+                                           "adapted.",
                                    "governed_by": ["D24", "D57", "D58", "D62", "D79", "D93", "D96",
                                                    "D97", "D116", "D118", "D132", "D164", "D171",
                                                    "D181", "D193", "D209", "D212", "D218", "D220",
-                                                   "D252", "D263", "D279"]},
-            "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
-                                           "drain-bar (borrowed from `Inventory.css` by class "
-                                           "name); every other shape this file draws is "
-                                           "`BoxBrowse.css`'s own `.browse-*` classes, imported "
-                                           "by `Orders.tsx` rather than restated here.",
-                                   "governed_by": ["D50", "D94", "D118", "D164"]},
+                                                   "D252", "D263", "D279",
+                                                   "D-orders-walk-rejoins-inventory"]},
             "src/Shipping.tsx": {"does": "`#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE "
                                          "HUB — `<OrdersHub stage=\'ship\'/>`. The stage itself "
                                          "is src/OrdersShipStage.tsx, which `Orders.tsx` "
@@ -9488,7 +9478,7 @@ COMPONENTS = [
                                                      "D114", "D118", "D123", "D132", "D171", "D181",
                                                      "D193", "D194", "D196", "D203", "D209", "D212",
                                                      "D218", "D220", "D221", "D263", "D274", "D285",
-                                                     "D296"]},
+                                                     "D296", "D-orders-walk-rejoins-inventory"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "
@@ -9510,8 +9500,8 @@ COMPONENTS = [
                                                  "Not a harness test — it starts a browser; "
                                                  "`make design-check` runs it.",
                                          "governed_by": ["D57", "D58", "D113", "D118", "D136",
-                                                         "D164", "D212", "D220",
-                                                         "D252"]},
+                                                         "D164", "D212", "D220", "D252",
+                                                         "D-orders-walk-rejoins-inventory"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "

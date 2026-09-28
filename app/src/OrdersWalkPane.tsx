@@ -1,5 +1,5 @@
 /* app/src/OrdersWalkPane.tsx — the walk: the cards to pick for the buyers walked, in the order
- * the boxes are walked (`docs/specs/order-walk-plan.md` §13), and the card pane beside it.
+ * the boxes are walked (`docs/specs/order-walk-plan.md` §13).
  *
  * THE WIRE IS UNCHANGED: `POST /orders/walk-plan` (`server.ts:walkPlan`), `WalkPlan` and its
  * parts, and the pull/undo write `Orders.tsx` already makes (`onWalkPull`/`onWalkUndo`,
@@ -11,21 +11,20 @@
  * copy of the solver's reach, because the press and its undo act on one physical copy; the list
  * folds them by take. `here` is the solver's own flag and this file does not recompute it.
  *
- * THE CARD PANE (UX-169) is the photograph, what the card is, and every copy of it with its place
- * and Mark sold, in the wire's own order (this stop's copies first, D212/D93/D97). Positions
- * patched from a pull's own post-write facts are folded into `facts` and never change which row
- * is first. The card's full inventory detail stays on `#/inventory`.
+ * THE CARD PANE MOVED OUT (`docs/decisions/D-orders-walk-rejoins-inventory.md`, lane A3): what
+ * used to be `WalkCardPane` here is now `Orders.tsx`'s own use of `CardHero.tsx:CardPane` and
+ * `CardLocations.tsx:CardLocations`, reused whole rather than forked — the walk-only pane and
+ * its `orders-card-*` classes are deleted, not adapted. `pickFigureOf` and `RowAction` are
+ * exported from here because `Orders.tsx` still needs them: the "Pick N of M" figure, and the
+ * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { marketTable, PhotoPanel, type MarketRead, type Row } from './CardHero'
-import { forSale } from './cardState'
-import { Dialog as Overlay } from './kit/overlay'
-import { Icon, IconButton, Loading, Location, Money, Notice, Pill, ProductLink } from './kit'
+import { Icon, IconButton, Loading, Notice, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
-import { describeFailure, getPricing, photoUrl, walkPlan } from './server'
+import { describeFailure, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   InventoryCard,
@@ -40,7 +39,6 @@ import type {
   WalkPlanStop,
   WalkPlanTake,
 } from './types'
-import './OrdersWalkPane.css'
 
 export type WalkPullOutcome =
   | { readonly ok: true; readonly place: string; readonly refreshed: readonly Place[] }
@@ -116,7 +114,7 @@ function pickOrderFor(
  *  `of` is capped at what is really here and `short` carries the gap, so the row can say "7
  *  short" instead of a wrong count (the owner's wording ruling, 2026-09-25: "say what's short
  *  but it's not intuitive to use so much verbiage"). */
-function pickFigureOf(
+export function pickFigureOf(
   take: WalkPlanTake,
   owedBySku: ReadonlyMap<string, number>,
 ): { readonly of: number; readonly short: number } {
@@ -750,7 +748,7 @@ export function WalkList({
 /** The press on a copy row: an icon in every row (the iconography rule, a press repeated per
  *  row), its name carrying the place so thirty rows never announce the same word. `Undo` stands
  *  only on the newest sale (`newestUndoKey`). */
-function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly copy: SearchCopy }) {
+export function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly copy: SearchCopy }) {
   const receipt = walk.receipts.get(copy.key)
   const busy = walk.busyCopy === copy.key
   const where = copy.place.label === null ? copy.key : sayPlace(copy.place.label)
@@ -765,177 +763,5 @@ function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly copy: Se
       disabled={walk.busyCopy !== null && !busy}
       onClick={() => (undo ? walk.undoCopy(copy.key) : walk.onSell(copy))}
     />
-  )
-}
-
-/* ------------------------------------------------------------------------------ the card pane */
-
-/** THE CARD THE WALK STANDS ON, AND WHERE EVERY COPY OF IT IS (UX-169). The photograph, what the
- *  card is, how many to pick, and one row per copy with its place and Mark sold: every copy, this
- *  stop's first, in the server's order (D212). The card's full inventory detail (stats, listing
- *  counts, the details table) is `#/inventory`'s, not this screen's. */
-export function WalkCardPane({
-  walk,
-  owedBySku,
-  showBuyers,
-}: {
-  readonly walk: OrderWalk
-  readonly owedBySku: ReadonlyMap<string, number>
-  readonly showBuyers: boolean
-}) {
-  const { currentRow, currentGroup, currentCard } = walk
-  const [broken, setBroken] = useState(false)
-  const [zoomed, setZoomed] = useState(false)
-  useEffect(() => {
-    setBroken(false)
-    setZoomed(false)
-  }, [currentRow?.copy.key])
-
-  /* THE MARKET READING, ONE READ PER RUN (the owner's pick, 2026-09-24: B, one quiet line under
-     the card). The same per-run cache the old pane kept. A failed read is a quiet dash. */
-  const [priced, setPriced] = useState<Record<string, MarketRead>>({})
-  const asked = useRef<Set<string>>(new Set())
-  const pricedRun = currentCard?.run ?? null
-  useEffect(() => {
-    if (pricedRun === null || asked.current.has(pricedRun)) return
-    asked.current.add(pricedRun)
-    let live = true
-    getPricing(pricedRun)
-      .then((payload) => {
-        if (live) setPriced((held) => ({ ...held, [pricedRun]: marketTable(payload) }))
-      })
-      .catch(() => {
-        if (live) setPriced((held) => ({ ...held, [pricedRun]: { kind: 'absent', why: 'could not be read' } }))
-      })
-    return () => {
-      live = false
-    }
-  }, [pricedRun])
-
-  if (currentGroup === null || currentRow === null) return null
-  const take = currentRow.take
-  /* NEVER A PHOTOGRAPH OF A POOLED CARD: a code card's photo is a live code (D24, opsec). */
-  const row: Row | null =
-    currentCard === null || currentRow.copy.place.located === false ? null : { key: currentRow.copy.key, card: currentCard }
-  const figure = pickFigureOf(take, owedBySku)
-  const sub = [take.number_display, take.set].filter((part): part is string => Boolean(part))
-
-  const here = currentGroup.copies.find((copy) => copy.key === currentRow.copy.key) ?? null
-  const read = currentCard?.run == null ? undefined : priced[currentCard.run]
-  const rawMarket = read?.kind === 'table' && currentCard !== null ? read.rows[`${currentCard.box}/${currentCard.index}`] : null
-  const market = rawMarket === null || rawMarket === undefined || Number.isNaN(Number(rawMarket)) ? null : Number(rawMarket)
-  const liveNow = take.listed === undefined ? null : forSale(take.listed.live, take.sold_here ?? 0)
-  const hereWords = currentRow.copy.place.label === null ? null : sayPlace(currentRow.copy.place.label)
-
-  return (
-    <section className="orders-card-pane bn-panel" aria-label="The card to pick">
-      <div className="orders-card-thin">
-        <button
-          type="button"
-          className="orders-card-thumb"
-          aria-label="Open the photograph"
-          disabled={row === null}
-          onClick={() => setZoomed(true)}
-        >
-          {row === null ? (
-            <Icon name="image" size={18} />
-          ) : (
-            <img src={photoUrl(row.card.box, row.card.index, row.card.cid)} alt="" loading="lazy" />
-          )}
-        </button>
-        <span className="orders-card-thin-text">
-          <span className={take.name === null ? 'orders-card-thin-name is-unnamed' : 'orders-card-thin-name'}>
-            {take.name ?? 'Not identified yet'}
-          </span>
-          <span className="orders-card-thin-meta">
-            <span className="orders-card-thin-place">
-              {hereWords === null ? `Pick ${take.wanted}` : `${hereWords}, pick ${take.wanted}`}
-              {figure.short > 0 ? '' : ` of ${figure.of}`}
-            </span>
-            {figure.short > 0 ? (
-              <>
-                {' '}
-                <Pill tone="warn">{figure.short} short</Pill>
-              </>
-            ) : null}
-          </span>
-        </span>
-        {here === null ? null : (
-          <span className="orders-card-thin-action">
-            <RowAction walk={walk} copy={here} />
-          </span>
-        )}
-      </div>
-      <div className="orders-card-top">
-        <div className="orders-card-shot">
-          {row === null ? (
-            <div className="orders-walk-photo">
-              <Icon name="image" size={28} />
-            </div>
-          ) : (
-            <PhotoPanel
-              row={row}
-              label={currentRow.copy.place.label}
-              absent={broken}
-              onAbsent={() => setBroken(true)}
-              nonce={null}
-              onZoom={() => setZoomed(true)}
-              reshoot={null}
-            />
-          )}
-        </div>
-        <div className="orders-card-text">
-          <h2 className={take.name === null ? 'orders-card-name is-unnamed' : 'orders-card-name'}>{take.name ?? 'Not identified yet'}</h2>
-          {sub.length === 0 ? null : (
-            <p className="orders-card-sub bn-facts">
-              {sub.map((part, at) => (
-                <span key={at}>{part}</span>
-              ))}
-            </p>
-          )}
-          <p className="orders-card-pick">
-            Pick <strong>{take.wanted}</strong>
-            {figure.short > 0 ? null : <> of {figure.of}</>}
-            {figure.short > 0 ? (
-              <>
-                {' '}
-                <Pill tone="warn">{figure.short} short</Pill>
-              </>
-            ) : null}
-          </p>
-          {showBuyers ? <p className="orders-card-for">For {takeBuyers(take)}</p> : null}
-          <p className="orders-card-market">
-            <ProductLink sku={take.sku} name={take.name ?? undefined}>
-              {market === null ? '—' : <Money value={market} />} market, {liveNow === null ? '—' : liveNow} live
-            </ProductLink>
-          </p>
-        </div>
-      </div>
-      <ul className="orders-card-copies" aria-label="Every copy of this card">
-        {currentGroup.copies.map((copy) => {
-          const here = copy.key === currentRow.copy.key
-          return (
-            <li className={here ? 'orders-card-copy is-current' : 'orders-card-copy'} key={copy.key} aria-current={here ? 'true' : undefined}>
-              {copy.place.located === false ? (
-                <span className="orders-card-place">Pooled: {copy.place.game_display ?? 'cards'}</span>
-              ) : (
-                <Location place={copy.place} className="orders-card-place" />
-              )}
-              <span className="orders-card-action">
-                <RowAction walk={walk} copy={copy} />
-              </span>
-            </li>
-          )
-        })}
-      </ul>
-      {!zoomed || row === null ? null : (
-        <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
-          <img
-            src={photoUrl(row.card.box, row.card.index, row.card.cid)}
-            alt={`The card at ${currentRow.copy.place.label === null ? row.key : sayPlace(currentRow.copy.place.label)}`}
-          />
-        </Overlay>
-      )}
-    </section>
   )
 }
