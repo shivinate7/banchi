@@ -3890,11 +3890,10 @@ COMPONENTS = [
                 # missed, which is what that row exists to make impossible a third time.
                 #
                 # D31 AND D39 JOIN FOR THE ROW BESIDE IT, the same shape one row later. The
-                # `route census` row names the routes whose arrival the published screen
-                # count failed to follow — D39's #/runs, D49's #/pricing, D69's two and
-                # D70's #/codes — because the incident is what the row is for, and a reader
-                # who does not know the count has been wrong seven times reads the check as
-                # pedantry. Illustrations, listed because the superset rule reads a citation
+                # `route census` row (CUT, test-audit plan Q2, 2026-09-28) named the routes
+                # whose arrival the published screen count failed to follow — D39's #/runs,
+                # D49's #/pricing, D69's two and D70's #/codes. The published count is gone
+                # with it. Illustrations, listed because the superset rule reads a citation
                 # literally; the ruling both rows enforce is D16's.
                 #
                 # D27 AND D94 JOIN FOR `storage keys`, and both are load-bearing rather than
@@ -4438,8 +4437,8 @@ COMPONENTS = [
                         "only guard a rewrite has and the only check here that needs a "
                         "BEFORE. Reads and never writes; stdlib only, so the git hook's "
                         "bare python3 can run the half that gates. docs-audit.py calls the "
-                        "structure half as `decision structure` and the size half as "
-                        "`entry budget`; `--facts` is on no gate, having nothing to "
+                        "structure half as `decision structure`. The size half, `entry "
+                        "budget`, was cut (test-audit plan, 2026-09-27). `--facts` is on no gate, having nothing to "
                         "compare against outside a rewrite.",
                 # D60 is the entry it enforces and D17 the hook it exists to protect. D16
                 # is the temperament twice over: mechanical findings blocking by default,
@@ -4933,8 +4932,7 @@ COMPONENTS = [
                         "the failure this repo has paid for more than any other. One that "
                         "merely describes it can only lie, and a lie is catchable: `check "
                         "registry` reconciles it against the recipe both ways and in order, "
-                        "`check census` reconciles the published prose in the Makefile and "
-                        "CLAUDE.md against it, and `commit path` asserts D18 MECHANICALLY for "
+                        "and `commit path` asserts D18 MECHANICALLY for "
                         "the first time — nothing that writes may be on the path that decides "
                         "whether a commit proceeds, a rule cited in five Makefile comments and "
                         "two decisions and enforced until now by nobody. IT HAD A LIVE "

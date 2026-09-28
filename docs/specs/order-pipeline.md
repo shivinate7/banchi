@@ -822,10 +822,9 @@ down today names a different card tomorrow — D63 measured exactly that.
 
 **The route count is maintained in four places** — `CLAUDE.md`, `README.md`, `docs/map.py`,
 `app/src/App.tsx` — and `scripts/views.txt` carries a LINE rather than a number, which is the one a
-session looking for a count will not find. **This paragraph used to end by saying nothing checks
-it, and that has been false since the route census landed**: `make docs-audit`'s `route census` row
-reconciles the published counts in the first three against `App.tsx`'s `ROUTES` table, `route
-rosters` does the same for each spec's pinned roster, and both fail a commit. `CLAUDE.md`'s own
+session looking for a count will not find. `make docs-audit`'s `route census` row once reconciled
+those counts. It was cut on 2026-09-28 (test-audit plan Q2), and the counts were deleted with it.
+`route rosters` still reconciles each spec's pinned roster against `App.tsx`'s `ROUTES` table. `CLAUDE.md`'s own
 warning was rewritten at the same time. The sentence outlived its subject in this file and in the
 branch that rewrote this section, which is the failure a count with no reader has: nothing
 contradicts it.
@@ -914,7 +913,7 @@ PII projection is proven against fixtures and against nothing that came off the 
 — the owner pressed Fetch, the search pages walked far enough to count 370 orders in
 `LastThreeMonths`, and it was refused `order_too_many`. The paging is proven live and that refusal
 is the one D91 answers. This sentence disagreed with the module it points at as the primary record,
-which is the drift the `transport standing` audit row now catches.
+which is the drift the `transport standing` audit row caught until its cut on 2026-09-28.
 
 `server/order_transport.py`'s own STATUS block is the primary record and says this at greater length.
 

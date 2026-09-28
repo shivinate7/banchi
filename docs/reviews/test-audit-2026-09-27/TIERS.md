@@ -35,15 +35,15 @@ measurement, marked with an asterisk and explained in the Method section.
 ## Counts, as landed (L12, 2026-09-28)
 
 The table above is the original proposal. L8 merged 16 rows into 4 families, 109 to 93.
-Q2's nine cuts landed, with rows 20 and 48. That took the count from 93 to 83. L12 wrote
+Q2's nine cuts landed, with rows 20 and 48. The debt48 lane added `numbered record growth`. L12 wrote
 every remaining row's tier into `scripts/docs-audit.py:TIER`. Recounted from that dict:
 
 | Tier | Rows |
 |---|---:|
-| 1 (block at commit) | 54 |
+| 1 (block at commit) | 55 |
 | 2 (block in CI) | 19 |
-| 3 (note in CI) | 10 |
-| **Total** | **83** |
+| 3 (note in CI, and `coupling` runs only on a staged diff) | 11 |
+| **Total** | **85** (a full run prints 84) |
 
 `coupling` sits outside this count. It is staged-only and already advisory. It runs only
 inside `--staged` mode, never through the tier gate. L12 leaves its behavior unchanged.
@@ -53,7 +53,7 @@ inside `--staged` mode, never through the tier gate. L12 leaves its behavior unc
 **Measured, not estimated.** `ste offenders` is already gone (L2 cut it). L12 applies the
 tier column. The pre-commit hook now calls `python3 scripts/docs-audit.py --staged
 --commit`. That flag skips every Tier 2 and Tier 3 row's computation entirely. Each one
-never runs and never prints, leaving the 54 rows now tiered 1 (of 83 total; the counts
+never runs and never prints, leaving the 55 rows now tiered 1 (of 85 total; the counts
 above predate L8's merges and the Q2 cuts, both landed before L12).
 
 Method: the same 5-file staged diff (CLAUDE.md, README.md, docs/map.py,
@@ -288,7 +288,7 @@ The tier model and every row not named below stand as proposed. The owner's word
   nothing, so nothing there narrows. The nine Q2 rows are cut, and the prose number each one
   policed is deleted from CLAUDE.md, README.md, docs/map.py and
   docs/specs/order-pipeline.md. Rows 20 (`entry budget`) and 48 (`gates structure`) are cut
-  too. Row count: 83 (93 minus 9 Q2 rows, minus 2). See "Counts, as landed" and "Commit-hook
+  too. See "Counts, as landed" and "Commit-hook
   time, measured" above for the row and timing figures this ruling made stale.
 
 ## Next
