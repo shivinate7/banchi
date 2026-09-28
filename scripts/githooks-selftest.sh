@@ -189,6 +189,47 @@ expect allow "delete a branch"  git branch -D scratch
 expect allow "tag"              git tag v-selftest
 expect allow "fetch"            git fetch -q origin
 
+echo "  -- packing refs is not moving main --"
+# `pack-refs` (and so `gc`) writes main into packed-refs, then deletes the LOOSE main in a second
+# transaction stating `<sha> 0000`. Read as a delete, it printed "REFUSED: would DELETE main" while
+# main never moved (2026-09-28). The refusals below prove the exemption is that narrow: a real
+# delete, move or fast-forward of a main that is loose AND packed still stops.
+git init -q -b main "$tmp/pack"
+cd "$tmp/pack" || exit 1
+git config user.email selftest@example.com
+git config user.name  selftest
+git config commit.gpgsign false
+PKMNSCAN_MAIN=off git commit -q --allow-empty -m base
+base="$(git rev-parse main)"
+git switch -q -c side 2>/dev/null
+git commit -q --allow-empty -m ahead        # `side` is on no remote, so it is not a legal target
+git config core.hooksPath "$HOOKS_DIR"
+# main both loose AND packed at $base. (A bare update-ref to the packed value writes no loose
+# file, so delete, recreate, then pack without pruning.) The hatch is setup only.
+reloose() {
+  PKMNSCAN_MAIN=off git update-ref -d refs/heads/main
+  PKMNSCAN_MAIN=off git update-ref refs/heads/main "$base"
+  PKMNSCAN_MAIN=off git pack-refs --all --no-prune
+}
+reloose
+expect allow "git pack-refs --all"            git pack-refs --all
+reloose
+# gc exits 0 even when its pack-refs step is refused, so assert its OUTPUT is silent too.
+gcout="$(git gc -q 2>&1)"
+case "$gcout" in
+  *REFUSED*) bad "git gc — the hook refused inside gc"; printf '%s\n' "$gcout" | sed 's/^/         /' ;;
+  *) ok "git gc — silent" ;;
+esac
+reloose
+expect refuse "delete loose+packed main"      git update-ref -d refs/heads/main
+expect refuse "delete main stating its value" git update-ref -d refs/heads/main "$base"
+expect refuse "git branch -D main, packed"    git branch -D main
+expect refuse "move loose+packed main"        git update-ref refs/heads/main side
+git switch -q main 2>/dev/null
+expect refuse "fast-forward packed main"      git merge --ff-only side
+git switch -q side 2>/dev/null
+cd "$tmp/work" || exit 1
+
 echo "  -- D139: which branch the primary checkout stands on --"
 # WHY THIS IS A GUARD AT ALL. D53 keeps a supervisor alive at login out of the PRIMARY checkout
 # over the owner's real store, so the branch that ONE directory stands on silently decides which
