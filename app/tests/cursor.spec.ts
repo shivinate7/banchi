@@ -129,25 +129,117 @@ function expected(f: Found): string {
    the build and move either way. `app/tests/shell.ts` carries the rest of the argument. */
 sealEveryTest({ store: true })
 
-test('every rendered control tells the pointer what it is', async ({ page }) => {
-  /* THE ONE TEST IN THIS SUITE THAT LOADS EVERY SCREEN, AND THE ONLY ONE THAT ASKS THE REAL
-     SERVER FOR ALL OF THEM. Both facts follow from what it is for and neither is a smell: a
-     sweep that discovers controls cannot stub routes it has not been told about, and a roster
-     read off the sidebar is a roster of every screen. So this case alone pays the whole module
-     graph's cold Vite compile AND every screen's real fetches, while six other workers compile
-     against the same dev server and the same single-threaded capture server behind it.
-     Measured on this rig: 1.8s alone against a warm server, 41.4s alone against a cold one.
 
-     THE RAISE IS FOR THE COLD COMPILE AND NOTHING ELSE, and it is not what was actually wrong —
-     see `networkidle` below, which is the real fault and is fixed there rather than paid for
-     here. Raising a budget WEAKENS NOTHING, the same distinction `playwright.config.ts` argues
-     for its own `expect.timeout`: it does not change which routes are walked, which controls
-     are classified, or the rule they are held to. It changes how long a true statement is given
-     to become true, and a control saying `pointer` while disabled is still saying it at 60s. */
+/* THREE FLOORS, ONE WALK (test-audit L7, M2, 2026-09-28). This file used to pay for the route
+ * walk three times — once per floor below — because each floor was its own `test()` with its
+ * own `for (const route of await routesFromNav(page))` loop. `docs/reviews/test-audit-2026-09-27/
+ * PLAN.md`'s M2 is `app/tests/routeSweep.ts`'s own argument applied here: keep every assertion,
+ * pay for the navigation once. The three comments below are UNCHANGED from when each floor had
+ * its own test — they still describe what each check asks and why, only "the case below" now
+ * means a phase of the loop rather than a separate `test()`.
+ *
+ * THE ONE TEST IN THIS SUITE THAT LOADS EVERY SCREEN, AND THE ONLY ONE THAT ASKS THE REAL
+ * SERVER FOR ALL OF THEM. Both facts follow from what it is for and neither is a smell: a
+ * sweep that discovers controls cannot stub routes it has not been told about, and a roster
+ * read off the sidebar is a roster of every screen. So this case alone pays the whole module
+ * graph's cold Vite compile AND every screen's real fetches, while six other workers compile
+ * against the same dev server and the same single-threaded capture server behind it.
+ * Measured on this rig: 1.8s alone against a warm server, 41.4s alone against a cold one.
+ *
+ * THE RAISE IS FOR THE COLD COMPILE AND NOTHING ELSE, and it is not what was actually wrong —
+ * see `networkidle` below, which is the real fault and is fixed there rather than paid for
+ * here. Raising a budget WEAKENS NOTHING, the same distinction `playwright.config.ts` argues
+ * for its own `expect.timeout`: it does not change which routes are walked, which controls
+ * are classified, or the rule they are held to. It changes how long a true statement is given
+ * to become true, and a control saying `pointer` while disabled is still saying it at 60s. */
+
+/* THE RESPONSE ITSELF, ASSERTED AS A RULE OVER EVERY `:hover` RULE THE APP LOADED — which is
+ * the half of D50 this file did not have. Everything above is about `cursor`, and the one case
+ * below it about hover reaches exactly ONE element, `.search-field-box` on `#/gallery`. D50 is
+ * titled for an interactive element's FEEDBACK; a guard that checks one control's border color
+ * is not holding that entry to its own name, and the owner's report of 2026-09-06 landed in the
+ * gap: `.bn-brand`, the sidebar's rail toggle, painted a 109px hover slab in a single frame on
+ * all ten routes while the nav links under it faded over 120ms. Every assertion in this file
+ * was green through it, because none of them looks at time.
+ *
+ * MEASURED BEFORE IT WAS WRITTEN, by hovering all 315 controls the eleven routes draw and
+ * letting the transition settle: 293 responded, 276 eased and 17 SNAPPED, across six classes in
+ * five sheets. `base.css`'s response floor took that to 0 of 294 in one block.
+ *
+ * IT READS THE CSSOM RATHER THAN HOVERING, and that is the difference between a rule and a
+ * roster one level down. Hovering finds only what this store happens to draw and costs ~100s at
+ * one worker; walking `document.styleSheets` finds every `:hover` rule in every sheet whether or
+ * not something renders it today, which is the same widening D50 recorded when it re-measured
+ * its own reflow claim over "all 64 :hover rules in all 26 sheets" instead of over the routes a
+ * browser drew. There are 161 of those rules now and 31 sheets — it was 164 when this was
+ * written and D110 deleted three dark-only overrides the same day; the count is not pinned here,
+ * because the point is that the walk discovers them.
+ *
+ * THE FOUR PROPERTIES ARE THE FLOOR'S OWN FOUR, deliberately, so the guard and the guarantee
+ * cannot drift apart. `transform` and `opacity` are outside both: mount animations own opacity,
+ * and a transform is contained micro-motion a screen may want to time itself — `Codes.css`'s
+ * 4px-to-7px arrow nudge is transitioned on its own rule and is not this rule's business.
+ * `text-decoration` is outside because `base.css`'s own `a:hover` underline is an affordance
+ * rather than a repaint, and easing it would look wrong.
+ *
+ * A SCREEN MAY STILL SAY `transition: none` AND THIS WILL FAIL IT, which is correct and is the
+ * cheap exception D50 describes: an exception costs one rule and one comment saying why, and
+ * this is what makes somebody write the comment. */
+
+/* ---------------------------------------------------------------------------- the stability floor
+ *
+ * A POINTER STATE MAY REPAINT A CONTROL. IT MAY NOT RE-LAY IT OUT.
+ *
+ * The owner's report, 2026-09-07: "I am getting a lot of screen shake when I am in inventory and
+ * am marking something sold, things should not be moving around when I hit buttons". D118 is the
+ * entry, and this is the half of it that is not about one screen: the three floors above answer
+ * what a control SAYS to the pointer and the finger, and nothing answered what the PAGE does
+ * around it.
+ *
+ * TWO CASES, AND THEY CATCH DIFFERENT HALVES. This one reads the rules — a hover or a press that
+ * changes a width, a padding, a border width, a type size or a gap re-flows everything beside it,
+ * under a pointer that is by definition already there. `inventory.spec.ts` carries the other
+ * half, which is about what a WRITE does to the panel it lands in, and needs that file's
+ * fixtures to see it.
+ *
+ * MEASURED FIRST, over the 3,422 rules the eleven routes load: exactly one rule reflowed on a
+ * pointer state — `.codes-task:hover .codes-task-go` grew a `gap` from 4px to 7px, moving the
+ * ellipsised meta line beside it. That is a small number and it is the point: the floors above
+ * did their work, and what remained was a rule nothing was watching. A second candidate,
+ * `.pricing-cheap-input:focus-visible`, is why this reads COMPUTED values rather than matching on
+ * property names — it sets `border-bottom` as a shorthand at the same 2px the rest state already
+ * has, so the CSSOM lists `border-bottom-width` among its properties and nothing changes.
+ *
+ * WHAT IT CANNOT SEE, said plainly: a rule whose selector matches nothing on any route (this
+ * worktree's store is empty, D43), and a reflow caused by JavaScript rather than by a rule. The
+ * second is exactly what `inventory.spec.ts`'s cases are for. */
+const REFLOWS = [
+  'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
+  'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+  'font-size', 'font-weight', 'letter-spacing', 'line-height',
+  'row-gap', 'column-gap', 'flex-basis', 'flex-grow',
+] as const
+
+test('every rendered control tells the pointer what it is, its hover response eases, and no pointer state re-lays out the page', async ({ page }) => {
   test.setTimeout(60_000)
+
+  /* THE FLOOR'S FOUR, NAMED ONCE. `background` and `border` are the shorthands a sheet actually
+     writes; they set the longhand this asks about, so both spellings count as a repaint. */
+  const REPAINT = ['background', 'background-color', 'border-color', 'border-top-color',
+    'border-bottom-color', 'border-left-color', 'border-right-color', 'border', 'color',
+    'box-shadow', 'outline-color']
 
   const wrong: string[] = []
   let total = 0
+
+  const repaintOffenders: string[] = []
+  let rulesWalked = 0
+  let elementsChecked = 0
+
+  const reflowOffenders: string[] = []
+  let reflowWalked = 0
 
   for (const route of await routesFromNav(page)) {
     await page.goto(`/${route}`)
@@ -182,6 +274,7 @@ test('every rendered control tells the pointer what it is', async ({ page }) => 
       `${route} is drawn in the nav but resolves to nothing — is the row still in App.tsx's ROUTES?`,
     ).toHaveCount(0)
 
+    /* FLOOR 1: the cursor. */
     const found = await sweep(page)
     total += found.length
     for (const f of found) {
@@ -193,80 +286,9 @@ test('every rendered control tells the pointer what it is', async ({ page }) => 
         )
       }
     }
-  }
 
-  /* A FLOOR ON THE SWEEP ITSELF, WHICH THIS FILE ALREADY INVENTED FOR ITS ROSTER HARVEST AND
-     NEEDS TWICE AS BADLY HERE. The screens draw their controls out of `shell.ts`'s shared
-     fixture now, and a regression in that fixture — a payload gone short, a route stopped
-     matching — leaves every screen on its empty state and turns the richest sweep in this
-     suite into a loop over nothing. It would pass, instantly, forever: exactly the vacuous
-     green the harvest's own floor exists to refuse, one level down.
-
-     300 AGAINST A MEASURED 354, on this worktree 2026-09-06. Not a pin — the number moves with
-     every control the product gains — but far enough below to survive ordinary drift and far
-     enough above the 40-odd an all-empty store draws that no fixture regression can hide under
-     it. */
-  expect(total, 'the sweep classified almost nothing — are `shell.ts`\'s fixtures still populating every screen?')
-    .toBeGreaterThan(300)
-
-  expect(
-    wrong,
-    `${wrong.length} of ${total} controls say the wrong thing to the pointer:\n${wrong.join('\n')}`,
-  ).toHaveLength(0)
-})
-
-/* THE RESPONSE ITSELF, ASSERTED AS A RULE OVER EVERY `:hover` RULE THE APP LOADED — which is
- * the half of D50 this file did not have. Everything above is about `cursor`, and the one case
- * below it about hover reaches exactly ONE element, `.search-field-box` on `#/gallery`. D50 is
- * titled for an interactive element's FEEDBACK; a guard that checks one control's border color
- * is not holding that entry to its own name, and the owner's report of 2026-09-06 landed in the
- * gap: `.bn-brand`, the sidebar's rail toggle, painted a 109px hover slab in a single frame on
- * all ten routes while the nav links under it faded over 120ms. Every assertion in this file
- * was green through it, because none of them looks at time.
- *
- * MEASURED BEFORE IT WAS WRITTEN, by hovering all 315 controls the eleven routes draw and
- * letting the transition settle: 293 responded, 276 eased and 17 SNAPPED, across six classes in
- * five sheets. `base.css`'s response floor took that to 0 of 294 in one block.
- *
- * IT READS THE CSSOM RATHER THAN HOVERING, and that is the difference between a rule and a
- * roster one level down. Hovering finds only what this store happens to draw and costs ~100s at
- * one worker; walking `document.styleSheets` finds every `:hover` rule in every sheet whether or
- * not something renders it today, which is the same widening D50 recorded when it re-measured
- * its own reflow claim over "all 64 :hover rules in all 26 sheets" instead of over the routes a
- * browser drew. There are 161 of those rules now and 31 sheets — it was 164 when this was
- * written and D110 deleted three dark-only overrides the same day; the count is not pinned here,
- * because the point is that the walk discovers them.
- *
- * THE FOUR PROPERTIES ARE THE FLOOR'S OWN FOUR, deliberately, so the guard and the guarantee
- * cannot drift apart. `transform` and `opacity` are outside both: mount animations own opacity,
- * and a transform is contained micro-motion a screen may want to time itself — `Codes.css`'s
- * 4px-to-7px arrow nudge is transitioned on its own rule and is not this rule's business.
- * `text-decoration` is outside because `base.css`'s own `a:hover` underline is an affordance
- * rather than a repaint, and easing it would look wrong.
- *
- * A SCREEN MAY STILL SAY `transition: none` AND THIS WILL FAIL IT, which is correct and is the
- * cheap exception D50 describes: an exception costs one rule and one comment saying why, and
- * this is what makes somebody write the comment. */
-test('a control that answers the pointer eases into it', async ({ page }) => {
-  test.setTimeout(60_000)
-
-  /* THE FLOOR'S FOUR, NAMED ONCE. `background` and `border` are the shorthands a sheet actually
-     writes; they set the longhand this asks about, so both spellings count as a repaint. */
-  const REPAINT = ['background', 'background-color', 'border-color', 'border-top-color',
-    'border-bottom-color', 'border-left-color', 'border-right-color', 'border', 'color',
-    'box-shadow', 'outline-color']
-
-  const offenders: string[] = []
-  let rulesWalked = 0
-  let elementsChecked = 0
-
-  for (const route of await routesFromNav(page)) {
-    await page.goto(`/${route}`)
-    await settleFonts(page)
-    await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {})
-    await expect(page.locator('main').first()).toBeVisible()
-
-    const result = await page.evaluate((REPAINT) => {
+    /* FLOOR 2: the response — every `:hover` rule that repaints eases in. */
+    const repaintResult = await page.evaluate((REPAINT) => {
       const bad: string[] = []
       let walked = 0
       let checked = 0
@@ -361,26 +383,122 @@ test('a control that answers the pointer eases into it', async ({ page }) => {
       return { bad, walked, checked }
     }, REPAINT)
 
-    rulesWalked += result.walked
-    elementsChecked += result.checked
-    for (const b of result.bad) if (!offenders.includes(`${b}`)) offenders.push(b)
+    rulesWalked += repaintResult.walked
+    elementsChecked += repaintResult.checked
+    for (const b of repaintResult.bad) if (!repaintOffenders.includes(`${b}`)) repaintOffenders.push(b)
+
+    /* FLOOR 3: stability — a pointer state may repaint, never re-lay out. */
+    const reflowResult = await page.evaluate((PROPS) => {
+      const collect = (list: CSSRuleList, out: CSSStyleRule[]) => {
+        for (const r of Array.from(list)) {
+          if (r instanceof CSSStyleRule) out.push(r)
+          else if ('cssRules' in r) { try { collect((r as CSSGroupingRule).cssRules, out) } catch { /* opaque */ } }
+        }
+      }
+      const rules: CSSStyleRule[] = []
+      for (const sheet of Array.from(document.styleSheets)) {
+        try { collect(sheet.cssRules, rules) } catch { /* cross-origin, not ours */ }
+      }
+
+      const bad: string[] = []
+      let seen = 0
+      for (const rule of rules) {
+        const sel = rule.selectorText
+        if (!sel || !/:(hover|active|focus|focus-visible|focus-within)\b/.test(sel)) continue
+        seen++
+        const declared = PROPS.filter((p) => rule.style.getPropertyValue(p) !== '')
+        if (!declared.length) continue
+
+        /* THE ELEMENT THE RULE PAINTS, not the one carrying the pseudo-class — the same read the
+           response floor above makes, and for the same reason: `.a:hover .b` moves `.b`.
+           IT IS USED ONLY TO EXONERATE, WHICH IS THE WAY ROUND THIS HAS TO BE. The first draft
+           skipped a rule whose selector matched nothing, and the mutation that put the real
+           defect back — `.codes-task:hover .codes-task-go { gap: 7px }` — went green, because
+           against this worktree's empty store (D43) `#/codes` draws no task card at all. A guard
+           that only sees what the fixture happens to render is the failure this file's own header
+           spends a paragraph on. So the DECLARATION is what convicts; a rendered element can
+           acquit it by already painting the same value, which is the `border-bottom: 2px solid`
+           over a 2px edge case and the only false positive this check has. */
+        const rest = sel.replace(/:(hover|active|focus-visible|focus-within|focus)\b/g, '')
+        let el: Element | null = null
+        try {
+          el = Array.from(document.querySelectorAll(rest)).find((t) => {
+            const b = t.getBoundingClientRect()
+            return b.width > 0 && b.height > 0
+          }) ?? null
+        } catch { el = null }
+        const cs = el === null ? null : getComputedStyle(el)
+
+        for (const prop of declared) {
+          const want = rule.style.getPropertyValue(prop).trim()
+          const now = cs === null ? '(not drawn on this route)' : cs.getPropertyValue(prop).trim()
+          if (want === '' || want === now) continue
+          bad.push(`${sel}  changes \`${prop}\` from \`${now}\` to \`${want}\` under the pointer — ` +
+            `that re-flows everything beside it. Composite the same movement with \`translate\`, ` +
+            `or paint it with a color, a shadow or an inset ring.`)
+        }
+      }
+      return { bad, seen }
+    }, REFLOWS as unknown as string[])
+
+    reflowWalked += reflowResult.seen
+    reflowOffenders.push(...reflowResult.bad)
   }
+
+  /* A FLOOR ON THE SWEEP ITSELF, WHICH THIS FILE ALREADY INVENTED FOR ITS ROSTER HARVEST AND
+     NEEDS TWICE AS BADLY HERE. The screens draw their controls out of `shell.ts`'s shared
+     fixture now, and a regression in that fixture — a payload gone short, a route stopped
+     matching — leaves every screen on its empty state and turns the richest sweep in this
+     suite into a loop over nothing. It would pass, instantly, forever: exactly the vacuous
+     green the harvest's own floor exists to refuse, one level down.
+
+     300 AGAINST A MEASURED 354, on this worktree 2026-09-06. Not a pin — the number moves with
+     every control the product gains — but far enough below to survive ordinary drift and far
+     enough above the 40-odd an all-empty store draws that no fixture regression can hide under
+     it. */
+  /* THREE FLOORS, ONE REPORT (test-audit L7 review fix, 2026-09-28). The walk above is shared,
+     so its failures must be too: a hard assertion that THROWS on a broken floor stops the test
+     right there, and a second, unrelated broken floor stays invisible until the next run fixes
+     the first. `.soft` runs every check below regardless of an earlier one's outcome and fails
+     the test at the END, naming all of them together — the same guarantee the three separate
+     `test()` cases gave for free before this file paid for the walk once. Every check below is
+     unchanged; only the matcher call is soft now. */
+  expect.soft(total, 'the sweep classified almost nothing — are `shell.ts`\'s fixtures still populating every screen?')
+    .toBeGreaterThan(300)
+
+  expect.soft(
+    wrong,
+    `${wrong.length} of ${total} controls say the wrong thing to the pointer:\n${wrong.join('\n')}`,
+  ).toHaveLength(0)
 
   /* THE SAME FLOOR THE SWEEP ABOVE KEEPS, FOR THE SAME REASON. A selector that stops matching,
      a sheet that stops loading, or a fixture regression that empties every screen would turn
      this into a walk over nothing — green, instantly, forever. Measured on this worktree
      2026-09-06 at 300 rule-element pairs; the floor is set well under it so ordinary drift does
      not trip it, and well over the handful an all-empty store would leave. */
-  expect(elementsChecked, 'the walk checked almost nothing — are the stylesheets still loading?')
+  expect.soft(elementsChecked, 'the walk checked almost nothing — are the stylesheets still loading?')
     .toBeGreaterThan(100)
-  expect(rulesWalked, 'no repainting :hover rule was found at all — is the CSSOM read still valid?')
+  expect.soft(rulesWalked, 'no repainting :hover rule was found at all — is the CSSOM read still valid?')
     .toBeGreaterThan(20)
 
-  expect(
-    offenders,
-    `${offenders.length} hover rules repaint a control without easing it:\n${offenders.join('\n')}`,
+  expect.soft(
+    repaintOffenders,
+    `${repaintOffenders.length} hover rules repaint a control without easing it:\n${repaintOffenders.join('\n')}`,
+  ).toHaveLength(0)
+
+  /* THE SUBJECT HAS TO BE ON THE PAGE, AND WHAT IS COUNTED IS EVERY POINTER-STATE RULE RATHER
+     THAN EVERY OFFENDING ONE. The first draft counted the rules that declared a layout property,
+     which is zero once the product is clean — a liveness check that goes to zero the moment the
+     thing it guards is fixed is not a liveness check. Measured over the eleven routes: 1,600-odd
+     pointer-state rules, so 50 is a floor a broken CSSOM read cannot clear. */
+  expect.soft(reflowWalked, 'no pointer-state rule was walked at all — is the CSSOM read still valid?')
+    .toBeGreaterThan(50)
+  expect.soft(
+    reflowOffenders,
+    `${reflowOffenders.length} pointer states re-lay out the page:\n${[...new Set(reflowOffenders)].join('\n')}`,
   ).toHaveLength(0)
 })
+
 
 /* THE PRESS, IN TWO CASES, BECAUSE THE FLOOR AND THE SCREENS CAN FAIL DIFFERENTLY — the same
  * split the cursor half of this file already makes, and for the same reason. The sweep asks
@@ -444,121 +562,6 @@ test('no screen spells the press dip as a transform — the floor owns it', asyn
   ).toHaveLength(0)
 })
 
-/* ---------------------------------------------------------------------------- the stability floor
- *
- * A POINTER STATE MAY REPAINT A CONTROL. IT MAY NOT RE-LAY IT OUT.
- *
- * The owner's report, 2026-09-07: "I am getting a lot of screen shake when I am in inventory and
- * am marking something sold, things should not be moving around when I hit buttons". D118 is the
- * entry, and this is the half of it that is not about one screen: the three floors above answer
- * what a control SAYS to the pointer and the finger, and nothing answered what the PAGE does
- * around it.
- *
- * TWO CASES, AND THEY CATCH DIFFERENT HALVES. This one reads the rules — a hover or a press that
- * changes a width, a padding, a border width, a type size or a gap re-flows everything beside it,
- * under a pointer that is by definition already there. `inventory.spec.ts` carries the other
- * half, which is about what a WRITE does to the panel it lands in, and needs that file's
- * fixtures to see it.
- *
- * MEASURED FIRST, over the 3,422 rules the eleven routes load: exactly one rule reflowed on a
- * pointer state — `.codes-task:hover .codes-task-go` grew a `gap` from 4px to 7px, moving the
- * ellipsised meta line beside it. That is a small number and it is the point: the floors above
- * did their work, and what remained was a rule nothing was watching. A second candidate,
- * `.pricing-cheap-input:focus-visible`, is why this reads COMPUTED values rather than matching on
- * property names — it sets `border-bottom` as a shorthand at the same 2px the rest state already
- * has, so the CSSOM lists `border-bottom-width` among its properties and nothing changes.
- *
- * WHAT IT CANNOT SEE, said plainly: a rule whose selector matches nothing on any route (this
- * worktree's store is empty, D43), and a reflow caused by JavaScript rather than by a rule. The
- * second is exactly what `inventory.spec.ts`'s cases are for. */
-const REFLOWS = [
-  'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
-  'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-  'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-  'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
-  'font-size', 'font-weight', 'letter-spacing', 'line-height',
-  'row-gap', 'column-gap', 'flex-basis', 'flex-grow',
-] as const
-
-test('a pointer state repaints a control and never re-lays it out', async ({ page }) => {
-  const offenders: string[] = []
-  let walked = 0
-
-  for (const route of await routesFromNav(page)) {
-    await page.goto(`/${route}`)
-    await settleFonts(page)
-    await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {})
-    await expect(page.locator('main').first()).toBeVisible()
-
-    const found = await page.evaluate((PROPS) => {
-      const collect = (list: CSSRuleList, out: CSSStyleRule[]) => {
-        for (const r of Array.from(list)) {
-          if (r instanceof CSSStyleRule) out.push(r)
-          else if ('cssRules' in r) { try { collect((r as CSSGroupingRule).cssRules, out) } catch { /* opaque */ } }
-        }
-      }
-      const rules: CSSStyleRule[] = []
-      for (const sheet of Array.from(document.styleSheets)) {
-        try { collect(sheet.cssRules, rules) } catch { /* cross-origin, not ours */ }
-      }
-
-      const bad: string[] = []
-      let seen = 0
-      for (const rule of rules) {
-        const sel = rule.selectorText
-        if (!sel || !/:(hover|active|focus|focus-visible|focus-within)\b/.test(sel)) continue
-        seen++
-        const declared = PROPS.filter((p) => rule.style.getPropertyValue(p) !== '')
-        if (!declared.length) continue
-
-        /* THE ELEMENT THE RULE PAINTS, not the one carrying the pseudo-class — the same read the
-           response floor above makes, and for the same reason: `.a:hover .b` moves `.b`.
-           IT IS USED ONLY TO EXONERATE, WHICH IS THE WAY ROUND THIS HAS TO BE. The first draft
-           skipped a rule whose selector matched nothing, and the mutation that put the real
-           defect back — `.codes-task:hover .codes-task-go { gap: 7px }` — went green, because
-           against this worktree's empty store (D43) `#/codes` draws no task card at all. A guard
-           that only sees what the fixture happens to render is the failure this file's own header
-           spends a paragraph on. So the DECLARATION is what convicts; a rendered element can
-           acquit it by already painting the same value, which is the `border-bottom: 2px solid`
-           over a 2px edge case and the only false positive this check has. */
-        const rest = sel.replace(/:(hover|active|focus-visible|focus-within|focus)\b/g, '')
-        let el: Element | null = null
-        try {
-          el = Array.from(document.querySelectorAll(rest)).find((t) => {
-            const b = t.getBoundingClientRect()
-            return b.width > 0 && b.height > 0
-          }) ?? null
-        } catch { el = null }
-        const cs = el === null ? null : getComputedStyle(el)
-
-        for (const prop of declared) {
-          const want = rule.style.getPropertyValue(prop).trim()
-          const now = cs === null ? '(not drawn on this route)' : cs.getPropertyValue(prop).trim()
-          if (want === '' || want === now) continue
-          bad.push(`${sel}  changes \`${prop}\` from \`${now}\` to \`${want}\` under the pointer — ` +
-            `that re-flows everything beside it. Composite the same movement with \`translate\`, ` +
-            `or paint it with a color, a shadow or an inset ring.`)
-        }
-      }
-      return { bad, seen }
-    }, REFLOWS as unknown as string[])
-
-    walked += found.seen
-    offenders.push(...found.bad)
-  }
-
-  /* THE SUBJECT HAS TO BE ON THE PAGE, AND WHAT IS COUNTED IS EVERY POINTER-STATE RULE RATHER
-     THAN EVERY OFFENDING ONE. The first draft counted the rules that declared a layout property,
-     which is zero once the product is clean — a liveness check that goes to zero the moment the
-     thing it guards is fixed is not a liveness check. Measured over the eleven routes: 1,600-odd
-     pointer-state rules, so 50 is a floor a broken CSSOM read cannot clear. */
-  expect(walked, 'no pointer-state rule was walked at all — is the CSSOM read still valid?')
-    .toBeGreaterThan(50)
-  expect(
-    offenders,
-    `${offenders.length} pointer states re-lay out the page:\n${[...new Set(offenders)].join('\n')}`,
-  ).toHaveLength(0)
-})
 
 /* THE DIP AND THE SQUEEZE LAND ON THE SAME FRAME (D118). `base.css`'s press floor is deliberately
  * not transitioned — its own comment says adding `translate` to the response floor's list "would
