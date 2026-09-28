@@ -1,0 +1,113 @@
+/* Lantern District — A back-alley night market in the rain: red paper lanterns, matcha-neon signage, cobalt puddle reflections, ramen-stall gold. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bn-bg: #0a090f;
+  --bn-surface: #131019;
+  --bn-surface-2: #07060b;
+  --bn-surface-3: #1c1826;
+  --bn-surface-glass: rgba(19, 16, 25, 0.72);
+  --bn-hover: rgba(244, 241, 251, 0.05);
+
+  --bn-ink: #f4f1fb;
+  --bn-ink-2: #c9c4dc;
+  --bn-ink-3: #9a94b8;
+  --bn-ink-4: #7d7799;
+
+  --bn-line: rgba(210, 200, 240, 0.10);
+  --bn-line-strong: rgba(210, 200, 240, 0.20);
+  --bn-line-focus: rgba(77, 123, 255, 0.6);
+
+  --bn-accent: #4d7bff;
+  --bn-accent-hover: #6d92ff;
+  --bn-accent-press: #3a63e0;
+  --bn-accent-tint: rgba(77, 123, 255, 0.16);
+  --bn-accent-tint-2: rgba(77, 123, 255, 0.26);
+  --bn-on-accent: #050710;
+
+  --bn-live: #ff4438;
+  --bn-live-tint: rgba(255, 68, 56, 0.18);
+
+  --bn-ok: #7dfb6b;
+  --bn-ok-tint: rgba(125, 251, 107, 0.16);
+  --bn-warn: #ffb238;
+  --bn-warn-tint: rgba(255, 178, 56, 0.16);
+  --bn-danger: #ff2f7e;
+  --bn-danger-tint: rgba(255, 47, 126, 0.16);
+  --bn-money: #ffd23f;
+
+  --bn-pill-ink-accent: #6d92ff;
+  --bn-pill-ink-ok: #7dfb6b;
+  --bn-pill-ink-warn: #ffb238;
+  --bn-pill-ink-danger: #ff2f7e;
+  --bn-pill-ink-live: #ff4438;
+
+  --bn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --bn-shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -8px rgba(77, 123, 255, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  --bn-shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 24px 56px -16px rgba(255, 68, 56, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bn-shadow-accent: 0 8px 28px -8px rgba(77, 123, 255, 0.65);
+
+  --bn-btn-bg: var(--bn-surface-3);
+  --bn-btn-bg-hover: #1c1826;
+  --bn-btn-shadow: 0 0 0 1px var(--bn-line-strong), 0 1px 2px rgba(0, 0, 0, 0.4);
+
+  /* the camera/photo stage keeps its own accent apart from the UI's, so the
+     capture screen clashes on purpose against the shell around it */
+  --bn-stage-accent: #7f90ff;
+  --bn-stage-accent-hover: rgba(127, 144, 255, 1);
+  --bn-stage-ok: #3ddc84;
+  --bn-stage-warn: #f5a524;
+  --bn-stage-danger: #ff5c5c;
+  --bn-stage-live: #ff6a58;
+
+  /* text glow, cyberpunk sign-off */
+  text-shadow: none;
+}
+
+/* ---- nav groups: each rail section takes its own hue (D-less, color only) ---- */
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(2) .bn-nav-group-label { color: #4d7bff; }
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(2) .bn-nav-link[aria-current='page'] {
+  color: #4d7bff;
+  background: rgba(77, 123, 255, 0.14);
+  box-shadow: inset 2px 0 0 #4d7bff;
+}
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(2) .bn-nav-link:hover { color: #4d7bff; }
+
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(3) .bn-nav-group-label { color: #ff4438; }
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(3) .bn-nav-link[aria-current='page'] {
+  color: #ff4438;
+  background: rgba(255, 68, 56, 0.14);
+  box-shadow: inset 2px 0 0 #ff4438;
+}
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(3) .bn-nav-link:hover { color: #ff4438; }
+
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(4) .bn-nav-group-label { color: #7dfb6b; }
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(4) .bn-nav-link[aria-current='page'] {
+  color: #7dfb6b;
+  background: rgba(125, 251, 107, 0.14);
+  box-shadow: inset 2px 0 0 #7dfb6b;
+}
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(4) .bn-nav-link:hover { color: #7dfb6b; }
+
+/* Home link (ungrouped, index 1) keeps the primary accent as its own job */
+:root[data-theme='dark'] .bn-nav-group:nth-of-type(1) .bn-nav-link[aria-current='page'] {
+  color: #4d7bff;
+  background: var(--bn-accent-tint);
+  box-shadow: inset 2px 0 0 #4d7bff;
+}
+
+/* segmented tabs (Pricing's To send / Live, etc.) alternate two clashing hues */
+:root[data-theme='dark'] .bn-seg-item[aria-selected='true'],
+:root[data-theme='dark'] .bn-seg-item.active {
+  color: #050710;
+  background: #4d7bff;
+}
+:root[data-theme='dark'] .bn-seg-item:nth-of-type(2)[aria-selected='true'],
+:root[data-theme='dark'] .bn-seg-item:nth-of-type(2).active {
+  background: #ff4438;
+}
+
+/* the "Live" / server-online dot and any live badge reads the live hue already via
+   --bn-live; the "Server online" status dot picks up bn-ok already through tokens */
