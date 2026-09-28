@@ -2437,7 +2437,7 @@ export type PricingSku = {
    *  — a pooled copy carries `place_text`'s own string here rather than a gap (D24). What a
    *  caller draws instead is the caller's decision, and `#/pricing` follows `BoxBrowse`'s
    *  `no label · <key>`. */
-  positions: { box: number; index: number; label: string | null }[]
+  positions: { box: number; index: number; label: string | null; cid?: string | null }[]
   /** The listing record as it stood WHEN THE RUN WAS JOINED, frozen into `pricing.json`.
    *  `sold_here` rides with it since D115: `live` is the export's reading, and a screen
    *  drawing the reading alone would over-report by exactly the copies sold since.

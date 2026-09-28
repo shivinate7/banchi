@@ -2095,6 +2095,18 @@ def _position_label(
     return join.place_text(game, view.at(number, at))
 
 
+def _position_cid(inventory: Optional[master.Inventory], box, index) -> Optional[str]:
+    """The card's own name at `box/index` today, so a screen can address its photograph by
+    name (D172) and let the browser keep it. None where the slot names no card."""
+    if inventory is None:
+        return None
+    try:
+        card = inventory.cards.get(master.position_key(int(box), int(index)))
+    except (TypeError, ValueError):
+        return None
+    return getattr(card, "cid", None)
+
+
 def _relabel_positions(table) -> None:
     """Re-render every position label in a parsed `pricing.json`, in place. The file is not touched.
 
@@ -2167,6 +2179,7 @@ def _relabel_positions(table) -> None:
             if not isinstance(at, dict):
                 continue
             at["label"] = _position_label(views, inventory, at.get("box"), at.get("index"))
+            at["cid"] = _position_cid(inventory, at.get("box"), at.get("index"))
 
 
 def do_pipeline_pricing(name: str) -> dict:
@@ -3151,6 +3164,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
                         "box": card.box,
                         "index": card.index,
                         "label": _position_label(views, snapshot.inventory, card.box, card.index),
+                        "cid": getattr(card, "cid", None),
                     }
                 )
                 drawn.add(key)

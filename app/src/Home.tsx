@@ -126,6 +126,10 @@ function finishOf(card: InventoryCard): string | null {
    art off; this is where the art and the name are. */
 const FOCUS = 0.34
 
+/* The last named deck this tab drew. The placeholder pass below addresses SLOTS, which the
+   browser re-requests on every visit; a revisit shows this deck by name until the fresh read lands. */
+let lastNamedDeck: DeckCard[] = []
+
 /** First pass: the last few indices of the newest box that holds cards. No extra request. */
 function deckFromBoxes(boxes: BoxRecord[] | null): { cards: DeckCard[]; box: BoxRecord | null } {
   if (boxes === null) return { cards: [], box: null }
@@ -483,7 +487,7 @@ export function Home() {
   const fromCards = deckFromCards(shelf.state === 'ready' ? shelf.value : null)
   /* The box-derived pass is a placeholder for the moment before the card map lands, so it
      yields to the named cards the instant they arrive. */
-  const deck = fromCards.length > 0 ? fromCards : fromBoxes.cards
+  const deck = fromCards.length > 0 ? (lastNamedDeck = fromCards) : lastNamedDeck.length > 0 ? lastNamedDeck : fromBoxes.cards
   const deckBox = fromBoxes.box
   const front = deck[0]
   const frontCard = front?.card ?? null

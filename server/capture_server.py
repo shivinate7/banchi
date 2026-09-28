@@ -3532,7 +3532,13 @@ def do_photo(box: int, index: int) -> Tuple[bytes, str]:
     return blob, '"' + hashlib.sha256(blob).hexdigest()[:32] + '"'
 
 
-def do_photo_by_card(cid: str) -> Tuple[bytes, str]:
+def _etag_matches(header: Optional[str], etag: str) -> bool:
+    """RFC 9110 `If-None-Match`, weak comparison: `*` matches, `W/"x"` matches `"x"`."""
+    offered = [t.strip() for t in (header or "").split(",") if t.strip()]
+    return "*" in offered or etag in [t[2:] if t.startswith("W/") else t for t in offered]
+
+
+def do_photo_by_card(cid: str, if_none_match: Optional[str] = None) -> Tuple[Optional[bytes], str]:
     """The photograph called `cid`, addressed by the card's own name (D172).
 
     THE URL NAMES THE PHOTOGRAPH, WHICH IS WHAT `do_photo` ABOVE COULD NOT DO. A cid is
@@ -3573,7 +3579,11 @@ def do_photo_by_card(cid: str) -> Tuple[bytes, str]:
             "photo_not_found",
             f"No photograph stored under {cid[:12]}….",
         )
-    return path.read_bytes(), '"' + cid[:32] + '"'
+    etag = '"' + cid[:32] + '"'
+    # THE TAG IS THE NAME, SO A MATCHING REVALIDATION NEEDS NO READ: None is "not modified".
+    if _etag_matches(if_none_match, etag):
+        return None, etag
+    return path.read_bytes(), etag
 
 
 def do_inventory() -> dict:
@@ -16086,20 +16096,12 @@ class CaptureHandler(BaseHTTPRequestHandler):
         question the ETag already settles would waste exactly what this route exists to
         save. The tag costs no read here: it is the name's own first 32 hex.
         """
-        blob, etag = do_photo_by_card(cid)
+        blob, etag = do_photo_by_card(cid, self.headers.get("If-None-Match"))
         headers = (
             ("ETag", etag),
             ("Cache-Control", "public, max-age=31536000, immutable"),
         )
-        offered = [
-            tag.strip()
-            for tag in (self.headers.get("If-None-Match") or "").split(",")
-            if tag.strip()
-        ]
-        fresh = "*" in offered or etag in [
-            tag[2:] if tag.startswith("W/") else tag for tag in offered
-        ]
-        if fresh:
+        if blob is None:
             self.send_response(int(HTTPStatus.NOT_MODIFIED))
             for header, value in self._cors_headers():
                 self.send_header(header, value)

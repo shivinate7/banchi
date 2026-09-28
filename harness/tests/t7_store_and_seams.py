@@ -209,6 +209,7 @@ from decimal import Decimal
 from fractions import Fraction
 from http import HTTPStatus
 from pathlib import Path
+from unittest import mock
 from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -12809,6 +12810,55 @@ def check_photo_cache(checks: Checks) -> None:
                 "under a new ETag, so the next request revalidates against the right "
                 "photograph rather than the one that was deleted",
             )
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+    # ---------------------------------------------------- by-card: 304 without a read
+    # A matching revalidation of `/photo/by-card/<cid>` must not read the 1.9 MB file: the
+    # tag is the name. The counter wraps `Path.read_bytes` for the photograph's own path.
+    with isolated_home():
+        capture_server.do_capture(
+            {"box": 3, "capture_id": "q1", "image": blob(9), "set_hint": "sv9"}
+        )
+        cid = next(iter(Store().read().inventory.cards.values())).cid
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        reads: List[str] = []
+        real = Path.read_bytes
+
+        def counting(self: Path) -> bytes:
+            if cid[:16] in str(self):
+                reads.append(str(self))
+            return real(self)
+
+        try:
+            with mock.patch.object(Path, "read_bytes", counting):
+                status, body, headers = request(port, "GET", f"/photo/by-card/{cid}")
+                checks.equal(status, 200, "by-card answers 200 with the bytes")
+                etag = headers.get("ETag")
+                checks.equal(len(reads), 1, "and reads the file once")
+                reads.clear()
+                status, body, headers = request(
+                    port, "GET", f"/photo/by-card/{cid}", extra_headers={"If-None-Match": etag}
+                )
+                checks.equal(status, 304, "a matching If-None-Match answers 304")
+                checks.equal(body, b"", "with no body")
+                checks.equal(reads, [], "and the 304 never READ the photograph")
+                checks.equal(
+                    (headers.get("Connection") or "").lower(),
+                    "close",
+                    "and still says Connection: close (DEBT11: a kept socket holds a worker)",
+                )
+                status, body, _ = request(
+                    port,
+                    "GET",
+                    f"/photo/by-card/{cid}",
+                    extra_headers={"If-None-Match": '"stale"'},
+                )
+                checks.equal(status, 200, "a tag we never issued gets the bytes")
         finally:
             httpd.shutdown()
             httpd.server_close()

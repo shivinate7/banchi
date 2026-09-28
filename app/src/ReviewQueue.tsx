@@ -1298,10 +1298,9 @@ export function ReviewQueue() {
     const next = worklist[1]
     if (next === undefined) return null
     if (next.entry.box < 1 || next.entry.photo === null) return null
-    /* The slot route, for `QueuePhoto`'s reason below: a queue entry carries no `cid`. The
-       prefetch must address the photograph exactly as the render will, or it warms a URL
-       nothing asks for. */
-    return photoUrl(next.entry.box, next.entry.index)
+    /* By name when the entry carries one, exactly as `QueuePhoto` renders it, or the prefetch
+       warms a URL nothing asks for. */
+    return photoUrl(next.entry.box, next.entry.index, next.entry.cid)
   }, [worklist])
 
   useEffect(() => {
@@ -1963,9 +1962,8 @@ function GroupConfirm({
             ) : (
               <img
                 className="review-group-photo"
-                /* The slot route again, and for the same reason: these are queue entries
-                   (D29's homogeneous group), which carry no `cid`. */
-                src={photoUrl(row.entry.box, row.entry.index)}
+                /* By name (D172); the slot route only for an entry with no cid. */
+                src={photoUrl(row.entry.box, row.entry.index, row.entry.cid)}
                 alt={`The card photographed at ${row.entry.label}`}
                 loading="lazy"
                 onError={() =>
@@ -2598,15 +2596,10 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
     )
   }
 
-  /* THE SLOT ROUTE, BECAUSE A QUEUE ENTRY HAS NO NAME TO ADDRESS BY (D172). `_queue_row` is
-     `asdict(QueueEntry)`, and that record — written by `cli/resolve.py` at join time and read
-     back out of the store's queue table — carries `box`, `index`, `label` and `photo` and no
-     `cid`: the queues predate the name by a long way, and nothing re-derives one for an entry
-     that is already waiting. `GET /photo/<box>/<index>` is the correct address for it and is
-     kept for exactly this population, alongside the 3,629 position records in 12 immutable
-     `runs/<n>/pricing.json` files. Its `no-cache` and its digest ETag are what keep this
-     picture honest while the box shifts under it. */
-  const src = photoUrl(entry.box, entry.index)
+  /* BY NAME WHEN THE ROUTE DECORATED THE ENTRY WITH ONE (D172): `_queue_row` adds `cid` for an
+     addressable slot, so a revisit costs no request. An entry with none (box 0, no card at
+     the slot) keeps the slot route, whose digest ETag stays honest while the box shifts. */
+  const src = photoUrl(entry.box, entry.index, entry.cid)
 
   if (absent) {
     return (
