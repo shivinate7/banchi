@@ -206,6 +206,16 @@ def lookup(relative: str) -> Optional[Dict[str, object]]:
 
 
 def render(relative: str, entry: Dict[str, object]) -> str:
+    """One line per governing decision — id and title, no rulings.
+
+    A ruling was the expensive part: 108 decisions on `server/capture_server.py` cost
+    38,130 bytes on every single edit, most of it text `make map ARGS="D<n> --full"` (or
+    `make map ARGS=<path>`) already gives on demand. The owner's ruling, from
+    `docs/reviews/token-budget-2026-09-27/REPORT.md` §5: "Id + title only (Recommended)."
+    `decision_gists()` still computes rulings — `scripts/map-view.py`'s `make map ARGS=D<n>`
+    still shows them, and `scripts/status.py` still reads titles off the same call — so
+    nothing here is removed, only what THIS render prints.
+    """
     governed = [d for d in (entry.get("governed_by") or [])]
     if not governed:
         return ""
@@ -216,10 +226,8 @@ def render(relative: str, entry: Dict[str, object]) -> str:
         lines.append(f"(no entry for this file; showing what governs {scope})")
     lines.append("Settled decisions that govern it — docs/DECISIONS.md, do not re-litigate:")
     for name in sorted(governed, key=lambda d: int(d[1:])):
-        title, rulings = gists.get(name, ("(no such entry)", []))
+        title, _ = gists.get(name, ("(no such entry)", []))
         lines.append(f"  {name:<4} {title}")
-        for ruling in rulings:
-            lines.append(f"       - {ruling}")
     tested = entry.get("tested_by") or []
     if tested:
         lines.append(f"Covered by: {', '.join(tested)}. Run `make harness` before claiming it works.")
@@ -234,12 +242,11 @@ def render(relative: str, entry: Dict[str, object]) -> str:
         if codes:
             track_gists = decision_gists(ROOT / str(track.get("decisions")), prefix="C")
             for name in sorted(codes, key=lambda d: int(d[1:])):
-                title, rulings = track_gists.get(name, ("(no such entry)", []))
+                title, _ = track_gists.get(name, ("(no such entry)", []))
                 lines.append(f"  {name:<4} {title}")
-                for ruling in rulings:
-                    lines.append(f"       - {ruling}")
     if entry.get("note"):
         lines.append(f"Also: {entry['note']}")
+    lines.append('Full text: `make map ARGS="D<n> --full"`, or `make map ARGS=<path>` for the module.')
     return "\n".join(lines)
 
 
