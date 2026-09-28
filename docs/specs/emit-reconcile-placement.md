@@ -71,7 +71,7 @@ neither is fixed by moving a button.
 
 ### 2.1 `emit`'s commonest refusal has no control anywhere but a raw textarea (overtaken 2026-09-02)
 
-`pipeline/decisions.py:332` refuses `emit` while `sub_threshold is None` and any sub-threshold
+`pipeline/decisions.Decisions` refuses `emit` while `sub_threshold is None` and any sub-threshold
 SKU exists. **That check never consults `overrides`** — so pricing all 108 of box 2's SKUs by
 hand on `#/pricing` still leaves `emit` refusing. The run-wide answer is settable only by typing
 into the `decisions.json` textarea behind the Emit step's "Pricing answers" button on `#/runs` (overtaken 2026-09-02).
@@ -81,8 +81,8 @@ the screen built to answer pricing cannot express it, and the screen that can ex
 JSON.
 
 **The server already serves the answer and nothing draws it.**
-`server/pipeline_routes.py:1192` computes `_remembered_sub_threshold` (overtaken 2026-09-02), `:1279` puts it on the
-pricing payload, and `app/src/types.ts:1304` declares it. No component reads it. The control was
+`server/pipeline_routes.py` computes `_remembered_sub_threshold` (overtaken 2026-09-02), the same file puts it on the
+pricing payload, and `app/src/types.DecisionsDocument` declares it. No component reads it. The control was
 designed for that screen and never built there — `CLAUDE.md`'s route-is-not-a-feature rule, one
 field rather than one route.
 
@@ -94,7 +94,7 @@ field rather than one route.
 
 ### 2.2 The preset control writes a key nothing reads
 
-`app/src/Pricing.tsx:387` carries the comment *"A PRESET WRITES `rule`/`basis` AND NO
+`app/src/Pricing.Pricing` carries the comment *"A PRESET WRITES `rule`/`basis` AND NO
 OVERRIDE"*, and the line beneath it writes `preset: key`. **`preset` appears nowhere in
 `pipeline/decisions.py`, `cli/` or `server/`** — `Decisions.parse` reads `rule`, `basis`,
 `sub_threshold`, `overrides` and `no_market_data`, and drops unknown keys. `cli/cmd_join.py`
@@ -179,8 +179,8 @@ does not exist: `e` is free for Emit, and **Reconcile has no free letter** — `
 Capture, `i` is Inventory.
 
 And the route count is provably unmaintained. D31 records it false in five places for the whole
-of D39's life. **It is false right now in the file that owns the table**: `app/src/App.tsx:14`
-opens *"The app shell: six routes"* while line 25 of the same comment says *"SEVEN again now"* and
+of D39's life. **It is false right now in the file that owns the table**: `app/src/App.tsx`
+opens *"The app shell: six routes"* while a later line of the same comment says *"SEVEN again now"* and
 the table carries seven. Nothing in `scripts/docs-audit.py` reconciles it.
 
 ### Into `#/pricing` — REFUSED, and its own argument is why

@@ -160,7 +160,7 @@ desk — only the wire is frozen.
 
 ## 6. `VITE_DEMO` is a build-time constant, not a runtime flag
 
-**Verified in `app/vite.config.ts` line 88**: `__BN_DEMO__: JSON.stringify(process.env.VITE_DEMO
+**Verified in the `define` block of `app/vite.config.ts`**: `__BN_DEMO__: JSON.stringify(process.env.VITE_DEMO
 === '1')`. This is a compile-time literal substitution, not an environment read at run time. An
 ordinary build (`VITE_DEMO` unset) folds `__BN_DEMO__` to the literal `false`; Rollup then dead-
 code-eliminates the `if (DEMO)` branch in `server.ts` entirely, so neither `demoServer.ts` nor

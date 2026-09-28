@@ -3,8 +3,7 @@
 `scripts/docs-audit.py`'s `ste offenders` row, was CUT 2026-09-27 (test-audit plan;
 D226/D229/D280 amended): the write-time STE hook already lints new prose. `measure()`,
 `EXEMPTIONS` and the offender-identity machinery below have no caller left. `list_key` alone
-stays imported, by the `line anchor offenders` and `identifier spelling` (markdown half)
-rows, which key a decision entry by its file tail the same way this module's own retired
+stays imported, by the `identifier spelling` (markdown half) row, which keys a decision entry by its file tail the same way this module's own retired
 list did.
 
 WHAT IT MEASURES. The vendored `scripts/ste/ste_lint.py`'s four ERROR-severity rules

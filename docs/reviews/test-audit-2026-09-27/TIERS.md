@@ -241,6 +241,10 @@ The tier model and every row not named below stand as proposed. The owner's word
   A lane converts the old line anchors (about 88, in 44 files) to symbol citations. Then one
   Tier 1 row refuses any line anchor. The four rows merge into it. The parent CLAUDE.md asks
   for the same thing: cite by id, never by path and line.
+  **Landed 2026-09-28 by the line-anchor lane.** The lane
+  converted 776 anchors in 44 files. The one `line anchors` row (Tier 1) now refuses every
+  `path:N` and `path:N-M`, with no list of exceptions. `line anchor allowlist` and `line
+  anchor offenders` are gone, with the two data files they read. CLAUDE.md's D245 hard rule describes the one row.
 - **Row 20, `entry budget`:** CUT.
 - **Row 48, `gates structure`:** CUT. Gating retired, and `gates-selftest` proves the set is
   complete.

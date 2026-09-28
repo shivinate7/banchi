@@ -14,11 +14,11 @@ Three items. All cheap, all confirmed, and each one carries across several scree
 
 | Property | Referenced at | What renders |
 | --- | --- | --- |
-| `--bn-r-md` | `app/src/CaptureScreen.css:154` | `.capture-rig-summary`, square corners |
-| `--bn-radius-md` | `app/src/OrdersWalkPane.css:15` | `.orders-walk-photo`, square corners |
-| `--bn-well` | `app/src/Pricing.css:835` | `.pricing-locked` loses its muted ground |
-| `--bn-muted` | `app/src/Pricing.css:836` | the same pill renders at full contrast |
-| `--bn-border` | `app/src/ProductHistory.css:75` | `border-style: none`, panels near-invisible in light theme |
+| `--bn-r-md` | `app/src/CaptureScreen.css` | `.capture-rig-summary`, square corners |
+| `--bn-radius-md` | `app/src/OrdersWalkPane.css` | `.orders-walk-photo`, square corners |
+| `--bn-well` | `app/src/Pricing.css` | `.pricing-locked` loses its muted ground |
+| `--bn-muted` | `app/src/Pricing.css` (`.pricing-locked`) | the same pill renders at full contrast |
+| `--bn-border` | `app/src/ProductHistory.css` (`.producthistory-range`) | `border-style: none`, panels near-invisible in light theme |
 
 A `var()` with no definition and no fallback drops the whole declaration silently. Two
 agents confirmed these by reading `getComputedStyle` in the running app, not off the
@@ -35,14 +35,14 @@ landed. It is a small script and it never needs looking at again.
   theme, against the 4.5:1 body text needs. The token's own comment gives it the job of
   "metadata, captions, placeholders" — reading text. Every caller who uses it exactly as
   documented still fails. Darkening the light-theme value fixes every one of them at once.
-- `.bn-menu-label` (`app/src/kit.css:785`) sets 10px all-caps text in `--bn-ink-4`, 3.64:1,
+- `.bn-menu-label` (`app/src/kit.css`) sets 10px all-caps text in `--bn-ink-4`, 3.64:1,
   two lines below that token's own comment saying it may never be a caption.
-- `.graveyard-condition` (`app/src/Graveyard.css:95`) puts card condition prose in
+- `.graveyard-condition` (`app/src/Graveyard.css`) puts card condition prose in
   `--bn-ink-4` at 3.34:1. `CardLocations.css:130` forbids this exact usage in a comment.
 
 ### 3. The sidebar decides collapsed or expanded once, at mount
 
-`app/src/App.tsx:324` reads `window.innerWidth < 1280` as a `useState` lazy initializer
+`app/src/App.readRail` reads `window.innerWidth < 1280` as a `useState` lazy initializer
 (`:1352`) and nothing re-runs it. With no stored preference, a window resized from 1440 to
 1000 keeps the rail expanded until a reload. Reproduced directly. One listener fixes it for
 every screen in the product.

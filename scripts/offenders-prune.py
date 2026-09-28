@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""DELETE THE STALE ENTRIES FROM THE THREE SHRINKING OFFENDER LISTS, AND RE-KEY A RENAMED FILE.
+"""DELETE THE STALE ENTRIES FROM THE TWO SHRINKING OFFENDER LISTS, AND RE-KEY A RENAMED FILE.
 
     scripts/offenders-prune.py            what it would delete and re-key. Writes nothing.
     scripts/offenders-prune.py --write    apply it.
     scripts/offenders-prune.py --selftest its own cases, in memory and in a throwaway repo.
 
-THE THREE LISTS (D280): `scripts/typed-interpunct-allow.json`, which its `typed interpunct`
-row reads, `scripts/line-anchor-offenders.json`, which its `line anchor offenders` row reads,
-and `scripts/markdown-spelling-allow.json`, which the `identifier spelling` row's markdown
-half reads (owner's ruling, test-audit plan, 2026-09-27). A fourth list,
-`scripts/ste-offenders.json`, was cut 2026-09-27 (test-audit plan, D226/D229/D280 amended):
-the write-time STE hook already lints new prose, so the `ste offenders` row was retired
-along with the list. Each remaining row
+THE TWO LISTS (D280): `scripts/typed-interpunct-allow.json`, which its `typed interpunct`
+row reads, and `scripts/markdown-spelling-allow.json`, which the `identifier spelling` row's
+markdown half reads (owner's ruling, test-audit plan, 2026-09-27). Two lists were cut.
+`scripts/ste-offenders.json` went 2026-09-27 (test-audit plan, D226/D229/D280 amended): the
+write-time STE hook already lints new prose, so the `ste offenders` row was retired along
+with the list. `scripts/line-anchor-offenders.json` went 2026-09-28 (line-anchor lane): the
+last anchor was converted, so the one `line anchors` row now refuses every anchor and
+lists none. Each remaining row
 fails on a STALE entry, one that matches
 nothing now because the fix landed. A stale
 entry there is a hash, so a hand delete is slow and a merge conflict is worse. This does the
@@ -24,7 +25,7 @@ they refuse, they never write. It writes data files under `scripts/` only, so it
 seam in D18's list, which governs the prose files agents read as argument.
 
 IT ONLY EVER DELETES, AND RE-KEYS. It never adds an entry. An offender the list does not name
-stays unlisted, and the row stays red on it: the fix for a new dot or a stray line anchor is
+stays unlisted, and the row stays red on it: the fix for a new dot or a stray spelling is
 to rewrite it, never to list it. Two edits are all it makes.
 
   1. A STALE ENTRY IS DELETED, one occurrence for each occurrence the tree no longer has. The
@@ -235,17 +236,6 @@ def interpunct_inputs(audit):
             lambda path: path, lambda entry: entry, {audit.TYPED_INTERPUNCT_RULE})
 
 
-def line_anchor_inputs(audit):
-    """The same six for the line-anchor list. A decision entry is keyed by its file tail, as
-    the prose list is."""
-    ste_measure = audit._sibling("ste_measure.py")
-    list_key = ste_measure.list_key if ste_measure is not None else (lambda path: path)
-    found = audit._line_anchor_found(audit.markdown_files())
-    keys_now = {list_key(audit.rel(p)) for p in audit.markdown_files()}
-    return (audit.LINE_ANCHOR_OFFENDERS, found, keys_now.__contains__, list_key,
-            lambda entry: entry, {audit.LINE_ANCHOR_RULE})
-
-
 def markdown_spelling_inputs(audit):
     """The same six for the markdown-spelling list. Reads the WHOLE tree — this generator
     never runs in staged mode, unlike the row itself, which narrows to staged markdown."""
@@ -307,8 +297,7 @@ def main() -> int:
 
     audit = _audit()
     renames = git_renames(ROOT)
-    inputs = [("line anchor offenders", line_anchor_inputs(audit)),
-              ("markdown spelling", markdown_spelling_inputs(audit))]
+    inputs = [("markdown spelling", markdown_spelling_inputs(audit))]
     dots = interpunct_inputs(audit)
     if dots is None:
         print("typed interpunct: not read. `node` or app/node_modules/typescript is missing, "

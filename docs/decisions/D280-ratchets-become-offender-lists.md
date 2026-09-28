@@ -98,7 +98,7 @@ The rows read tracked files only. `markdown_files()` in `scripts/docs-audit.py` 
 
 ### The line-anchor pin becomes a list too
 
-The owner's ruling, later on 2026-09-24, was "convert both of the last pins". D245's `line anchor ratchet` row pinned a count of line anchors per file, in D229's shape. It is now the `line anchor offenders` row, over `scripts/line-anchor-offenders.json`.
+The owner's ruling, later on 2026-09-24, was "convert both of the last pins". D245's `line anchor ratchet` row pinned a count of line anchors per file, in D229's shape. It is now the `line anchor offenders` row, over an offender list (deleted 2026-09-28, when the last anchor was converted).
 
 - **An entry is the anchor as written**, `path:N` or `path:N-M`, once per occurrence. An edit elsewhere in the file, or a reflow, does not touch it.
 - **A claim moves nothing.** A decision entry's number is folded out of the document's own file key, as the prose list folds it. It is also folded out of an anchor's decision path, so both read `docs/decisions/*-<slug>.md`.
@@ -129,7 +129,7 @@ ratchet decisions) in the lane that cuts it." Lane L2 deletes the `ste offenders
 `scripts/ste-offenders.json` and `scripts/docs-audit.py:check_ste_offenders`.
 
 Two offender lists remained right after the cut: `scripts/typed-interpunct-allow.json` and
-`scripts/line-anchor-offenders.json`. `scripts/only_shrinks.py` and `_offender_list_shape`/
+the line-anchor list (deleted 2026-09-28). `scripts/only_shrinks.py` and `_offender_list_shape`/
 `_offender_diff`/`_offender_growth` still serve both, unchanged by the cut.
 
 A third list joined the same day. The owner's later word, in the same review round

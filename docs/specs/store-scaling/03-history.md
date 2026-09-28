@@ -1,5 +1,8 @@
 # Item 3 — history() scoped to the key
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree). The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 **CORRECTION, from the implementing session (branch `claude/scaling-03-history`): "Done
 when" item 4 and the "second, cheaper win" it describes are WRONG, and were NOT built.**
 The claim was that `_sell`'s and `do_retire`'s `else` branches (`undo=False`) "never read
@@ -23,7 +26,7 @@ likewise not applicable and was not added.
 
 ## Goal and done-when
 
-`Store.history()` (`store/db.py:1208-1225`) is `SELECT id, payload FROM events ORDER BY id`
+`Store.history()` (`store/db.flush_rows`) is `SELECT id, payload FROM events ORDER BY id`
 followed by a `json.loads` per row — every row of the `events` table, unconditionally.
 Measured in `docs/specs/store-scaling.md` §1: 16.5 ms at 12,654 events, 345 ms at 20x
 (253,080 events, 20.9x). It is called, with zero arguments, from exactly three functions in
@@ -50,7 +53,7 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
 
 1. `store/db.py` has a new function, `events_at(conn, key)`, that reads only the events
    whose `position` shares `key`'s box — using the `events_position` index that already
-   exists (`store/db.py:139`), with **no schema change and no migration** (see "Read first" —
+   exists (`store/db._INTEGER`), with **no schema change and no migration** (see "Read first" —
    this is not the column-and-backfill case the umbrella task worried about, because
    `position` is already a first-class indexed column and it already encodes the box).
 2. `store/session.py`'s `Store` gets a matching `history_at(key)` method, mirroring
@@ -68,7 +71,7 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
    assertion that the SQL it runs uses the index rather than a table scan (the performance
    claim, made checkable rather than trusted).
 6. The stale prose naming these three functions as the `history()` readers
-   (`server/capture_server.py:980-993`) is corrected to say they read `history_at(key)` now
+   (`server/capture_server.UNDOABLE_STATES`) is corrected to say they read `history_at(key)` now
    — see "Allowlist entries removed" for why the mechanical `sole reader` docs-audit row
    does not need a matching edit.
 7. `docs/specs/store-scaling.md`'s row for `Store.history()` in the measured table (§1) is
@@ -94,36 +97,36 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
 
 ## Read first
 
-- `store/db.py:1-52` — the module docstring (D88): one file, one transaction per
+- `store/db.py` — the module docstring (D88): one file, one transaction per
   `Store.write()`, WAL, indexed columns "derived from the object at write time" that
   "cannot disagree with the payload."
-- `store/db.py:113-142` — `TABLES`, `_INTEGER`, `_INDEXES`. **`events` is not in `TABLES`**
-  (it is DDL'd separately at `store/db.py:266-269`) but IS in `_INDEXES`:
+- `store/db.TABLES` — `TABLES`, `_INTEGER`, `_INDEXES`. **`events` is not in `TABLES`**
+  (it is DDL'd separately at `store/db._ensure_schema`) but IS in `_INDEXES`:
   `("events", "position")` at line 139. That index already exists on every store on disk,
   fresh or upgraded — it is created unconditionally in the `stored is None` branch
-  (`store/db.py:264-272`, which runs for a fresh store) and there is no `_upgrade` step that
+  (`store/db._ensure_schema`, which runs for a fresh store) and there is no `_upgrade` step that
   could have skipped it for an older one, because `_INDEXES` has never changed shape across
   `SCHEMA_VERSION` 1-4 (confirm with `git log -p --follow -- store/db.py | grep -n "events.*position"`
   before relying on this, but as of this branch it is unconditional).
-- `store/db.py:264-272` — the `events` table DDL itself:
+- `store/db._ensure_schema` — the `events` table DDL itself:
   `CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, event
   TEXT, position TEXT, payload TEXT NOT NULL)`. Four denormalised columns
   (`at`, `event`, `position`) plus the whole record as `payload` JSON — this is the general
   shape D88's docstring describes for every table, and `events` already has the column this
   task worried might not exist.
-- `store/db.py:1192-1205` — `append_events`, the only writer: `position` is written from
+- `store/db.append_events` — `append_events`, the only writer: `position` is written from
   `event.get("position")`, which is `_history`'s own `record["position"] = key` (see next
   bullet). **It is a plain column, not something buried in `payload`.**
-- `server/capture_server.py:1888-1922` — `_history(inventory, event, key, **extra)`. `key`
+- `server/capture_server._history` — `_history(inventory, event, key, **extra)`. `key`
   becomes `record["position"]` when not `None` (line 1919-1920); `extra` values are folded in
   when not `None` (line 1921). This is the one function that ever appends an event, so
   reading it fully is reading the whole shape of every row `events_at` will have to filter.
-- `store/master.py:243-244` — `position_key(box, index) -> f"{int(box)}/{int(index)}"`. Every
+- `store/master.position_key` — `position_key(box, index) -> f"{int(box)}/{int(index)}"`. Every
   `key` passed anywhere in this file is this exact shape (verified: every call in
   `server/capture_server.py` goes through `master.position_key(box, index)`, no other format
   exists). This is what makes a box-prefix `GLOB` safe and exact.
 - **The one fact that decides the whole design — read this twice.**
-  `server/capture_server.py:4140-4203`, inside the mid-box delete (`do_remove_card`'s body):
+  `server/capture_server.do_remove_card`, inside the mid-box delete (`do_remove_card`'s body):
   the deleted card's own key is `key = master.position_key(box, index)` (bound earlier in the
   function, not shown in this range — it is the same `key` used at `del
   inventory.cards[key]`, line 4141). The `RENUMBERED` event is appended at line 4196-4203:
@@ -140,36 +143,36 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
   So a `renumbered` line's `position` is the **deleted** card's position — a different index
   than any of the movers it describes, but **the same box**. Every mover's own state line is
   logged separately, at *its own new key* (the "ONE STATE LINE PER SHIFTED CARD, AT ITS NEW
-  POSITION" comment at `server/capture_server.py:4204-4209`). The four readers below all rely
+  POSITION" comment at `server/capture_server.do_remove_card`). The four readers below all rely
   on being able to see the `renumbered` marker when asked about a *mover's* key — which means
   `position = key` alone is the WRONG scope. The correct scope is **the box**, because
   `renumbered`'s `position` and every mover's `position` share the same `"{box}/"` prefix.
-- `server/capture_server.py:5380-5443` — `_answer_before(events, key)`. Scans `events`
+- `server/capture_server._answer_before` — `_answer_before(events, key)`. Scans `events`
   reversed; the `RENUMBERED` guard at lines 5420-5428 checks `event.get("box") == at_box`
   (not `event.get("position") == key`) — confirming the box-scope, not position-scope,
   requirement directly in the reader's own code.
-- `server/capture_server.py:6263-6289+` (`_clearing_event`) — identical shape: parses
+- `server/capture_server._clearing_event+` (`_clearing_event`) — identical shape: parses
   `at_box, at_index` from `key` (line 6278), then checks `event.get("box") == at_box` for the
   `RENUMBERED` guard (line 6285).
-- `server/capture_server.py:7046-7105` (`_state_before_sale`) and `:7108-7138`
+- `server/capture_server._state_before_sale` (`_state_before_sale`) and `:7108-7138`
   (`_state_before_retirement`) — these two do **not** have a `RENUMBERED`/box guard; they
   filter purely on `event.get("position") == key` (lines 7098, 7131). A box-wide scope is
   still correct for them (it is a superset, not a mismatch) — they simply ignore the
   extra rows for other positions in the box, exactly as `history()`'s current full-store read
   lets them ignore rows for every *other* box today.
-- `server/capture_server.py:7141-7196` — `_sale_origin`, `_retirement_origin`, `_origin`.
+- `server/capture_server._sale_origin` — `_sale_origin`, `_retirement_origin`, `_origin`.
   `_origin` is the one place that actually calls `store.history()` (line 7185) and hands the
   result to whichever reader (`_state_before_sale` or `_state_before_retirement`) it was given.
-- `server/capture_server.py:7198-7297` (`_sell`) — read in full. Line 7232:
+- `server/capture_server._sell` (`_sell`) — read in full. Line 7232:
   `previous, origin_unknown = _sale_origin(Store(snapshot.directory), key)` runs **before**
   the `if undo:` branch (line 7235). The `else` branch (a plain sale, lines 7256-7283) never
   reads `previous` or `origin_unknown` — confirmed by reading every line between 7256 and
   7283 inclusive; the names appear nowhere in that range.
-- `server/capture_server.py:7434-7583` (`do_retire`), specifically line 7508:
+- `server/capture_server.do_retire` (`do_retire`), specifically line 7508:
   `previous, origin_unknown = _retirement_origin(store, key)`, again before `if undo:` (line
   7511). The `else` branch (a plain retirement, lines 7546-7583) never reads either name —
   confirmed the same way.
-- `store/db.py:1228-1252` — `events_named(event)`, the existing scoped-by-event-name sibling
+- `store/db.events_named` — `events_named(event)`, the existing scoped-by-event-name sibling
   (D134). Its own docstring is explicit that it is an **unindexed scan** ("the events table
   has none of its own [index]") — that sentence is about a `WHERE event = ?` filter, and it
   predates the box-scoping this item adds; it does NOT mean `position` is unindexed (it is,
@@ -177,10 +180,10 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
   `events_named` and `events_at` are solving different problems (filter by event name, which
   has no column of its own to index cheaply without a migration, vs. filter by box, which the
   `position` column already supports).
-- `store/session.py:140-209` — `Store.read()`, `Store.write()`, `Store.history()` (line 179),
+- `store/session.Store` — `Store.read()`, `Store.write()`, `Store.history()` (line 179),
   `Store.named_events()` (line 187), `Store.buried()` (line 201). Copy this file's own
   pattern: open a connection, call the `db.py` function, close it in `finally`.
-- `scripts/docs-audit.py:2652-2708` — `_HISTORY_READER_ROOTS` and `_history_readers()`. **This
+- `scripts/docs-audit._HISTORY_READER_ROOTS` — `_HISTORY_READER_ROOTS` and `_history_readers()`. **This
   AST walker counts only zero-argument `.history()` calls** (`if node.args or
   node.keywords: continue` at line 2702-2703). After this change, all three production call
   sites become `store.history_at(key)` — a call with an argument — so `_history_readers()`
@@ -188,35 +191,35 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
   `identify`, `geometry`, `codes`; verified nothing outside `server/capture_server.py` calls
   bare `.history()` in production — see "Call sites"). This is fine and self-correcting: the
   row's summary string is built from `len(readers)` at run time
-  (`scripts/docs-audit.py:3068`, `f"{len(readers)} history readers, every claim about them
+  (`scripts/docs-audit.check_sole_reader`, `f"{len(readers)} history readers, every claim about them
   counts right"`) — it will print `0 history readers...` and stay green, because nothing in
   the tree currently asserts "there are exactly N" as a literal; it asserts "every claim about
   a specific function being the sole reader agrees with the live list," and there is no
   currently-passing claim of that shape that this change breaks (checked: the only
-  candidate text, `server/capture_server.py:984`, says `` the only reader of `history.jsonl` ``
+  candidate text, `server/capture_server.UNDOABLE_STATES`, says `` the only reader of `history.jsonl` ``
   — a filename with a dot, which `_SOLE_READER_RE`'s `` `([A-Za-z_][A-Za-z0-9_]*)` `` character
   class cannot match, so it was never counted as a match and stays inert). **Do not add a
   migration or a docs-audit change for this row** — verify it stays green, do not touch it.
-- `server/capture_server.py:972-1000` — the comment block this item DOES need to hand-edit
+- `server/capture_server.UNDOABLE_STATES` — the comment block this item DOES need to hand-edit
   (see "Steps" #6): "The readers are `_answer_origin`, `_origin` and `_reverse_stand_down`."
   This is prose, not matched by any mechanical check (confirmed above), so it will not fail a
   commit if left stale — but it will be **wrong**, in the same way the comment it replaced in
   2026-09-05 was wrong, and this repo's own `sole reader` row exists specifically because that
   kind of drift shipped once already. Fix it in the same commit.
-- `harness/tests/t7_store_and_seams.py:5166-5405` (`check_mark_sold`) and `:5494+`
+- `harness/tests/t7_store_and_seams.check_mark_sold` (`check_mark_sold`) and `:5494+`
   (`check_retire`, confirmed at line 5494) — the existing coverage for the two `undo`-gated
-  callers this item changes. `harness/tests/t7_store_and_seams.py:5472-5480` —
+  callers this item changes. `harness/tests/t7_store_and_seams.check_mark_sold` —
   `events_for(key)` / `last_event(key)`, the test-side helpers already used throughout this
   file (`[event for event in Store().history() if event.get("position") == key]`) — this
   is your ground truth for the functional-equivalence assertion in "Tests," and it is a
   precedent for "filter the full read in Python and compare," which is exactly what the new
   test should do to prove `events_at` didn't drop or add anything a caller needs.
-- `harness/tests/t7_store_and_seams.py:6210-6231` (`check_history`) — the section documenting
+- `harness/tests/t7_store_and_seams.check_history` (`check_history`) — the section documenting
   the three route-written non-state events (`corrected`, `removed`, `answered`/`stood_down`
   family) and the disjointness assertion between them and `master.STATES`. Read this before
   writing new assertions nearby so the new ones sit in the right section rather than
   duplicating `check_history`'s job.
-- `harness/tests/t7_store_and_seams.py:238-246` — imports already in scope: `db`, `files`,
+- `harness/tests/t7_store_and_seams.py` — imports already in scope: `db`, `files`,
   `master`, `Store` are all imported; `sqlite3` is imported in `store/db.py` but **not** in
   the test file — add `import sqlite3` only if you go the `set_trace_callback` route (see
   "Tests"; the recommended route uses `db.connect` + `EXPLAIN QUERY PLAN`, which needs no new
@@ -228,7 +231,7 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
   SQL `WHERE` clause, not a `Rows` scoping fix.
 - `CLAUDE.md`'s D88 paragraph ("THE STORE OF RECORD IS ONE SQLITE FILE...") — read for the
   transaction/lock discipline: `history_at` must be safe to call **inside** a
-  `Store.write()` session exactly as `history()` is today. `store/db.py:213-230`
+  `Store.write()` session exactly as `history()` is today. `store/db._ensure_schema`
   (`_ensure_schema`'s docstring) explains why this matters: `Store(snapshot.directory)
   .history()` opens a **second connection** inside an open write transaction, and a
   version-check happens on every open — so a new read-only function following the same
@@ -238,10 +241,10 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
 ## Steps
 
 **No migration step.** Verified above: `position` is already a column on `events`
-(`store/db.py:266-269`), it is already indexed (`store/db.py:139`,
+(`store/db._ensure_schema`), it is already indexed (`store/db._INTEGER`,
 `("events", "position")`, created unconditionally for every store — fresh or upgraded — since
-`_INDEXES` is applied at `store/db.py:271-272` with no version gate), and it already encodes
-the box (`f"{box}/{index}"`, `store/master.py:243-244`). A `GLOB` query with a literal prefix
+`_INDEXES` is applied at `store/db._ensure_schema` with no version gate), and it already encodes
+the box (`f"{box}/{index}"`, `store/master.position_key`). A `GLOB` query with a literal prefix
 is index-friendly in SQLite regardless of the `LIKE`/case-sensitivity caveats that would apply
 to `LIKE` — confirmed on this schema:
 
@@ -284,7 +287,7 @@ def events_at(conn: sqlite3.Connection, key: str) -> List[dict]:
     SCOPED TO THE BOX, NEVER TO THE BARE POSITION, and that is not a wider margin chosen for
     safety — it is what correctness requires. A `renumbered` line's `position` is the
     DELETED card's own key, not any mover's (`server/capture_server.py:_history`, called
-    from the mid-box delete at `server/capture_server.py:4196-4203`), so a mover's own
+    from the mid-box delete at `server/capture_server.do_remove_card`), so a mover's own
     reversal has to see a line filed under a DIFFERENT position in the same box to learn a
     shift happened above it (D10 ruling 1). `position` is always `f"{box}/{index}"`
     (`store/master.py:position_key`), so every event that could matter to a reversal at
@@ -298,7 +301,7 @@ def events_at(conn: sqlite3.Connection, key: str) -> List[dict]:
     `... WHERE position GLOB '3/*'` reports `SEARCH events USING INDEX events_position
     (position>? AND position<?)`, the same index `history()`'s unindexed full scan never
     touches. No new column and no migration: `position` has been a plain, indexed column
-    since this table's DDL (`store/db.py:264-272`), unconditionally, for every schema
+    since this table's DDL (`store/db._ensure_schema`), unconditionally, for every schema
     version this store has ever carried.
 
     A `key` that is not `box/index` cannot be box-scoped, and this never guesses at one: it
@@ -411,7 +414,7 @@ signature change anywhere in this step.
 
 ### 4. Skip `_sale_origin` entirely when `undo` is false, in `_sell`
 
-`server/capture_server.py:7223-7232`. Before:
+`server/capture_server._sell`. Before:
 ```python
     previous, origin_unknown = _sale_origin(Store(snapshot.directory), key)
     was = card.state
@@ -439,7 +442,7 @@ substitution: `was = card.state` and the rest of the function are unchanged.
 
 ### 5. Skip `_retirement_origin` entirely when `undo` is false, in `do_retire`
 
-`server/capture_server.py:7504-7511`. Before:
+`server/capture_server.do_retire`. Before:
 ```python
         previous, origin_unknown = _retirement_origin(store, key)
         was = card.state
@@ -458,7 +461,7 @@ After:
 
 ### 6. Correct the stale reader roster comment
 
-`server/capture_server.py:980-993`. The sentence "The readers are `_answer_origin`,
+`server/capture_server.UNDOABLE_STATES`. The sentence "The readers are `_answer_origin`,
 `_origin` and `_reverse_stand_down`." (line 986-987) is still true about *which functions*
 read the history, but it is now inaccurate about *how* — all three call `history_at(key)`,
 not `history()`. Reword the sentence (keep everything else in the block, including the
@@ -494,11 +497,11 @@ Every production, zero-argument `Store.history()` (equivalently `store.history()
 
 | # | File:line | Function | Caller of the function | Undo-gated? | Action |
 |---|---|---|---|---|---|
-| 1 | `server/capture_server.py:5461` | `_answer_origin` | `do_answer`'s undo branch (call site at `server/capture_server.py:6639`, itself inside the route's `if undo:`) | Already gated at the call site one level up | Step 3a: `store.history_at(key)` |
-| 2 | `server/capture_server.py:6478` | `_reverse_stand_down` | route body itself (this whole function is the undo of a stand-down) | The function is inherently an undo | Step 3b: `_clearing_event(store.history_at(key), key)` |
-| 3 | `server/capture_server.py:7185` | `_origin` | `_sale_origin` (→ `_sell`) and `_retirement_origin` (→ `do_retire`) | See rows 4-5 | Step 3c: `store.history_at(key)` |
-| 4 | `server/capture_server.py:7232` | `_sell`, via `_sale_origin` → `_origin` | `do_mark_sold` | **No — read unconditionally today** | Step 4: gate the call on `undo` |
-| 5 | `server/capture_server.py:7508` | `do_retire`, via `_retirement_origin` → `_origin` | route itself | **No — read unconditionally today** | Step 5: gate the call on `undo` |
+| 1 | `server/capture_server._answer_origin` | `_answer_origin` | `do_answer`'s undo branch (call site at `server/capture_server._reverse_answer`, itself inside the route's `if undo:`) | Already gated at the call site one level up | Step 3a: `store.history_at(key)` |
+| 2 | `server/capture_server._reverse_stand_down` | `_reverse_stand_down` | route body itself (this whole function is the undo of a stand-down) | The function is inherently an undo | Step 3b: `_clearing_event(store.history_at(key), key)` |
+| 3 | `server/capture_server._origin` | `_origin` | `_sale_origin` (→ `_sell`) and `_retirement_origin` (→ `do_retire`) | See rows 4-5 | Step 3c: `store.history_at(key)` |
+| 4 | `server/capture_server._sell` | `_sell`, via `_sale_origin` → `_origin` | `do_mark_sold` | **No — read unconditionally today** | Step 4: gate the call on `undo` |
+| 5 | `server/capture_server.do_retire` | `do_retire`, via `_retirement_origin` → `_origin` | route itself | **No — read unconditionally today** | Step 5: gate the call on `undo` |
 
 No other production call exists (`grep -rn "\.history()" server/ store/ pipeline/ cli/
 identify/ geometry/ codes/` returns only the three lines above plus two `store/db.py`
@@ -549,7 +552,7 @@ def check_history_scoped_read(checks: Checks) -> None:
         capture_server.do_put_card(3, 1, {"variant": "reverse_holo"})
 
         # A mid-box delete of 3/1 renumbers 3/2 and 3/3 down by one and logs `renumbered` at
-        # position "3/1" — the DELETED key, per server/capture_server.py:4196-4203.
+        # position "3/1" — the DELETED key, per server/capture_server.do_remove_card.
         capture_server.do_remove_card(3, 1, {})
 
         full = Store().history()
@@ -702,9 +705,9 @@ regresses to the latter.
 **None.** Checked the two candidates:
 
 - `scripts/docs-audit-allow.txt` (the general "planned but not yet built" registry, read via
-  `scripts/docs-audit.py:842-897`) has no entry naming `store/db.py`, `events`, `history`, or
+  `scripts/docs-audit.check_paths`) has no entry naming `store/db.py`, `events`, `history`, or
   any function touched here. This change does not add, remove, or need an allowlist entry.
-- The `sole reader` docs-audit row (`scripts/docs-audit.py:3017-3070`,
+- The `sole reader` docs-audit row (`scripts/docs-audit.py`,
   `_history_readers()` at `:2671-2708`) is **not** an allowlist and needs no edit — see "Read
   first" for the full argument that its dynamic count (currently 3, becoming 0 after this
   change) self-corrects and stays green. If a future session ever needs to make this row
@@ -734,7 +737,7 @@ than needing a guard, so no such row is proposed.
 - `Rows`, `Inventory.to_payload()`, `_Places`, `_copies_out` — items 1, 2 and 4 of the plan.
   Nothing in this item touches `cards`, `boxes`, `listings`, or any table besides `events`.
 - The `_ensure_schema` / `_upgrade` / `SCHEMA_VERSION` machinery in `store/db.py` — this item
-  adds no migration, so `SCHEMA_VERSION` (currently 4, per `store/db.py:95`) does not change
+  adds no migration, so `SCHEMA_VERSION` (currently 4, per `store/db.SCHEMA_VERSION`) does not change
   and no `if stored < N:` branch is added to `_upgrade`.
 - `docs/specs/store-scaling.md`'s other three rows (`Inventory.to_payload()`, `do_orders()`,
   `_copies_out`) — update only the `Store.history()` row per Step 7.

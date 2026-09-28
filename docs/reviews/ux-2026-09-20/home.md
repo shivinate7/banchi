@@ -12,8 +12,8 @@ Themes looked at: dark (measured in depth), light (screenshotted earlier in this
    "Cannot be filled…" banner row), `.home-deck` (the card-photo link, top right), and all
    6 `.home-stage` stat tiles (Capture/Runs/Review/Pricing/Orders/Shipping) — return `0.2s`
    for their hover transitions (`box-shadow`, `background-color`, `transform`).
-   Where: `app/src/Home.css:40` (`.home-standing-row`, uses `var(--bn-t)`), `:241` (`.home-stage`,
-   `var(--bn-t)`), `:341` (`.home-deck`, `var(--bn-t)`). The rest of the product (checked:
+   Where: `app/src/Home.css` (`.home-standing-row`, uses `var(--bn-t)`; `.home-stage`,
+   `var(--bn-t)`; `.home-deck`, `var(--bn-t)`). The rest of the product (checked:
    sidebar nav links, topbar, `Start capturing` button, command palette items, keyboard sheet)
    uses `var(--bn-t-fast)` (120ms) for the same kind of hover response.
    Severity: nit (each is smooth and correct on its own; the mismatch is only visible when
@@ -32,7 +32,7 @@ Themes looked at: dark (measured in depth), light (screenshotted earlier in this
    the literal keyboard shortcut string (I observed `,0` and `,C` in different states across
    this session). Read out of context, `,0` looks like a stray comma-zero rather than a
    keyboard hint, unless the reader already knows the app's `,`-then-letter leader convention.
-   Where: `app/src/Home.tsx:216-219` (`say.kbd` rendered as `<kbd className="bn-kbd">{say.kbd}</kbd>`
+   Where: `app/src/Home.StandingLine` (`say.kbd` rendered as `<kbd className="bn-kbd">{say.kbd}</kbd>`
    immediately before the chevron, with no "press" or "shortcut" affordance beyond the kbd's own
    chip styling).
    Severity: nit. The kbd-chip convention is used consistently everywhere else in the product

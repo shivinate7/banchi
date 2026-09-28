@@ -16,7 +16,7 @@ Files read: `app/src/OrdersShipStage.tsx`, `app/src/Shipping.css`, `app/src/toke
 }
 ```
 with a comment explaining that 3 columns below 1280 measured ~210-250px per lane and caused figures to wrap onto a second line, "Inferred" to wrap off the row entirely, and the reason code to wrap onto a third line. The fix already ships (drop to 2 columns below 1280), so this is not a live defect — but it means the exact 1280px boundary this review is asked to check is the boundary where the layout deliberately snaps from 2-wide back to 3-wide. I could not confirm live that 1280 (not 1279) actually gives each of the 3 lanes enough room, because I never got the Ship stage on screen before losing frame compositing. Given the same lane content (a certainty tag, up to 3 figure chips, a mono reason code) needs to fit in ~316px at 1280 (my estimate: (1280 − 236 sidebar − 64 page padding − 32 gap)/3), which is more room than the 1440 layout the comment says works (~340px), this is LIKELY fine — but I want to flag it as the one width in this whole slice where a documented past failure and my required check width are the same number.
-**Where:** `app/src/Shipping.css:293-304`.
+**Where:** `app/src/Shipping.css` (`.shipping-lane-hidden`).
 **Severity:** unknown/nit — flagging for a live check rather than reporting a confirmed defect.
 **Fix:** none proposed; re-verify live at exactly 1280.
 **Does it recur:** n/a.
@@ -35,7 +35,7 @@ This is actually a well-reasoned, well-documented decision (avoiding a contrast 
 
 ### 3. `figuresOf()` can return an empty array, and the row still renders `.shipping-figures` as an empty flex container
 **What I saw in source:** `OrdersShipStage.tsx:92-98`, `figuresOf()` returns `[]` when a row has no value, no weight, and no item count (all three are nullable and independently omitted "on purpose," per the surrounding comment at lines 89-91, so a fully-unknown row is plausible for the `unjudged` lane specifically). `Shipping.css:261` styles `.shipping-figures { display: inline-flex; flex-wrap: wrap; gap: 6px; }` with no empty-state handling. If `figuresOf(row)` is empty, this renders a zero-height, zero-content flex box — harmless layout-wise (no visible gap since `gap` only applies between children) but means an `unjudged` row with literally no data at all shows nothing where the reader would expect at least a "no data" cue, right next to the `REASON_SAYS` text that already explains why (e.g. `no_value_data`/`no_weight_data`). This is very likely fine in practice since the reason text carries the explanation, but I flag it because I could not confirm live whether this combination (all three figures null) actually occurs in real export data, or whether the router's own logic guarantees at least one figure survives whenever a reason like `no_weight_data` fires (which by definition means weight is absent, but value or item count could still be present).
-**Where:** `app/src/OrdersShipStage.tsx:92-98`; `app/src/Shipping.css:261-271`.
+**Where:** `app/src/OrdersShipStage.figuresOf`; `app/src/Shipping.css` (`.shipping-figures`).
 **Severity:** nit, unconfirmed live.
 **Does it recur:** n/a.
 

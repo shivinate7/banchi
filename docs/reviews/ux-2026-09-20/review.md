@@ -14,10 +14,10 @@ pressed, no skip, no re-check.
    number" is immediately followed by a small chip reading `set_ambiguous` in JetBrains Mono,
    11px, `rgb(131,139,152)` (the muted-ink token), inside a `background: var(--bn-surface-2)`
    pill with 2px/6px padding and `border-radius: var(--bn-r-xs)`.
-   Where: `app/src/ReviewQueue.tsx:1685` (`<span className="review-code">{offer.reason}</span>`,
+   Where: `app/src/ReviewQueue.GroupConfirm` (`<span className="review-code">{offer.reason}</span>`,
    the group/bulk-answer header) and `:1846` (`<span className="review-code" title="Reason
    code">{entry.reason}</span>`, the single-card header). Styling at
-   `app/src/ReviewQueue.css:390-400`.
+   `app/src/ReviewQueue.css` (`.review-code`).
    Judging this purely as a designer, with no reference to any written rule: this is a raw
    enum value — `set_ambiguous`, and elsewhere `low_confidence`, `rarity_claim_mismatch`,
    `name_disputed` — shown to the person doing the work, immediately after a sentence that
@@ -55,7 +55,7 @@ pressed, no skip, no re-check.
 - **1280 width** was not reached this pass for Review. UNKNOWN.
 - **Light theme** was not reached this pass for Review. UNKNOWN.
 - **The group/bulk-answer view** ("Answer all N together?") was read from source
-  (`app/src/ReviewQueue.tsx:1670-1695`) to confirm the same `review-code` pattern exists there,
+  (`app/src/ReviewQueue.GroupConfirm`) to confirm the same `review-code` pattern exists there,
   but I did not navigate to a live group state to see it rendered and measure it — the store's
   current queue only offered a single ambiguous card, not a same-reason cluster. Confirmed in
   code, not confirmed on screen.

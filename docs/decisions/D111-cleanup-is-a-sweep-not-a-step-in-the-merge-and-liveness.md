@@ -12,7 +12,7 @@ recreating the `.serve/` directory it logged the failure into. The oldest had be
 since 2026-08-30; one of them pointed at a directory that was not on disk at all.
 
 **37 of the 73 branches were in the IDENTICAL state — merged, deleted at origin, alive here.**
-That is not 37 mistakes. `scripts/merge-pr.py:484` deletes the head branch at origin
+That is not 37 mistakes. `scripts/merge-pr.delete_head_branch` deletes the head branch at origin
 unconditionally, then returns early for the local half whenever a worktree holds the branch:
 
 ```python
@@ -86,7 +86,7 @@ that enters from outside is resolved first: `/tmp` is `/private/tmp` on this mac
 `git worktree list` and a session record spell the same directory differently — which made the
 self-test's every tree read as sessionless until it was fixed.
 
-**A defect this found on the way, in code it wanted to reuse.** `scripts/serve.py:297` picked
+**A defect this found on the way, in code it wanted to reuse.** `scripts/serve.py` picked
 its identity needle as `argv[-1]`, right for the supervisor and the capture server, whose last
 argument IS the path, and degenerate for Vite, whose argv is
 `["npm", "--prefix", "/abs/app", "run", "dev"]` — so the needle was `"dev"`, a substring of

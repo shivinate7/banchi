@@ -1,5 +1,8 @@
 # Item 2 — the per-box read
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree). The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 **Status of this file: BUILT, 2026-09-13, as D192.** It was the playbook for
 `docs/specs/store-scaling.md` §3 item 2 ("The per-box read, and the screens move to it. 2–3
 days"), written for a session with no other context on this branch. D192 shipped
@@ -12,7 +15,7 @@ and where it corrected this playbook.
 
 **Goal.** Stop every non-capture screen from paying `Inventory.to_payload()`'s full-store
 walk (78 ms today, 1,485 ms at 20x rows) on every load and after every write. Reopen the
-refusal at `server/capture_server.py:10687` ("a per-box read would be a second renderer for
+refusal at `server/capture_server.CaptureHandler`'s `do_GET` ("a per-box read would be a second renderer for
 one caller that does not exist yet" — the caller exists now, D53's own §5 argument) and give
 `#/inventory` a real per-box data path. Remove `rows.py:177`'s degrade so a scoped `where()`/
 `select()` never pays for an earlier full load. `GET /inventory` itself is **kept**, on the
@@ -32,16 +35,16 @@ this plan may delete it.
 3. `Home.tsx`, `Fulfillment.tsx` and `Orders.tsx` no longer call `getInventory()`. Each has a
    named replacement source (see §(c) below) — cheap, already-fetched data, or one new lean
    route, never the old full walk.
-4. `store/rows.py:177`'s fallback is gone: a `where()`/`select()` issued after this session's
+4. `store/rows.Rows`'s fallback is gone: a `where()`/`select()` issued after this session's
    `Rows` has been fully materialised still resolves through the indexed source, and its cost
    is bounded by what THIS session has read and written, not by the size of the table. T7's
    `check_store_of_record`-style assertion (reusing `Rows.loaded_count`/`Rows.complete`,
-   already used at `harness/tests/t7_store_and_seams.py:1084-1089`) proves it.
+   already used at `harness/tests/t7_store_and_seams.check_store_of_record`) proves it.
 
 **CORRECTED 2026-09-12: `make docs-audit`'s `unscoped walk` row drops NOTHING in this item's
 PR.** This paragraph originally claimed three entries closed here
-(`server/capture_server.py:3056 do_inventory`, `:8349 _boxes_named`,
-`store/master.py:1447 to_payload`); all three are verified to stay on the allowlist — see
+(`server/capture_server.do_inventory`, `_boxes_named`,
+`store/master.Inventory to_payload`); all three are verified to stay on the allowlist — see
 "Allowlist entries removed" below and D192 for the full
 argument. The allowlist count is unchanged at 13 after this item.
 
@@ -87,7 +90,7 @@ argument. The allowlist count is unchanged at 13 after this item.
 - D43 (`store/files.py:home()`), D58 (`Place.slot` vs `index`), D88 (SQLite is the store of
   record, one transaction per session, `Rows` per D88's own module) — all three are read
   before touching `store/master.py` or `store/rows.py` by the map's own instruction.
-- `server/capture_server.py:1939-2130` — `_Places`'s docstring. Read it before writing
+- `server/capture_server._Places` — `_Places`'s docstring. Read it before writing
   `do_inventory_box`: it already explains why `_Places(inventory)` costs nothing extra per
   box (`records_in` is lazy, per box, since D88) and what degrades whole-store versus
   per-box (the denominator scan is whole-store on a corrupt neighbor; per-box decoration of
@@ -95,7 +98,7 @@ argument. The allowlist count is unchanged at 13 after this item.
 - `store/rows.py`, the whole file (303 lines) — read it end to end before changing `where`/
   `select`. The docstring at the top states the two backings and the flush contract; get
   those invariants in your head before editing.
-- `harness/tests/t7_store_and_seams.py:1020-1120` (`check_store_of_record`) — the existing
+- `harness/tests/t7_store_and_seams.check_store_of_record` (`check_store_of_record`) — the existing
   precedent for asserting `Rows.loaded_count`/`Rows.complete` after a store operation. This
   item's new T7 assertions reuse that exact pattern; do not invent a new instrumentation
   mechanism (no query counters, no `sqlite3.Connection.set_trace_callback` — `Rows` already
@@ -111,7 +114,7 @@ after the fallback is removed.
 
 ### Step 1 — `Inventory` gains no new method; confirm `records_in` is enough
 
-Nothing to write here. `store/master.py:1522-1533`:
+Nothing to write here. `store/master.Inventory`:
 
 ```python
 def records_in(self, box) -> List[Tuple[int, str, Card]]:
@@ -130,7 +133,7 @@ def records_in(self, box) -> List[Tuple[int, str, Card]]:
 
 already returns exactly what `do_inventory_box` needs: every `Card` in one box, via
 `self.cards.where(box=box)` — an indexed query (`box` is in `CARDS.column_names`, confirmed at
-`store/master.py:2485-2495`). Do not add a second method; `records_in` is the one this whole
+`store/master.Inventory`). Do not add a second method; `records_in` is the one this whole
 item is named after in the plan text ("through `records_in`, with `_Places` built for that
 box alone").
 
@@ -213,20 +216,20 @@ Notes for whoever writes this:
   itself). Keep that asymmetry — do not add a broader try/except that `do_inventory` does not
   have, or the two routes' error behavior on a truly corrupt Card diverges silently.
 - `asdict(card)` is the same call `Inventory.to_payload()` makes per card
-  (`store/master.py:1459`) — reuse it so the two routes can never drift on which fields a
+  (`store/master.Inventory`) — reuse it so the two routes can never drift on which fields a
   `Card` serialises to.
 - `box` here is the ALREADY-VALIDATED int from the route regex (see step 3); `records_in`
   itself calls `_as_position_int(box, "box")`, so a query-string box of `"0"` or a negative
   number is refused by `records_in` with the store's own `BadPosition`, not by a bespoke
   check in this function. Do not add one.
 - `master.VERSION` is the module-level constant `to_payload()` also writes
-  (`store/master.py:1452`). Import it the same way `capture_server.py` already imports
+  (`store/master.Inventory`). Import it the same way `capture_server.py` already imports
   `master` (it does; grep `from store import master` or similar near the top of the file —
   do not add a second import statement if one already exists).
 
 ### Step 3 — wire the route
 
-`server/capture_server.py:546` already declares:
+`server/capture_server._INVENTORY_BOX_RE` already declares:
 
 ```python
 _INVENTORY_BOX_RE = re.compile(r"^/inventory/(\d+)$")
@@ -353,7 +356,7 @@ before moving on.
 
 ### Step 5 — client: `getInventoryBox`
 
-`app/src/server.ts:714-717`:
+`app/src/server.getStatus`:
 
 ```ts
 /** The whole card map. Keyed `"<box>/<index>"`. */
@@ -698,8 +701,8 @@ query over every box and cannot be answered by any per-box route or by `GET /box
 `Inventory.counts()` alone — it is the one place in this item that needs **a new small
 route**, per the task's own third option.
 
-`captured_at` is already an indexed column (`store/master.py:2485-2495`'s `CARDS`
-`column_names` includes it; `store/db.py:118` confirms it in the SQLite schema). Add:
+`captured_at` is already an indexed column (`store/master.Inventory`'s `CARDS`
+`column_names` includes it; `store/db.TABLES` confirms it in the SQLite schema). Add:
 
 - `store/rows.py`: extend the `Source` contract (documented at the top of the file,
   `:36-49`) with one more method, and implement it only where a table is actually queried
@@ -865,7 +868,7 @@ and the T7 case that pins it. The sketch below is kept as a record of the FIRST,
 attempt — read the decision entry and the actual `store/rows.py` before trusting any of the
 code in this section.
 
-This is the load-bearing fix in item 2 (`docs/specs/store-scaling.md` §0: "`store/rows.py:177`
+This is the load-bearing fix in item 2 (`docs/specs/store-scaling.md` §0: "`store/rows.Rows`
 … a handler that materialises first and filters second gets no benefit from the index at
 all"). Without it, `do_inventory_box` is scoped on its OWN first call, but any handler that
 happens to run `.values()`/`.items()`/`to_payload()` earlier in the SAME session (setting
@@ -877,7 +880,7 @@ rule out, not just the route's happy path.
 `__iter__` (`:173-175`) and `to_dict()` (`:289-292`) call `_load_all()` (`:185-205`), which
 sets `self._complete = True` after copying every source row into `self._loaded`. `MutableMapping`
 derives `.values()`/`.items()`/`.keys()` from `__iter__` + `__getitem__`, so `to_payload()`'s
-`self.cards.items()` (`store/master.py:1459`) is what flips `_complete` for `do_inventory`'s
+`self.cards.items()` (`store/master.Inventory`) is what flips `_complete` for `do_inventory`'s
 own session. `__len__` (`:177-181`) branches on `_complete` too, but only to pick between
 `len(self._loaded)` and `source.count() - deleted + fresh` — both are O(1)-ish (no row
 filtering), so **`__len__` needs no change** and is not part of this fix; note this in the PR
@@ -1135,14 +1138,14 @@ filters `_loaded`, so it is not part of the O(table) defect this step fixes.
 (per D88) opens one `Inventory` bound to the database, hands it to the caller inside a `with`
 block, and on a clean exit computes `changes()` per `Rows` (cards/boxes/listings) and commits
 them in one transaction (`store/session.py` — the "one transaction over every table" this
-class's own docstring at `store/master.py:1327-1336` describes). Everything a write handler
+class's own docstring at `store/master.Inventory` describes). Everything a write handler
 does to a row goes through `Rows.__setitem__` (confirmed: `allocate_capture`,
 `do_put_card`/`do_put_box_claims`, `do_sell`, `do_retire` — every mutator assigns
 `self.cards[key] = card`, never mutates `self._loaded` directly) — so `_touched` is a
 complete record of "what this write transaction changed," which is exactly the set `where()`/
 `select()` must re-check for correctness. A row this transaction has NOT written is safe to
 resolve from the source's index even mid-transaction, because SQLite's `SqliteSource`
-(`store/db.py:1011`) queries the connection this session holds, which has not committed
+(`store/db._open`) queries the connection this session holds, which has not committed
 anything yet — but it has also not been asked to see anything OTHER than this session's own
 writes, and this session's own writes are exactly `_touched`. There is no second writer to
 race: `store/files.py`'s flock (D88's own store-of-record write-up) serialises `Store.write()`
@@ -1248,17 +1251,17 @@ Every place `getInventory()` is called today, and what happens to each:
 
 | File:line | Purpose | After this item |
 |---|---|---|
-| `app/src/BoxBrowse.tsx:864` | whole-store fetch, filtered client-side by shelf | `getInventoryBox(shelf)`, refetched on shelf change and on `reloads`/`reloadToken` |
-| `app/src/Home.tsx:405` | hero deck, newest identified cards store-wide | `getRecentCards(DECK_DEPTH)` — new lean route |
-| `app/src/Fulfillment.tsx:451` | (a) order resolution, (b) store-wide sellable browse | (a) `getInventoryBox` per order-named box; (b) left on `getInventory()`, named as a debt for a later item |
-| `app/src/Orders.tsx:1361` | (a) order-line resolution map, (b) "Walk the boxes" cross-order walk | (a) `getInventoryBox` per order-named box; (b) left on `getInventory()`, named as item 6's to close |
+| `app/src/BoxBrowse.BoxBrowse` | whole-store fetch, filtered client-side by shelf | `getInventoryBox(shelf)`, refetched on shelf change and on `reloads`/`reloadToken` |
+| `app/src/Home.Home` | hero deck, newest identified cards store-wide | `getRecentCards(DECK_DEPTH)` — new lean route |
+| `app/src/Fulfillment.Fulfillment` | (a) order resolution, (b) store-wide sellable browse | (a) `getInventoryBox` per order-named box; (b) left on `getInventory()`, named as a debt for a later item |
+| `app/src/Orders.OrdersHub` | (a) order-line resolution map, (b) "Walk the boxes" cross-order walk | (a) `getInventoryBox` per order-named box; (b) left on `getInventory()`, named as item 6's to close |
 
 Every place `Inventory.to_payload()` / `do_inventory()` is called server-side:
 
 | File:line | After this item |
 |---|---|
-| `server/capture_server.py:10637` (`do_GET`, exact `/inventory`) | unchanged — route kept, unused by the app, on the allowlist |
-| `server/capture_server.py:3093` (`do_inventory`'s body) | unchanged — the function itself is not touched, only no longer called from anywhere this item edits |
+| `server/capture_server.CaptureHandler` (`do_GET`, exact `/inventory`) | unchanged — route kept, unused by the app, on the allowlist |
+| `server/capture_server.do_inventory` (`do_inventory`'s body) | unchanged — the function itself is not touched, only no longer called from anywhere this item edits |
 
 New routes added: `GET /inventory/<box>` (`do_inventory_box`), `GET /inventory/recent`
 (`do_inventory_recent`). New client functions: `getInventoryBox`, `getRecentCards`.
@@ -1318,24 +1321,24 @@ are corrected in the same PR that found this.
 
 | Site | Shape | Actually removed by |
 |---|---|---|
-| `server/capture_server.py:3056` `do_inventory` | `to_payload()` | **stays permanently** — `GET /inventory` is kept, unused, on the owner's word (`00-phases.md`'s own "Where each item's decisions came from" section already said this; §4's table had not been updated to match) |
-| `server/capture_server.py:8349` `_boxes_named` | `select(("box",))` | **stays** — its only caller is `do_status` (the health endpoint), which this item does not touch at all; a future item scoping `do_status` removes it |
-| `store/master.py:1447` `to_payload` | `.items()` | **stays with `do_inventory`** — `do_inventory` calling it is a real, still-reachable code path (the route is kept), so the function inside it that walks the whole store cannot be "removed" without deleting the route itself, which this item explicitly does not do |
+| `server/capture_server.do_inventory` | `to_payload()` | **stays permanently** — `GET /inventory` is kept, unused, on the owner's word (`00-phases.md`'s own "Where each item's decisions came from" section already said this; §4's table had not been updated to match) |
+| `server/capture_server._boxes_named` | `select(("box",))` | **stays** — its only caller is `do_status` (the health endpoint), which this item does not touch at all; a future item scoping `do_status` removes it |
+| `store/master.Inventory`'s `to_payload` | `.items()` | **stays with `do_inventory`** — `do_inventory` calling it is a real, still-reachable code path (the route is kept), so the function inside it that walks the whole store cannot be "removed" without deleting the route itself, which this item explicitly does not do |
 
 **`_boxes_named`'s callers were traced, per this section's own original instruction to do so
 before checking the row off.** `grep -rn "_boxes_named" server/ store/ cli/ app/src/` finds
-exactly one call site: `do_status` (`server/capture_server.py:2783`), computing `next_index`
+exactly one call site: `do_status` (`server/capture_server.do_status`), computing `next_index`
 for every box on the health endpoint. Nothing this item touches (`do_inventory_box`,
 `BoxBrowse.tsx`, `Home.tsx`, `Fulfillment.tsx`, `Orders.tsx`) calls `do_status` or
 `_boxes_named`. The row stays.
 
 The two rows the plan's §4 table already marked "stays" are unaffected by any of this:
-`server/capture_server.py:8388 do_boxes` (`distinct("box")`, cheap) and
-`store/master.py:2378 counts` (cheap).
+`server/capture_server._box_row do_boxes` (`distinct("box")`, cheap) and
+`store/master.Inventory counts` (cheap).
 
 ## Do not touch
 
-- `server/capture_server.py:10687-10699` — the `GET /boxes/<n>` refusal. The plan's §5
+- `server/capture_server.CaptureHandler`'s `do_GET` — the `GET /boxes/<n>` refusal. The plan's §5
   explicitly reopens this refusal's REASONING (the caller now exists) but the fix is the NEW
   `/inventory/<box>` route, not turning `/boxes/<n>` into a real route. `GET /boxes/<n>`
   stays refused; do not add a second per-box route answering a different question (box

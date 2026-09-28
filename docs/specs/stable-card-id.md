@@ -62,7 +62,7 @@ at is deleted rather than left to go stale.
 
 _Executable specification. Written 2026-09-12 against **main `df6ec79`** (`Merge pull request #309`), worktree clean at the same sha. Every figure below was read from the owner's live store opened `mode=ro&immutable=1` or from a `.backup()` copy under the session scratchpad. **The live store ends this session at `md5 b3373ed823a7b397054e9980f2ddcaa9`, 7,438,336 B, mtime `Sep 12 11:28`, schema 2, no `cid` column** — unchanged from before the survey. Every writable probe ran on a copy. Re-read before trusting any number here: three of the store survey's figures did not reproduce against this tree and two of mine will not reproduce against the next one._
 
-This is the ninth PR and the one the plan's own section 7 excluded by name: *"taking the box out of `store/master.py:243 position_key`."* **It does not take it out.** It gives the card a name that is not its box, which is the mechanism that makes taking it out possible; the removal itself is a later PR and §4 says which parts and why they wait. The plan's own arithmetic was *"about 90%"*; this is the seam, measured, migrated and proved, and it is honest about which of the remaining 10% it buys today.
+This is the ninth PR and the one the plan's own section 7 excluded by name: *"taking the box out of `store/master.position_key`."* **It does not take it out.** It gives the card a name that is not its box, which is the mechanism that makes taking it out possible; the removal itself is a later PR and §4 says which parts and why they wait. The plan's own arithmetic was *"about 90%"*; this is the seam, measured, migrated and proved, and it is honest about which of the remaining 10% it buys today.
 
 ---
 
@@ -409,7 +409,7 @@ guard tested on a single rejection might be testing the prefix rather than the s
 nowhere else.
 
 **NEITHER** — unchanged from §4 and §7 item 6, and none of it is a follow-up to this: the batch
-`custom_id` (`identify/sidecar.py:164`'s false claim), the `identifications` re-key and its
+`custom_id` (`identify/sidecar.Capture`'s false claim), the `identifications` re-key and its
 ~$3.63 hazard, the `fulfilment` repair for 3 dangling references, and `position_key` itself.
 `events` gains nothing, for §4's measured reason.
 
@@ -465,9 +465,9 @@ That is the deciding reason. An integer cannot be checked against anything on di
 
 **D58's argument HOLDS and is not the subject.** Measured today: **zero index gaps in all five boxes** — box 1 `1..322`, box 2 `1..543`, box 3 `1..887`, box 4 `1..678`, box 5 `1..105`, each max equal to its count. The rendering layer is drawing an identity mapping, which is exactly why it is not under strain.
 
-**`store/master.py:243 position_key` stays, and `cards.key` stays `"<box>/<index>"`.** All four primary keys it is (cards, identifications, queues, and `events.position`) stay. The cid arrives **beside** the key on `cards` alone.
+**`store/master.position_key` stays, and `cards.key` stays `"<box>/<index>"`.** All four primary keys it is (cards, identifications, queues, and `events.position`) stay. The cid arrives **beside** the key on `cards` alone.
 
-**`store/master.py:1390 next_index` stays, unchanged, and is still needed.** `1 + max(idx WHERE box = N)` over every state, D10's high-water mark. Its argument in D10 is *permanent gaps from departures*; note that D26's re-shoot is **not** a second ground — `do_reshoot`'s own docstring says *"allocator never involved"* — and with zero gaps in all five boxes today, high-water, count+1 and first-free return the same integer. That is a population of zero, not a vindication, and it is why `next_index` is left alone here rather than defended.
+**`store/master.Inventory next_index` stays, unchanged, and is still needed.** `1 + max(idx WHERE box = N)` over every state, D10's high-water mark. Its argument in D10 is *permanent gaps from departures*; note that D26's re-shoot is **not** a second ground — `do_reshoot`'s own docstring says *"allocator never involved"* — and with zero gaps in all five boxes today, high-water, count+1 and first-free return the same integer. That is a population of zero, not a vindication, and it is why `next_index` is left alone here rather than defended.
 
 **Superseded 2026-09-25: a box has no seal and no capacity (D299).**
 
@@ -580,7 +580,7 @@ MIGRATION 3.018 s, ONE transaction
 
 ### 3.3 · The write-time refusal, and why it is in exactly one place
 
-**`_card_columns` raises `MissingCardId(key)` when `card.cid is None`.** One function, and it is the single chokepoint every card row passes through on its way to SQLite — so it covers **every** writer, including ones nobody has enumerated. That matters, because `allocate_capture` is not where cards are born: `record_capture`'s `existing is None` branch is, and there are **three real call sites that reach it without the allocator** — `cli/cmd_identify.py:1056`, `cli/cmd_emit.py:683` and `cli/cmd_emit.py:1064`. `store/master.py:40-42` calls this *"a seam to watch rather than a guarantee"*, and `cmd_emit`'s own comment names the case: *"A position the store has never seen — a run joined from a recovered identifications file, say."* A refusal placed only in `allocate_capture` would leave all three minting nameless rows.
+**`_card_columns` raises `MissingCardId(key)` when `card.cid is None`.** One function, and it is the single chokepoint every card row passes through on its way to SQLite — so it covers **every** writer, including ones nobody has enumerated. That matters, because `allocate_capture` is not where cards are born: `record_capture`'s `existing is None` branch is, and there are **three real call sites that reach it without the allocator** — `cli/cmd_identify.run`, `cli/cmd_emit.run` and `cli/cmd_emit.run_merged`. `store/master.py` calls this *"a seam to watch rather than a guarantee"*, and `cmd_emit`'s own comment names the case: *"A position the store has never seen — a run joined from a recovered identifications file, say."* A refusal placed only in `allocate_capture` would leave all three minting nameless rows.
 
 `NOT NULL` is refused as the mechanism: adding it to an existing SQLite column means rebuilding the table, which is precisely the operation this design will not perform on 2,535 rows of the store of record. The UNIQUE index cannot substitute — **verified: SQLite accepts unlimited NULLs under a UNIQUE index** (three stripped rows, no refusal).
 
@@ -593,9 +593,9 @@ MIGRATION 3.018 s, ONE transaction
 | `capture_server.py:do_capture` | `hashlib.sha256(blob).hexdigest()` | `blob` is already decoded in RAM at `:2390` before the `Store.write()` block. Pass it into `allocate_capture` as a keyword beside `capture_id` — **not** a member of `CAPTURE_CLAIM_FIELDS`, because a claim survives a re-record and this must not. Zero extra I/O. |
 | `capture_server.py:do_reshoot` | **nothing** — `cid` is untouched | and one line is ADDED: the `reshot` history event gains `photo_sha256=hashlib.sha256(blob).hexdigest()`. Today's `reshot` line carries two capture ids and **no digest at all**, so nothing in this store records the boundary between two photographs of one card. This is what §6's audit excuses a re-shot card by, and it must be a recorded digest and never the bare fact of a re-shoot. |
 | `master.py:move_card` | tombstone gets `card.cid = f"moved:{card.cid}"` | One line, beside the four existing clears, and the docstring's list of what the tombstone clears gains a fifth entry with the reason: `replace(card, …)` already hands the transplant the original cid, so leaving it on the tombstone would fire `cards_cid`. `move_cards` loops this and is covered. |
-| `cli/cmd_identify.py:1056` | `item.photo_sha256` | Already set for every item at `:631` (`images.sha256_of(item.capture.photo)`) before the cache consult — PR A put it there. Free. |
-| `cli/cmd_emit.py:683` and `:1064` | `images.sha256_of(path)` where the path resolves, else `nophoto:<key>@` | Both hold `resolved.photos.get(key)`. Hash it; where there is no file, write shape 4 and name the position in the report. |
-| `scripts/demo-seed.py:392` | `sha256(demo-assets/photos/<row.photo>)` | The seed writes `inventory.cards[card.key] = card` directly, bypassing `record_capture` — `_card_columns` catches it at flush, which is why the backstop is the right place. **Deterministic by construction**, no allocator and nothing seeded: measured **132 pool files, 132 distinct digests, 0 duplicates**, so an unchanged tree rebuilds byte-identically and CI's republish-on-merge does not churn. Its one synthetic `moved` card (`:417`) needs the `moved:` prefix. |
+| `cli/cmd_identify.run` | `item.photo_sha256` | Already set for every item (`images.sha256_of(item.capture.photo)`) before the cache consult — PR A put it there. Free. |
+| `cli/cmd_emit.run` and `cli/cmd_emit.run_merged` | `images.sha256_of(path)` where the path resolves, else `nophoto:<key>@` | Both hold `resolved.photos.get(key)`. Hash it; where there is no file, write shape 4 and name the position in the report. |
+| `scripts/demo-seed.build_store` | `sha256(demo-assets/photos/<row.photo>)` | The seed writes `inventory.cards[card.key] = card` directly, bypassing `record_capture` — `_card_columns` catches it at flush, which is why the backstop is the right place. **Deterministic by construction**, no allocator and nothing seeded: measured **132 pool files, 132 distinct digests, 0 duplicates**, so an unchanged tree rebuilds byte-identically and CI's republish-on-merge does not churn. Its one synthetic `moved` card needs the `moved:` prefix. |
 
 ### 3.5 · Previewable
 
@@ -605,7 +605,7 @@ It prints, from a read-only connection: the count per source, so a non-zero `ide
 
 `cards name --write` takes the lock and runs the same step now rather than waiting for the next read. `cards audit` is §6's proof. `--reverse --write` is 3.6 below.
 
-**`cli/__main__.py` gains `cards` and `harness/tests/t7_store_and_seams.py:11794`'s exact-match roster goes from nine to ten** — that list is an exact match on purpose (*"a command cannot appear in the dispatch without somebody editing this list"*) and it has already caught a merge where both sides counted eight. Update the count in its comment too.
+**`cli/__main__.py` gains `cards` and `harness/tests/t7_store_and_seams.check_cli_refusals`'s exact-match roster goes from nine to ten** — that list is an exact match on purpose (*"a command cannot appear in the dispatch without somebody editing this list"*) and it has already caught a merge where both sides counted eight. Update the count in its comment too.
 
 ### 3.6 · Reversible — measured, byte-identical
 
@@ -674,7 +674,7 @@ The other three ways a run can stop: **killed after COMMIT, before the receipt**
 
 ### Deleted in this PR — and it is almost nothing, which is the honest report
 
-**`app/src/BoxBrowse.tsx:1975` — `?card=${encodeURIComponent(stamp)}`, and `photoSrc`'s stamp parameter.** One screen out of ten already appends a photograph's id to a slot URL to make it name the right picture. Under `GET /photo/by-card/<cid>` (commit 4) the address does that work, so the query parameter becomes unnecessary rather than under-applied at 18 other sites.
+**`app/src/BoxBrowse.tsx` — `?card=${encodeURIComponent(stamp)}`, and `photoSrc`'s stamp parameter.** One screen out of ten already appends a photograph's id to a slot URL to make it name the right picture. Under `GET /photo/by-card/<cid>` (commit 4) the address does that work, so the query parameter becomes unnecessary rather than under-applied at 18 other sites.
 
 **That is the whole deletion list.** Everything else this design makes deletable is deleted by a later PR, because deleting it here would either change the wire or move 4.45 GB. Section 3 of the plan was honest about `realign` being demoted rather than deleted and it was right to be; this is the same posture.
 
@@ -688,7 +688,7 @@ The other three ways a run can stop: **killed after COMMIT, before the receipt**
 
 ### What MOVES rather than dissolving
 
-**The position key does not go anywhere.** It stays on all ten route regexes, stays the primary key of `identifications` (2,535 rows) and `queues` (565 rows), stays `events.position` (11,919 of 12,002 rows), and stays `cards.key`. **`position_key` is still called 36 times and hand-composed as an f-string in seven more places** — `cli/resolve.py:290,1107,1486`, `capture_server.py:7693`, `pipeline/merge.py:116`, `identify/sidecar.py:164` — plus ~20 sites in `app/src`. Consolidating those seven is a real prerequisite for any later PR that re-keys, and it is **not** in this one: nothing here reads the key differently, so consolidating it now would be an unrelated diff in a PR whose whole value is that it is additive.
+**The position key does not go anywhere.** It stays on all ten route regexes, stays the primary key of `identifications` (2,535 rows) and `queues` (565 rows), stays `events.position` (11,919 of 12,002 rows), and stays `cards.key`. **`position_key` is still called 36 times and hand-composed as an f-string in seven more places** — `cli/resolve._key`, `capture_server.py:7693`, `pipeline/merge._key`, `identify/sidecar.Capture` — plus ~20 sites in `app/src`. Consolidating those seven is a real prerequisite for any later PR that re-keys, and it is **not** in this one: nothing here reads the key differently, so consolidating it now would be an unrelated diff in a PR whose whole value is that it is additive.
 
 **`identifications` gains nothing in this PR, deliberately, and the reason is money.** Re-keying the cache to `cid` is the highest-value single change this seam unlocks — it closes the batch hazard and the renumber's hand re-key at once — and it is the one that can spend cash. **If any build ever reads a cid-keyed cache without understanding cid, 2,535 paid answers read as absent and the next store-wide press bills ~$3.63** (2,535 × $0.00143–0.00145). `photo_sha256` must stay on every entry as the staleness gate whenever it does move: re-keying without it would make every entry look reusable forever and bill a re-shot card its old answer with no photograph left to disprove it, which the cache's own header calls *"the single worst failure available to a cache in this pipeline."* Note the latent half: `Cache.reusable` returns a `cleared_by_human` entry **without** checking the digest, by design — measured **0 of 2,535 carry that flag**, so the bypass is one review answer away from being live.
 
@@ -698,7 +698,7 @@ The other three ways a run can stop: **killed after COMMIT, before the receipt**
 
 **`fulfilment` gains nothing.** The three dangling refs stay dangling in this PR. They are repairable — all three resolve to a `buried` event carrying `photo_sha256`, which is the card's cid — but `fulfilment` is 17 rows keyed by ORDER, each holding many capture ids across many SKUs, so the repair is a payload rewrite and not a column, and `Ledger.holder_of` walks the ledger's own map and never opens `cards`. Say this in the PR body rather than promising an outcome a column cannot deliver.
 
-**`identify/sidecar.py:164 key` keeps its false claim for now.** Its docstring calls `f"{box}/{index}"` a *"Stable id for the batch and the cache"*, and it becomes the Batch API `custom_id`. Submit 678 requests, delete one junk capture mid-box, and 537 paid answers come back keyed one card off — each plausible, each billed. **It has not fired and nothing prevents it.** The fix is cheap and self-contained (`images.prepare` already calls `sha256_of` at `:378`, 0.7 ms against 113 ms to crop, a 161× ratio) and it is deliberately a separate PR so that this one's diff stays inside `store/` plus two functions.
+**`identify/sidecar.Capture key` keeps its false claim for now.** Its docstring calls `f"{box}/{index}"` a *"Stable id for the batch and the cache"*, and it becomes the Batch API `custom_id`. Submit 678 requests, delete one junk capture mid-box, and 537 paid answers come back keyed one card off — each plausible, each billed. **It has not fired and nothing prevents it.** The fix is cheap and self-contained (`images.prepare` already calls `sha256_of`, 0.7 ms against 113 ms to crop, a 161× ratio) and it is deliberately a separate PR so that this one's diff stays inside `store/` plus two functions.
 
 **`realign` is not demoted.** §2 says why: 701 of 3,728 run records still need re-binding and no cid can reach backwards into a file written before it existed.
 
