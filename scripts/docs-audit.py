@@ -1797,22 +1797,53 @@ def iter_code_lines(text: str):
             yield number, "\n".join(spans)
 
 
+# A word that makes "make" the MAIN VERB of a sentence, right before it: an infinitive
+# marker or a modal. No real command is ever written "to make X" or "will make X" — a
+# command is always the bare word "make" followed by its target, nothing in front of it
+# that could take "make" as a verb. This is the ONE thing that disqualifies a match; every
+# other position in a span is fair game (a leading `(`, a shell verb like `time`, a quote,
+# an ellipsis, "with" — none of them make "make" a verb, so none of them needs its own rule).
+_MAKE_VERB_LEAD_WORDS = {
+    "to", "will", "can", "could", "would", "should", "might", "must", "shall", "may",
+}
+_TRAILING_WORD = re.compile(r"[A-Za-z']+$")
+
+
+def _reads_as_a_command(span: str, start: int) -> bool:
+    """Is the `make <word>` at `start` in `span` a command, or an English sentence's verb?
+
+    Everything in a backtick span counts unless the single word right before `start` is one
+    of `_MAKE_VERB_LEAD_WORDS`. That is the whole rule (test-audit plan S4, amended after
+    review): an owner's prose quote in backticks, `"We just need to make capping..."`, is
+    excluded because "to" sits right before "make" — never because the span holds a quote,
+    which `` `zsh -c '… make server 2>&1 | tail -20'` `` also does and must still be read.
+    """
+    prefix = span[:start].rstrip()
+    if not prefix:
+        return True
+    word = _TRAILING_WORD.search(prefix)
+    return not (word and word.group(0).lower() in _MAKE_VERB_LEAD_WORDS)
+
+
 def make_target_refs(text: str):
     """Yield (line number, span, match) for every `make <target>` reference `check_make_
-    targets` treats as real (test-audit plan S4).
+    targets` treats as real (test-audit plan S4, amended after review).
 
     ANYWHERE in a FENCED block, unchanged — CLAUDE.md's Commands block is one big fence, and
     a target's own description on the same line legitimately names another one in backticks
     (`` `make design-check` asserts... ``), which is not a span out here to require anything
     of.
 
-    In a backtick SPAN outside a fence, ONLY when the span itself — after an optional `+`
-    proposed-sigil — STARTS WITH `make `. Never mid-sentence: an owner's prose quote in
-    backticks, `"We just need to make capping..."`, was once read as a target named
-    `capping`, because the old rule accepted a match anywhere inside any span. Two adjacent
-    spans on one line are two independent references, each judged on its own text, so
+    ANYWHERE in a backtick SPAN too, outside a fence — see `_reads_as_a_command` for the one
+    exclusion. A `+make <name>` proposed reference still resolves: nothing in `_MAKE_VERB_
+    LEAD_WORDS` matches a bare `+`, so the sigil is read exactly as before, and
+    `marked_proposed` still finds it immediately in front of the match. Two adjacent spans on
+    one line are two independent references, each judged on its own text, so
     `` `docs/GATES.md` `` beside `` `make icloud-sweep` `` still finds the second and not a
-    target named `docs`.
+    target named `docs`. Real references this reads that the first cut of S4 missed:
+    `` `Bash(make check)` ``, `` `time make harness` ``, `` `zsh -c '… make server …'` `` and
+    `` `Rebuild it with make demo.` `` (quoted screen copy, D248, D169, and the review's own
+    copy sheets).
     """
     fenced = False
     for number, line in enumerate(text.splitlines(), start=1):
@@ -1824,12 +1855,9 @@ def make_target_refs(text: str):
                 yield number, line, match
             continue
         for span in re.findall(r"`([^`]+)`", line):
-            body = span[1:] if span.startswith(PROPOSED_SIGIL) else span
-            if not body.startswith("make "):
-                continue
-            match = _MAKE_REF_RE.search(span)
-            if match:
-                yield number, span, match
+            for match in _MAKE_REF_RE.finditer(span):
+                if _reads_as_a_command(span, match.start()):
+                    yield number, span, match
 
 
 def phony_gaps(text: str) -> Tuple[Set[str], Set[str]]:
@@ -6544,9 +6572,11 @@ BINARY_SUFFIXES = frozenset({
 
 # A PATH INDEX CITED NOTHING, AND THE ONE THERE WAS IS GONE. `PATH_INDEX_FILES` skipped the
 # retired per-file prose pin, whose keys were decision FILENAMES. Its replacement,
-# `scripts/ste-offenders.json`, keys a decision entry by its tail and folds every decision id in
-# a label (`scripts/ste_measure.py:list_key`, `fold`), so it holds no id to skip, and the skip
-# was deleted with its only member (D280).
+# `scripts/ste-offenders.json`, keyed a decision entry by its tail and folded every decision id
+# in a label (`scripts/ste_measure.py:list_key`, `fold`), so it held no id to skip, and the skip
+# was deleted with its only member (D280). That list is itself CUT now (test-audit plan,
+# 2026-09-27); `scripts/markdown-spelling-allow.json` keys the same way, through the same
+# `list_key`, and needs no skip for the same reason.
 
 
 def cited_decisions(path: Path) -> Set[str]:
@@ -17088,16 +17118,19 @@ def check_coupling(report: Report) -> None:
 # NAME — a function, a variable, a class, a key spelled as an attribute, a CSS class or custom
 # property, a shell variable.
 #
-# MARKDOWN PROSE IS STILL NOT READ HERE, 2026-09-27 — MEASURED, NOT BUILT. The test-audit
-# plan (S2) asked to extend this row to markdown prose, since Vale is retired and nothing
-# else reads spelling in markdown (owner's Vale ruling: "keep American spelling in
-# docs-audit"). Extending `spelling_findings` to `.md` and running it over the tracked tree
-# found 727 British-spelling words in 226 files — catalogue (80), judgement (67), organised,
-# analysed and the rest of the -ise/-our/-re family. That is far past the plan's own "fix it
-# only if fewer than about 30" line, and wiring the row to block on it would fail nearly
-# every commit that touches markdown until the backlog is gone. So this stays unbuilt: see
-# D226's 2026-09-27 amendment for the count and the open question (an offender list over the
-# backlog, on this repo's own D280 pattern, or a bulk rewrite pass — the owner's word).
+# MARKDOWN PROSE IS READ TOO, AS A SHRINKING OFFENDER LIST (owner's ruling, test-audit plan,
+# 2026-09-27: "Shrinking offender list now"). Extending `spelling_findings` to `.md` and
+# running it over the tracked tree found 727 British-spelling words in 226 files — catalogue
+# (80), judgement (67), organised, analysed and the rest of the -ise/-our/-re family — far
+# past "fix it only if fewer than about 30", so it is not a blocking rule over every word:
+# `scripts/markdown-spelling-allow.json` lists today's words, one entry per occurrence, file
+# by file, on D280's pattern. It fails on a British word the list does not name, a stale
+# entry, and growth over the merge-base, so a new file starts clean and new prose is American
+# from the moment it is written. Fenced code, an inline code span and a single-asterisk
+# italic span are exempt — an owner's quote, `*"..."*` (D007's own style) or in backticks, is
+# never this row's to rewrite. `docs/gates/` is excluded outright: its records are evidence of
+# a real run and are "never rewritten to match a later tree" (CLAUDE.md). See D280's
+# 2026-09-27 amendment for the count and the list this ruling names.
 #
 # THE -ISE LIST IS CLOSED, DELIBERATELY. An open `\w+ise` pattern flags `raise`, `Promise`,
 # `otherwise`, `pairwise` and `exercise`, every one of them -ise in American English too; a
@@ -17116,6 +17149,10 @@ def check_coupling(report: Report) -> None:
 # excused. A full run (`python3 scripts/docs-audit.py`, no `--staged`) always reads everything,
 # which is what CI runs.
 SPELLING_SUFFIXES = (".py", ".ts", ".tsx", ".mjs", ".sh", ".css")
+
+MARKDOWN_SPELLING_ALLOW = ROOT / "scripts" / "markdown-spelling-allow.json"
+MARKDOWN_SPELLING_RULE = "SPELLING"
+MARKDOWN_SPELLING_EXCLUDE = "docs/gates/"
 
 # Lower-cased identifier fragment -> why it is allowed. Matched as a substring of the whole
 # lower-cased name, so `is_catalogued`, `NotCatalogued` and `_parse_fulfilment` are covered
@@ -17453,14 +17490,48 @@ def _css_code_only(text: str) -> str:
     return re.sub(r"'[^'\n]*'|\"[^\"\n]*\"", lambda m: _blank(m.group(0)), text)
 
 
+def _md_prose_only(text: str) -> str:
+    """A markdown file with every fenced code block, inline code span and single-asterisk
+    italic span blanked, byte for byte, so line numbers survive and what is left is PROSE —
+    never code, and never a quote of someone's exact words (owner's ruling, test-audit plan,
+    2026-09-27: exempt "owner quotes in backticks or italics").
+
+    A fence is a line whose stripped text starts with three (or more) backticks or tildes;
+    every line up to its matching close is blanked, fence lines included. An inline code span
+    is `` `...` `` on one line. An italic span is `*...*` on one line — `(?<!\\*)\\*(?!\\*)`
+    on each side excludes `**bold**`, since a doubled `*` is never this repo's italic. The
+    owner's quotes are written `*"..."*` (D007's own style), which this blanks whole. A span
+    that crosses a line break is a miss, never a false finding, the limit every other
+    span-reading function in this file accepts.
+    """
+    out_lines: List[str] = []
+    in_fence = False
+    for line in text.split("\n"):
+        stripped = line.lstrip()
+        if stripped[:3] in ("```", "~~~"):
+            in_fence = not in_fence
+            out_lines.append(_blank(line))
+            continue
+        if in_fence:
+            out_lines.append(_blank(line))
+            continue
+        line = re.sub(r"`[^`\n]*`", lambda m: _blank(m.group(0)), line)
+        line = re.sub(r"(?<!\*)\*(?!\*)[^*\n]+\*(?!\*)", lambda m: _blank(m.group(0)), line)
+        out_lines.append(line)
+    return "\n".join(out_lines)
+
+
 _PY_NAME = re.compile(r"(?<![\w.])[A-Za-z_]\w*")
 _JS_NAME = re.compile(r"[A-Za-z_$][\w$]*")
 _CSS_NAME = re.compile(r"-{0,2}[A-Za-z_][\w-]*")
+_PROSE_WORD = re.compile(r"[A-Za-z]+")
 
 
 def spelling_findings(text: str, suffix: str) -> List[Tuple[int, str, str, str]]:
-    """(line, name, british word, american word) for every British identifier in one file's
-    text. `suffix` picks the reader; an unknown suffix is read as nothing."""
+    """(line, name, british word, american word) for every British identifier in a code
+    file's text, or every British WORD in a markdown file's PROSE (`.md`, owner's ruling,
+    test-audit plan, 2026-09-27). `suffix` picks the reader; an unknown suffix is read as
+    nothing."""
     found: List[Tuple[int, str, str, str]] = []
     if suffix == ".py":
         try:
@@ -17484,6 +17555,9 @@ def spelling_findings(text: str, suffix: str) -> List[Tuple[int, str, str, str]]
     elif suffix == ".css":
         code = _css_code_only(text)
         pattern = _CSS_NAME
+    elif suffix == ".md":
+        code = _md_prose_only(text)
+        pattern = _PROSE_WORD
     else:
         return found
     for match in pattern.finditer(code):
@@ -17939,27 +18013,76 @@ def _spelling_scope() -> Tuple[List[Path], bool]:
     )
 
 
+def _spelling_markdown_files() -> Tuple[List[Path], bool]:
+    """(markdown paths to read, whole_tree) for the markdown half of `check_identifier_
+    spelling` (owner's ruling, test-audit plan, 2026-09-27).
+
+    Full mode reads the whole tracked markdown tree. Staged mode reads ONLY the markdown
+    THIS COMMIT TOUCHES — narrower than `_spelling_scope`'s code half on purpose, the
+    owner's own words: "Staged mode reads only staged markdown." `docs/gates/` is excluded
+    in every mode: its records are evidence of a real run, "never rewritten to match a later
+    tree" (CLAUDE.md), so its prose is not this row's to flag.
+    """
+    if _INDEX_PATHS is None:
+        paths, whole_tree = markdown_files(), True
+    else:
+        paths = [ROOT / entry for entry in _STAGED_PATHS if entry.endswith(".md")]
+        whole_tree = False
+    return [p for p in paths if not rel(p).startswith(MARKDOWN_SPELLING_EXCLUDE)], whole_tree
+
+
+def _markdown_spelling_found(paths: Sequence[Path]) -> Dict[str, Dict[str, List[str]]]:
+    """list key -> {MARKDOWN_SPELLING_RULE: every British word found, once per occurrence}.
+
+    A decision entry is keyed by its file tail (`ste_measure.list_key`), as the other two
+    shrinking lists are, so a claim that renumbers it moves nothing.
+    """
+    ste_measure = _sibling("ste_measure.py")
+    list_key = ste_measure.list_key if ste_measure is not None else (lambda path: path)
+    found: Dict[str, Dict[str, List[str]]] = {}
+    for path in paths:
+        words = [british for _, _, british, _ in spelling_findings(read(path), ".md")]
+        if words:
+            found.setdefault(list_key(rel(path)), {}) \
+                 .setdefault(MARKDOWN_SPELLING_RULE, []).extend(sorted(words))
+    return found
+
+
 def check_identifier_spelling(report: Report) -> None:
-    """A name spelled British, anywhere a session might grep for its American twin.
+    """A name spelled British, anywhere a session might grep for its American twin — and, in
+    markdown PROSE, a British word the shrinking list below does not already excuse.
 
-    **Blocking, on D16's test.** Under D60 as amended 2026-09-11 an identifier either carries a
-    British fragment or it does not; there is nothing to judge. Prose and comments are not read
-    and are not governed — see the section comment above for why the ruling stopped there, and
-    why markdown prose is measured but not yet read here either.
+    **CODE: blocking, on D16's test.** Under D60 as amended 2026-09-11 an identifier either
+    carries a British fragment or it does not; there is nothing to judge. Comments and
+    docstrings inside code are not read and are not governed — see the section comment above
+    for why the ruling stopped there. **STAGED-SCOPED** (test-audit plan S2): see
+    `_spelling_scope`.
 
-    **STAGED-SCOPED** (test-audit plan S2): see `_spelling_scope`.
+    **MARKDOWN: a shrinking offender list** (owner's ruling, test-audit plan, 2026-09-27),
+    `scripts/markdown-spelling-allow.json`, on D280's pattern: it fails on a British word the
+    list does not name, a stale entry, and growth over the merge-base, so a new file starts
+    clean. Fenced code, an inline code span and a single-asterisk italic quote are exempt
+    (`_md_prose_only`), and `docs/gates/` is excluded outright. **STAGED-SCOPED, narrower
+    than the code half**: see `_spelling_markdown_files` — a staged commit reads only the
+    markdown it touches, and the diff compares only those same files against the list, so an
+    untouched file's entries are never judged stale for having gone unscanned.
 
-    **What it cannot see, by name.** A British word outside the fragment table (the -ise stems
-    are a closed list); a name inside a template literal's `${}` (the whole literal is blanked);
-    and code a misjudged JSX tag blanks along with the text. Each of those is a miss, never a
-    false finding, and `--self-test` proves the blanking in both directions.
+    **What it cannot see, by name.** A British word outside the fragment table (the -ise
+    stems are a closed list); a name inside a template literal's `${}` (the whole literal is
+    blanked); code a misjudged JSX tag blanks along with the text; and a markdown code span
+    or italic quote that crosses a line break, read as prose on both sides of the break. Each
+    of those is a miss, never a false finding, and `--self-test` proves the blanking in both
+    directions.
     """
     findings: List[Finding] = []
     scanned = 0
+    code_findings = 0
+
     paths, whole_tree = _spelling_scope()
     for path in paths:
         scanned += 1
         for line, name, british, american in spelling_findings(read(path), path.suffix):
+            code_findings += 1
             findings.append(
                 Finding(
                     f"{rel(path)}:{line}",
@@ -17969,13 +18092,73 @@ def check_identifier_spelling(report: Report) -> None:
                     f"SPELLING_ALLOWED with the reason.",
                 )
             )
+
+    md_paths, md_whole_tree = _spelling_markdown_files()
+    scanned += len(md_paths)
+    found_md = _markdown_spelling_found(md_paths)
+    list_rel = rel(MARKDOWN_SPELLING_ALLOW)
+    document, unreadable = _read_offender_list(MARKDOWN_SPELLING_ALLOW)
+    md_growth_note = ""
+    if document is None:
+        findings.append(Finding(
+            list_rel,
+            f"{unreadable}, so no British word in markdown can be told listed from new. "
+            f"Restore the list from git.",
+        ))
+    else:
+        listed_all, lanes, shape_errors = _offender_list_shape(document, {MARKDOWN_SPELLING_RULE})
+        findings.extend(Finding(list_rel, error) for error in shape_errors)
+
+        ste_measure = _sibling("ste_measure.py")
+        list_key = ste_measure.list_key if ste_measure is not None else (lambda path: path)
+        if md_whole_tree:
+            listed_for_diff = listed_all
+        else:
+            scoped_keys = {list_key(rel(p)) for p in md_paths}
+            listed_for_diff = {f: v for f, v in listed_all.items() if f in scoped_keys}
+
+        unlisted, stale = _offender_diff(found_md, listed_for_diff)
+        for file, _rule, word in unlisted:
+            findings.append(Finding(
+                file,
+                f"types the British `{word}` in prose, and {list_rel} does not list it. "
+                f"Rewrite the word American, or list it in {list_rel} for lane "
+                f"{lanes.get(file, '?')!r} if it names something that cannot be renamed.",
+            ))
+        for file, _rule, word in stale:
+            findings.append(Finding(
+                f"{list_rel}: {file}",
+                f"lists `{word}` for lane {lanes.get(file, '?')!r}, and {file} no longer "
+                f"spells it that way. Delete the entry: the list only shrinks.",
+            ))
+
+        base_doc, where = _offender_list_at_merge_base(list_rel)
+        if base_doc is None:
+            md_growth_note = f" Only-shrinks not compared: {where}. Failing open."
+        else:
+            base_listed, _, _ = _offender_list_shape(base_doc, {MARKDOWN_SPELLING_RULE})
+            refused, allowed = _offender_growth(
+                base_listed, listed_all, {MARKDOWN_SPELLING_RULE}, {MARKDOWN_SPELLING_RULE},
+            )
+            for line in refused:
+                findings.append(Finding(
+                    list_rel, f"gained {line} over the merge-base {where}. Rewrite the word "
+                              "instead of excusing it.",
+                ))
+            md_growth_note = f" Only-shrinks compared against the merge-base {where}."
+
     scope_note = "" if whole_tree else " (staged: only the files this commit touches)"
+    md_scope_note = "" if md_whole_tree else " (staged: only the markdown this commit touches)"
+    md_found_count = sum(len(es) for per in found_md.values() for es in per.values())
+    code_summary = (f"{code_findings} British identifiers" if code_findings
+                    else f"every identifier in {len(paths)} files is spelled American")
     report.add(
         "identifier spelling",
         MECHANICAL,
         findings,
-        (f"{len(findings)} British identifiers" if findings
-         else f"every identifier in {scanned} files is spelled American") + scope_note,
+        (f"code: {code_summary}{scope_note}; "
+         f"markdown: {md_found_count} British word(s) over {len(md_paths)} files, all "
+         f"listed{md_growth_note}{md_scope_note}"),
         scanned=scanned,
     )
 
@@ -18477,12 +18660,12 @@ def self_test() -> int:
     found = [name for _, line in iter_code_lines(fenced) for name in _MAKE_REF_RE.findall(line)]
     ok(found == ["harness"], "fenced make harness is", str(found))
 
-    print("\nmake targets: a code span counts only when it starts with `make ` (test-audit plan S4)")
+    print("\nmake targets: a code span counts unless `make` follows a verb-lead word (S4, amended after review)")
     owner_quote = 'The owner said `"We just need to make capping only be available"` today.'
     found = [name for _, _, m in make_target_refs(owner_quote) for name in [m.group(1)]]
     ok(
         found == [],
-        "RED before the fix: an owner quote in backticks that contains `make` mid-sentence "
+        "an owner quote in backticks that contains `make` mid-sentence, right after `to`, "
         "is never read as a target reference",
         str(found),
     )
@@ -18494,7 +18677,7 @@ def self_test() -> int:
     ok(
         len(matches) == 1 and matches[0][2].group(1) == "opsec-selftest"
         and marked_proposed(matches[0][1], matches[0][2].start()),
-        "a `+make` proposed reference still starts the span (after the sigil) and is read",
+        "a `+make` proposed reference is still read, sigil and all",
         str(matches),
     )
     two_spans = "See `docs/GATES.md` beside `make icloud-sweep` for the run."
@@ -18513,6 +18696,24 @@ def self_test() -> int:
         "fence, is still read the old way, same as `make harness` right beside it",
         str(found),
     )
+
+    # RED BEFORE THE FIRST CUT OF S4: these four real shapes went invisible when the row
+    # required a span to START WITH `make ` — the review caught them the day this landed.
+    # None of them starts with `make `, and none of them is an English sentence naming
+    # `make` as its verb, so all four must still resolve.
+    bash_span = "Grant `Bash(make harness)` in settings."
+    found = [name for _, _, m in make_target_refs(bash_span) for name in [m.group(1)]]
+    ok(found == ["harness"], "`Bash(make X)` is a command, not a sentence", str(found))
+    time_span = "MEASURED, BEFORE AND AFTER. `time make harness` on this tree: 24.85s."
+    found = [name for _, _, m in make_target_refs(time_span) for name in [m.group(1)]]
+    ok(found == ["harness"], "`time make X`: a shell verb in front of `make` is still a command", str(found))
+    shell_c_span = "its subject was `zsh -c '… make server 2>&1 | tail -20'`, a pipeline"
+    found = [name for _, _, m in make_target_refs(shell_c_span) for name in [m.group(1)]]
+    ok(found == ["server"], "`make` after a quote and an ellipsis inside a shell -c string is still a command", str(found))
+    copy_span = "Then the path `/graveyard`, then `Rebuild it with make demo.`, then `Try again`."
+    found = [name for _, _, m in make_target_refs(copy_span) for name in [m.group(1)]]
+    ok(found == ["demo"], "quoted on-screen copy naming a real target is still read", str(found))
+
     def _refs_only(text: str) -> List[str]:
         makefile_targets = set(_MAKE_RULE_RE.findall(read(ROOT / "Makefile")))
         return [m.group(1) for _, _, m in make_target_refs(text) if m.group(1) not in makefile_targets]
@@ -18523,6 +18724,45 @@ def self_test() -> int:
         == ["totally-not-a-real-target"],
         "a real code span naming a missing target is still caught",
     )
+    ok(
+        _refs_only("Grant `Bash(make definitely-not-a-real-target)` in settings.")
+        == ["definitely-not-a-real-target"],
+        "RED: `Bash(make <missing-target>)` is still caught, the exact case the review named",
+    )
+    ok(
+        _refs_only("`time make definitely-not-a-real-target` on this tree.")
+        == ["definitely-not-a-real-target"],
+        "RED: `time make <missing-target>` is still caught",
+    )
+
+    print("\nmake targets: no real reference dropped, over the whole tracked tree (S4 review)")
+    old_makefile_targets = set(_MAKE_RULE_RE.findall(read(ROOT / "Makefile")))
+
+    def _old_refs(text: str) -> Set[str]:
+        # The behaviour before EITHER cut of S4: any `make <word>` anywhere in a backtick
+        # span or a fenced line, with no exclusion at all.
+        found: Set[str] = set()
+        for _, line in iter_code_lines(text):
+            found.update(_MAKE_REF_RE.findall(line))
+        return found
+
+    def _new_refs(text: str) -> Set[str]:
+        return {m.group(1) for _, _, m in make_target_refs(text)}
+
+    dropped_anywhere = False
+    for doc_path in markdown_files():
+        doc_text = read(doc_path)
+        missing = _old_refs(doc_text) - _new_refs(doc_text)
+        # A dropped name is only a real regression if IT NAMES A REAL TARGET — the whole
+        # point of S4 is that a name naming NOTHING real (an English sentence's object) is
+        # correctly dropped, and the corpus has exactly one of those on purpose (D007).
+        real_missing = missing & old_makefile_targets
+        if real_missing:
+            dropped_anywhere = True
+            print(f"    DROPPED in {rel(doc_path)}: {sorted(real_missing)}")
+    ok(not dropped_anywhere,
+       "no real target reference in the whole tracked tree is read by the old rule and "
+       "missed by the new one")
 
     print("\nmodule.attribute references are resolved, not guessed")
     with tempfile.TemporaryDirectory() as tmp:
@@ -19750,6 +19990,110 @@ def self_test() -> int:
         _STAGED_PATHS.clear()
         _STAGED_PATHS.update(saved_staged)
 
+    print("\n_md_prose_only: fenced code, an inline span and an italic quote are blanked")
+    md_sample = (
+        "This sentence types the British colour word in prose.\n"
+        "```\n"
+        "colour inside a fence is never prose\n"
+        "```\n"
+        "Exempt in code: `colour`.\n"
+        "Exempt as a quote: *\"the colour of money\"*.\n"
+        "Never exempt: **bold colour** stays prose, only `**` is doubled.\n"
+    )
+    prose = _md_prose_only(md_sample)
+    found = {m.group(0).lower() for m in _PROSE_WORD.finditer(prose) if m.group(0).lower() == "colour"}
+    ok(len(found) == 1, "only the one true-prose `colour` survives blanking", str(_PROSE_WORD.findall(prose)))
+    ok("colour" in prose.splitlines()[6], "**bold colour** is not italics and is not blanked",
+       prose.splitlines()[6])
+
+    print("\nidentifier spelling: markdown scope excludes docs/gates/ and narrows when staged")
+    here = globals()
+    saved_index, saved_staged = here["_INDEX_PATHS"], set(_STAGED_PATHS)
+    try:
+        here["_INDEX_PATHS"] = {"docs/gates/x.md", "docs/specs/y.md"}
+        _STAGED_PATHS.clear()
+        _STAGED_PATHS.add("docs/gates/x.md")
+        _STAGED_PATHS.add("docs/specs/y.md")
+        paths, whole_tree = _spelling_markdown_files()
+        ok(
+            not whole_tree and paths == [ROOT / "docs" / "specs" / "y.md"],
+            "docs/gates/ is excluded even when staged, and the staged scope narrows to the rest",
+            f"whole_tree={whole_tree} paths={paths}",
+        )
+        here["_INDEX_PATHS"] = None
+        found_files = {rel(p) for p in markdown_files()}
+    finally:
+        here["_INDEX_PATHS"] = saved_index
+        _STAGED_PATHS.clear()
+        _STAGED_PATHS.update(saved_staged)
+
+    print("\n_markdown_spelling_found: the british word is the entry, one per occurrence")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = Path(tmp)
+        target = tmp_root / "spec.md"
+        target.write_text("This uses the British colour word twice: colour.\n", encoding="utf-8")
+        clean = tmp_root / "clean.md"
+        clean.write_text("Nothing British here.\n", encoding="utf-8")
+        found = _markdown_spelling_found([target, clean])
+        ok(
+            found == {rel(target): {MARKDOWN_SPELLING_RULE: ["colour", "colour"]}},
+            "one word twice is two entries, and a clean file adds no key",
+            str(found),
+        )
+
+    print("\nidentifier spelling: the markdown offender list is wired (owner's ruling, 2026-09-27)")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = Path(tmp)
+        doc = tmp_root / "spec.md"
+        doc.write_text("This spec uses the British colour word in prose, and judgement too.\n",
+                       encoding="utf-8")
+        allow_path = tmp_root / "allow.json"
+        saved_root, saved_index2, saved_allow = here["ROOT"], here["_INDEX_PATHS"], MARKDOWN_SPELLING_ALLOW
+        saved_files_fn = here["_spelling_markdown_files"]
+
+        def _patch(document):
+            allow_path.write_text(json.dumps(document), encoding="utf-8")
+            here["MARKDOWN_SPELLING_ALLOW"] = allow_path
+            here["_spelling_markdown_files"] = lambda: ([doc], True)
+            here["ROOT"] = tmp_root
+            here["_INDEX_PATHS"] = None
+
+        try:
+            _patch({"rules": [MARKDOWN_SPELLING_RULE], "files": {}})
+            report = Report()
+            check_identifier_spelling(report)
+            findings = {f.message for f in report.checks[0].findings}
+            ok(
+                any("colour" in m for m in findings) and any("judgement" in m for m in findings),
+                "RED: two unlisted British words in markdown both fail",
+                str(findings),
+            )
+
+            _patch({"rules": [MARKDOWN_SPELLING_RULE], "files": {
+                rel(doc): {"lane": "docs-sweep", MARKDOWN_SPELLING_RULE: ["colour", "judgement"]},
+            }})
+            report = Report()
+            check_identifier_spelling(report)
+            ok(not report.checks[0].findings, "listing both words clears the row",
+               str(report.checks[0].findings))
+
+            _patch({"rules": [MARKDOWN_SPELLING_RULE], "files": {
+                rel(doc): {"lane": "docs-sweep",
+                          MARKDOWN_SPELLING_RULE: ["colour", "judgement", "favour"]},
+            }})
+            report = Report()
+            check_identifier_spelling(report)
+            findings = {f.message for f in report.checks[0].findings}
+            ok(
+                any("favour" in m and "no longer" in m for m in findings),
+                "RED: a listed word the file no longer spells that way is stale",
+                str(findings),
+            )
+        finally:
+            here["ROOT"], here["_INDEX_PATHS"] = saved_root, saved_index2
+            here["MARKDOWN_SPELLING_ALLOW"] = saved_allow
+            here["_spelling_markdown_files"] = saved_files_fn
+
     report = Report()
     check_identifier_spelling(report)
     check_shell_substitution(report)
@@ -19757,7 +20101,7 @@ def self_test() -> int:
     by_label = {row.check: row.findings for row in report.checks}
     ok(
         not by_label["identifier spelling"],
-        "every identifier in this tree is spelled American",
+        "every identifier in code, and every British word in markdown prose, is spelled American",
         "\n".join(f.where for f in by_label["identifier spelling"][:12]),
     )
 

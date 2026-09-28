@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""DELETE THE STALE ENTRIES FROM THE TWO SHRINKING OFFENDER LISTS, AND RE-KEY A RENAMED FILE.
+"""DELETE THE STALE ENTRIES FROM THE THREE SHRINKING OFFENDER LISTS, AND RE-KEY A RENAMED FILE.
 
     scripts/offenders-prune.py            what it would delete and re-key. Writes nothing.
     scripts/offenders-prune.py --write    apply it.
     scripts/offenders-prune.py --selftest its own cases, in memory and in a throwaway repo.
 
-THE TWO LISTS (D280): `scripts/typed-interpunct-allow.json`, which
-its `typed interpunct` row reads, and `scripts/line-anchor-offenders.json`, which its `line
-anchor offenders` row reads. A third list, `scripts/ste-offenders.json`, was cut
-2026-09-27 (test-audit plan, D226/D229/D280 amended): the write-time STE hook already lints
-new prose, so the `ste offenders` row was retired along with the list. Each remaining row
+THE THREE LISTS (D280): `scripts/typed-interpunct-allow.json`, which its `typed interpunct`
+row reads, `scripts/line-anchor-offenders.json`, which its `line anchor offenders` row reads,
+and `scripts/markdown-spelling-allow.json`, which the `identifier spelling` row's markdown
+half reads (owner's ruling, test-audit plan, 2026-09-27). A fourth list,
+`scripts/ste-offenders.json`, was cut 2026-09-27 (test-audit plan, D226/D229/D280 amended):
+the write-time STE hook already lints new prose, so the `ste offenders` row was retired
+along with the list. Each remaining row
 fails on a STALE entry, one that matches
 nothing now because the fix landed. A stale
 entry there is a hash, so a hand delete is slow and a merge conflict is worse. This does the
@@ -244,6 +246,18 @@ def line_anchor_inputs(audit):
             lambda entry: entry, {audit.LINE_ANCHOR_RULE})
 
 
+def markdown_spelling_inputs(audit):
+    """The same six for the markdown-spelling list. Reads the WHOLE tree — this generator
+    never runs in staged mode, unlike the row itself, which narrows to staged markdown."""
+    ste_measure = audit._sibling("ste_measure.py")
+    list_key = ste_measure.list_key if ste_measure is not None else (lambda path: path)
+    docs, _whole_tree = audit._spelling_markdown_files()
+    found = audit._markdown_spelling_found(docs)
+    keys_now = {list_key(audit.rel(p)) for p in docs}
+    return (audit.MARKDOWN_SPELLING_ALLOW, found, keys_now.__contains__, list_key,
+            lambda entry: entry, {audit.MARKDOWN_SPELLING_RULE})
+
+
 # ------------------------------------------------------------------------------------ main
 
 
@@ -293,7 +307,8 @@ def main() -> int:
 
     audit = _audit()
     renames = git_renames(ROOT)
-    inputs = [("line anchor offenders", line_anchor_inputs(audit))]
+    inputs = [("line anchor offenders", line_anchor_inputs(audit)),
+              ("markdown spelling", markdown_spelling_inputs(audit))]
     dots = interpunct_inputs(audit)
     if dots is None:
         print("typed interpunct: not read. `node` or app/node_modules/typescript is missing, "

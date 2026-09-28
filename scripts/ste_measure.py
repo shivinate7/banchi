@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""The STE prose check's one measurer (D226, D280). Read by one
-caller: `scripts/docs-audit.py`'s `ste offenders` row (read-only, the commit path). The pinned
-per-file ratio this module used to feed (D229's ratchet) is retired. The row now compares the OFFENDERS this module names against `scripts/ste-offenders.json`, a
-shrinking list keyed by each offender's identity, never by a count.
+"""The STE prose check's one measurer (D226, D280). Its one caller,
+`scripts/docs-audit.py`'s `ste offenders` row, was CUT 2026-09-27 (test-audit plan;
+D226/D229/D280 amended): the write-time STE hook already lints new prose. `measure()`,
+`EXEMPTIONS` and the offender-identity machinery below have no caller left. `list_key` alone
+stays imported, by the `line anchor offenders` and `identifier spelling` (markdown half)
+rows, which key a decision entry by its file tail the same way this module's own retired
+list did.
 
 WHAT IT MEASURES. The vendored `scripts/ste/ste_lint.py`'s four ERROR-severity rules
 (STE001 sentence-length, STE006 semicolon, STE007 Latin abbreviation, STE008 contraction —
@@ -285,7 +288,10 @@ _DECISION_FILE = re.compile(r"^docs/decisions/D(?:\d+)?-(?P<tail>[^/]+\.md)$")
 
 
 def list_key(relpath: str) -> str:
-    """The key a file's offenders sit under in `scripts/ste-offenders.json`."""
+    """The key a file's offenders sit under in a shrinking offender list — `scripts/line-
+    anchor-offenders.json` and `scripts/markdown-spelling-allow.json` today. Its own list,
+    `scripts/ste-offenders.json`, was CUT 2026-09-27 (test-audit plan; D226/D229/D280
+    amended)."""
     match = _DECISION_FILE.match(relpath)
     return f"docs/decisions/*-{match.group('tail')}" if match else relpath
 

@@ -3754,7 +3754,7 @@ COMPONENTS = [
                         "left in `scripts/docs-audit.py`. It stays vendored because "
                         "`list_key` (a decision entry keyed by its file tail, so a claim "
                         "moves nothing) is still imported by the `line anchor offenders` "
-                        "row's own file-key logic.",
+                        "row and by `identifier spelling`'s markdown half.",
                 "governed_by": ["D18", "D140", "D218", "D226", "D229",
                                 "D280"]},
             "line-anchor-offenders.json": {
@@ -3769,6 +3769,23 @@ COMPONENTS = [
                         "Shrunk by hand or by `make offenders-prune`, which only deletes. Never "
                         "grown by a tool.",
                 "governed_by": ["D229", "D245", "D280"]},
+            "markdown-spelling-allow.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `identifier "
+                        "spelling` row, markdown half (owner's ruling, test-audit plan, "
+                        "2026-09-27: \"Shrinking offender list now\"): file -> lane and "
+                        "SPELLING -> every British word that file's PROSE spells, lower-cased, "
+                        "once per occurrence. Fenced code, an inline code span and a "
+                        "single-asterisk italic quote are exempt, `docs/gates/` is excluded "
+                        "outright, and a decision entry's number is folded out of its file key "
+                        "(`ste_measure.py:list_key`) so a claim moves nothing. The row fails "
+                        "on an unlisted word, a stale entry, and growth over the merge-base "
+                        "(`only_shrinks.py`), so a new file starts clean and new prose is "
+                        "American from the moment it is written. Staged mode reads only "
+                        "staged markdown, narrower than every other markdown row here. "
+                        "Seeded 2026-09-27 with the tree's own 724 pre-existing words over "
+                        "224 files. Shrunk by hand or by `make offenders-prune`, which only "
+                        "deletes. Never grown by a tool.",
+                "governed_by": ["D60", "D226", "D280"]},
             "only_shrinks.py": {
                 "does": "THE ONE only-shrinks helper for every shrinking offender list "
                         "(D280). `list_at_merge_base` reads a list "
@@ -3876,10 +3893,10 @@ COMPONENTS = [
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D110",
                                 "D111", "D113", "D119", "D122", "D123", "D127", "D132", "D134",
                                 "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
-                                "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
-                                "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D200",
-                                "D210", "D213", "D215", "D218", "D226", "D229", "D245", "D247",
-                                "D280", "D284"],
+                                "D149", "D155", "D159", "D160", "D161", "D169", "D173", "D174",
+                                "D178", "D181", "D182", "D185", "D191", "D192", "D194", "D196",
+                                "D200", "D210", "D213", "D215", "D218", "D226", "D229", "D245",
+                                "D247", "D248", "D280", "D284"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -4634,11 +4651,12 @@ COMPONENTS = [
                         "writes is already verified by a gate that runs on every commit.",
             },
             "offenders-prune.py": {
-                "does": "`make offenders-prune` — delete the STALE entries from the two "
+                "does": "`make offenders-prune` — delete the STALE entries from the three "
                         "shrinking offender lists (`typed-interpunct-allow.json`, "
-                        "`line-anchor-offenders.json`), and re-key a listed file that git's "
+                        "`line-anchor-offenders.json`, `markdown-spelling-allow.json`), and "
+                        "re-key a listed file that git's "
                         "rename detection (`git diff -M` from the merge-base with origin/main) "
-                        "says moved. A third list, `ste-offenders.json`, was CUT 2026-09-27 "
+                        "says moved. A fourth list, `ste-offenders.json`, was CUT 2026-09-27 "
                         "(test-audit plan, D226/D229/D280 amended). It NEVER ADDS an entry, "
                         "and it refuses to write a plan "
                         "that holds any identity more often than the list it read. Reads with "
@@ -4649,7 +4667,7 @@ COMPONENTS = [
                         "and its selftest is not in `make check`, on `map-fix.py`'s precedent. "
                         "It writes a data file under scripts/, as `line-anchors-pin.py` does, "
                         "so it opens no seam in D18's list.",
-                "governed_by": ["D18", "D218", "D226", "D229",
+                "governed_by": ["D18", "D60", "D218", "D226", "D229",
                                 "D280"]},
             "repair-born-game.py": {
                 "does": "the one-off repair for the F1 defect: a card born with `game IS "

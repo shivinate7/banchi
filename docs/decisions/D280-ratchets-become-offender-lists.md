@@ -120,7 +120,7 @@ Three copies of the only-shrinks rules existed: `scripts/kit-adoption.mjs` and t
 
 Each caller still decides what an identity is, and so whether growth is counted per file. The prose and line-anchor lists count over the whole list. The typed-dot list puts the file in the identity. The kit list keys one entry per file and rule.
 
-### Amended 2026-09-27 — the prose list is CUT
+### Amended 2026-09-27 — the prose list is CUT, and a new one joins the same day
 
 Owner's ruling (test-audit plan, row 92, `docs/reviews/test-audit-2026-09-27/TIERS.md`):
 "Row 92, `ste offenders`, and its list `scripts/ste-offenders.json`: CUT. The write-time
@@ -128,7 +128,12 @@ STE hook lints new prose. This needs dated amendments to D226, D229 and D280 (th
 ratchet decisions) in the lane that cuts it." Lane L2 deletes the `ste offenders` row,
 `scripts/ste-offenders.json` and `scripts/docs-audit.py:check_ste_offenders`.
 
-Two offender lists remain: `scripts/typed-interpunct-allow.json` and
-`scripts/line-anchor-offenders.json`. `make offenders-prune` now covers only those two.
-`scripts/only_shrinks.py` and `_offender_list_shape`/`_offender_diff`/`_offender_growth`
-still serve both, unchanged by this cut.
+Two offender lists remained right after the cut: `scripts/typed-interpunct-allow.json` and
+`scripts/line-anchor-offenders.json`. `scripts/only_shrinks.py` and `_offender_list_shape`/
+`_offender_diff`/`_offender_growth` still serve both, unchanged by the cut.
+
+A third list joined the same day. The owner's later word, in the same review round
+(`docs/reviews/test-audit-2026-09-27/TIERS.md`): "Shrinking offender list now."
+`scripts/markdown-spelling-allow.json` covers the `identifier spelling` row's markdown half
+(D60). It carries the same shape as the other two: file -> lane and SPELLING -> the British
+word, lower-cased, once per occurrence. `make offenders-prune` now covers all three lists.
