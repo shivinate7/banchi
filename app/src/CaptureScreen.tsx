@@ -427,10 +427,8 @@ function hintReason(code: string | null, message?: string | null): string {
   if (code === 'tcg_url_invalid') return 'The set list is pointed somewhere the session may not go'
   if (code === 'no_category') return 'No TCGplayer category for this game'
   // THE FLOOR, and reaching it means `hint reasons` is already failing a commit. The
-  // transport's sentence beats the bare token; the token stays beside it either way.
-  return message
-    ? `${message.trim().replace(/\.$/, '')} (${code})`
-    : `Set list unavailable (${code})`
+  // transport's sentence if there is one, else a plain one. Never the code (D196).
+  return message ? message.trim().replace(/\.$/, '') : 'The server did not accept this hint'
 }
 
 function hintMetaText(verdict: HintVerdict, needsHint = false): string {
