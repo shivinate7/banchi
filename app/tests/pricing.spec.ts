@@ -835,7 +835,7 @@ function trends(asked: string[]): TrendsPayload {
 }
 
 const strip = (page: Page) => page.locator('.pricing-row .pricetrend')
-const loadTrends = (page: Page) => page.getByRole('button', { name: /Load trends|Read again/ })
+const loadTrends = (page: Page) => page.getByRole('button', { name: /Trends|Read again/ })
 
 const field = (page: Page) => page.getByRole('textbox', { name: /^Price for / })
 
@@ -896,7 +896,7 @@ test('the run picker leads with the box, and the directory is what tells two run
   /* THE PICKER IS A POPOVER OFF THE HEADER NOW rather than a strip standing on the page.
      Which runs are being priced is a question you ask once a session, and the answer is drawn
      in the lede either way — so it is opened here rather than asserted into existence. */
-  await page.getByRole('button', { name: /^(Every run|\d+ runs?)$/ }).click()
+  await page.getByRole('button', { name: /^(All|\d+ runs?)$/ }).click()
   const chips = page.locator('.pricing-run')
   await expect(chips).toHaveCount(4)
 
@@ -965,7 +965,7 @@ test('an emitted run with copies still unsent stays open, and the chip counts th
     },
   })
 
-  await page.getByRole('button', { name: /^(Every run|\d+ runs?)$/ }).click()
+  await page.getByRole('button', { name: /^(All|\d+ runs?)$/ }).click()
   const chips = page.locator('.pricing-run')
   await expect(chips).toHaveCount(2)
   await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('148 unsent')
@@ -1005,7 +1005,7 @@ test('a sent run that owes a price says so, apart from a run never sent', async 
       '2026-09-02-box6-01': [{ code: 'never_emitted', count: null }],
     },
   })
-  await page.getByRole('button', { name: /^(Every run|\d+ runs?)$/ }).click()
+  await page.getByRole('button', { name: /^(All|\d+ runs?)$/ }).click()
   const chips = page.locator('.pricing-run')
   await expect(chips).toHaveCount(2)
   await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never sent')
@@ -1619,7 +1619,7 @@ test('an empty send titles every reason it had, never only the price', async ({ 
   )
 })
 
-test('Download the file instead writes the file, and its copies are named until they are found', async ({
+test('Download writes the file, and its copies are named until they are found', async ({
   page,
 }) => {
   const written = sendSummary({
@@ -1652,7 +1652,7 @@ test('Download the file instead writes the file, and its copies are named until 
 
   /* THE SPLIT LIVES BEHIND THE DOOR, NOT BESIDE THE SEND (the Send-menu ruling). */
   await expect(page.getByLabel('Split in two files at the cut-off')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Download the file instead' }).click()
+  await page.getByRole('button', { name: 'Download' }).click()
   await expect(page.getByLabel('Split in two files at the cut-off')).toBeVisible()
   await page.getByRole('button', { name: 'Write the file' }).click()
   await expect.poll(() => sendPosts(wire).length).toBe(1)
@@ -1671,7 +1671,7 @@ test('Download the file instead writes the file, and its copies are named until 
   await expect(page.getByRole('button', { name: /^Take .* back$/ })).toHaveCount(0)
 
   checked = true
-  await page.getByRole('button', { name: 'Check what is live' }).click()
+  await page.getByRole('button', { name: 'Refresh' }).click()
   const back = page.locator('.send-short-check')
   await expect(back).toContainText('0 of 4 found at TCGplayer')
   await back.getByRole('button', { name: 'Take 4 copies back' }).click()
@@ -1823,7 +1823,7 @@ test('a send that stopped partway is held, says so, and leaves every press on', 
   await expect(held).toContainText('Banchi stopped partway through this send.')
   await expect(held).toContainText('stay out of every send')
   await expect(sendPress(page)).toBeEnabled()
-  await expect(page.getByRole('button', { name: 'Check what is live' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Refresh' })).toBeEnabled()
 })
 
 test('a press over cards a price change holds is refused by name, with no retry', async ({ page }) => {
@@ -1901,9 +1901,9 @@ test('the wait ends while the page is open, and the check runs with no refresh',
   await expect.poll(() => wire.filter((r) => r.path === '/pipeline/live-check').length, { timeout: 12000 }).toBe(1)
 })
 
-test('Check what is live is a manual press that always runs', async ({ page }) => {
+test('Refresh is a manual press that always runs', async ({ page }) => {
   const wire = await open(page)
-  await page.getByRole('button', { name: 'Check what is live' }).click()
+  await page.getByRole('button', { name: 'Refresh' }).click()
   await expect.poll(() => wire.filter((r) => r.path === '/pipeline/live-check').length).toBe(1)
   expect(wire.find((r) => r.path === '/pipeline/live-check')?.body).toEqual({ force: true })
 })
@@ -2909,8 +2909,8 @@ test('the over-cap warning is visible with Compare off, and the toggle does not 
      copy count and one the cap allows, never the disagreement between two counts of copies. */
   const copiesFact = page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-copies')
   await expect(copiesFact).toBeVisible()
-  await expect(copiesFact).toHaveText('3 copies, 3 can go')
-  await expect(copiesFact).toHaveAttribute('title', 'The runs claim 4. 3 can go.')
+  await expect(copiesFact).toHaveText('3 copies, 3 sendable')
+  await expect(copiesFact).toHaveAttribute('title', 'The runs claim 4. 3 sendable.')
 
   /* AND IT STAYS AFTER THE TOGGLE, TOO — Compare only ever ADDS context, it never removes a
      warning. */
@@ -2952,7 +2952,7 @@ test('the cap is what can go, and the row says the runs disagree with it', async
      2026-09-26). */
   const qty = page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-qty')
   await expect(qty.locator('.pricing-qty-input')).toHaveAttribute('placeholder', '3')
-  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-copies')).toHaveText('3 copies, 3 can go')
+  await expect(page.locator('.pricing-row', { hasText: 'LeBlanc' }).locator('.pricing-copies')).toHaveText('3 copies, 3 sendable')
 })
 
 test('a send of several runs is one press over every run, with nothing beside it', async ({
@@ -3164,7 +3164,7 @@ test('the run door draws the estimate, and says what it was read at', async ({ p
      read, 3 sold since)" was jargon). "4 when read, 2 sold since" now rides the title only —
      `LiveCount`'s own tooltip — and the row itself says "2 live on TCGplayer". */
   const live = page.locator('.pricing-row .pricing-live').first()
-  await expect(live).toHaveText('2 live on TCGplayer')
+  await expect(live).toHaveText('2 listed')
   await expect(live).toHaveAttribute('title', 'TCGplayer held 4 when this was read. 2 sold here since.')
 })
 
@@ -3939,7 +3939,7 @@ test('the rows that need the owner come first, each with its reason, and the res
      already why it matters. */
   const flags = page.locator('.pricing-group').nth(0).locator('.pricing-flag')
   await expect(flags).toHaveCount(1)
-  await expect(flags.nth(0)).toHaveText('Your price is 100% over market')
+  await expect(flags.nth(0)).toHaveText('100% over market')
   await expect(page.locator('.pricing-group').nth(1).locator('.pricing-flag')).toHaveCount(0)
   /* THE BAR NAMES WHAT STAYS BACK (Q3). */
   await expect(page.locator('.pricing-bar-says')).toContainText('1 needs a price')
@@ -3963,7 +3963,7 @@ test('a price typed far from market gives the row its flag, and the row does not
   await page.keyboard.type('9.00')
   await second.blur()
   /* THE CHIP APPEARS ON THE ROW; THE ORDER WAS TAKEN ON ARRIVAL (D118, D181). */
-  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-flag')).toHaveText('Your price is 350% over market')
+  await expect(page.locator('.pricing-row').nth(1).locator('.pricing-flag')).toHaveText('350% over market')
   await expect(page.locator('.pricing-name')).toHaveText(['First', 'Second'])
   await expect(page.locator('.pricing-group-head')).toHaveCount(0)
 })
@@ -4240,8 +4240,8 @@ test('the 25% edge is exact: 25% away needs the owner, 24.5% does not, on either
      repeats the Market figure). Only a real drift, 25% or past it, still reads in words. */
   await expect(flag('Over by 24.5')).toHaveCount(0)
   await expect(flag('Under by 24.5')).toHaveCount(0)
-  await expect(flag('Over by 25')).toHaveText('Your price is 25% over market')
-  await expect(flag('Under by 25')).toHaveText('Your price is 25% under market')
+  await expect(flag('Over by 25')).toHaveText('25% over market')
+  await expect(flag('Under by 25')).toHaveText('25% under market')
 })
 
 test('the keyboard sheet lists the keys the rows answer, and nothing the screen dropped', async ({ page }) => {
@@ -4305,8 +4305,8 @@ for (const width of [390, 820]) {
       },
     })
     const where = page.locator('.pricing-where').first()
-    await expect(where.locator('.pricing-copies')).toHaveText('2 copies, 1 can go')
-    await expect(where.locator('.pricing-live')).toHaveText('2 live on TCGplayer')
+    await expect(where.locator('.pricing-copies')).toHaveText('2 copies, 1 sendable')
+    await expect(where.locator('.pricing-live')).toHaveText('2 listed')
     const outside = await where.evaluate((el) => {
       const column = (el.closest('.pricing-id') as HTMLElement).getBoundingClientRect()
       return [...el.querySelectorAll('*')]
@@ -4338,7 +4338,7 @@ test('a reworded owed sentence draws the same chip while its code stays', async 
       '2026-09-02-box6-01': [{ code: 'never_emitted', count: null }],
     },
   })
-  await page.getByRole('button', { name: /^(Every run|\d+ runs?)$/ }).click()
+  await page.getByRole('button', { name: /^(All|\d+ runs?)$/ }).click()
   const chips = page.locator('.pricing-run')
   await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never sent')
   await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('Sent, 3 need a price')

@@ -313,7 +313,7 @@ test('the trends press asks about the rows on screen, not about the whole survey
   })
 
   await page.getByRole('button', { name: /Not selling/ }).click()
-  await page.getByRole('button', { name: 'Load trends' }).click()
+  await page.getByRole('button', { name: 'Trends' }).click()
   await expect.poll(() => wire.filter((row) => row.path.includes('/trends')).length).toBeGreaterThan(0)
 
   const asked = wire
@@ -403,7 +403,7 @@ test('one press writes the file, sends it and makes it live', async ({ page }) =
   expect(wire.find((row) => row.path.endsWith('/send'))?.body).toEqual({ confirm: true })
 })
 
-test('Download the file instead writes it and sends nothing', async ({ page }) => {
+test('Download writes it and sends nothing', async ({ page }) => {
   const wire = await open(page)
   const field = page.locator('.pricing-input').first()
   await field.click()
@@ -411,7 +411,7 @@ test('Download the file instead writes it and sends nothing', async ({ page }) =
   await field.type('17.50')
   await field.blur()
 
-  await page.getByRole('button', { name: 'Download the file instead' }).click()
+  await page.getByRole('button', { name: 'Download' }).click()
   await expect(page.getByRole('link', { name: 'import.csv' })).toHaveCount(1)
   expect(wire.filter((row) => row.path.endsWith('/send'))).toHaveLength(0)
 })
@@ -748,7 +748,7 @@ test('the Live tab with no read yet says so and offers the read, and nothing is 
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runs: [] }) }),
   )
   await page.goto('/#/pricing?live')
-  await expect(page.getByText('Nothing read from TCGplayer yet').first()).toBeVisible()
+  await expect(page.getByText('Empty').first()).toBeVisible()
   await expect(page.locator('.pricing-tabs').getByRole('button', { name: 'Live' })).toHaveAttribute('aria-pressed', 'true')
   /* THE READ IS A PRESS (D62's rule for anything that asks a remote host): opening the tab
      asks TCGplayer for nothing. */

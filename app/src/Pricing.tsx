@@ -494,7 +494,7 @@ function flagOf(row: PricingSku, standing: unknown, locked: boolean, cut: string
      a row is on. Only the words round the figure they print. */
   if (typed !== null && market > 0 && !clamped && Math.abs(typed - market) * 100 >= DRIFT_PCT * market) {
     const pct = Math.round((Math.abs(typed - market) / market) * 100)
-    return { kind: 'drift', text: `Your price is ${pct}% ${typed < market ? 'under' : 'over'} market`, tone: 'warn' }
+    return { kind: 'drift', text: `${pct}% ${typed < market ? 'under' : 'over'} market`, tone: 'warn' }
   }
   if (market >= WORTH_A_LOOK) {
     return {
@@ -646,7 +646,7 @@ function LiveCount({ live, soldHere, age }: { live: number; soldHere: number | u
           : `What TCGplayer held when this was read${age === null ? '' : `, ${age}`}.`
       }
     >
-      {forSaleNow === 0 ? 'None' : forSaleNow} live on TCGplayer
+      {forSaleNow === 0 ? 'None' : forSaleNow} listed
     </span>
   )
 }
@@ -2315,7 +2315,7 @@ export function Pricing() {
           aria-haspopup="dialog"
           onClick={() => setRunsOpen((open) => !open)}
         >
-          {picked.size === 0 ? 'Every run' : `${picked.size} ${picked.size === 1 ? 'run' : 'runs'}`}
+          {picked.size === 0 ? 'All' : `${picked.size} ${picked.size === 1 ? 'run' : 'runs'}`}
         </Button>
       )}
       {!liveTab || sheet === null ? null : (
@@ -2358,7 +2358,7 @@ export function Pricing() {
       )}
       {table === null || table.length === 0 ? null : (
         <Button size="sm" icon="trendUp" className="pricing-trends-press" onClick={loadTrends} busy={trendRun?.reading === true} disabled={trendRun?.reading === true}>
-          Load trends
+          Trends
         </Button>
       )}
     </div>
@@ -2420,7 +2420,10 @@ export function Pricing() {
   ) : (
     <p className="pricing-rule-line">
       <span>
-        {ruleWords(doc)}. Nothing lists under the cut-off, <Money value={Number(cut)} />.
+        {/* F5 verbiage cut: "Nothing lists under the cut-off" restated the number that
+            follows it — the dollar figure plus "floor" says the same thing (the data rule
+            keeps the percentage and the cut-off, only the words around them shrink). */}
+        {ruleWords(doc)}, <Money value={Number(cut)} /> floor.
       </span>
       <Button size="sm" variant="quiet" onClick={() => setRuleOpen(true)}>
         Change
@@ -2458,12 +2461,15 @@ export function Pricing() {
     barObserver.current = observer
   }, [])
 
+  /* F5 verbiage cut: the reviewer's own "Status" word would drop the multi-way split this
+     line is the only place to see broken out, which the data rule refuses (numbers stay,
+     only the words around them shrink). */
   const summary = [
-    `${progress.outCopies} ${progress.outCopies === 1 ? 'copy' : 'copies'} ready`,
-    needsPrice > 0 ? `${needsPrice} ${needsPrice === 1 ? 'needs a price and stays' : 'need a price and stay'} here` : null,
-    progress.byHand > 0 ? `${progress.byHand} at a quantity you typed` : null,
+    `${progress.outCopies} ready`,
+    needsPrice > 0 ? `${needsPrice} need a price` : null,
+    progress.byHand > 0 ? `${progress.byHand} typed` : null,
     progress.held > 0 ? `${progress.held} held` : null,
-    progress.closed > 0 ? `${progress.closed} already at TCGplayer` : null,
+    progress.closed > 0 ? `${progress.closed} sent` : null,
   ].filter((part): part is string => part !== null)
 
   const bar =
@@ -2617,11 +2623,10 @@ export function Pricing() {
         ) : liveTab ? (
           <EmptyState
             icon="tag"
-            title="Nothing read from TCGplayer yet"
-            body="Read what is live, then type a new price on any listing."
+            title="Empty"
             actions={
               <Button variant="primary" icon="refresh" busy={liveBusy} disabled={liveBusy} onClick={() => setLiveSettings(true)}>
-                Read what is live
+                Refresh
               </Button>
             }
           />
@@ -2946,7 +2951,7 @@ function PricingRow({
      contradiction when the two are really different questions (what is on hand, and what a
      cap still lets go out). */
   const copiesLine =
-    [sku.copies > 1 ? `${sku.copies} copies` : null, sku.over_cap ? `${sku.add_to_quantity} can go` : null]
+    [sku.copies > 1 ? `${sku.copies} copies` : null, sku.over_cap ? `${sku.add_to_quantity} sendable` : null]
       .filter((part): part is string => part !== null)
       .join(', ') || null
   return (
@@ -3570,7 +3575,7 @@ function UnreachableLine({ at }: { at: Unreachable | null }) {
     <p className="pricing-unreachable" data-testid="pricing-unreachable">
       <Icon name="alert" size={13} />
       <span>
-        Not on this list:{' '}
+        Excluded:{' '}
         {parts.map((part, at) => (
           <span key={at}>
             {at === 0 ? null : ', '}
