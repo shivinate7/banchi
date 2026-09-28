@@ -2743,37 +2743,7 @@
     },
     "docs/decisions/*-a-send-is-a-cart-of-boxes-a-run-is-still-one-box.md": {
       "lane": "docs-sweep",
-      "STE001": [
-        "03c3371b26 Two presses over one selection were two different paths, neither saw th…",
-        "0d8e890df9 Because `_resolve_scope` creates a symlink directory per ticked selecti…",
-        "1365c72c7a `_parse_preflight` answers `None` where a line did not appear — deliber…",
-        "13ef0eaa39 Adding box 7 to a cart does not touch what box 3 means, so the rule now…",
-        "1a6a36dffc The RESPONSE is always a list too — a shape that changed with the reque…",
-        "1b5bc9c108 The whole cost of this entry is the list shape on the wire and the per-…",
-        "1cd8618f0e The read-side widening D#'s amendment gives the finish claim and D# giv…",
-        "32a47bfec3 The first recommendation was ONE RUN over several boxes, on the argumen…",
-        "3731c1ee6d Two runs over DIFFERENT boxes stay legal and unblocked — the Batch API…",
-        "3856d841dc Built 2026-08-29 on the owner's instruction after being told what the p…",
-        "3e43cf2fa6 `RunPanel.tsx` computed a three-way partition — live, this box, other b…",
-        "497dc42956 D#'s validate-everything-then-write-everything with an invoice instead…",
-        "51c6b07d9c It compares box numbers now, read from the manifest's scope first and f…",
-        "51ca4cf532 That works for a whole box — `captures/cards/box3` both times — and can…",
-        "5834ce9a8a That entry drops the ticked selection whenever a box is picked on `#/ru…",
-        "6e72397a97 That is the case an operator cannot tell apart from a double-click at t…",
-        "819f86e069 `app/src/server.ts` already records that the app may not compute rules…",
-        "86a720e106 Bounded at four workers, and the cart itself at sixteen boxes: each leg…",
-        "9089050ed3 So a screen with a box selected threw the grouping away and drew the se…",
-        "9d9a80ab3f The response names what STARTED and what did not, and the screen draws…",
-        "aac201dc1f Nothing downstream learns a new shape, and that is the property worth p…",
-        "ac3ce73dac Every box gets its own run directory, its own manifest scope, its own q…",
-        "b28b5ecd91 A preflight decodes and crops every photograph in its box — measured at…",
-        "c60215105e N calls from the screen would be N confirms for one operator decision,…",
-        "da1a7e792b What decides it is that a run carries a **reading**, a `--bypass` rulin…",
-        "deab19bde9 They are separate read-only processes over a lock-free snapshot and `--…",
-        "e4e2a853c8 Recorded here because the tempting alternative — refusing the whole res…"
-      ],
       "STE006": [
-        "1b5bc9c108 The whole cost of this entry is the list shape on the wire and the per-…",
         "b421ecf263 D# — A send is a cart of boxes; a run is still one box"
       ]
     },
@@ -3370,35 +3340,6 @@
         "5c2e270d3b `.codex/config.toml` is kept regardless; it was never one of the three…",
         "97770678b2 **BUILT**: the three symlinks, committed and verified to resolve inside…",
         "f114ca47d4 Codex's file was written 2026-09-09; `.claude/settings.json` gained a `…"
-      ]
-    },
-    "docs/decisions/*-copy-ratchet.md": {
-      "lane": "docs-sweep",
-      "STE001": [
-        "03c2387bb2 The only way a ceiling rises is `node scripts/copy-budget.mjs --pin`, r…",
-        "09092869a5 The fix waits for `.bn-view`'s own text to stop changing (two reads 150…",
-        "0b4abdf4a4 A route whose ceiling was pinned this way will need `--pin` again the d…",
-        "0c55d1c416 Mutation-tested: `COPY_BUDGET_MUTATE='#/pricing'` makes the spec inject…",
-        "2809f08cd8 This is not a second pass over the same ground: a session that rewords…",
-        "281601b56d None of the four is copy creep — nothing under `app/src` changed — and…",
-        "2adbd64ce7 Five `seedPopulated*` functions each register a `page.route` stub carry…",
-        "35f0058616 **The owner's ruling, 2026-09-13:** *\"less text is always better than m…",
-        "3eb5ddda85 Left to a diff alone it would just be numbers: `#/runs` fell from 68 to…",
-        "639c887504 That was refused for one reason: a live number is not reproducible in C…",
-        "71e67b55d6 **The region counted is `.bn-view`** — `App.tsx`'s own wrapper around `…",
-        "7f95be2bef It contains no counting logic of its own — it sets `COPY_BUDGET_PIN=1`…",
-        "9c66148699 It renders every owner route at 1440 in the fixture `wide.spec.ts` and…",
-        "add0481f8e The first build measured `#/inventory` at either 156 or 158 words acros…",
-        "b39c3b56a4 The other four rose because a populated screen draws real content an em…",
-        "b43c3c3799 `app/tests/routeFixtures.ts` is a new, shared module holding the fixtur…",
-        "bceb2e27f9 **Routes are discovered off `routesFromNav`**, the same argument `curso…",
-        "eb2831a85a The fixture that renders every route is a small, shared store (two boxe…",
-        "eb7651f9ef That is the opposite of a ratchet: D#'s whole design is that the only w…",
-        "eebdb8ef10 The guard has no opinion on that; it only forces the question into the…"
-      ],
-      "STE006": [
-        "b43c3c3799 `app/tests/routeFixtures.ts` is a new, shared module holding the fixtur…",
-        "eebdb8ef10 The guard has no opinion on that; it only forces the question into the…"
       ]
     },
     "docs/decisions/*-duplicates-aggregate-by-sku-at-join-time.md": {

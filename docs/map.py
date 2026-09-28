@@ -4139,7 +4139,8 @@ COMPONENTS = [
                         "2026-09-20, is the same shape for a different record: "
                         "`scripts/stop-gate.sh:69` cited in docs/specs/mechanization-"
                         "backlog.md, from before the harness left turn end.",
-                "governed_by": ["D16", "D136", "D141", "D149", "D229", "D248", "D277"],
+                "governed_by": ["D16", "D48", "D136", "D141", "D149", "D180", "D194", "D229",
+                                "D248", "D277", "D284"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
