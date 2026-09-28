@@ -195,6 +195,9 @@ Lane D and the feedback items:
 - Token budget (2026-09-27): `Prune memory.md now, and then send an audit lane`. The audit lane
   measures every source loaded into each session and proposes a cut or a move per section. It
   writes a report under `docs/reviews/`. Nothing changes until the owner rules.
+  The owner ruled on its four questions the same day. The rulings are in that report's last
+  section. Two lanes build them: the edit hook, and one CLAUDE.md lane that also takes the
+  decision index.
 - Auto memory (2026-09-27, process only): `Migrate first, then off`. A lane gives each memory fact
   with no repo home a real home: a debt, a spec or a decision entry. It also proposes
   global-rule sentences for the owner. After it merges, `autoMemoryEnabled: false` goes into the project's

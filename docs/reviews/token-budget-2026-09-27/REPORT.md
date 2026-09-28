@@ -257,3 +257,17 @@ It flags the question for whoever picks up the build.
 **Q5. Global `~/Developer/claude-settings/CLAUDE.md`, anything to flag?**
 This report measures it only, per the brief. It is not this repo's to edit. No proposal
 follows. See section 2 for the two observations recorded there.
+
+## The owner's rulings (2026-09-27)
+
+- Q4, the edit hook: `Id + title only (Recommended)`. `scripts/decision-context.py` prints one
+  line per governing decision. The full text stays behind `make map ARGS=<path>`.
+- Q1, the Commands section: `One source, two views (Recommended)`. The Makefile comment on each
+  target is the only source. `make help` prints from it. CLAUDE.md keeps the name and one line
+  per target, and a docs-audit row checks that list against the Makefile both ways.
+- Q2, code cards: `Move now (Recommended)`. CLAUDE.md keeps the dormancy marker, the opsec hard
+  rules and one pointer to `docs/specs/code-cards.md`.
+- Q3, incident stories: `they can be straight deleted tbh`. Each rule stays. Its story is
+  deleted, not moved.
+- One lane does Q1, Q2 and Q3 together with the decision-index ruling in the test audit's
+  TIERS.md, because all four edit CLAUDE.md.
