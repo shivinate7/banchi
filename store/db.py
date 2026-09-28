@@ -158,7 +158,12 @@ PHOTOS_RELOCATED = "photos_relocated"
 # adds `cards.ord`, a REAL, and gives every card the key its index already is, in the column
 # and in the payload. So every box reads in today's order, and every stored divider (an index)
 # is already a key. Idempotent: a card that has a key keeps it.
-SCHEMA_VERSION = 13
+#
+# FOURTEEN, FOR D219 (amended 2026-09-28). `_add_price_history_summary` adds
+# `price_history_summary` and BUILDS it once from `price_history`, under the lock, inside the
+# upgrade transaction. It is a derived table, so unlike the additive steps above it has rows
+# to backfill: an archive with no summary would read as empty to Holdings.
+SCHEMA_VERSION = 14
 
 # The six files a legacy store is made of, and the one that is a log rather than a document.
 LEGACY_INVENTORY = "inventory.json"
@@ -230,6 +235,10 @@ TABLES: Dict[str, Tuple[str, ...]] = {
         "sku", "product_id", "range", "width_days", "start", "market", "quantity",
         "transactions", "low", "high", "at",
     ),
+    # D219 (amended 2026-09-28): one row per (sku, range) holding that range's buckets as
+    # Holdings reads them. Derived from `price_history` by `PriceArchive.upsert`, in the same
+    # transaction — see `store/pricearchive.py:Summary`.
+    "price_history_summary": ("sku", "range"),
     # One row per range last swept — see `store/pricearchive.py:Source`.
     "price_history_sources": ("range", "at", "requested", "answered", "refused"),
     # LANE 0 OF `docs/specs/identity-follows-sku.md` §3.2: one row per TCGplayer Id this
@@ -272,6 +281,8 @@ _INDEXES = (
     # D219: `PriceArchive.for_sku` filters on `sku`, and a table this
     # never deletes from grows without bound, so a scan-per-lookup would only get worse.
     ("price_history", "sku"),
+    # `PriceArchive.summary_for_sku`'s lookup (Holdings): one indexed read per on-hand SKU.
+    ("price_history_summary", "sku"),
 )
 
 # D172'S TWO INDEXES, DELIBERATELY NOT IN `_INDEXES` BECAUSE NEITHER IS A PLAIN ONE.
@@ -524,6 +535,8 @@ def _upgrade(
             if stored < 13:
                 _add_card_order(conn)        # D265, the order key
                 _open_every_box(conn)        # D299
+            if stored < 14:
+                _add_price_history_summary(conn)  # D219, amended 2026-09-28
             conn.execute(
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema', ?)",
                 (str(SCHEMA_VERSION),),
@@ -1304,6 +1317,36 @@ def _add_price_history(conn: sqlite3.Connection) -> None:
     conn.execute(_ddl("price_history_sources", TABLES["price_history_sources"]))
     conn.execute(
         "CREATE INDEX IF NOT EXISTS price_history_sku ON price_history(sku)"
+    )
+
+
+def _add_price_history_summary(conn: sqlite3.Connection) -> None:
+    """Schema 14: `price_history_summary`, built ONCE from `price_history` (D219, amended
+    2026-09-28). Runs inside `_upgrade`'s locked transaction, so a reader never sees the table
+    half-built. From here `PriceArchive.upsert` keeps it current in each write's own
+    transaction. `INSERT OR REPLACE`, so a re-run after a crash rebuilds it whole."""
+    from store.pricearchive import PriceArchive, _parse_bucket, summaries_of
+
+    conn.execute(_ddl("price_history_summary", TABLES["price_history_summary"]))
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS price_history_summary_sku ON price_history_summary(sku)"
+    )
+    buckets = []
+    for key, text in conn.execute("SELECT key, payload FROM price_history"):
+        try:
+            bucket = _parse_bucket(key, json.loads(text))
+        except ValueError:
+            bucket = None
+        if bucket is not None:
+            buckets.append(bucket)
+    spec = PriceArchive.SUMMARY
+    conn.executemany(
+        "INSERT OR REPLACE INTO price_history_summary (key, sku, range, payload) "
+        "VALUES (?, ?, ?, ?)",
+        [
+            (key, row.sku, row.range, payload_text(spec.dump(row)))
+            for key, row in summaries_of(buckets).items()
+        ],
     )
 
 

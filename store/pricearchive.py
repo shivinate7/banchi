@@ -147,6 +147,58 @@ def _parse_source(key: str, record: dict) -> Optional[Source]:
     return Source(range=range_, at=at, requested=requested, answered=answered, refused=refused)
 
 
+class Point(NamedTuple):
+    """One bucket's three facts Holdings reads: `Bucket.start`, `.market`, `.width_days`."""
+
+    start: str
+    market: Optional[str]
+    width_days: int
+
+
+class Summary(NamedTuple):
+    """One SKU's one range, every bucket ascending by `start`, as Holdings reads it (D219,
+    amended 2026-09-28). A derived table, `price_history_summary`, one row per `(sku, range)`,
+    written by `PriceArchive.upsert` in the SAME transaction as the buckets it summarises, so
+    `pipeline/holdings.py` reads a few indexed rows instead of loading every bucket (D189's
+    argument: a table, not a live recompute, and no RAM held while idle)."""
+
+    sku: str
+    range: str
+    points: Tuple[Point, ...]
+
+
+def _summary_key(sku: str, range_: str) -> str:
+    return f"{sku}:{range_}"
+
+
+def _parse_summary(key: str, record: dict) -> Optional[Summary]:
+    try:
+        return Summary(
+            sku=str(record["sku"]),
+            range=str(record["range"]),
+            # Plain tuples, not `Point`s: Holdings needs one range of four, so `Point` is
+            # built only for that range in `summary_for_sku` (measured: 55k `Point`
+            # constructions were a fifth of the read).
+            points=tuple(map(tuple, record["points"])),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def summaries_of(buckets) -> Dict[str, Summary]:
+    """The summary rows for an iterable of `Bucket`s: the ONE derivation, called by
+    `PriceArchive.__post_init__` and by `store/db.py:_add_price_history_summary`, so the
+    backfill and the writer cannot disagree. Later duplicates of one `(sku, range, start)` win,
+    like `_index`."""
+    grouped: Dict[Tuple[str, str], Dict[str, Point]] = {}
+    for b in buckets:
+        grouped.setdefault((b.sku, b.range), {})[b.start] = Point(b.start, b.market, b.width_days)
+    return {
+        _summary_key(sku, rng): Summary(sku, rng, tuple(pts[s] for s in sorted(pts)))
+        for (sku, rng), pts in grouped.items()
+    }
+
+
 @dataclass
 class PriceArchive:
     entries: "Rows" = field(default_factory=lambda: Rows(PriceArchive.ENTRIES))
@@ -158,6 +210,7 @@ class PriceArchive:
     # first `upsert`, if that runs first) needs it. `store/rows.py:Rows` is untouched — every
     # OTHER reader of `entries` (`__iter__`, `values()`, `sources_payload`) is unaffected, and
     # `entries` stays the one thing this table persists.
+    summary: "Rows" = field(default_factory=lambda: Rows(PriceArchive.SUMMARY))
     _by_sku: Optional[Dict[str, Dict[Tuple[str, str], "Bucket"]]] = field(
         default=None, init=False, repr=False, compare=False,
     )
@@ -198,9 +251,21 @@ class PriceArchive:
         column_names=("range", "at", "requested", "answered", "refused"),
     )
 
+    SUMMARY = TableSpec(
+        "price_history_summary",
+        parse=_parse_summary,
+        dump=lambda s: {"sku": s.sku, "range": s.range, "points": [list(p) for p in s.points]},
+        columns=lambda s: {"sku": s.sku, "range": s.range},
+        column_names=("sku", "range"),
+    )
+
     def __post_init__(self) -> None:
         if not isinstance(self.entries, Rows):
             self.entries = Rows(PriceArchive.ENTRIES, objects=dict(self.entries))
+            # A memory-built archive handed its buckets whole has no writer to have summarised
+            # them, so summarise here, through the same derivation the migration uses.
+            for key, row in summaries_of(self.entries.values()).items():
+                self.summary[key] = row
         if not isinstance(self.sources, Rows):
             self.sources = Rows(PriceArchive.SOURCES, objects=dict(self.sources))
 
@@ -237,6 +302,14 @@ class PriceArchive:
         found.sort(key=lambda b: (b.range, b.start))
         return found
 
+    def summary_for_sku(self, sku: str, range_: str) -> Tuple[bool, List[Point]]:
+        """`(priced in any range, points of `range_` ascending by start)` for one SKU: an
+        indexed read of `price_history_summary` and never a walk of `entries`. What
+        `pipeline/holdings.py` reads instead of `for_sku`."""
+        rows = self.summary.where(sku=str(sku))
+        points = [Point(*p) for row in rows if row.range == range_ for p in row.points]
+        return bool(rows), points
+
     # -------------------------------------------------------------------------- writing
 
     def upsert(self, buckets: Dict[str, Bucket]) -> None:
@@ -260,6 +333,16 @@ class PriceArchive:
             self.entries[key] = bucket
             if self._by_sku is not None:
                 self._by_sku.setdefault(bucket.sku, {})[(bucket.range, bucket.start)] = bucket
+        # THE SUMMARY IS MERGED IN THE SAME CALL, SO IT FLUSHES IN THE SAME `Store.write()`
+        # TRANSACTION AS THE BUCKETS (`Snapshot.tables` lists both). Never a clear, like the
+        # buckets: a start this call does not mention stays in its row.
+        for key, fresh in summaries_of(buckets.values()).items():
+            old = self.summary.get(key)
+            if old is not None:
+                merged = {p[0]: p for p in old.points}
+                merged.update({p[0]: p for p in fresh.points})
+                fresh = Summary(fresh.sku, fresh.range, tuple(merged[s] for s in sorted(merged)))
+            self.summary[key] = fresh
 
     def record_pass(self, sources: List[Source]) -> None:
         """One row per range this pass swept, replacing that range's own prior accounting

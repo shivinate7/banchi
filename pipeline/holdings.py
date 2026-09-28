@@ -61,12 +61,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 from pipeline import tcgcsv
 from store.master import TERMINAL_STATES, Inventory
 from store.orders import Ledger
-from store.pricearchive import Bucket, PriceArchive, RANGE_WIDTH_DAYS
+from store.pricearchive import Point, PriceArchive, RANGE_WIDTH_DAYS
 
 
 def on_hand_quantities(inventory: Inventory) -> Dict[str, int]:
@@ -176,7 +176,7 @@ class SkuSeries:
         return None
 
 
-def sku_series(sku: str, quantity: int, name: str, buckets: List[Bucket]) -> Optional[SkuSeries]:
+def sku_series(sku: str, quantity: int, name: str, buckets: Sequence[Point]) -> Optional[SkuSeries]:
     """One SKU's own series for ONE range's already-filtered, already-sorted buckets
     (`PriceArchive.for_sku` sorts ascending by `(range, start)`, so a caller that has already
     filtered to one range hands this an ascending run). `None` when there is nothing archived
@@ -326,10 +326,9 @@ def build_holdings_report(
     ever_priced_any_range = 0
     earliest: Optional[str] = None
     for sku, quantity in quantities.items():
-        all_buckets = archive.for_sku(sku)
-        if all_buckets:
+        priced_any, buckets = archive.summary_for_sku(sku, range_)
+        if priced_any:
             ever_priced_any_range += 1
-        buckets = [b for b in all_buckets if b.range == range_]
         one = sku_series(sku, quantity, names.get(sku, ""), buckets)
         if one is None:
             continue

@@ -127,6 +127,7 @@ class Snapshot:
             self.readings.sources,
             self.archive.entries,
             self.archive.sources,
+            self.archive.summary,
             self.skus.entries,
         ]
 
@@ -179,6 +180,7 @@ class Store:
             archive=PriceArchive(
                 entries=bound(PriceArchive.ENTRIES, "price_history"),
                 sources=bound(PriceArchive.SOURCES, "price_history_sources"),
+                summary=bound(PriceArchive.SUMMARY, "price_history_summary"),
             ),
             skus=Skus(entries=bound(Skus.ENTRIES, "skus")),
             # NOT `bound()` — nothing to load, only to append to, exactly like
