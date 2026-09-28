@@ -167,10 +167,7 @@ copies of ONE script.
 
 ### It reaches the network, so it does not gate
 
-**The retired coordinator was deliberately not in `make check`**, on `make lan-check`'s reasoning:
-`check` answers from the tree alone, and a row that fails on a train is a row people learn to
-ignore. **What gates is the retired coordinator selftest**, which runs the verdict rules against
-synthetic payloads and needs no network — the split `verdict-selftest` already makes.
+**The retired coordinator was deliberately not in `make check`**. Like `make lan-check`, `check` answers from the tree alone. A row that fails on a train is a row people learn to ignore. **What gates is the retired coordinator selftest**, which runs the verdict rules against synthetic payloads and needs no network — the split `verdict-selftest` already makes.
 
 **`make silent-write-selftest` gates and is never in the git hook** (D18: it writes a temp
 repository), which is exactly `reap-selftest`'s standing.
