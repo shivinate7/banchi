@@ -54,11 +54,11 @@
 
 **It waits for the answer, not for a non-empty list.** `boxRecords` starts `[]` and `[]` is also what a store with no boxes returns; judging on emptiness would clear a good box on every slow fetch, which on a cold capture server is every fetch. A separate flag records that `GET /boxes` actually answered.
 
-### THE CLEAR IS ONE PRESS WITH A RECEIPT AND A WAY BACK
+### THE CLEAR ASKS FIRST, THEN GIVES A RECEIPT AND A WAY BACK
 
-**Quick is the requirement, so there is no confirmation dialog.** The press clears, the screen visibly returns to its empty state, and a receipt toast carries an Undo — D28's shape for the review answer, right here for the same reason: a confirmation ahead of a reversible act buys nothing and costs a press every time.
+**The press opens a confirmation (owner's ruling, 2026-09-28, replacing "no dialog").** It carries the sentence that used to sit under the button and a Clear button; Esc cancels, Enter confirms. Only the confirm clears. The screen then visibly returns to its empty state, and a receipt toast carries an Undo.
 
-**It clears choices about CARDS and leaves the RIG alone.** Box, game, set hint, rarity, finish and product are decisions about the stack in front of the operator, and the next stack is a different decision. The camera and the rotation are which hardware is plugged in and which way it is mounted (D13) — the same tomorrow as today. Clearing those would mean re-picking a 4K capture card to start a run that needs none of it re-picked, so the control says on its face what it leaves behind.
+**It clears choices about CARDS and leaves the RIG alone.** Box, game, set hint, rarity, finish and product are decisions about the stack in front of the operator, and the next stack is a different decision. The camera and the rotation are which hardware is plugged in and which way it is mounted (D13) — the same tomorrow as today. Clearing those would mean re-picking a 4K capture card to start a run that needs none of it re-picked, so the confirmation says what it leaves behind.
 
 **It leaves `banchi.box-recency` alone too**, and that is the same line drawn once more: the clear is about the setup, not about which drawers this hand has been in.
 
