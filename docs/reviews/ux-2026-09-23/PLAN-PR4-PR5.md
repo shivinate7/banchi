@@ -210,7 +210,10 @@ Do a design pass first, and show the owner a mockup.
 - Q3, the rows: `Full detail on every row (Recommended)`.
 - Q4, the phone: `The walk, with the card in a sheet (Recommended)`.
 - Q2: the buyer list scrolls in a sticky rail, as Inventory does.
-- Q5, Q6 and Q7 are still open. The owner asked for Q5 to be explained.
+- Q6, the pane: `we don't need details on this screen`. The pane keeps D274's hero head only.
+- Q7: the PNGs stay outside the repo, because the pre-commit opsec hook refuses images.
+- Q5, the walk order: open. The owner asked: `i thought we sort formulaically be density of the cards available in a section?`
+- Lane E's Hide picked (owner, same day): `The press folds picked rows`. Lane E builds it.
 - Lane A's own plan: `orders-a/PLAN.md` in this folder, on branch `ux/pr4b-A-design`.
 
 ### H. Epilogue: cyberpunk dark mode
