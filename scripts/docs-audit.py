@@ -1225,9 +1225,13 @@ def comment_units(path: Path, text: str) -> List[Tuple[int, Optional[str]]]:
                         if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
                                 and isinstance(body[0].value.value, str)):
                             spans.append(body[0].value)
-            for const in spans:
-                for row in range(const.lineno, (const.end_lineno or const.lineno) + 1):
-                    found[row] = found.get(row, "") + " " + lines[row - 1]
+            rows = {
+                row
+                for const in spans
+                for row in range(const.lineno, (const.end_lineno or const.lineno) + 1)
+            }
+            for row in rows:
+                found[row] = found.get(row, "") + " " + lines[row - 1]
     else:
         pattern = r"/\*.*?\*/" if path.suffix == ".css" else r"/\*.*?\*/|(?<!:)//[^\n]*"
         for m in re.finditer(pattern, text, re.S):
