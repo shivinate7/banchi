@@ -200,6 +200,11 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
         "commit that touches none of them, and does not touch scripts/docs-audit.py itself, "
         "legitimately scans zero",
     ),
+    "spec map": (
+        "staged",
+        "path-gated (test-audit plan S3) — a staged commit touching neither app/ nor "
+        "scripts/browser-scope.py skips the row and scans zero",
+    ),
     "derived numbers": (
         "staged",
         "counts the `<!-- derived:<name> -->` markers it found in the staged documents",
@@ -16096,6 +16101,25 @@ def check_browser_scope(report: Report) -> None:
                scanned=len(scope))
 
 
+def _spec_map_should_run() -> bool:
+    """Whether `check_spec_map` should run this pass (test-audit plan S3).
+
+    Full mode always runs it, matching CI. Staged mode runs it only when the commit touches
+    `app/` or `scripts/browser-scope.py` — its own subjects: the map is BUILT from
+    `app/tests/*.spec.ts` and `app/src/`, and it is `scripts/browser-scope.py`'s own data.
+    A commit touching neither cannot change what this row would find.
+
+    FAILS OPEN, on `serve-scope.py`'s own precedent: an empty staged set (nothing staged, or
+    the diff could not be read) runs the row too, rather than skip on doubt.
+    """
+    if _INDEX_PATHS is None:
+        return True
+    if not _STAGED_PATHS:
+        return True
+    return any(path == "scripts/browser-scope.py" or path.startswith("app/")
+               for path in _STAGED_PATHS)
+
+
 def check_spec_map(report: Report) -> None:
     """`scripts/browser-scope.py`'s spec map (`specs`), against `app/tests/` and the shared
     surfaces it names, both ways (D215).
@@ -16113,7 +16137,17 @@ def check_spec_map(report: Report) -> None:
     - every file the map's reverse index names must still exist;
     - the shell's own closure (`App.tsx`/`main.tsx`, cut off at the screens) must be covered
       by `is_shared_surface`, or a shared file has quietly stopped being treated as one.
+
+    **PATH-GATED IN STAGED MODE** (test-audit plan S3): see `_spec_map_should_run`. A skip
+    still emits the row, at `scanned=0`, pinned in `EXPECTED_EMPTY`.
     """
+    if not _spec_map_should_run():
+        report.add(
+            "spec map", MECHANICAL, [],
+            "skipped: staged commit touches neither app/ nor scripts/browser-scope.py",
+            scanned=0,
+        )
+        return
     if not exists(BROWSER_SCOPE_SCRIPT):
         report.add("spec map", MECHANICAL, [Finding(
             rel(BROWSER_SCOPE_SCRIPT), "does not exist, so there is no spec map to reconcile.")])
@@ -19645,6 +19679,32 @@ def self_test() -> int:
         "every identifier in this tree is spelled American",
         "\n".join(f.where for f in by_label["identifier spelling"][:12]),
     )
+
+    print("\nspec map: path-gated in staged mode (test-audit plan S3)")
+    here = globals()
+    saved_index, saved_staged = here["_INDEX_PATHS"], set(_STAGED_PATHS)
+    try:
+        here["_INDEX_PATHS"] = {"docs/x.md"}
+        _STAGED_PATHS.clear()
+        _STAGED_PATHS.add("docs/x.md")
+        ok(not _spec_map_should_run(),
+           "a staged commit touching only docs/ does not run the row")
+        _STAGED_PATHS.add("app/src/Orders.tsx")
+        ok(_spec_map_should_run(),
+           "a staged commit touching app/ runs the row")
+        _STAGED_PATHS.discard("app/src/Orders.tsx")
+        _STAGED_PATHS.add("scripts/browser-scope.py")
+        ok(_spec_map_should_run(),
+           "a staged commit touching scripts/browser-scope.py runs the row")
+        _STAGED_PATHS.clear()
+        ok(_spec_map_should_run(),
+           "RED before the fix: an empty staged set fails open and runs the row")
+        here["_INDEX_PATHS"] = None
+        ok(_spec_map_should_run(), "a full run (no staged mode) always runs the row")
+    finally:
+        here["_INDEX_PATHS"] = saved_index
+        _STAGED_PATHS.clear()
+        _STAGED_PATHS.update(saved_staged)
 
     # ------------------------------------------------------------------ storage keys
     #
