@@ -914,13 +914,19 @@ def _apply(args, say) -> int:
     # command and `PUT /pricing` date an answer by one rule. Setting `at` inline was the only
     # place in the repo that ever wrote it, which is why `priced_recently` meant "marked down
     # recently" while D100 claimed it meant "priced recently, by any hand".
-    before = corpus.Corpus.read()
-    book = corpus.Corpus.read()
-    stamp = master.now()
-    for edit in application.edits:
-        book.answers[edit.sku] = corpus.Answer(value=str(edit.now))
-    corpus.stamp_answers(before, book, stamp)
-    book.write()
+    # THE STORE LOCK, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT48): the same primitive
+    # `store/session.py:Store.write()` already takes, reused here rather than a second lock,
+    # because this command reads `inventory/prices.json` and writes it back without one — this
+    # runs as a subprocess of `POST /pipeline/markdowns/<stamp>/apply` (D105), so a request to
+    # `PUT /pricing` landing between the two reads below used to be silently overwritten.
+    with files.exclusive(files.inventory_dir()):
+        before = corpus.Corpus.read()
+        book = corpus.Corpus.read()
+        stamp = master.now()
+        for edit in application.edits:
+            book.answers[edit.sku] = corpus.Answer(value=str(edit.now))
+        corpus.stamp_answers(before, book, stamp)
+        book.write()
 
     lines = [
         f"markdown applied {stamp}",

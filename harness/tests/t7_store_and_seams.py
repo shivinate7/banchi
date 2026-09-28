@@ -6802,6 +6802,160 @@ def check_undo_until_built_on(checks: Checks) -> None:
         )
         checks.equal(field(back, "restored"), [], "nothing restored twice")
 
+    def put_price_with_retry(sku: str, value: str, attempts: int = 5) -> None:
+        """`PUT /pricing`, adding one SKU, retried on `corpus_moved` — the real client's own
+        recovery path (D103's "Reload before saving"), never a silent overwrite. A lock that
+        forces two writers to serialize can still leave the second one holding a revision the
+        first just moved — the lock's job is to stop a SILENT loss, not to stop the second
+        writer from ever needing to look again."""
+        for _ in range(attempts):
+            current = pipeline_routes.do_pricing_corpus()
+            document = current["corpus"]
+            document["skus"][sku] = {"value": value}
+            try:
+                pipeline_routes.do_pricing_corpus_write(
+                    {"corpus": document, "revision": current["revision"]}
+                )
+                return
+            except pipeline_routes.PipelineRefusal as exc:
+                if exc.code != "corpus_moved":
+                    raise
+        raise AssertionError(f"corpus_moved kept refusing {sku} after {attempts} attempts")
+
+    # ------------------------------------------------ T7-RACE (DEBT48): the restore lost-update race
+    # `do_pricing_restore`, `PUT /pricing`, `POST /pricing/clear` and both CLI writers
+    # (`cli/cmd_join.py`, `cli/cmd_reprice.py`) now share ONE lock, `store/files.py:exclusive`,
+    # around their whole read-modify-write. Before this fix, none of them took it, so a
+    # `Corpus.read()` here, followed by another writer's whole `Corpus.write()` there, followed
+    # by THIS call's own `write()`, would silently discard the other write. Forced with REAL
+    # threads and the REAL flock, never a stubbed lock: `corpus.Corpus.read` is patched to
+    # sleep, on the ONE call the restore makes, for exactly as long as that call now holds the
+    # lock. Proven RED against a `.bak` copy of the pre-lock file, and proven GREEN here,
+    # against the file as it stands, never `git checkout`.
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers = {"7500": corpus.Answer(value="1.00")}
+        book.write()
+        clear_id = pipeline_routes.do_pricing_clear({"skus": ["7500"]})["clear_id"]
+
+        real_corpus_read = corpus.Corpus.read
+        seen = {"n": 0}
+        paused = threading.Event()
+
+        def racing_read(path=None):
+            seen["n"] += 1
+            result = real_corpus_read(path)
+            if seen["n"] == 1:
+                # THE RESTORE'S OWN READ — the one call `do_pricing_restore` makes, now
+                # inside `files.exclusive`. Sleeping here holds the real flock.
+                paused.set()
+                time.sleep(0.2)
+            return result
+
+        corpus.Corpus.read = racing_read
+        outcome: dict = {}
+        try:
+            def run_restore():
+                outcome["restored"] = pipeline_routes.do_pricing_restore({"clear": clear_id})
+
+            worker = threading.Thread(target=run_restore)
+            worker.start()
+            fired = paused.wait(timeout=5)
+            # WRITER B, ON THIS THREAD, WHILE THE RESTORE SLEEPS INSIDE ITS LOCK. Unlocked,
+            # this lands at once; locked, this call blocks here until the restore's
+            # `with files.exclusive(...)` releases — never a hang, since it releases in ~0.2s.
+            put_price_with_retry("7501", "3.25")
+            worker.join(timeout=10)
+        finally:
+            corpus.Corpus.read = real_corpus_read
+
+        checks.ok(fired, "T7-RACE: the restore's read fires before the wait times out")
+        checks.ok(not worker.is_alive(), "T7-RACE: the restore finished")
+        final = corpus.Corpus.read().answers
+        checks.ok(
+            "7501" in final and final["7501"].value == "3.25",
+            "T7-RACE (DEBT48): PUT /pricing's edit survives a concurrent restore",
+        )
+        checks.ok(
+            "7500" in final and final["7500"].value == "1.00",
+            "and the restore's own answer still lands",
+        )
+
+    # ------------------------------------------------ T7-RACE (DEBT48): the same race, over a real join
+    # The identical hazard, over `cli/cmd_join.py`'s own writer (D105's second unguarded
+    # writer). `join` reads the corpus TWICE: once at the top, read-only, for the threshold
+    # that shapes matching; once again, fresh, right before the write this lane put under the
+    # lock. The second call is the one this test targets.
+    with isolated_home():
+        run_dir = runs.create("t7-b2race")
+        capture_server.do_capture(capture_payload(1, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("1/1", master.IDENTIFIED)
+            snapshot.inventory.cards["1/1"].game = "riftbound"
+        run_dir.write_identifications(
+            {
+                "prompt_fingerprint": "t7-b2race",
+                "cards": {
+                    "1/1": {
+                        "photo": run_photo(1, 1),
+                        "box": 1,
+                        "index": 1,
+                        "set_hint": None,
+                        "metadata_finish": "foil",
+                        "status": "ok",
+                        "error": None,
+                        "identification": {
+                            "name": "Vilemaw",
+                            "number": "060/219",
+                            "printed_total": "219",
+                            "confidence": "high",
+                            "finish": "foil",
+                        },
+                    }
+                },
+            }
+        )
+
+        real_corpus_read = corpus.Corpus.read
+        seen = {"n": 0}
+        paused = threading.Event()
+
+        def racing_read(path=None):
+            seen["n"] += 1
+            result = real_corpus_read(path)
+            if seen["n"] == 2:
+                paused.set()
+                time.sleep(0.2)
+            return result
+
+        corpus.Corpus.read = racing_read
+        exit_codes: list = []
+        try:
+            def run_join():
+                from cli import __main__ as entry
+
+                with quiet():
+                    exit_codes.append(
+                        entry.main(["join", str(run_dir.directory), "--export", str(RIFTBOUND_EXPORT)])
+                    )
+
+            worker = threading.Thread(target=run_join)
+            worker.start()
+            fired = paused.wait(timeout=5)
+            put_price_with_retry("8888", "4.50")
+            worker.join(timeout=15)
+        finally:
+            corpus.Corpus.read = real_corpus_read
+
+        checks.ok(fired, "T7-RACE: the join's second corpus read fires before the wait times out")
+        checks.ok(not worker.is_alive(), "T7-RACE: the join finished")
+        checks.equal(exit_codes, [0], "and it exited clean")
+        final = corpus.Corpus.read().answers
+        checks.ok(
+            "8888" in final and final["8888"].value == "4.50",
+            "T7-RACE (DEBT48): PUT /pricing's edit survives a concurrent join",
+        )
+
     # ------------------------------------------------ UN-14: a move, until either box changes
     with isolated_home():
         for _ in range(2):

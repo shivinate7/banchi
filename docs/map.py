@@ -641,8 +641,8 @@ COMPONENTS = [
                                         "prices go into the corpus keyed by SKU (D86), without "
                                         "which the next emit re-lists at the rule price and "
                                         "undoes the markdown.",
-                               "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86",
-                                               "D100", "D103", "D87", "D106", "D107", "D109",
+                               "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86", "D87",
+                                               "D100", "D103", "D105", "D106", "D107", "D109",
                                                "D243"],
                                "tested_by": ["T7"]},
             "cmd_emit.py": {"does": "write ONE import CSV, `import.csv`; refuses while a price "

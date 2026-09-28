@@ -84,19 +84,22 @@ Owner, 2026-09-27: `save it in the markdown as an item for PR4B, ironically rpel
   the next load) already rules for Inventory. Remove the pin. Prove UN-6 red on the old
   behavior, then green. Add a DEBT for the jump first, and close it in the same lane.
 
-### B2. The restore lost-update race — STOPPED, see DEBT48
+### B2. The restore lost-update race — BUILT, see DEBT48
 
 - Found by lane B's reviewer, older than lane B. `do_pricing_restore` reads the corpus, then
   the clears, with no lock across both. Two concurrent restores can lose an unrelated price
   edit.
-- The builder checked first, as asked. `PUT /pricing` and the clear path do not take the store
-  lock either. Nothing that writes `inventory/prices.json` does. Five call sites write it. All
-  are unlocked. Each is guarded only by an optional revision digest, and a slow client can skip
-  past that. A lock around `do_pricing_restore` alone would not close the named race. The other
-  side of every pairing the lane named stays unlocked. It can still land its write in the same
-  gap. DEBT48 has the full finding and the fix: `files.exclusive` around all five call sites,
-  one Sonnet lane's worth of touch points, across three files. It asks the owner whether to
-  build that now or defer it.
+- The builder checked first, as asked. `PUT /pricing` and the clear path did not take the
+  store lock either. Nothing that wrote `inventory/prices.json` did. Five call sites wrote it,
+  all unlocked, each guarded only by an optional revision digest a slow client could skip past.
+  A lock around `do_pricing_restore` alone would not have closed the named race, since the
+  other side of every pairing the lane named stayed unlocked. The builder stopped and asked,
+  per this section's own instruction, recording DEBT48 with the full finding.
+- Owner, 2026-09-27: `yes build now`, in this same lane. All five call sites now take
+  `files.exclusive`, and the revision digest checks moved inside the lock (a second gap found
+  while proving the harness case). Two real-thread races in `harness/tests/t7_store_and_seams.py`
+  (`T7-RACE (DEBT48)`), proved RED against a `.bak` copy of the pre-lock files and GREEN
+  against the fix. `make harness` passes, all ten tests. DEBT48 is closed.
 
 ### C. The send path (money, so an adversarial review)
 
