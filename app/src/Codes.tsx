@@ -814,15 +814,16 @@ export function Codes() {
           <div className="bn-panel codes-empty">
             <EmptyState
               icon="qr"
-              title="No codes on file yet"
+              title="Empty"
               /* UX-159: ONE first step. With the ledger empty, the header hides its own
                  "Read a box" (above) — there is nothing captured yet for it to read — so
                  this is the only button on screen. Once a box is captured and read, the
-                 header's button takes over as the one persistent action instead. */
-              body="Set Game to Pokémon code cards on Capture, then come back and read the box."
+                 header's button takes over as the one persistent action instead.
+                 F5 verbiage cut: the setup instruction body is gone -- the one button below
+                 is the one actionable step, and it names its own destination. */
               actions={
                 <Button icon="camera" onClick={() => (window.location.hash = '#/capture')}>
-                  Go to capture
+                  Capture
                 </Button>
               }
             />

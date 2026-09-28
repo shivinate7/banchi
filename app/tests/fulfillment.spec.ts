@@ -1801,7 +1801,7 @@ test('a card an open order owes is drawn as "Pick N" with every copy the store h
   await openList(page, [], { orders: ONE_OPEN_ORDER, plan: ONE_OPEN_ORDER_PLAN })
 
   // The figure he reads first, and it counts copies rather than orders.
-  await expect(view(page)).toContainText('1 copy to pick')
+  await expect(view(page)).toContainText('1 pick')
 
   /* The card is on screen WITHOUT opening a box: an order's demand is the list, and the boxes
      below it are the other way in. */
@@ -2012,7 +2012,7 @@ test('a card an order is waiting for still says which order, opened from a box',
  * asserts nothing here routes him off this screen. */
 test('a SKU the boxes cannot fill at all gets a count, not a dead end', async ({ page }) => {
   await openList(page, [], { orders: ORDER_WITH_ELSEWHERE, plan: ORDER_WITH_ELSEWHERE_PLAN })
-  await expect(view(page)).toContainText('8 more copies are not in the boxes')
+  await expect(view(page)).toContainText('8 unlocated')
   await battery(page, 'order with a shortfall SKU')
 })
 
@@ -2869,7 +2869,7 @@ test('the card says which neighbour is at the back and which at the front, in a 
   await openCard(page, 'Charizard ex')
 
   await expect(view(page).locator('.ff-where-between')).toHaveText(
-    'It sits in front of Pidgeot ex and behind 2 unread cards.',
+    'Position: Pidgeot ex / 2 unread cards',
   )
   await battery(page, 'the neighbour sentence')
 })

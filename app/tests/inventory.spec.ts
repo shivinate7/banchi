@@ -5213,7 +5213,7 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
      not a second author's, which is what the one-composer rule in server.ts is for. */
   await expect(band).toHaveAttribute(
     'aria-label',
-    'It sits in front of Galio, Indefaticable and behind Evelynn, Entrancing.',
+    'Position: Galio, Indefaticable / Evelynn, Entrancing',
   )
 })
 
@@ -5284,7 +5284,7 @@ test('a card at the back of the box gets one row, not a pretend between', async 
   await expect(front.locator('.nb-rest')).toHaveCount(0)
   /* Nothing toward the back: card 1 is at the far back, so this card sits behind its one
      neighbour and in front of nothing (UX-186). */
-  await expect(front).toHaveAttribute('aria-label', 'It sits behind Conscription.')
+  await expect(front).toHaveAttribute('aria-label', 'Position: Conscription')
 })
 
 test('an unread neighbour is said in words, and counts as the neighbour (LOC-28)', async ({ page }) => {
@@ -5308,14 +5308,14 @@ test('an unread neighbour is said in words, and counts as the neighbour (LOC-28)
   await expect(reached.locator('.nb-side[data-side="back"]')).not.toContainText(/#\d/)
 
   /* AND IN `said`, WHICH IS THE HALF THE EYE CANNOT SEE HERE AND THE FULFILLER READS AT 20px. */
-  await expect(reached).toHaveAttribute('aria-label', 'It sits in front of 2 unread cards and behind Conscription.')
+  await expect(reached).toHaveAttribute('aria-label', 'Position: 2 unread cards / Conscription')
 
   /* A ROW WHOSE NEIGHBOURS ARE BOTH NAMED SAYS NO "unread", asserted on a DIFFERENT copy. */
   const adjacent = page.locator('.card-locations-owner .nb').first()
   await expect(adjacent.locator('.nb-unread')).toHaveCount(0)
   await expect(adjacent).toHaveAttribute(
     'aria-label',
-    'It sits in front of Galio, Indefaticable and behind Evelynn, Entrancing.',
+    'Position: Galio, Indefaticable / Evelynn, Entrancing',
   )
 })
 
