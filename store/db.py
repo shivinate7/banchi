@@ -1837,7 +1837,8 @@ class SqliteSource:
         bad = self.conn.execute(
             f"SELECT 1 FROM {self.table}{base}{joiner}({nulls}) LIMIT 1", base_params
         ).fetchone()
-        return (0 if top is None else int(top)), bad is not None
+        # Clamped at 0 like the walk's `highest = 0`: a box holding only idx <= 0 answers 1.
+        return (0 if top is None else max(0, int(top))), bad is not None
 
     def distinct(self, column: str) -> Iterable[Any]:
         if column not in self.columns:

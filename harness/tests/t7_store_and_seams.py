@@ -1078,8 +1078,14 @@ def check_next_index_sql(checks: Checks) -> None:
             inv.ensure_box(9)
             del inv.cards["2/1"]
             inv.cards["4/1"] = master.Card(box="4", index="1")
+            inv.cards["8/0"] = master.Card(box=8, index=0)
+            inv.cards["10/-3"] = master.Card(box=10, index=-3)
         read = Store().read().inventory
-        compare(read, [0, 1, 2, 3, 4, 9, 77], "hand-built")
+        compare(read, [0, 1, 2, 3, 4, 8, 9, 10, 77], "hand-built")
+        checks.equal(
+            (read.next_index(8), read.next_index(10)), (1, 1),
+            "a box holding only idx <= 0 starts at 1, as the walk does",
+        )
         checks.equal(read.next_index(1), 6, "sold, retired and moved cards still hold the mark")
         checks.equal(read.next_index(9), 1, "a registered empty box starts at 1")
         checks.equal(read.next_index(77), 1, "an unknown box starts at 1")
