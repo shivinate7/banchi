@@ -83,3 +83,13 @@ test('raw finds a digit run in the middle of a code (Codes, F11b)', () => {
   // The same digit run through `text` instead of `raw` does not match (rule 7's own limit).
   expect(matchQuery('234', { text: ['PROMO1234XY'] })).toBe(false)
 })
+
+/* F11c: rule 4's `/`-prefix guard must run BEFORE `raw` gets a turn. `/19` names the
+ * SECOND PART of a card number (`numberMatch`'s own reading). A `raw` field holding `19`
+ * (a code, a key cap) must never answer for it — `rawSubstringMatch` used to run first,
+ * so a `raw` row with no matching card number still matched on the plain substring. */
+test('a leading slash never falls through to raw (F11c)', () => {
+  expect(matchQuery('/19', { raw: ['19'] })).toBe(false)
+  // The same query still finds a real card number whose second part is 19.
+  expect(matchQuery('/19', { numbers: ['4/19'] })).toBe(true)
+})

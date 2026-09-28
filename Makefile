@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -386,7 +386,8 @@ audit-history:
 # both ways, so this line and CLAUDE.md's cannot drift from each other or from it.
 # make check        harness + docs-audit + revert-guard + port-agreement + set-hint-agreement +
 #                   readiness-agreement + screen-freshness + screen-freshness-selftest +
-#                   sigil-check + css-var-check + css-var-check-selftest + token-literal-check +
+#                   sigil-check + css-var-check + css-var-check-selftest +
+#                   hand-search-selftest + token-literal-check +
 #                   kit-adoption + ignore-check + lint + typecheck + audit-self-test +
 #                   mutate-anchors + githooks-selftest + merge-selftest + revert-selftest +
 #                   claim-selftest + decisions-selftest + debts-selftest + gates-selftest +
@@ -426,6 +427,7 @@ check:
 	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory css-var-check
 	@$(MAKE) --no-print-directory css-var-check-selftest
+	@$(MAKE) --no-print-directory hand-search-selftest
 	@$(MAKE) --no-print-directory token-literal-check
 	@$(MAKE) --no-print-directory kit-adoption
 	@$(MAKE) --no-print-directory ignore-check
@@ -543,6 +545,7 @@ ci-check:
 	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory css-var-check
 	@$(MAKE) --no-print-directory css-var-check-selftest
+	@$(MAKE) --no-print-directory hand-search-selftest
 	@$(MAKE) --no-print-directory token-literal-check
 	@$(MAKE) --no-print-directory kit-adoption
 	@$(MAKE) --no-print-directory ignore-check
@@ -612,6 +615,16 @@ css-var-check:
 # `css-var-check` itself.
 css-var-check-selftest:
 	@python3 scripts/css-var-check.py --self-test
+
+# THE HAND-ROLLED-SEARCH ESLINT RULE (D271, F11c), PROVED ON FIXTURES OVER THE REAL
+# `npx eslint --stdin`, THE SAME METHOD css-var-check-selftest USES. Not on the
+# guard-scope roster: its real subject is app/eslint.config.js, a JS file no Python
+# import can name, so `derive_subjects` has nothing to read (scripts/hand-search-selftest.py's
+# own header argues this in full). Ungated in `make check`, the same as
+# css-var-check-selftest and kit-adoption-selftest.
+hand-search-selftest:
+	$(NPM_GUARD)
+	@python3 scripts/hand-search-selftest.py
 
 # A CSS LITERAL EXACTLY EQUAL TO A DESIGN TOKEN'S VALUE, IN ITS OWN PROPERTY FAMILY
 # (`docs/reviews/ux-2026-09-20/RANKING.md` §4): `font-size: 22px` where `--bn-fs-2xl: 22px`

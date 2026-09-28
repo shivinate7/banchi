@@ -239,8 +239,8 @@ function rawSubstringMatch(token: string, row: Prepared): boolean {
 function tokenMatch(raw: string, row: Prepared): boolean {
   if (SKU_SHAPE.test(raw) && row.skus.some((sku) => sku.startsWith(raw))) return true
   if (numberMatch(raw, row)) return true
-  if (rawSubstringMatch(raw, row)) return true
   if (raw.startsWith('/')) return false
+  if (rawSubstringMatch(raw, row)) return true
   return textMatch(raw, row)
 }
 

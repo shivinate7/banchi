@@ -584,6 +584,8 @@ export function Codes() {
     return ledger.entries.filter((e) => {
       if (stateFilter !== 'all' && e.state !== stateFilter) return false
       if (laneFilter !== 'all' && laneOf(e) !== laneFilter) return false
+      // D271: `code` is `raw`, a plain substring — a digit run in the middle of a code is
+      // not a word of its own, so rule 7's word-start digit test would miss it.
       return matchQuery(filter, {
         text: [e.product_display, e.set_hint, e.order_id, e.buyer, e.state],
         raw: [e.code],

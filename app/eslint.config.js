@@ -188,22 +188,50 @@ const LOCAL_STORAGE_RULES = [
 
 const HAND_SEARCH =
   'D271: every search field uses `matchQuery`/`filterByQuery` from app/src/kit/match.ts, ' +
-  'never its own `.toLowerCase().includes()`. That call folds only case, not accents or ' +
-  'punctuation, tests one token instead of the shared word-order and digit rules, and ' +
-  'drifts from the server\'s own `match_query`. A fixed constant on the right (a literal ' +
-  'like `\'foil\'`) is not a typed query — silence this line with a one-line comment ' +
-  'saying so, the way app/src/Revenue.tsx and app/src/kit/data.tsx already do.'
+  'never a hand-rolled case-folded comparison (`.includes`/`.startsWith`/`.endsWith`/' +
+  '`.indexOf` over `.toLowerCase`/`.toLocaleLowerCase`). That fold covers only case, ' +
+  'never accents or punctuation, tests one token instead of the shared word-order and ' +
+  'digit rules, and drifts from the server\'s own `match_query`. A fixed constant on ' +
+  'either side (a literal like `\'foil\'`) is not a typed query — silence this line with ' +
+  'a one-line comment saying so, the way app/src/Revenue.tsx and app/src/kit/data.tsx ' +
+  'already do.'
 
-/* One shape: `x.toLowerCase().includes(y)`. Narrower than a bare ban on `.includes()`,
- * which fires on ordinary array membership everywhere in this codebase — the `.toLowerCase()`
- * in front is what marks a case-folded string comparison, which is what a hand-rolled
- * search is. Two known non-query uses are silenced at the call site rather than exempted
- * by file, the same choice `LOCAL_STORAGE_RULES` argues against for a store-wide ban: a
- * fixed word like `'foil'` on the right is not a typed query, and the comment says so
- * where a reviewer is already looking. */
+/* FOUR COMPARISON METHODS (`includes`, `startsWith`, `endsWith`, `indexOf`), FOLDED ON
+ * EITHER SIDE (F11c, the reviewer's own finding: the round-one rule caught only
+ * `x.toLowerCase().includes(y)` and let `.startsWith`, `.toLocaleLowerCase()` and a fold
+ * on the ARGUMENT instead of the receiver — `x.includes(y.toLowerCase())` — through
+ * silently). Two selectors, not one, because the fold can sit on either operand of the
+ * comparison and esquery has no "either child" combinator:
+ *
+ *  - RECEIVER-FOLDED: `x.toLowerCase().includes(y)`. The comparison's own object is
+ *    itself a call to the fold.
+ *  - ARGUMENT-FOLDED: `x.includes(y.toLowerCase())`. One of the comparison's arguments is
+ *    a call to the fold. `CallExpression.arguments` reaches into the arguments array by
+ *    esquire's field-selector syntax, the same the SPLIT_COMMA_RULES selectors above use
+ *    for `arguments.0`.
+ *
+ * Narrower than a bare ban on the four methods, which fire on ordinary array membership
+ * and byte offsets everywhere in this codebase — the fold on one side is what marks a
+ * case-folded STRING comparison, which is what a hand-rolled search is. Known non-query
+ * uses are silenced at the call site rather than exempted by file, the same choice
+ * `LOCAL_STORAGE_RULES` argues against for a store-wide ban: a fixed word like `'foil'` on
+ * either side is not a typed query, and the comment says so where a reviewer is already
+ * looking.
+ *
+ * WHAT THIS STILL CANNOT CATCH, ARGUED RATHER THAN CHASED (see D271's own amendment): a
+ * fold assigned to a variable first (`const f = x.toLowerCase(); f.includes(y)`) breaks
+ * the chain esquery matches on. A type-aware rule could follow the binding; this repo
+ * declines type-aware linting for `make lint`'s own cost reasons (this file's own header,
+ * "Overlap"). Disclosed, not mechanized. */
+const HAND_SEARCH_METHODS = '/^(includes|startsWith|endsWith|indexOf)$/'
+const HAND_SEARCH_FOLDS = '/^(toLowerCase|toLocaleLowerCase)$/'
 const HAND_SEARCH_RULES = [
   {
-    selector: 'CallExpression[callee.property.name="includes"][callee.object.callee.property.name="toLowerCase"]',
+    selector: `CallExpression[callee.property.name=${HAND_SEARCH_METHODS}][callee.object.callee.property.name=${HAND_SEARCH_FOLDS}]`,
+    message: HAND_SEARCH,
+  },
+  {
+    selector: `CallExpression[callee.property.name=${HAND_SEARCH_METHODS}] > CallExpression.arguments[callee.property.name=${HAND_SEARCH_FOLDS}]`,
     message: HAND_SEARCH,
   },
 ]
