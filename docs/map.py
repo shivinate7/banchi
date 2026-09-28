@@ -5070,8 +5070,8 @@ COMPONENTS = [
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
                 "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D86", "D88",
-                                "D96", "D159", "D172", "D183", "D213", "D216", "D220", "D227",
-                                "D269", "D295", "D-demo-stock-images"],
+                                "D96", "D159", "D172", "D183", "D193", "D213", "D216", "D220",
+                                "D227", "D269", "D295", "D-demo-stock-images"],
             },
             "demo-record-resume-selftest.py": {
                 "does": "`WorkArea`/`snapshot_key`, the resume cache PR 4B lane M added to "
@@ -5081,13 +5081,18 @@ COMPONENTS = [
                         "a clean one (which is also why the shipping-batch POST's random "
                         "id is routed through the same skip check, not reissued on resume), "
                         "a corrupted route file is never counted as recorded and is "
-                        "re-fetched exactly once, and a changed store hashes to a different "
-                        "key and starts over.",
+                        "re-fetched exactly once, a changed store hashes to a different key "
+                        "and starts over, no work-area file carries a name the scrub "
+                        "replaces (D295), an old key's work area is pruned once a current "
+                        "one exists, and a stateful POST (the batch id "
+                        "`server/shipping_routes.py:_BATCHES` only means anything inside "
+                        "the process that issued it) is cached only once its dependent GET "
+                        "is too, never the POST alone.",
                 # D18: writes nothing but its own throwaway temp directories, spends
                 # nothing (no network, no subprocess, no real store), so it is safe on any
                 # path. Not wired into `make check`, on `demo-record-selftest.py`'s own
-                # precedent — run by hand.
-                "governed_by": ["D18", "D86", "D88"],
+                # precedent — run by hand. D193 is the buyer name the scrub test protects.
+                "governed_by": ["D18", "D86", "D88", "D193", "D295"],
             },
             "demo-record-selftest.py": {
                 "does": "Server's stdout-drain, proved on a bare subprocess rather than by "

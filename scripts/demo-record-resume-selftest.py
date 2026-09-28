@@ -22,9 +22,21 @@ WHAT COULD GO WRONG WITHOUT EACH PIECE, PROVED BELOW.
       wrongly reuses another store's cached routes, or a copy with an unchanged mtime never
       resumes at all
 
+REVIEW ROUND 2 ADDED TWO MORE, BOTH FOUND BY THE REVIEWER, NOT BY THIS FILE:
+  (e) `save()` writes a route's RAW body                     -> a second, persistent copy of
+      whatever a route answers (an order or pick's buyer name, D193) sits on disk across
+      process runs, unscrubbed, which D295's outcome ("nothing unscrubbed sits anywhere")
+      forbids regardless of whether the store it came from was already scrubbed upstream
+  (f) a stateful POST (`POST /shipping/batches`, whose id lives only in the SERVER
+      PROCESS's own memory, `server/shipping_routes.py:_BATCHES`) is cached the moment it
+      succeeds, before its dependent GET does -> a kill in between strands that GET
+      forever: a resumed run's server is a NEW process that never heard of the old id
+
 Each is proved on the real `demo_record.WorkArea` / `demo_record.sweep` — a `FakeServer`
 answers every GET/POST with a body that depends only on the path, deterministically, so a
-clean run and a killed-then-resumed run can be compared byte for byte.
+clean run and a killed-then-resumed run can be compared byte for byte. `StatefulFakeServer`
+(for (f)) is the one exception: its POST-created ids are valid only in the INSTANCE that
+created them, the way the real server's in-memory batch table is valid only in that process.
 """
 
 from __future__ import annotations
@@ -80,24 +92,61 @@ def _body_for(key: str) -> dict:
 class FakeServer:
     """No network, no subprocess: every GET/POST answers 200 with `_body_for`'s body.
     `kill_after` raises `Interrupted` from the call after the Nth, simulating a process
-    killed mid-sweep."""
+    killed mid-sweep. `log` records every call attempted, in order, `(kind, path)` —
+    including the one that raises — so a test can find WHERE in the deterministic call
+    sequence a given route sits, rather than hand-counting it."""
 
     def __init__(self, kill_after: int = None) -> None:
         self.calls = 0
         self.kill_after = kill_after
+        self.log = []
 
-    def _step(self) -> None:
+    def _step(self, kind: str, path: str) -> None:
         self.calls += 1
+        self.log.append((kind, path))
         if self.kill_after is not None and self.calls > self.kill_after:
             raise Interrupted("simulated kill after %d call(s)" % self.kill_after)
 
     def get(self, path: str):
-        self._step()
+        self._step("GET", path)
         return 200, _body_for(path)
 
     def post(self, path: str, payload: dict):
-        self._step()
+        self._step("POST", path)
         return 200, _body_for(demo_record.post_key(path, payload))
+
+
+class StatefulFakeServer(FakeServer):
+    """Like `FakeServer`, except `/shipping/batches` behaves the way the real server's
+    `_BATCHES` table does (`server/shipping_routes.py`): the id a POST creates is valid
+    only for a GET against THIS SAME INSTANCE. A fresh instance — a resumed run's new
+    server process — has never heard of it and answers 404, exactly like the real one
+    would for a batch nobody here ever created. Every other path answers like `FakeServer`.
+    """
+
+    def __init__(self, kill_after: int = None) -> None:
+        super().__init__(kill_after=kill_after)
+        self._known_batches = set()
+        self._next_batch = 0
+
+    def post(self, path: str, payload: dict):
+        self._step("POST", path)
+        if path == "/shipping/batches":
+            self._next_batch += 1
+            batch = "batch-%d-of-instance-%d" % (self._next_batch, id(self))
+            self._known_batches.add(batch)
+            return 200, {"batch": batch}
+        return 200, _body_for(demo_record.post_key(path, payload))
+
+    def get(self, path: str):
+        self._step("GET", path)
+        prefix = "/shipping/batches/"
+        if path.startswith(prefix):
+            batch = path[len(prefix):]
+            if batch not in self._known_batches:
+                return 404, None
+            return 200, {"batch": batch, "ok": True}
+        return 200, _body_for(path)
 
 
 def _space(home: Path) -> Dict[str, object]:
@@ -120,12 +169,16 @@ def _write_store(home: Path, content: bytes) -> None:
     (home / "inventory" / "store.sqlite").write_bytes(content)
 
 
-def _sweep(work: "demo_record.WorkArea", home: Path, kill_after: int = None):
-    """One sweep over a `FakeServer`. Returns `(recorded, stats, calls)`, or raises
-    `Interrupted` (leaving whatever `work` already holds on disk) if `kill_after` fires."""
-    server = FakeServer(kill_after=kill_after)
+def _sweep(work: "demo_record.WorkArea", home: Path, kill_after: int = None,
+           server_cls=FakeServer, server=None):
+    """One sweep over a fake server. Returns `(recorded, stats, server)`, or raises
+    `Interrupted` (leaving whatever `work` already holds on disk) if `kill_after` fires.
+    Pass `server` (already constructed) to reuse a specific instance, e.g. to prove that a
+    resumed run's server is a genuinely DIFFERENT one (`StatefulFakeServer`)."""
+    if server is None:
+        server = server_cls(kill_after=kill_after)
     recorded, skipped, stats = demo_record.sweep(server, _space(home), work)
-    return recorded, stats, server.calls
+    return recorded, stats, server
 
 
 # ------------------------------------------------------------------------------- the tests
@@ -175,7 +228,7 @@ def _resume_skips_and_matches_a_clean_run() -> None:
 
         clean_area = demo_record.WorkArea(home)
         clean_area.dir = root / "work-clean"
-        clean_recorded, clean_stats, _clean_calls = _sweep(clean_area, home)
+        clean_recorded, clean_stats, _clean_server = _sweep(clean_area, home)
         total = len(clean_recorded)
         ok(total > 30, "the fixture space produces a real number of routes",
            "got %d" % total)
@@ -195,13 +248,13 @@ def _resume_skips_and_matches_a_clean_run() -> None:
            "the kill leaves exactly the routes that finished landing on disk",
            "got %d, kill_after=%d" % (len(landed), kill_point))
 
-        resumed_recorded, resumed_stats, resumed_calls = _sweep(killed_area, home)
+        resumed_recorded, resumed_stats, resumed_server = _sweep(killed_area, home)
         ok(resumed_stats["resumed"] == kill_point,
            "the resumed run's own count of skipped routes matches what was on disk",
            "got %d, want %d" % (resumed_stats["resumed"], kill_point))
-        ok(resumed_calls == total - kill_point,
+        ok(resumed_server.calls == total - kill_point,
            "(a) the resumed run calls the server only for routes the kill never finished",
-           "got %d calls, want %d" % (resumed_calls, total - kill_point))
+           "got %d calls, want %d" % (resumed_server.calls, total - kill_point))
         ok(len(resumed_recorded) == total, "the resumed run finishes with every route")
 
         clean_json = json.dumps(clean_recorded, sort_keys=True)
@@ -220,7 +273,7 @@ def _corrupted_route_file_is_rerecorded() -> None:
         work = demo_record.WorkArea(home)
         work.dir = root / "work"
 
-        recorded, _stats, _calls = _sweep(work, home)
+        recorded, _stats, _server = _sweep(work, home)
         total = len(recorded)
         victim = sorted(work.dir.glob("*.json"))[0]
         victim.write_text("{not valid json", "utf-8")
@@ -229,8 +282,9 @@ def _corrupted_route_file_is_rerecorded() -> None:
         ok(len(loaded) == total - 1, "a corrupted route file is not counted as recorded",
            "got %d, want %d" % (len(loaded), total - 1))
 
-        rerecorded, _restats, recalls = _sweep(work, home)
-        ok(recalls == 1, "exactly the corrupted route is re-fetched", "got %d calls" % recalls)
+        rerecorded, _restats, reserver = _sweep(work, home)
+        ok(reserver.calls == 1, "exactly the corrupted route is re-fetched",
+           "got %d calls" % reserver.calls)
         ok(len(rerecorded) == total, "the corrupted route is whole again after the re-run")
 
 
@@ -253,12 +307,132 @@ def _changed_snapshot_starts_fresh() -> None:
         ok(len(work2.load()) == 0, "the new key's own work area starts empty")
 
 
+def _work_area_scrubs_before_it_writes_to_disk() -> None:
+    """(e) A route's raw answer may carry the machine's own absolute path — `/status`
+    really does (`captures_root`, the corpus file) — and the work area is a SECOND,
+    PERSISTENT copy that outlives the one process a pre-existing whole-dict scrub at
+    publish time used to be enough to cover. Nothing unscrubbed may sit there."""
+    with tempfile.TemporaryDirectory() as scratch:
+        root = Path(scratch)
+        home = root / "home"
+        _write_store(home, b"snapshot-scrub")
+
+        secret_root = Path("/Users/some-owner/Developer/pkmnscan")
+        pairs = [(str(secret_root), "/machine")]
+
+        class LeakyServer(FakeServer):
+            """`/status` answers with a literal machine path, the way the real one does."""
+
+            def get(self, path):
+                self._step("GET", path)
+                if path == "/status":
+                    return 200, {"captures_root": str(secret_root / "captures")}
+                return 200, _body_for(path)
+
+        work = demo_record.WorkArea(home, pairs)
+        work.dir = root / "work"
+        _sweep(work, home, server=LeakyServer())
+
+        leaked = [f.name for f in work.dir.glob("*.json")
+                  if str(secret_root) in f.read_text("utf-8")]
+        ok(not leaked, "(e) no work-area file contains a name the scrub replaces",
+           "leaked in %r" % leaked)
+
+        status_entry = work.load().get("/status")
+        ok(status_entry is not None
+           and status_entry["body"]["captures_root"] == "/machine/captures",
+           "the scrubbed value, not the raw one, is what a later reader gets back",
+           "got %r" % status_entry)
+
+
+def _stale_keys_are_pruned() -> None:
+    """`prune_others()`: a run over a CURRENT key deletes every OTHER key's work area —
+    an old snapshot's routes (buyer names included) should not just sit there once a run
+    has moved on. Patches the module-level `WORK_ROOT` for the duration of the test alone,
+    so this never touches the real, gitignored cache under the checkout."""
+    with tempfile.TemporaryDirectory() as scratch:
+        root = Path(scratch)
+        original_root = demo_record.WORK_ROOT
+        demo_record.WORK_ROOT = root / "cache"
+        try:
+            home = root / "home"
+            _write_store(home, b"snapshot-old")
+            old_work = demo_record.WorkArea(home)
+            old_work.save("some/route", {"status": 200, "body": {"x": 1}})
+            ok(old_work.dir.is_dir(), "the old key's own directory exists before the prune")
+
+            _write_store(home, b"snapshot-new")
+            new_work = demo_record.WorkArea(home)
+            ok(new_work.key != old_work.key, "the new store hashes to a different key")
+            pruned = new_work.prune_others()
+
+            ok(pruned == 1, "prune_others() reports the one stale key it removed",
+               "got %d" % pruned)
+            ok(not old_work.dir.exists(), "the old key's work area is gone")
+            ok(demo_record.WORK_ROOT.is_dir(), "WORK_ROOT itself survives the prune")
+        finally:
+            demo_record.WORK_ROOT = original_root
+
+
+def _find_shipping_post_index(home: Path, root: Path) -> int:
+    """The 1-based call index of the `/shipping/batches` POST in one full, uninterrupted
+    sweep — found empirically rather than hand-counted, so a change elsewhere in
+    `sweep()`'s call order cannot make the kill point below silently mean something else."""
+    probe = demo_record.WorkArea(home)
+    probe.dir = root / "work-probe"
+    _recorded, _stats, server = _sweep(probe, home, server_cls=StatefulFakeServer)
+    for index, call in enumerate(server.log, start=1):
+        if call == ("POST", "/shipping/batches"):
+            return index
+    raise AssertionError("the fixture sweep never called POST /shipping/batches")
+
+
+def _shipping_unit_is_not_split_by_a_kill() -> None:
+    """(f) A kill between the shipping POST and its dependent GET must never leave the
+    POST cached alone: the resumed run's server is a NEW instance
+    (`StatefulFakeServer`) that has never heard of the old batch id, so trusting the
+    stale POST would strand its GET forever."""
+    with tempfile.TemporaryDirectory() as scratch:
+        root = Path(scratch)
+        home = root / "home"
+        _write_store(home, b"snapshot-shipping")
+        post_index = _find_shipping_post_index(home, root)
+
+        work = demo_record.WorkArea(home)
+        work.dir = root / "work"
+        try:
+            _sweep(work, home, kill_after=post_index, server_cls=StatefulFakeServer)
+            ok(False, "the kill lands right after the POST, before its dependent GET")
+        except Interrupted:
+            pass
+
+        landed = work.load()
+        shipping_keys = [k for k in landed if "shipping/batches" in k]
+        ok("POST /shipping/batches" not in landed,
+           "(f) a POST with no completed dependent GET is never cached alone",
+           "got %r" % shipping_keys)
+
+        # Resume with a FRESH instance — a new process, an empty batch table.
+        recorded, _stats, _server = _sweep(work, home, server_cls=StatefulFakeServer)
+        posted = recorded.get("POST /shipping/batches")
+        ok(posted is not None, "the whole unit is reissued and lands on resume",
+           "got %r" % posted)
+        batch = (posted or {}).get("body", {}).get("batch")
+        get_key = "/shipping/batches/%s" % batch if batch else None
+        ok(get_key is not None and get_key in recorded,
+           "the resumed GET matches the resumed POST's own (new) batch id, not a stale one",
+           "got %r" % get_key)
+
+
 def main() -> int:
     _save_is_atomic_no_tmp_survives()
     _key_reflects_prices_json_too()
     _resume_skips_and_matches_a_clean_run()
     _corrupted_route_file_is_rerecorded()
     _changed_snapshot_starts_fresh()
+    _work_area_scrubs_before_it_writes_to_disk()
+    _stale_keys_are_pruned()
+    _shipping_unit_is_not_split_by_a_kill()
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0
 

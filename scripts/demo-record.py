@@ -50,7 +50,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from demo_scrub import audit, replacements, scrub  # noqa: E402
 
@@ -125,11 +125,24 @@ class WorkArea:
     the very rebuild the owner reruns after a kill. A different snapshot hashes to a
     different key and so reads an empty directory — it starts fresh, with no rule needed
     to notice the change.
+
+    SCRUBBED BEFORE IT TOUCHES DISK, NEVER AFTER (review finding, PR 4B lane M round 2).
+    `main()` used to scrub only once, over the whole assembled `recorded` dict, right
+    before writing the published bundle — so nothing unscrubbed ever left the ONE process
+    that read the store. This cache is a SECOND, PERSISTENT copy that survives the process
+    exiting, so an order or pick route's raw body (a buyer's name, D193) must never sit
+    here unscrubbed, whether or not the store it came from was already scrubbed upstream
+    (`demo-mirror.py:build()`) — D295's outcome is that nothing unscrubbed sits anywhere.
+    `pairs` is the same `demo_scrub.replacements()` list `main()` already computes.
+    Scrubbing is a plain string replace, so scrubbing an already-scrubbed value again (the
+    whole-dict pass in `main()` still runs, as a second, harmless check) changes nothing —
+    idempotent by construction, which is what keeps a resumed bundle byte-identical.
     """
 
-    def __init__(self, home: Path) -> None:
+    def __init__(self, home: Path, pairs: Sequence[Tuple[str, str]] = ()) -> None:
         self.key = snapshot_key(home)
         self.dir = WORK_ROOT / self.key
+        self.pairs = list(pairs)
 
     def load(self) -> Dict[str, dict]:
         """Every route this key already holds an answer for.
@@ -150,17 +163,39 @@ class WorkArea:
         return out
 
     def save(self, key: str, entry: dict) -> None:
-        """One route's answer, written to a temporary name and then renamed into place.
+        """One route's answer, scrubbed, then written to a temporary name and renamed
+        into place.
 
-        THE RENAME IS THE WHOLE MECHANISM. `load()` above only ever globs the final `.json`
-        name, so a process killed mid-write leaves nothing but an orphan `.tmp` file that no
-        glob matches — the route it was about to finish is simply asked for again.
+        THE RENAME IS THE WHOLE ATOMICITY MECHANISM. `load()` above only ever globs the
+        final `.json` name, so a process killed mid-write leaves nothing but an orphan
+        `.tmp` file that no glob matches — the route it was about to finish is simply
+        asked for again.
         """
+        scrubbed = scrub(entry, self.pairs)
         self.dir.mkdir(parents=True, exist_ok=True)
         name = hashlib.sha256(key.encode("utf-8")).hexdigest() + ".json"
         tmp = self.dir / (name + ".tmp")
-        tmp.write_text(json.dumps({"key": key, "entry": entry}), "utf-8")
+        tmp.write_text(json.dumps({"key": key, "entry": scrubbed}), "utf-8")
         tmp.rename(self.dir / name)
+
+    def prune_others(self) -> int:
+        """Delete every OTHER key's work area under `WORK_ROOT` — they belong to a
+        snapshot nobody is resuming any more and hold data nobody needs (review finding:
+        an old snapshot's routes, buyer names included, should not just sit there once a
+        run has moved on to a current key). Returns how many were removed.
+
+        Reads the module-level `WORK_ROOT` directly rather than `self.dir.parent`, so a
+        test that points `self.dir` elsewhere (never touching the real cache) cannot
+        accidentally make this prune somewhere it should not.
+        """
+        if not WORK_ROOT.is_dir():
+            return 0
+        pruned = 0
+        for child in WORK_ROOT.iterdir():
+            if child.is_dir() and child.name != self.key:
+                shutil.rmtree(child)
+                pruned += 1
+        return pruned
 
 
 # --------------------------------------------------------------------------- the server
@@ -561,34 +596,54 @@ def sweep(server: Server, space: Dict[str, List[str]], work: "WorkArea"):
     if not shipping.is_file():
         shipping = REPO_ROOT / "fixtures" / "orders-shipping.csv"
     if shipping.is_file():
-        # RESUMED RATHER THAN REISSUED. `_new_batch_id()` (`server/shipping_routes.py`) is
-        # random by design — "what it cannot do is name one" — so posting the same export a
-        # second time never gets the same batch id back. Reissuing it on every resumed run
-        # would make `POST /shipping/batches` (and the `/shipping/batches/<batch>` GET it
-        # feeds) a fresh, unrepeatable answer every time, which is exactly what a resumed
-        # run must never be (assertion b: byte-identical to an uninterrupted one).
-        if "POST /shipping/batches" in recorded:
-            made = recorded["POST /shipping/batches"]["body"]
+        # THE UNIT IS THE POST PLUS ITS ONE DEPENDENT GET, NEVER THE POST ALONE (review
+        # round 2). `_new_batch_id()` (`server/shipping_routes.py`) only means anything
+        # inside the SERVER PROCESS that issued it — `_BATCHES` lives in memory there, and
+        # is random by design ("what it cannot do is name one"). A resumed run's server is
+        # a NEW process with an empty table, so a cached POST answer whose dependent GET
+        # never landed points at a batch id nothing can ever look up again — caching the
+        # POST alone would strand that GET forever. So the POST is trusted from the cache
+        # ONLY once its GET is ALSO already cached (or the answer never named one to wait
+        # for at all); short of that, BOTH are reissued against the live server, never the
+        # POST by itself.
+        def _shipping_get_key(body: dict) -> Optional[str]:
+            batch = body.get("batch") if isinstance(body, dict) else None
+            return "/shipping/batches/%s" % urllib.parse.quote(str(batch)) if batch else None
+
+        cached_post = recorded.get("POST /shipping/batches")
+        if cached_post is not None:
+            cached_get_key = _shipping_get_key(cached_post.get("body"))
+            # No batch named at all means there was never a dependent GET to strand.
+            unit_complete = cached_get_key is None or cached_get_key in recorded
+            if not unit_complete:
+                del recorded["POST /shipping/batches"]  # a stranded half; reissue the unit
+                cached_post = None
+
+        if cached_post is not None:
+            made = cached_post["body"]
         else:
             status, made = server.post(
                 "/shipping/batches", {"content": shipping.read_text(encoding="utf-8")}
             )
-            if status == 200 and isinstance(made, dict):
-                # RECORDED UNDER THE VERB, because this one read is a POST. There is no
-                # `GET /shipping/batches` at all — the server keeps no list, so the only way
-                # to see a batch is the answer to the request that made it. `demoServer.ts`
-                # replays this for the same POST, which is honest: reading an export is a
-                # pure function of the file, and the demo is a frozen store throughout.
+            made = made if status == 200 and isinstance(made, dict) else None
+
+        if isinstance(made, dict):
+            get_key = _shipping_get_key(made)
+            if get_key is not None:
+                take(get_key)
+            # THE UNIT IS COMPLETE ONCE ITS GET (IF ANY) HAS ALSO LANDED — persist the
+            # POST now, never earlier than this. RECORDED UNDER THE VERB, because this one
+            # read is a POST. There is no `GET /shipping/batches` at all — the server keeps
+            # no list, so the only way to see a batch is the answer to the request that
+            # made it. `demoServer.ts` replays this for the same POST, which is honest:
+            # reading an export is a pure function of the file, and the demo is a frozen
+            # store throughout.
+            if (get_key is None or get_key in recorded) \
+                    and "POST /shipping/batches" not in recorded:
                 entry = {"status": 200, "body": made}
                 recorded["POST /shipping/batches"] = entry
                 work.save("POST /shipping/batches", entry)
                 stats["new"] += 1
-            else:
-                made = None
-        if isinstance(made, dict):
-            batch = made.get("batch")
-            if batch:
-                take("/shipping/batches/%s" % urllib.parse.quote(str(batch)))
 
     # ---------------------------------------------------------------- price history
     # D62's reading, per SKU: hold `t` over a row on `#/pricing` and this is what appears.
@@ -1051,7 +1106,11 @@ def main() -> int:
 
     space = parameter_space(home)
     warmed = warm_history_cache(home)
-    work = WorkArea(home)
+    pairs = replacements(REPO_ROOT, home)
+    work = WorkArea(home, pairs)
+    pruned = work.prune_others()
+    if pruned:
+        print("resume    pruned %d work area(s) from an earlier snapshot" % pruned)
     port = free_port()
     with Server(home, port, offline=args.offline) as server:
         recorded, skipped, stats = sweep(server, space, work)
@@ -1068,7 +1127,7 @@ def main() -> int:
             "`photo` is a file under %s." % (len(space["cards"]), home)  # type: ignore[arg-type]
         )
 
-    pairs = replacements(REPO_ROOT, home)
+    # `pairs` was already computed above, before the sweep — `WorkArea.save` needs it too.
     BUNDLE.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "wire": wire_digest(),
