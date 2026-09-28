@@ -100,6 +100,7 @@ Logged, waiting for the owner's word:
 - F8: in Inventory, a search for "hand hammer" ranks Jayce cards above the common card Hand Hammer. A Sonnet lane diagnoses the cause and the change that made it, then proposes a fix. D271 (one forgiving matcher everywhere) governs.
   - The diagnosis: `server/match.py` ranks Hand Hammer first. The walk in `BoxBrowse.tsx` picks its box and landing by the largest pile of live copies across all matches, and never reads that rank. The owner confirmed that in-stock Hand Hammers did not surface until another box was picked.
   - The owner's ruling: `Rank before pile size (Recommended),Say when the best match is sold (Recommended)`. Lane F8 builds both on `ux/pr4b-F8`.
+  - A second example (owner, same day): a search for "shadow" shows a Zed card before the card named Shadow. Sent to lane F8 to confirm the same cause.
 - F9: an empty section must not show in the Inventory walk. The owner often opens the next section at the end of a capture, and it stays empty. The strip then counts it ("Section 10 of 11"), which breaks the back-to-front count while locating a card. Owner: `be careful about this change`. Default scope: the walk hides it (strip, "of N", ruler). Capture, Manage box and the move targets still show it, so it can be filled, renamed or deleted. It runs as one lane after F8, since both edit `BoxBrowse.tsx`. D264 (a section is an object that moves whole) and D260 (a card counts within its section) govern.
 
 Before PR 4B merges:
@@ -201,6 +202,7 @@ G, T and PR 5:
 - H, on the first mockups (current, A, B, C, desktop only): `all of the H concepts tend to just pick one color and stick to it, when the power of cyberpunk is its fusion of several loud color schema contrasting and clashing`. So no single-accent concept is the answer.
 - H, same round: `neon noir was the closest of the dynamism though if i had to pick one`, then `none were good tho`. Neon Noir is the starting point, not the answer.
 - H round 2 (owner, same day): `Mockup round 2: fusion (Recommended)`. Three multi-color concepts on Neon Noir's ground, Pricing and Home, desktop only.
+- H round 2 verdict: `pretty underwhelming, neon noir and synthwave are again too mild`. The next step, on the owner's word: a new BLIND agent sees only the LIGHT mode and designs several novel many-color palettes. Colors only, no layout change. Owner: `super spicy, loud, color schema ... not just one color, MANYYY COLORS ... cyberpunk anime esque dark mode as though you're a league of legends pro`.
 - The Box number sweep (owner, same day): `In PR 4B, after A3 and F5 (Recommended)`. One Sonnet lane adds a shared browser `boxTitle`. It fixes the screens that show a box number: the Orders copy map, the run scope, the rescue, Capture and Home's status line. A check refuses a new typed `Box ${`. D259 (a box is shown only by its name) governs.
 - Walk density: `Cards to pick at the stop (what's built)`.
 - Test-audit Q1, the tiers: `Three tiers, agent proposes, you approve (Recommended)`. Q2: `Yes (Recommended)`.
