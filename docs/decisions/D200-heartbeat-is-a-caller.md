@@ -60,7 +60,7 @@ anything it shells out to, and it writes nothing outside `.serve/heartbeat/`.
 
 This entry exists partly to correct its own history. Two intermediate drafts, produced before this one, built a **client-side scheduler inside `app/src`** — a `subscribe(job, { everyNBeats })` primitive meant to share one `setInterval` between the sidebar's server-status
 dot and a future Orders live-arrival poll, with tab-visibility awareness and failure backoff.
-That work was deleted from this branch before landing. **It was answering a different, real bug** (`app/src/App.tsx`'s "Server online" dot staying green through several seconds of every
+That work was deleted from this branch before landing. **It was answering a different, real bug** (`app/src/App.tsx`'s server-status dot (deleted 2026-09-28) staying green through several seconds of every
 request failing, from the 2026-09-13 UX walkthrough) that has nothing to do with item 24 beyond
 sharing the word "heartbeat" — GATES item 24 is about *this repository's own state across
 sessions and branches*, never about a browser tab's connection to its own capture server. That

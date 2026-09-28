@@ -428,8 +428,6 @@ type ServerState = 'unknown' | 'online' | 'offline'
  *  `refresh()` rather than re-implementing a check. */
 function useServerPresence(enabled: boolean): { state: ServerState; retry: () => void } {
   const [state, setState] = useState<ServerState>('unknown')
-  /* THE FOOT SAYS "Server online" AND NOTHING MORE (TXT-45). It printed the store's card count
-     beside it, a third count in the chrome to compare against the screen's own. */
   const { refresh } = usePoll({
     enabled,
     fn: getStatus,
@@ -1031,20 +1029,6 @@ function NavLink({ route, current, onNavigate }: { route: Route; current: boolea
   )
 }
 
-/* ---- the server line ------------------------------------------------------------------------ */
-function ServerLine({ state }: { state: ServerState }) {
-  return (
-    <div className="bn-server" data-state={state} title={state === 'offline' ? 'The capture server is not answering' : undefined}>
-      <span className={`bn-dot ${state === 'online' ? 'bn-dot-ok' : state === 'offline' ? 'bn-dot-danger' : ''}`} />
-      {state === 'online' ? (
-        <span className="bn-sr">Server online</span>
-      ) : (
-        <span className="bn-side-foot-text">{state === 'offline' ? 'Server offline' : 'Checking server…'}</span>
-      )}
-    </div>
-  )
-}
-
 /* ---- the tab title ------------------------------------------------------------------------------
    ONE FIXED TITLE: "番地 " and the screen's name in lowercase ("番地 pricing", "番地 home"). The
    owner's ruling, 2026-09-23. It replaced a title that alternated on a timer between the screen and
@@ -1128,7 +1112,6 @@ function Sidebar({
   rail,
   onToggleRail,
   armed,
-  server,
   theme,
   onToggleTheme,
   onPalette,
@@ -1137,7 +1120,6 @@ function Sidebar({
   rail: boolean
   onToggleRail?: () => void
   armed: boolean
-  server: ServerState
   theme: Theme
   onToggleTheme: () => void
   onPalette: () => void
@@ -1196,7 +1178,6 @@ function Sidebar({
         <Button variant="ghost" icon={theme === 'dark' ? 'sun' : 'moon'} onClick={onToggleTheme}>
           <span className="bn-side-foot-text">Theme</span>
         </Button>
-        <ServerLine state={server} />
       </div>
     </aside>
   )
@@ -1260,9 +1241,9 @@ function TabBar({ path, drawerOpen, onMore }: { path: string; drawerOpen: boolea
 /* THE DRAWER IS THE KIT'S SHEET (UX-014), on its own left edge (kit.css carves the drawer out of
    the rise-from-the-bottom rule). So it is modal: focus moves in, stays in, and goes back to More
    when it closes, and Escape is the one stack's. ITS FOOT JOINED THE LIST
-   (D266, amends D204): Cards to pull, the theme and the server line are the last rows of the one
+   (D266, amends D204): Cards to pull and the theme are the last rows of the one
    scrolling list, so no row ever sits under a fixed block. */
-function Drawer({ open, path, onClose, theme, onToggleTheme, server }: { open: boolean; path: string; onClose: () => void; theme: Theme; onToggleTheme: () => void; server: ServerState }) {
+function Drawer({ open, path, onClose, theme, onToggleTheme }: { open: boolean; path: string; onClose: () => void; theme: Theme; onToggleTheme: () => void }) {
   /* THE ONE PLACE IN THIS SHELL WHERE THE SIZE IS CHOSEN IN JS RATHER THAN IN A STYLESHEET, and
      the reason is the morph: `Lockup` reads the SLOT's measured width against the `size` it was
      handed, so a media query that shrank the slot without telling the component would draw the
@@ -1301,8 +1282,7 @@ function Drawer({ open, path, onClose, theme, onToggleTheme, server }: { open: b
             <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
             <span className="bn-nav-text">Theme</span>
           </button>
-          <ServerLine state={server} />
-        </div>
+          </div>
       </nav>
     </Sheet>
   )
@@ -1455,7 +1435,6 @@ export function App() {
         rail={rail}
         onToggleRail={tabletRail ? undefined : toggleRail}
         armed={arm !== null}
-        server={server}
         theme={theme}
         onToggleTheme={toggleTheme}
         onPalette={() => setPalette(true)}
@@ -1482,7 +1461,7 @@ export function App() {
         </div>
       </div>
       <TabBar path={path} drawerOpen={drawer} onMore={() => setDrawer(true)} />
-      <Drawer open={drawer} path={path} onClose={() => setDrawer(false)} theme={theme} onToggleTheme={toggleTheme} server={server} />
+      <Drawer open={drawer} path={path} onClose={() => setDrawer(false)} theme={theme} onToggleTheme={toggleTheme} />
       <CommandPalette open={palette} onClose={() => setPalette(false)} commands={commands} />
       <KeysSheet open={keysOpen} onClose={() => setKeysOpen(false)} path={path} />
       {/* THE ONE PLACE A REGISTERED SHEET IS DRAWN: `openSheet('product', …)` from any screen. */}

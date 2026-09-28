@@ -43,8 +43,7 @@ the drawer was the tagline's last home, since the sidebar dropped it when the lo
 *"Every one has an address."*, which is the sentence a person actually reads and is bound to the
 count in front of it. `.bn-brand-text`, `.bn-brand-name` and `.bn-brand-tag` are deleted.
 
-**THE DRAWER'S SERVER LINE GAINED THE CARD COUNT** the sidebar has always drawn. It said only
-`Server online` here, so a phone could not see how big the store it was answering for was.
+**THE DRAWER'S SERVER LINE IS DELETED** (2026-09-28, D152).
 
 **WHY NOTHING CAUGHT ANY OF THIS.** `app/tests/nav.spec.ts` scopes itself to `.bn-side` on
 purpose; `app/tests/cursor.spec.ts` harvests its routes from `.bn-side a.bn-nav-link`, which is

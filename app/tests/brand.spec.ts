@@ -524,10 +524,6 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
  *     and the `external` mark on the Fulfiller's link was in none of them, so the row drew the
  *     hand at x = 19 and the external glyph at x = 47 — a pair straddling a 64px rail while every
  *     other row wore one glyph at 32.
- *   - THE SERVER DOT WAS NEVER CENTRED AT ALL. `.bn-server` is not a `.bn-btn`, so the rail's
- *     width rule skipped it and nothing else named it; it kept its open-sidebar padding into the
- *     rail, shrink-wrapped to 32px, and put its dot at 8 + 12 + 4 = 24. Eight pixels left of the
- *     spine, in the shipped product.
  *
  * SO THE ASSERTION IS THE SPINE ITSELF, AND IT IS READ OFF THE NAV RATHER THAN TYPED. Hard-coding
  * 32 would restate `--bn-rail-w` in a second place and go stale the day the rail is resized; the
@@ -539,10 +535,9 @@ test('collapsing the sidebar moves nothing sideways off its spine', async ({ pag
  * block is a deliberate copy of the first, so it carried a deliberate copy of both bugs. A test
  * that looked only at 1440 would have passed over half the fix.
  *
- * OBSERVED RED BEFORE IT WAS KEPT, once per arm and once per rail. Mutation 1: drop
+ * OBSERVED RED BEFORE IT WAS KEPT, once per rail. Mutation: drop
  * `.bn-nav-link > :not(:first-child)` — `one glyph per row` fails naming the link and the two
- * centres it found. Mutation 2: drop the `.bn-server` width rule — `on the spine` fails with 24
- * against 32. Each fails at 1440 and again at 820. */
+ * centres it found. It fails at 1440 and again at 820. */
 for (const rail of [
   { name: 'the rail', width: 1440, collapse: true },
   { name: 'the 640-1023 media rail', width: 820, collapse: false },
@@ -670,9 +665,8 @@ test('the phone drawer draws the lockup, and no wordmark or tagline beside it', 
   await expect(page.locator('.bn-brand-tag')).toHaveCount(0)
   await expect(page.getByText('every card has an address')).toHaveCount(0)
 
-  /* the sidebar's server line, and nothing more (TXT-45): it printed the store's card count, a
-     third count in the chrome to compare against the screen's own */
-  await expect(page.locator('.bn-drawer .bn-server .bn-sr')).toHaveText('Server online')
+  // the server dot is gone (owner's ruling, 2026-09-28): the offline banner says when it is down
+  await expect(page.locator('.bn-server')).toHaveCount(0)
 })
 
 test('every lockup the product draws clears the size floor', async ({ page }) => {
