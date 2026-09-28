@@ -461,6 +461,8 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
   bn-page 559   Pricing — the row becomes two lines, the price on the right with Market under it
   bn-page 899   Pricing — Lowest and the trend leave the row (the product view carries both)
   (unnamed) 520, 640   RunPanel — the run detail's own steps, on `.runs-detail`
+  runs    699   RunPanel — the run list and an opened run stay one pushed-nav column below this
+  runs    700   RunPanel — the run list and the opened run split into a master and a detail pane
   bn-page 640   kit — a `Page`'s toolbar folds into equal cells, and its actions take a line;
                 Gallery — the specimen grids go to one column
   bn-page 879   Gallery — the section index becomes a strip over the specimens
@@ -468,6 +470,11 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
 
 COLUMN-BLIND    a sheet allowed to ask the VIEWPORT a question at or above 1024, with why.
   Fulfillment.css   `persona: 'fulfiller'` draws no shell (D5), so the viewport IS its column
+  CaptureScreen.css  1280-1359: the live capture stage (D19, D32), not a scrollable
+                     column — the rule trades padding so the four stacked cards fit the fold
+                     at 800px of HEIGHT, an input-modality question (the rig's own frame) the
+                     docstring's own "100dvh stage" exception names, and no `--bn-shell-main`
+                     column width changes what it is deciding
 ```
 
 **Above 1024, prefer a cap or a container to a viewport width.** Every screen but the

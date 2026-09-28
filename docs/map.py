@@ -7108,7 +7108,7 @@ COMPONENTS = [
                         "body between a fixed heading and a fixed press, sized 640px wide "
                         "because that is what the command's own longest line measures.",
                 "governed_by": ["D5", "D9", "D13", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
-                                "D41", "D46", "D50", "D117", "D118", "D162", "D259",
+                                "D41", "D46", "D50", "D117", "D118", "D123", "D162", "D259",
                                 "D291"],
             },
             "src/Inventory.tsx": {
@@ -8623,7 +8623,8 @@ COMPONENTS = [
                                          "once per box in the cart, capped so they stay chip-sized on a "
                                          "full-width route rather than spanning it.",
                                  "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48",
-                                                 "D50", "D54", "D64", "D76", "D86", "D117", "D218"]},
+                                                 "D50", "D54", "D64", "D76", "D86", "D117", "D123",
+                                                 "D218", "D291"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
