@@ -881,3 +881,44 @@ test('a capture after a 409 with Keep unanswered does not fire — nothing was w
   await page.keyboard.press('c')
   await expect(page.locator('.capture-undo-row').first()).toBeVisible()
 })
+
+/* OWNER'S RULING, 2026-09-28: the open Section list goes in FRONT of the RECENT footer and
+ * scrolls. `.capture-open-pinned` is z-indexed inside `.capture-card`'s own stacking context,
+ * so the later footer painted over rows 8-11 of an 11-section box and they could not be
+ * reached. The last option must take a real (never forced) click, at every width. */
+function manySections(n: number): Span[] {
+  return Array.from({ length: n }, (_, at) => ({
+    section: at + 1,
+    start: at * 5 + 1,
+    end: at === n - 1 ? null : at * 5 + 5,
+    count: at === n - 1 ? 0 : 5,
+    name: null,
+    div: String(at * 5 + 1),
+  }))
+}
+
+for (const [width, height] of [
+  [1440, 900],
+  [550, 800],
+  [390, 844],
+] as const) {
+  test(`the last of 12 sections scrolls into view and takes a real click at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await open(page, {
+      spans: manySections(12),
+      boxes: [
+        {
+          ...BOX,
+          sections: manySections(12).map((s) => s.start),
+          sections_detail: manySections(12),
+        },
+      ],
+    })
+    await sectionRow(page).click()
+    await expect(page.locator('.capture-open-pinned')).toBeVisible()
+    const last = page.locator('.capture-opt').filter({ hasText: /Section 12 of 12/ })
+    // A real click: Playwright scrolls the list, then refuses if anything else covers the row.
+    await last.click({ timeout: 5_000 })
+    await expect(sectionRow(page)).toContainText('Section 12 of 12')
+  })
+}
