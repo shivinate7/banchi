@@ -385,6 +385,8 @@ async function open(
        once"/"fires twice"/"never fires" cases assert on — a call COUNT, not a screen text,
        is the only thing that tells "asked the SAME run twice" apart from "asked once". */
     pricing?: unknown | ((name: string) => unknown)
+    /* Land with no query at all: the default view. */
+    landing?: boolean
   } = {},
 ): Promise<Wire[]> {
   const wire: Wire[] = []
@@ -677,7 +679,9 @@ async function open(
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ boxes: [], facet_cells: [] }) })
   })
 
-  await page.goto(VIEW_ROUTE)
+  /* THE LANDING VIEW HIDES BUYERS WITH NOTHING ON HAND (2026-09-28). Every case but the one about
+     that view opens with it widened, so a fixture's buyer is never hidden by a default it is not about. */
+  await page.goto(options.landing === true ? VIEW_ROUTE : `${VIEW_ROUTE}?pullable=0`)
   await expect(page.locator(VIEW)).toBeVisible()
   return wire
 }
@@ -939,7 +943,7 @@ test('the Show facet lists a buyer only in its own state, and each count is the 
   /* EACH COUNT IS BUYERS, THE ROWS THE LIST WILL DRAW, never lines. */
   await expect(list.getByRole('option', { name: /^Short/ })).toContainText('1')
   await expect(list.getByRole('option', { name: /^Ready/ })).toContainText('1')
-  await expect(list.getByRole('option', { name: /^Needs a look/ })).toContainText('1')
+  await expect(list.getByRole('option', { name: /^Check/ })).toContainText('1')
   await list.getByRole('option', { name: /^Short/ }).click()
   await closeFilters(page)
 
@@ -954,7 +958,7 @@ test('the Show facet lists a buyer only in its own state, and each count is the 
 
 /** A buyer's one state says what is wrong in words (UX-200), and a pulled-out short line stays
  *  Short (UX-196). */
-test('Needs a look names what to look at, in cards', async ({ page }) => {
+test('Check names what to look at, in cards', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   const carol = page.locator('.orders-index-row', { hasText: 'Carol' })
   await expect(carol).toContainText('1 missing')
@@ -2613,10 +2617,10 @@ test('"Walk N" ticks every row, and "Stop" clears them', async ({ page }) => {
   await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
 })
 
-test('the TCGplayer status options are built from the payload, with buyer counts', async ({ page }) => {
+test('the Status options are built from the payload, with buyer counts', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await (await openFilters(page)).getByRole('button', { name: /^TCGplayer status/ }).click()
-  const list = page.getByRole('listbox', { name: 'TCGplayer status' })
+  await (await openFilters(page)).getByRole('button', { name: /^Status/ }).click()
+  const list = page.getByRole('listbox', { name: 'Status' })
   await expect(list.getByRole('option', { name: /^Ready to Ship/ })).toContainText('2')
   await expect(list.getByRole('option', { name: /^Zorbo Pending/ })).toContainText('1')
 })
@@ -2625,20 +2629,20 @@ test('each control narrows; they compose', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
 
   /* STATUS ALONE. */
-  await pickFacet(page, 'TCGplayer status', /^Zorbo Pending/)
+  await pickFacet(page, 'Status', /^Zorbo Pending/)
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Bob')
 
   /* BACK TO ALL, THEN HIDE UNKNOWN CARDS: Carol's line names a card the store never saw. */
   const body = await openFilters(page)
-  await body.getByRole('button', { name: 'Clear TCGplayer status' }).click()
-  await body.getByRole('button', { name: /^Hide unknown cards/ }).click()
+  await body.getByRole('button', { name: 'Clear Status' }).click()
+  await body.getByRole('button', { name: /^Hide unknown/ }).click()
   await closeFilters(page)
   await expect(page.locator('.orders-index-row')).toHaveCount(2)
   await expect(page.locator('.orders-buyers')).not.toContainText('Carol')
 
   /* COMPOSED: Ready to Ship AND hide-unknown leaves only Alice. */
-  await pickFacet(page, 'TCGplayer status', /^Ready to Ship/)
+  await pickFacet(page, 'Status', /^Ready to Ship/)
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Alice')
 })
@@ -2669,7 +2673,7 @@ test('the sort press re-orders the list at once, Ready first, and the list says 
 test('the filters, the search and the sort survive a reload through the URL', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
 
-  await pickFacet(page, 'TCGplayer status', /^Ready to Ship/)
+  await pickFacet(page, 'Status', /^Ready to Ship/)
   await (await openFilters(page)).getByRole('button', { name: /^Order: Newest first/ }).click()
   await closeFilters(page)
   await expect(page).toHaveURL(/status=Ready\+to\+Ship/)
@@ -2794,7 +2798,7 @@ async function reverseSort(page: Page): Promise<void> {
 
 test('Dollar value sorts buyers by their order total, high to low then low to high', async ({ page }) => {
   await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
-  await pickSort(page, /^Dollar value/)
+  await pickSort(page, /^Value/)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Zeta', 'Abel', 'Mona'])
   await reverseSort(page)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Abel', 'Zeta'])
@@ -2802,7 +2806,7 @@ test('Dollar value sorts buyers by their order total, high to low then low to hi
 
 test('Card count sorts buyers by copies still owed, most first then fewest first', async ({ page }) => {
   await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
-  await pickSort(page, /^Card count/)
+  await pickSort(page, /^Cards/)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Zeta', 'Abel'])
   await reverseSort(page)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Abel', 'Zeta', 'Mona'])
@@ -2810,7 +2814,7 @@ test('Card count sorts buyers by copies still owed, most first then fewest first
 
 test('Buyer name sorts A to Z, then Z to A', async ({ page }) => {
   await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
-  await pickSort(page, /^Buyer name/)
+  await pickSort(page, /^Buyer/)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Abel', 'Mona', 'Zeta'])
   await reverseSort(page)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Zeta', 'Mona', 'Abel'])
@@ -2821,7 +2825,7 @@ test('Buyer name sorts A to Z, then Z to A', async ({ page }) => {
  * box, Abel's sits in two — 0, 1, 2 ascending, and unplaced never means "last". */
 test('Fewest drawers to open reuses the walk plan: unplaced buyers rank first, ascending', async ({ page }) => {
   await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
-  await pickSort(page, /^Fewest drawers to open/)
+  await pickSort(page, /^Fewest drawers/)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Zeta', 'Abel'])
   await reverseSort(page)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Abel', 'Zeta', 'Mona'])
@@ -2829,7 +2833,7 @@ test('Fewest drawers to open reuses the walk plan: unplaced buyers rank first, a
 
 test('a new sort key survives a reload through the URL', async ({ page }) => {
   await open(page, { orders: sortFixturePayload(), walkPlan: sortWalkPlan() })
-  await pickSort(page, /^Buyer name/)
+  await pickSort(page, /^Buyer/)
   await expect(page).toHaveURL(/sort=buyer/)
   await page.reload()
   await expect(page.locator(VIEW)).toBeVisible()
@@ -2861,7 +2865,7 @@ test('Mark sold does not re-rank the Card count sort under the hand', async ({ p
       return { undone: false, order_key: ZETA.row.key, sku: 'SKU-ZETA1', newly: 2, recorded: 2, outstanding: 0, places: [place({ box: 3, index: 9 })], sales: [] }
     },
   })
-  await pickSort(page, /^Card count/)
+  await pickSort(page, /^Cards/)
   await expect.poll(() => sortBuyerOrder(page)).toEqual(['Mona', 'Zeta', 'Abel'])
 
   await page.locator('.orders-index-row', { hasText: 'Zeta' }).click()
@@ -3027,7 +3031,7 @@ test('the search matches an order number too', async ({ page }) => {
 
 test('the search composes with the status select — an AND, never a second gate', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await pickFacet(page, 'TCGplayer status', /^Ready to Ship/)
+  await pickFacet(page, 'Status', /^Ready to Ship/)
   await expect(page.locator('.orders-index-row')).toHaveCount(2) // Carol, Alice
 
   await page.locator('.bn-filterbar-search .search-field-input').fill('bob')
@@ -4380,11 +4384,11 @@ test('an empty cutoff refuses the press', async ({ page }) => {
 test('a typed ?buyer= selects that buyer, and Back selects the one before (FLT-11)', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
   await page.evaluate(() => {
-    window.location.hash = '#/orders?buyer=name%3Abob'
+    window.location.hash = '#/orders?pullable=0&buyer=name%3Abob'
   })
   await expect(page.locator('.orders-panel-name')).toHaveText('Bob')
   await page.evaluate(() => {
-    window.location.hash = '#/orders?buyer=name%3Aalice'
+    window.location.hash = '#/orders?pullable=0&buyer=name%3Aalice'
   })
   await expect(page.locator('.orders-panel-name')).toHaveText('Alice')
   await page.goBack()
@@ -4557,7 +4561,7 @@ test('the Show facet offers "Missing a copy", counts its buyers, and lists only 
 
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
-  const option = list.getByRole('option', { name: /^Missing a copy/ })
+  const option = list.getByRole('option', { name: /^Missing/ })
   await expect(option).toContainText('1')
   await option.click()
   await closeFilters(page)
@@ -4574,5 +4578,136 @@ test('"Missing a copy" is not offered while no buyer owes a missing copy', async
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
   await expect(list.getByRole('option', { name: /^Ready/ })).toBeVisible()
-  await expect(list.getByRole('option', { name: /^Missing a copy/ })).toHaveCount(0)
+  await expect(list.getByRole('option', { name: /^Missing/ })).toHaveCount(0)
+})
+
+/* SEVERAL PICKS IN "SHOW" (owner's ruling 2026-09-28, D270): OR within the facet. "Done" reads the
+ * closed buyers and every other pick the open ones, so Done plus Short is the union of both. */
+test('the Show facet takes several picks: a buyer passes on any, and the URL keeps them all', async ({ page }) => {
+  const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+  const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'short' })
+  const closed = order({ key: 'TCGplayer:Z0009', number: 'Z0009', buyer: 'Zed', open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true })
+  await open(page, { orders: payloadOf([alice.row, bob.row, closed], [alice.resolved, bob.resolved]) })
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const list = page.getByRole('listbox', { name: 'Show' })
+  await list.getByRole('option', { name: /^Short/ }).click()
+  await list.getByRole('option', { name: /^Done/ }).click()
+  /* EACH COUNT STAYS ITS OWN ROWS: another pick in the same facet does not change it. */
+  await expect(list.getByRole('option', { name: /^Ready/ })).toContainText('1')
+  await closeFilters(page)
+
+  await expect(page).toHaveURL(/show=short/)
+  await expect(page).toHaveURL(/show=done/)
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+  await expect(page.locator('.orders-buyers')).toContainText('Bob')
+  await expect(page.locator('.orders-buyers')).toContainText('Zed')
+  await expect(page.locator('.orders-buyers')).not.toContainText('Alice')
+  await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('2 of 3 buyers')
+
+  await page.reload()
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+})
+
+/* THE LANDING VIEW IS THE PULLABLES (owner's ruling, 2026-09-28, D270): a fresh landing lists only
+ * buyers with a card on hand to pull, names the hide in the count line, opens the first of them,
+ * ticks nobody, and one click widens it. A link that names its own view is not narrowed. */
+test('a fresh landing shows only pullable buyers, and one click widens it', async ({ page }) => {
+  /* Alice's line resolves (a copy is on hand); Bob's is short (none on hand). */
+  const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+  const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'short' })
+  const both = payloadOf([alice.row, bob.row], [alice.resolved, { ...bob.resolved, outstanding: 2 }])
+  await open(page, { orders: both, landing: true })
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Alice')
+  await expect(page.locator('.orders-index-row')).toHaveAttribute('aria-current', 'true')
+  /* THE HIDDEN SET AND THE HEADLINE'S PICK COUNT COME FROM ONE ARITHMETIC (`pickOf`): Alice holds
+     the one pick, Bob's line is short, so the headline names both and the list is the picks' buyers. */
+  const headline = (await page.locator(VIEW).innerText()).match(/(\d+) pick and (\d+) short/)
+  expect(headline).not.toBeNull()
+  expect(Number(headline![1])).toBe(1)
+  expect(Number(headline![2])).toBe(1)
+  await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
+  await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('1 of 2 buyers')
+  await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('Hide unpullable')
+  /* The rest state is not a change: no badge on the Filters press. */
+  await expect(page).not.toHaveURL(/pullable=/)
+
+  await (await openFilters(page)).getByRole('button', { name: /^Hide unpullable/ }).click()
+  await closeFilters(page)
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+  await expect(page).toHaveURL(/pullable=0/)
+  await page.reload()
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+
+  /* A link that names its own view is not narrowed by the default. */
+  await page.goto(`${VIEW_ROUTE}?show=short`)
+  await page.reload()
+  await expect(page.locator('.orders-index-row')).toContainText('Bob')
+})
+
+/* A SALE MAY NOT RE-SHAPE THE LANDING LIST UNDER THE HAND (D181, D118). Both cases land with no
+ * `?pullable=0`. The pull's answer leaves the buyer open with nothing on hand, so the buyer stops
+ * being pullable; membership is frozen when the view was taken, so the row and the selection stay. */
+function nothingOnHandAfter(): OrdersPayload {
+  const empty = line({ reason: 'no_copies_on_hand', outstanding: 1, on_hand: 0, picks: [], fulfilled: 0 })
+  return payloadOf(
+    [order({ wanted: 2, recorded: 1 })],
+    [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 1, lines: [empty] }],
+  )
+}
+
+async function buyerNames(page: Page): Promise<string[]> {
+  return page.locator('.orders-index-row .orders-index-number').allTextContents()
+}
+
+test('landing view: a sale does not re-sort the list or drop the buyer whose last card it took', async ({ page }) => {
+  const nora = secondBuyerPayload()
+  let pulled = false
+  const emptied = nothingOnHandAfter()
+  const after = payloadOf([emptied.orders[0]!, nora.payload.orders[1]!], [emptied.resolution.orders[0]!, nora.resolved])
+  await open(page, {
+    orders: () => (pulled ? after : nora.payload),
+    pull: () => {
+      pulled = true
+      return { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] }
+    },
+    walkPlan: volcanionPlan(),
+    landing: true,
+  })
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+  const before = await buyerNames(page)
+  /* WAIT ON THE RE-READ, NEVER A CLOCK: the assertions below mean nothing until the post-sale
+     answer has been read and drawn (the headline then names the short line). */
+  const reread = page.waitForResponse((r) => /\/orders$/.test(new URL(r.url()).pathname) && r.request().method() === 'GET')
+  await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
+  await reread
+  await expect(page.locator(VIEW)).toContainText('short')
+  await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+  expect(await buyerNames(page)).toEqual(before)
+})
+
+test('landing view: the last sale leaves the buyer on screen', async ({ page }) => {
+  let pulled = false
+  await open(page, {
+    orders: () => (pulled ? nothingOnHandAfter() : oneOpenOrder()),
+    pull: () => {
+      pulled = true
+      return { undone: false, order_key: `TCGplayer:${ORDER_NUMBER}`, sku: SKU, newly: 1, recorded: 1, outstanding: 0, places: [place()], sales: [] }
+    },
+    walkPlan: volcanionPlan(),
+    landing: true,
+  })
+  /* WAIT ON THE RE-READ, NEVER A CLOCK: the assertions below mean nothing until the post-sale
+     answer has been read and drawn (the headline then names the short line). */
+  const reread = page.waitForResponse((r) => /\/orders$/.test(new URL(r.url()).pathname) && r.request().method() === 'GET')
+  await page.locator('.browse-card').getByRole('button', { name: 'Mark sold' }).click()
+  await reread
+  await expect(page.locator(VIEW)).toContainText('short')
+  await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
+  await expect(page.locator('.orders-index-row')).toHaveCount(1)
+  await expect(page.locator('.orders-index-row')).toContainText('Ada Lovelace')
+  await expect(page.locator('.orders-index-row')).toHaveAttribute('aria-current', 'true')
 })

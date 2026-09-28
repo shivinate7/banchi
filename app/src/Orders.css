@@ -127,6 +127,18 @@
 .orders-filterbar .bn-filterbar-controls { flex: 0 1 auto; flex-wrap: nowrap; min-width: 0; }
 .orders-filterbar .bn-filterbar-lead { flex: 0 1 28rem; min-width: 10rem; max-width: 28rem; }
 .orders-filterbar .bn-filterbar-compact { flex: none; }
+/* ONE FACE FOR THE BAR'S ICONS: the search's own field edge, one square, one glyph size. Bare
+   icons beside a bordered search read as three different heights. */
+.orders-filterbar .bn-icon-btn {
+  width: var(--bn-control-h);
+  height: var(--bn-control-h);
+  border: 1px solid var(--bn-field-edge, var(--bn-ink-4));
+  border-radius: var(--bn-r);
+  background: var(--bn-surface);
+  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), border-color var(--bn-t-fast) var(--bn-ease);
+}
+.orders-filterbar .bn-icon-btn:hover { border-color: var(--bn-ink-3); }
+.orders-filterbar .bn-icon-btn .bn-icon { width: 16px; height: 16px; flex: none; }
 .orders-filterbar .bn-filtercount { flex: 1 1 auto; min-width: 0; margin: 0; }
 @container bn-page (max-width: 559px) {
   .orders-filterbar .bn-filterbar-lead { flex: 1 1 auto; max-width: none; }
@@ -204,18 +216,20 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--bn-2);
-  min-height: var(--bn-control-h-lg);
-  padding: 0 0 var(--bn-2);
+  min-height: var(--bn-control-h);
+  padding: 0 var(--bn-1) var(--bn-1) var(--bn-3);
 }
-.orders-buyers-note { font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
+.orders-buyers-note { font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-ink-3); }
+/* The same list padding and row gap as Inventory's box list (`.browse-boxes`). */
 .orders-index {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  padding: var(--bn-1);
 }
 .orders-index > li { animation: bn-page-in var(--bn-t) var(--bn-ease-out) backwards; }
-.orders-index-item { display: flex; align-items: center; gap: var(--bn-1); min-width: 0; }
+.orders-index-item { display: flex; align-items: center; gap: 0; min-width: 0; }
 .orders-index-item > .orders-index-row { flex: 1 1 auto; min-width: 0; }
 /* THE LABEL IS THE TARGET (40px, UX-267); the box inside it stays the system's 16px. A row with
    nothing to walk keeps the same slot empty, so every name starts on one edge. */
@@ -234,10 +248,10 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--bn-3);
+  gap: var(--bn-2);
   width: 100%;
-  min-height: var(--bn-control-h-lg);
-  padding: var(--bn-2) var(--bn-3);
+  min-height: 42px;
+  padding: var(--bn-1) var(--bn-2) var(--bn-1) var(--bn-3);
   border-radius: var(--bn-r);
   text-align: left;
   color: var(--bn-ink);
@@ -263,14 +277,14 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-index-row[aria-current='true'] { background: var(--bn-accent-tint); }
 .orders-index-row[aria-current='true']::before { opacity: 1; scale: 1 1; }
 .orders-index-row[aria-current='true'] .orders-index-number { color: var(--bn-accent); }
-.orders-index-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.orders-index-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 /* A NAME WRAPS, never an ellipsis: "Buyer on order …00012" cut to "Buyer on order …0…" named
    nobody (review, UX-268). */
 .orders-index-number { font-size: var(--bn-fs-md); font-weight: 600; overflow-wrap: break-word; }
 .orders-label-tail { white-space: nowrap; }
 .orders-index-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }
 .orders-index-count { flex: none; }
-.orders-index-figure { font-size: var(--bn-fs-xs); font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.orders-index-figure { display: inline-flex; align-items: baseline; justify-content: flex-end; min-width: 3.5em; font-size: var(--bn-fs-xs); font-weight: 500; color: var(--bn-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .orders-index-figure b { font-family: var(--bn-font-display); font-size: var(--bn-fs-base); font-weight: 800; color: var(--bn-ink); margin-right: 3px; }
 
 /* ---- the walk's head: one buyer, or several (UX-168, UX-230) ------------------------- */
