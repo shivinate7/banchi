@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
+import { boxTitle } from './kit/data'
 import {
   applyBoxClaims,
   buildLot,
@@ -126,16 +127,14 @@ function laneOf(entry: CodeEntry): LaneFilter {
  *  stale falls back to the number — the honest answer where there is genuinely no name to
  *  read, never a placeholder drawn over a fault that is not there. */
 function boxName(box: number, boxes: BoxRecord[] | null): string {
-  const name = boxes?.find((b) => b.box === box)?.name
-  return typeof name === 'string' && name.trim() !== '' ? name : `Box ${box}`
+  return boxTitle(boxes?.find((b) => b.box === box)?.name, box)
 }
 
 /* D218: this renders inside a native `<option>`, which is plain text only — no element can
    carry the seam, so this is a real sentence (a comma list) rather than a typed dot. */
 function boxLabel(box: BoxRecord): string {
   const held = box.on_hand ?? box.cards
-  const name = typeof box.name === 'string' && box.name.trim() !== '' ? box.name : `Box ${box.box}`
-  return `${name}, ${plural(held, 'card')}`
+  return `${boxTitle(box.name, box.box)}, ${plural(held, 'card')}`
 }
 
 /* ---- sheet -----------------------------------------------------------------------------------
