@@ -25,13 +25,23 @@
 
      So the chrome was cut to 172px instead of the number being nudged, and every one of the 86px
      came off the desk:
-        page padding-top     24 -> 16   (-8)   `.review.bn-page` below
+        page padding-top     24 -> 16   (-8)   REVERTED 2026-09-27, see below
         pagehead margin      24 -> 12   (-12)
         filter strip margin  24 -> 12   (-12)
         well padding       2x12 -> 2x9  (-6)
-        page padding-bottom  64 -> 16   (-48)  the decision surface is the last thing on the page
+        page padding-bottom  64 -> 8    (-56)  the decision surface is the last thing on the page
      172 leaves a 728px photograph at 1440x900: 728 x 409.5 = 23.0% of the screen, and a long
      edge over the 700px the spec asserts beside the area.
+
+     MOVED ONTO THE KIT'S OWN TOP GAP, 2026-09-27 (owner's ruling, "move Review"). The
+     `padding-top: var(--bn-4)` override below is gone: `/review` now takes `--bn-page-top`
+     like every other screen (24px desktop, 16px phone — phone is unchanged, since the
+     override was already 16px there). That gives 8px back to the page padding-top line above,
+     so `page padding-bottom` absorbs it, cut a further 8px (16 -> 8) to keep the same 86px off
+     the desk and the same 172px chrome. Measured, not assumed: `.review-photo`'s real
+     `boundingBox()` at 1440x900 is unchanged, 728x409.5, 23.0% — `review.spec.ts`'s own floor
+     assertion is the proof. The runtime "/review" and "/runs" `top` entries in
+     scripts/kit-adoption-allow.json are deleted in the same commit.
 
      THE PIECES AND THIS NUMBER MUST MOVE TOGETHER. There is no mechanism keeping them in step —
      a padding changed above without changing this reintroduces exactly the overflow that stood
@@ -75,8 +85,10 @@
    with the bar riding after the text. The reason lens is the row under it. ---- */
 .review-pagehead .bn-lede { max-width: none; }
 /* The desk's share, cut to leave the card 23% of the screen — the arithmetic is above the
-   `--rv-chrome` declaration and these four rules are the four lines of it. */
-.review.bn-page { padding-top: var(--bn-4); padding-bottom: var(--bn-4); }
+   `--rv-chrome` declaration and these four rules are the four lines of it.
+   NO `padding-top` OVERRIDE (2026-09-27, "move Review"): the kit's own `--bn-page-top` applies,
+   same as every other screen. `padding-bottom` absorbs the 8px this gave up. */
+.review.bn-page { padding-bottom: var(--bn-2); }
 .review-pagehead { margin-bottom: var(--bn-3); }
 /* Three icon-only presses now sit in this header. `.bn-head-actions`'s own gap (`--bn-2`,
    8px) is enough between a worded press and its neighbour, but not between two 28px faces
