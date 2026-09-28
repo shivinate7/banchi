@@ -71,7 +71,7 @@ find.
 - `scripts/docs-audit.py:12746` (was cited as `:12737`, corrected) `check_subject_counts`
   — why every `report.add(...)` call needs `scanned=<n>` and what happens if you omit it
   (a distinct "no count declared" finding, always failing, never silently green).
-- `store/rows.py:213-266` — `Rows.where(**equals)`, `Rows.select(columns, **equals)`,
+- `store/rows.Rows` — `Rows.where(**equals)`, `Rows.select(columns, **equals)`,
   `Rows.distinct(column)`. `Rows` is a `MutableMapping`, so `.values()`/`.items()` take no
   arguments ever (they are the ABC's own methods) and always materialise every row.
   `distinct()` takes no filter parameter at all — every call is a full-column scan by

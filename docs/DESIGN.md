@@ -777,9 +777,9 @@ tier, so the five type-size bands render a sort the queue no longer has.
 
 **The bands were not retired, and this paragraph said they were.** Corrected 2026-08-25 after
 reading the screen rather than this file, and re-derived on 2026-09-03 after the rebuild moved
-every line: `bandOf` is live at `app/src/ReviewQueue.tsx:340`, applied as `data-band` on every
-rail row at `:2239`, and the sizes are the only `font-size` those spans have
-(`app/src/ReviewQueue.css:740-746`) — FOUR of the five bands, since `mid` deliberately sets
+every line: `bandOf` is live at `app/src/ReviewQueue.bandOf`, applied as `data-band` on every
+rail row, and the sizes are the only `font-size` those spans have
+(the `data-band` rules in `app/src/ReviewQueue.css`) — FOUR of the five bands, since `mid` deliberately sets
 nothing and renders at the row's own size. The worklist was not
 retired either — it BECAME the rail. So what is true is narrower and worse than a retirement:
 **the five bands still render, and they render a sort the queue only partly has.** That is an

@@ -105,7 +105,7 @@ every input this repo's tests already exercise.
   `docs/specs/store-scaling.md`'s §1 table (753 listings, a later/different store snapshot)
   restates again with a slightly different count. Both figures describe the same defect;
   the count differs because the store grew between measurements.
-- `cli/resolve.py:487-648` — `_copies_out` itself, read in full. The arithmetic you must
+- `cli/resolve._copies_out` — `_copies_out` itself, read in full. The arithmetic you must
   preserve exactly is documented inline in its own docstring (lines 490-524, 554-648) and
   is NOT to be simplified, re-derived, or "cleaned up" beyond what this file's Steps
   section specifies — every comment in that function is there because a wrong version of
@@ -137,7 +137,7 @@ every input this repo's tests already exercise.
   `server/capture_server.py:7986`, and every T7 case listed in "Do not touch" below) that
   must keep working exactly as they do today; this item only stops `_copies_out` from
   calling them in a loop.
-- `store/rows.py:213-260` — `Rows.where(**equals)` and `Rows.select(columns, **equals)` in
+- `store/rows.Rows` — `Rows.where(**equals)` and `Rows.select(columns, **equals)` in
   full. **This is the actual mechanism, and it is subtler than "the store was already
   materialised":**
   ```python
@@ -184,7 +184,7 @@ every input this repo's tests already exercise.
 - `store/db.py:1071-1080` (`Source.select`) — confirms `select(columns, equals)` issues
   `SELECT key, {columns} FROM cards {WHERE...} ORDER BY key` and returns `(key, tuple)`
   pairs with no payload parse, no `Card` construction — the cheapest read this store offers,
-  the same one `Inventory.counts()` (`store/master.py:2374-2378`) and `next_index`'s
+  the same one `Inventory.counts()` (`store/master.Inventory`) and `next_index`'s
   high-water scan already rely on.
 - `store/master.py:2480-2489` — the `CARDS` `TableSpec`, confirming the indexed column names
   are `box`, `idx` (not `index`), `state`, `sku`, `capture_id`, `name`, `number`, `game`,
@@ -194,7 +194,7 @@ every input this repo's tests already exercise.
   real B-tree index (auto-named `{table}_{column}` at line 272), and it is what
   `positions_for_sku`'s existing `.where(sku=sku)` already hits on its SQL half — the index
   was never the problem.
-- `cli/resolve.py:676-732` — `_committed_keys`, the function immediately below
+- `cli/resolve._committed_keys` — `_committed_keys`, the function immediately below
   `_copies_out`. It has the IDENTICAL per-listing shape this item fixes
   (`for sku, out in copies_out.items(): for card in _oldest_first(inventory.copies_on_hand
   (sku))[:out]: ...`, line 729-731 — `copies_on_hand` calls `positions_for_sku` internally)
@@ -206,7 +206,7 @@ every input this repo's tests already exercise.
   name), which is `_copies_out`'s first caller: `copies_out, live_now = _copies_out(
   snapshot.inventory, _live_by_sku(parsed, ...))` at line 1916, called once per `join`/`emit`
   invocation (there is no loop here).
-- `server/pipeline_routes.py:2283-2426` — `_unsent_ledger` in full, `_copies_out`'s second
+- `server/pipeline_routes._unsent_ledger` — `_unsent_ledger` in full, `_copies_out`'s second
   caller at line 2405 (`held_out, live_out = run_resolve._copies_out(inventory, readings)`),
   called exactly once per `_unsent_ledger` invocation, which is itself called exactly once
   per `do_pipeline_worklist` request (line 2642: `ledger = _unsent_ledger(snapshot.inventory,
@@ -239,10 +239,10 @@ ends (line 484):
 ```python
 class _SkuCardRow(NamedTuple):
     """The handful of a card's indexed columns `_copies_out` (and nothing else, yet) needs,
-    read without building a `Card` object at all (`Rows.select`, `store/rows.py:231-250`).
+    read without building a `Card` object at all (`Rows.select`, `store/rows.Rows`).
 
     `key` and `box`/`index` are carried even though `_copies_out` itself does not read them,
-    because this is the SAME shape `_committed_keys` (`cli/resolve.py:676-732`) and
+    because this is the SAME shape `_committed_keys` (`cli/resolve._committed_keys`) and
     `_unsent_ledger`'s orphan scan (`server/pipeline_routes.py:2364-2374`) would need if
     either is ever rewritten onto this helper — see this item's "Allowlist entries removed"
     section for whether that happens in this PR or a later one. Carrying two extra columns
@@ -369,12 +369,12 @@ non-comment, non-docstring hit:
 
 1. `cli/resolve.py:1916` — `copies_out, live_now = _copies_out(snapshot.inventory,
    _live_by_sku(parsed, {...}))`, inside `_resolve` (the shared tail of `load`/
-   `load_from_store`, cli/resolve.py:1864-1929). Called ONCE per `join`/`emit` invocation —
+   `load_from_store`, cli/resolve.load_from_store). Called ONCE per `join`/`emit` invocation —
    confirmed by `cli/cmd_join.py:347` and `cli/cmd_join.py:363` (`resolve.load(...)` /
    `resolve.load_from_store(...)`, one call each) and `cli/cmd_emit.py:466` (`resolve.load(
    ...)`, one call). Signature and return type unchanged by this item; no edit needed here.
 2. `server/pipeline_routes.py:2405` — `held_out, live_out = run_resolve._copies_out(
-   inventory, readings)`, inside `_unsent_ledger` (`server/pipeline_routes.py:2283-2426`).
+   inventory, readings)`, inside `_unsent_ledger` (`server/pipeline_routes._unsent_ledger`).
    Called ONCE per `_unsent_ledger` invocation, which is itself called ONCE per
    `do_pipeline_worklist` request (`server/pipeline_routes.py:2642`, the only call site of
    `_unsent_ledger` in the tree). No edit needed here either, UNLESS you take the optional
@@ -544,7 +544,7 @@ not — read this whole section before choosing.**
 
 `docs/specs/store-scaling.md` §4's table has one row naming this item:
 
-> `server/pipeline_routes.py:2370` `_unsent_ledger` | `distinct("sku")` | per-load |
+> `server/pipeline_routes._unsent_ledger` `_unsent_ledger` | `distinct("sku")` | per-load |
 > Removed by: item 4
 
 `00-phases.md`'s allowlist-progress table repeats the credit: "Phase 1 | 10 | item 2:
@@ -753,7 +753,7 @@ be committed.
 
 ## Risks
 
-- **`_committed_keys` (`cli/resolve.py:676-732`) has the identical O(listings × cards)
+- **`_committed_keys` (`cli/resolve._committed_keys`) has the identical O(listings × cards)
   shape this item fixes, and this item does not touch it.** It loops `copies_out.items()`
   (the SAME dict `_copies_out` now returns in one pass) and calls `inventory.copies_on_hand
   (sku)` per SKU — which calls `positions_for_sku`, which is the exact `Rows.where()`

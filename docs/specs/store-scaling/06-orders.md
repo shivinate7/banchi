@@ -39,7 +39,7 @@ itself anticipated.
 
 ## Goal and done-when
 
-`do_orders` (`server/capture_server.py:9027-9122`) measured 185 ms at 2,535 cards and
+`do_orders` (`server/capture_server.do_orders`) measured 185 ms at 2,535 cards and
 3,465 ms at the 20x-row copy (18.7x) — O(cards) in practice, even though every individual
 lookup it makes is indexed. The mechanism (confirmed by reading the code, not assumed):
 
@@ -65,7 +65,7 @@ lookup it makes is indexed. The mechanism (confirmed by reading the code, not as
   cost is therefore not "the same box re-read many times" — it is "every box an order's
   picks touch gets fully hydrated once, and with five boxes and orders whose picks span
   most of them, that is effectively the whole store, once."
-- `do_orders`'s own picks come from `_pick_row` (`server/capture_server.py:8961-8987`),
+- `do_orders`'s own picks come from `_pick_row` (`server/capture_server._pick_row`),
   called once per pick at `server/capture_server.py:9023`: `"place": places.of(pick.box,
   pick.index)`.
 
@@ -158,8 +158,8 @@ correct; only the ORDER of landing is at stake, not correctness.
 - `docs/specs/order-pipeline.md` — background on the order screens; confirms steps 8-12 are
   built and step 13/14 (shipped status, tracking write-back) are not, and that D96 deleted
   the envelope-walk code (`orderWalk.ts` etc.) that is unrelated to `do_orders`.
-- `server/capture_server.py:1939-2333` (`_Places` in full — class docstring through `.of()`)
-  and `pipeline/join.py:104-311` (`Position` in full — the ONE label formula; read this
+- `server/capture_server._Places` (`_Places` in full — class docstring through `.of()`)
+  and `pipeline/join.Position` (`Position` in full — the ONE label formula; read this
   before writing anything that could be mistaken for a second one).
 - `store/master.py:1492-1519` (`_positions_in`) — the EXISTING precedent for exactly this
   optimization shape, already used by the capture allocator's high-water scan. Read its
@@ -320,7 +320,7 @@ test still passes, because the RESULT is identical — only the cost is wrong). 
 at the docstring naming this trap explicitly, since a future edit to `.of()` that adds a new
 call into `_walk`/`_boxmates` would reintroduce the same defeat silently.
 
-### 4. Wire it into `do_orders` — `server/capture_server.py:9027-9122`
+### 4. Wire it into `do_orders` — `server/capture_server.do_orders`
 
 Replace lines 9074-9078 (currently):
 
@@ -382,9 +382,9 @@ Every place `_Places(...)` is instantiated today (`grep -n "_Places(" server/cap
 | 8235 | `_box_row` (`view(box)` only, no `.of()`) | No |
 | 8392 | `do_boxes` | No — item 7's subject |
 | 8542 | (`occupied(box)` only) | No |
-| 8829 | `_order_stamps` (`server/capture_server.py:8751`) — the Rubber Stamp fill helper behind `POST /shipping/batches/<batch>/stamps` (`docs/specs/order-pipeline.md` §3 T2b) | **YES — same shape, confirmed by reading `:8780-8835`.** It runs the IDENTICAL pattern to `do_orders`: `sequence`/`open_records`/`asked = [_engine_order(record, ledger) for record in open_records]`/`resolution = order_engine.resolve_all(...)`, then `places = _Places(snapshot.inventory)` over EVERY open order in the store to stamp only the numbers in one batch. Its own docstring even says "`_Places` built and dropped inside this call" — same cost, same fix. |
+| 8829 | `_order_stamps` (`server/capture_server._order_stamps`) — the Rubber Stamp fill helper behind `POST /shipping/batches/<batch>/stamps` (`docs/specs/order-pipeline.md` §3 T2b) | **YES — same shape, confirmed by reading `:8780-8835`.** It runs the IDENTICAL pattern to `do_orders`: `sequence`/`open_records`/`asked = [_engine_order(record, ledger) for record in open_records]`/`resolution = order_engine.resolve_all(...)`, then `places = _Places(snapshot.inventory)` over EVERY open order in the store to stamp only the numbers in one batch. Its own docstring even says "`_Places` built and dropped inside this call" — same cost, same fix. |
 | 9078 | `do_orders` | **YES — this item's subject** |
-| 9756 | `do_order_pull` (`server/capture_server.py:9663`) | **No — different shape, confirmed by reading `:9740-9793`.** This is a WRITE route (`Store().write()`), bounded by the request body (`parsed`, capped at `ORDER_FILL_TARGET_LIMIT = 50` per D90) rather than by every open order in the store; `places` here answers `_prepare_targets`'s specific positions, not a store-wide resolution. Lower value and not measured in `docs/specs/store-scaling.md` — leave it on the ordinary constructor for this item; note it as a candidate for the SAME treatment in a follow-up if `_prepare_targets`'s own boxes ever prove slow (it is a write, not a polled GET, so it is off this plan's "per-press"/"per-load" cost table). |
+| 9756 | `do_order_pull` (`server/capture_server.do_order_pull`) | **No — different shape, confirmed by reading `:9740-9793`.** This is a WRITE route (`Store().write()`), bounded by the request body (`parsed`, capped at `ORDER_FILL_TARGET_LIMIT = 50` per D90) rather than by every open order in the store; `places` here answers `_prepare_targets`'s specific positions, not a store-wide resolution. Lower value and not measured in `docs/specs/store-scaling.md` — leave it on the ordinary constructor for this item; note it as a candidate for the SAME treatment in a follow-up if `_prepare_targets`'s own boxes ever prove slow (it is a write, not a polled GET, so it is off this plan's "per-press"/"per-load" cost table). |
 
 **Recommendation: apply the identical `_Places.for_keys` fix to `_order_stamps`
 (`:8829`) in this same PR.** It is not named in `docs/specs/store-scaling.md`'s item 6 text
@@ -497,7 +497,7 @@ Also assert `places.of(p.box, p.index)["slot"]` equals the slot `do_inventory`'s
 matching the task's own instruction — "slot equality against `do_inventory`'s for the same
 cards"). Call `capture_server.do_inventory()` in the test, find the matching card in its
 `inventory`/box payload, and compare `place.slot`. Confirm `do_inventory`'s response shape
-by reading `server/capture_server.py:3056` (`do_inventory`) before writing this half — it
+by reading `server/capture_server.do_inventory` (`do_inventory`) before writing this half — it
 returns boxes/cards nested, not a flat list, so the lookup needs the right traversal.
 
 ### Assertion 3 — a section with real dividers

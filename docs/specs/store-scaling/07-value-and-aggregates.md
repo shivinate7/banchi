@@ -56,7 +56,7 @@ for the store-wide caller — never a raw SQL rewrite, and never Card objects in
 aggregates one box's SKUs against every OTHER box those SKUs also sit in (D34's release
 preflight). Also in scope by the plan's own §4 allowlist: `_box_names`
 (`server/pipeline_routes.py:797`, `select(("box","run"))` with no filter, `:838`) and
-`_on_hand_by_run` (`server/pipeline_routes.py:2429`, `select(("run","state"))` with no
+`_on_hand_by_run` (`server/pipeline_routes._on_hand_by_run`, `select(("run","state"))` with no
 filter, `:2444`). All three become **two rounds of the existing indexed `equals` filter** on
 `Rows.select` — `box=` and `sku=` for `_release_plan`, `box=` for `_box_names`, `run=` for
 `_on_hand_by_run` — never a new SQL primitive. `grep -n "GROUP BY" store/*.py` returns nothing
@@ -104,7 +104,7 @@ step this playbook is doing on the implementer's behalf.
 - **Item 4 (`_copies_out`, `04-copies-out.md`, else
   `store-scaling.md` §3 item 4)** also edits `cli/resolve.py` — it touches
   `cli/resolve.py:487` and the two per-SKU helpers beside it, this item touches
-  `cli/resolve.py:372-425` (`box_views`). Different functions in the same file; a merge
+  `cli/resolve.box_views` (`box_views`). Different functions in the same file; a merge
   conflict is likely if both land as concurrent branches (adjacent line ranges), not a
   logical conflict. `do_pipeline_value` (`:3117`) calls `_readings()` (`:2975`), which itself
   calls `run_resolve._copies_out` indirectly through `_committed_keys`/`_copies_out` in
@@ -490,18 +490,18 @@ around **two fetches**:
   command run from the CLI, where "slow" is acceptable because it is not on a polled screen),
   leave it on the no-args path. This playbook does not pre-judge which, because it did not
   read the surrounding function bodies at `:785` and `:1923` in full — do that first.
-- `server/pipeline_routes.py:2020` — `_relabel_positions`'s `views = ... run_resolve.
+- `server/pipeline_routes._relabel_positions` — `_relabel_positions`'s `views = ... run_resolve.
   box_views(inventory)`. Before this call, collect `{at.get("box") for entry in
   table.get("skus") or () for at in entry.get("positions") or () if isinstance(at, dict)}`
   and pass it as `boxes=`.
-- `server/pipeline_routes.py:2732` — `do_pipeline_worklist`'s `views = run_resolve.
+- `server/pipeline_routes.do_pipeline_worklist` — `do_pipeline_worklist`'s `views = run_resolve.
   box_views(snapshot.inventory) if snapshot is not None and ledger else {}`. Collect
   `{p.get("box") for row in merged.values() for p in row.get("positions") or ()}` from
   `merged` (already fully built by this line) and pass as `boxes=`.
 - `server/pipeline_routes.py:3178` (inside `do_pipeline_value`) and the equivalent line inside
   the new `do_pipeline_value_page` (§A2) — `views = run_resolve.box_views(inventory)`. **No**
   `boxes=` argument — this caller genuinely needs every box.
-- `server/capture_server.py:4636` (`do_box_listings`) and `:4714`
+- `server/capture_server.do_box_listings` (`do_box_listings`) and `:4714`
   (`do_release_box_listings`) — both call `_release_plan(inventory, box)`. Signature
   unchanged; only `_release_plan`'s body changes (§C below).
 - `server/pipeline_routes.py:1908` (inside `do_pipeline_runs`, `names = _box_names()`) and
@@ -666,11 +666,11 @@ From `docs/specs/store-scaling.md` §4:
 
 | Site | Confirmed removed? |
 |---|---|
-| `server/pipeline_routes.py:3202` `do_pipeline_value` (`.values()`) | **Yes** — §A1 replaces it with `inventory.cards.select(...)`. |
-| `cli/resolve.py:372` `box_views` (`.values()`) | **Yes** — §B (below) replaces the store-wide fallback with `select()` and gives the two bounded callers a `records_in`-per-box path that never builds more than one box's `Card` objects at a time. |
-| `server/capture_server.py:4549` `_release_plan` (`.items()`) | **Yes** — §C replaces it with two rounds of indexed `select(box=...)`/`select(sku=...)`. |
-| `server/pipeline_routes.py:838` `_box_names` (`select(("box","run"))`, filter-less) | **Yes** — §C scopes the walk to the box registry's own keys (`inventory.boxes.items()`, a small table) plus one indexed `select(("run",), box=b)` per registry box, never a filter-less pass over `cards`. |
-| `server/pipeline_routes.py:2444` `_on_hand_by_run` (`select(("run","state"))`, filter-less) | **Yes** — §C scopes the walk to the joined-run-name list the caller already has, one indexed `select(("state",), run=name)` per run. |
+| `server/pipeline_routes.do_pipeline_value` `do_pipeline_value` (`.values()`) | **Yes** — §A1 replaces it with `inventory.cards.select(...)`. |
+| `cli/resolve.box_views` `box_views` (`.values()`) | **Yes** — §B (below) replaces the store-wide fallback with `select()` and gives the two bounded callers a `records_in`-per-box path that never builds more than one box's `Card` objects at a time. |
+| `server/capture_server._release_plan` `_release_plan` (`.items()`) | **Yes** — §C replaces it with two rounds of indexed `select(box=...)`/`select(sku=...)`. |
+| `server/pipeline_routes._box_names` `_box_names` (`select(("box","run"))`, filter-less) | **Yes** — §C scopes the walk to the box registry's own keys (`inventory.boxes.items()`, a small table) plus one indexed `select(("run",), box=b)` per registry box, never a filter-less pass over `cards`. |
+| `server/pipeline_routes._on_hand_by_run` `_on_hand_by_run` (`select(("run","state"))`, filter-less) | **Yes** — §C scopes the walk to the joined-run-name list the caller already has, one indexed `select(("state",), run=name)` per run. |
 
 All five leave the allowlist in this item's PR. If research at implementation time (§"Read
 first", and the open questions in "Call sites" about `cli/resolve.py:785`/`:1923`) finds
@@ -681,7 +681,7 @@ entry that turns out to still need to stay, without a sentence explaining which.
 
 ## Steps (§B and §C detail, referenced above)
 
-### B. `box_views` — `cli/resolve.py:372-425`
+### B. `box_views` — `cli/resolve.box_views`
 
 ```python
 def box_views(

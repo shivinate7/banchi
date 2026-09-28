@@ -87,7 +87,7 @@ argument. The allowlist count is unchanged at 13 after this item.
 - D43 (`store/files.py:home()`), D58 (`Place.slot` vs `index`), D88 (SQLite is the store of
   record, one transaction per session, `Rows` per D88's own module) — all three are read
   before touching `store/master.py` or `store/rows.py` by the map's own instruction.
-- `server/capture_server.py:1939-2130` — `_Places`'s docstring. Read it before writing
+- `server/capture_server._Places` — `_Places`'s docstring. Read it before writing
   `do_inventory_box`: it already explains why `_Places(inventory)` costs nothing extra per
   box (`records_in` is lazy, per box, since D88) and what degrades whole-store versus
   per-box (the denominator scan is whole-store on a corrupt neighbor; per-box decoration of
@@ -95,7 +95,7 @@ argument. The allowlist count is unchanged at 13 after this item.
 - `store/rows.py`, the whole file (303 lines) — read it end to end before changing `where`/
   `select`. The docstring at the top states the two backings and the flush contract; get
   those invariants in your head before editing.
-- `harness/tests/t7_store_and_seams.py:1020-1120` (`check_store_of_record`) — the existing
+- `harness/tests/t7_store_and_seams.check_store_of_record` (`check_store_of_record`) — the existing
   precedent for asserting `Rows.loaded_count`/`Rows.complete` after a store operation. This
   item's new T7 assertions reuse that exact pattern; do not invent a new instrumentation
   mechanism (no query counters, no `sqlite3.Connection.set_trace_callback` — `Rows` already
@@ -1258,7 +1258,7 @@ Every place `Inventory.to_payload()` / `do_inventory()` is called server-side:
 | File:line | After this item |
 |---|---|
 | `server/capture_server.py:10637` (`do_GET`, exact `/inventory`) | unchanged — route kept, unused by the app, on the allowlist |
-| `server/capture_server.py:3093` (`do_inventory`'s body) | unchanged — the function itself is not touched, only no longer called from anywhere this item edits |
+| `server/capture_server.do_inventory` (`do_inventory`'s body) | unchanged — the function itself is not touched, only no longer called from anywhere this item edits |
 
 New routes added: `GET /inventory/<box>` (`do_inventory_box`), `GET /inventory/recent`
 (`do_inventory_recent`). New client functions: `getInventoryBox`, `getRecentCards`.
@@ -1318,13 +1318,13 @@ are corrected in the same PR that found this.
 
 | Site | Shape | Actually removed by |
 |---|---|---|
-| `server/capture_server.py:3056` `do_inventory` | `to_payload()` | **stays permanently** — `GET /inventory` is kept, unused, on the owner's word (`00-phases.md`'s own "Where each item's decisions came from" section already said this; §4's table had not been updated to match) |
-| `server/capture_server.py:8349` `_boxes_named` | `select(("box",))` | **stays** — its only caller is `do_status` (the health endpoint), which this item does not touch at all; a future item scoping `do_status` removes it |
+| `server/capture_server.do_inventory` `do_inventory` | `to_payload()` | **stays permanently** — `GET /inventory` is kept, unused, on the owner's word (`00-phases.md`'s own "Where each item's decisions came from" section already said this; §4's table had not been updated to match) |
+| `server/capture_server._boxes_named` `_boxes_named` | `select(("box",))` | **stays** — its only caller is `do_status` (the health endpoint), which this item does not touch at all; a future item scoping `do_status` removes it |
 | `store/master.py:1447` `to_payload` | `.items()` | **stays with `do_inventory`** — `do_inventory` calling it is a real, still-reachable code path (the route is kept), so the function inside it that walks the whole store cannot be "removed" without deleting the route itself, which this item explicitly does not do |
 
 **`_boxes_named`'s callers were traced, per this section's own original instruction to do so
 before checking the row off.** `grep -rn "_boxes_named" server/ store/ cli/ app/src/` finds
-exactly one call site: `do_status` (`server/capture_server.py:2783`), computing `next_index`
+exactly one call site: `do_status` (`server/capture_server.do_status`), computing `next_index`
 for every box on the health endpoint. Nothing this item touches (`do_inventory_box`,
 `BoxBrowse.tsx`, `Home.tsx`, `Fulfillment.tsx`, `Orders.tsx`) calls `do_status` or
 `_boxes_named`. The row stays.

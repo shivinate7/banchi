@@ -774,7 +774,7 @@ client functions, with harness, lint, typecheck and docs-audit green.
 
 **Evidence it happened.** Measured: 73 distinct routes extract cleanly and 0 are unreached, so
 the route floor needs no baseline exemption list. The call-site floor yields exactly ONE finding
-today — and I corrected the surface reader's framing: `moveCard` (app/src/server.ts:1649) has no
+today — and I corrected the surface reader's framing: `moveCard` (app/src/server.moveCard) has no
 caller while `moveCards` (:1674) IS imported and called by app/src/BoxOps.tsx:27/:453 with
 `indices: null` meaning every on-hand card, so D83's move IS reachable from the Manage box
 sheet. The finding resolves by DELETING eleven dead lines, not by building a screen. Take the

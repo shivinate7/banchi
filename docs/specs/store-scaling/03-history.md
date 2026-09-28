@@ -97,7 +97,7 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
 - `store/db.py:1-52` — the module docstring (D88): one file, one transaction per
   `Store.write()`, WAL, indexed columns "derived from the object at write time" that
   "cannot disagree with the payload."
-- `store/db.py:113-142` — `TABLES`, `_INTEGER`, `_INDEXES`. **`events` is not in `TABLES`**
+- `store/db.TABLES` — `TABLES`, `_INTEGER`, `_INDEXES`. **`events` is not in `TABLES`**
   (it is DDL'd separately at `store/db.py:266-269`) but IS in `_INDEXES`:
   `("events", "position")` at line 139. That index already exists on every store on disk,
   fresh or upgraded — it is created unconditionally in the `stored is None` branch
@@ -111,10 +111,10 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
   (`at`, `event`, `position`) plus the whole record as `payload` JSON — this is the general
   shape D88's docstring describes for every table, and `events` already has the column this
   task worried might not exist.
-- `store/db.py:1192-1205` — `append_events`, the only writer: `position` is written from
+- `store/db.append_events` — `append_events`, the only writer: `position` is written from
   `event.get("position")`, which is `_history`'s own `record["position"] = key` (see next
   bullet). **It is a plain column, not something buried in `payload`.**
-- `server/capture_server.py:1888-1922` — `_history(inventory, event, key, **extra)`. `key`
+- `server/capture_server._history` — `_history(inventory, event, key, **extra)`. `key`
   becomes `record["position"]` when not `None` (line 1919-1920); `extra` values are folded in
   when not `None` (line 1921). This is the one function that ever appends an event, so
   reading it fully is reading the whole shape of every row `events_at` will have to filter.
@@ -144,32 +144,32 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
   on being able to see the `renumbered` marker when asked about a *mover's* key — which means
   `position = key` alone is the WRONG scope. The correct scope is **the box**, because
   `renumbered`'s `position` and every mover's `position` share the same `"{box}/"` prefix.
-- `server/capture_server.py:5380-5443` — `_answer_before(events, key)`. Scans `events`
+- `server/capture_server._answer_before` — `_answer_before(events, key)`. Scans `events`
   reversed; the `RENUMBERED` guard at lines 5420-5428 checks `event.get("box") == at_box`
   (not `event.get("position") == key`) — confirming the box-scope, not position-scope,
   requirement directly in the reader's own code.
 - `server/capture_server.py:6263-6289+` (`_clearing_event`) — identical shape: parses
   `at_box, at_index` from `key` (line 6278), then checks `event.get("box") == at_box` for the
   `RENUMBERED` guard (line 6285).
-- `server/capture_server.py:7046-7105` (`_state_before_sale`) and `:7108-7138`
+- `server/capture_server._state_before_sale` (`_state_before_sale`) and `:7108-7138`
   (`_state_before_retirement`) — these two do **not** have a `RENUMBERED`/box guard; they
   filter purely on `event.get("position") == key` (lines 7098, 7131). A box-wide scope is
   still correct for them (it is a superset, not a mismatch) — they simply ignore the
   extra rows for other positions in the box, exactly as `history()`'s current full-store read
   lets them ignore rows for every *other* box today.
-- `server/capture_server.py:7141-7196` — `_sale_origin`, `_retirement_origin`, `_origin`.
+- `server/capture_server._sale_origin` — `_sale_origin`, `_retirement_origin`, `_origin`.
   `_origin` is the one place that actually calls `store.history()` (line 7185) and hands the
   result to whichever reader (`_state_before_sale` or `_state_before_retirement`) it was given.
-- `server/capture_server.py:7198-7297` (`_sell`) — read in full. Line 7232:
+- `server/capture_server._sell` (`_sell`) — read in full. Line 7232:
   `previous, origin_unknown = _sale_origin(Store(snapshot.directory), key)` runs **before**
   the `if undo:` branch (line 7235). The `else` branch (a plain sale, lines 7256-7283) never
   reads `previous` or `origin_unknown` — confirmed by reading every line between 7256 and
   7283 inclusive; the names appear nowhere in that range.
-- `server/capture_server.py:7434-7583` (`do_retire`), specifically line 7508:
+- `server/capture_server.do_retire` (`do_retire`), specifically line 7508:
   `previous, origin_unknown = _retirement_origin(store, key)`, again before `if undo:` (line
   7511). The `else` branch (a plain retirement, lines 7546-7583) never reads either name —
   confirmed the same way.
-- `store/db.py:1228-1252` — `events_named(event)`, the existing scoped-by-event-name sibling
+- `store/db.events_named` — `events_named(event)`, the existing scoped-by-event-name sibling
   (D134). Its own docstring is explicit that it is an **unindexed scan** ("the events table
   has none of its own [index]") — that sentence is about a `WHERE event = ?` filter, and it
   predates the box-scoping this item adds; it does NOT mean `position` is unindexed (it is,
@@ -177,10 +177,10 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
   `events_named` and `events_at` are solving different problems (filter by event name, which
   has no column of its own to index cheaply without a migration, vs. filter by box, which the
   `position` column already supports).
-- `store/session.py:140-209` — `Store.read()`, `Store.write()`, `Store.history()` (line 179),
+- `store/session.Store` — `Store.read()`, `Store.write()`, `Store.history()` (line 179),
   `Store.named_events()` (line 187), `Store.buried()` (line 201). Copy this file's own
   pattern: open a connection, call the `db.py` function, close it in `finally`.
-- `scripts/docs-audit.py:2652-2708` — `_HISTORY_READER_ROOTS` and `_history_readers()`. **This
+- `scripts/docs-audit._HISTORY_READER_ROOTS` — `_HISTORY_READER_ROOTS` and `_history_readers()`. **This
   AST walker counts only zero-argument `.history()` calls** (`if node.args or
   node.keywords: continue` at line 2702-2703). After this change, all three production call
   sites become `store.history_at(key)` — a call with an argument — so `_history_readers()`
@@ -203,7 +203,7 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
   commit if left stale — but it will be **wrong**, in the same way the comment it replaced in
   2026-09-05 was wrong, and this repo's own `sole reader` row exists specifically because that
   kind of drift shipped once already. Fix it in the same commit.
-- `harness/tests/t7_store_and_seams.py:5166-5405` (`check_mark_sold`) and `:5494+`
+- `harness/tests/t7_store_and_seams.check_mark_sold` (`check_mark_sold`) and `:5494+`
   (`check_retire`, confirmed at line 5494) — the existing coverage for the two `undo`-gated
   callers this item changes. `harness/tests/t7_store_and_seams.py:5472-5480` —
   `events_for(key)` / `last_event(key)`, the test-side helpers already used throughout this
@@ -211,7 +211,7 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
   is your ground truth for the functional-equivalence assertion in "Tests," and it is a
   precedent for "filter the full read in Python and compare," which is exactly what the new
   test should do to prove `events_at` didn't drop or add anything a caller needs.
-- `harness/tests/t7_store_and_seams.py:6210-6231` (`check_history`) — the section documenting
+- `harness/tests/t7_store_and_seams.check_history` (`check_history`) — the section documenting
   the three route-written non-state events (`corrected`, `removed`, `answered`/`stood_down`
   family) and the disjointness assertion between them and `master.STATES`. Read this before
   writing new assertions nearby so the new ones sit in the right section rather than
@@ -494,11 +494,11 @@ Every production, zero-argument `Store.history()` (equivalently `store.history()
 
 | # | File:line | Function | Caller of the function | Undo-gated? | Action |
 |---|---|---|---|---|---|
-| 1 | `server/capture_server.py:5461` | `_answer_origin` | `do_answer`'s undo branch (call site at `server/capture_server.py:6639`, itself inside the route's `if undo:`) | Already gated at the call site one level up | Step 3a: `store.history_at(key)` |
-| 2 | `server/capture_server.py:6478` | `_reverse_stand_down` | route body itself (this whole function is the undo of a stand-down) | The function is inherently an undo | Step 3b: `_clearing_event(store.history_at(key), key)` |
-| 3 | `server/capture_server.py:7185` | `_origin` | `_sale_origin` (→ `_sell`) and `_retirement_origin` (→ `do_retire`) | See rows 4-5 | Step 3c: `store.history_at(key)` |
-| 4 | `server/capture_server.py:7232` | `_sell`, via `_sale_origin` → `_origin` | `do_mark_sold` | **No — read unconditionally today** | Step 4: gate the call on `undo` |
-| 5 | `server/capture_server.py:7508` | `do_retire`, via `_retirement_origin` → `_origin` | route itself | **No — read unconditionally today** | Step 5: gate the call on `undo` |
+| 1 | `server/capture_server._answer_origin` | `_answer_origin` | `do_answer`'s undo branch (call site at `server/capture_server.py:6639`, itself inside the route's `if undo:`) | Already gated at the call site one level up | Step 3a: `store.history_at(key)` |
+| 2 | `server/capture_server._reverse_stand_down` | `_reverse_stand_down` | route body itself (this whole function is the undo of a stand-down) | The function is inherently an undo | Step 3b: `_clearing_event(store.history_at(key), key)` |
+| 3 | `server/capture_server._origin` | `_origin` | `_sale_origin` (→ `_sell`) and `_retirement_origin` (→ `do_retire`) | See rows 4-5 | Step 3c: `store.history_at(key)` |
+| 4 | `server/capture_server._sell` | `_sell`, via `_sale_origin` → `_origin` | `do_mark_sold` | **No — read unconditionally today** | Step 4: gate the call on `undo` |
+| 5 | `server/capture_server.do_retire` | `do_retire`, via `_retirement_origin` → `_origin` | route itself | **No — read unconditionally today** | Step 5: gate the call on `undo` |
 
 No other production call exists (`grep -rn "\.history()" server/ store/ pipeline/ cli/
 identify/ geometry/ codes/` returns only the three lines above plus two `store/db.py`

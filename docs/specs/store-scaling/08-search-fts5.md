@@ -103,8 +103,8 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
   `app/src/server.ts:1345-1346` takes only `q`), and `BoxBrowse.tsx:710-716` intersects the
   box's own rows against the returned copy keys in a `useMemo`. **This migration does not
   add box scoping to the wire** — that would be new surface area D45 does not ask for.
-- `server/capture_server.py:7929-8090` — `do_search` in full (reproduced under Call sites).
-- `server/capture_server.py:7783-7857` — `_card_number_key`, `_number_display`,
+- `server/capture_server.do_search` — `do_search` in full (reproduced under Call sites).
+- `server/capture_server._card_number_key` — `_card_number_key`, `_number_display`,
   `_match_rank`, `_distinct`.
 - `store/db.py:1-40` (module docstring, D88's argument), `:95-98` (`SCHEMA_VERSION` and the
   comment about the 3→4 merge collision — the precedent for this item's own version claim),
@@ -116,7 +116,7 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
   does), `:990-1005` (`connect`), `:1092-1136` (`SqliteSource.upsert` — **note the ON
   CONFLICT DO UPDATE form, not INSERT OR REPLACE**, which is what keeps `rowid` stable
   across a card's lifetime; see Steps 2), `:1140-1143` (`delete`).
-- `store/master.py:1285-1330` (`_card_columns`), `:2480-2487` (`Inventory.CARDS`
+- `store/master._card_columns` (`_card_columns`), `:2480-2487` (`Inventory.CARDS`
   `TableSpec`).
 - `pipeline/join.py:611-620` (`join_key`, the **composition** form `_card_number_key` uses
   — zero-padded, no D55 set-code strip), `:623-650` (`display_number`, the **screen** form —
@@ -124,7 +124,7 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
   **catalog-match** form — NOT what search uses; do not confuse the three).
 - `harness/tests/t7_store_and_seams.py:7183-7500` and `:9924-9945` (every existing search
   assertion).
-- `scripts/cid-selftest.py:133-175` (`raw`, `table_bytes`) and `:649-684` (the reverse
+- `scripts/cid-selftest.raw` (`raw`, `table_bytes`) and `:649-684` (the reverse
   test that enumerates every table by `sqlite_master`).
 - `app/src/useSearch.ts` (the one call site of `search()` on the client — `Inventory.tsx`,
   `BoxBrowse.tsx` and `Fulfillment.tsx` all go through this one hook) and
@@ -274,7 +274,7 @@ explicit call there, `cards_fts` would exist on no fresh store and `do_search` w
 `_add_search_index` unconditionally on both paths is safe and cheap: on a fresh store it
 runs over zero rows.
 
-New function, modelled on `_add_submissions` (`store/db.py:798-812`) plus the two new
+New function, modelled on `_add_submissions` (`store/db._add_submissions`) plus the two new
 columns from Step 2 (modelled on `_add_card_ids`'s `ALTER TABLE ... ADD COLUMN` idiom at
 `store/db.py:515-516`):
 
@@ -444,7 +444,7 @@ specifically until now.
 
 Replace `server/capture_server.py:7929-8090`'s matching loop (`:7962-7983`) — leave the
 grouping/rendering code from `:7984` onward untouched. New helper, placed beside
-`_match_rank` (`server/capture_server.py:7814`):
+`_match_rank` (`server/capture_server._match_rank`):
 
 ```python
 def _fts_query(text: str) -> str:
@@ -586,15 +586,15 @@ assertions already do this structurally — see Tests).
 
 ## Call sites
 
-- `server/capture_server.py:7929` `do_search` — the function this item rewrites (Step 4).
+- `server/capture_server.do_search` `do_search` — the function this item rewrites (Step 4).
 - `server/capture_server.py:9924-9945` — the code-card dispute lookup calls `do_search`
   directly (`found = capture_server.do_search(code)["groups"]`); it needs no changes since
   it consumes the same return shape, but re-run its T7 block after this change (harness
   line numbers above).
-- `store/master.py:1285` `_card_columns`, `:2480` `Inventory.CARDS` — extended in Step 2.
-- `store/db.py:95` `SCHEMA_VERSION`, `:117-119` `TABLES["cards"]`, `:285` `_upgrade` — the
+- `store/master._card_columns` `_card_columns`, `:2480` `Inventory.CARDS` — extended in Step 2.
+- `store/db.SCHEMA_VERSION` `SCHEMA_VERSION`, `:117-119` `TABLES["cards"]`, `:285` `_upgrade` — the
   migration (Steps 2-3).
-- `scripts/cid-selftest.py:165-175` (`table_bytes`) and `:649-684`
+- `scripts/cid-selftest.table_bytes` (`table_bytes`) and `:649-684`
   (`case_the_reverse_restores_every_table_byte_identically`) — **must be updated, not
   merely re-run.** `table_bytes` enumerates every table via
   `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'` and then
@@ -617,7 +617,7 @@ assertions already do this structurally — see Tests).
 - `scripts/submission-selftest.py:576,588` — enumerates tables/indexes by **exact name**
   (`name='submissions'`, `name='submissions_state'`), unaffected by new tables appearing in
   `sqlite_master`.
-- `store/db.py:200` (`_stored_version`) — filters for `name = 'meta'` exactly, unaffected.
+- `store/db._stored_version` (`_stored_version`) — filters for `name = 'meta'` exactly, unaffected.
 - No other `sqlite_master` reader exists in `store/`, `scripts/`, `harness/`, or `cli/` —
   verified: `grep -rn "sqlite_master" store/*.py scripts/*.py server/*.py cli/*.py
   harness/*.py` returns only the three sites above plus this migration's own new code.
@@ -749,7 +749,7 @@ argument given above for T7). Re-run the suite; do not hand-edit the fixture spe
 `docs/specs/store-scaling.md` §4:
 
 ```
-| `server/capture_server.py:7970` `do_search` | `.values()` | per-keystroke | item 8 |
+| `server/capture_server.do_search` `do_search` | `.values()` | per-keystroke | item 8 |
 ```
 
 This row's own "Removed by" column already says "item 8" — this PR is what makes that true.

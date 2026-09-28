@@ -54,12 +54,12 @@ and `events` duplicated under new keys.
 |---|---|---|---|---|
 | `Inventory.to_payload()` — `GET /inventory` | 78 ms | 1,485 ms | 19.0x | Home, Inventory, Fulfillment, Orders, on load; Inventory again after **every** sale, retire, move and reshoot |
 | `do_orders()` — `GET /orders` | 185 ms | 3,465 ms | 18.7x | Orders and Shipping on load |
-| `Store.history()` | 16.5 ms | 345 ms | 20.9x | **every** mark-sold press (`_sale_origin`, `server/capture_server.py:7232`), every queue-answer undo, stand-down undo and retirement reversal — **FIXED, see D191: `Store.history_at(key)` scopes the read to the key's own box via the existing `events_position` index. Re-measured on this session's own copy of the owner's store: base 13.68 ms / 20x 309.50 ms for the unscoped read (this store's own numbers, close to the figures above); the new `events_at('3/1')` reads 3.77 ms on the base copy and 3.74 ms on a 20x-larger store where box 3's own size is held fixed (new cards added as new boxes, not by inflating existing ones) — flat, as the fix claims. On the plan's own duplication recipe (every existing box, including box 3, ALSO inflated 20x, which is what "duplicate every row" does when positions aren't remapped), `events_at('3/1')` reads 96.9 ms against `history()`'s 309.5 ms at the same store size — worse than "flat" because that recipe confounds store size with box size, but still ~3.2x faster than the unscoped read it replaces.** |
+| `Store.history()` | 16.5 ms | 345 ms | 20.9x | **every** mark-sold press (`_sale_origin`, `server/capture_server._sale_origin`), every queue-answer undo, stand-down undo and retirement reversal — **FIXED, see D191: `Store.history_at(key)` scopes the read to the key's own box via the existing `events_position` index. Re-measured on this session's own copy of the owner's store: base 13.68 ms / 20x 309.50 ms for the unscoped read (this store's own numbers, close to the figures above); the new `events_at('3/1')` reads 3.77 ms on the base copy and 3.74 ms on a 20x-larger store where box 3's own size is held fixed (new cards added as new boxes, not by inflating existing ones) — flat, as the fix claims. On the plan's own duplication recipe (every existing box, including box 3, ALSO inflated 20x, which is what "duplicate every row" does when positions aren't remapped), `events_at('3/1')` reads 96.9 ms against `history()`'s 309.5 ms at the same store size — worse than "flat" because that recipe confounds store size with box size, but still ~3.2x faster than the unscoped read it replaces.** |
 | `_copies_out` (before item 4) | 1,617 ms / 753 listings, 2,535 cards | 32,478 ms / 753 listings, 50,700 cards | 20.1x | `GET /pipeline/pricing`'s default landing (`pipeline_routes.py:2405`), `cli/resolve.py:1916` |
 | `_copies_out` (after item 4 — one `select()` via `_cards_by_sku`) | 6.6 ms | 189 ms | 28.6x | same call sites — 245x and 172x faster than the row above, at 1x and 20x respectively |
 
 **`GET /orders` was a named contradiction and it is resolved: the route's comment is stale
-and the route is slow anyway.** `_Places.__init__` (`server/capture_server.py:2029`) does
+and the route is slow anyway.** `_Places.__init__` (`server/capture_server._Places`) does
 no eager scan, its docstring says "per box since D88, and lazily", and `positions_for_sku`
 is an indexed `where(sku=…)`. The comment at 9075 saying it "walks the entire store per
 instantiation" is wrong about the mechanism. The measurement says the route is O(cards) all
@@ -103,8 +103,8 @@ re-derive the original list from the investigation's own journal.
 - **Two of the three "direct scoped precedents" do not transfer.** `do_search`
   (`capture_server.py:7929`) is free text over several fields and has no column to scope
   on; `_release_plan` (`:4526`) aggregates copies of one SKU across every box and cannot
-  be answered by `where(box=…)`. `box_views` (`cli/resolve.py:372`) can. And `do_status` is
-  not a scoped precedent either: `Inventory.counts()` (`store/master.py:2374`) is an
+  be answered by `where(box=…)`. `box_views` (`cli/resolve.box_views`) can. And `do_status` is
+  not a scoped precedent either: `Inventory.counts()` (`store/master.Inventory`) is an
   unfiltered column scan, cheap per row and full-table.
 - **There is no `docs/DEBTS.md` entry about `_copies_out`'s cost, and the investigation's
   "documented in-repo" figure came from a session's memory note.** DEBTS §24 mentions the
@@ -283,18 +283,18 @@ Taken 2026-09-12. Per-press means a write handler; per-load means a screen openi
 
 | Site | Shape | When | Removed by |
 |---|---|---|---|
-| `server/capture_server.py:3056` `do_inventory` | `to_payload()` | per-load, four screens; per-press on Inventory — until item 2, after which nothing calls it | stays — kept on the owner's word, no caller; the guard names it |
-| `server/capture_server.py:4549` `_release_plan` | `.items()` | per-press (release preflight) | item 7 |
-| ~~`server/capture_server.py:7970` `do_search`~~ | ~~`.values()`~~ | ~~per-keystroke~~ | **CLOSED by item 8 — `do_search` reads an FTS5 index (`store/db.py:_add_search_index`); row removed from `scripts/docs-audit.py`'s `UNSCOPED_WALK_ALLOWED`, `UNSCOPED_WALK_EXPECTED` 13 -> 12** |
-| `server/capture_server.py:8349` `_boxes_named` | `select(("box",))` | per-load | **stays — verified 2026-09-12 by item 2: its only caller is `do_status`, untouched by item 2, so it cannot close this row; a future item scoping `do_status` removes it** |
-| `server/capture_server.py:8388` `do_boxes` | `distinct("box")` | per-load | stays — one column, cheap; the guard names it |
-| `server/pipeline_routes.py:838` `_box_names` | `select(("box","run"))` | per-load | item 7 |
-| `server/pipeline_routes.py:2370` `_unsent_ledger` | `distinct("sku")` | per-load | item 4 |
-| `server/pipeline_routes.py:2444` `_on_hand_by_run` | `select(("run","state"))` | per-load | item 7 |
-| `server/pipeline_routes.py:3202` `do_pipeline_value` | `.values()` | per-load | item 7 |
+| `server/capture_server.do_inventory` `do_inventory` | `to_payload()` | per-load, four screens; per-press on Inventory — until item 2, after which nothing calls it | stays — kept on the owner's word, no caller; the guard names it |
+| `server/capture_server._release_plan` `_release_plan` | `.items()` | per-press (release preflight) | item 7 |
+| ~~`server/capture_server.do_search` `do_search`~~ | ~~`.values()`~~ | ~~per-keystroke~~ | **CLOSED by item 8 — `do_search` reads an FTS5 index (`store/db.py:_add_search_index`); row removed from `scripts/docs-audit.py`'s `UNSCOPED_WALK_ALLOWED`, `UNSCOPED_WALK_EXPECTED` 13 -> 12** |
+| `server/capture_server._boxes_named` `_boxes_named` | `select(("box",))` | per-load | **stays — verified 2026-09-12 by item 2: its only caller is `do_status`, untouched by item 2, so it cannot close this row; a future item scoping `do_status` removes it** |
+| `server/capture_server.do_boxes` `do_boxes` | `distinct("box")` | per-load | stays — one column, cheap; the guard names it |
+| `server/pipeline_routes._box_names` `_box_names` | `select(("box","run"))` | per-load | item 7 |
+| `server/pipeline_routes._unsent_ledger` `_unsent_ledger` | `distinct("sku")` | per-load | item 4 |
+| `server/pipeline_routes._on_hand_by_run` `_on_hand_by_run` | `select(("run","state"))` | per-load | item 7 |
+| `server/pipeline_routes.do_pipeline_value` `do_pipeline_value` | `.values()` | per-load | item 7 |
 | `store/master.py:1447` `to_payload` | `.items()` | called by `do_inventory` alone | stays with `do_inventory` |
 | `store/master.py:2378` `counts` | `select(("state",))` | `do_status`, polled | stays — one column; the guard names it |
-| `cli/resolve.py:372` `box_views` | `.values()` | `GET /pipeline/pricing` | item 7 |
+| `cli/resolve.box_views` `box_views` | `.values()` | `GET /pipeline/pricing` | item 7 |
 
 `do_graveyard` (`:5208`), `_box_row` (`:8243`) and `do_put_box` (`:8547`) are scoped today
 and are not on the list.

@@ -33,7 +33,7 @@ tail, the same shape PR #424's defect added one where none belonged, in reverse.
 
 **Why the dead one was never caught, verified rather than assumed.** `make docs-audit`'s
 `paths` row is `check_paths(report, docs, allowed)`. Every caller passes it `docs =
-markdown_files()` (`scripts/docs-audit.py:379-380`, `_walk(ROOT, (".md",))`) or a `.md`
+markdown_files()` (`scripts/docs-audit._walk`, `_walk(ROOT, (".md",))`) or a `.md`
 fixture. The four calls inside the row's own self-test do this too. No call anywhere in this
 file hands it a `.py`, `.ts`, `.tsx`, `.css` or `.js` path. The rule is real. `check_paths` is
 a real reader for it. The reader is wired to one file type only. A citation of the identical
