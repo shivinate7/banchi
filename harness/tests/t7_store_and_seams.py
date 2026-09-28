@@ -1045,6 +1045,67 @@ def orders_with_picks() -> dict:
 # --------------------------------------------------------------------------- the allocator
 
 
+def check_next_index_sql(checks: Checks) -> None:
+    """`next_index` answered by an indexed read must equal the walk, box by box (D192).
+
+    Two stores: a hand-built one (every state, sections, a gap, an empty registered box, a
+    string-typed record) and the demo seed. On a read snapshot the fast path answers; the
+    walk (`_next_index_walk`) is the oracle. A record that will not coerce must still
+    refuse by name, and a write session must still answer by the walk.
+    """
+    checks.note("")
+    checks.note("NEXT INDEX, INDEXED READ — store/master.py:next_index")
+
+    def compare(inventory, boxes, label):
+        bad = [
+            (b, inventory.next_index(b), inventory._next_index_walk(b))
+            for b in boxes
+            if inventory.next_index(b) != inventory._next_index_walk(b)
+        ]
+        checks.ok(not bad, f"{label}: fast path equals the walk in {len(boxes)} boxes", str(bad))
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            inv = snapshot.inventory
+            for _ in range(5):
+                inv.allocate_capture(1, cid=fake_cid(f"nx-{len(inv.cards)}"))
+            inv.set_state("1/2", master.SOLD)
+            inv.retire("1/3", "lost")
+            inv.set_state("1/5", master.MOVED)
+            inv.allocate_capture(2, cid=fake_cid("nx-b2"))
+            inv.open_section(2)
+            inv.allocate_capture(2, cid=fake_cid("nx-b2s"))
+            inv.ensure_box(9)
+            del inv.cards["2/1"]
+            inv.cards["4/1"] = master.Card(box="4", index="1")
+        read = Store().read().inventory
+        compare(read, [0, 1, 2, 3, 4, 9, 77], "hand-built")
+        checks.equal(read.next_index(1), 6, "sold, retired and moved cards still hold the mark")
+        checks.equal(read.next_index(9), 1, "a registered empty box starts at 1")
+        checks.equal(read.next_index(77), 1, "an unknown box starts at 1")
+        checks.equal(read.next_index(2), 3, "a deleted low index leaves the mark on the end")
+        checks.equal(read.next_index(4), 2, "a string-typed record still counts")
+        with Store().write() as snapshot:
+            snapshot.inventory.allocate_capture(3, cid=fake_cid("nx-w"))
+            checks.equal(snapshot.inventory.next_index(3), 2, "a write session answers by the walk")
+            snapshot.inventory.cards["6/1"] = master.Card(box="six", index=1)
+        checks.raises(
+            master.BadPosition, lambda: Store().read().inventory.next_index(1),
+            "a record that will not coerce refuses in EVERY box, by the walk",
+        )
+
+    with isolated_home() as home:
+        seed = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve().parents[2] / "scripts" / "demo-seed.py"),
+             "--force"],
+            capture_output=True, text=True, env={**os.environ, files.HOME_ENV: str(home)},
+        )
+        checks.ok(seed.returncode == 0, "the demo seed builds", seed.stderr[-300:])
+        read = Store().read().inventory
+        boxes = sorted({int(b) for b in read.boxes} | {int(c.box) for c in read.cards.values()})
+        compare(read, boxes, "demo seed")
+
+
 def check_allocator(checks: Checks) -> None:
     """The seventeen cases `docs/DEBTS.md` enumerates, plus the coercion that caused them.
 
@@ -39946,6 +40007,7 @@ def run() -> Result:
     check_pricing_labels(checks)
     check_box_views_bounded(checks)
     check_allocator(checks)
+    check_next_index_sql(checks)
     check_boxes_and_listings(checks)
     check_store(checks)
     check_set_and_rarity(checks)

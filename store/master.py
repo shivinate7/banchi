@@ -1827,6 +1827,14 @@ class Inventory:
         that there is no parameter to pass it through.
         """
         box = _as_position_int(box, "box")
+        fast = self.cards.high_water("idx", ("box", "idx"), box=box)
+        if fast is not None:
+            return fast + 1
+        return self._next_index_walk(box)
+
+    def _next_index_walk(self, box: int) -> int:
+        """`next_index` by the walk: the answer for a write session and the refusal for a
+        record that will not coerce. The indexed read above must equal this in every case."""
         highest = 0
         for _key, at in self._positions_in(box):
             highest = max(highest, at)

@@ -1818,6 +1818,27 @@ class SqliteSource:
         ).fetchall()
         return [(row[0], tuple(row[1:])) for row in rows]
 
+    def high_water(
+        self, column: str, equals: Dict[str, Any], unreadable: Sequence[str]
+    ) -> Tuple[int, bool]:
+        """`(MAX(column) over rows matching equals, or 0; whether ANY row of the table has a
+        NULL in one of `unreadable`)` — two indexed probes, no row read. `next_index`'s
+        answer (D192 follow-on): the NULL columns are exactly the records `int()` refuses."""
+        for name in (column, *unreadable):
+            if name not in self.columns:
+                raise KeyError(f"{self.table} has no indexed column {name!r}")
+        where, params = self._where(equals)
+        top = self.conn.execute(
+            f"SELECT MAX({column}) FROM {self.table}{where}", params
+        ).fetchone()[0]
+        base, base_params = self._where({})
+        joiner = " AND " if base else " WHERE "
+        nulls = " OR ".join(f"{name} IS NULL" for name in unreadable)
+        bad = self.conn.execute(
+            f"SELECT 1 FROM {self.table}{base}{joiner}({nulls}) LIMIT 1", base_params
+        ).fetchone()
+        return (0 if top is None else int(top)), bad is not None
+
     def distinct(self, column: str) -> Iterable[Any]:
         if column not in self.columns:
             raise KeyError(f"{self.table} has no indexed column {column!r}")
