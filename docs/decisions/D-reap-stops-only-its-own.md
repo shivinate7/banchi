@@ -129,6 +129,17 @@ same full-sweep power D127 always gave it. Had the 2026-09-27 incident's wanderi
 the top-level one, this entry would not have stopped it. This is a scope choice, not an
 oversight. It is recorded here so nobody rediscovers it by hitting it again.
 
+**A caller with no Claude Code signal at all reads as narrow, on purpose.** A bare terminal, or
+a session from another tool such as Codex, sets none of `CLAUDE_CODE_SESSION_ID`,
+`CLAUDE_CODE_CHILD_SESSION` or `CLAUDE_CODE_HOST_SESSION_ID`. `is_top_level_caller()` returns
+false the moment `caller_id()` is empty. That is case 4's narrow reading, the same one a
+subagent gets. So a bare `--confirm` from such a caller LISTS every untagged process under the
+checkout. It STOPS none of them, the same as for a subagent in someone else's tree. This is the
+narrow default doing its job: a caller this file cannot place is never assumed to be the
+orchestrator. The remedy is naming the target directly. `pid:`, `port:` and `match:` still take
+an untagged process, from any caller, and `_ownership_verdict` prints that remedy in the
+refusal itself, not only here.
+
 **A launcher that starts a server some other way leaves it untagged.** By hand, from a bare
 terminal, or from a tool this repo does not wrap, all read this way. That is the correct,
 honest answer (case 3 or 4 above), not a gap to close. A mark this file did not write is not

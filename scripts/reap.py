@@ -77,6 +77,7 @@ import shlex
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
 
@@ -458,15 +459,44 @@ def is_top_level_caller() -> bool:
     return not host or host == session
 
 
+def proc_start_epoch(pid: int) -> Optional[float]:
+    """When the OS says `pid` started, in epoch seconds, or None if that cannot be read.
+
+    COPIED FROM `janitor.py:_proc_start`, WITH ITS ARGUMENT: `ps -o lstart=` renders in LOCAL
+    time and `startedAt` is written in the same local `time.mktime` space, so the two compare
+    directly. D175's own entry records the trap in the other direction — comparing a UTC
+    string against a local one read every session as five hours stale — and the fix there was
+    the same one taken here: pick ONE space and never let a raw string cross into it unparsed.
+    """
+    got = run(["ps", "-o", "lstart=", "-p", str(pid)])
+    if not got.ok or not got.out.strip():
+        return None
+    try:
+        return time.mktime(time.strptime(got.out.strip()))
+    except (ValueError, OverflowError):
+        return None
+
+
 def _read_owner_marks(root: str) -> Dict[int, str]:
     """pid -> the session id recorded for its launched root, walked down to every descendant.
 
-    Reads every `.serve/owners/*.json` `scripts/reap_mark.py` left behind, keeps only the ones
-    whose recorded pid is STILL ALIVE — a corpse's mark says nothing about who runs under that
-    pid now, if anything does — and walks `_descendants` from each to cover children spawned
-    after the mark was written (`make dev`'s Vite, `make design-check`'s Playwright). A pid this
-    finds nothing about is simply absent from the result, which the caller reads as untagged —
-    the same "missing evidence is never a guess" rule the rest of this file already keeps.
+    Reads every `.serve/owners/*.json` `scripts/reap_mark.py` (or `serve.py:do_up`, for the
+    one launcher that cannot mark itself — see that file's own note) left behind, and walks
+    `_descendants` from each surviving one to cover children spawned after the mark was
+    written (`make dev`'s Vite, `make design-check`'s Playwright).
+
+    A MARK NAMES A PROCESS, NOT A PID, AND A PID IS REUSED. `os.kill(pid, 0)` alone cannot
+    tell today's occupant of a number from the one the mark was written about — the exact gap
+    the 2026-09-27 review found: a mark left behind by a process that has since exited reads
+    as "alive" the moment some unrelated later process is handed the same pid by the OS. So
+    every mark also carries `startedAt`, the marked pid's own process-start time, read at
+    WRITE time; a live pid whose CURRENT start time does not match is not the process the mark
+    was about, and is treated exactly like the mark was never written — MISSING EVIDENCE IS
+    NEVER A GUESS, the same rule `verdict_for` already keeps for a target it cannot place.
+
+    A STALE OR MISMATCHED MARK IS DELETED HERE, on the read that discovers it, rather than
+    left to keep answering the same wrong question on every later read. `reap.py` already
+    walks this whole directory each time it is asked; nothing else ever will.
     """
     marks: Dict[int, str] = {}
     if not root:
@@ -482,11 +512,27 @@ def _read_owner_marks(root: str) -> Dict[int, str]:
             continue
         pid = record.get("pid")
         owner = record.get("owner")
-        if not isinstance(pid, int) or not isinstance(owner, str):
-            continue
-        with contextlib.suppress(OSError):
-            os.kill(pid, 0)
+        started = record.get("startedAt")
+        valid = isinstance(pid, int) and isinstance(owner, str)
+        current = False
+        if valid:
+            with contextlib.suppress(OSError):
+                os.kill(pid, 0)
+                # A TOLERANCE OF FIVE SECONDS, NOT JANITOR.PY'S 120: that entry's record is
+                # written by a session sometime after the process it describes already
+                # started, so its gap is real and can be minutes wide. This mark is written
+                # by `write_mark` in the same breath it resolves `pid`, against the same `ps`
+                # this reads back — the only drift possible is `ps`'s own one-second rounding.
+                actual = proc_start_epoch(pid)
+                current = (isinstance(started, (int, float)) and actual is not None
+                           and abs(actual - started) <= 5.0)
+        if current:
             roots[pid] = owner
+        else:
+            # Dead, reused, or a record this file cannot trust — never guessed into OURS,
+            # and removed so the next read is not answering this same question again.
+            with contextlib.suppress(OSError):
+                marker.unlink()
     for root_pid, owner in roots.items():
         for descendant in _descendants({root_pid}):
             # First writer wins on a genuine collision. The ordinary case is disjoint trees —
@@ -534,7 +580,8 @@ def _ownership_verdict(pid: int, owner_map: Dict[int, str], caller: str,
         return False, "owned by another session ({0})".format(owner)
     if explicit:
         return True, "untagged, named explicitly"
-    return False, "untagged; a subagent's blanket sweep never stops an untagged process"
+    return False, ("untagged; a subagent's blanket sweep never stops an untagged process — "
+                    "name it directly with pid:/port:/match: to stop it")
 
 
 # ------------------------------------------------------------------------------- the verdict

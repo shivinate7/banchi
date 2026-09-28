@@ -23,10 +23,11 @@ before. This file is that same pattern, generalised from "the one supervisor" to
 session's launcher wrote it": one JSON file per launched root, and `reap.py` reads the whole
 directory and walks down from every live entry.
 
-ONE SHELL LINE IS THE WHOLE MECHANISM. A Makefile recipe runs each line as its OWN child of
-`make`, so `scripts/reap_mark.py dev` on one line and `npm run dev` on the next are SIBLINGS —
-marking the first's pid records a process that has already exited by the time anyone reads the
-mark. So every launcher instead runs
+ONE SHELL LINE IS THE WHOLE MECHANISM — FOR A LAUNCHER THAT STAYS IN THE FOREGROUND. A Makefile
+recipe runs each line as its OWN child of `make`, so `scripts/reap_mark.py dev` on one line and
+`npm run dev` on the next are SIBLINGS — marking the first's pid records a process that has
+already exited by the time anyone reads the mark. So `make dev`, `make server` and
+`make design-check`/`-quiet` each run
 
     scripts/reap_mark.py <label>; exec <the real command>
 
@@ -35,7 +36,22 @@ as ONE recipe line. This script's own process is a genuine child of that line's 
 KEEPING THE SAME PID, or (where the launcher must stay alive to do cleanup, like
 `design-check`'s suite-lock) simply runs the real command as its own child next and stays alive
 throughout. Either way the pid this file records is a real ancestor of the launched server for
-the whole of its life, which is what `_descendants` needs to be true.
+the whole of its life, which is what `_descendants` needs to be true — PROVIDED THE MARKED
+PROCESS STAYS ALIVE, which is the one thing `make up` does not do.
+
+`MAKE UP` CANNOT USE THIS SHAPE, AND THE 2026-09-27 REVIEW IS WHY. `scripts/serve.py:do_up`
+`Popen`s a DETACHED supervisor (`start_new_session=True`) and returns within about a second —
+by design, D138's "one process, detached." The Makefile line that ran `reap_mark.py up; exec
+$(PYTHON) scripts/serve.py up` marked the shell that becomes `do_up`'s own short-lived process,
+not the supervisor it spawns and orphans. Once `do_up` exits, that mark's pid is dead, the
+supervisor has been reparented to init, and `_descendants` can no longer connect the two —
+reproduced on this tree: a mark on the wrapper, a live server on an unrelated pid, and a
+subagent's `--confirm` refusing to stop the very server it had just started. So `do_up` calls
+`write_mark` BELOW DIRECTLY, on the real `Popen` result, the moment it has that pid — reusing
+this file's writer rather than a second copy of it, per this project's own rule that a shared
+shape is imported once rather than re-derived per caller. `design-check`/`-quiet` were checked
+for the same shape and do NOT have it: `scripts/suite-lock.py:_spawn` calls `subprocess.run`,
+which blocks, so that process stays the real child's direct parent for the whole run.
 
 THE OWNER IS `CLAUDE_CODE_SESSION_ID` — READ, NOT INVENTED. It is a primitive Claude Code
 itself already sets and every child inherits ordinarily (this is fork/exec inheritance, not
@@ -50,14 +66,24 @@ THAT IS AN HONEST ANSWER, NOT A FAILURE. The mark is written with an EMPTY owner
 `scripts/reap.py` reads as untagged: listed under a blanket sweep, never auto-stopped by one,
 still reachable by naming it explicitly. See that file's own header for the full rule.
 
+THE MARK NAMES A PROCESS, NOT A PID, AND `write_mark` READS THAT PID'S OWN PROCESS-START TIME
+AT THE MOMENT IT WRITES — `reap.py:proc_start_epoch`, the same `ps -o lstart=` reading D175's
+entry already uses for the neighbouring question. A pid is a number the OS hands out again. A
+mark that only remembered the number would let a LIVE, UNRELATED later process inherit a dead
+one's tag the instant the two numbers collided — found in the same review that found the `make
+up` gap. `reap.py:_read_owner_marks` checks the live pid's CURRENT start time against what was
+recorded, and deletes the mark on the read that finds it does not match, or finds the pid gone.
+
 FAILS OPEN, LIKE EVERYTHING ELSE THIS INCIDENT TOUCHES. No checkout, no writable `.serve/`, a
-`.serve` that is a stale file rather than a directory — none of these may stop the real
-command from running; they leave the process unmarked, which `reap.py` treats exactly like a
-process nothing here has ever heard of.
+`.serve` that is a stale file rather than a directory, a pid whose start time cannot be read —
+none of these may stop the real command from running; they leave the process unmarked, which
+`reap.py` treats exactly like a process nothing here has ever heard of.
 
 NEVER INSTALLED AND NEVER IMPORTED FROM OUTSIDE THIS CHECKOUT. `make janitor-install` copies
 `reap.py` alone to `~/.claude/bin` so its hook covers every project on the machine; this script
 is a Banchi launcher's own business and reads nothing `reap.py` does not already read back.
+`scripts/serve.py` imports `write_mark` below directly — a normal in-repo import, not a copy,
+since `serve.py` is never installed anywhere either.
 """
 
 from __future__ import annotations
@@ -65,12 +91,34 @@ from __future__ import annotations
 import json
 import os
 import sys
-import time
 from pathlib import Path
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from reap import checkout_root  # local import — this file is never copied out, see above
+from reap import checkout_root, proc_start_epoch  # local import — never copied out, see above
+
+
+def write_mark(root: str, pid: int, label: str) -> bool:
+    """Write `.serve/owners/<pid>.json` for `pid`, tagged with THIS process's own
+    `CLAUDE_CODE_SESSION_ID` — the caller who is doing the marking, never the marked pid's own
+    environment, which may not even be this session's to read.
+
+    `pid`'s own process-start time is read fresh, right now, with the same `ps -o lstart=`
+    `reap.py` will later check it against — not `time.time()`, which times this WRITE and not
+    the process, and would still match a same-second pid reuse. Returns whether a mark was
+    written; never raises, so a launcher that cannot write one still runs its real command.
+    """
+    started: Optional[float] = proc_start_epoch(pid)
+    owner = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+    owners_dir = Path(root) / ".serve" / "owners"
+    try:
+        owners_dir.mkdir(parents=True, exist_ok=True)
+        record = {"pid": pid, "owner": owner, "label": label, "startedAt": started}
+        (owners_dir / f"{pid}.json").write_text(json.dumps(record), encoding="utf-8")
+        return True
+    except OSError:
+        return False  # a mark that could not be written leaves the pid untagged, never a hard failure
 
 
 def main(argv: list) -> int:
@@ -78,15 +126,7 @@ def main(argv: list) -> int:
     root = checkout_root(os.getcwd())
     if not root:
         return 0  # no honest checkout to mark against — the real command still runs
-    pid = os.getppid()
-    owner = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
-    owners_dir = Path(root) / ".serve" / "owners"
-    try:
-        owners_dir.mkdir(parents=True, exist_ok=True)
-        record = {"pid": pid, "owner": owner, "label": label, "startedAt": time.time()}
-        (owners_dir / f"{pid}.json").write_text(json.dumps(record), encoding="utf-8")
-    except OSError:
-        pass  # a mark that could not be written leaves the pid untagged, never a hard failure
+    write_mark(root, os.getppid(), label)
     return 0
 
 

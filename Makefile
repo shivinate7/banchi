@@ -1609,7 +1609,7 @@ lan-check:
 # `up` takes them too, for `--no-watch` and for `--restart`, which is the bounce now.
 up:
 	$(PORT_CLAIM)
-	@python3 scripts/reap_mark.py up; exec $(PYTHON) scripts/serve.py up $(ARGS)
+	@$(PYTHON) scripts/serve.py up $(ARGS)
 
 down:
 	@$(PYTHON) scripts/serve.py down $(ARGS)

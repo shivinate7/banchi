@@ -725,9 +725,20 @@ echo "  -- ownership: two sessions can stand in one checkout (D-reap-stops-only-
 # processes are `sleeper.py` under `spawn` rather than a real Makefile launcher — that mechanism
 # is proved separately, below, on its own real child process.
 mark_owner() {   # mark_owner <pid> <owner>
-  mkdir -p "$tmp/checkout/.serve/owners"
-  printf '{"pid": %s, "owner": "%s", "label": "test", "startedAt": 0}' "$1" "$2" \
-    > "$tmp/checkout/.serve/owners/$1.json"
+  # REUSES `write_mark`, so the recorded `startedAt` is the fixture pid's REAL process-start
+  # time — the same reading `reap.py` will check it against — rather than a second, divergent
+  # computation of the same fact by hand. A placeholder value here would read as a STALE mark
+  # under the review's own fix and fail every case below for the wrong reason.
+  python3 -c "
+import json, sys
+sys.path.insert(0, '$(dirname "$REAP_MARK")')
+import reap_mark
+reap_mark.write_mark('$tmp/checkout', $1, 'test')
+marker = '$tmp/checkout/.serve/owners/$1.json'
+record = json.load(open(marker))
+record['owner'] = '$2'
+json.dump(record, open(marker, 'w'))
+"
 }
 
 a_mine_script="$(fixture_script amine "$tmp")"
@@ -882,6 +893,104 @@ out="$(cd "$tmp/checkout" && CLAUDE_CODE_CHILD_SESSION=1 CLAUDE_CODE_SESSION_ID=
 kill -0 "$mark_line" 2>/dev/null \
   && bad "the marking session could not stop the process its own mark named" \
   || ok "and the marking session can stop the process its own mark named"
+
+# --------------------------------------------------- the detach-then-exit shape (`make up`)
+echo
+echo "  -- the detach-then-exit shape: a mark on the wrapper is not a mark on the server --"
+
+# THE 2026-09-27 REVIEW'S OWN FINDING, REPRODUCED. `scripts/serve.py:do_up` Popens a DETACHED
+# supervisor (`start_new_session=True`) and returns within about a second — D138's own design.
+# The shell `scripts/reap_mark.py up; exec ...` marks IS that short-lived wrapper, never the
+# supervisor it orphans. `detach_wrapper.py` here plays `do_up`'s exact part: it starts a
+# detached child and exits at once, which is the shape neither `spawn` nor `sleeper` above ever
+# poses — every other fixture in this file marks or is marked as the same long-lived process.
+cat > "$tmp/checkout/detach_wrapper.py" <<'PY'
+import subprocess, sys
+with open('/dev/null', 'wb') as null:
+    p = subprocess.Popen([sys.executable, sys.argv[1]], stdin=null, stdout=null, stderr=null,
+                          start_new_session=True)
+print(p.pid)
+PY
+detach_target="$(fixture_script detach "$tmp")"
+sleeper "$tmp/checkout/$detach_target"
+
+# THE BUG, SHOWN RED ON THE SHAPE `make up` HAD BEFORE THIS REVIEW: mark the wrapper (the CLI's
+# own `os.getppid()` path, exactly what the old Makefile line did), then `exec` into the
+# detaching wrapper, which returns almost at once. By the time anything reads the mark, its pid
+# is a corpse and the real server is unreachable from it.
+detach_child="$(cd "$tmp/checkout" && sh -c "python3 '$REAP_MARK' up; exec python3 detach_wrapper.py '$detach_target'")"
+out="$(cd "$tmp/checkout" && CLAUDE_CODE_CHILD_SESSION=1 CLAUDE_CODE_SESSION_ID=SESSION-DETACH \
+       python3 "$REAP" --explain "pid:$detach_child" 2>&1)"
+kids="$kids $detach_child"
+case "$out" in
+  *"started by this session"*) bad "MARKING THE WRAPPER CREDITED THE DETACHED CHILD — this arm proves nothing"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+  *) ok "RED, AS THE REVIEW FOUND IT: marking the wrapper does not reach the detached child" ;;
+esac
+
+# THE FIX: `serve.py:do_up` now calls `reap_mark.write_mark` DIRECTLY on the real `Popen`
+# result, the moment it has that pid — never on `os.getppid()`. Posed here the same way, one
+# level up: a fresh wrapper that marks the CHILD's pid before it returns.
+detach_target2="$(fixture_script detach2 "$tmp")"
+sleeper "$tmp/checkout/$detach_target2"
+detach_child2="$(cd "$tmp/checkout" && CLAUDE_CODE_SESSION_ID=SESSION-DETACH python3 -c "
+import subprocess, sys
+sys.path.insert(0, '$(dirname "$REAP_MARK")')
+import reap_mark
+with open('/dev/null', 'wb') as null:
+    p = subprocess.Popen([sys.executable, '$detach_target2'], stdin=null, stdout=null,
+                          stderr=null, start_new_session=True)
+reap_mark.write_mark('.', p.pid, 'up')
+print(p.pid)
+")"
+kids="$kids $detach_child2"
+out="$(cd "$tmp/checkout" && CLAUDE_CODE_CHILD_SESSION=1 CLAUDE_CODE_SESSION_ID=SESSION-DETACH \
+       python3 "$REAP" --explain "pid:$detach_child2" 2>&1)"
+case "$out" in
+  *"started by this session"*) ok "THE FIX: marking the real Popen'd child survives the wrapper's own exit" ;;
+  *) bad "marking the child directly still did not credit it — the fix itself is broken"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+esac
+out="$(cd "$tmp/checkout" && CLAUDE_CODE_CHILD_SESSION=1 CLAUDE_CODE_SESSION_ID=SESSION-DETACH \
+       python3 "$REAP" --confirm 2>&1)"
+kill -0 "$detach_child2" 2>/dev/null \
+  && bad "a subagent's bare --confirm still could not stop the server it had just started" \
+  || ok "and a subagent's bare --confirm can now stop the server make up just started"
+
+# ------------------------------------------------------- a stale mark on a live, unrelated pid
+echo
+echo "  -- a stale mark: a reused pid must not inherit a dead process's tag --"
+
+# THE SECOND FINDING: `os.kill(pid, 0)` alone cannot tell TODAY'S occupant of a pid from the one
+# a mark was written about. A live fixture process here stands in for that reused pid, and the
+# mark beside it carries a `startedAt` that cannot be its own — the shape a stale mark left
+# over from an exited process would have the instant the OS hands its old number to something
+# new and unrelated.
+stale_script="$(fixture_script stale "$tmp")"
+sleeper "$tmp/checkout/$stale_script"
+stale_pid="$(spawn "$tmp/checkout/$stale_script" "$tmp/checkout")"
+kids="$kids $stale_pid"
+mkdir -p "$tmp/checkout/.serve/owners"
+printf '{"pid": %s, "owner": "SESSION-STALE", "label": "stale", "startedAt": 1000000000}' \
+  "$stale_pid" > "$tmp/checkout/.serve/owners/$stale_pid.json"
+out="$(cd "$tmp/checkout" && CLAUDE_CODE_CHILD_SESSION=1 CLAUDE_CODE_SESSION_ID=SESSION-STALE \
+       python3 "$REAP" --explain "pid:$stale_pid" 2>&1)"
+case "$out" in
+  *"started by this session"*) bad "A STALE MARK ON A LIVE, UNRELATED PID WAS TRUSTED"
+     printf '%s\n' "$out" | sed 's/^/         /' ;;
+  *) ok "a mark whose recorded start time does not match the live pid's own is not trusted" ;;
+esac
+[ -f "$tmp/checkout/.serve/owners/$stale_pid.json" ] \
+  && bad "the stale mark file was left behind for the next read to trip over again" \
+  || ok "and the stale mark is deleted on the read that finds it, not left to rot"
+# The stale mark is gone now, so this pid reads exactly like any other untagged process —
+# naming it explicitly is still allowed (the ordinary untagged-explicit rule), on no strength
+# of the tag that was just refused.
+out="$(cd "$tmp/checkout" && CLAUDE_CODE_CHILD_SESSION=1 CLAUDE_CODE_SESSION_ID=SESSION-STALE \
+       python3 "$REAP" "pid:$stale_pid" --confirm 2>&1)"
+kill -0 "$stale_pid" 2>/dev/null \
+  && bad "an untagged process (its stale mark already gone) survived an explicit pid:" \
+  || ok "and it is still reachable by naming it explicitly, as any untagged process is"
 
 echo
 if [ "$fail" -eq 0 ]; then

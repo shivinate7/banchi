@@ -2855,7 +2855,7 @@ COMPONENTS = [
                         "`CLAUDE_CODE_SESSION_ID`, read directly rather than re-deriving D175's "
                         "Bash-wrapper fragment, which only ever answered ANY session. Never "
                         "installed to `~/.claude/bin` and never imported outside this checkout.",
-                "governed_by": ["D43", "D53", "D127", "D175", "D-reap-stops-only-its-own"],
+                "governed_by": ["D43", "D53", "D127", "D138", "D175", "D-reap-stops-only-its-own"],
             },
             "cid-selftest.py": {
                 "does": "proves D172's card name and the photograph store filed under it by "
@@ -3339,7 +3339,7 @@ COMPONENTS = [
                         "directory-token subject that must NOT be placed, the caller it must "
                         "pass over, and a real nested worktree. Mutation-tested: twenty-two "
                         "guards removed one at a time, all caught, the naming rule among them.",
-                "governed_by": ["D18", "D43", "D53", "D122", "D127", "D157", "D169",
+                "governed_by": ["D18", "D43", "D53", "D122", "D127", "D138", "D157", "D169",
                                 "D-reap-stops-only-its-own"],
             },
             "silent-write-guard.py": {
