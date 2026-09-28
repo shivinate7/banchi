@@ -32,20 +32,50 @@ measurement, marked with an asterisk and explained in the Method section.
 | CUT (Q2) | 9 |
 | **Total** | **109** |
 
-## Estimated commit-hook time after, Tier 1 only
+## Counts, as landed (L12, 2026-09-28)
 
-**Estimate, not measured: roughly 5 to 10 seconds on a typical small staged diff.**
+The table above is the original proposal. L8 merged 16 rows into 4 families, 109 to 93.
+Q2's nine cuts landed, with rows 20 and 48. That took the count from 93 to 83. L12 wrote
+every remaining row's tier into `scripts/docs-audit.py:TIER`. Recounted from that dict:
 
-Today's full run is 37.3s (`docs-audit.md`'s Cost section). Four rows are 33.1s of that:
-`ste offenders` (18.09s, Tier 3), `paths` (5.95s, Tier 2), `identifier spelling` (5.91s,
-Tier 3), `spec map` (3.15s, Tier 2). None of the four is Tier 1. None of the four runs at
-commit time under this plan. The other 101 rows share about 14.1s in a full run, about
-0.14s each on average. Tier 1 holds 65 of those rows. At the average rate that is about
-9s. Several Tier 1 rows already narrow to nothing on a small staged diff today.
-`--staged` already zeroes **make targets**, `env vars`, and others when the diff does not
-touch their subject. A real staged-diff timing, before and after, would confirm this.
-Nobody has run that timing yet (`docs-audit.md`: "this audit did not separately measure it
-on a real staged diff").
+| Tier | Rows |
+|---|---:|
+| 1 (block at commit) | 54 |
+| 2 (block in CI) | 19 |
+| 3 (note in CI) | 10 |
+| **Total** | **83** |
+
+`coupling` sits outside this count. It is staged-only and already advisory. It runs only
+inside `--staged` mode, never through the tier gate. L12 leaves its behavior unchanged.
+
+## Commit-hook time, measured (L12, 2026-09-28)
+
+**Measured, not estimated.** `ste offenders` is already gone (L2 cut it). L12 applies the
+tier column. The pre-commit hook now calls `python3 scripts/docs-audit.py --staged
+--commit`. That flag skips every Tier 2 and Tier 3 row's computation entirely. Each one
+never runs and never prints, leaving the 54 rows now tiered 1 (of 83 total; the counts
+above predate L8's merges and the Q2 cuts, both landed before L12).
+
+Method: the same 5-file staged diff (CLAUDE.md, README.md, docs/map.py,
+docs/specs/order-pipeline.md, and DEBT6's own file — this lane's own prose edits, 64
+insertions, 78 deletions) staged in two trees: a `git worktree add --detach` at
+`262f3351` (this branch's parent, before L12) for "before", and this branch for "after".
+Three runs each, `/usr/bin/time -p`:
+
+| | Command | Runs (s) | Mean |
+|---|---|---|---|
+| Before | `python3 scripts/docs-audit.py --staged` (262f3351) | 8.62, 8.60, 8.68 | 8.63s |
+| After | `python3 scripts/docs-audit.py --staged --commit` (this branch) | 6.10, 6.13, 6.14 | 6.12s |
+
+**About 2.5s faster, 29%, on this diff.** That is smaller than the "31s to 9s" figure in
+PLAN.md's own Time table, because that figure compared against a PRE-L2 baseline
+(`ste offenders`, `paths` and `spec map` all unscoped). L2 already cut most of the fat this
+commit-time figure once had. What is left at Tier 1 is 54 real product- and structure-facing
+rows, most cheap alone (`cProfile` on the after-run: `sole reader` 1.10s,
+`identity writers` 0.98s, `views opsec` 0.67s, `id claims` 0.63s, `decision ids` 0.57s — no
+single row is slow, the total is 54 rows' sum). A commit that touches none of `env
+vocabulary`'s, `identity writers`'s or `sole reader`'s subjects narrows further; this
+measurement did not isolate that case.
 
 ## Method
 
@@ -253,14 +283,17 @@ The tier model and every row not named below stand as proposed. The owner's word
   (Recommended)`. The markdown row blocks the commit that touches a bad reference. The code
   row warns only, because a comment about a count is often plain English. Both find nothing
   today. So L8 lands 93 rows, not 92.
+- **L12 landed (2026-09-28).** The tier column is now `scripts/docs-audit.py:TIER`, read by
+  `_run_at_commit`. The pre-commit hook passes `--commit`; `make docs-audit` and CI pass
+  nothing, so nothing there narrows. The nine Q2 rows are cut, and the prose number each one
+  policed is deleted from CLAUDE.md, README.md, docs/map.py and
+  docs/specs/order-pipeline.md. Rows 20 (`entry budget`) and 48 (`gates structure`) are cut
+  too. Row count: 83 (93 minus 9 Q2 rows, minus 2). See "Counts, as landed" and "Commit-hook
+  time, measured" above for the row and timing figures this ruling made stale.
 
 ## Next
 
 - Owner reviews the tier column and the "Rows I was unsure about" table, and rules or
   amends.
-- A separate lane (`PLAN.md`'s L12) applies the ruling. Tier 1 rows stay on
-  `scripts/githooks/pre-commit`. Tier 2 rows move to CI-only. Tier 3 rows move their print
-  to a CI-only run. The nine Q2 rows are deleted, along with the prose number each one
-  polices.
-- Before that lane lands, a real staged-diff timing (before and after) should replace the
-  estimate above.
+- The line-anchor conversion (rows 3-5 plus the allowlist) is its own lane, after PR 4B, per
+  the 2026-09-28 ruling above.

@@ -5,20 +5,16 @@ own record belongs in git, not in this file forever (the preamble's own rule: "a
 leaves when someone argues it should"). The argument the owner closed on 2026-09-09, and the
 59-frame eye-pass question it left open, are both kept in full at commit b61ffa32.
 
-**This section cannot leave whole, and that is why it stays a section rather than a git-only
-record.** `make docs-audit`'s `detector standing` row reads five figures straight out of its
-prose, against `harness/results/detect.json`. Deleting the section once already made that row
-fail over a claim nobody removed on purpose. So the five figures stay published here, and
-only the argument around them is retired.
+**The `detector standing` row that once read five figures out of this prose against
+`harness/results/detect.json` is CUT** (test-audit plan Q2, 2026-09-28). It repeated a count
+the result file already holds. Read `harness/results/detect.json` for the current numbers
+rather than trusting a copy here.
 
-`detect_card` has been run over 1,625 photographs in the owner's six boxes. It returned
-a box for every one and refused none, and the crop guard declined 59 —
-`harness/results/detect.json`. The same run, over the same 1,625 photographs across six boxes,
-is the one `detector standing` reads twice on purpose. A stale twin cannot pass unnoticed
-that way. And the 59 frames nobody has looked at are still named by box and filename in the
-score file.
+`detect_card` has been run over every photograph in the owner's six boxes. It returned a
+box for every one and refused none. The crop guard's declines, and the frames nobody has
+looked at, are still named by box and filename in the score file.
 
-**The declines are entirely boxes 3 and 4** (42 of 723, and 17 of 56).
+**The declines are entirely boxes 3 and 4.**
 
 ### What T7 leaves uncovered in `server/`
 

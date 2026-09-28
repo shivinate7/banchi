@@ -546,15 +546,9 @@ govern the file, and the order id T2 carries into Pirate Ship is what makes the 
 
 **pkmnscan never writes order status back to TCGplayer** — tcgtracking owns mark-shipped, and two
 authors on one shipment is D34's problem twice. The two endpoints that would do it were seen on
-the wire and are recorded in `server/order_transport.py`'s WHAT IS DELIBERATELY NOT BUILT block,
-quoted here so that adding either reads as a change of policy rather than a change of code:
-
-    POST /orders/status-updates?api-version=2.0            {orderNumbers:[], status:"Shipped"}
-    POST /orders/<orderNumber>/tracking?api-version=2.0    {carrier, trackingNumber}
-
-That module cites this section by number for the ruling, and this section quotes the module for
-the endpoints, so neither can be read without the other. `not-built endpoints` in
-`scripts/docs-audit.py` is what keeps the two lists identical.
+the wire and are recorded once, in `server/order_transport.py`'s WHAT IS DELIBERATELY NOT BUILT
+block. Read them there rather than a second copy here — that module cites this section by
+number for the ruling.
 
 ### T6 — the order drives the walk, and the pull becomes a mode of the inventory screen. SUPERSEDED 2026-09-04 (D96 amended)
 
@@ -846,12 +840,13 @@ a sentence.
 
 **The abstention is a third answer and is never defaulted into a lane.** Defaulting the 39 to the
 envelope ships a playmat in a stamped mailer; defaulting them to the parcel spends postage nobody
-chose. `pipeline/shipping.py:parcel_lane` leaves them out of the download entirely — its own
-docstring says an order nobody can place is not swept in to be safe — and
+chose. `pipeline/shipping.py:parcel_lane` leaves them out of the download entirely. Its own
+docstring says an order nobody can place is not swept in to be safe.
 `app/tests/shipping.spec.ts`'s "an unjudged order is not in the parcel file" case asserts it from
-the screen's end. `Routing.certain` is the split worth surfacing beside the lane, and it is
-**112 of 331**: a published price against a published threshold is a different quality of claim
-from an inference off a weight ratio, and section 2 has the derivation.
+the screen's end. `Routing.certain` is the split worth surfacing beside the lane — see the
+figure above, against the committed fixture. A published price against a published
+threshold is a different quality of claim than an inference off a weight ratio. Section 2 has
+the derivation.
 
 **No weight is ever derived.** `Product Weight` is a catalog constant that counts the cardboard
 and not the mailer, so writing it buys postage for less than the parcel weighs, and the bill

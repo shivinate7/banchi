@@ -289,11 +289,17 @@ fi
 #
 # Bypass:  PKMNSCAN_DOCS=off git commit ...
 #
+# `--commit` (L12, test-audit-2026-09-27/TIERS.md, owner's ruling on Q1): only TIER 1 rows
+# run here. A Tier 2 row (two artifacts agreeing with each other) or Tier 3 row (a style
+# note) is skipped entirely — never computed, never printed — and blocks or prints only in
+# CI's full run (`python3 scripts/docs-audit.py`, no `--commit`). This is where the hook's
+# own time comes back: `paths` and `identifier spelling` alone measured almost 12s combined.
+#
 # stdin is closed deliberately. Nothing in this block may prompt: `git commit` run from an
 # agent session has no tty, and a hook that waits for input there hangs the session
 # instead of failing it. See cli/__main__.py for the same rule stated for the pipeline.
 if [ "${PKMNSCAN_DOCS:-}" != "off" ] && [ -f scripts/docs-audit.py ] && command -v python3 >/dev/null 2>&1; then
-  audit_out="$(python3 scripts/docs-audit.py --staged </dev/null 2>&1)"
+  audit_out="$(python3 scripts/docs-audit.py --staged --commit </dev/null 2>&1)"
   audit_status=$?
   case "$audit_status" in
     0) ;;
