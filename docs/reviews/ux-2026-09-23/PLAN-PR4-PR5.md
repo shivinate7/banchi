@@ -192,6 +192,9 @@ Lane D and the feedback items:
 - F3: `ask it what filters would be nice to have / optimal for an end user`.
 - The decision index (2026-09-27): `Derived view + pointer (Recommended)`. The ruling lives in
   the test audit's TIERS.md. One lane builds it after L2, beside L4.
+- Token budget (2026-09-27): `Prune memory.md now, and then send an audit lane`. The audit lane
+  measures every source loaded into each session and proposes a cut or a move per section. It
+  writes a report under `docs/reviews/`. Nothing changes until the owner rules.
 - F5: `Approved on cutting everything from F5`, `rest are good to cull`, and for Review's line
   `middle option approved for the cut mismatch+data`.
 
