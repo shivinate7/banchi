@@ -1797,6 +1797,41 @@ def iter_code_lines(text: str):
             yield number, "\n".join(spans)
 
 
+def make_target_refs(text: str):
+    """Yield (line number, span, match) for every `make <target>` reference `check_make_
+    targets` treats as real (test-audit plan S4).
+
+    ANYWHERE in a FENCED block, unchanged — CLAUDE.md's Commands block is one big fence, and
+    a target's own description on the same line legitimately names another one in backticks
+    (`` `make design-check` asserts... ``), which is not a span out here to require anything
+    of.
+
+    In a backtick SPAN outside a fence, ONLY when the span itself — after an optional `+`
+    proposed-sigil — STARTS WITH `make `. Never mid-sentence: an owner's prose quote in
+    backticks, `"We just need to make capping..."`, was once read as a target named
+    `capping`, because the old rule accepted a match anywhere inside any span. Two adjacent
+    spans on one line are two independent references, each judged on its own text, so
+    `` `docs/GATES.md` `` beside `` `make icloud-sweep` `` still finds the second and not a
+    target named `docs`.
+    """
+    fenced = False
+    for number, line in enumerate(text.splitlines(), start=1):
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+            continue
+        if fenced:
+            for match in _MAKE_REF_RE.finditer(line):
+                yield number, line, match
+            continue
+        for span in re.findall(r"`([^`]+)`", line):
+            body = span[1:] if span.startswith(PROPOSED_SIGIL) else span
+            if not body.startswith("make "):
+                continue
+            match = _MAKE_REF_RE.search(span)
+            if match:
+                yield number, span, match
+
+
 def phony_gaps(text: str) -> Tuple[Set[str], Set[str]]:
     """(rule targets missing from `.PHONY`, `.PHONY` names with no rule).
 
@@ -1830,28 +1865,27 @@ def check_make_targets(report: Report, docs: List[Path]) -> None:
     findings: List[Finding] = []
     referenced = 0
     for doc in docs:
-        for number, line in iter_code_lines(read(doc)):
-            for match in _MAKE_REF_RE.finditer(line):
-                name = match.group(1)
-                referenced += 1
-                if marked_proposed(line, match.start()):
-                    # `+make opsec-selftest` — a target a proposal would add. It has to fail
-                    # the moment it exists, or the sigil becomes a permanent exemption.
-                    if name in targets:
-                        findings.append(Finding(
-                            f"{rel(doc)}:{number}",
-                            f"`{PROPOSED_SIGIL}make {name}` carries the proposed-name sigil "
-                            f"and that target NOW EXISTS. Drop the sigil.",
-                        ))
-                    continue
-                if name not in targets:
-                    findings.append(
-                        Finding(
-                            f"{rel(doc)}:{number}",
-                            f"`make {name}` — no such target in the Makefile.\n"
-                            f"Targets are: {', '.join(sorted(targets))}",
-                        )
+        for number, line, match in make_target_refs(read(doc)):
+            name = match.group(1)
+            referenced += 1
+            if marked_proposed(line, match.start()):
+                # `+make opsec-selftest` — a target a proposal would add. It has to fail
+                # the moment it exists, or the sigil becomes a permanent exemption.
+                if name in targets:
+                    findings.append(Finding(
+                        f"{rel(doc)}:{number}",
+                        f"`{PROPOSED_SIGIL}make {name}` carries the proposed-name sigil "
+                        f"and that target NOW EXISTS. Drop the sigil.",
+                    ))
+                continue
+            if name not in targets:
+                findings.append(
+                    Finding(
+                        f"{rel(doc)}:{number}",
+                        f"`make {name}` — no such target in the Makefile.\n"
+                        f"Targets are: {', '.join(sorted(targets))}",
                     )
+                )
 
     # The reverse direction. `make help` is the front door, and a target missing from it
     # is invisible to anyone who did not read the Makefile.
@@ -18442,6 +18476,53 @@ def self_test() -> int:
     fenced = "```\nmake harness        # all six verification tests\n```"
     found = [name for _, line in iter_code_lines(fenced) for name in _MAKE_REF_RE.findall(line)]
     ok(found == ["harness"], "fenced make harness is", str(found))
+
+    print("\nmake targets: a code span counts only when it starts with `make ` (test-audit plan S4)")
+    owner_quote = 'The owner said `"We just need to make capping only be available"` today.'
+    found = [name for _, _, m in make_target_refs(owner_quote) for name in [m.group(1)]]
+    ok(
+        found == [],
+        "RED before the fix: an owner quote in backticks that contains `make` mid-sentence "
+        "is never read as a target reference",
+        str(found),
+    )
+    real_ref = "Run `make harness` before you tell me something works."
+    found = [name for _, _, m in make_target_refs(real_ref) for name in [m.group(1)]]
+    ok(found == ["harness"], "a span that starts with `make ` still names a target", str(found))
+    proposed = "`+make opsec-selftest` — a target a proposal would add."
+    matches = list(make_target_refs(proposed))
+    ok(
+        len(matches) == 1 and matches[0][2].group(1) == "opsec-selftest"
+        and marked_proposed(matches[0][1], matches[0][2].start()),
+        "a `+make` proposed reference still starts the span (after the sigil) and is read",
+        str(matches),
+    )
+    two_spans = "See `docs/GATES.md` beside `make icloud-sweep` for the run."
+    found = [name for _, _, m in make_target_refs(two_spans) for name in [m.group(1)]]
+    ok(
+        found == ["icloud-sweep"],
+        "two adjacent spans are judged independently: the path span names no target, and "
+        "the make span still does",
+        str(found),
+    )
+    still_fenced = "```\n# a session may make things worse: make harness catches it\n```"
+    found = [name for _, _, m in make_target_refs(still_fenced) for name in [m.group(1)]]
+    ok(
+        found == ["things", "harness"],
+        "a fenced line is UNCHANGED by this fix: `make things`, mid-line prose inside the "
+        "fence, is still read the old way, same as `make harness` right beside it",
+        str(found),
+    )
+    def _refs_only(text: str) -> List[str]:
+        makefile_targets = set(_MAKE_RULE_RE.findall(read(ROOT / "Makefile")))
+        return [m.group(1) for _, _, m in make_target_refs(text) if m.group(1) not in makefile_targets]
+
+    ok(_refs_only(owner_quote) == [], "the owner quote names no missing target")
+    ok(
+        _refs_only("See `make totally-not-a-real-target` here.")
+        == ["totally-not-a-real-target"],
+        "a real code span naming a missing target is still caught",
+    )
 
     print("\nmodule.attribute references are resolved, not guessed")
     with tempfile.TemporaryDirectory() as tmp:
