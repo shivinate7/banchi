@@ -1305,7 +1305,7 @@ test('Hide picked folds at the PRESS, not the sale (owner ruling, 2026-09-27)', 
   await expect(page.locator('.orders-walk-line')).toHaveCount(2)
 
   // Toggle Hide picked off, then on: the ON press is what folds Volcanion's row, right now.
-  const hideToggle = page.getByRole('button', { name: /^Hide picked/ })
+  const hideToggle = page.getByRole('button', { name: /^Picked/ })
   await hideToggle.click()
   await expect(page.locator('.orders-walk-line')).toHaveCount(2)
   await hideToggle.click()
@@ -4202,7 +4202,7 @@ test('#/inventory renders its own known shell unchanged by any of this', async (
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        boxes: [{ box: 1, name: 'Box 1', state: 'open', cards: 1, sold: 0, retired: 0, moved: 0 }],
+        boxes: [{ box: 1, name: 'Box 1', state: 'open', cards: 1, sold: 0, retired: 0, moved: 0, sections_detail: [] }],
         facets: { games: [], sets: {}, rarities: {} },
       }),
     }),
