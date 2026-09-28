@@ -8239,9 +8239,8 @@ COMPONENTS = [
                                            "brief named first (never re-sort the walk).",
                                    "governed_by": ["D24", "D57", "D58", "D62", "D79", "D93", "D96",
                                                    "D97", "D116", "D118", "D132", "D164", "D171",
-                                                   "D181",
-                                                   "D193", "D209", "D212", "D218", "D220", "D252",
-                                                   "D279"]},
+                                                   "D181", "D193", "D209", "D212", "D218", "D220",
+                                                   "D252", "D263", "D279"]},
             "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
                                            "drain-bar (borrowed from `Inventory.css` by class "
                                            "name); every other shape this file draws is "
@@ -9443,9 +9442,9 @@ COMPONENTS = [
                                                      "D50", "D57", "D58", "D63", "D69", "D73",
                                                      "D90", "D91", "D93", "D96", "D103", "D113",
                                                      "D114", "D118", "D123", "D132", "D171", "D181",
-                                                     "D193", "D194", "D196", "D203", "D209",
-                                                     "D212", "D218", "D220", "D221", "D274",
-                                                     "D285", "D296"]},
+                                                     "D193", "D194", "D196", "D203", "D209", "D212",
+                                                     "D218", "D220", "D221", "D263", "D274", "D285",
+                                                     "D296"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "

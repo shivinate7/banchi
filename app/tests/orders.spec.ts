@@ -1137,20 +1137,14 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
      `Mark sold` to `Undo` — D118 is about the REST of the page, never the control itself).
      Every other geometry on the pane, including every OTHER copy's row, is measured.
 
-     PINNED TO scrollY=0 BEFORE EACH SNAPSHOT — diagnosed off a repeat CI red (two runs, 4x
-     locally under `--repeat-each` on this exact case): `getBoundingClientRect()` is
-     VIEWPORT-relative, and `.orders-card-pane`'s own PAGE position never moves at all (284px
-     from the document top, confirmed constant across every run, failing and passing alike).
-     What moves is the viewport's OWN scroll offset. Clicking the "Volcanion" walk row, itself
-     below the fold at 390x844, makes Playwright auto-scroll to reach it — landing near the
-     PAGE'S OWN BOTTOM often enough to matter, because the walk list sits below the card pane
-     in this stacked layout. Marking the row sold then hides it from the walk list under
-     `hideSold` (on by default, a real and correct feature, not the defect) — the page gets
-     shorter by exactly one row's height, and a browser CLAMPS a scroll position that no
-     longer fits the shorter document, without firing anything else `before`/`after` here
-     would have caught. Nothing on the pane itself ever moved; the frame the two snapshots
-     were taken through did. Pinning the frame is what D118 asks the REST OF THE PAGE to hold
-     still against — it does not ask an incidental Playwright auto-scroll to hold still too. */
+     NO scrollTo PIN HERE ANY MORE (D263, ported to the walk): PR 3's pin only existed
+     because marking the row sold used to remove it from `.orders-walk-list` AT ONCE under
+     `hideSold`, shrinking the page and making the browser clamp an out-of-range scroll
+     position — a real symptom of a real D118 violation, papered over rather than fixed.
+     `OrdersWalkPane.tsx` now keeps a sold line drawn, in place, for the rest of this plan's
+     load (D263's own rule, ported from Inventory's box walk) — the document never gets
+     shorter, so there is nothing left for a browser's scroll clamp to react to, and nothing
+     left for this pin to hide. */
   const rectsOf = () =>
     page.locator('.orders-card-pane').evaluate((el) => {
       const controls = [...el.querySelectorAll('.orders-card-thin-action, .orders-card-action')]
@@ -1161,15 +1155,28 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
           return `${r.top}:${r.left}:${r.width}:${r.height}`
         })
     })
-  await page.evaluate(() => window.scrollTo(0, 0))
   const before = await rectsOf()
+  /* THE WALK LIST'S OWN JUMP (the plan's own repro: "the page shrinks and the view jumps
+     about 48px" — one row's height). The card pane's rects, checked below, sit ABOVE the
+     walk list and a scroll position already at 0 never clamps, so that check alone can pass
+     even on the old, buggy code (measured: it does). Tricksy Tentacles' own row, the row
+     BELOW Volcanion's in the list, is the one a real fold moves — this is the direct,
+     environment-independent measurement of the same defect. */
+  const nextRowTop = () =>
+    page.locator('.orders-walk-line', { hasText: 'Tricksy Tentacles' }).evaluate((el) => el.getBoundingClientRect().top)
+  const nextRowTopBefore = await nextRowTop()
 
   const action = page.getByRole('button', { name: /^Mark sold/ })
   await action.click()
   await expect
     .poll(async () => (await page.getByRole('button', { name: /^Undo/ }).count()) > 0)
     .toBe(true)
-  await page.evaluate(() => window.scrollTo(0, 0))
+  /* SETTLED, NOT JUST LANDED: the pane's own Undo appears before the walk LIST'S count badge
+     re-renders (two different consumers of the same `walk`), so waiting on Undo alone reads
+     `.orders-card-pane` a beat before the list has caught up. `.bn-hidetoggle-count` reaching
+     "1" is the walk list's own proof that it has now re-rendered off the fresh `soldKeys` —
+     the real state D263 asks this row to sit through, not a fixed pause. */
+  await expect(page.locator('.orders-walk-tools .bn-hidetoggle-count')).toHaveText('1')
 
   /* THE CARD DID NOT ADVANCE (the rebuilt fix): Volcanion is still what the pane shows, its own
      row now reading Undo. Tricksy Tentacles stays in the walk list (it was always the next
@@ -1181,6 +1188,102 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
      own, is unchanged — a real rect-diff, not a same-spot check on one element. */
   const after = await rectsOf()
   expect(after).toEqual(before)
+
+  /* NOR DOES THE NEXT WALK-LIST ROW (D263): Volcanion's own row stays drawn, marked sold, so
+     Tricksy Tentacles never slides up to take its place. */
+  expect(await nextRowTop()).toBe(nextRowTopBefore)
+})
+
+test('Hide picked folds at the PRESS, not the sale (owner ruling, 2026-09-27)', async ({ page }) => {
+  /* UN-6 above fixed the jump by never folding on a sale. The review round then found the
+   * fix had gone too far: `hideSold` could no longer fold anything at all, because the same
+   * event that lets a row go sold (a Mark sold press) is the only event the old code folded
+   * on. The owner's ruling restores a real fold, moved to a different press: turning Hide
+   * picked ON folds every row picked SO FAR, right then — D118 allows this, because the fold
+   * is the toggle's own result. A sale recorded while it is already on stays put until the
+   * NEXT press or the walk's own next load (D263 ruling 2, unchanged). */
+  const SKU_B = '9191487'
+  const lineB = line({
+    sku: SKU_B,
+    wanted: 1,
+    owed: 1,
+    fulfilled: 0,
+    outstanding: 1,
+    on_hand: 1,
+    line: { sku: SKU_B, quantity: 1, name: 'Tricksy Tentacles', number: '008', printing: 'Normal', condition: 'Near Mint', rarity: 'Rare', unit_price: '1.24', kind: 'single' },
+    picks: [
+      pick({
+        card_name: 'Tricksy Tentacles',
+        card_number: '008',
+        box: 3,
+        index: 22,
+        capture_id: 'cap-b',
+        place: place({ box: 3, index: 22, slot: 18, card: 18, label: 'Box 3, Section 2, Card 18' }),
+      }),
+    ],
+  })
+  await open(page, {
+    orders: payloadOf(
+      [
+        order({
+          wanted: 2,
+          lines: [line().line, lineB.line],
+          progress: [
+            ...order().progress,
+            { sku: SKU_B, wanted: 1, recorded: 0, outstanding: 1, over: 0, copies: [], at: null, by_hand: 0, reason: null, declared_kind: null, closed_at: null, closed_reason: null },
+          ],
+        }),
+      ],
+      [{ key: `TCGplayer:${ORDER_NUMBER}`, number: ORDER_NUMBER, complete: false, outstanding: 2, lines: [line(), lineB] }],
+    ),
+    walkPlan: walkPlanOf([
+      walkPlanStop({
+        takes: [
+          walkPlanTake({ wanted: 1, copies: [walkPlanCopy({ capture_id: 'cap-a' })] }),
+          walkPlanTake({
+            sku: SKU_B,
+            name: 'Tricksy Tentacles',
+            wanted: 1,
+            copies: [
+              walkPlanCopy({
+                box: 3,
+                index: 22,
+                slot: 18,
+                card: 18,
+                label: 'Box 3, Section 2, Card 18',
+                capture_id: 'cap-b',
+              }),
+            ],
+          }),
+        ],
+      }),
+    ]),
+  })
+
+  // Hide picked defaults ON (D132). Nothing sold yet, so both rows show.
+  await expect(page.locator('.orders-walk-line')).toHaveCount(2)
+
+  // Sell Volcanion (the default landing card). The row must NOT fold at once (UN-6's own fix).
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
+  await expect(page.locator('.orders-walk-tools .bn-hidetoggle-count')).toHaveText('1')
+  await expect(page.locator('.orders-walk-line')).toHaveCount(2)
+
+  // Toggle Hide picked off, then on: the ON press is what folds Volcanion's row, right now.
+  const hideToggle = page.getByRole('button', { name: /^Hide picked/ })
+  await hideToggle.click()
+  await expect(page.locator('.orders-walk-line')).toHaveCount(2)
+  await hideToggle.click()
+  await expect(page.locator('.orders-walk-line')).toHaveCount(1)
+  await expect(page.locator('.orders-walk-line')).toHaveText(/Tricksy Tentacles/)
+
+  // Sell Tricksy Tentacles while Hide picked is already on: it stays in place, this time.
+  await page.getByRole('button', { name: /Tricksy Tentacles/ }).click()
+  await page.getByRole('button', { name: 'Mark sold' }).click()
+  await expect(page.getByRole('button', { name: /^Undo/ }).first()).toBeVisible()
+  await expect(page.locator('.orders-walk-tools .bn-hidetoggle-count')).toHaveText('2')
+  await expect(page.locator('.orders-walk-line')).toHaveCount(1)
+  await expect(page.locator('.orders-walk-line')).toHaveText(/Tricksy Tentacles/)
 })
 
 test('finding #16 (the Opus review round) — the struck-out row in the walk list, at 390, carries its own Undo', async ({

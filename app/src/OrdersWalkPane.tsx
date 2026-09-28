@@ -582,6 +582,17 @@ function takeLinesOf(rows: readonly WalkRow[]): WalkTakeLine[] {
   return out
 }
 
+/** Every copy the wanted count is asking for has a receipt against it. Shared by the press's
+ *  own snapshot (below) and each line's `is-done` styling — one formula, not two. */
+function pickedAllOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>): boolean {
+  return line.rows.filter((row) => soldKeys.has(row.copy.key)).length >= line.take.wanted
+}
+
+/** Every take key across every section, flat — what a press of Hide picked snapshots. */
+function allTakeLinesOf(sections: readonly WalkSection[]): WalkTakeLine[] {
+  return sections.flatMap((section) => takeLinesOf(section.rows))
+}
+
 /** Who a take is for, in words: the buyers' names, once each. */
 export function takeBuyers(take: WalkPlanTake): string {
   const names: string[] = []
@@ -611,6 +622,32 @@ export function WalkList({
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
 }) {
+  /* THE OWNER'S RULING, 2026-09-27: THE PRESS FOLDS, NOT THE SALE. Turning Hide picked ON is
+   * itself allowed to fold every row picked SO FAR, right then — D118 permits this, because
+   * the fold is the PRESS's own result, not a side effect of some other action. A sale made
+   * while it is already on stays drawn, marked sold, until the NEXT press (off then on again
+   * re-snapshots) or the walk's own next load (a fresh plan) — D263 ruling 2, unchanged from
+   * this file's earlier fix. This is `BoxBrowse.tsx`'s `enteredLive` shape, ported again: a
+   * snapshot taken at one deliberate moment, held fixed until that moment repeats, never
+   * recomputed on every render — which is what made the previous `planTakeKeys` a tautology
+   * (it recomputed from the very data it was meant to hold still against). */
+  const [foldedKeys, setFoldedKeys] = useState<ReadonlySet<string>>(new Set())
+  const wasHiding = useRef(hideSold)
+  const planRef = useRef(walk.plan)
+  useEffect(() => {
+    if (walk.plan !== planRef.current) {
+      planRef.current = walk.plan
+      setFoldedKeys(new Set())
+    } else if (hideSold && !wasHiding.current) {
+      const picked = new Set<string>()
+      for (const line of allTakeLinesOf(walk.sections)) {
+        if (pickedAllOf(line, walk.soldKeys)) picked.add(line.takeKey)
+      }
+      setFoldedKeys(picked)
+    }
+    wasHiding.current = hideSold
+  }, [hideSold, walk.plan, walk.sections, walk.soldKeys])
+
   if (walk.loading && walk.plan === null) {
     return (
       <Loading rows={4} label="Reading the walk" />
@@ -630,9 +667,7 @@ export function WalkList({
     <ul className="orders-walk-list" aria-label="The cards to pick, in the order the boxes are walked">
       {walk.sections.map((section) => {
         const lines = takeLinesOf(section.rows)
-        const pickedAll = (line: WalkTakeLine) =>
-          line.rows.filter((row) => walk.soldKeys.has(row.copy.key)).length >= line.take.wanted
-        const shown = hideSold ? lines.filter((line) => !pickedAll(line)) : lines
+        const shown = hideSold ? lines.filter((line) => !foldedKeys.has(line.takeKey)) : lines
         if (shown.length === 0) return null
         return (
           <li className="orders-walk-group" key={section.key}>
