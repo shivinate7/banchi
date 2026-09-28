@@ -1,5 +1,8 @@
 # Item 7 — the value route paginated, and the aggregates in SQL
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree). The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 Source: `docs/specs/store-scaling.md` §3 item 7 and its §4 allowlist rows for
 `do_pipeline_value`, `_release_plan`, `box_views`, `_box_names`, `_on_hand_by_run`. This file
 is the implementation playbook; it does not itself change code. It also carries the owner's
@@ -9,16 +12,16 @@ walk — that ruling post-dates the spec file's own item-7 paragraph, which only
 
 ## Goal and done-when
 
-**(A) `do_pipeline_value`** (`server/pipeline_routes.py:3117`, the `.values()` walk at
-`:3202`, behind `GET /pipeline/value` at `server/capture_server.py:10744-10755`, consumed by
+**(A) `do_pipeline_value`** (`server/pipeline_routes.do_pipeline_value`, the `.values()` walk at
+behind `GET /pipeline/value` at `server/capture_server.CaptureHandler`'s `do_GET`, consumed by
 `#/pricing?band=top|bottom` — `app/src/ValueBands.tsx`) ranks every on-hand card by market.
 Today it builds a full `Card` dataclass for every row in the store (`inventory.cards.values()`
 triggers `Rows._load_all()`, which JSON-parses and constructs a `Card` for every stored
-payload — `store/rows.py:177-196`), sorts the whole list, and ships every row to the browser
+payload — `store/rows.Rows`), sorts the whole list, and ships every row to the browser
 in one response, which then does all percentile/cut-off slicing and "show more" paging
-client-side over the full array (`app/src/ValueBands.tsx:150-177`, `608-618`,
+client-side over the full array (`app/src/ValueBands.tsx`, `608-618`,
 `660-687`). At 2,535 cards that is 78–185 ms and a response the owner measured around 739 KB
-(`app/src/server.ts:2459` — "2,245 rows, ~739KB, 0.11s server-side"); at 50,000 cards
+(`app/src/server.getPricingWorklist` — "2,245 rows, ~739KB, 0.11s server-side"); at 50,000 cards
 (≈20x) the equivalent walk elsewhere in this store measures 18–21x
 (`docs/specs/store-scaling.md` §1's table), which puts this route in the multi-second, multi-MB
 range for a screen the owner opens to glance at a handful of cards.
@@ -43,20 +46,20 @@ the actual code below:
    finding of this playbook (§"Read first" below) and it is what keeps the client's percentile
    math correct without shipping the whole store.
 
-**(B) `box_views`** (`cli/resolve.py:372`, the `inventory.cards.values()` walk at `:397`,
-called from `server/pipeline_routes.py:2020`, `:2732`, `:3178`) builds full `Card` objects for
+**(B) `box_views`** (`cli/resolve.box_views`, the `inventory.cards.values()` walk,
+called from `server/pipeline_routes._relabel_positions`) builds full `Card` objects for
 every card in the store to answer "what section/card number does this box render right now"
 (D58). Two of its three callers only ever ask about a bounded set of boxes (the boxes a run's
 own positions name); the third (`do_pipeline_value`) genuinely needs every box in the store.
 The fix is **both** halves the plan names: a per-box path through `Inventory.records_in`
-(`store/master.py:1522`) for the two bounded callers, and a column-only `select()` fallback
+(`store/master.Inventory`) for the two bounded callers, and a column-only `select()` fallback
 for the store-wide caller — never a raw SQL rewrite, and never Card objects in either path.
 
-**(C) `_release_plan`** (`server/capture_server.py:4526`, the `.items()` walk at `:4551`)
+**(C) `_release_plan`** (`server/capture_server._release_plan`, the `.items()` walk)
 aggregates one box's SKUs against every OTHER box those SKUs also sit in (D34's release
 preflight). Also in scope by the plan's own §4 allowlist: `_box_names`
-(`server/pipeline_routes.py:797`, `select(("box","run"))` with no filter, `:838`) and
-`_on_hand_by_run` (`server/pipeline_routes.py:2429`, `select(("run","state"))` with no
+(`server/pipeline_routes._run_drawer`, `select(("box","run"))` with no filter) and
+`_on_hand_by_run` (`server/pipeline_routes._on_hand_by_run`, `select(("run","state"))` with no
 filter, `:2444`). All three become **two rounds of the existing indexed `equals` filter** on
 `Rows.select` — `box=` and `sku=` for `_release_plan`, `box=` for `_box_names`, `run=` for
 `_on_hand_by_run` — never a new SQL primitive. `grep -n "GROUP BY" store/*.py` returns nothing
@@ -82,7 +85,7 @@ step this playbook is doing on the implementer's behalf.
    with the same button text and the same `"N of M shown"` line.
 4. `box_views` gains an optional `boxes=` parameter; its two bounded callers pass it; its
    one store-wide caller does not, and its no-argument behavior for every existing direct
-   caller (`cli/resolve.py:785`, `:1923`, and every T7 site listed in "Tests") is unchanged.
+   caller (`cli/resolve._needed_games`, and every T7 site listed in "Tests") is unchanged.
 5. `_release_plan`, `_box_names`, `_on_hand_by_run` no longer walk `.items()` / a filter-less
    `select()` over the whole `cards` table; each is bounded by a real filter.
 6. All five rows leave `docs/specs/store-scaling.md` §4's allowlist (see "Allowlist entries
@@ -103,8 +106,8 @@ step this playbook is doing on the implementer's behalf.
   "Allowlist entries removed" section makes the identical point).
 - **Item 4 (`_copies_out`, `04-copies-out.md`, else
   `store-scaling.md` §3 item 4)** also edits `cli/resolve.py` — it touches
-  `cli/resolve.py:487` and the two per-SKU helpers beside it, this item touches
-  `cli/resolve.py:372-425` (`box_views`). Different functions in the same file; a merge
+  `cli/resolve._copies_out` and the two per-SKU helpers beside it, this item touches
+  `cli/resolve.box_views` (`box_views`). Different functions in the same file; a merge
   conflict is likely if both land as concurrent branches (adjacent line ranges), not a
   logical conflict. `do_pipeline_value` (`:3117`) calls `_readings()` (`:2975`), which itself
   calls `run_resolve._copies_out` indirectly through `_committed_keys`/`_copies_out` in
@@ -114,17 +117,17 @@ step this playbook is doing on the implementer's behalf.
   `_copies_out` has not changed its call signature before this item's code lands on top of
   it.
 - **Item 5 (`docs/specs/store-scaling/05-readings-writer.md`)** changes `_readings()`
-  (`server/pipeline_routes.py:2975`), which `do_pipeline_value` calls at `:3178`
+  (`server/pipeline_routes._readings`), which `do_pipeline_value` calls
   (`found, sources = _readings()`). This item does not change `_readings()` or its return
   shape (`Tuple[Dict[str, _Reading], List[dict]]`); if item 5 has landed, `_readings()`'s
   *behavior* changes (it reads a `readings` table instead of re-parsing CSVs) but its
   *signature* does not, so this item's code is unaffected either way — confirm the signature
   is unchanged with `grep -n "^def _readings" server/pipeline_routes.py` before writing code.
-- **Item 2 (the per-box read, `server/capture_server.py:10687`)** reopens `GET
-  /inventory/<box>` and touches `store/rows.py:177`'s "materialise-then-filter" fallback.
+- **Item 2 (the per-box read, `server/capture_server.CaptureHandler`'s `do_GET`)** reopens `GET
+  /inventory/<box>` and touches `store/rows.Rows`'s "materialise-then-filter" fallback.
   This item's `box_views` change does not depend on that fallback being fixed — the per-box
   branch here calls `Inventory.records_in`, which is `self.cards.where(box=box)`
-  (`store/master.py:1528`), an indexed query regardless of whether `rows.py:177`'s
+  (`store/master.Inventory`), an indexed query regardless of whether `rows.py:177`'s
   degrade-to-Python-filtering bug is fixed. If item 2 lands first, nothing here needs
   re-testing; if it lands after, nothing here needs to wait for it.
 - **No conflict with item 6** (`do_orders`, `docs/specs/store-scaling/06-orders.md`) — that
@@ -171,7 +174,7 @@ ValueBands.tsx:176` computes a percentile band's row count as
 `Math.round((rows.length * SHARES[cut]) / 100)` where `rows` is `pool` — the full list of
 priced rows for the current `end`/`box` scope (`:150-155`, `:369`). `pool.length` is exactly
 the count of priced cards in scope, which the aggregates block already reports: store-wide as
-`totals.valued` (`server/pipeline_routes.py:3348`, `"valued": valued`) and per-box as
+`totals.valued` (`server/pipeline_routes._open_markdown`, `"valued": valued`) and per-box as
 `ValueBox.valued` (`:3319`, `"valued": seat["valued"]`). The cut-off band's count is likewise
 already computed store-wide as the sum of every box's `at_or_over`/`under_cutoff`
 (`:3247-3253`) — this playbook adds two convenience totals (`totals.under_cutoff`,
@@ -182,14 +185,14 @@ ever needs a row.** Only the rows a human is about to look at do.
 ## Steps
 
 ### A1. Extract the per-card classification into a shared, column-only pass —
-`server/pipeline_routes.py:3117-3350`
+`server/pipeline_routes.do_pipeline_value`
 
 Replace the `for card in inventory.cards.values():` loop at `:3202` with a `select()` over
 exactly the columns the loop reads. Cross-check against `ValueCopy`'s fields
-(`app/src/types.ts:3355-3386`) and the loop body (`:3202-3269`): every field the loop reads
+(`app/src/types.ValueCopy`) and the loop body: every field the loop reads
 off `card` — `card.box`, `card.index`, `card.sku`, `card.state`, `card.name`, `card.set_hint`,
 `card.condition`, `card.game` — is an indexed column on the `cards` table
-(`store/master.py:2485-2488`: `"box", "idx", "state", "sku", "condition", "capture_id",
+(`store/master.Inventory`: `"box", "idx", "state", "sku", "condition", "capture_id",
 "name", "number", "game", "set_hint", "run", "captured_at", "state_at", "cid"`). So the whole
 loop can run over `inventory.cards.select(("box", "idx", "sku", "state", "name",
 "set_hint", "condition", "game"))` and build **no** `Card` object at all:
@@ -384,7 +387,7 @@ reversed-tie-order as "removed" behavior). Write `_value_sort_key_reversed` expl
 than deriving it by negating `_value_sort_key`'s output, so a reader sees the actual
 comparator.
 
-**Route dispatch** — `server/capture_server.py:10744-10755`. The docstring comment there
+**Route dispatch** — `server/capture_server.CaptureHandler`'s `do_GET`. The docstring comment there
 currently reads *"No band, no filter and no percentile in the query string"* — this is now
 false and must be corrected in the same edit, not left as a stale claim (`CLAUDE.md`'s own
 rule about a claim a check can no longer support):
@@ -412,10 +415,10 @@ Follow the `GET /pipeline/pricing` handler's own query-parsing style two branche
 
 ### A3. The client — `app/src/server.ts`, `app/src/ValueBands.tsx`
 
-**`app/src/server.ts:2461-2466`** (`getValueTable`) is no longer called once the client
+**`app/src/server.getPricingWorklist`** (`getValueTable`) is no longer called once the client
 paginates — remove its one call site rather than keeping a function with no caller. Add two
 new functions instead, following `getExportScope`'s `URLSearchParams` pattern
-(`app/src/server.ts:2603-2616`):
+(`app/src/server.getExportScope`):
 
 ```typescript
 export type ValueAggregates = Pick<
@@ -478,11 +481,11 @@ around **two fetches**:
 
 ## Call sites (complete)
 
-- `server/capture_server.py:10748` — the `GET /pipeline/value` route dispatch. Edited per §A2.
-- `harness/tests/t7_store_and_seams.py:26460`, `:26576` — direct calls to
+- `server/capture_server.CaptureHandler`'s `do_GET` — the `GET /pipeline/value` route dispatch. Edited per §A2.
+- `harness/tests/t7_store_and_seams.check_value_table` — direct calls to
   `pipeline_routes.do_pipeline_value()`. Unedited (T7-parity requirement).
-- `app/src/ValueBands.tsx:349` — `getValueTable()` call inside `read()`. Replaced per §A3.
-- `cli/resolve.py:785`, `:1923` — `box_views(inventory)` calls INSIDE `cli/resolve.py`
+- `app/src/ValueBands.tsx` — `getValueTable()` call inside `read()`. Replaced per §A3.
+- `cli/resolve._needed_games` — `box_views(inventory)` calls INSIDE `cli/resolve.py`
   itself (not `pipeline_routes.py`). Read each before touching anything: if either resolves a
   bounded set of boxes (a single run's positions, a single reconcile's SKUs), it is a THIRD
   candidate for the `boxes=` parameter and should take it for the same reason `pipeline_
@@ -490,27 +493,27 @@ around **two fetches**:
   command run from the CLI, where "slow" is acceptable because it is not on a polled screen),
   leave it on the no-args path. This playbook does not pre-judge which, because it did not
   read the surrounding function bodies at `:785` and `:1923` in full — do that first.
-- `server/pipeline_routes.py:2020` — `_relabel_positions`'s `views = ... run_resolve.
+- `server/pipeline_routes._relabel_positions` — `_relabel_positions`'s `views = ... run_resolve.
   box_views(inventory)`. Before this call, collect `{at.get("box") for entry in
   table.get("skus") or () for at in entry.get("positions") or () if isinstance(at, dict)}`
   and pass it as `boxes=`.
-- `server/pipeline_routes.py:2732` — `do_pipeline_worklist`'s `views = run_resolve.
+- `server/pipeline_routes.do_pipeline_worklist` — `do_pipeline_worklist`'s `views = run_resolve.
   box_views(snapshot.inventory) if snapshot is not None and ledger else {}`. Collect
   `{p.get("box") for row in merged.values() for p in row.get("positions") or ()}` from
   `merged` (already fully built by this line) and pass as `boxes=`.
-- `server/pipeline_routes.py:3178` (inside `do_pipeline_value`) and the equivalent line inside
+- `server/pipeline_routes.do_pipeline_value` (inside `do_pipeline_value`) and the equivalent line inside
   the new `do_pipeline_value_page` (§A2) — `views = run_resolve.box_views(inventory)`. **No**
   `boxes=` argument — this caller genuinely needs every box.
-- `server/capture_server.py:4636` (`do_box_listings`) and `:4714`
+- `server/capture_server.do_box_listings` (`do_box_listings`) and `:4714`
   (`do_release_box_listings`) — both call `_release_plan(inventory, box)`. Signature
   unchanged; only `_release_plan`'s body changes (§C below).
-- `server/pipeline_routes.py:1908` (inside `do_pipeline_runs`, `names = _box_names()`) and
+- `server/pipeline_routes.do_pipeline_runs` (inside `do_pipeline_runs`, `names = _box_names()`) and
   `:2564` (inside `do_pipeline_worklist`, before the run loop, `names = _box_names()` —
   confirm exact line at implementation time; it is the call immediately preceding `for entry
   in sorted(root.iterdir())` around `:2564-2584`) — both unaffected by signature; `_box_names`'
   body changes (§C below) to scope its walk to the box registry's own (small) key set instead
   of scanning every card.
-- `server/pipeline_routes.py:2579` — `on_hand = None if snapshot is None else
+- `server/pipeline_routes.do_pipeline_worklist` — `on_hand = None if snapshot is None else
   _on_hand_by_run(snapshot.inventory)`. Signature changes: `_on_hand_by_run(inventory, runs)`
   — the caller must collect the joined run names it is about to loop over BEFORE this line
   (the loop starting at `:2584`, `for entry in sorted(root.iterdir())`, already filters
@@ -640,7 +643,7 @@ builder (`:65-77`) needs to change — the reshaping happens entirely inside the
   `stack_index`/`stack_of` rather than the client's `stacks()`. Update this test's
   `copy({...})` rows to carry those fields explicitly.
 - Any test asserting `"They sit in N separate spots across M drawers"` (`pulls()`'s output,
-  `app/src/ValueBands.tsx:541`) needs its fixture to carry the new server-side `reach` field
+  `app/src/ValueBands.tsx`) needs its fixture to carry the new server-side `reach` field
   (§A3 point 5).
 - Read the remaining tests (`:193-374`) individually — several assert chip counts
   (`counts.p1` etc.) that after this rewrite come from the aggregates block rather than from
@@ -666,14 +669,14 @@ From `docs/specs/store-scaling.md` §4:
 
 | Site | Confirmed removed? |
 |---|---|
-| `server/pipeline_routes.py:3202` `do_pipeline_value` (`.values()`) | **Yes** — §A1 replaces it with `inventory.cards.select(...)`. |
-| `cli/resolve.py:372` `box_views` (`.values()`) | **Yes** — §B (below) replaces the store-wide fallback with `select()` and gives the two bounded callers a `records_in`-per-box path that never builds more than one box's `Card` objects at a time. |
-| `server/capture_server.py:4549` `_release_plan` (`.items()`) | **Yes** — §C replaces it with two rounds of indexed `select(box=...)`/`select(sku=...)`. |
-| `server/pipeline_routes.py:838` `_box_names` (`select(("box","run"))`, filter-less) | **Yes** — §C scopes the walk to the box registry's own keys (`inventory.boxes.items()`, a small table) plus one indexed `select(("run",), box=b)` per registry box, never a filter-less pass over `cards`. |
-| `server/pipeline_routes.py:2444` `_on_hand_by_run` (`select(("run","state"))`, filter-less) | **Yes** — §C scopes the walk to the joined-run-name list the caller already has, one indexed `select(("state",), run=name)` per run. |
+| `server/pipeline_routes.do_pipeline_value` (`.values()`) | **Yes** — §A1 replaces it with `inventory.cards.select(...)`. |
+| `cli/resolve.box_views` (`.values()`) | **Yes** — §B (below) replaces the store-wide fallback with `select()` and gives the two bounded callers a `records_in`-per-box path that never builds more than one box's `Card` objects at a time. |
+| `server/capture_server._release_plan` (`.items()`) | **Yes** — §C replaces it with two rounds of indexed `select(box=...)`/`select(sku=...)`. |
+| `server/pipeline_routes._box_names` (`select(("box","run"))`, filter-less) | **Yes** — §C scopes the walk to the box registry's own keys (`inventory.boxes.items()`, a small table) plus one indexed `select(("run",), box=b)` per registry box, never a filter-less pass over `cards`. |
+| `server/pipeline_routes._on_hand_by_run` (`select(("run","state"))`, filter-less) | **Yes** — §C scopes the walk to the joined-run-name list the caller already has, one indexed `select(("state",), run=name)` per run. |
 
 All five leave the allowlist in this item's PR. If research at implementation time (§"Read
-first", and the open questions in "Call sites" about `cli/resolve.py:785`/`:1923`) finds
+first", and the open questions in "Call sites" about `cli/resolve._needed_games`) finds
 either of these two callers is ALSO store-wide in a way that makes the bounded fix
 inapplicable, say so explicitly in the PR and leave that ONE site on the allowlist with a
 named reason — do not silently keep an entry the spec says should go, and do not remove an
@@ -681,7 +684,7 @@ entry that turns out to still need to stay, without a sentence explaining which.
 
 ## Steps (§B and §C detail, referenced above)
 
-### B. `box_views` — `cli/resolve.py:372-425`
+### B. `box_views` — `cli/resolve.box_views`
 
 ```python
 def box_views(
@@ -773,7 +776,7 @@ cli/resolve.py` first.
 
 ### C. `_release_plan`, `_box_names`, `_on_hand_by_run`
 
-**`_release_plan`** — `server/capture_server.py:4526-4590`. Replace the single
+**`_release_plan`** — `server/capture_server._release_plan`. Replace the single
 `for card_key, card in inventory.cards.items():` walk with two rounds:
 
 ```python
@@ -804,10 +807,10 @@ def _release_plan(inventory: master.Inventory, box: int) -> Tuple[List[dict], di
 
 This is bounded by `O(cards in box) + O(distinct SKUs in box × copies of each SKU
 store-wide)` instead of `O(all cards in the store)`. `sku` is an indexed column
-(`store/master.py:2487`), so `select(("box", "state"), sku=sku)` is a real indexed query, not
+(`store/master.Inventory`), so `select(("box", "state"), sku=sku)` is a real indexed query, not
 a scoped-looking full scan.
 
-**`_box_names`** — `server/pipeline_routes.py:797-843`. Replace the filter-less
+**`_box_names`** — `server/pipeline_routes._box_names`. Replace the filter-less
 `inventory.cards.select(("box", "run"))` with a per-registry-box indexed query:
 
 ```python
@@ -837,7 +840,7 @@ This walks `inventory.boxes` (a handful of rows — the box registry, not the ca
 once, and issues one indexed `select(("run",), box=b)` per registry box — bounded by
 `O(boxes) × O(cards per box)`, never `O(all cards)`.
 
-**`_on_hand_by_run`** — `server/pipeline_routes.py:2429-2455`. Change the signature to take
+**`_on_hand_by_run`** — `server/pipeline_routes._on_hand_by_run`. Change the signature to take
 the run names to count, rather than discovering them from a full-table scan:
 
 ```python
@@ -859,7 +862,7 @@ def _on_hand_by_run(inventory: master.Inventory, runs: Iterable[str]) -> Dict[st
     return counts
 ```
 
-Caller at `server/pipeline_routes.py:2579` must collect the joined run-name list before this
+Caller at `server/pipeline_routes.do_pipeline_worklist` must collect the joined run-name list before this
 line — hoist a first, cheap pass over `sorted(root.iterdir())` (reading only `manifest.get
 ("joined")`, which the existing loop at `:2584` already does per-run) into a list
 comprehension executed before `on_hand = ...`, then have the main loop reuse that same list
@@ -868,7 +871,7 @@ grep `^def _manifest`) before deciding whether calling it twice per run (once to
 names, once in the main loop) is acceptable or whether the collected names should carry
 their parsed manifests along to avoid a second file read.
 
-**Note on the comment this replaces** (`server/pipeline_routes.py:2578`, "ONE PASS, BEFORE
+**Note on the comment this replaces** (`server/pipeline_routes.do_pipeline_worklist`, "ONE PASS, BEFORE
 THE RUN LOOP, because the loop asks this question once per run and the answer is one read of
 two columns for the whole store") — this is a settled argument that has rotted exactly the
 way `CLAUDE.md`'s "a settled decision is an argument, not an authority" section describes:
@@ -883,7 +886,7 @@ a number). Replace the comment rather than leaving it beside code it no longer d
 - **`pipeline/join.py:BoxView`, `Position`, `place_text`.** This item supplies a cheaper set
   of inputs to the SAME `BoxView`/`Position` construction every caller already used — it does
   not touch the label formula itself, D58's rule, or `join.is_located`.
-- **`_readings()`** (`server/pipeline_routes.py:2975`) and its return shape. Item 5
+- **`_readings()`** (`server/pipeline_routes._readings`) and its return shape. Item 5
   (`docs/specs/store-scaling/05-readings-writer.md`) owns changes to how it gets its data;
   this item only calls it, twice now (once in `do_pipeline_value`, once in
   `do_pipeline_value_page`) with the identical call signature it uses today.
@@ -1000,7 +1003,7 @@ and are never rewritten to match a later tree — do not edit §1's existing tab
   the moment of writing; the implementing session must re-run the two `grep` commands named
   there before trusting this playbook's line numbers, since a concurrent branch may have
   already moved them.
-- **`_position_int`'s exact refusal behavior** (`server/capture_server.py:3586`) is reused
+- **`_position_int`'s exact refusal behavior** (`server/capture_server._position_int`) is reused
   verbatim in the `_release_plan` rewrite's `elsewhere` loop; this playbook did not read
   `_position_int`'s full body, only confirmed it exists at that line. Read it before relying
   on its exception type/message shape in a new call site.

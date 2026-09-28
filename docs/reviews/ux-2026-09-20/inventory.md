@@ -14,7 +14,7 @@ Files read: `app/src/Inventory.tsx`, `app/src/Inventory.css`, `app/src/BoxBrowse
 - `BoxBrowse.css:856` — `.browse-stepper-btn:disabled { opacity: 0.4; }`
 
 Meanwhile `BoxBrowse.css:138` (`.browse-boxcell:disabled { opacity: 0.45; }`) gets it right, in the same file as the 0.4 miss — so this isn't a screen-wide style choice, it's drift.
-**Where:** `app/src/Inventory.css:117`, `app/src/BoxOps.css:171`, `app/src/BoxBrowse.css:856`, contrast with `app/src/BoxBrowse.css:138`.
+**Where:** `app/src/Inventory.css` (`.inventory-retire-reason:disabled`), `app/src/BoxOps.css` (`.boxops-op:disabled`), `app/src/BoxBrowse.css` (`.browse-stepper-btn:disabled`), contrast with `app/src/BoxBrowse.css` (`.browse-boxcell:disabled`).
 **Severity:** medium. Three different disabled-state darknesses (0.4 / 0.45 / 0.5) can appear back to back — e.g. a disabled stepper button next to a disabled box row — and a user who has learned "faded = disabled" gets a different fade each time.
 **Fix:** replace the three hardcoded values with `var(--bn-disabled)`.
 **Recurs:** yes — this is a repo-wide drift (also seen in ReviewQueue.css, Runs.css, CaptureScreen.css, Pricing.css, Codes.css during a repo-wide grep), not unique to this screen, but three of the instances are inside this slice's own files.
@@ -25,19 +25,19 @@ Meanwhile `BoxBrowse.css:138` (`.browse-boxcell:disabled { opacity: 0.45; }`) ge
 - `BoxOps.css:130` — `.boxops-census-cell dt { letter-spacing: 0.04em; text-transform: uppercase; }` (the census tile labels, in the same sheet, a few rows below)
 
 `BoxBrowse.css:310` (`.browse-secttitle`) also uses `0.04em` uppercase, with no comment explaining a deliberate deviation.
-**Where:** `app/src/BoxOps.css:20` and `:130`; `app/src/BoxBrowse.css:310`.
+**Where:** `app/src/BoxOps.css` (`.boxops-identity-num`, and a second rule); `app/src/BoxBrowse.css` (`.browse-secttitle`).
 **Severity:** nit, but it is the kind of thing that shows up the instant two of these captions sit near each other — the identity number's tracking is visibly looser than the census label's directly below it.
 **Fix:** use `var(--bn-tracking-caps)` in all three places unless there's a reason one caption needs to track wider, and if so, say why in a comment (every other deliberate override in this codebase is commented).
 **Recurs:** contained to Inventory's own files (BoxOps, BoxBrowse) as far as I checked.
 
 ### 3. `Retired · pulled` mixes a humanized label with a raw enum value (documented in Graveyard.md, but the source of truth for the correct label lives here)
-**Where:** `app/src/Inventory.tsx:72-76` defines the canonical, human labels for a retirement: `'pulled'` → **"Pulled out"**, `'damaged'` → **"Damaged"**, etc. This dialog is the only place those labels are defined. Graveyard prints the raw machine value instead of using this table — see `graveyard.md` finding for the visible defect. Flagging here because the fix belongs beside this table: either export `REASONS` (or a `label` lookup built from it) so Graveyard can reuse it, or duplicate just the label map with a comment pointing at this one.
+**Where:** `app/src/Inventory.tsx` defines the canonical, human labels for a retirement: `'pulled'` → **"Pulled out"**, `'damaged'` → **"Damaged"**, etc. This dialog is the only place those labels are defined. Graveyard prints the raw machine value instead of using this table — see `graveyard.md` finding for the visible defect. Flagging here because the fix belongs beside this table: either export `REASONS` (or a `label` lookup built from it) so Graveyard can reuse it, or duplicate just the label map with a comment pointing at this one.
 **Severity:** medium (see graveyard.md for the on-screen effect).
 **Recurs:** yes, this is a two-screen issue; full detail in `graveyard.md`.
 
 ### 4. The retire dialog's box-name / position stack has no vertical rhythm relationship to the photo it sits beside
 **What I saw:** `.inventory-retire-card` (`Inventory.css:63-71`) is a `84px minmax(0,1fr)` grid with `align-items: start`, `gap: var(--bn-4)` (16px). The photo is a fixed 84×117.3 (63/88 aspect). The text column (`inventory-retire-where`) stacks the position label, box name, and (conditionally) a `PositionBar`, with `gap: var(--bn-2)` (8px) — no `justify-content` or minimum height coordination with the 117px-tall photo. When the `PositionBar` is absent (a departed/located-false copy), the text column collapses to two short lines sitting at the TOP of an 117px-tall row, leaving roughly 70-80px of dead space below the text but beside the photo. This is a plausible, code-visible imbalance; I could not confirm the exact whitespace live without opening the retire dialog (would require pressing "Retire", a write-adjacent control I'm not pressing).
-**Where:** `app/src/Inventory.css:63-71`, `90-96`; `app/src/Inventory.tsx:1010-1019`.
+**Where:** `app/src/Inventory.css` (`.inventory-retire-card` and a second rule); `app/src/Inventory.RetirePanel`.
 **Severity:** nit (cosmetic, situational — only visible for a copy with no PositionBar).
 **Fix:** either `align-items: center` on `.inventory-retire-card` so the text column centers against the photo when it's short, or confirm this never actually happens (e.g. every non-departed copy always draws a PositionBar) and drop this note.
 **Does it recur:** unknown — could not verify live.

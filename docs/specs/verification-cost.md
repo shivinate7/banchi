@@ -171,7 +171,7 @@ Measured:
   history because the fix is amended into the same commit — which is exactly why it reads as
   friction rather than as work.
 
-**And the rule is one-directional.** `scripts/docs-audit.py:5677`:
+**And the rule is one-directional.** `scripts/docs-audit.check_map`:
 
 ```
 missing = cited_decisions(module_path) - declared - set(component.get("governed_by") or [])

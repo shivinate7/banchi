@@ -721,7 +721,7 @@ page.
 
 **That used to be reported as `unreachable` — "It may not be running — start it with `make
 server`".** So in the one failure this section exists for, the phone told the operator to
-restart a server that was running, while the shell's own status dot said `Server online` off
+restart a server that was running, while the shell showed no offline banner off
 the same ungated read. `app/src/server.ts` had predicted it in a comment since step 7a and
 shipped it anyway. It now probes `GET /status` on that path — a simple request, so no
 preflight, and ungated, so it answers whenever the server is up at all — and raises

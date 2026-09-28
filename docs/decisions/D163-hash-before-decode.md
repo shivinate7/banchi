@@ -48,7 +48,7 @@ prepared either.
 Five loops tested it — the cache consult, the prompt refusal, the `to_send` filter, the
 `unreadable` roster, the retry rounds — and a sixth site wrote `item.prepared.sha256` into
 the run payload. **A reorder that left those alone would have reported all 464 healthy cached cards as unreadable**, counted them as neither hit nor miss, and written
-`photo_sha256: null` onto every one of their records — where `cli/resolve.py:1108` reads a
+`photo_sha256: null` onto every one of their records — where `cli/resolve.realign` reads a
 missing digest as `blind` and **D36's realign can no longer re-bind the card to the slot it is in today**. That is `CLAUDE.md`'s *"Never silently drop a card"*, four different ways, and
 it is why this ships with a field rather than with a reordering.
 

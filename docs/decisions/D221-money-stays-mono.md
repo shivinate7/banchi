@@ -5,9 +5,9 @@
 ### The contradiction
 
 CLAUDE.md's type paragraph read: "Numbers in tables are Inter tabular-nums, not mono."
-`app/src/kit.css:123` defines `.bn-money` as mono, 600 weight, tabular figures, the money
+`app/src/kit.css` defines `.bn-money` as mono, 600 weight, tabular figures, the money
 colour. Ten files use it, including table cells in `Revenue.tsx` and `Pricing.css`.
-`app/src/RunPanel.tsx:223` carries a comment defending exactly that treatment: ".bn-money is
+`app/src/RunPanel.tsx` carries a comment defending exactly that treatment: ".bn-money is
 mono, 600 and tabular — the treatment a column of dollar amounts needs." The rule and the
 primitive have disagreed for as long as both have existed.
 
@@ -37,7 +37,7 @@ hand-rolled declaration that copies its look. Every other table figure — a bar
 quantity, an index, a percentage — keeps the old rule exactly as it read.
 
 No styling changed. `.bn-money` already did what the amended rule now describes.
-`app/src/RunPanel.tsx:226`'s comment already argued the correct side. It needed no edit.
+`app/src/RunPanel.tsx`'s comment already argued the correct side. It needed no edit.
 
 ### Mechanization
 

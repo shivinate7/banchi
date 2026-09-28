@@ -710,7 +710,7 @@ test('a capture built on its sitting refuses, and offers Manage box', async ({ p
   await page.keyboard.press('u')
 
   await expect(page.locator('.capture-refused')).toContainText('This sitting has ended')
-  await expect(page.locator('.capture-halt-code')).toHaveText('capture_built_on')
+  await expect(page.locator('.capture-halt-code')).toHaveCount(0)
   const fix = page.getByRole('button', { name: 'Manage box' })
   await expect(fix).toBeVisible()
 
@@ -816,7 +816,7 @@ test('a walk that is refused partway says how far it got, in the server’s own 
 
   // The server's sentence, verbatim, and its machine string beside it (docs/DESIGN.md).
   await expect(page.locator('.capture-refused')).toContainText('is the newest card in box 3')
-  await expect(page.locator('.capture-halt-code')).toHaveText('undo_not_newest')
+  await expect(page.locator('.capture-halt-code')).toHaveCount(0)
 })
 
 /* THE ONE UNDO TARGET THIS SESSION NEVER SAW A CAPTURE RESPONSE FOR, which is the only row in
@@ -828,7 +828,7 @@ test('a walk that is refused partway says how far it got, in the server’s own 
  * anything this session shot (`CaptureScreen.tsx`). That is every reload mid-run — the operator
  * refreshes, the session's own list is empty, and the newest card in the drawer is still undoable.
  * The record has a box and an index and NOTHING ELSE, so `positionText` and `undoFigure` both fall
- * through to `storeKey.ts`'s `storeKeyText`.
+ * through to the box's name (D259).
  *
  * WHAT IT GUARDS. `undoFigure` used to draw `#{slotNumber(target)}` here, and `slotNumber` returned
  * the raw index — D58's countable number spelled over the store key, three functions away from the
@@ -838,19 +838,20 @@ test('a walk that is refused partway says how far it got, in the server’s own 
  *
  * `toHaveText` and an anchored `aria-label` rather than a `contains`: `B3 #7` contains `#7`, so a
  * loose assertion here passes against the exact defect it is written for. */
-test('an undo target the session never captured draws the store key, not a card number', async ({
+test('an undo target the session never captured names its box, never a store key (D259)', async ({
   page,
 }) => {
   /* Shoot nothing. The server says box 3 is at index 8, so the newest card in it is 7 — a card
-     this session has no capture response for and therefore no label. */
+     this session has no capture response for and therefore no label. D259 (owner, 2026-09-28):
+     the tile and its accessible name say the box's name, and a `B<n> #<n>` key appears nowhere. */
   await open(page, { nextIndex: { '3': 8 } })
 
   await expect(rows(page)).toHaveCount(1)
-  await expect(rows(page).first().locator('.capture-undo-pos')).toHaveText('B3 #7')
-  await expect(rows(page).first()).toHaveAttribute(
-    'aria-label',
-    'Undo the newest capture, B3 #7',
-  )
+  await expect(rows(page).first().locator('.capture-undo-pos')).toHaveText('S key')
+  await expect(rows(page).first()).toHaveAttribute('aria-label', 'Undo the newest capture, S key')
+  await expect(page.locator('.capture-undo-row').first()).not.toContainText(/B\d+ #\d+/)
+  const everything = await page.locator('.bn-view').evaluate((el) => (el as HTMLElement).innerText)
+  expect(everything).not.toMatch(/\bB\d+ #\d+/)
 })
 
 /* ════════════════════════════════════════════════════════════════════════════════════════
@@ -895,8 +896,8 @@ test('the stack keeps this sitting’s cards when the drawer changes', async ({ 
      label on only the rows that differ would make the unlabelled ones read as "the current
      drawer" — the exact inference the filter used to invite. */
   await expect(page.locator('.capture-undo-drawer')).toHaveCount(5)
-  await expect(rows(page).nth(0).locator('.capture-undo-drawer')).toHaveText('Box 4')
-  await expect(rows(page).nth(2).locator('.capture-undo-drawer')).toHaveText('Box 3')
+  await expect(rows(page).nth(0).locator('.capture-undo-drawer')).toHaveText('Next drawer')
+  await expect(rows(page).nth(2).locator('.capture-undo-drawer')).toHaveText('S key')
 })
 
 test('a drawer already fed is not offered for undo when this sitting has shots', async ({
@@ -1238,11 +1239,14 @@ test('removing a middle row deletes that card alone, and the later ones survive 
 
   /* CARD 3 IS GONE. Cards 4 and 5 are not — they SLID to 3 and 4, which is the physical truth
      D10 ruling 1 permits the renumber for. Cards 1 and 2, below the cut, are untouched and
-     keep their server-rendered labels; the two that shifted fall back to the bare store key,
+     keep their server-rendered labels; the two that shifted fall back to the box's name (D259),
      because `pipeline/join.py:Position.label` composed the old string against an index that
      is no longer theirs and this screen never composes a second one (D67). */
-  await expect(rows(page).nth(0)).toHaveAttribute('aria-label', /B3 #4$/)
-  await expect(rows(page).nth(1)).toHaveAttribute('aria-label', /B3 #3$/)
+  // Each slid card still names ITS card (the old label's number minus one), so the two differ.
+  await expect(rows(page).nth(0)).toHaveAttribute('aria-label', /S key, Card 4$/)
+  await expect(rows(page).nth(1)).toHaveAttribute('aria-label', /S key, Card 3$/)
+  await expect(rows(page).nth(0).locator('.capture-undo-pos')).toHaveText('#4')
+  await expect(rows(page).nth(1).locator('.capture-undo-pos')).toHaveText('#3')
   await expect(rows(page).nth(2)).toHaveAttribute('aria-label', /Card 2$/)
   await expect(rows(page).nth(3)).toHaveAttribute('aria-label', /Card 1$/)
 
@@ -1288,7 +1292,7 @@ test('a blocked removal reaches the operator as a sentence naming what blocked i
   // the operator" means on this screen (`describe()`, matched by every other refusal here).
   const refusal = page.locator('.capture-undo .capture-refused')
   await expect(refusal).toContainText('card 6 is sold')
-  await expect(page.locator('.capture-halt-code')).toHaveText('renumber_blocked')
+  await expect(page.locator('.capture-halt-code')).toHaveCount(0)
 
   // NO REGISTERED WORD FOR THE MECHANISM (D196): the sentence the operator reads never says
   // "capture id" or names the route, only what blocked it and why.

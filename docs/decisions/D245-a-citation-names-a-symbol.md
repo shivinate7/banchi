@@ -92,8 +92,8 @@ scores not-checkable.
 
 D149 names four addresses in the file `docs/DECISIONS.md` used to be. Those are a RECORD of
 where wrong citations stood when that file was one document. Rewriting them falsifies the
-record. They are exempt by name in `scripts/docs-audit-line-allow.txt`, which refuses an
-entry once its anchor resolves again.
+record. Since 2026-09-28 they read as words ("`docs/DECISIONS.md`, line 9522"), which no
+line-anchor shape matches, so no exemption list is needed.
 
 **A file-level exemption was proposed and rejected.** Its subject was
 `docs/specs/capture-server.md`. That file's own header calls it "the record of a plan that
@@ -136,6 +136,8 @@ on no target and no hook, and a person runs it on purpose (D18).
 
 ### Superseded in part 2026-09-24 — `D280`
 
-**Clause C's pin is gone. The rule stays.** A citation still names a symbol, never a line. The owner's ruling was "convert both of the last pins". The `line anchor ratchet` row is now the `line anchor offenders` row. It fails on each anchor that `scripts/line-anchor-offenders.json` does not list, by file and by anchor as written. It also fails on a stale entry, and on growth over the list at the merge-base. A new file still starts clean, unless the anchor moved out of another file. Growth is counted over the whole list, so the total of each anchor never rises and the inflow stays shut. `scripts/line-anchors.json` and `scripts/line-anchors-pin.py` are deleted.
+**Clause C's pin is gone. The rule stays.** A citation still names a symbol, never a line. The owner's ruling was "convert both of the last pins". The `line anchor ratchet` row is now the `line anchor offenders` row. It fails on each anchor that the offender list (deleted 2026-09-28, when the last anchor was converted) does not list, by file and by anchor as written. It also fails on a stale entry, and on growth over the list at the merge-base. A new file still starts clean, unless the anchor moved out of another file. Growth is counted over the whole list, so the total of each anchor never rises and the inflow stays shut. `scripts/line-anchors.json` and `scripts/line-anchors-pin.py` are deleted.
 
 **What is kept.** Clauses A and B, the `line anchor allowlist` row, the printed rot rate, and "leave nothing alone": every anchor is listed, resolving or not.
+
+**Amended 2026-09-28.** The owner ruled "convert and collapse" (test-audit plan, 2026-09-27). A lane converted the last 776 anchors to symbols. One `line anchors` row now refuses every `path:N` and `path:N-M`, with no list and no exemption. Clauses A, B and C, the `line anchor allowlist` row and the printed rot rate are gone. The text above is the record of how the rule was policed before.

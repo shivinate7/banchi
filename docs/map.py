@@ -3808,22 +3808,10 @@ COMPONENTS = [
                         "measuring, exemption and offender-identity machinery has no caller "
                         "left in `scripts/docs-audit.py`. It stays vendored because "
                         "`list_key` (a decision entry keyed by its file tail, so a claim "
-                        "moves nothing) is still imported by the `line anchor offenders` "
-                        "row and by `identifier spelling`'s markdown half.",
+                        "moves nothing) is still imported by `identifier spelling`'s "
+                        "markdown half.",
                 "governed_by": ["D18", "D140", "D218", "D226", "D229",
                                 "D280"]},
-            "line-anchor-offenders.json": {
-                "does": "the shrinking offender list for `make docs-audit`'s `line anchor "
-                        "offenders` row (D245): file -> lane and `line-anchor` -> every "
-                        "`path:N`/`path:N-M` line anchor that file cites, as written, once per "
-                        "occurrence. A decision entry's number is folded out of its file key "
-                        "and out of an anchor's decision path, so a claim moves nothing. The "
-                        "row fails on an unlisted anchor, a stale entry, and growth over the "
-                        "merge-base (`only_shrinks.py`), so a new file starts clean. Replaced "
-                        "D229's per-file pinned count (D280). "
-                        "Shrunk by hand or by `make offenders-prune`, which only deletes. Never "
-                        "grown by a tool.",
-                "governed_by": ["D229", "D245", "D280"]},
             "markdown-spelling-allow.json": {
                 "does": "the shrinking offender list for `make docs-audit`'s `identifier "
                         "spelling` row, markdown half (owner's ruling, test-audit plan, "
@@ -4140,22 +4128,6 @@ COMPONENTS = [
                         "pipeline/games.py's finish_by_rarity deliberately allows the "
                         "plain version too, per D23's superset rule.",
                 "governed_by": ["D16", "D23"],
-            },
-            "docs-audit-line-allow.txt": {
-                "does": "`path:N`/`path:N-M` line anchors the `line anchors` row's Clause A "
-                        "would otherwise flag as past their target's end, one "
-                        "`candidate  # reason` line each. Self-cleaning, mirroring "
-                        "`docs-audit-allow.txt`'s own discipline: `check_line_anchor_"
-                        "allowlist` fails when a listed anchor's number resolves again. "
-                        "Its four entries are one record — docs/decisions/D149's own "
-                        "citation of four wrong `docs/DECISIONS.md` line numbers, kept as "
-                        "history rather than corrected, because correcting them would "
-                        "falsify what D149 is an account of. A fifth entry, added "
-                        "2026-09-20, is the same shape for a different record: "
-                        "`scripts/stop-gate.sh:69` cited in docs/specs/mechanization-"
-                        "backlog.md, from before the harness left turn end.",
-                "governed_by": ["D16", "D48", "D136", "D141", "D149", "D180", "D194", "D229",
-                                "D248", "D277", "D284"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
@@ -4712,13 +4684,15 @@ COMPONENTS = [
                         "writes is already verified by a gate that runs on every commit.",
             },
             "offenders-prune.py": {
-                "does": "`make offenders-prune` — delete the STALE entries from the three "
+                "does": "`make offenders-prune` — delete the STALE entries from the two "
                         "shrinking offender lists (`typed-interpunct-allow.json`, "
-                        "`line-anchor-offenders.json`, `markdown-spelling-allow.json`), and "
+                        "`markdown-spelling-allow.json`), and "
                         "re-key a listed file that git's "
                         "rename detection (`git diff -M` from the merge-base with origin/main) "
-                        "says moved. A fourth list, `ste-offenders.json`, was CUT 2026-09-27 "
-                        "(test-audit plan, D226/D229/D280 amended). It NEVER ADDS an entry, "
+                        "says moved. Two lists were CUT: `ste-offenders.json` on 2026-09-27 "
+                        "(test-audit plan, D226/D229/D280 amended) and "
+                        "`line-anchor-offenders.json` on 2026-09-28 (its row now refuses "
+                        "every line anchor). It NEVER ADDS an entry, "
                         "and it refuses to write a plan "
                         "that holds any identity more often than the list it read. Reads with "
                         "the rows' own `_offender_list_shape`, `_offender_diff` and "
@@ -8207,8 +8181,7 @@ COMPONENTS = [
                                                "D118", "D123", "D132", "D159", "D171", "D181",
                                                "D192", "D193", "D194", "D195", "D196", "D203",
                                                "D209", "D212", "D218", "D220", "D221", "D259",
-                                               "D271", "D274", "D285", "D296",
-                                               "D304"]},
+                                               "D270", "D271", "D274", "D285", "D296", "D304"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8775,7 +8748,7 @@ COMPONENTS = [
                         "it, and a walk refused partway reporting how far it got in the "
                         "server's own words. Run by `make design-check`.",
                 "governed_by": ["D10", "D41", "D58", "D67", "D101", "D117", "D118", "D136", "D153",
-                                "D164", "D196", "D211", "D218"],
+                                "D164", "D196", "D211", "D218", "D259"],
                 "note": "THE ONLY SPEC THAT CAPTURES, and it is the opposite of "
                         "capture-claims.spec.ts's rule rather than an exception to it: "
                         "`POST /capture` and `DELETE /inventory/...` are both intercepted, so "
@@ -9487,9 +9460,8 @@ COMPONENTS = [
                                                      "D90", "D91", "D93", "D96", "D103", "D113",
                                                      "D114", "D118", "D123", "D132", "D171", "D181",
                                                      "D193", "D194", "D196", "D203", "D209", "D212",
-                                                     "D218", "D220", "D221", "D263", "D274", "D285",
-                                                     "D289", "D296",
-                                                     "D304"]},
+                                                     "D218", "D220", "D221", "D263", "D270", "D274",
+                                                     "D285", "D289", "D296", "D304"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "

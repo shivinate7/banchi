@@ -289,8 +289,8 @@ not pick which.
 Two registers, not one. The owner's ruling, 2026-09-18, read off main rather than the earlier
 draft of this sentence. `stop.takes` ranks densest first — `count` descending, same as
 `buildWalkPlan`'s `cardsHere` in `app/src/Orders.tsx`. That is which card to reach for first.
-A `Take`'s own `copies` rank front to back, ascending slot, per that file's own comment at
-line 1381. That is which copy of one card, once a hand is at it. `buildCopyMap` ranks boxes
+A `Take`'s own `copies` rank front to back, ascending slot, per that file's own comment on a
+`Take`'s copies. That is which copy of one card, once a hand is at it. `buildCopyMap` ranks boxes
 densest-first for a different screen and does not reach here.
 
 **`cid` is a new field on a pick-shaped row.** `Pick` carries `box`, `index` and `capture_id`
@@ -959,6 +959,8 @@ the only rows that can hold a tick.
 **3. Nothing is ticked by default.** The first draft ticked every open order so that the first
 press matched the press before the walk existed. That argument is retired. The operator says
 who the walk is for, every time, and an empty selection means Start is not offered.
+
+**Opening a buyer is not ticking one (owner's ruling, 2026-09-28).** `#/orders` opens the first buyer in the list on its own, as `#/inventory` opens its first box: `selectedKey` falls back to the first shown row, and the landing list is the pullable buyers (D270, amended 2026-09-28: "Hide unpullable" is on at rest, one click widens it). That is a view. The tick set stays empty at first render, and on a phone no sheet opens by itself.
 
 **2 was not a question the owner could answer as asked, because "a frozen pass" was this
 document's word and not defined here.** It is defined in section 8: from the press of Start to

@@ -125,9 +125,9 @@ launch-config:
 # downloading 151 images from pokemontcg.io, which is slow, rate-limited without a key,
 # and fails outright offline.
 #
-# `.env` IS DELIBERATELY NOT COPIED. It is the API key, copying secrets around a disk is
-# how they end up somewhere nobody is tracking, and T1 does not need it once the cache is
-# warm. Named here so its absence reads as a decision rather than an oversight.
+# `make worktree-setup` copies no secret. `.env` reaches each Claude Code worktree through
+# `.worktreeinclude` instead (owner's ruling, 2026-09-28), with `.claude/settings.local.json`
+# and `.codex/config.toml`. T1 does not need it once the cache is warm.
 # The cache/mirror/node_modules provisioning below is shared with scripts/worktree-guard.sh
 # (the SessionStart hook) via scripts/worktree-provision.sh — see that script's header for
 # why: this used to be a second copy of the same cp/ln/python-one-liner sequence, and D47's
@@ -328,8 +328,8 @@ map-fix-selftest:
 	@python3 scripts/map-fix.py --selftest
 
 # A DELETING GENERATOR, AND IT GATES NOTHING (D18; D-ratchets-become-offender-lists). It deletes
-# the STALE entries from the three shrinking offender lists, scripts/typed-interpunct-allow.json,
-# scripts/line-anchor-offenders.json and scripts/markdown-spelling-allow.json, and re-keys a
+# the STALE entries from the two shrinking offender lists, scripts/typed-interpunct-allow.json
+# and scripts/markdown-spelling-allow.json, and re-keys a
 # file that git's rename detection says moved. It never adds an entry. It reads with the rows'
 # own functions, imported, so the pruner and the gates cannot disagree about what is stale.
 # Previews. ARGS=--write applies.

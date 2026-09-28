@@ -20,7 +20,7 @@ D48 did not rest on convenience. It was the owner's own correction of a worse pr
 
 That argument was right when it was written. **All three supports are gone, and two of them by other entries that did not look back at this one.**
 
-- **`--bypass` was retired 2026-09-02** by D3's amendment. `pipeline/variant.py:357` is where the ladder decides now; 16 of 16 measured.
+- **`--bypass` was retired 2026-09-02** by D3's amendment. `pipeline/variant.resolve` is where the ladder decides now; 16 of 16 measured.
 - **`decisions.json` moved store-wide 2026-09-02** by D86: the pricing answer is one file for the whole store, keyed by SKU. **0 live `decisions.json` files in `runs/`, 8 `.adopted` tombstones.** A run carries no pricing answer at all any more.
 - **The per-run READING is alive as text and has never been exercised.** Measured across all 15 runs on the operator's store: **12 at `max_edge` 1200, 2 at 900, 1 at 1568** — and the three that differ are three separate presses on three different days, never two legs of one send.
 

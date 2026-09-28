@@ -18,24 +18,24 @@ kept here so a later session does not re-propose them without re-deriving why th
 Each of these is a single finding in a single file. None needs a decision entry to fix; each
 needs someone to pick it up.
 
-- **`pipeline/join.py:1344-1356`** (`Catalog.candidates`) — set-hint narrowing returns the
+- **`pipeline/join.Catalog`** (`Catalog.candidates`) — set-hint narrowing returns the
   hint-matched candidate set as resolved without checking it collapsed to exactly one `Set
   Name`. A genuinely ambiguous multi-set collision inside the hinted set would silently skip
   the `SET_AMBIGUOUS` routing D76 exists to guarantee.
-- **`pipeline/join.py:1192-1195`** (`_blank_number_by_name`) — the blank-Number index used for
-  `pokemon_code`'s `name_only` matching is unfolded, unlike the folded D35 name index at
-  `join.py:1189-1191`. A case or whitespace mismatch here produces a silent `no_catalog_row`
+- **`pipeline/join.Catalog`** (`_blank_number_by_name`) — the blank-Number index used for
+  `pokemon_code`'s `name_only` matching is unfolded, unlike the folded D35 name index in
+  `Catalog`. A case or whitespace mismatch here produces a silent `no_catalog_row`
   with no fallback, the same failure shape D35 was written to close off everywhere else.
-- **`server/pipeline_routes.py:2455-2497`**, calling into `:2297` — `do_pipeline_scope` reads
-  and parses the identifications file twice inside one GET. The module's own docstring at
-  `:2227-2230` says data is "lifted rather than recomputed"; this route does not follow its
+- **`server/pipeline_routes.do_pipeline_scope`** — it reads
+  and parses the identifications file twice inside one GET. The module's own docstring
+  says data is "lifted rather than recomputed"; this route does not follow its
   own rule.
-- **`app/src/RunPanel.tsx:684-693`** vs **`:698-722`** — `detail` (run name, counts, console,
+- **`app/src/RunPanel.tsx`** (`detail` and `openRun`) — `detail` (run name, counts, console,
   the bypass-claim banner) clears only when `openRun` becomes `null`, never when it changes to
   a *different* run. Clicking another row can leave the previous run's numbers on screen,
   under a newly-highlighted row, until the next poll resolves — on the one screen where
   misreading which run's numbers you are looking at can spend money.
-- **`app/src/RunPanel.tsx:873-888`** and **`app/src/BoxBrowse.tsx:1379`** — two independent
+- **`app/src/RunPanel.tsx`** and **`app/src/BoxBrowse.tsx`** — two independent
   global `window`-level arrow-key listeners, each guarded against form-field focus and neither
   guarded against a screen reader's browse-mode navigation. Same defect, found twice, which
   makes it a pattern rather than an oversight in one file.
@@ -66,8 +66,7 @@ on), leaving the component file holding only JSX. Not proposed: a state-manageme
 see §3.
 
 **String-keyed `getattr`/`setattr` on dataclass fields bypasses whatever typing the dataclasses
-provide.** `store/master.py:584,594-595,662-673,729` and `server/capture_server.py:2606-2609,
-2813-2820,3491,6289` drive stage-counter manipulation off string constants
+provide.** `store/master.py` and `server/capture_server.py` drive stage-counter manipulation off string constants
 (`LISTING_STAGES`, `CLAIM_WIRE_NAMES`) via `getattr(card, field)` / `setattr(entry, stage, ...)`.
 A typo'd field name is a silent no-op or a runtime `AttributeError`, and nothing in this repo's
 toolchain would catch it before that happens, because of the next item.

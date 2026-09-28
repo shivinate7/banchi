@@ -29,7 +29,7 @@ press "Open the camera" or "Pick a box" (would start a capture flow / write).
    `capture-k` modifier class) — except the `C` hint on the primary "Capture card" button,
    which is 12px and dark-on-accent instead of 10px and muted.**
    This is NOT a bug: the `C` kbd sits inside `.bn-btn-primary`, which has its own documented
-   kbd override (`app/src/kit.css:217`, `.bn-btn-primary .bn-kbd`) for contrast against the
+   kbd override (`app/src/kit.css`, `.bn-btn-primary .bn-kbd`) for contrast against the
    accent fill. Recorded because it was the one outlier in an automated sweep and is worth a
    later reviewer not re-flagging it.
 

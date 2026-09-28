@@ -8,6 +8,16 @@
   --cap-gap: var(--bn-3);
   --cap-rail-w: 300px;
   --cap-last-w: 320px;
+  /* THE STAGE HUGS ITS PORTRAIT FRAME (owner, 2026-09-28: "oddly too square for a capturing
+     that's done in a portrait view"). The frame inside is 9:16 and height-bound, so the panel's
+     width is DERIVED from the panel's height, never left to a 1fr track that spread it wide
+     around a narrow frame. 104px is what the head, the foot and the viewfinder's own padding
+     spend around the frame (measured at 1440x900, 1280x800, 1100x900 and 820x1100: panel height
+     minus frame height, 104 each time); 34px is the viewfinder's 16px side padding twice plus
+     2px of rounding. `app/tests/capture-claims.spec.ts` measures the panel and its 104px overhead against the frame, so a
+     changed head or foot turns it red instead of leaving dead side bands. */
+  --cap-stage-h: min(calc(100dvh - var(--cap-chrome)), 860px);
+  --cap-stage-w: calc((var(--cap-stage-h) - 104px) * 9 / 16 + 34px);
   /* What the page spends above the shell, so the two frames fit the fold: top pad, the
      kit's own <Page> header (title row plus the odometer actions, which can be two lines),
      its bottom margin, then straight into the shell. 96px is a DELIBERATE OVER-ESTIMATE
@@ -111,7 +121,9 @@
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: var(--cap-rail-w) minmax(0, 1fr) var(--cap-last-w);
+  /* The width the stage no longer takes goes to the last capture, whose photo is the one that
+     grows into it. */
+  grid-template-columns: var(--cap-rail-w) var(--cap-stage-w) minmax(var(--cap-last-w), 1fr);
   grid-template-rows: auto auto auto minmax(0, 1fr);
   grid-template-areas:
     'run stage last'
@@ -126,7 +138,7 @@
 .capture-card-run { animation-delay: 0ms; }
 /* The rail sets the row height; the two frames never grow past the viewport with it, so an
    open picker scrolls the page rather than stretching the viewfinder. */
-.capture-stage { grid-area: stage; align-self: start; max-height: calc(100dvh - var(--cap-chrome)); height: 100%; }
+.capture-stage { grid-area: stage; align-self: start; height: var(--cap-stage-h); }
 .capture-last { grid-area: last; align-self: start; max-height: calc(100dvh - var(--cap-chrome)); height: 100%; }
 /* The halt is an absolute overlay (below), so it no longer takes room from the flow here —
    the stage and the last frame keep their own height whether or not a halt is showing (D118). */
@@ -370,9 +382,22 @@
   /* A long box list grew the card itself before this (in flow); now that it overlays
      instead, an unbounded height would run the list off the bottom of the screen with
      nothing to stop it. Capped and scrollable, never clipped mid-row. */
-  max-height: min(420px, calc(100dvh - 200px));
   overflow-y: auto;
+  /* The whole list, header row included, fits between the phone's bars: the shell's own
+     tokens, zero where it draws no bar. */
+  max-height: min(
+    420px,
+    calc(100dvh - 200px),
+    calc(100dvh - var(--bn-topbar-h) - var(--bn-tabbar-h) - var(--bn-4))
+  );
+  scroll-margin-top: calc(var(--bn-topbar-h) + var(--bn-2));
+  scroll-margin-bottom: calc(var(--bn-tabbar-h) + var(--bn-2));
 }
+/* OWNER'S RULING, 2026-09-28: the open list goes in FRONT and scrolls. The overlay's own
+   z-index is scoped to `.capture-card`'s stacking context (its animation makes one), so the
+   later RECENT footer and the sibling cards painted over the list's lower rows. While a
+   field is open its card outranks them; the overlay stays out of flow, so nothing moves (D118). */
+.capture-card:has(.capture-open-pinned) { position: relative; z-index: 5; }
 .capture-open-body { display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 10px; }
 .capture-open-lg > .capture-row { min-height: 40px; }
 .capture-meta {
@@ -544,7 +569,6 @@
    is separated from them rather than drawn as a fourth one. Quiet, never danger — it writes
    nothing to the store (D142). */
 .capture-clear { margin-top: var(--bn-2); padding-top: var(--bn-2); border-top: 1px solid var(--bn-line); display: flex; flex-direction: column; gap: 4px; }
-.capture-clear-note { padding-inline: 4px; }
 
 /* ---- the stage: dark in both themes ----------------------------------------------------------------------- */
 .capture-stage {
@@ -1331,13 +1355,14 @@
 /* ---- tablet: the run beside the feed so the shutter shares the first viewport with it; the
    last capture under the run; the filmstrip across; the two claim cards underneath ----------- */
 @media (max-width: 1279px) {
-  .capture.bn-page { min-height: 0; }
+  /* Declared on the page, not the shell: `--cap-stage-w` is computed where it is declared. */
+  .capture.bn-page { min-height: 0; --cap-stage-h: min(66vh, 720px); --cap-stage-w: calc((var(--cap-stage-h) - 104px) * 9 / 16 + 34px); }
   .capture-shell {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(260px, 320px);
+    grid-template-columns: var(--cap-stage-w) minmax(0, 1fr) minmax(260px, 320px);
     grid-template-rows: auto minmax(0, 1fr) auto auto;
     grid-template-areas:
-      'stage stage run'
-      'stage stage last'
+      'stage run run'
+      'stage last last'
       'film film film'
       'stack stack rig';
   }
@@ -1366,7 +1391,6 @@
     scrollbar-width: thin;
   }
   .capture-undo-list > li { flex: none; width: 56px; }
-  .capture-stage { height: min(66vh, 720px); max-height: none; }
   /* Sized by the row the stage leaves it, not by a ratio of its own: the frame inside is
      already container-bound, so it simply takes what is left under the run card. */
   .capture-last { align-self: stretch; height: auto; max-height: none; }

@@ -1,13 +1,16 @@
 # Item 8 — search on FTS5
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree). The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 Source: `docs/specs/store-scaling.md` §3 item 8 ("Search gets an index. 2 days... On the
 owner's word over the recommendation to record it as a debt"), and §4's allowlist row
-`server/capture_server.py:7970  do_search  .values()  per-keystroke  item 8`.
+`server/capture_server.do_search  do_search  .values()  per-keystroke  item 8`.
 
 ## Goal and done-when
 
 Replace `do_search`'s full walk over `inventory.cards.values()`
-(`server/capture_server.py:7970`) with a SQLite FTS5 index over the fields it matches on
+(`server/capture_server.do_search`) with a SQLite FTS5 index over the fields it matches on
 today. The owner chose FTS5 over `LIKE` explicitly, for multi-word-any-order matching and
 best-match-first ranking, and explicitly accepted losing mid-word substring matching
 (`izard` -> Charizard) — traded for **prefix matching**, which must be built in so a
@@ -27,7 +30,7 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
 1. `server/capture_server.py:do_search` no longer iterates `inventory.cards.values()` — the
    candidate set comes from an FTS5 `MATCH` query, and every downstream line (grouping by
    SKU, `positions_for_sku`, `copies_on_hand`, the `loose` bag, the wire shape) is otherwise
-   byte-for-byte what it is today. `T7`'s existing search assertions (`harness/tests/t7_store_and_seams.py:7363-7500`,
+   byte-for-byte what it is today. `T7`'s existing search assertions (`harness/tests/t7_store_and_seams.check_box_routes_and_search`,
    the code-ledger dispute lookup at `:9924-9945`) pass unmodified except where the ORDER of
    groups changes (see Tests).
 2. A store opened by an older build's migration path (`store/db.py:_upgrade`) gets the FTS5
@@ -59,7 +62,7 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
   copy that stops being watched" failure D185/D173 exist to prevent.
 - **Item 2 (the per-box read, `GET /inventory/<box>`).** Different routes
   (`do_inventory` vs. `do_search`), different functions, no line overlap. The one shared
-  fact: item 2 removes `store/rows.py:177`'s degradation ("once one call in a request has
+  fact: item 2 removes `store/rows.Rows`'s degradation ("once one call in a request has
   loaded every row, every later `where()`/`select()` answers from the Python-side list").
   `do_search`'s FTS query never materialises the whole table first (see Steps 4), so it does
   not depend on item 2 landing — but if item 2 lands first and touches
@@ -78,7 +81,7 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
   writing a migration's version number on ANY future item, `grep -n "SCHEMA_VERSION = " store/db.py`
   on top of current `main` rather than trusting this file's own account of a race that may
   since have settled. If a second branch is *also* proposing "the next version" concurrently
-  (the same shape D174's own comment at `store/db.py:88-93` records — "Two concurrent 2→3
+  (the same shape D174's own comment at `store/db.PHOTOS_RELOCATED` records — "Two concurrent 2→3
   steps in `_upgrade` is a conflict in the one function where taking either side silently
   loses a migration... THE RESOLUTION WAS TO ADD A STEP, NEVER TO TAKE A SIDE") — resolve it
   the same way: both `if stored < N` arms stay, the higher number is the true
@@ -100,13 +103,13 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
   `docs/decisions/D045-the-copies-list-is-a-way-back-into-the-walk-and-the.md`) — confirms
   search narrows the box walk **client-side**: `GET /search` is store-wide with no box
   parameter (verified: `grep -n "search" app/src/server.ts` — `search(q)` at
-  `app/src/server.ts:1345-1346` takes only `q`), and `BoxBrowse.tsx:710-716` intersects the
+  `app/src/server.search` takes only `q`), and `BoxBrowse.tsx:710-716` intersects the
   box's own rows against the returned copy keys in a `useMemo`. **This migration does not
   add box scoping to the wire** — that would be new surface area D45 does not ask for.
-- `server/capture_server.py:7929-8090` — `do_search` in full (reproduced under Call sites).
-- `server/capture_server.py:7783-7857` — `_card_number_key`, `_number_display`,
+- `server/capture_server.do_search` — `do_search` in full (reproduced under Call sites).
+- `server/capture_server._card_number_key` — `_card_number_key`, `_number_display`,
   `_match_rank`, `_distinct`.
-- `store/db.py:1-40` (module docstring, D88's argument), `:95-98` (`SCHEMA_VERSION` and the
+- `store/db.py` (module docstring, D88's argument), `SCHEMA_VERSION` and the
   comment about the 3→4 merge collision — the precedent for this item's own version claim),
   `:112-150` (`TABLES`, `_INDEXES`, `_CID_INDEXES` — the existing pattern for a derived,
   indexed column), `:213-283` (`_ensure_schema`), `:285-345` (`_upgrade`), `:496-628`
@@ -116,19 +119,19 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
   does), `:990-1005` (`connect`), `:1092-1136` (`SqliteSource.upsert` — **note the ON
   CONFLICT DO UPDATE form, not INSERT OR REPLACE**, which is what keeps `rowid` stable
   across a card's lifetime; see Steps 2), `:1140-1143` (`delete`).
-- `store/master.py:1285-1330` (`_card_columns`), `:2480-2487` (`Inventory.CARDS`
+- `store/master._card_columns` (`_card_columns`), `:2480-2487` (`Inventory.CARDS`
   `TableSpec`).
-- `pipeline/join.py:611-620` (`join_key`, the **composition** form `_card_number_key` uses
+- `pipeline/join.py` (`join_key`, the **composition** form `_card_number_key` uses
   — zero-padded, no D55 set-code strip), `:623-650` (`display_number`, the **screen** form —
   no padding, set code stripped per D55/D67), `:653-710` (`number_index_key`, the
   **catalog-match** form — NOT what search uses; do not confuse the three).
-- `harness/tests/t7_store_and_seams.py:7183-7500` and `:9924-9945` (every existing search
+- `harness/tests/t7_store_and_seams.check_game_and_note_seam` (every existing search
   assertion).
-- `scripts/cid-selftest.py:133-175` (`raw`, `table_bytes`) and `:649-684` (the reverse
+- `scripts/cid-selftest.raw` (`raw`, `table_bytes`) and `:649-684` (the reverse
   test that enumerates every table by `sqlite_master`).
 - `app/src/useSearch.ts` (the one call site of `search()` on the client — `Inventory.tsx`,
   `BoxBrowse.tsx` and `Fulfillment.tsx` all go through this one hook) and
-  `app/src/server.ts:1318-1346`.
+  `app/src/server.undoRetire`.
 
 ## Steps
 
@@ -154,7 +157,7 @@ D55/D67 exist because this logic was written twice and drifted. Reuse the Python
 by adding two derived, indexed columns to the `cards` table, populated at write time the
 same way `cid` and `state_at` already are.
 
-`store/master.py:1285` — extend `_card_columns`:
+`store/master._card_columns` — extend `_card_columns`:
 
 ```python
 def _card_columns(card: "Card") -> Dict[str, object]:
@@ -191,7 +194,7 @@ existing import cycle first: `pipeline/join.py` must not import `store/master.py
 by `grep -n "^from store\|^import store" pipeline/join.py` returning nothing today, so the
 import is safe in this direction).
 
-`store/master.py:2480` — extend `Inventory.CARDS.column_names`:
+`store/master.Inventory` — extend `Inventory.CARDS.column_names`:
 
 ```python
         column_names=(
@@ -201,7 +204,7 @@ import is safe in this direction).
         ),
 ```
 
-`store/db.py:117-119` — extend `TABLES["cards"]` the same way:
+`store/db.TABLES` — extend `TABLES["cards"]` the same way:
 
 ```python
     "cards": (
@@ -220,18 +223,18 @@ of "one fold, both sides" holding for a fourth reader.
 
 ### 3. The migration: schema version, DDL, triggers, rebuild
 
-`store/db.py:95` (line number drifted; grep it) — bump `SCHEMA_VERSION`. **CORRECTED: by
+`store/db.SCHEMA_VERSION` (line number drifted; grep it) — bump `SCHEMA_VERSION`. **CORRECTED: by
 the time this item was actually built, both PR #333 (readings, took 5) and item 2
 (`cards_captured_at`, took 6 — see "Depends on" above) had already merged to `origin/main`,
 so this migration is `stored < 7`, `SCHEMA_VERSION = 7`**, not 6 as this section originally
-assumed. Add a comment in the same style as the existing one at `store/db.py:88-94`
+assumed. Add a comment in the same style as the existing one at `store/db.PHOTOS_RELOCATED`
 explaining which PR took which number.
 
 ```python
 # SEVEN, FOR STORE-SCALING ITEM 8. Item 2 (D192) reached the 6 this file had reserved for
 # search first — see store/db.py's own comment beside SCHEMA_VERSION = 6 — so this item
 # renumbers its own, the D140 rule for decision ids applied to schema versions. Read
-# `store/db.py:88-94`'s account of the 3->4 collision before assuming a bare bump is safe —
+# `store/db.PHOTOS_RELOCATED`'s account of the 3->4 collision before assuming a bare bump is safe —
 # two branches claiming "the next version" at once is the same shape and the resolution is
 # the same: add a step, never take a side.
 SCHEMA_VERSION = 7
@@ -274,9 +277,9 @@ explicit call there, `cards_fts` would exist on no fresh store and `do_search` w
 `_add_search_index` unconditionally on both paths is safe and cheap: on a fresh store it
 runs over zero rows.
 
-New function, modelled on `_add_submissions` (`store/db.py:798-812`) plus the two new
+New function, modelled on `_add_submissions` (`store/db._add_submissions`) plus the two new
 columns from Step 2 (modelled on `_add_card_ids`'s `ALTER TABLE ... ADD COLUMN` idiom at
-`store/db.py:515-516`):
+`store/db._add_card_ids`):
 
 ```python
 _FTS_TOKENIZE = "unicode61 remove_diacritics 2 tokenchars '/-'"
@@ -302,15 +305,15 @@ def _add_search_index(conn: sqlite3.Connection) -> None:
     check).
 
     EXTERNAL CONTENT (`content='cards'`), NOT A COPY. `cards.key` is `TEXT PRIMARY KEY`
-    (`store/db.py:187`'s `_ddl`: `body = f"key TEXT PRIMARY KEY, {typed}, "`), which does
+    (`store/db._ddl`'s `_ddl`: `body = f"key TEXT PRIMARY KEY, {typed}, "`), which does
     NOT alias SQLite's rowid — only an `INTEGER PRIMARY KEY` column does that — so `cards`
     still carries its own implicit, stable rowid, and `content_rowid='rowid'` is exactly
     right. The rowid stays stable across a card's whole life because `SqliteSource.upsert`
-    (`store/db.py:1092-1136`) writes `ON CONFLICT (key) DO UPDATE`, not `INSERT OR REPLACE`
+    (`store/db.SqliteSource`) writes `ON CONFLICT (key) DO UPDATE`, not `INSERT OR REPLACE`
     — an UPDATE never changes a row's rowid; a REPLACE (delete+insert) would have, which
     would leave the sync triggers' `old.rowid`/`new.rowid` bookkeeping wrong on every
     ordinary write. D172 fixed exactly this defect for a different constraint (`cards_cid`,
-    `store/db.py:1095-1112`) by naming the conflict target — the same property this item
+    `store/db.SqliteSource`) by naming the conflict target — the same property this item
     leans on was fixed for a different reason four schema versions ago.
     """
     columns = {row[1] for row in conn.execute("PRAGMA table_info(cards)").fetchall()}
@@ -442,9 +445,9 @@ specifically until now.
 
 ### 4. The query function
 
-Replace `server/capture_server.py:7929-8090`'s matching loop (`:7962-7983`) — leave the
+Replace `server/capture_server.do_search`'s matching loop — leave the
 grouping/rendering code from `:7984` onward untouched. New helper, placed beside
-`_match_rank` (`server/capture_server.py:7814`):
+`_match_rank` (`server/capture_server._match_rank`):
 
 ```python
 def _fts_query(text: str) -> str:
@@ -563,7 +566,7 @@ def do_search(query: str) -> dict:
             ranked[sku] = min(rank, ranked.get(sku, rank))
 
     groups: List[dict] = []
-    # ... unchanged from server/capture_server.py:7984 onward ...
+    # ... unchanged from server/capture_server.do_search onward ...
 ```
 
 **Do not add a `LIMIT`.** Verified: no client caller sends a page size or count
@@ -578,7 +581,7 @@ argued decision — not a side effect of the indexing change.
 
 `app/src/types.ts:SearchResult`/`SearchGroup`/`SearchCopy` are unchanged — Step 4's function
 produces exactly the same shape `do_search` produces today, because everything after the
-matching loop (`server/capture_server.py:7984` onward) is untouched. `app/src/server.ts:1345`
+matching loop (`server/capture_server.do_search` onward) is untouched. `app/src/server.search`
 (`search(q)`), `app/src/useSearch.ts`, `app/src/BoxBrowse.tsx`, `app/src/Inventory.tsx`, and
 `app/src/Fulfillment.tsx` need NO changes. Confirm this by diffing the response shape for
 one fixed query before/after in a scratch script, not by inspection alone (T7's existing
@@ -586,15 +589,15 @@ assertions already do this structurally — see Tests).
 
 ## Call sites
 
-- `server/capture_server.py:7929` `do_search` — the function this item rewrites (Step 4).
-- `server/capture_server.py:9924-9945` — the code-card dispute lookup calls `do_search`
+- `server/capture_server.do_search` — the function this item rewrites (Step 4).
+- `server/capture_server.do_order_fill` — the code-card dispute lookup calls `do_search`
   directly (`found = capture_server.do_search(code)["groups"]`); it needs no changes since
   it consumes the same return shape, but re-run its T7 block after this change (harness
   line numbers above).
-- `store/master.py:1285` `_card_columns`, `:2480` `Inventory.CARDS` — extended in Step 2.
-- `store/db.py:95` `SCHEMA_VERSION`, `:117-119` `TABLES["cards"]`, `:285` `_upgrade` — the
+- `store/master._card_columns`, `:2480` `Inventory.CARDS` — extended in Step 2.
+- `store/db.SCHEMA_VERSION`, `:117-119` `TABLES["cards"]`, `:285` `_upgrade` — the
   migration (Steps 2-3).
-- `scripts/cid-selftest.py:165-175` (`table_bytes`) and `:649-684`
+- `scripts/cid-selftest.table_bytes` (`table_bytes`) and `:649-684`
   (`case_the_reverse_restores_every_table_byte_identically`) — **must be updated, not
   merely re-run.** `table_bytes` enumerates every table via
   `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'` and then
@@ -614,10 +617,10 @@ assertions already do this structurally — see Tests).
   copies and assert the returned groups are equal. That is the semantic property the
   byte-exact check was standing in for on every other table; FTS5's shadow tables need a
   semantic check instead of a byte one.
-- `scripts/submission-selftest.py:576,588` — enumerates tables/indexes by **exact name**
+- `scripts/submission-selftest.case_an_older_store_upgrades` — enumerates tables/indexes by **exact name**
   (`name='submissions'`, `name='submissions_state'`), unaffected by new tables appearing in
   `sqlite_master`.
-- `store/db.py:200` (`_stored_version`) — filters for `name = 'meta'` exactly, unaffected.
+- `store/db._stored_version` (`_stored_version`) — filters for `name = 'meta'` exactly, unaffected.
 - No other `sqlite_master` reader exists in `store/`, `scripts/`, `harness/`, or `cli/` —
   verified: `grep -rn "sqlite_master" store/*.py scripts/*.py server/*.py cli/*.py
   harness/*.py` returns only the three sites above plus this migration's own new code.
@@ -691,7 +694,7 @@ assertions already do this structurally — see Tests).
    correct after each — there is no separate "flush the index" step for the test to call.
 4. `check_migration_seeds_the_index_for_pre_existing_rows` — build a schema-`N-1` store by
    hand (model on `case_the_forward_version_guard_refuses_a_newer_store`,
-   `scripts/cid-selftest.py:687-700`, which already knows how to stamp an arbitrary schema
+   `scripts/cid-selftest.case_the_reverse_restores_every_table_byte_identically`, which already knows how to stamp an arbitrary schema
    version into `meta`), with cards written directly via SQL (bypassing `_card_columns`, so
    `number_key`/`number_display` are genuinely absent), open it through the ordinary
    `Store()` path, and assert a search finds those pre-existing cards — proving the
@@ -735,7 +738,7 @@ THE WRONG TRIGGER.**
   reproduces this.
 
 **`app/tests/inventory.spec.ts`.** No stub needs updating for shape (verified: the fixture's
-`searchAnswer` function at `app/tests/inventory.spec.ts:564` is a hand-rolled TypeScript
+`searchAnswer` function at `app/tests/inventory.spec.ts` is a hand-rolled TypeScript
 mirror of `do_search` used to stub `page.route(/\/search\?/, ...)` in Playwright — it never
 calls the real server, so it is unaffected by a server-side implementation change).
 **Ordering IS a risk here**: if `searchAnswer`'s own grouping/sort logic assumes anything
@@ -749,7 +752,7 @@ argument given above for T7). Re-run the suite; do not hand-edit the fixture spe
 `docs/specs/store-scaling.md` §4:
 
 ```
-| `server/capture_server.py:7970` `do_search` | `.values()` | per-keystroke | item 8 |
+| `server/capture_server.do_search` | `.values()` | per-keystroke | item 8 |
 ```
 
 This row's own "Removed by" column already says "item 8" — this PR is what makes that true.
@@ -762,7 +765,7 @@ item 1 exists).
 
 ## Do not touch
 
-- `server/capture_server.py:7984` onward (grouping, `_agreed`, `_distinct`, `_copy_row`,
+- `server/capture_server.do_search` onward (grouping, `_agreed`, `_distinct`, `_copy_row`,
   the `loose` bag's rendering, the final sort) — this item changes ONLY how the candidate
   set of matching cards is discovered, never how a match becomes a group.
 - `pipeline/join.py:join_key`, `display_number`, `number_index_key` — reused, not
@@ -772,10 +775,10 @@ item 1 exists).
 - `app/src/*` — no wire shape change, no client change (Step 5).
 - `store/rows.py`, `store/session.py` — this item's query path (Step 4) opens its own raw
   connection for the FTS `SELECT`, exactly as `Store.history()`/`Store.buried()` already do
-  (`store/session.py:172-186`) for reads that do not fit the `Rows`/`Snapshot` abstraction;
+  (`store/session.Store`) for reads that do not fit the `Rows`/`Snapshot` abstraction;
   it does not touch `Rows`, `TableSpec`, or the write path's transaction machinery beyond
   the two new columns and the migration.
-- `cards_cid`, `cards_cid_missing` (D172's indexes, `store/db.py:143-150`) — untouched;
+- `cards_cid`, `cards_cid_missing` (D172's indexes, `store/db._INDEXES`) — untouched;
   this item adds a fourth and fifth index-like object (`cards_fts` and its shadows) beside
   them, not instead of them.
 - The `queues`, `boxes`, `listings`, `identifications`, `orders`, `fulfilment`,
@@ -815,7 +818,7 @@ Measure, five runs each, median, with `PKMNSCAN_HOME` pointed at each copy in tu
 4. **Index build time during migration, on the 20x copy** — the `_add_search_index` call's
    own wall-clock (backfill loop + rebuild), on the copy sized to what the owner expects to
    reach in two weeks. This is a ONE-TIME cost per store and belongs beside `_add_card_ids`'
-   own measured 2.68-3.00s hashing figure (`store/db.py:333-336`'s comment) for scale.
+   own measured 2.68-3.00s hashing figure (`store/db._upgrade`'s comment) for scale.
 5. **Store file size delta** — `store.sqlite` before and after migration, on the 1x and 20x
    copies. FTS5's shadow tables (`cards_fts_data` especially) are not free; report the
    absolute MB and the percentage of the pre-migration file size, the same way
@@ -828,7 +831,7 @@ numbers sit beside the plan's other measured rows for the next session that read
 
 ## Risks
 
-- **FTS5 availability on CI's Linux Python.** `.github/workflows/check.yml:140-146` installs
+- **FTS5 availability on CI's Linux Python.** `.github/workflows/check.yml` installs
   Python 3.11 via `actions/setup-python@v5` on `ubuntu-latest`. This playbook's Step 1
   confirms FTS5 on the rig's own `.venv` (macOS, sqlite 3.54.0) but that says nothing about
   the CI runner's interpreter, which is a *different* build of Python with its own bundled

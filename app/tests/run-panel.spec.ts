@@ -2778,27 +2778,22 @@ test('the release names its receipt and confirms, and the page does not move und
   ])
 })
 
-/* THE FOOT LIES FOR UP TO FIFTEEN SECONDS, AND THE FIX IS NOT IN THE FOOT (D207).
+/* THE OFFLINE BANNER LIES FOR UP TO FIFTEEN SECONDS, AND THE FIX IS NOT IN THE BANNER (D207).
  *
  * `useServerPresence` used to learn the server was gone ONLY from its own `GET /status` —
  * on mount, on a 15s interval, on window focus. Every other request in the app could fail
- * without touching that state, so the sidebar went on drawing `Server online` while a poll
+ * without touching that state, so the shell went on showing no banner while a poll
  * elsewhere on the very same screen was failing outright. This is the six-second case from
- * one instance: the run detail poll fails while `/status` keeps answering, and the foot must
- * flip within ONE REQUEST rather than wait out the interval.
+ * one instance: the run detail poll fails while `/status` keeps answering, and the banner must
+ * appear within ONE REQUEST rather than wait out the interval.
  *
- * RED, BEFORE THE FIX: this case failed with
- *   Error: Timed out 5000ms waiting for expect(locator).toHaveAttribute(expected)
- *   Locator: locator('.bn-server')
- *   Expected string: "offline"
- *   Received string: "online"
- * — because nothing but `/status` could tell the shell the server had gone, and the fake
+ * RED, BEFORE THE FIX: the banner never appeared, because nothing but `/status` could tell the shell the server had gone, and the fake
  * clock had advanced only 4.5s of the 15s the shell was willing to wait. */
-test('a failed poll elsewhere flips the server foot before the next status check', async ({ page }) => {
+test('a failed poll elsewhere flips the offline banner before the next status check', async ({ page }) => {
   await page.clock.install()
   await open(page, { live: true })
   await openRun(page)
-  await expect(page.locator('.bn-server')).toHaveAttribute('data-state', 'online')
+  await expect(page.locator('.bn-banner[role="alert"]')).toHaveCount(0)
 
   /* Overrides the routes `open()` and `sealEveryTest()` registered — Playwright matches the
      LAST route added, so these win for every request from here on. BOTH have to go dark:
@@ -2813,7 +2808,7 @@ test('a failed poll elsewhere flips the server foot before the next status check
   // shell's own `/status` interval waits before it would notice on its own.
   await page.clock.fastForward(4500)
 
-  await expect(page.locator('.bn-server')).toHaveAttribute('data-state', 'offline')
+  await expect(page.locator('.bn-banner[role="alert"]')).toBeVisible()
 
   /* Bring `/status` back before the case ends — `sealEveryTest`'s own teardown refuses a
      screen left showing the offline banner, which is the correct floor for every OTHER case
@@ -2836,7 +2831,7 @@ test('a failed poll elsewhere flips the server foot before the next status check
     }),
   )
   await page.clock.fastForward(15500)
-  await expect(page.locator('.bn-server')).toHaveAttribute('data-state', 'online')
+  await expect(page.locator('.bn-banner[role="alert"]')).toHaveCount(0)
 })
 
 // ------------------------------------------------------------------------- D165's rescue

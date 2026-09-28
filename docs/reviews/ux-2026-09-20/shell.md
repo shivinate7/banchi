@@ -22,13 +22,13 @@ most of this pass, which blocks the `computer` tool's real key-press action but 
    threshold that a fresh mount would use to default to collapsed) leaves `data-rail` still
    `null` (still expanded). The rail never collapses on its own no matter how narrow the
    window gets, because nothing re-runs the check after mount.
-   Where: `app/src/App.tsx:324-326` —
+   Where: `app/src/App.readRail` —
    ```
    function readRail(): boolean {
      return storedRail() ?? window.innerWidth < 1280
    }
    ```
-   used as a `useState` lazy initializer at `app/src/App.tsx:1352`
+   used as a `useState` lazy initializer at `app/src/App.App`
    (`const [rail, setRail] = useState(readRail)`) — a lazy initializer runs exactly once, at
    mount, by React's own contract. There is no `resize` listener anywhere that re-derives
    `rail` from a new `window.innerWidth`.
@@ -76,16 +76,16 @@ most of this pass, which blocks the `computer` tool's real key-press action but 
 
 5. **Error boundary has two shapes as the codebase claims, read from source but not triggered
    live** (triggering a real crash was judged too invasive/unreliable to force safely against
-   the owner's live store): the owner's shape (`app/src/App.tsx:363-370`, a card with the
+   the owner's live store): the owner's shape (`app/src/App.RouteBoundary`, a card with the
    Banchi mark, an `h1.bn-title`, presumably "reload or home" per the two doors mentioned) and
-   the Fulfiller's `plain` shape (`app/src/App.tsx:351-360`), which is a bare
+   the Fulfiller's `plain` shape (`app/src/App.RouteBoundary`), which is a bare
    `<main className="crash-plain">` with exactly one button ("Open it again") and no brand,
    no error text, matching the described intent. I did not render either live, so I cannot
    confirm actual spacing, type sizes, or that the "reload or home" doors are actually two
    buttons rather than one plus a link — that detail is UNKNOWN from source alone.
 
 6. **Server-state indicator ("Server online" / "Server offline" / "Checking server…") is a
-   small dot + text in the sidebar footer** (`app/src/App.tsx:1202-1205`, duplicated at
+   small dot + text in the sidebar footer** (`app/src/App.Sidebar`, duplicated at
    `:1335-1336` for a second placement I did not identify by screen). I saw "Checking server…"
    render briefly during a page reload in an earlier light-theme screenshot this session, and
    "Server online" (implied by no visible banner) throughout the rest — but I never saw

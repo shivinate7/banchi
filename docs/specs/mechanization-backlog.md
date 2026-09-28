@@ -450,8 +450,8 @@ HAPPENED: ten live SKUs held more copies than this pipeline ever pushed, nine at
 pushed − sold`, eight of them from one file (runs/2026-08-31-box3-01/import-subthreshold-riftbound
 .csv) uploaded twice.
 
-**Evidence it happened.** Verified the sites: `ADD_TO_QUANTITY = 0` at pipeline/reprice.py:112,
-used at :816 and cli/cmd_reprice.py:392, with the argument written at reprice.py:799 and :567.
+**Evidence it happened.** Verified the sites: `ADD_TO_QUANTITY = 0` at pipeline/reprice.ADD_TO_QUANTITY,
+used in pipeline/reprice.import_rows and cli/cmd_reprice._write_worklist, with the argument written in pipeline/reprice.py.
 D100:64 has the measurement.
 
 **Must keep passing.** `pipeline/join.py:add_to_quantity` is a DIFFERENT function on the EMIT
@@ -460,7 +460,7 @@ two reprice modules by name, never to the identifier repo-wide. Note: the siblin
 pin `SCOPE_THIS_UPLOAD` the same way is correct and costs the same, but has zero measured
 instances — build it second, in the same row.
 
-**Mutation arm.** Change cli/cmd_reprice.py:392 to `add_to_quantity=0` (a literal, not the name)
+**Mutation arm.** Change cli/cmd_reprice._write_worklist to `add_to_quantity=0` (a literal, not the name)
 — must go red; add a `scope`-style parameter named add_to_quantity — red.
 
 **Escape hatch.** PKMNSCAN_DOCS=off.
@@ -471,7 +471,7 @@ instances — build it second, in the same row.
 
 **Mechanism.** Write the busy marker from the CLI too: `cli/cmd_identify.py` writes
 `{run}/running.pid` with its own pid before submitting and removes it on exit, exactly as
-server/pipeline_routes.py:1474 does. Add the T7 case the existing block is missing: start a
+server/pipeline_routes._spawn does. Add the T7 case the existing block is missing: start a
 batch through the CLI seam and assert `POST /pipeline/identify` over that box refuses. Age-out
 stays as it is — `_live_pid`'s floor is the run's own identifications.json — or a terminal crash
 locks the box against the screen forever, which is worse than the double press.
@@ -485,8 +485,8 @@ sequential re-identify of the same box costs nothing — concurrency is not one 
 risks, it is the only one.
 
 **Evidence it happened.** Verified: `grep -c pid cli/cmd_identify.py` returns **0**, and
-`running.pid` is written only by server/pipeline_routes.py:_spawn (PID_FILE at :158, marker read
-at :730, write at :1474). So `_live_pid` returns None for a CLI run and `_busy_run` skips it at
+`running.pid` is written only by server/pipeline_routes.py:_spawn (`PID_FILE`, marker read in `_live_pid`,
+write in `_spawn`). So `_live_pid` returns None for a CLI run and `_busy_run` skips it at
 the loop head. BREAK COUNT IS ZERO-MEASURED — nothing records a double batch having happened,
 which is why this is ranked here and not at the top. Harm unit is the owner's money, which is
 why it is not ranked lower. DEBTS §21 is the entry.
@@ -597,7 +597,7 @@ from the day it was written until a human read it. The `#` and the field were th
 apart, so the text match passed.
 
 **Evidence it happened.** DEBT9
-(`docs/debts/009-the-sigil-check-matches-text-so-a-renamed-local-walks.md:26`) records the trigger
+(`docs/debts/009-the-sigil-check-matches-text-so-a-renamed-local-walks.md`) records the trigger
 firing. The entry's earlier sentence — "the evasion is available and has never been taken" — was
 already wrong when written.
 
@@ -610,7 +610,7 @@ untouched.
 **Mutation arm.** Re-introduce a same-file helper returning the raw index behind a `#{}` — must
 go red; the same helper returning `slot` — green.
 
-**Escape hatch.** PKMNSCAN_SIGIL=off, already printed (scripts/githooks/pre-commit:343).
+**Escape hatch.** PKMNSCAN_SIGIL=off, already printed (scripts/githooks/pre-commit).
 
 ### Rank 35 — A spec's standing is declared in the spec, and CLAUDE.md's pointer at it may not assert otherwise.
 
@@ -628,12 +628,12 @@ passing.
 **Where.** scripts/docs-audit.py — the existing `work item standing` row (docs-audit.py:2902)
 
 **What it catches.** Two live contradictions. (1) CLAUDE.md:2069 says docs/specs/one-process.md
-is "SPECIFIED 2026-09-11, NOT BUILT"; that spec's line 3 says "specified and BUILT 2026-09-11",
+is "SPECIFIED 2026-09-11, NOT BUILT"; that spec's status line says "specified and BUILT 2026-09-11",
 D138 merged the same day, and CLAUDE.md's own `make up` block says "ONE PROCESS AS OF 2026-09-11
 (D138)". The row prints ok because it is scoped to order-pipeline.md alone. (2)
-docs/specs/order-pipeline.md:410 reads `### T2b — the rubber stamps. BUILT 2026-09-05, SERVER
-HALF ONLY` while the client half exists (app/src/server.ts:3147,
-app/src/OrdersShipStage.tsx:223) — the row passes because it captures only the first state word.
+docs/specs/order-pipeline.md reads `### T2b — the rubber stamps. BUILT 2026-09-05, SERVER
+HALF ONLY` while the client half exists (app/src/server.fillShippingStamps,
+app/src/OrdersShipStage.ShipStage) — the row passes because it captures only the first state word.
 
 **Evidence it happened.** Both verified. Most of the cost is vocabulary: 13 of 20 specs carry no
 `## STATUS` heading and standing is spelled three ways (`## STATUS — `, `**Status: ...**`,
@@ -654,7 +654,7 @@ qualifier to a heading whose pointer does not carry it — red.
 **Cost:** small.
 
 **Mechanism.** Lift each `| <name> | … >= N… |` row out of DESIGN.md's constraints table
-(docs/DESIGN.md:1006-1011) and require the matching `const *_FLOOR = N` in
+(docs/DESIGN.md's constraints table) and require the matching `const *_FLOOR = N` in
 app/tests/fulfillment.spec.ts to EQUAL N — compared on the integer, never by substring, which is
 the exact defect check_pass_criteria was hardened against when 0.9 matched inside 0.95. A
 deliberate floor RAISE passes by editing the table in the same commit, which is what makes the
@@ -774,8 +774,8 @@ client functions, with harness, lint, typecheck and docs-audit green.
 
 **Evidence it happened.** Measured: 73 distinct routes extract cleanly and 0 are unreached, so
 the route floor needs no baseline exemption list. The call-site floor yields exactly ONE finding
-today — and I corrected the surface reader's framing: `moveCard` (app/src/server.ts:1649) has no
-caller while `moveCards` (:1674) IS imported and called by app/src/BoxOps.tsx:27/:453 with
+today — and I corrected the surface reader's framing: `moveCard` (app/src/server.moveCard) has no
+caller while `moveCards` (app/src/server.moveCards) IS imported and called by app/src/BoxOps.tsx with
 `indices: null` meaning every on-hand card, so D83's move IS reachable from the Manage box
 sheet. The finding resolves by DELETING eleven dead lines, not by building a screen. Take the
 floor for the vacuous green it repairs, not for a reachability harm it has yet to demonstrate.
@@ -889,7 +889,7 @@ rubber stamp. Each entry says what a machine would have to be able to SEE.
 
 - **A wrap-up does not restate the task or summarise the request.**
   A machine would need: That a sentence adds nothing the user did not already supply. The repo
-  has already ruled on this bar, at scripts/docs-audit.py:1176: a claim is policeable only when
+  has already ruled on this bar, at scripts/docs-audit.strip_presentation: a claim is policeable only when
   it self-identifies AND its ground truth is a machine-readable assignment in the same tree —
   "where that bar is not met, the answer is to delete the restatement rather than widen this
   check to chase it." A restatement has neither property, and any n-gram-overlap detector fires
@@ -913,7 +913,7 @@ rubber stamp. Each entry says what a machine would have to be able to SEE.
   ever run 53 real cards through end to end (ME01 Mega Evolution, Gate B, 2026-08-22, which
   raised no scope question at any stage) and would refuse riftbound and one_piece outright. This
   is a dead rule that should be answered or declared dead, not mechanised.
-  Nearest partial: The condition half is already structural: pipeline/variant.py:76's
+  Nearest partial: The condition half is already structural: pipeline/variant.CONDITION_BY_FINISH's
   CONDITION_BY_FINISH hardcodes the Near Mint strings, and D137's Near Mint rule lives in the
   catalog join with a T3 guard against two wide fixtures.
 
@@ -1022,8 +1022,8 @@ rubber stamp. Each entry says what a machine would have to be able to SEE.
 Kept so nobody re-proposes them. A rejected mechanism is usually one that would fire on honest
 work, one that could not fail, or one that would have a gate write to the tree (D18).
 
-- **Stop hook blocking a turn whose final text claims the harness is green when no harness run happened in this session** — SELF-REFUTING. scripts/stop-gate.sh:69 runs `make harness` unconditionally whenever the gate is armed, BEFORE anything else in the hook can execute — so a claim check bolted on runs after that run and would block a claim its own gate had just made true. The 41 measured no-run claims are coordinator turns relaying a fleet member's run, and this project's fleets are separate SESSIONS (0 of 129,119 messages carry isSidechain), each with its own armed gate, so a coordinator can never comply. The proposal's own pin list requires that a turn relaying CI or quoting a past run must PASS, which is the same population. Cost of the rule being unenforced: a session is occasionally accidentally right. Cost of the guard: PKMNSCAN_GATE=off in a shell profile, which disarms the real harness gate. KEEP ONLY the trivial sibling — print the harness summary line (with a run id) to stderr on success, which the gate already holds and throws away; that makes the claim checkable by a reader and refuses nothing.
-- **Stop hook requiring a render newer than the turn's app/src writes plus a Read of that PNG** — Three unboundable false-positive families, an inverted escape, and it would LAUNDER a wrong image. Most app/src writes carry no appearance claim (types.ts, server.ts, standing.ts, a comment edit, a revert); a turn that ran the Playwright suite has stronger evidence and would still be refused; and the escape — pass when nothing listens on the dev port — inverts where it matters, because on the MAIN checkout a server IS listening, so the gate would demand a render against the owner's live app over their real store. The evidence is also unobtainable through the repo's own tool: scripts/screenshot.sh:35 hard-codes VIEWPORT=1280,900 and screenshot.mjs has no theme flag, so the three widths and two themes the rule names have never been renderable. And with views.txt's `capture` line pointing at `#/`, a satisfied gate would certify that a session opened the HOME screen as verification of the capture screen. Fix the manifest (build_now rank 3) instead of policing the session.
+- **Stop hook blocking a turn whose final text claims the harness is green when no harness run happened in this session** — SELF-REFUTING. scripts/stop-gate.sh runs `make harness` unconditionally whenever the gate is armed, BEFORE anything else in the hook can execute — so a claim check bolted on runs after that run and would block a claim its own gate had just made true. The 41 measured no-run claims are coordinator turns relaying a fleet member's run, and this project's fleets are separate SESSIONS (0 of 129,119 messages carry isSidechain), each with its own armed gate, so a coordinator can never comply. The proposal's own pin list requires that a turn relaying CI or quoting a past run must PASS, which is the same population. Cost of the rule being unenforced: a session is occasionally accidentally right. Cost of the guard: PKMNSCAN_GATE=off in a shell profile, which disarms the real harness gate. KEEP ONLY the trivial sibling — print the harness summary line (with a run id) to stderr on success, which the gate already holds and throws away; that makes the claim checkable by a reader and refuses nothing.
+- **Stop hook requiring a render newer than the turn's app/src writes plus a Read of that PNG** — Three unboundable false-positive families, an inverted escape, and it would LAUNDER a wrong image. Most app/src writes carry no appearance claim (types.ts, server.ts, standing.ts, a comment edit, a revert); a turn that ran the Playwright suite has stronger evidence and would still be refused; and the escape — pass when nothing listens on the dev port — inverts where it matters, because on the MAIN checkout a server IS listening, so the gate would demand a render against the owner's live app over their real store. The evidence is also unobtainable through the repo's own tool: scripts/screenshot.sh hard-codes VIEWPORT=1280,900 and screenshot.mjs has no theme flag, so the three widths and two themes the rule names have never been renderable. And with views.txt's `capture` line pointing at `#/`, a satisfied gate would certify that a session opened the HOME screen as verification of the capture screen. Fix the manifest (build_now rank 3) instead of policing the session.
 - **Stop hook requiring one of BUILT / RECORDED / NEITHER / SPECIFIED / VALIDATED in a wrap-up** — 84% of measured wrap-ups would fire (1,943 of 2,310), and the proposal concedes the escape is typing the word. That is actively harmful, not weakly useful: it trains sessions to paste a boilerplate bucket block, which makes a WRONG bucket harder to spot and turns CLAUDE.md:1544's corollary unfalsifiable. A per-turn exit 2 on the majority of write turns is precisely the rate docs-audit.py:1367 says teaches a reader to skip exit 2 — and in the git hook the same reflex takes the three opsec rules down with it. Build the two rows that make a BUILT claim checkable (build_now ranks 2 and 39); an unchecked vocabulary word is worth less than silence.
 - **Stop hook comparing files named in a wrap-up against the turn's own write targets** — Unmeasured, and its own author said so: "Not measured — I will not assert a number I did not compute." A mechanism whose proposer could not find an instance, for a rule whose violation costs a reader one `git status`.
 - **A PreCompact hook injecting the fixture facts, make targets and modified-file list** — broken is unobservable by construction — a compaction leaves no artifact in the tree AND none in the transcript, so no instance has ever been or can be seen. And it collides with the one roster reconciliation that has never been bypassed: D135's `codex hooks` row compares the full event/matcher/command triple in both directions, and whether Codex has a PreCompact event is not answerable from this tree.
@@ -1039,7 +1039,7 @@ work, one that could not fail, or one that would have a gate write to the tree (
 - **A `sole writer` row counting import-CSV writers and refusing any count but one** — A count of one is preserved by substitution — delete pipeline/join.py:emit_import and add a writer that never raises OutputSuppressed and the row is still green with the rule gone. It also says nothing about the PROPERTY (both directions reported before a byte is written), and its key is a filename heuristic, so a writer whose destination is computed is outside the denominator. Rework: pin the ROSTER of modules that write an import file and require each to raise OutputSuppressed, folded into the existing `sole reader` row, which already holds a counted-sentence claim of this shape.
 - **An `arm census` row reconciling published "N arms" sentences against len(ARMS)** — An arm COUNT cannot see a DEAD arm, and a dead arm is the failure measured three times here: T7's zombie-pid arm survived because the fixture handed itself the handle, so the arm deleting the entire defect stayed green; D167 names a surviving arm today; DEBTS §11 carried a sentence about two observed mutation failures that were false on both counts. A row proving the number matches is satisfied while every arm has stopped killing. Rework: count KILLS — the selftest declares its arms as data, RUNS each one (apply, require failure, restore from a .bak copy, never `git checkout <path>`), and publishes the kill count, which the doc sentence then reconciles against. It writes, so `make check` and never the git hook. And every declared arm list must carry at least one `allow:` arm — a named case proving honest work passes — because the allow arm is the one that actually costs this repo time (reap-selftest's own-process arm went red four times against an unmodified reap.py, and guard-opsec was switched off wholesale for refusing two honest writes).
 - **A `route reach` row requiring every route A DOC ASSERTS AS BUILT to have a client function** — The trigger is prose, so the guard is cleared by silence — and silence is the measured incident. On 2026-08-23 the box delete, the mid-box delete-with-reindex and the retroactive box claims shipped with full T7 coverage and zero client functions, and NO document claimed any of them BUILT. The mechanism's subject is a sentence somebody wrote; the defect's subject is a route somebody shipped. It would have been green through the founding incident. Use the unconditional route floor: build_now rank 39.
-- **A `flag citations` row refusing present-tense claims about a `--flag` no argparse accepts** — The measured baseline is 1, not 2, and the row's first run would demand an edit to the file the repo most explicitly protects from edits. `docs/gates/gate-runs/GateB-note1-box-2-544-cards-and-the-first-ground-truth-about-finish.md:37` ("The remedy the owner chose, the same day: `join --bypass`") is a record of a ruling the owner made on 2026-08-24, inside the file CLAUDE.md declares is "a record of runs, not a schedule" whose numbers "are evidence and are never rewritten to match a later tree." A session obeying the row commits the D16 violation to satisfy a checker. If taken: scope to CLAUDE.md, README.md, docs/specs/ and docs/decisions/, exempt docs/GATES.md by name (as `decision structure` already exempts its gate sections), and fix the one genuinely stale sentence (docs/specs/ui-redesign-options.md:629) by hand.
+- **A `flag citations` row refusing present-tense claims about a `--flag` no argparse accepts** — The measured baseline is 1, not 2, and the row's first run would demand an edit to the file the repo most explicitly protects from edits. `docs/gates/gate-runs/GateB-note1-box-2-544-cards-and-the-first-ground-truth-about-finish.md` ("The remedy the owner chose, the same day: `join --bypass`") is a record of a ruling the owner made on 2026-08-24, inside the file CLAUDE.md declares is "a record of runs, not a schedule" whose numbers "are evidence and are never rewritten to match a later tree." A session obeying the row commits the D16 violation to satisfy a checker. If taken: scope to CLAUDE.md, README.md, docs/specs/ and docs/decisions/, exempt docs/GATES.md by name (as `decision structure` already exempts its gate sections), and fix the one genuinely stale sentence (in docs/specs/ui-redesign-options.md) by hand.
 - **A `debts citations` row asserting every `docs/DEBTS.md §N` reference names a section that exists** — Measured at 55 citations, 0 unresolvable — and the proposal concedes it "would NOT have caught the §11/§8 defect: both sections exist." So the mechanism does not address the harm that cost three sessions three different wrong totals. §25 already measured the subject-matching proxy at 1 catch against 3 false alarms and declined it. Build the half with the cost behind it: CANONICALISE the spelling. A citation is written three ways (`§11`, `section 11`, and either hidden behind a backticked filename), which is why three sweeps for one population returned 5, then 7, then 9. One spelling makes the population findable by one pattern.
 - **A coverage table requiring every server write in app/src to have a rect-diff press case (D118 universality)** — The largest cost in the audit against its smallest harm unit: 98px of collapse and 131 elements moved on one `Mark sold` is a cosmetic jolt, not a card, a dollar or an hour, and the rule's own entry records the owner asking for it by feel. Enumerating 96 write call sites needs a marker-exemption list (undo removing a filmstrip frame, a box delete emptying the walk) which is where a coverage table starts being maintained by hand. Build the one press the entry itself names as unguarded — the wanted-claim line's 46px move — as a fifth case in inventory.spec.ts beside the three that exist.
 - **Branding `Slot` and `Index` as nominal types so tsc refuses the swap** — Forty call sites across the wire contract, and D92 declined it on a blast radius it measured. The re-weighting argument ("there is a shipped defect now") is fair but the defect is a misleading LABEL: the undo press is aimed by `capture_id` (D145/D153), not by the drawn number, so the worst case is a human misreading a row, not a write landing on the wrong card. Take the cheap arm instead — sigil-check follows one same-file helper, which is exactly what `slotNumber` was. Build_now rank 34.
@@ -1059,7 +1059,7 @@ work, one that could not fail, or one that would have a gate write to the tree (
 
 WHAT I VERIFIED MYSELF, in /Users/shivinate/Developer/pkmnscan at main (the audit's own worktree
 is at ac2e382/df6ec79; I read the main checkout read-only): cli/cmd_identify.py contains ZERO
-occurrences of `pid` while `running.pid` is written only at server/pipeline_routes.py:1474;
+occurrences of `pid` while `running.pid` is written only at server/pipeline_routes._spawn;
 `--self-test` for screen-freshness appears in no Makefile recipe, no hook roster and no workflow
 (checks.py:177 carries the bare command); check_criteria_evidence's substring test and silent
 `continue` at docs-audit.py:1329-1344; scripts/views.txt's eight lines with `capture` pointing
@@ -1072,7 +1072,7 @@ in the pre-D161 order; ADD_TO_QUANTITY's two call sites; harness/run.py's docstr
 three times against nine in TESTS; `grep -c ci-check scripts/docs-audit.py` = 0; guard-opsec.sh
 has zero self-test occurrences and no make-target caller; a live `python3 scripts/docs-audit.py
 --json` returning 79 rows, exit 2, 23 advisory findings across four rows; `moveCard` uncalled
-while `moveCards` is called from BoxOps.tsx:27/:453; detect.json's `declined: 59` as an integer
+while `moveCards` is called from BoxOps.tsx; detect.json's `declined: 59` as an integer
 with no filenames anywhere; policy.live_cap refused by name at corpus.py:228 with no
 policy.floor equivalent; both PW_ARGS expansions unquoted at Makefile:859 and :875; stop-gate.sh
 registered in both rosters with `--status` called by nothing. TWO SURFACE/CRITIQUE CLAIMS I

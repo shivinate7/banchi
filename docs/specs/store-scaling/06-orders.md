@@ -1,11 +1,14 @@
 # Item 6 — do_orders per SKU
 
+**DATED RECORD.** Every line number and line-and-column locator in this file was measured against the tree of commit `1eeabb7e` (2026-09-12), which is the commit that added these plans (a "corrected" or "drifted" remark in the text names a later tree). The files have changed since. Read each one as evidence about that tree, never as a pointer into today's.
+
+
 Source: `docs/specs/store-scaling.md` §3 item 6 and its §1 `GET /orders` paragraph and §4
 allowlist. This file is the implementation playbook; it does not itself change code.
 
 **IMPLEMENTATION NOTES, ADDED BY THE PR THAT BUILT THIS ITEM.** Every `file:line` below
-predates item 2's merge and has drifted; the corrected anchors are `store/master.py:1492`
-(`_positions_in`, unchanged) / `:1522` (`occupied_indices`, new), `server/capture_server.py:1960`
+predates item 2's merge and has drifted; the corrected anchors are `store/master.Inventory`
+(`_positions_in`, unchanged) / `store/master.Inventory` (`occupied_indices`, new), `server/capture_server._Places`
 (`class _Places`), `:2078` (`for_keys`), `:8945` (`_order_stamps`), `:9221` (`do_orders`).
 Re-read the tree rather than trusting a line number in the sections below.
 
@@ -39,23 +42,23 @@ itself anticipated.
 
 ## Goal and done-when
 
-`do_orders` (`server/capture_server.py:9027-9122`) measured 185 ms at 2,535 cards and
+`do_orders` (`server/capture_server.do_orders`) measured 185 ms at 2,535 cards and
 3,465 ms at the 20x-row copy (18.7x) — O(cards) in practice, even though every individual
 lookup it makes is indexed. The mechanism (confirmed by reading the code, not assumed):
 
 - `order_engine.resolve_all` picks copies via `Inventory.positions_for_sku`
-  (`store/master.py:2366`), which is `self.cards.where(sku=sku)` — an indexed, scoped SQL
+  (`store/master.Inventory`), which is `self.cards.where(sku=sku)` — an indexed, scoped SQL
   query. This part is already fine and is explicitly OUT OF SCOPE unless research finds it
   walking something unscoped (see "Read first" below — check this before writing any code).
-- `places = _Places(snapshot.inventory)` (`server/capture_server.py:9078`) is instantiated
+- `places = _Places(snapshot.inventory)` (`server/capture_server.do_orders`) is instantiated
   ONCE for the whole response, which is correct and stays that way — "ONE RENDERER" is a
-  repo-wide rule (`_Places`'s own class docstring, `server/capture_server.py:1939-1985`).
+  repo-wide rule (`_Places`'s own class docstring, `server/capture_server._Places`).
   The class does NOT eagerly scan the store; it is lazy per box, cached per instance
-  (`_cache`, `_boxmates` dicts in `__init__`, `server/capture_server.py:2029-2033`).
+  (`_cache`, `_boxmates` dicts in `__init__`, `server/capture_server._Places`).
 - The cost is in what "lazy per box" means once it runs. `_Places.of(box, index)`
-  (`server/capture_server.py:2266`) calls `self.view(number)` which calls `self._walk(number)`
-  (`server/capture_server.py:2130-2168`), and `_walk` reads the ENTIRE box through
-  `Inventory.records_in(number)` (`store/master.py`, doc'd at `server/capture_server.py:2151`)
+  (`server/capture_server._Places`) calls `self.view(number)` which calls `self._walk(number)`
+  (`server/capture_server._Places`), and `_walk` reads the ENTIRE box through
+  `Inventory.records_in(number)` (`store/master.py`, doc'd at `server/capture_server._Places`)
   — every record in the box is hydrated into a full `Card` object (JSON payload parsed,
   every field built) so `_walk` can read that card's `name` and `state`. This is needed for
   D30's neighbor/gap decoration (`neighbors`, `section_gaps`), which needs every card's
@@ -65,8 +68,8 @@ lookup it makes is indexed. The mechanism (confirmed by reading the code, not as
   cost is therefore not "the same box re-read many times" — it is "every box an order's
   picks touch gets fully hydrated once, and with five boxes and orders whose picks span
   most of them, that is effectively the whole store, once."
-- `do_orders`'s own picks come from `_pick_row` (`server/capture_server.py:8961-8987`),
-  called once per pick at `server/capture_server.py:9023`: `"place": places.of(pick.box,
+- `do_orders`'s own picks come from `_pick_row` (`server/capture_server._pick_row`),
+  called once per pick at `server/capture_server._line_answer`: `"place": places.of(pick.box,
   pick.index)`.
 
 **What `do_orders`'s response actually needs from `place`, verified against the one screen
@@ -97,7 +100,7 @@ the leaner form scoped to exactly those boxes.
    every pick `do_orders` renders, and answers `neighbors: null, section_gaps: null` instead
    of D30's decoration.
 2. `do_orders` uses it, scoped to the picks its own resolution produced.
-3. The stale comment at `server/capture_server.py:9075-9077` ("ONE `_Places` FOR THE WHOLE
+3. The stale comment at `server/capture_server.do_orders` ("ONE `_Places` FOR THE WHOLE
    RESPONSE. It walks the entire store per instantiation...") is replaced with what the
    route now does — it does NOT walk the entire store per instantiation, and never did;
    what it did was hydrate every box the picks touch.
@@ -112,13 +115,13 @@ the leaner form scoped to exactly those boxes.
 ## Depends on / conflicts with
 
 **Item 2** ("the per-box read", `docs/specs/store-scaling.md` §3 item 2) touches
-`server/capture_server.py:10687` (`GET /boxes/<n>`, currently refused) and
-`store/rows.py:177`'s materialize-then-filter fallback. It does NOT touch `_Places`, `do_orders`,
-`_pick_row`, `_line_answer`, or anything under `server/capture_server.py:9027-9130`
+`server/capture_server.CaptureHandler`'s `do_GET` (`GET /boxes/<n>`, currently refused) and
+`store/rows.Rows`'s materialize-then-filter fallback. It does NOT touch `_Places`, `do_orders`,
+`_pick_row`, `_line_answer`, or anything under `server/capture_server.do_orders`
 (confirmed by reading item 2's own description in the spec — it lists `do_inventory`,
 `_boxes_named`, `store/master.py:to_payload`; `do_orders` is explicitly named in item 2's
 own text as moving "under item 6", i.e. this item). **No file-level conflict is expected**,
-but item 2 changes `store/rows.py:177`'s degrade behavior (a `where`/`select` after a full
+but item 2 changes `store/rows.Rows`'s degrade behavior (a `where`/`select` after a full
 load currently answers from the Python-side list rather than SQL). This item's new code
 path (a fresh `Rows.select(...)` call inside `Inventory.occupied_indices`, see "Steps")
 depends on that call being answered from SQL and not from a materialized Python list —
@@ -158,21 +161,21 @@ correct; only the ORDER of landing is at stake, not correctness.
 - `docs/specs/order-pipeline.md` — background on the order screens; confirms steps 8-12 are
   built and step 13/14 (shipped status, tracking write-back) are not, and that D96 deleted
   the envelope-walk code (`orderWalk.ts` etc.) that is unrelated to `do_orders`.
-- `server/capture_server.py:1939-2333` (`_Places` in full — class docstring through `.of()`)
-  and `pipeline/join.py:104-311` (`Position` in full — the ONE label formula; read this
+- `server/capture_server._Places` (`_Places` in full — class docstring through `.of()`)
+  and `pipeline/join.Position` (`Position` in full — the ONE label formula; read this
   before writing anything that could be mistaken for a second one).
-- `store/master.py:1492-1519` (`_positions_in`) — the EXISTING precedent for exactly this
+- `store/master.Inventory` (`_positions_in`) — the EXISTING precedent for exactly this
   optimization shape, already used by the capture allocator's high-water scan. Read its
   docstring: "Asked of the mapping as three indexed queries rather than a walk (D88)."
-- `store/rows.py:1-49` (module docstring) and `:230-250` (`Rows.select`) — the mechanism
+- `store/rows.py` (module docstring) and `Rows.select` — the mechanism
   `_positions_in` and this item's new method both use: column values without building
   objects.
-- `harness/tests/t7_store_and_seams.py:1074-1090` — the EXISTING test idiom for asserting
+- `harness/tests/t7_store_and_seams.check_store_of_record` — the EXISTING test idiom for asserting
   "this call built few `Card` objects, not the whole box/store":
   `snapshot.inventory.cards.loaded_count` and `.complete`. Use this idiom for the new test;
   do not invent a SQL-trace mechanism — none exists in this harness today and the repo's own
   idiom already answers the question this item needs to ask.
-- `harness/tests/t7_store_and_seams.py:22280-23260` — the existing `do_orders` test block:
+- `harness/tests/t7_store_and_seams.check_order_ledger` — the existing `do_orders` test block:
   fixture construction helpers, `answers(checks, capture_server.do_orders, "...")`, and the
   renumber/shift case this item's new test sits beside.
 - `app/tests/orders.spec.ts` — stubs the `/orders` response wholesale (fixture JSON), so it
@@ -230,7 +233,7 @@ def occupied_indices(self, box: int) -> Tuple[int, ...]:
 
 Notes for the implementer:
 - `_as_position_int` and `TERMINAL_STATES` are already module-level in `store/master.py`
-  (used by `_positions_in` and at `store/master.py:143` respectively) — no new import.
+  (used by `_positions_in` and at `store/master.TERMINAL_STATES` respectively) — no new import.
   `List`/`Tuple` are already imported at the top of the file (used throughout
   `store/master.py`; confirm with `grep -n "^from typing" store/master.py`).
 - The second loop (the `{"box": None}, {"idx": None}` pair) mirrors `_positions_in`'s own
@@ -242,7 +245,7 @@ Notes for the implementer:
   `records_in`/`_walk` would have caught it.
 - This function does not sort by calling `select` twice for ordering — `select`'s own
   contract returns `(key, tuple)` in a sequence `Rows.select` sorts by key internally
-  (`store/rows.py:249`, `return [(key, out[key]) for key in sorted(out)]`), which is KEY
+  (`store/rows.Rows`, `return [(key, out[key]) for key in sorted(out)]`), which is KEY
   order, not INDEX order — hence the explicit `live.sort()` at the end. Verify this by
   reading `Rows.select` again if in doubt; do not assume key order equals index order (it
   does not — keys are `"box/idx"` strings, and string-sorting "3/10" before "3/2" is exactly
@@ -281,11 +284,11 @@ def for_keys(
     return self
 ```
 
-Add `self._sparse = False` to `__init__` (`server/capture_server.py:2029-2033`, right beside
+Add `self._sparse = False` to `__init__` (`server/capture_server._Places`, right beside
 `self._degraded = False`), so the ordinary constructor path is unaffected and `_company`
 (step 3) can tell the two apart.
 
-### 3. Short-circuit `_company` in sparse mode — `server/capture_server.py:2176-2265`
+### 3. Short-circuit `_company` in sparse mode — `server/capture_server._Places`
 
 `_company` (D30's neighbor/gap walk) currently opens with:
 
@@ -313,14 +316,14 @@ This is the one line that makes `for_keys` actually cheap: without it, `.of()` s
 `_company`, which calls `self._walk(box)`, which is the exact full-`records_in` hydration
 this item exists to avoid — `_boxmates` would not have this box cached (only `_cache` does,
 populated by `for_keys` directly), so `_walk` would run in full. Verify this by re-reading
-`.of()` (`server/capture_server.py:2266-2333`): it calls `self.view(number)` (reads from
+`.of()` (`server/capture_server._Places`): it calls `self.view(number)` (reads from
 `self._cache`, populated by `for_keys` — fine) and then `self._company(number, at, first,
 last)` (must be short-circuited, or the whole optimization is silently defeated while every
 test still passes, because the RESULT is identical — only the cost is wrong). Add a comment
 at the docstring naming this trap explicitly, since a future edit to `.of()` that adds a new
 call into `_walk`/`_boxmates` would reintroduce the same defeat silently.
 
-### 4. Wire it into `do_orders` — `server/capture_server.py:9027-9122`
+### 4. Wire it into `do_orders` — `server/capture_server.do_orders`
 
 Replace lines 9074-9078 (currently):
 
@@ -360,7 +363,7 @@ with:
 Verify the exact attribute path `answer.lines[i].picks[j].box`/`.index` against
 `order_engine`'s dataclasses before writing this (grep `pipeline/orders.py` for the `Pick`/
 `Line`/`Answer` dataclass definitions — `_pick_row`'s own signature at
-`server/capture_server.py:8961-8987` already uses `pick.box`, `pick.index`,
+`server/capture_server._pick_row` already uses `pick.box`, `pick.index`,
 `pick.capture_id`, `pick.source`, `pick.run`, so the field names are confirmed there).
 
 An order with NO open lines with picks (a fully-resolved or empty ledger) yields an empty
@@ -382,9 +385,9 @@ Every place `_Places(...)` is instantiated today (`grep -n "_Places(" server/cap
 | 8235 | `_box_row` (`view(box)` only, no `.of()`) | No |
 | 8392 | `do_boxes` | No — item 7's subject |
 | 8542 | (`occupied(box)` only) | No |
-| 8829 | `_order_stamps` (`server/capture_server.py:8751`) — the Rubber Stamp fill helper behind `POST /shipping/batches/<batch>/stamps` (`docs/specs/order-pipeline.md` §3 T2b) | **YES — same shape, confirmed by reading `:8780-8835`.** It runs the IDENTICAL pattern to `do_orders`: `sequence`/`open_records`/`asked = [_engine_order(record, ledger) for record in open_records]`/`resolution = order_engine.resolve_all(...)`, then `places = _Places(snapshot.inventory)` over EVERY open order in the store to stamp only the numbers in one batch. Its own docstring even says "`_Places` built and dropped inside this call" — same cost, same fix. |
+| 8829 | `_order_stamps` (`server/capture_server._order_stamps`) — the Rubber Stamp fill helper behind `POST /shipping/batches/<batch>/stamps` (`docs/specs/order-pipeline.md` §3 T2b) | **YES — same shape, confirmed by reading `:8780-8835`.** It runs the IDENTICAL pattern to `do_orders`: `sequence`/`open_records`/`asked = [_engine_order(record, ledger) for record in open_records]`/`resolution = order_engine.resolve_all(...)`, then `places = _Places(snapshot.inventory)` over EVERY open order in the store to stamp only the numbers in one batch. Its own docstring even says "`_Places` built and dropped inside this call" — same cost, same fix. |
 | 9078 | `do_orders` | **YES — this item's subject** |
-| 9756 | `do_order_pull` (`server/capture_server.py:9663`) | **No — different shape, confirmed by reading `:9740-9793`.** This is a WRITE route (`Store().write()`), bounded by the request body (`parsed`, capped at `ORDER_FILL_TARGET_LIMIT = 50` per D90) rather than by every open order in the store; `places` here answers `_prepare_targets`'s specific positions, not a store-wide resolution. Lower value and not measured in `docs/specs/store-scaling.md` — leave it on the ordinary constructor for this item; note it as a candidate for the SAME treatment in a follow-up if `_prepare_targets`'s own boxes ever prove slow (it is a write, not a polled GET, so it is off this plan's "per-press"/"per-load" cost table). |
+| 9756 | `do_order_pull` (`server/capture_server.do_order_pull`) | **No — different shape, confirmed by reading `:9740-9793`.** This is a WRITE route (`Store().write()`), bounded by the request body (`parsed`, capped at `ORDER_FILL_TARGET_LIMIT = 50` per D90) rather than by every open order in the store; `places` here answers `_prepare_targets`'s specific positions, not a store-wide resolution. Lower value and not measured in `docs/specs/store-scaling.md` — leave it on the ordinary constructor for this item; note it as a candidate for the SAME treatment in a follow-up if `_prepare_targets`'s own boxes ever prove slow (it is a write, not a polled GET, so it is off this plan's "per-press"/"per-load" cost table). |
 
 **Recommendation: apply the identical `_Places.for_keys` fix to `_order_stamps`
 (`:8829`) in this same PR.** It is not named in `docs/specs/store-scaling.md`'s item 6 text
@@ -405,7 +408,7 @@ Add to `harness/tests/t7_store_and_seams.py`, near the existing `do_orders` bloc
 ### Assertion 1 — sparse build touches only the boxes with picks
 
 Using the `loaded_count`/`complete` idiom already proven at
-`harness/tests/t7_store_and_seams.py:1074-1090`:
+`harness/tests/t7_store_and_seams.check_store_of_record`:
 
 ```python
 # Five boxes, one order whose only line resolves inside box 3.
@@ -497,7 +500,7 @@ Also assert `places.of(p.box, p.index)["slot"]` equals the slot `do_inventory`'s
 matching the task's own instruction — "slot equality against `do_inventory`'s for the same
 cards"). Call `capture_server.do_inventory()` in the test, find the matching card in its
 `inventory`/box payload, and compare `place.slot`. Confirm `do_inventory`'s response shape
-by reading `server/capture_server.py:3056` (`do_inventory`) before writing this half — it
+by reading `server/capture_server.do_inventory` (`do_inventory`) before writing this half — it
 returns boxes/cards nested, not a flat list, so the lookup needs the right traversal.
 
 ### Assertion 3 — a section with real dividers
@@ -509,7 +512,7 @@ section split inside the test box before ingesting the order, so `layout` has mo
 for real rather than trivially. This is the case most likely to expose an off-by-one in
 `Inventory.occupied_indices` vs. `records_in`'s notion of "on hand" (e.g. a divider placed
 past every captured card — `Position._divider`'s "unfilled" branch,
-`pipeline/join.py:238-252` — read that method before deciding the fixture needs it; if the
+`pipeline/join.Position` — read that method before deciding the fixture needs it; if the
 existing test boxes never place a divider past the high-water mark, this assertion can be
 skipped with a one-line note saying why, rather than invented against a case that cannot
 occur through the routes this repo exposes).
@@ -520,7 +523,7 @@ An order whose lines all resolve with zero picks (or a store with no open orders
 error. `_Places.for_keys(inventory, set())` — call it directly and assert it returns an
 instance with no boxes cached, then confirm the existing "GET /orders answers an empty
 store" test (`server/capture_server.py`'s route exercised at
-`harness/tests/t7_store_and_seams.py:22867`) still passes unmodified — it already covers
+`harness/tests/t7_store_and_seams.check_order_screen`) still passes unmodified — it already covers
 this path through the route; this assertion is a UNIT-level companion for the new
 classmethod alone.
 
@@ -549,7 +552,7 @@ spec should be UNAFFECTED because it never talks to the real server.
 
 **None expected.** `docs/specs/store-scaling.md` §4's allowlist (the `unscoped walk` guard's
 census) does not list `do_orders`, `_Places`, or anything in
-`server/capture_server.py:9027-9130` — the paragraph explicitly separates this route out as
+`server/capture_server.do_orders` — the paragraph explicitly separates this route out as
 "O(cards) all the same" WITHOUT being an unscoped walk (`positions_for_sku` is indexed,
 `_Places` is lazy per box). So this item removes zero allowlist rows. If item 1 (the
 `unscoped walk` guard) has already landed by the time this item is implemented, run
@@ -584,7 +587,7 @@ exists) before deciding which.
   suites) before and after, not just the new T7 cases.
 - **`Position` in `pipeline/join.py`.** This item does not touch it. It only supplies a
   different, cheaper `occupied` tuple as an argument to the SAME `Position(...)` call
-  `_Places.of` already makes (`server/capture_server.py:2308`,
+  `_Places.of` already makes (`server/capture_server._Places`,
   `position = join.Position(number, at, layout, occupied)`) — the one label formula stays
   the only label formula.
 
@@ -658,13 +661,13 @@ makes this item's numbers incomparable to the other five items'.)
   `BadPosition` in `t7_store_and_seams.py`) using `occupied_indices` instead, before trusting
   the sketch's refusal behavior.
 - **`Position._divider`'s "unfilled" branch** (a divider declared past the box's captured
-  cards, `pipeline/join.py:238-252`) depends on `occupied[-1]` (the max on-hand index) via
+  cards, `pipeline/join.Position`) depends on `occupied[-1]` (the max on-hand index) via
   `high_water`. `occupied_indices`'s returned tuple supplies this correctly (it is the real
   sorted tuple of on-hand indices, not a fabricated proxy), so this should be fine by
   construction — flagged here only because Assertion 3 above is the one test that actually
   exercises it, and it must not be skipped without the one-line justification that section
   asks for.
-- **Ordering against item 2.** If item 2 lands first and changes `store/rows.py:177`'s
+- **Ordering against item 2.** If item 2 lands first and changes `store/rows.Rows`'s
   degrade rule, re-run this item's tests after rebasing — the "Depends on" section argues
   they are independently correct, but re-running costs nothing and the interaction has not
   been observed, only argued.

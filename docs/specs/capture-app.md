@@ -468,6 +468,8 @@ no-dialog rule is argued for ONE card still within reach of the hand that fed it
 that deletes five has to make the five visible instead. The count is also the row's ordinal,
 which is what lets one chip say both; the top row carries its key instead.
 
+**Owner's ruling, 2026-09-28: an open Section or Box list shows in front of the Recent strip and the sibling cards, and scrolls.** The cap stays. The list stays out of flow (D118). When an edge of the list would sit under a bar, opening it scrolls the viewport so the list is in view. That is a viewport scroll and not a layout shift, so D118 holds.
+
 **A refused walk stops at the refusal and says how far it got**, because the cards that went
 and the cards that did not both leave the list, and the count is then the only thing that
 says where the operator is. **Where the server is ahead of this session the stack is one row
@@ -524,16 +526,42 @@ index. So the sentence above still holds, and the store chooses the place inside
 **Superseded 2026-09-25: a box has no seal and no capacity (D299).**
 
 **It refuses rather than guessing**: a second press with nothing captured between
-(`section_empty` — the divider you want is already there). A divider already declared past
+(`section_empty` — the divider you want is already there; drawn quiet, since 2026-09-28,
+as "Section N is still empty. Capture a card first."). A divider already declared past
 the next card was `section_ahead` until 2026-09-26. The next card goes behind it now, so
 `section_empty` answers it (D10). A sealed box (`box_closed`) went with the seal. Each is a sentence beside the control and
 never a halt: §5.5 stops the run when a card may have gone past unrecorded, and a refused
-divider changed nothing.
+divider changed nothing. No note beside a control prints a reason code (D196); only a
+halt's "What the server said" does.
 
 **No dialog, and `U` is the undo.** `U` takes S's divider back out while it is the last one
 and no card is behind it (UN-15). After that, the remedy is the dividers editor on
 `#/inventory`, and a `resectioned` history line carries the layout it moved from. A confirm on the screen the owner shoots a box from at feeder pace is
 what `docs/DESIGN.md` refuses in as many words.
+
+### 5.7 — Owner's touch-ups, 2026-09-28
+
+- **Empty-section S.** A normal no-op, not an error: one quiet sentence, no reason code. The
+  button stays enabled — the server is the judge, and a stale client count must never block a
+  good press. The shared fix: undo, note and section notes no longer draw `code` at all.
+  `machine-words.spec` sweeps loaded screens only, so `capture-claims.spec.ts` asserts the
+  error state itself.
+- **No "Open the camera first" line** under Capture. The disabled button carries the reason
+  as its accessible description only (`aria-describedby`, screen-reader text).
+- **Closed Rarity row: bars only.** The picked names are screen-reader text in the row's
+  accessible name; the open picker lists every rarity by name, unchanged.
+- **Clear (RIG) asks first.** The sentence under the button is gone. Pressing Clear opens the
+  kit's `ConfirmSheet` with that sentence and a "Clear" button; Esc cancels, Enter confirms,
+  only confirm clears (toast Undo stays). Clear has no key binding, so `SHORTCUTS` is unchanged.
+- **Recent tile follows D259.** The caption names the box through `boxTitle` (on every tile
+  once the strip spans drawers) and the card's number from the rendered label. A tile with
+  no label (a reload, or a card that slid after a remove) shows the box name alone. No
+  `B<n> #<n>` key is drawn or spoken.
+- **The viewfinder panel hugs its portrait frame** (desktop and tablet). Its width is derived
+  from its height (`--cap-stage-w`), not a 1fr track; the freed width goes to the last-capture
+  photo (desktop) and the run and last cards (tablet). The phone keeps a full-width panel: its
+  height budget pins the shutter above the tab bar. Layout only: capture, motion trigger and
+  rotation are untouched. Width only. §5.1's order is unchanged.
 
 ## 6. trigger-seam
 

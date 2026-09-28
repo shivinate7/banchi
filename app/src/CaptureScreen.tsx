@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, ReactNode } from 'react'
 
 import { PositionLabel } from './PositionLabel'
-import { storeKeyText } from './storeKey'
 import type {
   BoxRecord,
   CardSummary,
@@ -56,7 +55,7 @@ import { captureBoxLabel } from './runScope'
 // The one thing this screen takes from the library drawing: how long a pause has to be
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
-import { Button, Icon, IconButton, Kbd, Notice, Page, Pill, Stat } from './kit'
+import { Button, ConfirmSheet, Icon, IconButton, Kbd, Notice, Page, Pill, Stat } from './kit'
 import { matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
@@ -215,6 +214,9 @@ const PROMPT_UNWRITTEN = 'unwritten'
 /** One capture made in this session: what the server recorded, and what we sent with it. */
 type Shot = {
   card: CardSummary
+  /** THE CARD NUMBER OF A SHOT WHOSE LABEL WAS RETIRED by a remove ahead of it (D67): the old
+   *  label's card minus one per slide, so the tile still names its card. Absent until a slide. */
+  cardNo?: number | null
   // The client's own copy of what accompanied this photo, NOT a server echo — the capture
   // response carries neither. Shown under the photo because the bar above shows what the
   // *next* card will get, and a stack toggled wrong is D3's expensive failure: it is
@@ -298,6 +300,10 @@ type UndoTarget = {
    *  undo or a remove that finds no section here patches nothing, and the next `GET /boxes`
    *  is what settles it, same as always. */
   sectionDiv: string | null
+  /** The box's stored name, for a tile or a note when there is no rendered label (D259). */
+  boxName: string | null
+  /** A slid card's own number (see `Shot.cardNo`); null everywhere else. */
+  cardNo: number | null
 }
 
 /** What to call a position on screen — the server's own rendered label, or the record's own
@@ -316,7 +322,9 @@ type UndoTarget = {
  *  `undoNote.position` — draws a bare key whole, because it peels one off a label only when
  *  there are position parts in front of it. */
 function positionText(target: UndoTarget): string {
-  return target.label ?? storeKeyText(target.box, target.index)
+  if (target.label !== null) return target.label
+  const name = boxTitle(target.boxName, target.box)
+  return target.cardNo === null ? name : `${name}, Card ${target.cardNo}`
 }
 
 const BOX_DIGITS = /^[0-9]+$/
@@ -420,10 +428,8 @@ function hintReason(code: string | null, message?: string | null): string {
   if (code === 'tcg_url_invalid') return 'The set list is pointed somewhere the session may not go'
   if (code === 'no_category') return 'No TCGplayer category for this game'
   // THE FLOOR, and reaching it means `hint reasons` is already failing a commit. The
-  // transport's sentence beats the bare token; the token stays beside it either way.
-  return message
-    ? `${message.trim().replace(/\.$/, '')} (${code})`
-    : `Set list unavailable (${code})`
+  // transport's sentence if there is one, else a plain one. Never the code (D196).
+  return message ? message.trim().replace(/\.$/, '') : 'The server did not accept this hint'
 }
 
 function hintMetaText(verdict: HintVerdict, needsHint = false): string {
@@ -808,6 +814,7 @@ function OpenField({
   if (size === 'lg') classes.push('capture-open-lg')
   if (pin === true) classes.push('capture-open-pinned')
   const bodyRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   /* UX-138: every field agrees on where focus goes when it opens, now — the body's own
    *  first control. Box and Set hint already did this by hand, through their own refs (kept:
    *  Set hint's effect also loads the set vocabulary, which is not this component's job to
@@ -819,10 +826,23 @@ function OpenField({
   useEffect(() => {
     bodyRef.current
       ?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex]')
-      ?.focus()
+      ?.focus({ preventScroll: true })
+    /* The list itself comes into view, and nothing else moves: it scrolls only when an edge
+       is past a bar, and `.capture-open-pinned`'s scroll-margin keeps it clear of the bar.
+       `block: 'nearest'` was tried first and does nothing here: Chromium counts a box whose
+       edge is inside the window as seen and ignores the fixed bar over it. */
+    const root = rootRef.current
+    if (root !== null) {
+      const rect = root.getBoundingClientRect()
+      const margin = parseFloat(getComputedStyle(root).scrollMarginBottom) || 0
+      if (rect.bottom > window.innerHeight - margin) root.scrollIntoView({ block: 'end' })
+      else if (rect.top < (parseFloat(getComputedStyle(root).scrollMarginTop) || 0)) {
+        root.scrollIntoView({ block: 'start' })
+      }
+    }
   }, [])
   return (
-    <div className={classes.join(' ')}>
+    <div className={classes.join(' ')} ref={rootRef}>
       <button
         type="button"
         className={typeof k === 'string' ? 'capture-row' : 'capture-row capture-row-keypair'}
@@ -945,14 +965,12 @@ function Track({
  *  a `… · departed · B3 #31` tail and print `#31` — a bare sigil over a key by the other door.
  *  No undo target carries a departed label today, because a card captured this session has not
  *  left the box; the guard costs a character class and does not depend on that staying true. */
-function undoFigure(target: UndoTarget): string {
-  if (target.label !== null) {
-    /* The card number the label names, off the one label reader (`position.ts:placePartsOf`),
-       which reads the server's comma form and the old dotted one alike. */
-    const card = placePartsOf(target.label)?.card ?? null
-    if (card !== null) return `#${card}`
-  }
-  return storeKeyText(target.box, target.index)
+function undoFigure(target: UndoTarget): string | null {
+  /* The card number the label names, off the one label reader (`position.ts:placePartsOf`),
+     which reads the server's comma form and the old dotted one alike. No label, no figure:
+     a store key is never drawn (D259) — the tile names the box instead. */
+  const card = target.cardNo ?? placePartsOf(target.label)?.card ?? null
+  return card === null ? null : `#${card}`
 }
 
 /** `Radiant Rare` → `Radiant` + a de-emphasised ` Rare`. The bare `Rare` keeps its whole
@@ -1237,6 +1255,8 @@ export function CaptureScreen() {
        *  number in any of them changed — the sentence names the range that shifted. Null
        *  for the ordinary S at the back, which renumbers nothing. */
       renumbered: { from: number; to: number } | null
+      /** A normal no-op (an empty section), drawn quiet rather than as an error. */
+      quiet?: boolean
     }) | null
   >(null)
   const [sectionBusy, setSectionBusy] = useState(false)
@@ -2212,12 +2232,10 @@ export function CaptureScreen() {
 
   /** ONE PRESS PUTS THE SETUP BACK TO NOTHING CHOSEN (D142).
    *
-   *  THE OWNER ASKED FOR IT IN FOUR WORDS: *"a quick clear all settings button"*. Quick is a
-   *  requirement, so there is no confirmation dialog: the press clears, the screen visibly goes
-   *  back to its empty state, and a receipt toast carries the way back. That is the shape D28
-   *  settled for the review answer — act, receipt, undo — and it is the right one here for the
-   *  same reason: a confirmation ahead of a reversible act buys nothing and costs a press every
-   *  single time.
+   *  THE OWNER ASKED FOR IT IN FOUR WORDS: *"a quick clear all settings button"*. Since
+   *  2026-09-28 (owner's ruling) the press asks first — `clearOpen`, a `ConfirmSheet` carrying
+   *  the sentence that used to sit under the button — and this runs only on confirm. The
+   *  receipt toast with Undo stays.
    *
    *  IT CLEARS CHOICES ABOUT CARDS, AND LEAVES THE RIG ALONE. Box, game, set hint, rarity,
    *  finish and product are things the operator decided about the stack in front of them, and
@@ -2239,6 +2257,7 @@ export function CaptureScreen() {
    *  null would leave the screen drawing *"Waiting for the game list from the server"* — the
    *  blocked reason for a registry that has not arrived — which would be a sentence that is
    *  simply untrue, about a fetch that finished minutes ago. */
+  const [clearOpen, setClearOpen] = useState(false)
   const clearSetup = useCallback(() => {
     const before: CaptureSetup = { box, bid: boxBid, game, setHint, finish, rarityClaim, product }
     setBox(null)
@@ -2280,6 +2299,23 @@ export function CaptureScreen() {
       },
     })
   }, [box, boxBid, game, setHint, finish, rarityClaim, product, registry, closeField])
+
+  /* ENTER CONFIRMS THE CLEAR (owner, 2026-09-28; Esc is the sheet's own). First focus is
+     Cancel, whose native Enter would cancel, so this takes Enter first, in the capture phase. */
+  useEffect(() => {
+    if (!clearOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter') return
+      event.preventDefault()
+      event.stopPropagation()
+      // A held key's repeats are swallowed, never a confirm (and never Cancel's native click).
+      if (event.repeat) return
+      setClearOpen(false)
+      clearSetup()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [clearOpen, clearSetup])
 
   /* WHAT ENTER DOES, which is a POLICY and not a control: take the top row if there is one,
      and otherwise make what the offer names. That ordering is what keeps typing `com` from
@@ -2641,6 +2677,10 @@ export function CaptureScreen() {
    * device writes into the drawer this one is shooting, the head is now this hand's card, the
    * server refuses it, and the note says which position is undoable. A loud wrong answer in
    * place of a quiet deletion of a card this operator never took. */
+  const boxNameOf = useCallback(
+    (number: number) => boxRecords.find((record) => record.box === number)?.name ?? null,
+    [boxRecords],
+  )
   const undoStack = useMemo<UndoTarget[]>(() => {
     if (sitting.length === 0) {
       if (box === null) return []
@@ -2652,7 +2692,7 @@ export function CaptureScreen() {
       // is no `cid` to address its photograph by. `photoSrc` draws it off the slot.
       return serverNewest < 1
         ? []
-        : [{ box, index: serverNewest, label: null, cid: null, captureId: null, sectionDiv: null }]
+        : [{ box, index: serverNewest, label: null, cid: null, captureId: null, sectionDiv: null, boxName: boxNameOf(box), cardNo: null }]
     }
 
     /* THE WHOLE SITTING, NEWEST FIRST — UN-1, the owner's own example: from capture 36, the
@@ -2664,13 +2704,15 @@ export function CaptureScreen() {
       .map((shot) => ({
         box: shot.card.box,
         index: shot.card.index,
-        label: shot.card.label,
+        label: shot.card.label === '' ? null : shot.card.label,
         // The capture response's own name for the photograph it just wrote (D172).
         cid: shot.card.cid ?? null,
         captureId: shot.card.capture_id,
         sectionDiv: shot.card.section_div ?? null,
+        boxName: boxNameOf(shot.card.box),
+        cardNo: shot.cardNo ?? null,
       }))
-  }, [box, nextForBox, sitting])
+  }, [box, boxNameOf, nextForBox, sitting])
 
   /* WHETHER THE STRIP NAMES A DRAWER ON EVERY ROW — it does the moment what is IN VIEW spans
    * more than one, and then on every row rather than only the rows that differ from the Box
@@ -3176,17 +3218,20 @@ export function CaptureScreen() {
             // sitting's own copies have to say the same thing or the next press aims at a
             // position that moved out from under it. The rendered label is retired with it —
             // `pipeline/join.py:Position.label` composed it against the OLD index and this
-            // screen still never composes a second one (D67) — so it falls back to the bare
-            // store key, `positionText`'s own fallback for exactly this case.
+            // screen still never composes a second one (D67) — so it falls back to the box's
+            // name, `positionText`'s own fallback for exactly this case (D259).
             .map((shot) =>
               shot.card.box === target.box && shot.card.index > target.index
                 ? {
                     ...shot,
+                    cardNo: (shot.cardNo ?? placePartsOf(shot.card.label)?.card ?? null) === null
+                      ? null
+                      : (shot.cardNo ?? placePartsOf(shot.card.label)?.card ?? 1) - 1,
                     card: {
                       ...shot.card,
                       index: shot.card.index - 1,
                       key: `${shot.card.box}/${shot.card.index - 1}`,
-                      label: storeKeyText(shot.card.box, shot.card.index - 1),
+                      label: '',
                     },
                   }
                 : shot,
@@ -3364,7 +3409,22 @@ export function CaptureScreen() {
         // the layout before it (D58) — reload the sitting and patch the strip by key.
         if (renumbered !== null) void refreshShotLabels()
       } catch (err) {
-        setSectionNote({ done: false, place: null, renumbered: null, ...describe(err) })
+        // An empty section is a normal no-op, not a fault (owner, 2026-09-28): one quiet
+        // sentence naming the section. The server stays the judge, so a stale client count
+        // can never block a good press. Every other refusal keeps the server's own words.
+        const empty = err instanceof ServerError && err.code === 'section_empty'
+        setSectionNote({
+          done: false,
+          place: null,
+          renumbered: null,
+          quiet: empty,
+          ...(empty
+            ? {
+                text: `${priorPicked === null && priorLast === null ? 'This section' : `Section ${(priorPicked ?? priorLast)!.section}`} is still empty. Capture a card first.`,
+                code: null,
+              }
+            : describe(err)),
+        })
       } finally {
         sectionBusyRef.current = false
         setSectionBusy(false)
@@ -4364,7 +4424,6 @@ export function CaptureScreen() {
                 <p className={noteSaved.done ? 'capture-quiet capture-note-ok' : 'capture-refused'}>
                   {noteSaved.done ? <Icon name="check" size={13} /> : <Icon name="alert" size={13} />}
                   {noteSaved.text}
-                  {noteSaved.code === null ? null : <span className="capture-halt-code"> {noteSaved.code}</span>}
                 </p>
               )}
             </div>
@@ -4637,6 +4696,9 @@ export function CaptureScreen() {
               className="capture-shutter"
               onClick={() => void doCapture()}
               disabled={shutterDisabled}
+              aria-describedby={
+                blockers.length === 1 && blockers[0]?.key === 'camera' ? 'capture-shutter-why' : undefined
+              }
               busy={busy}
               /* In motion mode the C key is genuinely disarmed, so the keycap goes; the
                  button itself stays live in both modes as an override. */
@@ -4651,7 +4713,11 @@ export function CaptureScreen() {
                 whole story. The box comes back the moment anything else joins it (a box, the
                 game list), because then there is a REASON list again and the fix buttons vary. */}
             {blockers.length === 1 && blockers[0]?.key === 'camera' ? (
-              <p className="capture-quiet capture-camera-note">Open the camera first</p>
+              // Owner, 2026-09-28: the disabled button and the camera state say it. The
+              // reason stays as the button's accessible description, not as visible text.
+              <span id="capture-shutter-why" className="bn-sr">
+                Open the camera first
+              </span>
             ) : blockers.length === 0 ? null : (
               <div className="capture-block" role="group" aria-label="Setup">
                 <span className="bn-label capture-block-word">Setup</span>
@@ -4701,8 +4767,8 @@ export function CaptureScreen() {
               Section
             </Button>
             {sectionNote === null ? null : (
-              <p className={sectionNote.done ? 'capture-quiet capture-note-ok' : 'capture-refused'}>
-                {sectionNote.done ? <Icon name="check" size={13} /> : <Icon name="alert" size={13} />}
+              <p className={sectionNote.done ? 'capture-quiet capture-note-ok' : sectionNote.quiet ? 'capture-quiet' : 'capture-refused'}>
+                {sectionNote.done ? <Icon name="check" size={13} /> : sectionNote.quiet ? null : <Icon name="alert" size={13} />}
                 {sectionNote.text}
                 {sectionNote.place === null ? null : (
                   <>
@@ -4714,9 +4780,6 @@ export function CaptureScreen() {
                       <span className="capture-list-part">from card {sectionNote.place.fromCard}</span>
                     </span>
                   </>
-                )}
-                {sectionNote.code === null ? null : (
-                  <span className="capture-halt-code"> {sectionNote.code}</span>
                 )}
               </p>
             )}
@@ -4819,16 +4882,12 @@ export function CaptureScreen() {
                           line grows UPWARD over the photograph and moves no layout at all
                           (D118). The cell's height is the thumbnail's `aspect-ratio`, which
                           this cannot reach.
-                          `Box 3` AND NOT `B3`: the figure beside it is a COUNT out of a
-                          rendered label, and `B3 #40` would be the key spelling wearing a
-                          count — the one confusion D92 exists to end. A word is not a sigil.
-                          The accessible name needed nothing: `positionText` is the server's own
-                          `Box 3 · Section 1 · Card 40`, which has always named the drawer. This
-                          is the visible half catching up with what a screen reader was already
-                          being told. */}
+                          THE BOX'S NAME, never its number or a store key (D259, owner 2026-09-28):
+                          `boxTitle` over the record's stored name, and the card's own number
+                          from the rendered label. A tile with no label names its box alone. */}
                       <span className="capture-undo-pos">
-                        {spansDrawers ? (
-                          <span className="capture-undo-drawer">Box {target.box}</span>
+                        {spansDrawers || undoFigure(target) === null ? (
+                          <span className="capture-undo-drawer">{boxTitle(target.boxName, target.box)}</span>
                         ) : null}
                         {undoFigure(target)}
                       </span>
@@ -4885,9 +4944,6 @@ export function CaptureScreen() {
                     <PositionLabel label={undoNote.position} flow="run" />
                   </span>
                 </>
-              )}
-              {undoNote.code === null ? null : (
-                <span className="capture-halt-code"> {undoNote.code}</span>
               )}
             </p>
           )}
@@ -5151,15 +5207,10 @@ export function CaptureScreen() {
                     <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
                   ) : (
                     <span className="capture-val">
-                      {/* THE NAMED LIST IS ITS OWN ELLIPSIS BOX (`.capture-val-name`, the same
-                          primitive the camera row's own value already leans on) — never a bare
-                          flex child of `.capture-val`. Two names plus the bits beside them can
-                          outrun a narrow Stack column, and a flex row clips an overflowing FIRST
-                          child from the left with no ellipsis mark: a two-pixel sliver of
-                          "Common" read as a stray tick before the CSS-drawn "· Uncommon". Wrapping
-                          the names lets THIS box shrink and truncate properly; `.capture-bits`
-                          stays a `flex: none` sibling, so the count marks are never the thing cut. */}
-                      <span className="capture-val-name">
+                      {/* OWNER, 2026-09-28: the closed row shows the segment bars alone. The
+                          names stay in the row's accessible name (screen-reader text); the OPEN
+                          picker still lists every rarity by name. */}
+                      <span className="bn-sr">
                         {rarityParts === null
                           ? rarityCountText
                           : rarityParts.map((name) => (
@@ -5556,19 +5607,24 @@ export function CaptureScreen() {
               block
               icon="eraser"
               words="not-in-vocabulary"
-              onClick={clearSetup}
+              onClick={() => setClearOpen(true)}
               disabled={!setupChosen}
             >
               Clear
             </Button>
-            {/* TXT-31 (density): "Nothing to clear." under a disabled button said nothing the
-                disabled state had not already said. The sentence now only earns its place
-                when there is something to explain. */}
-            {setupChosen ? (
-              <p className="capture-opennote capture-clear-note">
-                Resets the box, game, and claims. The camera, rotation, and store are untouched.
-              </p>
-            ) : null}
+            <ConfirmSheet
+              open={clearOpen}
+              tone="primary"
+              title="Clear the setup?"
+              confirmLabel="Clear"
+              onClose={() => setClearOpen(false)}
+              onConfirm={() => {
+                setClearOpen(false)
+                clearSetup()
+              }}
+            >
+              <p>Resets the box, game, and claims. The camera, rotation, and store are untouched.</p>
+            </ConfirmSheet>
           </div>
         </section>
 
