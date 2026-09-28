@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { describeFailure, rescueRun, type Failure } from './server'
 import type { RescueResult } from './types'
 import { Button, Notice, Sheet, Stat } from './kit'
+import { boxTitle } from './kit/data'
 import { toast } from './kit/toast'
 import './RunRescue.css'
 
@@ -32,8 +33,7 @@ function reasonSentence(reason: RescueResult['reason']): string {
 
 function destinationLabel(destination: RescueResult['destination']): string {
   if (destination === null) return 'another box'
-  const named = destination.box_name?.trim()
-  return named ? `${named} (Box ${destination.box})` : `Box ${destination.box}`
+  return boxTitle(destination.box_name, destination.box)
 }
 
 export function RunRescue({

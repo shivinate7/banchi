@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
+import { boxTitle } from './kit/data'
 import {
   applyBoxClaims,
   buildLot,
@@ -21,10 +22,10 @@ import type {
   LotReceipt,
   LotResult,
 } from './types'
-import { Button, EmptyState, Icon, IconButton, Loading, Notice, Page, Pill, ReloadButton, Segmented, Select, Sheet, Stat, type IconName } from './kit'
+import { Button, EmptyState, FilterBar, Icon, IconButton, Loading, Notice, Page, Pill, ReloadButton, Segmented, Select, Sheet, Stat, type FilterFacet, type FilterValue, type IconName } from './kit'
+import { matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { absoluteDate } from './dates'
-import { SearchField } from './SearchField'
 import './Codes.css'
 
 /* CODES — the code-card track on a route of its own (D14, D70).
@@ -127,16 +128,14 @@ function laneOf(entry: CodeEntry): LaneFilter {
  *  stale falls back to the number — the honest answer where there is genuinely no name to
  *  read, never a placeholder drawn over a fault that is not there. */
 function boxName(box: number, boxes: BoxRecord[] | null): string {
-  const name = boxes?.find((b) => b.box === box)?.name
-  return typeof name === 'string' && name.trim() !== '' ? name : `Box ${box}`
+  return boxTitle(boxes?.find((b) => b.box === box)?.name, box)
 }
 
 /* D218: this renders inside a native `<option>`, which is plain text only — no element can
    carry the seam, so this is a real sentence (a comma list) rather than a typed dot. */
 function boxLabel(box: BoxRecord): string {
   const held = box.on_hand ?? box.cards
-  const name = typeof box.name === 'string' && box.name.trim() !== '' ? box.name : `Box ${box.box}`
-  return `${name}, ${plural(held, 'card')}`
+  return `${boxTitle(box.name, box.box)}, ${plural(held, 'card')}`
 }
 
 /* ---- sheet -----------------------------------------------------------------------------------
@@ -582,19 +581,15 @@ export function Codes() {
 
   const rows = useMemo(() => {
     if (ledger === null) return []
-    const needle = filter.trim().toLowerCase()
     return ledger.entries.filter((e) => {
       if (stateFilter !== 'all' && e.state !== stateFilter) return false
       if (laneFilter !== 'all' && laneOf(e) !== laneFilter) return false
-      if (!needle) return true
-      return (
-        e.code.toLowerCase().includes(needle) ||
-        (e.product_display ?? '').toLowerCase().includes(needle) ||
-        (e.set_hint ?? '').toLowerCase().includes(needle) ||
-        (e.order_id ?? '').toLowerCase().includes(needle) ||
-        (e.buyer ?? '').toLowerCase().includes(needle) ||
-        e.state.includes(needle)
-      )
+      // D271: `code` is `raw`, a plain substring — a digit run in the middle of a code is
+      // not a word of its own, so rule 7's word-start digit test would miss it.
+      return matchQuery(filter, {
+        text: [e.product_display, e.set_hint, e.order_id, e.buyer, e.state],
+        raw: [e.code],
+      })
     })
   }, [ledger, filter, stateFilter, laneFilter])
 
@@ -608,6 +603,49 @@ export function Codes() {
     }
     return counts
   }, [ledger, stateFilter])
+
+  /* R2-filter-row (D270): State and Lane through the kit's own FilterBar/FilterChips, not a
+     hand-rolled `.codes-chip` row. Both stay single-select (`multiple: false`), matching the
+     old chips' behavior exactly -- FacetChip's own single-select rule already clears a picked
+     option on a second click, which is what the Lane chips did by hand before
+     (`cur === l.value ? 'all' : l.value`). State never had that "All" entry as a real option;
+     it is now the facet's own unpicked state, same idea. The counts are the exact same
+     numbers the old chips read: `ledger.counts` for State, `laneCounts` (already state-aware)
+     for Lane -- no new arithmetic, only a new control. */
+  const stateFacet: FilterFacet = useMemo(
+    () => ({
+      key: 'state',
+      label: 'State',
+      multiple: false,
+      options: STATES.filter((s) => s.value !== 'all').map((s) => ({
+        value: s.value,
+        label: s.label,
+        count: ledger?.counts[s.value] ?? 0,
+      })),
+    }),
+    [ledger],
+  )
+  const laneFacet: FilterFacet = useMemo(
+    () => ({
+      key: 'lane',
+      label: 'Lane',
+      multiple: false,
+      options: LANES.map((l) => ({ value: l.value, label: l.label, count: laneCounts[l.value] })),
+    }),
+    [laneCounts],
+  )
+  const filterFacets = useMemo(() => [stateFacet, laneFacet], [stateFacet, laneFacet])
+  const filterValue: FilterValue = useMemo(
+    () => ({
+      state: stateFilter === 'all' ? [] : [stateFilter],
+      lane: laneFilter === 'all' ? [] : [laneFilter],
+    }),
+    [stateFilter, laneFilter],
+  )
+  const onFilterChange = useCallback((next: FilterValue) => {
+    setStateFilter(((next.state?.[0] as StateFilter | undefined) ?? 'all'))
+    setLaneFilter(((next.lane?.[0] as LaneFilter | undefined) ?? 'all'))
+  }, [])
 
   /* WHICH BOXES HOLD THE UNCLAIMED CODES, and what the rest of each box already says.
    *
@@ -814,15 +852,16 @@ export function Codes() {
           <div className="bn-panel codes-empty">
             <EmptyState
               icon="qr"
-              title="No codes on file yet"
+              title="Empty"
               /* UX-159: ONE first step. With the ledger empty, the header hides its own
                  "Read a box" (above) — there is nothing captured yet for it to read — so
                  this is the only button on screen. Once a box is captured and read, the
-                 header's button takes over as the one persistent action instead. */
-              body="Set Game to Pokémon code cards on Capture, then come back and read the box."
+                 header's button takes over as the one persistent action instead.
+                 F5 verbiage cut: the setup instruction body is gone -- the one button below
+                 is the one actionable step, and it names its own destination. */
               actions={
                 <Button icon="camera" onClick={() => (window.location.hash = '#/capture')}>
-                  Go to capture
+                  Capture
                 </Button>
               }
             />
@@ -1161,16 +1200,6 @@ export function Codes() {
                   Lots <Pill>{lots.length.toLocaleString()}</Pill>
                 </button>
               </div>
-              {tab === 'codes' ? (
-                <SearchField
-                  value={filter}
-                  onChange={setFilter}
-                  persona="owner"
-                  label="Find a code"
-                  placeholder="Find a code, product, set or order"
-                  controlHeight="bar"
-                />
-              ) : null}
             </div>
 
             {tab === 'lots' ? (
@@ -1190,49 +1219,23 @@ export function Codes() {
               )
             ) : (
               <>
-                <div className="codes-toolbar">
-                  <div className="codes-chips" role="group" aria-label="State">
-                    {STATES.map((s) => {
-                      const n = s.value === 'all' ? ledger.total : (ledger.counts[s.value] ?? 0)
-                      return (
-                        <button
-                          key={s.value}
-                          type="button"
-                          className="codes-chip"
-                          aria-pressed={stateFilter === s.value}
-                          onClick={() => setStateFilter(s.value)}
-                        >
-                          {s.label}
-                          <span className="codes-chip-n">{n.toLocaleString()}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <span className="codes-toolbar-sep" aria-hidden="true" />
-                  <div className="codes-chips" role="group" aria-label="Lane">
-                    {LANES.map((l) => (
-                      <button
-                        key={l.value}
-                        type="button"
-                        className={`codes-chip is-${l.value}`}
-                        aria-pressed={laneFilter === l.value}
-                        onClick={() => setLaneFilter((cur) => (cur === l.value ? 'all' : l.value))}
-                      >
-                        <i className="codes-chip-dot" />
-                        {l.label}
-                        <span className="codes-chip-n">{laneCounts[l.value].toLocaleString()}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <span className="bn-spacer" />
-                  <IconButton
-                    size="sm"
-                    icon={revealAll ? 'eyeOff' : 'eye'}
-                    label={revealAll ? 'Hide codes' : 'Reveal codes'}
-                    pressed={revealAll}
-                    onClick={() => setRevealAll((r) => !r)}
-                  />
-                </div>
+                <FilterBar
+                  className="codes-filterbar"
+                  facets={filterFacets}
+                  value={filterValue}
+                  onChange={onFilterChange}
+                  count={{ shown: rows.length, total: ledger.total, noun: { one: 'code', many: 'codes' } }}
+                  search={{ query: filter, onChange: setFilter, placeholder: 'Find a code, product, set or order', label: 'Find a code' }}
+                  beside={
+                    <IconButton
+                      size="sm"
+                      icon={revealAll ? 'eyeOff' : 'eye'}
+                      label={revealAll ? 'Hide codes' : 'Reveal codes'}
+                      pressed={revealAll}
+                      onClick={() => setRevealAll((r) => !r)}
+                    />
+                  }
+                />
 
                 {rows.length === 0 ? (
                   <EmptyState

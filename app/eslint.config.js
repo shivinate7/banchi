@@ -186,6 +186,56 @@ const LOCAL_STORAGE_RULES = [
   { selector: 'Literal[value="localStorage"]', message: LOCAL_STORAGE },
 ]
 
+const HAND_SEARCH =
+  'D271: every search field uses `matchQuery`/`filterByQuery` from app/src/kit/match.ts, ' +
+  'never a hand-rolled case-folded comparison (`.includes`/`.startsWith`/`.endsWith`/' +
+  '`.indexOf` over `.toLowerCase`/`.toLocaleLowerCase`). That fold covers only case, ' +
+  'never accents or punctuation, tests one token instead of the shared word-order and ' +
+  'digit rules, and drifts from the server\'s own `match_query`. A fixed constant on ' +
+  'either side (a literal like `\'foil\'`) is not a typed query — silence this line with ' +
+  'a one-line comment saying so, the way app/src/Revenue.tsx and app/src/kit/data.tsx ' +
+  'already do.'
+
+/* FOUR COMPARISON METHODS (`includes`, `startsWith`, `endsWith`, `indexOf`), FOLDED ON
+ * EITHER SIDE (F11c, the reviewer's own finding: the round-one rule caught only
+ * `x.toLowerCase().includes(y)` and let `.startsWith`, `.toLocaleLowerCase()` and a fold
+ * on the ARGUMENT instead of the receiver — `x.includes(y.toLowerCase())` — through
+ * silently). Two selectors, not one, because the fold can sit on either operand of the
+ * comparison and esquery has no "either child" combinator:
+ *
+ *  - RECEIVER-FOLDED: `x.toLowerCase().includes(y)`. The comparison's own object is
+ *    itself a call to the fold.
+ *  - ARGUMENT-FOLDED: `x.includes(y.toLowerCase())`. One of the comparison's arguments is
+ *    a call to the fold. `CallExpression.arguments` reaches into the arguments array by
+ *    esquire's field-selector syntax, the same the SPLIT_COMMA_RULES selectors above use
+ *    for `arguments.0`.
+ *
+ * Narrower than a bare ban on the four methods, which fire on ordinary array membership
+ * and byte offsets everywhere in this codebase — the fold on one side is what marks a
+ * case-folded STRING comparison, which is what a hand-rolled search is. Known non-query
+ * uses are silenced at the call site rather than exempted by file, the same choice
+ * `LOCAL_STORAGE_RULES` argues against for a store-wide ban: a fixed word like `'foil'` on
+ * either side is not a typed query, and the comment says so where a reviewer is already
+ * looking.
+ *
+ * WHAT THIS STILL CANNOT CATCH, ARGUED RATHER THAN CHASED (see D271's own amendment): a
+ * fold assigned to a variable first (`const f = x.toLowerCase(); f.includes(y)`) breaks
+ * the chain esquery matches on. A type-aware rule could follow the binding; this repo
+ * declines type-aware linting for `make lint`'s own cost reasons (this file's own header,
+ * "Overlap"). Disclosed, not mechanized. */
+const HAND_SEARCH_METHODS = '/^(includes|startsWith|endsWith|indexOf)$/'
+const HAND_SEARCH_FOLDS = '/^(toLowerCase|toLocaleLowerCase)$/'
+const HAND_SEARCH_RULES = [
+  {
+    selector: `CallExpression[callee.property.name=${HAND_SEARCH_METHODS}][callee.object.callee.property.name=${HAND_SEARCH_FOLDS}]`,
+    message: HAND_SEARCH,
+  },
+  {
+    selector: `CallExpression[callee.property.name=${HAND_SEARCH_METHODS}] > CallExpression.arguments[callee.property.name=${HAND_SEARCH_FOLDS}]`,
+    message: HAND_SEARCH,
+  },
+]
+
 export default tseslint.config(
   {
     /* node_modules is ignored by flat config already. These three are build and test
@@ -207,6 +257,26 @@ export default tseslint.config(
        * plugin package or a local rule module plus a `plugins` entry in this file, and
        * buys nothing here: esquery expresses both shapes directly, and the message field
        * carries everything a rule's `meta.messages` would. */
+      'no-restricted-syntax': [
+        'error',
+        ...FACING_MODE_RULES,
+        ...SPLIT_COMMA_RULES,
+        ...TWO_ARG_THEN_RULES,
+        ...LOCAL_STORAGE_RULES,
+        ...HAND_SEARCH_RULES,
+      ],
+    },
+  },
+  {
+    /* HAND_SEARCH_RULES DOES NOT REACH `tests/`: a Playwright spec asserting a device-storage
+     * key's own casing, or proving a key absent from it, is not a screen matching a typed
+     * query, and the first false positive this rule hit was exactly that
+     * (`app/tests/capture-claims.spec.ts`, `fulfillment.spec.ts`, `moneyFace.ts`,
+     * `review.spec.ts`). D271 governs what a SCREEN does, and every screen lives under
+     * `src/`. This block re-declares the array without HAND_SEARCH_RULES, the same
+     * exempt-by-file shape the next block below uses for useCamera.ts/deviceMemory.ts. */
+    files: ['tests/**/*.ts', 'tests/**/*.tsx'],
+    rules: {
       'no-restricted-syntax': [
         'error',
         ...FACING_MODE_RULES,
@@ -262,37 +332,6 @@ export default tseslint.config(
         ...FACING_MODE_RULES,
         ...SPLIT_COMMA_RULES,
         ...TWO_ARG_THEN_RULES,
-      ],
-    },
-  },
-  {
-    /* The one exception, named rather than generalised. `parseRgb` in this spec splits
-     * the `rgb(20, 64, 175)` string `getComputedStyle` returns — three numbers between
-     * literal parens, no quoting, no field that can contain a comma, and nothing a CSV
-     * library would parse better. The selector cannot tell that apart from a CSV line,
-     * because syntactically it is not.
-     *
-     * Scoped to the single file, and only the split guard is dropped: `facingMode` and the
-     * two-argument `.then` both still error here. Every guard this block does not name has
-     * to be re-listed below, which is the cost of `no-restricted-syntax` taking one array
-     * per config block rather than merging them — and it is the right cost, because a guard
-     * silently disappearing from an exception block is exactly the kind of hole this file
-     * exists to close. The general form — turning the rule off for `tests/**` — was
-     * declined, since a later spec reading a fixture export is exactly the CSV parsing this
-     * guards.
-     *
-     * This belongs at the call site as an `eslint-disable-next-line` carrying the same
-     * reason, where a reader of that function sees it; it is here because that file was
-     * owned by another session when this landed. Moving it means deleting this block.
-     * Delete it outright if that spec stops parsing colours.
-     */
-    files: ['tests/pull-confirm.spec.ts'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        ...FACING_MODE_RULES,
-        ...TWO_ARG_THEN_RULES,
-        ...LOCAL_STORAGE_RULES,
       ],
     },
   },

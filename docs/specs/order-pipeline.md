@@ -546,15 +546,9 @@ govern the file, and the order id T2 carries into Pirate Ship is what makes the 
 
 **pkmnscan never writes order status back to TCGplayer** — tcgtracking owns mark-shipped, and two
 authors on one shipment is D34's problem twice. The two endpoints that would do it were seen on
-the wire and are recorded in `server/order_transport.py`'s WHAT IS DELIBERATELY NOT BUILT block,
-quoted here so that adding either reads as a change of policy rather than a change of code:
-
-    POST /orders/status-updates?api-version=2.0            {orderNumbers:[], status:"Shipped"}
-    POST /orders/<orderNumber>/tracking?api-version=2.0    {carrier, trackingNumber}
-
-That module cites this section by number for the ruling, and this section quotes the module for
-the endpoints, so neither can be read without the other. `not-built endpoints` in
-`scripts/docs-audit.py` is what keeps the two lists identical.
+the wire and are recorded once, in `server/order_transport.py`'s WHAT IS DELIBERATELY NOT BUILT
+block. Read them there rather than a second copy here — that module cites this section by
+number for the ruling.
 
 ### T6 — the order drives the walk, and the pull becomes a mode of the inventory screen. SUPERSEDED 2026-09-04 (D96 amended)
 
@@ -828,10 +822,9 @@ down today names a different card tomorrow — D63 measured exactly that.
 
 **The route count is maintained in four places** — `CLAUDE.md`, `README.md`, `docs/map.py`,
 `app/src/App.tsx` — and `scripts/views.txt` carries a LINE rather than a number, which is the one a
-session looking for a count will not find. **This paragraph used to end by saying nothing checks
-it, and that has been false since the route census landed**: `make docs-audit`'s `route census` row
-reconciles the published counts in the first three against `App.tsx`'s `ROUTES` table, `route
-rosters` does the same for each spec's pinned roster, and both fail a commit. `CLAUDE.md`'s own
+session looking for a count will not find. `make docs-audit`'s `route census` row once reconciled
+those counts. It was cut on 2026-09-28 (test-audit plan Q2), and the counts were deleted with it.
+`route rosters` still reconciles each spec's pinned roster against `App.tsx`'s `ROUTES` table. `CLAUDE.md`'s own
 warning was rewritten at the same time. The sentence outlived its subject in this file and in the
 branch that rewrote this section, which is the failure a count with no reader has: nothing
 contradicts it.
@@ -846,12 +839,13 @@ a sentence.
 
 **The abstention is a third answer and is never defaulted into a lane.** Defaulting the 39 to the
 envelope ships a playmat in a stamped mailer; defaulting them to the parcel spends postage nobody
-chose. `pipeline/shipping.py:parcel_lane` leaves them out of the download entirely — its own
-docstring says an order nobody can place is not swept in to be safe — and
+chose. `pipeline/shipping.py:parcel_lane` leaves them out of the download entirely. Its own
+docstring says an order nobody can place is not swept in to be safe.
 `app/tests/shipping.spec.ts`'s "an unjudged order is not in the parcel file" case asserts it from
-the screen's end. `Routing.certain` is the split worth surfacing beside the lane, and it is
-**112 of 331**: a published price against a published threshold is a different quality of claim
-from an inference off a weight ratio, and section 2 has the derivation.
+the screen's end. `Routing.certain` is the split worth surfacing beside the lane — see the
+figure above, against the committed fixture. A published price against a published
+threshold is a different quality of claim than an inference off a weight ratio. Section 2 has
+the derivation.
 
 **No weight is ever derived.** `Product Weight` is a catalog constant that counts the cardboard
 and not the mailer, so writing it buys postage for less than the parcel weighs, and the bill
@@ -919,7 +913,7 @@ PII projection is proven against fixtures and against nothing that came off the 
 — the owner pressed Fetch, the search pages walked far enough to count 370 orders in
 `LastThreeMonths`, and it was refused `order_too_many`. The paging is proven live and that refusal
 is the one D91 answers. This sentence disagreed with the module it points at as the primary record,
-which is the drift the `transport standing` audit row now catches.
+which is the drift the `transport standing` audit row caught until its cut on 2026-09-28.
 
 `server/order_transport.py`'s own STATUS block is the primary record and says this at greater length.
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 
 import { isEditableTarget } from './keys'
-import { placePartsOf, sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
+import { placePartsOf, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { SectionTitle } from './SectionTitle'
 import type {
   BoxRecord,
@@ -37,25 +37,23 @@ import {
 } from './server'
 import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
 import { reasonLabel } from './reasons'
+import { RailFrame } from './RailFrame'
 import {
   CardDetailsSection,
-  claimList,
+  CardPane,
   gameLabel,
   gameWord,
   marketTable,
   nameOf,
-  numberCell,
-  PhotoPanel,
   photoSrc,
-  titleCase,
   type MarketRead,
   type Row,
 } from './CardHero'
-import { IDENTIFIED, stateLabel, stateTone } from './cardState'
+import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
 import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows, type SortValue } from './kit'
-import { UNNAMED_BOX } from './kit/data'
+import { boxTitle, UNNAMED_BOX } from './kit/data'
 import type { FilterFacet, FilterValue } from './kit/data'
 import { useFacetParams } from './kit/viewState'
 import { storedBoxRecency, touchBox } from './deviceMemory'
@@ -205,6 +203,32 @@ function copyDeparted(copy: SearchCopy): boolean {
   return isDeparted(copy.place)
 }
 
+/* RANK BEFORE PILE SIZE (the owner, 2026-09-27, over "hand hammer" surfacing Jayce, Hammer in
+ * Hand first while Hand Hammer sat in stock unseen): `activeGroups` already arrives sorted by
+ * `SearchGroup.rank` (`do_search`'s own sort, F8) — several printings of one card share a
+ * tier because they share a rank, and an unrelated card only lands beside them by matching
+ * the query exactly as well. Consecutive equal ranks are one tier, so a single pass over the
+ * already-sorted array finds every boundary. */
+function tiersOf(groups: readonly SearchGroup[]): SearchGroup[][] {
+  const tiers: SearchGroup[][] = []
+  let i = 0
+  while (i < groups.length) {
+    const rank = groups[i]?.rank
+    let j = i + 1
+    while (j < groups.length && groups[j]?.rank === rank) j++
+    tiers.push(groups.slice(i, j))
+    i = j
+  }
+  return tiers
+}
+
+/* Does any copy in this tier still count as live? The same predicate every other reader of
+ * `frozen` asks (`frozenRank.ts`, D181), so a sale mid-search cannot re-rank this tier's
+ * pile any more than it can any other reader's. */
+function tierHasLive(tier: readonly SearchGroup[], frozen: FrozenRank): boolean {
+  return tier.some((group) => group.copies.some((copy) => ranksAsLive(copy.key, copyDeparted(copy), frozen)))
+}
+
 /* A SHELF BY ITS NAME (D259): the owner ruled the box number an index the
  * store keeps, never a label. Every box carries a stored name since the backfill, so `Box <n>`
  * is only the fallback for a registry the screen has not read yet, and it is the same string
@@ -212,8 +236,7 @@ function copyDeparted(copy: SearchCopy): boolean {
 function shelfLabel(shelf: Shelf, name?: string | null): string {
   if (shelf === 'pooled') return 'Pooled'
   if (shelf === 'unplaced') return 'No box'
-  if (name !== undefined && name !== null && name.trim() !== '') return name.trim()
-  return `Box ${shelf}`
+  return boxTitle(name, shelf)
 }
 
 /* What a 36px tile can say about a box (D132): the first word of its name, at most four
@@ -536,8 +559,15 @@ function pooledText(card: InventoryCard, key: string): string {
 
 /* `nameOf`, `numberCell`, `titleCase`, `claimList`, `gameLabel`, `gameWord`, `MarketRead`,
  * `marketTable` and `factGroupsOf`/`CardDetailsSection` moved to `CardHero.tsx` so `#/orders`'
- * walk pane can share them (`docs/specs/order-walk-plan.md` §13) — imported below, this file's
- * own JSX unchanged. */
+ * walk pane can share them (`docs/specs/order-walk-plan.md` §13).
+ *
+ * LANE A2a MOVES THE HERO HEAD AND THE CARD PANE FRAME TOO: the `<div className="browse-hero-
+ * head">`/`<section className="browse-card">` this file used to draw inline are now
+ * `CardHero.tsx`'s own `CardHeroHead`/`CardPane`, called below with the same values this file
+ * always held (`game`, `selectedLabel`, `searchGroups`, `open`, `panelDetail`, ...). The
+ * RENDERED OUTPUT IS UNCHANGED — `app/tests/inventory.spec.ts` is what proves that — only the
+ * JSX that builds it moved house, so `#/orders` can build the same pane later without forking
+ * it (`docs/reviews/ux-2026-09-23/orders-a/PLAN.md`, "The component reuse map"). */
 
 /** The open question about one position, or null — the entry and which queue it is in. */
 function openQuestion(
@@ -808,14 +838,9 @@ export function BoxBrowse({
     null,
   )
   const listRef = useRef<HTMLUListElement | null>(null)
+  /* `RailFrame` owns the rest-top measure (lane A2b); this is the mounted node it hands back,
+     used here only to scroll the selected row into view within it. */
   const mapRef = useRef<HTMLDivElement | null>(null)
-  /* The same node as state, so the rail's height effect runs when the rail mounts (it is not
-     drawn on the first render). */
-  const [mapEl, setMapEl] = useState<HTMLDivElement | null>(null)
-  const holdMap = useCallback((node: HTMLDivElement | null) => {
-    mapRef.current = node
-    setMapEl(node)
-  }, [])
   const boxesRef = useRef<HTMLDivElement | null>(null)
   /** N3: set by `selectShelf` alone, right before `setShelf`, so the rail's own scroll-into-view
    *  effect below skips exactly one run — the one a direct press on a row already caused to be
@@ -901,6 +926,31 @@ export function BoxBrowse({
     return picked === undefined ? searchGroups : [picked]
   }, [searchGroups, chooserActive, resolvedVariant])
 
+  /* `activeGroups` BUCKETED INTO RANK TIERS, ONCE, HERE — THE ONE SHARED PLACE (the owner,
+   * 2026-09-27, F8). The rail's `order`, the walk's shelf-picking effect and the section
+   * landing below all read `rankedGroups`/`topTierSoldOut` from here rather than each
+   * re-deriving their own idea of "the best tier". */
+  const searchTiers = useMemo(() => tiersOf(activeGroups), [activeGroups])
+
+  /* RANK BEFORE PILE SIZE: the first tier (best rank) that still holds a live copy anywhere
+   * in the store is what pile size may rank boxes and sections WITHIN. A tier with nothing
+   * live is skipped entirely rather than counted — that skip is the fall-through the owner
+   * asked for. With nothing live in any tier, every group pools together exactly as it did
+   * before this fix: a sold-out answer still shows where its copies were. */
+  const rankedGroups = useMemo(() => {
+    const live = searchTiers.find((tier) => tierHasLive(tier, frozen))
+    return live ?? activeGroups
+  }, [searchTiers, activeGroups, frozen])
+
+  /* `rankedGroups`' OWN COPY KEYS, for the landing below: which row of `visible` counts
+   * toward "the fullest section" is the same rank-before-pile-size question, just asked of
+   * one box's rows instead of every box. */
+  const rankedKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const group of rankedGroups) for (const copy of group.copies) keys.add(copy.key)
+    return keys
+  }, [rankedGroups])
+
   /* THE WALK LEAVES THE BOX IT WAS ON WHILE THE CHOOSER IS SHOWING. The shelf-picking effect
    * below returns early the moment `shelves` is empty (its own guard, written for the
    * registry's late arrival — see its own comment) — which under a plain empty search is
@@ -940,6 +990,13 @@ export function BoxBrowse({
 
   const filtered = searching && matched !== null
 
+  /* SAY WHEN THE BEST MATCH IS SOLD (the owner, 2026-09-27, F8): this asks about the TOP
+   * tier specifically, never mind which tier `rankedGroups` fell through to for ranking. */
+  const topTier = searchTiers[0] ?? EMPTY_GROUPS
+  const topTierSoldOut = filtered && topTier.length > 0 && !tierHasLive(topTier, frozen)
+  const topTierLabel = topTier.map((group) => group.names[0] ?? 'This card').join(', ')
+  const topTierCopyCount = topTier.reduce((sum, group) => sum + group.copies.length, 0)
+
   /* THE RAIL'S ORDER IS THE HAND'S (D132): the box opened most recently on this browser first,
      then its own true index (`bid`, newest box first), then the number — `kit/dataRules.ts:
      boxesMostRecentFirst`, the one primitive for a box order every list of boxes now shares.
@@ -973,14 +1030,19 @@ export function BoxBrowse({
        not by its total, so the rail agrees with the copies list and with where the walk lands:
        three in one section outranks one-plus-two across two. Sold copies count for nothing —
        a box full of departed matches is not where the hand goes. With no query this term is
-       zero everywhere and the rail is the hand's again. */
+       zero everywhere and the rail is the hand's again.
+
+       RANK BEFORE PILE SIZE (F8, 2026-09-27): pile size counts only `rankedGroups`, the best
+       rank tier that still has a live copy — never every matched group pooled together. A
+       weaker match with a bigger pile no longer outranks a stronger match that is in stock
+       ("hand hammer" no longer lets Jayce, Hammer in Hand's pile bury Hand Hammer's own). */
     /* D192, item 2: this box's own `rows` no longer stands for every box's cards, so the
        cross-box tally reads the search's OWN result (`results`) instead — `SearchCopy`
        carries `place.box`/`place.section`, everything this needed off a `Row`. */
     const liveMatches = new Map<number, number>()
     if (filtered && results !== null) {
       const perSection = new Map<string, number>()
-      for (const group of activeGroups) {
+      for (const group of rankedGroups) {
         for (const copy of group.copies) {
           const shelf = copyShelf(copy)
           /* A COPY THAT LEFT SINCE THIS ORDER WAS TAKEN STILL COUNTS (`frozenRank.ts`), so a
@@ -1002,7 +1064,7 @@ export function BoxBrowse({
       if (rra !== rrb) return rra - rrb
       return a - b
     }
-  }, [sort, valueByBox, boxRecords, recency, filtered, results, activeGroups, frozen])
+  }, [sort, valueByBox, boxRecords, recency, filtered, results, rankedGroups, frozen])
 
   /* D192, item 2: under a search, which OTHER boxes hold a match comes off the search's own
      result now — `inQuery` is only this box's matched rows since the fetch became box-scoped,
@@ -1120,6 +1182,31 @@ export function BoxBrowse({
     }
     return out
   }, [filtered, results, activeGroups, hideSold])
+
+  /* WHILE THE CHOOSER IS PENDING, A BOX HOLDING ONE OF ITS PRINTINGS IS NOT "NO MATCH"
+   *  (owner report, 2026-09-28). `activeGroups` is deliberately EMPTY_GROUPS until a
+   *  printing is picked (see its own comment above), and `matchesByShelf`/`searchBoxes`
+   *  read off `activeGroups` on purpose — that emptiness is the one substitution that keeps
+   *  a box a no-op to enter before a pick, with no second flag. But the SAME emptiness also
+   *  fed the box list's own label, so a search for a name held in two or more conditions
+   *  (`Punch First`, `Body Rune` — ordinary at the store's real size: measured 10 and 80
+   *  SKUs respectively for those two names alone) drew every one of its boxes as holding
+   *  "No match", although the chooser beside it was correctly listing where they are. This
+   *  is a second, READ-ONLY tally off `searchGroups` (the UNRESOLVED groups) — it never
+   *  touches `reachable`/`disabled`, only what a still-disabled cell SAYS while the operator
+   *  is looking at the chooser. */
+  const chooserMatchesByShelf = useMemo(() => {
+    const out = new Map<Shelf, number>()
+    if (!chooserActive || searchGroups === null) return out
+    for (const group of searchGroups) {
+      for (const copy of group.copies) {
+        if (hideSold && copyDeparted(copy)) continue
+        const s = copyShelf(copy)
+        out.set(s, (out.get(s) ?? 0) + 1)
+      }
+    }
+    return out
+  }, [chooserActive, searchGroups, hideSold])
 
   /* Every position with an open question, for the row badges. */
   const queuedKeys = useMemo(() => {
@@ -1332,11 +1419,14 @@ export function BoxBrowse({
        D192 (store-scaling item 2): off `results` rather than `inQuery`, for the
        same reason `order`'s own tally above is — `inQuery` is this box's own matched rows
        now, and a candidate shelf other than the one on screen would never appear in it, which
-       silently made every OTHER box read as holding no live match at all. */
+       silently made every OTHER box read as holding no live match at all.
+
+       RANK BEFORE PILE SIZE (F8): `rankedGroups`, not every matched group, so a shelf only
+       counts as "live" here through the same tier `order`'s pile size just ranked it by. */
     const holdsLive = (candidate: Shelf) =>
       !filtered ||
       results === null ||
-      activeGroups.some((group) =>
+      rankedGroups.some((group) =>
         group.copies.some(
           (copy) => copyShelf(copy) === candidate && ranksAsLive(copy.key, copyDeparted(copy), frozen),
         ),
@@ -1365,7 +1455,7 @@ export function BoxBrowse({
       shelfSource.current = 'search'
       return pool[0] ?? null
     })
-  }, [shelves, boxesAnswered, filtered, results, activeGroups, frozen])
+  }, [shelves, boxesAnswered, filtered, results, rankedGroups, frozen])
 
   /* The selection follows the filter. When nothing matches it is left alone.
      A NEW ANSWER LANDS IN THE FULLEST SECTION (D132 amended): the query's answer is drawn by
@@ -1388,9 +1478,14 @@ export function BoxBrowse({
     answered.current = query
     setSelected((prev) => {
       if (!fresh && prev !== null && visible.some((row) => row.key === prev)) return prev
-      return (filtered ? landingInFullest(visible) : landingOf(visible))?.key ?? null
+      /* RANK BEFORE PILE SIZE (F8): land among `rankedKeys`' own rows first — the same tier
+       * the rail just ranked boxes by — falling back to every visible row only when this box
+       * holds none of that tier (it was opened by hand, not by the walk). */
+      const ranked = visible.filter((row) => rankedKeys.has(row.key))
+      const pool = ranked.length > 0 ? ranked : visible
+      return (filtered ? landingInFullest(pool) : landingOf(visible))?.key ?? null
     })
-  }, [visible, filtered, results])
+  }, [visible, filtered, results, rankedKeys])
 
   /* The ticks are the box's, so they go when the box does. */
   useEffect(() => {
@@ -1429,21 +1524,6 @@ export function BoxBrowse({
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [visible, stepSelection])
-
-  /* THE RAIL'S TOP AT REST, for its height (BoxBrowse.css `.browse-map`, UX-227). Read off the
-     rail's parent, which is never sticky, so a resize while the page is scrolled reads the same
-     number as one at rest. */
-  useLayoutEffect(() => {
-    const map = mapEl
-    const body = map?.parentElement ?? null
-    if (map === null || body === null) return
-    const measure = () => {
-      map.style.setProperty('--browse-rail-rest', `${Math.round(body.getBoundingClientRect().top + window.scrollY)}px`)
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [mapEl])
 
   /* Keep the selected row where it can be seen — within the rail, never by scrolling the page. */
   useEffect(() => {
@@ -1928,7 +2008,7 @@ export function BoxBrowse({
   // ---------------------------------------------------------------------------- the rail
 
   const rail = (
-    <div className="browse-map" ref={holdMap}>
+    <RailFrame ref={mapRef}>
       {/* THE KIT'S FILTER BAR (FLT-09): the search, the three facets in any order and the one
           count line. Hide sold stays on the walk's own bar, beside the rows it folds. The rail is narrow, so the facets sit behind one Filters
           press: a popover beside it on a desk, a sheet on a phone. */}
@@ -1948,7 +2028,14 @@ export function BoxBrowse({
              native `placeholder` attribute. Shorter here, where the column is narrowest. */
           placeholder: 'Search',
         }}
-        count={{ shown: reachableCount, total: boxRecords.length, noun: { one: 'box', many: 'boxes' } }}
+        count={{
+          /* While the chooser is pending, `reachableCount` reads `activeGroups` — which is
+           * empty on purpose (see `chooserMatchesByShelf` above) — so this line said "0 of
+           * N boxes" over a search that had, in fact, found every box it named. */
+          shown: chooserActive ? chooserMatchesByShelf.size : reachableCount,
+          total: boxRecords.length,
+          noun: { one: 'box', many: 'boxes' },
+        }}
         sort={{
           options: [
             { key: 'recent', label: 'Most recent' },
@@ -1970,6 +2057,27 @@ export function BoxBrowse({
         }
       />
 
+      {/* SAY WHEN THE BEST MATCH IS SOLD (the owner, 2026-09-27, F8): the top-ranked answer
+          can be out of stock while a weaker match still has copies, and a hand searching for
+          it should be told rather than left to notice the pile silently reordered under a
+          card it never asked for. `Hide sold` is the ONE control that reveals it — no second
+          toggle. */}
+      {!topTierSoldOut ? null : (
+        <Notice
+          tone="warn"
+          compact
+          className="browse-topsold"
+          title={`${topTierLabel}: ${topTierCopyCount} ${topTierCopyCount === 1 ? 'copy' : 'copies'}, all sold`}
+          action={
+            !hideSold || onHideSold === undefined ? undefined : (
+              <Button size="sm" onClick={onHideSold}>
+                Show sold cards
+              </Button>
+            )
+          }
+        />
+      )}
+
       {cells.length === 0 ? null : (
         <div className="browse-boxes bn-panel" role="group" aria-label="Choose a box to walk" ref={boxesRef}>
           {cells.map(({ shelf: cell, reachable }) => {
@@ -1977,6 +2085,10 @@ export function BoxBrowse({
             const onHand = record ? (record.on_hand ?? record.cards - record.sold - record.retired - record.moved) : null
             const pct = record && record.cards > 0 && onHand !== null ? Math.round((onHand / record.cards) * 100) : 0
             const matches = matchesByShelf.get(cell) ?? (typeof cell === 'number' ? facetMatchesByBox.get(cell) : undefined)
+            /* The chooser's own unresolved count for this shelf — see `chooserMatchesByShelf`'s
+             * own header. `undefined` off the chooser too, so the ordinary "No match" still
+             * runs when this genuinely holds none. */
+            const pending = chooserActive ? chooserMatchesByShelf.get(cell) : undefined
             return (
               <button
                 key={String(cell)}
@@ -2011,9 +2123,9 @@ export function BoxBrowse({
                 <span className="browse-boxcell-text">
                   <span
                     className="browse-boxcell-name"
-                    title={typeof cell === 'number' ? (record?.name ?? `Box ${cell}`) : shelfLabel(cell)}
+                    title={typeof cell === 'number' ? boxTitle(record?.name, cell) : shelfLabel(cell)}
                   >
-                    {typeof cell === 'number' ? (record?.name ?? `Box ${cell}`) : shelfLabel(cell)}
+                    {typeof cell === 'number' ? boxTitle(record?.name, cell) : shelfLabel(cell)}
                   </span>
                   {/* The lock beside the row already says sealed; the meta keeps to the count. */}
                   <span className="browse-boxcell-meta">
@@ -2022,13 +2134,15 @@ export function BoxBrowse({
                         one figure that sort is actually about (D221: `Money`, never a plain
                         string, or this dollar sign sits in the wrong face). */}
                     {!reachable
-                      ? 'No match'
+                      ? pending !== undefined
+                        ? `${pending} ${pending === 1 ? 'match' : 'matches'}, pick a printing`
+                        : 'No match'
                       : matches !== undefined
                       ? `${matches} ${matches === 1 ? 'match' : 'matches'}`
                       : record && sort.key === 'value' && typeof cell === 'number'
                         ? valueByBox?.has(cell) ? <Money value={valueByBox.get(cell)} /> : 'no reading'
                         : record
-                          ? `${(onHand ?? 0).toLocaleString()} on hand`
+                          ? `${(onHand ?? 0).toLocaleString()} stored`
                           : cell === 'pooled'
                             ? 'a count, not a location'
                             : cell === 'unplaced'
@@ -2059,11 +2173,16 @@ export function BoxBrowse({
                     ? (selectedRow.card.place?.fraction ?? null)
                     : null
                 }
+                currentSection={
+                  selectedRow !== null && selectedRow.card.box === shelfBox.box
+                    ? (selectedRow.card.place?.section ?? null)
+                    : null
+                }
                 actions={
                   <IconButton
                     size="sm"
                     icon="settings"
-                    label="Manage this box"
+                    label="Manage"
                     className="browse-manage"
                     aria-haspopup="dialog"
                     onClick={() => setManage(true)}
@@ -2106,7 +2225,7 @@ export function BoxBrowse({
               <button className="browse-quiet" type="button" onClick={toggleAllSections}>
                 <Icon name={anyExpanded ? 'chevronUp' : 'chevronDown'} size={12} />
                 {/* THE HEADERS BELOW ALREADY COUNT THE SECTIONS (cut list #11, UX-269). */}
-                {anyExpanded ? 'Collapse all' : 'Expand all'}
+                {anyExpanded ? 'Collapse' : 'Expand'}
               </button>
             )}
 
@@ -2136,7 +2255,7 @@ export function BoxBrowse({
 
             {visible.length === 0 ? null : (
               <button className="browse-quiet" type="button" aria-pressed={shownAllTicked} onClick={tickAllShown}>
-                {shownAllTicked ? 'untick shown' : 'tick shown'}
+                {shownAllTicked ? 'None' : 'All'}
               </button>
             )}
           </div>
@@ -2350,7 +2469,7 @@ export function BoxBrowse({
               list takes (App.tsx INVENTORY_KEYS), and the legend cost the list a row. */}
         </div>
       )}
-    </div>
+    </RailFrame>
   )
 
   const miniRail = (
@@ -2464,7 +2583,7 @@ export function BoxBrowse({
                 {at >= 0 ? <span className="browse-boxchip-count">{at + 1}/{visible.length}</span> : null}
                 <Icon name="chevronDown" size={14} className="browse-boxchip-chev" />
               </button>
-              <IconButton icon="search" label="Search cards" onClick={() => setRailOpen(true)} />
+              <IconButton icon="search" label="Search" onClick={() => setRailOpen(true)} />
             </div>
           ) : null}
 
@@ -2515,11 +2634,11 @@ export function BoxBrowse({
                 </div>
               ) : (
                 <>
-                  {/* NO `key` ON THIS SECTION (2026-09-19, the owner's "fix the product"
+                  {/* NO `key` ON THIS PANE (2026-09-19, the owner's "fix the product"
                       ruling). It carried `key={selectedRow.key}` from the rebuild (D94-D99)
                       so `.browse-card`'s `bn-page-in` entrance replayed on every card. The
                       copies column — `{detail}`, which is `Inventory.tsx`'s `CopiesPanel` —
-                      is INSIDE this section, so that key tore it down and built it again on
+                      is INSIDE this pane, so that key tore it down and built it again on
                       every change of selection. A rebuilt `CopiesPanel` has no search answer
                       and no memory of one, so it drew its skeleton for a debounce plus a
                       fetch: the copies list went from six rows to none and back, under the
@@ -2530,74 +2649,55 @@ export function BoxBrowse({
                       this key is why it had never once run. The entrance now plays when the panel appears,
                       which is what an entrance is for. `CardOps` below keeps its own key:
                       that one resets a MENU, not a fetch. */}
-                  <section
-                    className="bn-panel browse-card"
-                    aria-busy={dimPanel ? 'true' : undefined}
-                    data-dimmed={dimPanel ? 'true' : undefined}
+                  <CardPane
+                    row={panelRow}
+                    game={game}
+                    place={selectedLabel}
                     /* REVIEW, PR #407: `pointer-events: none` (BoxBrowse.css) blocks the
                      * mouse alone. Tab still reached `CardOps`' "Card actions" button and
                      * Enter opened its menu on `held.current` — the previous box's card,
                      * under the new box's header, live — which is the a4f3594b regression
-                     * again, by keyboard. `inert` removes the whole subtree from the tab
-                     * order AND refuses activation, so neither path reaches a stale
-                     * control while `dimPanel` is true. */
-                    inert={dimPanel}
-                  >
-                    <div className="browse-hero-head">
-                      <div className="browse-hero-text">
-                        <h2 className={nameOf(panelRow.card) === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>
-                          {nameOf(panelRow.card) ?? 'Not identified yet'}
-                        </h2>
-                        <p className="browse-hero-sub">
-                          {[numberCell(panelRow.card) === 'none' ? null : numberCell(panelRow.card), panelRow.card.set_hint, game]
-                            .filter((part): part is string => typeof part === 'string' && part !== '')
-                            .map((part, i) => (
-                              <span key={`${part}-${i}`} className={i === 0 && numberCell(panelRow.card) !== 'none' ? 'browse-hero-number' : undefined}>
-                                {part}
-                              </span>
-                            ))}
-                        </p>
-                        {/* WHERE IT IS, BESIDE THE NAME, IN A ONE-COLUMN PANE (UX-187). At 390 and
-                            720 the copy row that says it sits under the photograph, below the
-                            fold. Drawn only where the pane is one column (BoxBrowse.css), so the
-                            wide pane does not say it twice. */}
-                        {positionLabel(panelRow.card) === null ? null : (
-                          <p className="browse-hero-place">{sayPlace(positionLabel(panelRow.card) ?? '')}</p>
-                        )}
-                        <div className="browse-hero-chips">
-                          {/* No `chooserActive` check needed here: while the chooser shows,
-                              `panelRow` is null and this whole branch does not render, so
-                              nothing here can bypass it. This chip is reachable only once a
-                              printing is picked (or the search always had one), and it is
-                              what gets an operator back to the chooser after the walk has
-                              carried them away from it. */}
-                          {searchGroups !== null && searchGroups.length > 1 ? (
-                            <Chip icon="layers" onClick={() => setChosenVariant(null)}>
-                              <span className="bn-facts">
-                                <span>{searchGroups.length} printings</span> <span>change</span>
-                              </span>
-                            </Chip>
-                          ) : null}
-                          {claimList(panelRow.card.metadata_finish).map((finish) => (
-                            <Pill key={`f-${finish}`} icon="sparkles">
-                              {titleCase(finish)}
-                            </Pill>
-                          ))}
-                          {claimList(panelRow.card.rarity_claim).map((rarity) => (
-                            <Pill key={`r-${rarity}`}>{titleCase(rarity)}</Pill>
-                          ))}
-                          {/* THE CARD'S STATE ONLY WHEN IT IS THE EXCEPTION (UX-221). */}
-                          {panelRow.card.state === IDENTIFIED ? null : (
-                            <Pill tone={stateTone(panelRow.card.state)}>{stateLabel(panelRow.card.state)}</Pill>
-                          )}
-                          {open === null ? null : (
-                            <a className="bn-pill bn-pill-warn browse-queuechip" href="#/review">
-                              <Icon name="clock" size={12} />
-                              In the {open.queue} queue
-                            </a>
-                          )}
+                     * again, by keyboard. `inert` (`CardPane`'s own `dimmed`) removes the whole
+                     * subtree from the tab order AND refuses activation, so neither path
+                     * reaches a stale control while `dimPanel` is true. */
+                    dimmed={dimPanel}
+                    preChips={
+                      /* No `chooserActive` check needed here: while the chooser shows,
+                          `panelRow` is null and this whole branch does not render, so
+                          nothing here can bypass it. This chip is reachable only once a
+                          printing is picked (or the search always had one), and it is
+                          what gets an operator back to the chooser after the walk has
+                          carried them away from it. */
+                      searchGroups !== null && searchGroups.length > 1 ? (
+                        <Chip icon="layers" onClick={() => setChosenVariant(null)}>
+                          <span className="bn-facts">
+                            <span>{searchGroups.length} printings</span> <span>change</span>
+                          </span>
+                        </Chip>
+                      ) : undefined
+                    }
+                    postChips={
+                      open === null ? undefined : (
+                        <a className="bn-pill bn-pill-warn browse-queuechip" href="#/review">
+                          <Icon name="clock" size={12} />
+                          In the {open.queue} queue
+                        </a>
+                      )
+                    }
+                    queued={
+                      open === null ? null : (
+                        <div className="browse-queued">
+                          <Notice tone="warn" title={`Waiting in the ${open.queue} queue — ${reasonLabel(open.entry.reason)}.`} code={`${open.entry.reason}, ${open.queue}, ${open.entry.candidates.length} candidates`}>
+                            {waitingFor(open.entry.first_seen)}.{' '}
+                            {open.entry.candidates.length > 0
+                              ? `${open.entry.candidates.length} candidate row${open.entry.candidates.length === 1 ? '' : 's'} on Review.`
+                              : 'No candidate rows — cannot be answered as it stands. Re-shoot it, or stand it down on Review.'}{' '}
+                            <a href="#/review">Open the review queue</a>
+                          </Notice>
                         </div>
-                      </div>
+                      )
+                    }
+                    actions={
                       <CardOps
                         key={panelRow.key}
                         row={panelRow}
@@ -2615,46 +2715,28 @@ export function BoxBrowse({
                           />
                         }
                       />
-                    </div>
-
-                    {open === null ? null : (
-                      <div className="browse-queued">
-                        <Notice tone="warn" title={`Waiting in the ${open.queue} queue — ${reasonLabel(open.entry.reason)}.`} code={`${open.entry.reason}, ${open.queue}, ${open.entry.candidates.length} candidates`}>
-                          {waitingFor(open.entry.first_seen)}.{' '}
-                          {open.entry.candidates.length > 0
-                            ? `${open.entry.candidates.length} candidate row${open.entry.candidates.length === 1 ? '' : 's'} on Review.`
-                            : 'No candidate rows — cannot be answered as it stands. Re-shoot it, or stand it down on Review.'}{' '}
-                          <a href="#/review">Open the review queue</a>
-                        </Notice>
-                      </div>
-                    )}
-
-                    <div className="browse-band">
-                      <div className="browse-shot">
-                        <PhotoPanel
+                    }
+                    photo={{
+                      label: selectedLabel,
+                      absent: photoAbsent === panelRow.key,
+                      onAbsent: () => setPhotoAbsent(panelRow.key),
+                      nonce: reshot[panelRow.key] ?? null,
+                      onZoom: () => setZoomed(true),
+                      reshoot: (
+                        <ReshootControl
                           row={panelRow}
-                          label={selectedLabel}
-                          absent={photoAbsent === panelRow.key}
-                          onAbsent={() => setPhotoAbsent(panelRow.key)}
-                          nonce={reshot[panelRow.key] ?? null}
-                          onZoom={() => setZoomed(true)}
-                          reshoot={
-                            <ReshootControl
-                              row={panelRow}
-                              busy={reshootBusy === panelRow.key}
-                              failure={
-                                reshootFailure !== null && reshootFailure.key === panelRow.key
-                                  ? reshootFailure.failure
-                                  : null
-                              }
-                              onPick={(file) => beginReshoot(panelRow, file)}
-                            />
+                          busy={reshootBusy === panelRow.key}
+                          failure={
+                            reshootFailure !== null && reshootFailure.key === panelRow.key
+                              ? reshootFailure.failure
+                              : null
                           }
+                          onPick={(file) => beginReshoot(panelRow, file)}
                         />
-                      </div>
-                      <div className="browse-under">{panelDetail}</div>
-                    </div>
-                  </section>
+                      ),
+                    }}
+                    detail={panelDetail}
+                  />
 
                   <CardDetailsSection
                     card={panelRow.card}
@@ -2678,7 +2760,7 @@ export function BoxBrowse({
                 <IconButton
                   className="browse-stepper-btn"
                   icon="chevronLeft"
-                  label="Previous card"
+                  label="Previous"
                   size="lg"
                   disabled={visible.length === 0 || at <= 0}
                   onClick={() => stepSelection(-1)}
@@ -2689,7 +2771,7 @@ export function BoxBrowse({
                 <IconButton
                   className="browse-stepper-btn"
                   icon="chevronRight"
-                  label="Next card"
+                  label="Next"
                   size="lg"
                   disabled={visible.length === 0 || at >= visible.length - 1}
                   onClick={() => stepSelection(1)}
@@ -2972,7 +3054,7 @@ function CardOps({
     <div className="browse-cardops" ref={anchor}>
       <IconButton
         icon="more"
-        label="Card actions"
+        label="Actions"
         aria-haspopup="menu"
         aria-expanded={menu}
         onClick={() => setMenu((held) => !held)}
@@ -2989,7 +3071,7 @@ function CardOps({
               setOpen('claims')
             }}
           >
-            <Icon name="pencil" size={16} /> Correct claims
+            <Icon name="pencil" size={16} /> Correct
           </button>
           {/* The screen re-reads after every write of its own; this is for a write made on
               another device. */}
@@ -3002,7 +3084,7 @@ function CardOps({
               onChanged()
             }}
           >
-            <Icon name="refresh" size={16} /> Re-read the inventory
+            <Icon name="refresh" size={16} /> Reread
           </button>
           {terminal || !addressable ? (
             <>
@@ -3061,7 +3143,7 @@ function CardOps({
                   setOpen('delete')
                 }}
               >
-                <Icon name="trash" size={16} /> Remove this card…
+                <Icon name="trash" size={16} /> Remove
               </button>
             </>
           )}

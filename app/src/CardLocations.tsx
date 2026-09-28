@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 
-import type { SearchCopy, SearchGroup, SectionDetail } from './types'
+import type { BoxRecord, SearchCopy, SearchGroup, SectionDetail } from './types'
 import { isDeparted, photoUrl, placeSentence } from './server'
 import { PlaceNeighbors } from './PlaceNeighbors'
 import { PullConfirm } from './PullConfirm'
@@ -51,6 +51,13 @@ export function ReadingAge({ at, className }: { readonly at?: string | null; rea
           : `This store last wrote these listing figures ${readingExact(at)}.`
       }
     >
+      {/* F5 verbiage cut (row 151, verdict ONE WORD "Updated") DECLINED for this element: it
+          is not shorter than "read" (it is longer, by three characters plus a capital), so it
+          buys no real cut, and `inventory.spec.ts`'s own width guard measures this exact
+          string wrapping to two lines at the 181px track the owner works at, 1440x900
+          (`the market row draws on one line at the width the owner works at`) — a
+          regression the reviewer's own reasoning ("the number of days is the fact worth
+          keeping") does not ask for. "read" stays. */}
       {ago === null ? 'not read yet' : `read ${ago}`}
     </span>
   )
@@ -95,7 +102,7 @@ function headroom(group: SearchGroup): string {
   if (group.listable === 0) return 'No copies can go live'
   if (room > 0) return `Room for ${room} more live`
   if (room === 0) return `At the ceiling of ${group.listable}`
-  return `${-room} over the ceiling of ${group.listable}`
+  return `${-room} over ${group.listable}`
 }
 
 /** ONE LINE, EVERY FACT ONCE (the owner's ruling, 2026-09-25, Direction B): the box's name, the
@@ -158,6 +165,22 @@ function RowIdentity({
       )}
     </span>
   )
+}
+
+/** Each box's divider layout, keyed by box number, out of the registry `BoxBrowse`'s own
+ *  `getBoxes()` read already returned. Keyed by `box` so one box's dividers can never be
+ *  handed to another box's card. Shared home, moved off `Inventory.tsx`: Orders' own walk
+ *  reads the same registry and feeds the same `sections` prop below. */
+export function layoutsOf(records: readonly BoxRecord[]): ReadonlyMap<number, readonly SectionDetail[]> {
+  const out = new Map<number, readonly SectionDetail[]>()
+  for (const record of records) {
+    if (record === null || typeof record !== 'object') continue
+    if (typeof record.box !== 'number' || !Number.isFinite(record.box)) continue
+    const detail: unknown = record.sections_detail
+    if (!Array.isArray(detail) || detail.length === 0) continue
+    out.set(record.box, detail as readonly SectionDetail[])
+  }
+  return out
 }
 
 export type CardLocationsProps = {
@@ -252,6 +275,12 @@ export type CardLocationsProps = {
    *  scope a rule to its usage (the walk's row `min-height`, D118) without it reaching
    *  `#/inventory` or `#/fulfillment`. Omitted, the section carries its usual two classes only. */
   className?: string
+
+  /** Draw the heading, the stats and the SKU line. Owner skin only. Defaults to `true`, so
+   *  every existing caller renders exactly as before. `false` draws the row list alone, for a
+   *  caller that already carries its own heading — the walk row, which draws one `CardLocations`
+   *  per pick and cannot repeat "Every copy of this card" on each one. */
+  head?: boolean
 }
 
 export function CardLocations(props: CardLocationsProps) {
@@ -313,6 +342,7 @@ function OwnerRows({
   onRerank,
   preserveOrder = false,
   className,
+  head = true,
 }: Omit<CardLocationsProps, 'persona'>) {
   const number = collectorNumber(group)
 
@@ -409,8 +439,9 @@ function OwnerRows({
 
   return (
     <section className={['card-locations', 'card-locations-owner', className ?? ''].filter(Boolean).join(' ')}>
+      {!head ? null : (
       <header className="card-locations-head">
-        <h3 className="bn-section-title card-locations-title">Every copy of this card</h3>
+        <h3 className="bn-section-title card-locations-title">Copies</h3>
         {/* THE ONE THING THAT RESHUFFLES THIS LIST, and it is a press rather than a consequence.
             Drawn only once the order has actually gone stale — a control offering to recompute
             an order that is already current is a button that does nothing, and a permanent one
@@ -513,7 +544,7 @@ function OwnerRows({
               <span>Not listed yet</span>
             ) : (
               <>
-                {group.listed.pushed > 0 ? <span>{group.listed.pushed} sent to TCGplayer</span> : null}
+                {group.listed.pushed > 0 ? <span>{group.listed.pushed} sent</span> : null}
                 {group.listed.staged > 0 ? <span>{group.listed.staged} waiting to go live</span> : null}
                 <span>{headroom(group)}</span>
               </>
@@ -521,6 +552,7 @@ function OwnerRows({
           </p>
         ) : null}
       </header>
+      )}
 
       <ul className="card-locations-rows bn-stagger">
         {drawn.map((copy, i) => {
@@ -688,7 +720,7 @@ function OwnerRows({
       </ul>
       {hidden === 0 ? null : (
         <p className="card-locations-hidden">
-          {hidden === 1 ? '1 sold copy hidden' : `${hidden} sold copies hidden`}
+          {`${hidden} hidden`}
         </p>
       )}
     </section>

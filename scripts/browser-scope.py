@@ -122,6 +122,13 @@ SCOPE = (
                "(D261).",
     },
     {
+        "path": "scripts/reap_mark.py",
+        "why": "Named in the `design-check` recipe: it stamps the suite's own process with "
+               "this session's id before `suite-lock.py` starts it (D305). "
+               "A bug here does not change what the browser draws, but it runs before the "
+               "suite does, on the same recipe line, so a change to it changes what runs.",
+    },
+    {
         "path": ".github/workflows/check.yml",
         "why": "The gate itself. A change to how the matrix is invoked, sharded or skipped "
                "has to run the matrix, or the change is verified by nothing.",

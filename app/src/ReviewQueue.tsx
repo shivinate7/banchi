@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { PositionLabel } from './PositionLabel'
 import { isEditableTarget } from './keys'
 import type {
@@ -44,22 +43,25 @@ import {
   Icon,
   IconButton,
   Kbd,
+  Modal,
   Money,
   Notice,
   Page,
   Pill,
   ReloadButton,
   Sheet,
+  Skeleton,
   UNDO_KEY_LABEL,
   useUndoHotkey,
 } from './kit'
 import { toast } from './kit/toast'
 import { LogWell } from './RunsLog'
-import { useOverlayFocus } from './runsOverlay'
 import { RunsContent, boxInHash, perCardRate, runInHash, stateInHash } from './Runs'
 import { openingSelection, sendOfKeys } from './RunsComposer'
 import { carriedScope, type CarriedScope } from './runHandoff'
-import { roundsToNothing } from './money'
+import { money, roundsToNothing } from './money'
+import { monthDay } from './dates'
+import { SearchField } from './SearchField'
 import './ReviewQueue.css'
 import { isRetiredReason, reasonLabel } from './reasons'
 import { collectorNumber as sharedCollectorNumber } from './cardNumber'
@@ -291,33 +293,16 @@ function sentence(entry: QueueEntryWire): Segment[] {
        * entry written before `found_by` existed answers null here and takes the shorter
        * wording rather than naming a row on a guess. */
       const rowName = text(numberMatch(entry.candidates)?.name ?? entry.candidates[0]?.name)
-      const offersBoth = entry.candidates.some((row) => row.found_by === 'name')
-      const head: Segment[] =
-        name === null
-          ? [say('The name on this photograph could not be checked against the listing below. ')]
-          : rowName === null
-            ? [say('This photograph reads as '), cardName(name), say(', which is not what the listing below is called. ')]
-            : [
-                say('This photograph reads as '),
-                cardName(name),
-                say(number === null ? ', but the listing it matched is ' : ', but '),
-                ...(number === null ? [] : [value(number), say(' is ')]),
-                value(rowName),
-                say('. '),
-              ]
-      return [
-        ...head,
-        say('The number and the name came off the same card and they disagree — one was misread. Check against the photograph before answering.'),
-        /* BOTH READINGS ARE ON THE LIST SINCE 2026-09-12, so the sentence says which is
-         * which. Only where the name actually found something: a card whose name matched no
-         * row still offers the number's row alone, and promising a second reading that is
-         * not there would be worse than the silence it replaced. */
-        ...(offersBoth
-          ? [
-              say(' Both readings are below — what the name found first, then what the number found. Neither is assumed right: the photograph settles it.'),
-            ]
-          : []),
-      ]
+      /* F5 verbiage cut, the owner's ruling on the one held row of the review: the two
+       * names are data and stay; the words that used to carry them ("This photograph reads
+       * as ... but the listing it matched is ...") are cut to "Mismatch: <read> / <listing>".
+       * A card whose name matched no row at all still gets the read name alone, since there
+       * is no second value to put after the slash. */
+      return name === null
+        ? [say('The name on this photograph could not be checked against the listing below. ')]
+        : rowName === null
+          ? [say('Mismatch: '), cardName(name)]
+          : [say('Mismatch: '), cardName(name), say(' / '), value(rowName)]
     }
 
     default:
@@ -334,7 +319,7 @@ function sentence(entry: QueueEntryWire): Segment[] {
 const QUESTIONS: Readonly<Record<string, string>> = {
   no_catalog_row: 'Which listing is this card?',
   metadata_not_stocked: 'Which finish is stocked?',
-  rarity_claim_mismatch: 'Is this the right card at all?',
+  rarity_claim_mismatch: 'Mismatch?',
   detected_finish_not_stocked: 'Which finish is this?',
   ambiguous_no_signal: 'Which finish is this?',
   duplicate_condition: 'Which of the two listings?',
@@ -344,7 +329,7 @@ const QUESTIONS: Readonly<Record<string, string>> = {
   set_ambiguous: 'Which set is it from?',
   card_not_detected: 'What is in this photograph?',
   number_unread_name_matched: 'Is this the listing it matched?',
-  name_disputed: 'Is this the right card at all?',
+  name_disputed: 'Mismatch?',
   no_market_data: 'Is this the card?',
   /* `pipeline/routing.py:LISTING_DISPUTED` (identity-follows-sku.md §7.3, lane 2): a held
    * card from `cards identity --write` — the read disputes the SKU it is bound to, and
@@ -503,9 +488,13 @@ function priceOf(market: string | null | undefined): number | null {
   return parsed
 }
 
+/* R2-money: the `$` figure is `money()`'s (`app/src/money.ts`), never built by hand here. The
+ * unpriced word stays exactly as it was -- `money()`'s own `—` is for a figure that failed to
+ * parse, not for "we never had one," and this file's callers already say which case they are
+ * in through `priceOf`. */
 function priceText(market: string | null | undefined): string {
   const parsed = priceOf(market)
-  return parsed === null ? 'no market price' : `$${(market ?? '').trim()}`
+  return parsed === null ? 'no market price' : money(parsed)
 }
 
 /* D9's threshold — `pipeline/pricing.py:THRESHOLD`, and the cut between review and parked. */
@@ -527,7 +516,7 @@ function bandOf(market: string | null | undefined): Band {
 function sinceText(raw: string): string {
   const parsed = new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00` : raw)
   if (Number.isNaN(parsed.getTime())) return raw
-  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return monthDay(parsed)
 }
 
 /** How long this card has been waiting — the server's arithmetic, never this file's. */
@@ -1350,7 +1339,7 @@ export function ReviewQueue() {
     /* THE RE-CHECK SHEET OWNS THE KEYBOARD WHILE IT IS UP, which is the rule the close panel
      * and the group state already follow. Every key below answers, closes, skips or reloads
      * the card behind the scrim — a digit pressed at this sheet would list a card the
-     * operator cannot see. Escape is the sheet's own, through `useOverlayFocus`. */
+     * operator cannot see. Escape is the kit `Sheet`'s own, through `useOverlayLayer`. */
     if (recheckOpen) return
 
     const key = event.key.toLowerCase()
@@ -1536,7 +1525,7 @@ export function ReviewQueue() {
                  `everyone.length`, the same number the Queue button's own badge shows
                  (D164's counter), so the two never disagree again. */
               <>
-                <strong>{done}</strong> done, <strong>{everyone.length}</strong> to go
+                Progress <strong>{done}</strong> of <strong>{everyone.length}</strong>
               </>
             )}
             {counts !== null && counts.parked > 0 ? <span className="review-progress-parked">{counts.parked} parked</span> : null}
@@ -1897,12 +1886,12 @@ function LoadingCard() {
           <div className="review-frame review-well" />
         </div>
         <div className="review-verdict">
-          <div className="bn-skeleton" style={{ height: 26, width: '52%' }} />
-          <div className="bn-skeleton" style={{ height: 14, width: '34%', marginTop: 8 }} />
-          <div className="bn-skeleton" style={{ height: 22, width: '60%', marginTop: 18 }} />
+          <Skeleton height={26} width="52%" />
+          <Skeleton height={14} width="34%" style={{ marginTop: 8 }} />
+          <Skeleton height={22} width="60%" style={{ marginTop: 18 }} />
           <div className="review-candidates" style={{ marginTop: 20 }}>
             {[0, 1, 2].map((i) => (
-              <div key={i} className="bn-skeleton review-candidate-skeleton" />
+              <Skeleton key={i} className="review-candidate-skeleton" />
             ))}
           </div>
         </div>
@@ -2086,7 +2075,7 @@ function Card({
         <Photo row={row} absent={photoAbsent} onAbsent={onPhotoAbsent} />
         <p className="review-next" title={next === null ? undefined : `${text(next.entry.read.name) ?? 'not identified'} ${priceText(next.entry.market)} ${reasonLabel(next.entry.reason)}`}>
           {next === null ? (
-            <span className="review-next-empty">Last in the queue</span>
+            <span className="review-next-empty">Last</span>
           ) : (
             <>
               <span className="review-next-label">Next</span>
@@ -2108,10 +2097,18 @@ function Card({
             {retired ? <Icon name="history" size={20} className="review-question-mark" /> : null}
             {questionFor(entry.reason)}
           </h2>
-          <p className="review-question-sub">
-            {reasonLabel(entry.reason)}
-            {row.shadow === undefined ? null : <Pill tone="warn">also {row.shadow}</Pill>}
-          </p>
+          {/* F5 verbiage cut: `name_disputed` shares its headline with `rarity_claim_mismatch`
+              ("Mismatch?"), and its own reason label ("The read name matches no listing") only
+              restated it a second time with no new fact — the mismatch paragraph below (the
+              owner's F5 ruling, the "middle option" for this cut: keep the two names as data,
+              "Mismatch: <read> / <listing>") is the one place that says WHICH two reads
+              disagree. Every other reason keeps its label here. */}
+          {entry.reason === 'name_disputed' && row.shadow === undefined ? null : (
+            <p className="review-question-sub">
+              {entry.reason === 'name_disputed' ? null : reasonLabel(entry.reason)}
+              {row.shadow === undefined ? null : <Pill tone="warn">also {row.shadow}</Pill>}
+            </p>
+          )}
         </div>
 
         <Claims entry={entry} claims={claims} />
@@ -2172,7 +2169,7 @@ function Card({
               disabled={busy}
               aria-expanded={looking}
             >
-              {looking ? 'Back to listings' : phone ? 'Search TCGplayer' : 'Search TCGplayer\'s list'}
+              {looking ? 'Back to listings' : 'Search'}
             </Button>
           )}
           {/* ICON-MAP (review): words at every width, including the phone — dropped
@@ -2193,12 +2190,7 @@ function Card({
           </Button>
           {activity === null ? null : <Busy activity={activity} />}
 
-          {!closing ? null : (
-            <>
-              <div className="bn-scrim review-close-scrim" onClick={onClose} aria-hidden="true" />
-              <ClosePanel onChoice={onCloseChoice} onClose={onClose} disabled={busy} />
-            </>
-          )}
+          <ClosePanel open={closing} onChoice={onCloseChoice} onClose={onClose} disabled={busy} />
         </div>
 
         {tray}
@@ -2250,14 +2242,6 @@ function Claims({ entry, claims }: { entry: QueueEntryWire; claims: Claims }) {
         <Icon name="eye" size={12} />
         <span className="review-chip-key">Confidence</span>
         <span className="review-chip-value">{humanize(confidence)}</span>
-      </span>,
-    )
-  }
-  if (entry.reason === 'rarity_claim_mismatch' || entry.reason === 'name_disputed') {
-    chips.push(
-      <span key="rarity" className="review-chip review-chip-warn">
-        <Icon name="alert" size={12} />
-        These rows may be another card
       </span>,
     )
   }
@@ -2365,42 +2349,22 @@ export function CandidateButton({
   )
 }
 
-/* D37's panel — a dialog on a desktop, a sheet on a phone. Digits 1–7 and Escape are the
- * container's; this draws, takes focus while it is up, keeps Tab inside itself, and hands
- * focus back to the control that raised it when it goes. */
-function ClosePanel({ onChoice, onClose, disabled }: { onChoice: (choice: CloseChoice) => void; onClose: () => void; disabled: boolean }) {
-  const panel = useRef<HTMLDivElement | null>(null)
-  useEffect(() => {
-    /* Raised by a click, focus goes back to the control that was pressed; raised by `X`
-     * with nothing focused, it goes to the Close button, which is the control that names
-     * this panel (`aria-expanded`). The host is read now: the ref is detached by the time
-     * this cleanup runs. */
-    const active = document.activeElement
-    const opener = active instanceof HTMLElement && active !== document.body ? active : null
-    const host = panel.current?.parentElement ?? null
-    panel.current?.focus({ preventScroll: true })
-    return () => {
-      const target = opener !== null && opener.isConnected ? opener : host?.querySelector<HTMLElement>('.review-action-close')
-      target?.focus({ preventScroll: true })
-    }
-  }, [])
-
-  const trapTab = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Tab' || panel.current === null) return
-    const stops = [...panel.current.querySelectorAll<HTMLElement>('button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex="-1"])')]
-    const first = stops[0]
-    const last = stops[stops.length - 1]
-    if (first === undefined || last === undefined) return
-    const active = document.activeElement
-    if (event.shiftKey && (active === first || active === panel.current)) {
-      event.preventDefault()
-      last.focus()
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault()
-      first.focus()
-    }
-  }
-
+/* D37's panel — the kit's own Modal (R2-dialog, 2026-09-27): focus trap, first focus, return
+ * focus and Escape all come from `Modal`/`OverlayFrame` now, instead of this file's own
+ * `trapTab` and a focus-effect duplicating what the kit already does for every other dialog.
+ * Digits 1–7 stay the container's, read off the document while the panel is open, same as
+ * before. */
+function ClosePanel({
+  open,
+  onChoice,
+  onClose,
+  disabled,
+}: {
+  open: boolean
+  onChoice: (choice: CloseChoice) => void
+  onClose: () => void
+  disabled: boolean
+}) {
   const group = (kind: CloseChoice['kind'], title: string, note: string) => (
     <div className="review-close-group">
       <div className="review-close-head">
@@ -2422,16 +2386,12 @@ function ClosePanel({ onChoice, onClose, disabled }: { onChoice: (choice: CloseC
     </div>
   )
   return (
-    <div className="review-close bn-dialog" role="dialog" aria-modal="true" aria-label="Close this card without answering it" ref={panel} tabIndex={-1} onKeyDown={trapTab}>
-      <div className="review-close-title">
-        <span className="bn-section-title">Close without answering</span>
-        <IconButton icon="x" label="Close the panel" kbd="Esc" size="sm" onClick={onClose} />
-      </div>
+    <Modal open={open} onClose={onClose} title="Close without answering" className="review-close">
       <p className="review-close-lede">Stops the queue asking about it. Can be undone.</p>
       {group('stand_down', 'Stand down', 'the card stays where it is')}
       {group('retire', 'Retire', 'the card leaves inventory, its slot stays empty')}
       <p className="review-close-foot">Delete the capture on Inventory — renumbers cards behind it, cannot be undone.</p>
-    </div>
+    </Modal>
   )
 }
 
@@ -2482,32 +2442,22 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
             <>No matching row. These are export rows matched on what was read.</>
           )}
         </span>
-        <form
-          className="review-catalog-search"
-          onSubmit={(event) => {
-            event.preventDefault()
-            onSearch()
+        {/* R2-search: the kit's own SearchField, not a hand-built input/icon/label. `onSubmit`
+            covers both Enter and its own "Search" button (the form's two old ways in), and
+            `busy` shows the spinner in place rather than locking the field -- the pattern
+            this file's own `Money`/`priceOf` pair already uses elsewhere on this screen. */}
+        <SearchField
+          persona="owner"
+          value={typed}
+          onChange={onTyped}
+          onSubmit={() => {
+            if (!busy) onSearch()
           }}
-        >
-          <label className="bn-sr" htmlFor="review-catalog-q">
-            Search this export
-          </label>
-          <span className="bn-input-wrap review-catalog-wrap">
-            <Icon name="search" size={16} />
-            <input
-              id="review-catalog-q"
-              className="bn-input review-catalog-input"
-              type="search"
-              value={typed}
-              placeholder="Name, collector number, or SKU"
-              onChange={(event) => onTyped(event.target.value)}
-              disabled={busy}
-            />
-          </span>
-          <Button type="submit" disabled={busy}>
-            Search
-          </Button>
-        </form>
+          submitLabel="Search"
+          label="Search this export"
+          placeholder="Name, collector number, or SKU"
+          busy={busy}
+        />
       </div>
 
       {failed !== null ? (
@@ -2515,7 +2465,7 @@ export function CatalogPanel({ lookup, failed, typed, onTyped, onSearch, onChoos
       ) : lookup === null ? (
         <div className="review-candidates" aria-busy="true">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="bn-skeleton review-candidate-skeleton" />
+            <Skeleton key={i} className="review-candidate-skeleton" />
           ))}
         </div>
       ) : rows.length === 0 ? (
@@ -2593,8 +2543,7 @@ function Facts({ row }: { row: Row }) {
     <details className="review-details">
       <summary className="review-details-summary">
         <Icon name="chevronRight" size={14} className="review-details-caret" />
-        This read
-        <span className="review-details-hint">what the run recorded about this card</span>
+        Details
       </summary>
       <dl className="review-facts">
         {facts.map((fact) => (
@@ -2694,7 +2643,7 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
       <PositionCaption label={entry.label} box={entry.box} cid={entry.cid} place={entry.place} />
       <span className="review-stage-hint" aria-hidden="true">
         <Icon name="scan" size={12} />
-        1:1 under the pointer
+        Zoomed
       </span>
     </>
   )
@@ -2955,8 +2904,6 @@ function QueueRefresh({
   /** The command's own exit code when it refused; null while it has not. */
   const [refused, setRefused] = useState<number | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
-  const sheet = useRef<HTMLElement | null>(null)
-  const scrim = useRef<HTMLDivElement | null>(null)
 
   const send = useCallback(
     async (write: boolean) => {
@@ -3003,127 +2950,115 @@ function QueueRefresh({
     void send(false)
   }, [open, send])
 
-  /* Focus lands inside on open, stays inside under Tab, and returns to the header button on
-     close; Escape closes unless a read or a write is in flight. */
-  useOverlayFocus(sheet, open, onClose, busy, scrim)
-
   /* The press that writes exists only while there is a preview to have read and nothing has
      been written yet. A refusal takes it away too: the write would refuse identically, and
      the remedy is in the console rather than in a second press. */
   const applyable = report !== null && !wrote && refused === null
 
-  /* Portalled to <body>: `main.bn-page` keeps a filled transform after its enter animation,
-     and a fixed sheet inside it would hang off the column. */
-  return createPortal(
-    <>
-      {open ? <div ref={scrim} className="bn-scrim" onClick={onClose} /> : null}
-      <aside
-        ref={sheet}
-        className="bn-sheet review-recheck"
-        hidden={!open}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="review-recheck-head"
-        tabIndex={-1}
-      >
-        <header className="review-recheck-top">
-          <div className="review-recheck-heading">
-            <span className="bn-eyebrow review-fact-multi">
-              <span>Store-wide</span>
-              <span>free</span>
-            </span>
-            <h2 className="review-recheck-head" id="review-recheck-head">
-              Re-check every waiting card
-            </h2>
-          </div>
-          <IconButton icon="x" label="Close" onClick={onClose} />
-        </header>
-
-        <div className="review-recheck-body">
-          <p className="review-recheck-says">
-            Re-resolves every waiting card against the current export. A card it can place
-            leaves the queue; the rest stay, often with a better reason.{' '}
-            <strong>Nothing is uploaded and nothing is identified</strong> — free, and safe to
-            run again.
-          </p>
-
-          {/* WHAT IT WILL NOT DO, said before the press rather than in the receipt. The
-              operator has just spent the session answering cards by hand, and a store-wide
-              write over that work has to state what it cannot reach. */}
-          <p className="review-recheck-safe">
-            <Icon name="lock" size={14} />
-            <span>
-              An already-answered card never returns to the queue. Only <strong>Undo</strong>{' '}
-              reverses an answer.
-            </span>
-          </p>
-
-          {!busy ? null : (
-            <p className="review-recheck-status" role="status">
-              <span className="bn-dot bn-dot-accent" />
-              {report === null ? 'Reading what would change…' : 'Re-checking every waiting card…'}
-            </p>
-          )}
-
-          {/* THE SHAPE OF THE ANSWER WHILE IT IS COMING, in the idiom this screen already uses
-              for the catalog rows. Only on the FIRST read: once there is a report, replacing it
-              with bars would take away the thing the operator is deciding from, and the status
-              line above already says a write is in flight. The bars are decoration for a
-              sentence that is `role="status"`, so they are hidden from the reader. */}
-          {busy && report === null ? (
-            <div className="review-recheck-wait" aria-hidden="true">
-              {[0, 1, 2].map((at) => (
-                <span key={at} className="bn-skeleton review-recheck-wait-line" />
-              ))}
-            </div>
-          ) : null}
-
-          {failure === null ? null : (
-            /* The TITLE carries the reassurance, not the body. `describeFailure`'s own
-               messages already end with one — `origin_blocked`'s says "Nothing was saved" —
-               and appending a second read as two different claims about one refusal. */
-            <Notice tone="danger" title="The re-check did not run, and nothing was written" code={failure.code}>
-              {failure.message}
-            </Notice>
-          )}
-
-          {report === null ? null : (
-            <>
-              {refused !== null ? (
-                <Notice tone="danger" title="The re-check refused" code={`exit ${refused}`}>
-                  Stopped on its own. Output is below.
-                </Notice>
-              ) : wrote ? (
-                <Notice tone="ok" title="Re-checked">
-                  Queues written and re-read. Your answers are untouched.
-                </Notice>
-              ) : (
-                <Notice tone="info" title="Preview — nothing written yet">
-                  Read what would move, then apply it below.
-                </Notice>
-              )}
-              <LogWell
-                text={report}
-                label={wrote ? 'What the re-check printed' : 'What the preview printed'}
-                className="review-recheck-console"
-                maxHeight={360}
-              />
-            </>
-          )}
-        </div>
-
-        {!applyable ? null : (
-          <footer className="review-recheck-foot">
+  /* R2-dialog/R2-class (2026-09-27): this was a hand-rolled `<aside role="dialog">`, its own
+     scrim and `useOverlayFocus`, duplicating the kit's own `Sheet` -- already imported in this
+     file and already used for the Runs sheet a few hundred lines up. Focus trap, first focus,
+     return focus, Escape and the scrim are all `Sheet`'s now. `dismissible={!busy}` is the one
+     behavior `useOverlayFocus`'s old `busy` argument gave: Escape and the scrim do nothing
+     while a read or a write is in flight. The "Store-wide / free" eyebrow moves from beside
+     the old hand-rolled `<h2>` into the body's first line -- `Sheet`'s own header is one h2 and
+     one Close, the same shape every other sheet in this product already has. */
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      dismissible={!busy}
+      title="Re-check every waiting card"
+      className="review-recheck"
+      footer={
+        !applyable ? null : (
+          <>
             <Button variant="ghost" onClick={onClose} disabled={busy}>
               Not now
             </Button>
             <Button variant="primary" icon="check" busy={busy} disabled={busy} onClick={() => void send(true)}>
               Apply the refresh
             </Button>
-          </footer>
+          </>
+        )
+      }
+    >
+      <div className="review-recheck-body">
+        <span className="bn-eyebrow review-fact-multi">
+          <span>Store-wide</span>
+          <span>free</span>
+        </span>
+        <p className="review-recheck-says">
+          Re-resolves every waiting card against the current export. A card it can place
+          leaves the queue; the rest stay, often with a better reason.{' '}
+          <strong>Nothing is uploaded and nothing is identified</strong> — free, and safe to
+          run again.
+        </p>
+
+        {/* WHAT IT WILL NOT DO, said before the press rather than in the receipt. The
+            operator has just spent the session answering cards by hand, and a store-wide
+            write over that work has to state what it cannot reach. */}
+        <p className="review-recheck-safe">
+          <Icon name="lock" size={14} />
+          <span>
+            An already-answered card never returns to the queue. Only <strong>Undo</strong>{' '}
+            reverses an answer.
+          </span>
+        </p>
+
+        {!busy ? null : (
+          <p className="review-recheck-status" role="status">
+            <span className="bn-dot bn-dot-accent" />
+            {report === null ? 'Reading what would change…' : 'Re-checking every waiting card…'}
+          </p>
         )}
-      </aside>
-    </>,
-    document.body,
+
+        {/* THE SHAPE OF THE ANSWER WHILE IT IS COMING, in the idiom this screen already uses
+            for the catalog rows. Only on the FIRST read: once there is a report, replacing it
+            with bars would take away the thing the operator is deciding from, and the status
+            line above already says a write is in flight. The bars are decoration for a
+            sentence that is `role="status"`, so they are hidden from the reader. */}
+        {busy && report === null ? (
+          <div className="review-recheck-wait" aria-hidden="true">
+            {[0, 1, 2].map((at) => (
+              <Skeleton key={at} className="review-recheck-wait-line" />
+            ))}
+          </div>
+        ) : null}
+
+        {failure === null ? null : (
+          /* The TITLE carries the reassurance, not the body. `describeFailure`'s own
+             messages already end with one — `origin_blocked`'s says "Nothing was saved" —
+             and appending a second read as two different claims about one refusal. */
+          <Notice tone="danger" title="The re-check did not run, and nothing was written" code={failure.code}>
+            {failure.message}
+          </Notice>
+        )}
+
+        {report === null ? null : (
+          <>
+            {refused !== null ? (
+              <Notice tone="danger" title="The re-check refused" code={`exit ${refused}`}>
+                Stopped on its own. Output is below.
+              </Notice>
+            ) : wrote ? (
+              <Notice tone="ok" title="Re-checked">
+                Queues written and re-read. Your answers are untouched.
+              </Notice>
+            ) : (
+              <Notice tone="info" title="Preview — nothing written yet">
+                Read what would move, then apply it below.
+              </Notice>
+            )}
+            <LogWell
+              text={report}
+              label={wrote ? 'What the re-check printed' : 'What the preview printed'}
+              className="review-recheck-console"
+              maxHeight={360}
+            />
+          </>
+        )}
+      </div>
+    </Sheet>
   )
 }

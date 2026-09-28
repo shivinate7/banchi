@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 import { cropStyle, IconButton, type Crop } from './index'
 import { STATUS_TONES, UNNAMED_BOX, type StatusKind } from './dataRules'
+import { matchQuery } from './match'
 import { hasSheet, openSheet, sheetHref } from './sheets'
 import { useOverlayLayer } from './overlay'
 import { moneyGrouped, moneySigned } from '../money'
@@ -16,7 +17,7 @@ import './data.css'
 /* The pure half — the status tones and the box order — lives in `dataRules.ts`, so a spec and a
  * non-React caller can import it without a stylesheet. It is re-exported here: this file is
  * still the one place a screen imports a data primitive from. */
-export { STATUS_TONES, UNNAMED_BOX, boxesMostRecentFirst } from './dataRules'
+export { STATUS_TONES, UNNAMED_BOX, boxesMostRecentFirst, boxTitle } from './dataRules'
 export type { BoxRecency, StatusKind, StatusTone } from './dataRules'
 
 /* THE KIT'S DATA PRIMITIVES: how a figure, a card, a box, a place, a status and a filter are
@@ -333,6 +334,8 @@ export function CardLine({
   if (set) facts.push({ key: 'set', node: <span className="bn-cardline-set">{set}</span> })
   if (number) facts.push({ key: 'number', node: <span className="bn-cardline-number">{number}</span> })
   if (condition) facts.push({ key: 'condition', node: <span className="bn-cardline-finish">{condition}</span> })
+  // D271: two stored facts compared, not a typed query, so this is not a hand-rolled search.
+  // eslint-disable-next-line no-restricted-syntax -- comparing two stored facts, not a typed query.
   if (finish && !(condition ?? '').toLowerCase().includes(finish.toLowerCase())) {
     facts.push({ key: 'finish', node: <span className="bn-cardline-finish">{finish}</span> })
   }
@@ -406,7 +409,7 @@ export function CardThumb({
           <Icon name="image" size={size === 'sm' ? 14 : size === 'md' ? 18 : 24} />
           {size === 'sm' ? null : (
             <span className="bn-thumb-none" aria-hidden="true">
-              No photo
+              None
             </span>
           )}
         </>
@@ -613,11 +616,10 @@ function PickPanel<T extends string>({
   const [narrow, setNarrow] = useState('')
   const searchable = options.length >= NARROW_FROM
 
-  const shown = useMemo(() => {
-    const needle = narrow.trim().toLowerCase()
-    if (needle === '') return options
-    return options.filter((option) => optionText(option).toLowerCase().includes(needle))
-  }, [options, narrow])
+  const shown = useMemo(
+    () => options.filter((option) => matchQuery(narrow, { text: [optionText(option)] })),
+    [options, narrow],
+  )
 
   const firstSelected = shown.findIndex((option) => selected.has(option.value))
   const [active, setActive] = useState(firstSelected === -1 ? 0 : firstSelected)

@@ -142,10 +142,13 @@ def run() -> Result:
     _exact(c)
     _cost_name(c)
     _take_order(c)
+    _drawn_order_is_density_not_box_number(c)
+    _drawn_order_density_tie_breaks_on_natural_name(c)
     _wire_owed(c)
     _walk_pick_all_accepted(c)
     _walk_pick_short_completes_smallest(c)
     _progress_wire_carries_closed_fields(c)
+    _walk_plan_stop_names_box(c)
 
     return c.result()
 
@@ -644,4 +647,127 @@ def _take_order(c: Checks) -> None:
         [take.sku for take in again.stops[0].takes],
         [take.sku for take in stop.takes],
         "a plan asked for twice over the same snapshot does not reshuffle",
+    )
+
+
+def _two_box_store(box_a, name_a, skus_a, box_b, name_b, skus_b):
+    """Two named, single-section boxes, `box_a` holding `skus_a` and `box_b` holding
+    `skus_b` — one SKU set per box, so the two never overlap and a cover always needs both."""
+    inventory = master.Inventory()
+    inventory.boxes[str(box_a)] = master.Box(box=box_a, name=name_a, sections=[1])
+    for index, sku in enumerate(skus_a, start=1):
+        inventory.cards[master.position_key(box_a, index)] = master.Card(
+            box=box_a, index=index, sku=sku, state=master.IDENTIFIED,
+            capture_id=f"cap-{box_a}-{index}",
+        )
+    inventory.boxes[str(box_b)] = master.Box(box=box_b, name=name_b, sections=[1])
+    for index, sku in enumerate(skus_b, start=1):
+        inventory.cards[master.position_key(box_b, index)] = master.Card(
+            box=box_b, index=index, sku=sku, state=master.IDENTIFIED,
+            capture_id=f"cap-{box_b}-{index}",
+        )
+    return inventory
+
+
+def _drawn_order_is_density_not_box_number(c: Checks) -> None:
+    """THE DRAWN ORDER IS DENSITY, NOT THE HIDDEN BOX NUMBER — the owner's ruling,
+    2026-09-27, over a box-name-only draft that never shipped: `PLAN-PR4-PR5.md`'s Q5, "i
+    thought we sort formulaically be density of the cards available in a section?", answered
+    "Density first, name breaks ties." D220's own words are the same: "in order walk it's
+    sorted by density." `StopKey.walk_order` still carries the box number for the SOLVER's own
+    determinism (`_dominated`, `_greedy`, `solve`, `_assign`) — this checks the DRAWN order
+    alone, which `plan`'s `_drawn_key` computes after every take is already assigned.
+
+    Box 2 ("Bravo") holds one copy of A. Box 5 ("Alpha") holds three copies of B. Neither box
+    can cover the other's SKU, so the cover needs BOTH stops regardless of any sort — this
+    fixture isolates the SORT from the SOLVE, which `harness/tests/t11_walk_plan.py`'s own
+    `_optimum` and `_multiplicity` already prove separately. Box NUMBER order is 2 then 5.
+    DENSITY order (`Stop.copies`, densest first) is 5 (three) then 2 (one) — the opposite. A
+    sort still keyed on `walk_order` draws Bravo (box 2) before Alpha (box 5); this is RED on
+    that sort and GREEN once `plan` re-sorts by density.
+    """
+    inventory = _two_box_store(2, "Bravo", ["A"], 5, "Alpha", ["B", "B", "B"])
+    ledger = _ledger({"A": 1, "B": 3})
+
+    plan = walkplan.plan(inventory, ledger, ["tcg:1"])
+
+    c.equal(plan.counts.stops, 2, "neither box covers the other's SKU, so both are walked")
+    c.equal(
+        [stop.box for stop in plan.stops],
+        [5, 2],
+        "box 5 (three copies, the denser stop) is drawn before box 2 (one copy), though "
+        "2 sorts before 5 as a plain box number",
+    )
+    c.equal([stop.copies for stop in plan.stops], [3, 1], "densest first, by count")
+    c.equal([stop.order for stop in plan.stops], [1, 2], "and the numbering follows the sort")
+
+
+def _drawn_order_density_tie_breaks_on_natural_name(c: Checks) -> None:
+    """A DENSITY TIE BREAKS ON THE BOX'S OWN NAME, IN NATURAL ORDER, NEVER THE NUMBER (D259).
+    The owner's chosen answer's own second half: "name breaks ties."
+
+    Box 2 is named "R10" and holds two copies of A. Box 5 is named "R2" and holds two copies
+    of B — the SAME count, a genuine tie on density. Box NUMBER order is 2 ("R10") then 5
+    ("R2"). NATURAL name order is "R2" before "R10" — plain string comparison gets this
+    backwards, sorting "R10" first because `'1' < '2'`. This is RED on a sort keyed on the box
+    number (or on a non-natural name compare) and GREEN once the tie breaks on the natural
+    key.
+    """
+    inventory = _two_box_store(2, "R10", ["A", "A"], 5, "R2", ["B", "B"])
+    ledger = _ledger({"A": 2, "B": 2})
+
+    plan = walkplan.plan(inventory, ledger, ["tcg:1"])
+
+    c.equal(plan.counts.stops, 2, "neither box covers the other's SKU, so both are walked")
+    c.equal([stop.copies for stop in plan.stops], [2, 2], "a genuine tie on density")
+    c.equal(
+        [stop.box for stop in plan.stops],
+        [5, 2],
+        "\"R2\" (box 5) is drawn before \"R10\" (box 2) — natural order, not the box number "
+        "(2 < 5) and not a plain string compare (\"R10\" < \"R2\" as text)",
+    )
+
+
+def _walk_plan_stop_names_box(c: Checks) -> None:
+    """D259: A box is shown only by its name, and a stop whose takes carry no copies still
+    gets its box's name. The server sends box_name from the stop's box_title, never null,
+    even when all takes are empty.
+    """
+    # Create an inventory with a named box
+    inventory = _store([1], [])  # empty box
+    inventory.boxes["1"].name = "Demo Box"
+    ledger = _ledger({})
+
+    # Manually create a minimal walkplan.Stop-like object with no copies
+    # This represents a scenario where a stop exists but has no copies to pick
+    class MockTake:
+        def __init__(self, sku, copies):
+            self.sku = sku
+            self.copies = copies
+            self.wanted = 0
+            self.orders = []
+
+    class MockStop:
+        def __init__(self):
+            self.key = "stop:1"
+            self.box = 1
+            self.section = None
+            self.pooled = False
+            self.game = "pokemon"
+            self.game_display = None
+            self.order = 1
+            self.takes = [MockTake("A", [])]  # Take with no copies
+
+    stop = MockStop()
+    places = capture_server._Places(inventory)
+
+    # Call _walk_plan_stop directly
+    wire_stop = capture_server._walk_plan_stop(inventory, ledger, places, stop)
+
+    # Verify that box_name is set to the box's title, not null
+    c.ok(wire_stop["box_name"] is not None, "box_name should not be null even with no copies")
+    c.equal(
+        wire_stop["box_name"],
+        "Demo Box",
+        "box_name should be set to the box's stored name from box_title",
     )

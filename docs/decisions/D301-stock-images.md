@@ -48,3 +48,9 @@ or a stale entry schedules a background `warm`, never a fetch inline.
 `server/capture_server.py:serve` also calls `warm` once at process start. And there were no
 Python tests: `harness/tests/t7_store_and_seams.py:check_stock_images` now covers the prefix
 fix, a miss, the non-blocking read, and the route threading, both sources stubbed.
+
+**Amended (F2, 2026-09-27): Sales uses this resolver too.** `do_skus_photos` (D298) falls
+back to `url_for`/`url_for_product` for a SKU with no own photograph on hand. Sealed product
+gains its own method, `url_for_product`, keyed by product name instead of a card number.
+Pokemon sealed product resolves through tcgcsv, because the vendored tree names singles
+only and carries no sealed row at all.

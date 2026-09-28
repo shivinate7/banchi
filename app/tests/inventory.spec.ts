@@ -1136,8 +1136,8 @@ async function open(
  *  the shape `openBoxOps` above takes and for the same reason: a test that wants card rows says
  *  so, and the fold tests below can still assert the state every other test starts from. */
 async function expandAll(page: Page) {
-  /* EVERY SHUT FOLD, PRESSED, rather than the one control that says "expand all". That control
-     is still there and still does this, but it now reads "collapse all" whenever ANY section is
+  /* EVERY SHUT FOLD, PRESSED, rather than the one control that says "Expand". That control
+     is still there and still does this, but it now reads "Collapse" whenever ANY section is
      open — and one always is on arrival, because the walk opens the section its planted
      selection sits in. Pressing the folds themselves is the same act and does not depend on
      which word the summary is wearing. */
@@ -1179,10 +1179,10 @@ async function openBoxOps(page: Page) {
  *  below still assert every one of them; this is the press that reaches them. Idempotent, so a
  *  case may ask for the menu twice. */
 async function openCardOps(page: Page) {
-  if ((await page.getByRole('menuitem', { name: 'Correct claims' }).count()) === 0) {
-    await page.getByRole('button', { name: 'Card actions' }).click()
+  if ((await page.getByRole('menuitem', { name: 'Correct' }).count()) === 0) {
+    await page.getByRole('button', { name: 'Actions' }).click()
   }
-  await expect(page.getByRole('menuitem', { name: 'Correct claims' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Correct' })).toBeVisible()
 }
 
 /** Shut the Manage sheet again. It is modal over the walk, so anything a case does to the walk
@@ -2541,7 +2541,7 @@ test('the walk arrives with only the planted selection\'s section open, and the 
   /* THIS TEST USED TO BE `sections start collapsed, and the one holding the selection is open`,
    * and it asserted nth(0) expanded with three rows drawn. That was the bug, not the contract.
    * The loader plants a selection on the first row and an effect opened its section for it, so
-   * the screen arrived PARTLY expanded while the control beside it offered `expand all` — the
+   * the screen arrived PARTLY expanded while the control beside it offered `Expand` — the
    * first press expanded, and only the second reached the collapsed list the press was for.
    * Measured on box 1 (3 sections, 53 cards) before the fix: 25 rows on load, 53 after one
    * press, 0 after two. The owner reported it as "you gotta click it once or twice for it to be
@@ -2558,23 +2558,23 @@ test('the walk arrives with only the planted selection\'s section open, and the 
    * sits in — the rule this file asserts a few cases down, that the mark is never on a row
    * nobody can see, applied to the first mark as well as to a moved one — and everything else
    * arrives shut. What made the old behaviour a bug was not the open section: it was that the
-   * control beside it said `expand all` while a section was already expanded, so the first press
+   * control beside it said `Expand` while a section was already expanded, so the first press
    * did nothing a person could see and the second was the one that worked.
    *
    * SO THE CONTROL IS WHAT IS PINNED HERE, and that is the stronger half of the old assertion:
    * it names the press it is about to perform. One section open, every other shut, and a control
-   * that says `collapse all` because collapsing is what pressing it does. */
+   * that says `Collapse` because collapsing is what pressing it does. */
   await expect(folds.nth(0)).toHaveAttribute('aria-expanded', 'true')
   await expect(folds.nth(1)).toHaveAttribute('aria-expanded', 'false')
   // Section 1 holds five of the seven records, and section 2's two are folded away.
   await expect(page.locator('.browse-row')).toHaveCount(5)
   await expect(page.locator('.browse-row[aria-current="true"]')).toBeVisible()
 
-  const fold = page.getByRole('button', { name: /collapse all/i })
+  const fold = page.locator('.browse-quiet').getByText(/^collapse$/i)
   await expect(fold).toBeVisible()
   await fold.click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /expand all/i })).toBeVisible()
+  await expect(page.locator('.browse-quiet').getByText(/^expand$/i)).toBeVisible()
 
   /* And nothing is lost by shutting it: the selected card's copies, its photograph and its two
      doors out of inventory are all still drawn beside the list. Only its ROW is folded. */
@@ -2613,16 +2613,16 @@ test('UX-227 — the walk keeps the row it steps onto in view, down to the last 
   expect(await page.evaluate(() => window.scrollY)).toBe(0)
 })
 
-test('expand all opens every section and collapse all shuts them', async ({ page }) => {
+test('Expand opens every section and Collapse shuts them', async ({ page }) => {
   await open(page)
 
   /* THE WALK ARRIVES WITH ONE SECTION OPEN — the planted selection's — so the roster begins by
-     shutting it. The control names that press rather than offering `expand all` over a screen
+     shutting it. The control names that press rather than offering `Expand` over a screen
      that is already partly expanded, which is the owner's own report and the case above. */
-  await page.getByRole('button', { name: 'collapse all' }).click()
+  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'expand all' }).click()
+  await page.locator('.browse-quiet').getByText('Expand', { exact: true }).click()
   /* SEVEN ROWS AND FIVE CARDS ON HAND (D58). The walk draws every RECORD the box holds,
      departed ones included — a sold card is still findable, still reversible past its
      twenty-second window, and still where the operator remembers it. What it does not draw
@@ -2635,31 +2635,31 @@ test('expand all opens every section and collapse all shuts them', async ({ page
    * "which is what makes collapsed-by-default safe rather than hostile". It was neither: the
    * owner reported the fold as clickable and doing nothing, and this was half the reason —
    * `isOpen` re-opened the selected section on every render, so an explicit fold recorded a
-   * close that the next paint discarded. A control whose label says `collapse all` and which
+   * close that the next paint discarded. A control whose label says `Collapse` and which
    * leaves a section open is not safe, it is lying.
    *
    * The invariant the override carried is real and did not go: the mark must never sit on a
    * row nobody can see. It moved to where it belongs, an effect that opens the landing
    * section when the selection MOVES — asserted below. Navigation is an automatic
    * consequence; folding is an act; they are not decided in the same expression. */
-  await page.getByRole('button', { name: 'collapse all' }).click()
+  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'expand all' }).click()
+  await page.locator('.browse-quiet').getByText('Expand', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(7)
-  await page.getByRole('button', { name: 'collapse all' }).click()
+  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
 
   /* ONE PRESS FROM A PARTIAL STATE, which is the other half of the owner's report and the half
    * a collapsed default does not fix on its own. A step into a shut section opens it, so the
    * walk is partly expanded again a single arrow key later — and while the control read
-   * `expand all` from there, reaching a collapsed list still cost two presses. It now reads ANY
+   * `Expand` from there, reaching a collapsed list still cost two presses. It now reads ANY
    * rather than EVERY, so it always names what one press will do. */
   await page.locator('.browse-list').focus()
   await page.keyboard.press('End')
   await expect(page.locator('.browse-row')).toHaveCount(2)
 
-  await expect(page.getByRole('button', { name: 'collapse all' })).toBeVisible()
-  await page.getByRole('button', { name: 'collapse all' }).click()
+  await expect(page.locator('.browse-quiet').getByText('Collapse', { exact: true })).toBeVisible()
+  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 })
 
@@ -2669,7 +2669,7 @@ test('a search opens every section holding a match, and clearing it gives the wa
   await open(page)
   /* Shut, so what the query opens is the query's doing and not the walk's own planted
      selection. */
-  await page.getByRole('button', { name: 'collapse all' }).click()
+  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
   /* The owner's second ask, verbatim: "i want if i search for a card, all results of that card
@@ -2704,7 +2704,7 @@ test('moving the selection opens the section it lands in, so the mark is never h
    * to open whatever it lands in — otherwise collapsed-by-default would let the walk put the
    * mark on a row nobody can see, which is the failure the old render-time override was
    * written to prevent and the one thing that must survive its removal. */
-  await page.getByRole('button', { name: 'collapse all' }).click()
+  await page.locator('.browse-quiet').getByText('Collapse', { exact: true }).click()
   await expect(page.locator('.browse-row')).toHaveCount(0)
 
   await page.locator('.browse-list').focus()
@@ -2742,7 +2742,7 @@ test('a copy row draws how far into the box AND how far into the section', async
   const first = bars.nth(0).locator('.position-bar-text')
   /* NO "SO FAR" ON THE BOX LINE (owner's ruling, 2026-09-19 — see the case below this one for
      the full argument): `#1 of 5`, not `#1 of 5 so far`. */
-  await expect(first.nth(0)).toHaveText('Section 1 of 2')
+  await expect(first.nth(0)).toHaveText('Position 1 of 2')
   /* SETTLED SECTION, SO THE DENOMINATOR IS SLOTS. Section 1 runs 1..3 and the box holds 5, so
      its far bound is a divider with cards behind it: three slots today and three next week —
      said now on the row's own header (`Card 1 of 3`), never restated here (the owner's
@@ -2751,7 +2751,7 @@ test('a copy row draws how far into the box AND how far into the section', async
   await expect(rows.nth(0).locator('.card-locations-identity')).toContainText('Card 1 of 3')
 
   const second = bars.nth(1).locator('.position-bar-text')
-  await expect(second.nth(0)).toHaveText('Section 1 of 2')
+  await expect(second.nth(0)).toHaveText('Position 1 of 2')
   await expect(bars.nth(1).locator('.position-bar-text-section')).toHaveCount(0)
   await expect(rows.nth(1).locator('.card-locations-identity')).toContainText('Card 3 of 3')
 
@@ -2782,7 +2782,7 @@ test('the last section of an open box counts what is in it, and the box line dro
    * second ruling the same evening — "drop it everywhere" — reached the section line too: a
    * growing section reads `card 2 of 2`, a settled one `card 2 of 2 slots`. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
-  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Section 2 of 2')
+  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Position 2 of 2')
   /* THE CARD RULER'S OWN CAPTION IS OMITTED HERE (the owner's Direction-B build, 2026-09-25):
      the header now says `Card 2 of 2` once, and this section carries no name, so there is
      nothing left for this caption to say. */
@@ -2809,7 +2809,7 @@ test('the card with no group gets both depths too', async ({ page }) => {
    * so the bars below are the ROW's, in the same shape every identified card gets. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar).toHaveCount(1)
-  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Section 1 of 2')
+  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Position 1 of 2')
   await expect(bar.locator('.position-bar-text-section')).toHaveCount(0)
 
   /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D71). This test reaches
@@ -3015,7 +3015,7 @@ test('the census greps to the store, and the identity line says what the box hol
      store's own, verbatim, which is the whole of the claim: `Captured` is the record count,
      `Fill` the allocator's high-water mark, and neither is the five the box holds. */
   await expect(censusValue(page, 'Captured')).toHaveText('7')
-  await expect(censusValue(page, 'On hand')).toHaveText('5')
+  await expect(censusValue(page, 'Stored')).toHaveText('5')
   await expect(censusValue(page, 'Sold')).toHaveText('1')
   await expect(censusValue(page, 'Retired')).toHaveText('1')
   await expect(censusValue(page, 'Fill')).toHaveText('7')
@@ -3123,10 +3123,10 @@ test('the operations are rows on one edge, and the delete is the only bordered o
   const rows = page.locator('.boxops-group:not(.boxops-group-danger) .boxops-op')
   await expect(rows.locator('.boxops-op-label')).toHaveText([
     'Rename',
-    'Edit sections',
-    'Name sections',
-    'Set claims',
-    'Move to box',
+    'Sections',
+    'Naming',
+    'Claims',
+    'Move',
   ])
   await expect(rows).toHaveCount(5)
 
@@ -3165,27 +3165,30 @@ test('the operations are rows on one edge, and the delete is the only bordered o
   /* THE DELETE IS SET APART BY BEING SOMEWHERE ELSE AND BY BEING RED, which is the same
      statement the bordered bar made and is measured the same way: against an ordinary row, on
      screen, rather than against a class name. */
-  const bar = page.getByRole('button', { name: /^Delete this box…/ })
+  const bar = page.getByRole('button', { name: /^Delete$/ })
   await expect(bar).toHaveCount(1)
-  await expect(bar).toHaveAttribute('aria-label', /^Delete this box…, no undo$/)
+  await expect(bar).toHaveAttribute('aria-label', /^Delete$/)
   const ordinary = await rows.first().evaluate((node) => window.getComputedStyle(node).color)
   const danger = await bar.evaluate((node) => window.getComputedStyle(node).color)
   expect(danger, 'the delete is drawn in the same ink as an ordinary operation').not.toBe(ordinary)
   await expect(page.locator('.boxops-group-danger')).toContainText('Danger')
 
   /* AND THE BAR IS BORDERED, which is the half of this case's own name that nothing asserted.
-     The loop above proves the rows are bare and the lines below prove the bar says `no undo`;
-     between them the title claims the delete is the ONLY bordered one, and `.boxops-bar` losing
-     its `1px solid var(--ink)` would have left every assertion here green while the one step of
-     emphasis this palette allows went missing. All four sides, because it encloses — that is
-     the distinction the rows are measured against. */
+     The loop above proves the rows are bare; between them the title claims the delete is the
+     ONLY bordered one, and `.boxops-bar` losing its `1px solid var(--ink)` would have left
+     every assertion here green while the one step of emphasis this palette allows went
+     missing. All four sides, because it encloses — that is the distinction the rows are
+     measured against. */
   /* And it opens its own paragraph rather than firing: the press that spends is inside the
      confirmation, which is the case below. */
   await expect(bar).toHaveAttribute('aria-expanded', 'false')
 
-  /* `no undo` is said BEFORE the panel that spends a paragraph on it, and it is what keeps a
-     full-measure bordered control from being a short label beside 220px of white. */
-  await expect(bar.locator('.boxops-op-detail')).toHaveText('no undo')
+  /* F5 verbiage cut (row 175, DELETE): `no undo` is gone from this caption. The reviewer's own
+     reasoning — irreversibility is already signalled twice over, by the red "Danger" heading
+     and the bordered row asserted above — holds, and D288's OWN concern (a press that cannot
+     be undone keeps its words) is about the button's own label, "Delete", spelled out in
+     full above, not this secondary caption. */
+  await expect(bar.locator('.boxops-op-detail')).toHaveCount(0)
 })
 
 // ------------------------------------------------------------------------- the mass-select
@@ -3208,13 +3211,13 @@ test('ticking rows narrows what a box-wide claim will reach, and says so on the 
      them, so the computed name would concatenate to `Set claims5 cards` without the explicit
      `aria-label` that `Op` supplies. A promise that holds on screen and not in the accessibility
      tree is half a promise, and the number-on-the-control rule is D20's. */
-  const claims = page.getByRole('button', { name: /^Set claims/ })
-  await expect(claims.locator('.boxops-op-label')).toHaveText('Set claims')
+  const claims = page.getByRole('button', { name: /^Claims/ })
+  await expect(claims.locator('.boxops-op-label')).toHaveText('Claims')
   /* SEVEN, not the five on hand: the sweep is over RECORDS, and a departed card's claim is
      as correctable as any other — D58 changed which cards a NUMBER counts, not which cards a
      write reaches. */
   await expect(claims.locator('.boxops-op-detail')).toHaveText('7 cards')
-  await expect(claims).toHaveAttribute('aria-label', 'Set claims, 7 cards')
+  await expect(claims).toHaveAttribute('aria-label', 'Claims, 7 cards')
 
   /* THE TICKING HAPPENS IN THE WALK AND THE CONTROL LIVES IN A SHEET OVER IT, so the sheet is
      shut to reach the rows and opened again to read what they did to the control. That is the
@@ -3228,7 +3231,7 @@ test('ticking rows narrows what a box-wide claim will reach, and says so on the 
 
   await openBoxOps(page)
   await expect(claims.locator('.boxops-op-detail')).toHaveText('2 ticked')
-  await expect(claims).toHaveAttribute('aria-label', 'Set claims, 2 ticked')
+  await expect(claims).toHaveAttribute('aria-label', 'Claims, 2 ticked')
 
   /* AND THE ROW DID NOT CHANGE WIDTH WHILE IT SAID SO. The old label grew and shrank by ~150px
      with the selection, which is what `boxops-actions-lone` existed to keep off the delete's
@@ -3279,7 +3282,7 @@ test('the box claim sends only the ticked fields, over only the ticked indices',
   await page.locator('.browse-rowtick').nth(2).check()
 
   await openBoxOps(page)
-  await page.getByRole('button', { name: /^Set claims/ }).click()
+  await page.getByRole('button', { name: /^Claims/ }).click()
 
   // Nothing armed yet: an editor that opened with a field ticked would write to every card in
   // scope on the first press.
@@ -3309,7 +3312,7 @@ test('a claim with nothing ticked reaches the whole box, and never sends an empt
   const wire = await open(page)
   await openBoxOps(page)
 
-  await page.getByRole('button', { name: /^Set claims/ }).click()
+  await page.getByRole('button', { name: /^Claims/ }).click()
   await page.locator('.boxops-claim-row', { hasText: 'NOTE' }).getByRole('switch').check()
   await page.getByRole('textbox', { name: 'Note' }).fill('japanese')
   await page.getByRole('button', { name: /^Apply to/ }).click()
@@ -3357,7 +3360,7 @@ test('the box-claims finish control is a multi-select and sends a list', async (
   const wire = await open(page)
   await openBoxOps(page)
 
-  await page.getByRole('button', { name: /^Set claims/ }).click()
+  await page.getByRole('button', { name: /^Claims/ }).click()
   await page.locator('.boxops-claim-row', { hasText: 'FINISH' }).getByRole('switch').check()
 
   /* Tapped in the REVERSE of the game's enum order, deliberately. The claim has to leave in
@@ -3388,7 +3391,7 @@ test('untapping the last finish clears the claim rather than sending an empty li
   const wire = await open(page)
   await openBoxOps(page)
 
-  await page.getByRole('button', { name: /^Set claims/ }).click()
+  await page.getByRole('button', { name: /^Claims/ }).click()
   await page.locator('.boxops-claim-row', { hasText: 'FINISH' }).getByRole('switch').check()
   const chips = page.locator('.boxops-claim-row', { hasText: 'FINISH' }).locator('.boxops-chip')
   await chips.filter({ hasText: /^normal$/ }).click()
@@ -3408,7 +3411,7 @@ test('the product row is drawn for the game that claims products, and for no oth
 }) => {
   const wire = await open(page)
   await openBoxOps(page)
-  await page.getByRole('button', { name: /^Set claims/ }).click()
+  await page.getByRole('button', { name: /^Claims/ }).click()
 
   /* THE NEGATIVE FIRST. `codes/products.py:GAME` says ONE game claims a product, `GET /games`
      serves that key as `product_game`, and `ClaimEditor` compares the picked game against it.
@@ -3469,7 +3472,7 @@ test('a product claim armed against the code game leaves with it, rather than ri
 }) => {
   const wire = await open(page)
   await openBoxOps(page)
-  await page.getByRole('button', { name: /^Set claims/ }).click()
+  await page.getByRole('button', { name: /^Claims/ }).click()
 
   /* THE RULE `ClaimEditor` STATES AND NOTHING ASSERTED: a row that is not drawn is not armed.
      Arm Product against the code game, change the game back, and without the disarming effect
@@ -3509,7 +3512,7 @@ test('the mid-box delete aims with the target’s own capture id and reports the
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Thievul' }).nth(1).click()
   await openCardOps(page)
-  await page.getByRole('menuitem', { name: 'Remove this card…' }).click()
+  await page.getByRole('menuitem', { name: 'Remove' }).click()
   await page.getByRole('button', { name: 'Delete this card' }).click()
 
   const removed = wire.find((sent) => sent.path.endsWith('/remove'))
@@ -3586,7 +3589,7 @@ test('and the photograph follows the shift, because the URL names the capture', 
   await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?card=cap-3$/)
 
   await openCardOps(page)
-  await page.getByRole('menuitem', { name: 'Remove this card…' }).click()
+  await page.getByRole('menuitem', { name: 'Remove' }).click()
   await page.getByRole('button', { name: 'Delete this card' }).click()
 
   /* After: the SAME slot, a different card, and therefore a different URL — so the picture
@@ -3719,8 +3722,8 @@ test('a sold or retired card is not offered the mid-box delete at all', async ({
      `do_remove_card` refuses a sold card by name, because deleting it would erase the record of
      a departure D10 makes permanent. */
   await openCardOps(page)
-  await expect(page.getByRole('menuitem', { name: 'Remove this card…' })).toHaveCount(0)
-  await expect(page.getByRole('menuitem', { name: 'Correct claims' })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: 'Remove' })).toHaveCount(0)
+  await expect(page.getByRole('menuitem', { name: 'Correct' })).toBeVisible()
 })
 
 /* AN EMPTY BOX IS A BOX, AND FOR ONE COMMIT IT WAS UNREACHABLE.
@@ -3772,14 +3775,14 @@ test('a registered box with no cards is still reachable, and can still be delete
      otherwise perform at all, and the one the owner went looking for. */
   await expect(page.locator('.browse-empty')).toContainText('Nothing in asdfkopas yet')
   await openBoxOps(page)
-  await expect(page.getByRole('button', { name: /^Delete this box/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Delete$/ })).toBeVisible()
 
   /* The claim editor is NOT offered, because it is the one control here that writes CARDS and
      there are none — `Set claims on all 0 cards in box 6` was a real string on this screen for
      as long as it took to notice. Absent rather than disabled, per docs/DESIGN.md. */
-  await expect(page.getByRole('button', { name: /^Set claims/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Claims/ })).toHaveCount(0)
 
-  await page.getByRole('button', { name: /^Delete this box/ }).click()
+  await page.getByRole('button', { name: /^Delete$/ }).click()
   await page.getByRole('button', { name: 'Delete this box permanently' }).click()
   const deleted = wire.find((sent) => sent.method === 'DELETE')
   expect(deleted?.path).toBe('/boxes/6')
@@ -3828,10 +3831,10 @@ test('the whole-box delete takes two presses, and both of them name the box', as
      controls, so neither press can be made without the target on screen. That is what keeps
      this out of docs/DESIGN.md's ban on "are you sure" — the banned dialog's confirm says
      nothing about what it is confirming, and both of these say the box. */
-  await expect(page.getByRole('button', { name: /^Delete this box/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Delete$/ })).toBeVisible()
   expect(wire.filter((sent) => sent.method === 'DELETE')).toHaveLength(0)
 
-  await page.getByRole('button', { name: /^Delete this box/ }).click()
+  await page.getByRole('button', { name: /^Delete$/ }).click()
   const fire = page.getByRole('button', { name: 'Delete this box permanently' })
   await expect(fire).toBeVisible()
 
@@ -3967,7 +3970,7 @@ test('a listing hold is named on the delete panel rather than discovered by pres
 }) => {
   await open(page, HELD_BOXES)
   await openBoxOps(page)
-  await page.getByRole('button', { name: /^Delete this box/ }).click()
+  await page.getByRole('button', { name: /^Delete$/ }).click()
 
   /* D134: a listed copy is the only remaining ground for `box_not_empty_of_commitments` — a
      sold or retired record no longer blocks and is named as something that will be BURIED
@@ -4084,7 +4087,7 @@ test('the re-shoot lives inside Correct claims, and nowhere else on the panel', 
   await expect(page.getByRole('button', { name: 'Re-shoot this photo' })).toHaveCount(0)
 
   await openCardOps(page)
-  await page.getByRole('menuitem', { name: 'Correct claims' }).click()
+  await page.getByRole('menuitem', { name: 'Correct' }).click()
   await expect(page.getByRole('button', { name: 'Re-shoot this photo' })).toBeVisible()
 })
 
@@ -4142,7 +4145,7 @@ test('the box lives in the walk\'s column, and it is the only thing in that head
   await expect(page.locator('.browse-map').getByRole('button', { name: 'Manage' })).toBeVisible()
   await openBoxOps(page)
   await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Delete this box/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Delete$/ })).toBeVisible()
   await closeBoxOps(page)
 
   /* AND NOTHING ON THIS SCREEN CREATES A BOX (owner, 2026-08-26: "delete register a new box from
@@ -4340,7 +4343,7 @@ test('S1 — bringing a card back names the box, never its number', async ({ pag
   const wire = await open(page)
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
-  await page.getByRole('button', { name: 'Card actions' }).click()
+  await page.getByRole('button', { name: 'Actions' }).click()
   const bring = page.getByRole('menuitem', { name: 'Bring this card back' })
   await expect(bring).toBeVisible()
   await bring.click()
@@ -4384,7 +4387,7 @@ test('UN-7 — a sale built on is refused, and "This card is still here" is a di
   })
   await expandAll(page)
   await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
-  await page.getByRole('button', { name: 'Card actions' }).click()
+  await page.getByRole('button', { name: 'Actions' }).click()
 
   /* THE FIRST PRESS LEARNS IT, the same shape `sold_origin_unknown` already takes: there is
      no route to ask in advance, so the ordinary control is what refuses. */
@@ -4447,7 +4450,7 @@ test('UN-7 finding #4 — "still here" reads the server\'s own order_effect, nev
   await expandAll(page)
 
   await page.locator('.browse-row', { hasText: 'Eiscue' }).click()
-  await page.getByRole('button', { name: 'Card actions' }).click()
+  await page.getByRole('button', { name: 'Actions' }).click()
   await page.getByRole('menuitem', { name: 'Bring this card back' }).click()
   await page.getByRole('menuitem', { name: 'This card is still here' }).click()
   const noneToast = page.locator('.bn-toast', { hasText: 'Card undone' })
@@ -4456,7 +4459,7 @@ test('UN-7 finding #4 — "still here" reads the server\'s own order_effect, nev
   await expect(noneToast).not.toContainText('order')
 
   await page.locator('.browse-row', { hasText: 'Sneasler' }).click()
-  await page.getByRole('button', { name: 'Card actions' }).click()
+  await page.getByRole('button', { name: 'Actions' }).click()
   await page.getByRole('menuitem', { name: 'Bring this card back' }).click()
   await page.getByRole('menuitem', { name: 'This card is still here' }).click()
   const releasedToast = page.locator('.bn-toast', { hasText: 'Card undone' }).last()
@@ -4553,7 +4556,7 @@ test('UX-244 — one copy moves to another box from its own row, and the receipt
     })
   })
   const row = page.locator('.card-locations-row.is-current')
-  await row.getByRole('button', { name: 'Move to another box' }).click()
+  await row.getByRole('button', { name: 'Move', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: /^Move/ })
   await expect(dialog).toBeVisible()
 
@@ -4598,7 +4601,7 @@ test('UX-244 — a stale section on Move re-opens the pick with one plain senten
     })
   })
   const row = page.locator('.card-locations-row.is-current')
-  await row.getByRole('button', { name: 'Move to another box' }).click()
+  await row.getByRole('button', { name: 'Move', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: /^Move/ })
   await dialog.locator('.bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
@@ -4656,7 +4659,7 @@ test('(a) — the one-card Move panel also reads the boxes again after a stale s
   })
 
   const row = page.locator('.card-locations-row.is-current')
-  await row.getByRole('button', { name: 'Move to another box' }).click()
+  await row.getByRole('button', { name: 'Move', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: /^Move/ })
   await dialog.locator('.bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
@@ -4714,7 +4717,7 @@ test('UN-14 — a move gets an undo, the same fast path a sale gets, and it neve
     })
   })
   const row = page.locator('.card-locations-row.is-current')
-  await row.getByRole('button', { name: 'Move to another box' }).click()
+  await row.getByRole('button', { name: 'Move', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: /^Move/ })
   await expect(dialog).toBeVisible()
   await dialog.locator('.bn-pick').click()
@@ -4797,7 +4800,7 @@ test('UN-14 — a move built on is refused, and "Move back" is an ordinary move 
     })
   })
   const row = page.locator('.card-locations-row.is-current')
-  await row.getByRole('button', { name: 'Move to another box' }).click()
+  await row.getByRole('button', { name: 'Move', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: /^Move/ })
   await expect(dialog).toBeVisible()
   await dialog.locator('.bn-pick').click()
@@ -4939,7 +4942,7 @@ test('S4 — the move panel offers boxes most recent first, never by number', as
   })
   await open(page, boxes, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
 
-  await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Move to another box' }).click()
+  await page.locator('.card-locations-row.is-current').getByRole('button', { name: 'Move', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: /^Move/ })
   await expect(dialog).toBeVisible()
   await dialog.locator('.bn-pick').click()
@@ -4961,7 +4964,7 @@ test('S4 — the BoxOps "Move to box" select offers boxes most recent first, nev
   })
   await open(page, boxes, ACROSS, () => PRICING, SALE, { route: '/#/inventory?box=2' })
   await openBoxOps(page)
-  await page.getByRole('button', { name: 'Move to box' }).click()
+  await page.getByRole('button', { name: /^Move,/ }).click()
   await page.locator('.bn-field .bn-pick').click()
   await expect(page.locator('.bn-pick-opt')).toHaveText(['Extra shelf', 'ME01 spares'])
 })
@@ -4982,8 +4985,8 @@ test('D300 — BoxOps "Move to box" (the whole box or a range) also requires a s
   })
 
   await openBoxOps(page)
-  await page.getByRole('button', { name: 'Move to box' }).click()
-  const move = page.getByRole('button', { name: 'Move', exact: true })
+  await page.getByRole('button', { name: /^Move,/ }).click()
+  const move = page.locator('.boxops-sheet').getByRole('button', { name: 'Move', exact: true })
 
   await page.locator('.bn-field .bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
@@ -5015,11 +5018,11 @@ test('D300 — a stale section on BoxOps Move re-opens the pick with one plain s
   })
 
   await openBoxOps(page)
-  await page.getByRole('button', { name: 'Move to box' }).click()
+  await page.getByRole('button', { name: /^Move,/ }).click()
   await page.locator('.bn-field .bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
   await page.locator('.bn-section-pick-item').click()
-  const move = page.getByRole('button', { name: 'Move', exact: true })
+  const move = page.locator('.boxops-sheet').getByRole('button', { name: 'Move', exact: true })
   await move.click()
 
   await expect(page.locator('.boxops-sheet')).toContainText('there is no default place inside the box')
@@ -5068,7 +5071,7 @@ test('UN-14 — Move to box gets a real Undo, wired into the receipt like every 
   })
 
   const row = page.locator('.card-locations-row.is-current')
-  await row.getByRole('button', { name: 'Move to another box' }).click()
+  await row.getByRole('button', { name: 'Move', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: /^Move/ })
   await dialog.locator('.bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
@@ -5107,11 +5110,11 @@ test('F2 — the visible sentence names the section, and a divider key sits behi
   })
 
   await openBoxOps(page)
-  await page.getByRole('button', { name: 'Move to box' }).click()
+  await page.getByRole('button', { name: /^Move,/ }).click()
   await page.locator('.bn-field .bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
   await page.locator('.bn-section-pick-item').click()
-  await page.getByRole('button', { name: 'Move', exact: true }).click()
+  await page.locator('.boxops-sheet').getByRole('button', { name: 'Move', exact: true }).click()
 
   /* THE VISIBLE SENTENCE NAMES WHAT THE OWNER SAW, and a divider key never reaches it
    * (D196): the row read "Section 1", so the sentence says "Section 1", never "divider 33". */
@@ -5164,12 +5167,12 @@ test('F1 — a stale section on BoxOps Move reads the boxes again, so the re-pic
   })
 
   await openBoxOps(page)
-  await page.getByRole('button', { name: 'Move to box' }).click()
+  await page.getByRole('button', { name: /^Move,/ }).click()
   await page.locator('.bn-field .bn-pick').click()
   await page.locator('.bn-pick-opt', { hasText: 'ME01 spares' }).click()
   await expect(page.locator('.bn-section-pick-count')).toHaveText('40 cards')
   await page.locator('.bn-section-pick-item').click()
-  await page.getByRole('button', { name: 'Move', exact: true }).click()
+  await page.locator('.boxops-sheet').getByRole('button', { name: 'Move', exact: true }).click()
 
   /* THE RE-PICK OFFERS THE LIVE LIST: the sheet asked `GET /boxes` again after the refusal,
    * and the section now reads 41 cards — the answer a stale, un-refetched list could never
@@ -5180,7 +5183,7 @@ test('F1 — a stale section on BoxOps Move reads the boxes again, so the re-pic
    * The old divider is gone from the fresh list, so nothing may still read as picked, and
    * Move must read disabled again until the owner picks from the LIVE row. */
   await expect(page.locator('.bn-section-pick-item[aria-checked="true"]')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Move', exact: true })).toBeDisabled()
+  await expect(page.locator('.boxops-sheet').getByRole('button', { name: 'Move', exact: true })).toBeDisabled()
 })
 
 test('the neighbours are ranked, not joined — the names are the only thing drawn at ink', async ({
@@ -5213,7 +5216,7 @@ test('the neighbours are ranked, not joined — the names are the only thing dra
      not a second author's, which is what the one-composer rule in server.ts is for. */
   await expect(band).toHaveAttribute(
     'aria-label',
-    'It sits in front of Galio, Indefaticable and behind Evelynn, Entrancing.',
+    'Position: Galio, Indefaticable / Evelynn, Entrancing',
   )
 })
 
@@ -5284,7 +5287,7 @@ test('a card at the back of the box gets one row, not a pretend between', async 
   await expect(front.locator('.nb-rest')).toHaveCount(0)
   /* Nothing toward the back: card 1 is at the far back, so this card sits behind its one
      neighbour and in front of nothing (UX-186). */
-  await expect(front).toHaveAttribute('aria-label', 'It sits behind Conscription.')
+  await expect(front).toHaveAttribute('aria-label', 'Position: Conscription')
 })
 
 test('an unread neighbour is said in words, and counts as the neighbour (LOC-28)', async ({ page }) => {
@@ -5308,14 +5311,14 @@ test('an unread neighbour is said in words, and counts as the neighbour (LOC-28)
   await expect(reached.locator('.nb-side[data-side="back"]')).not.toContainText(/#\d/)
 
   /* AND IN `said`, WHICH IS THE HALF THE EYE CANNOT SEE HERE AND THE FULFILLER READS AT 20px. */
-  await expect(reached).toHaveAttribute('aria-label', 'It sits in front of 2 unread cards and behind Conscription.')
+  await expect(reached).toHaveAttribute('aria-label', 'Position: 2 unread cards / Conscription')
 
   /* A ROW WHOSE NEIGHBOURS ARE BOTH NAMED SAYS NO "unread", asserted on a DIFFERENT copy. */
   const adjacent = page.locator('.card-locations-owner .nb').first()
   await expect(adjacent.locator('.nb-unread')).toHaveCount(0)
   await expect(adjacent).toHaveAttribute(
     'aria-label',
-    'It sits in front of Galio, Indefaticable and behind Evelynn, Entrancing.',
+    'Position: Galio, Indefaticable / Evelynn, Entrancing',
   )
 })
 
@@ -5611,7 +5614,7 @@ test('a photo the store has lost gets a sentence, never a card-shaped hole', asy
      `Correct claims` — the sentence above points at it, so what matters is that it is there and
      on screen, not that it is drawn before it is asked for. */
   await openCardOps(page)
-  await page.getByRole('menuitem', { name: 'Correct claims' }).click()
+  await page.getByRole('menuitem', { name: 'Correct' }).click()
   /* Still `Re-shoot this photo` and not `Add a photo`: the record CLAIMS a photo and the file is
      gone, which is the 404 branch. `Add a photo` is the other absent case — `photo: null`, a card
      `emit` recorded that was never photographed — and the control tells them apart. */
@@ -6101,7 +6104,7 @@ test('the walk keeps a floor when the box editors open beneath it', async ({ pag
      four box-claim cases above failed with "element is outside of the viewport" the moment the
      claims editor opened. The column scrolls itself now, and the walk keeps a floor so it cannot
      be squeezed to nothing by an editor below it. */
-  await page.getByRole('button', { name: /^Set claims/ }).click()
+  await page.getByRole('button', { name: /^Claims/ }).click()
 
   const apply = page.getByRole('button', { name: /^Apply to/ })
   await expect(apply).toBeVisible()
@@ -6311,7 +6314,7 @@ test('Reload re-reads the price, because a join is what a reload is pressed afte
      gesture clears the cache AND re-fetches, so the row cannot be left on a stale reading. */
   at = Math.floor((Date.now() - 9 * 86400000) / 1000)
   await openCardOps(page)
-  await page.getByRole('menuitem', { name: 'Re-read the inventory' }).click()
+  await page.getByRole('menuitem', { name: 'Reread' }).click()
   await expect(market).toContainText('read 9 days ago')
   await expect(market.locator('.bn-tnum')).toHaveText('$5.47')
 })
@@ -7107,7 +7110,7 @@ test('D132 — a named section is said in the walk header, in the bar\'s sentenc
     })
   })
   await openBoxOps(page)
-  await page.getByRole('button', { name: /^Name sections/ }).click()
+  await page.getByRole('button', { name: /^Naming/ }).click()
   const field = page.locator('.boxops-section-names input').first()
   await expect(field).toHaveValue('Rares')
   await field.fill('Top rares')
@@ -7388,6 +7391,104 @@ test('D132 — the copies list, the rail and the landing lead with the section h
   /* And pressing box 2 under the same search lands in ITS fullest section, section 2. */
   await page.locator('.browse-boxcell[aria-label^="ME01 commons"]').click()
   await expect(page.locator('.card-locations-row.is-current .card-locations-identity')).toHaveAttribute('aria-label', 'Box 2, Section 2, Card 1')
+})
+
+/* ============================================================== F8: rank before pile size
+ *
+ * THE OWNER'S REPORT, 2026-09-27: searching "hand hammer" showed "Jayce, Hammer in Hand" first,
+ * and Hand Hammer's own copies did not surface until another box was picked by hand.
+ * `server/match.py`/`_match_rank` already ranks Hand Hammer (a NAME PREFIX) ahead of Jayce (a
+ * bare SUBSTRING match on its own name) — `do_search` sorts `groups` by that rank before the
+ * answer ever reaches the wire. The defect was `BoxBrowse.tsx` pooling every matched group's
+ * live pile by shelf with no regard for which one the server ranked better, so a weaker match
+ * with a bigger pile buried a stronger one that was in stock.
+ *
+ * A second report the same day, same shape: "shadow" showed a Zed card ahead of the card
+ * actually named Shadow — a name-prefix match against a bare substring one. One fixture proves
+ * both, because neither the query text nor the card names are what decides it: `rank` is. */
+
+/** A `SearchGroup` built by hand, WITH `rank` (F8) — `searchAnswer` above predates the field
+ *  and every group it builds ties at the same `undefined` rank, which is exactly why those
+ *  cases still pass unchanged: one tier, pooled, precisely today's rule for a fixture that
+ *  never asked to be ranked. This one asks. */
+function rankedGroup(sku: string, rank: number, cards: Cards) {
+  const copies = Object.entries(cards)
+    .filter(([, held]) => held.sku === sku)
+    .map(([key, held]) => ({ key, state: held.state, state_at: held.state_at, has_photo: true, place: held.place }))
+  const onHand = copies.filter((copy) => !GONE.includes(copy.state)).length
+  return {
+    sku,
+    names: [
+      ...new Set(
+        Object.values(cards)
+          .filter((held) => held.sku === sku && held.name !== null)
+          .map((held) => held.name as string),
+      ),
+    ],
+    number: '090',
+    printed_total: '132',
+    set_hint: 'ME01',
+    condition: 'Near Mint',
+    listed: { pushed: 0, staged: 0, live: 0 },
+    sold_here: 0,
+    live_as_of: null,
+    on_hand: onHand,
+    listable: onHand,
+    rank,
+    copies,
+  }
+}
+
+test('F8 — the rail and the landing lead with the best-ranked match, never the biggest live pile', async ({ page }) => {
+  /* One live Hand Hammer in box 2, three live Jayce, Hammer in Hand in box 7 — the smaller
+   * pile is the one the server ranked better. */
+  const cards: Cards = {
+    '2/1': card({ index: 1, state: 'identified', name: 'Hand Hammer', sku: '9001001', section: 1, sectionStart: 1, sectionEnd: 1 }),
+    '7/38': card({ index: 38, state: 'identified', name: 'Jayce, Hammer in Hand', sku: '9001002', section: 1, sectionStart: 1, sectionEnd: 40, box: 7, boxName: 'ME01 spares', boxTotal: 40 }),
+    '7/39': card({ index: 39, state: 'identified', name: 'Jayce, Hammer in Hand', sku: '9001002', section: 1, sectionStart: 1, sectionEnd: 40, box: 7, boxName: 'ME01 spares', boxTotal: 40 }),
+    '7/40': card({ index: 40, state: 'identified', name: 'Jayce, Hammer in Hand', sku: '9001002', section: 1, sectionStart: 1, sectionEnd: 40, box: 7, boxName: 'ME01 spares', boxTotal: 40 }),
+  }
+  /* SERVER ORDER, exactly `do_search`'s own sort (rank ascending): Hand Hammer (1) before
+   * Jayce (2). */
+  const store: Store = {
+    cards,
+    search: (query) => ({ query, groups: [rankedGroup('9001001', 1, cards), rankedGroup('9001002', 2, cards)] }),
+  }
+  await open(page, TWO_BOXES, store, () => PRICING, SALE, { route: '/#/inventory?box=2', hideSold: null })
+  await page.getByRole('searchbox').fill('hand hammer')
+
+  /* WAIT FOR THE ANSWER TO LAND, NOT FOR A GUESS AT ITS TIMING. Box 2 is already both the
+   * FIRST tile and `aria-current` from the deep link before any search runs — asserting
+   * either straight after `fill` would pass on a stale, pre-search DOM exactly as readily as
+   * on a correct one. The match count only draws once `results` has actually landed, and
+   * every reader below (`order`, `cells`) is derived off that same state in the same render,
+   * so this is the earliest point a check here can trust what it sees. */
+  await expect(page.locator('.browse-boxcell-meta').first()).toContainText(/match/)
+
+  /* THE RAIL LEADS WITH BOX 2 (Hand Hammer), never box 7 (Jayce's three-copy pile). */
+  await expect(page.locator('.browse-boxcell').first()).toHaveAttribute('aria-label', /^ME01 commons/)
+  await expect(page.locator('.browse-boxcell[aria-current="true"]')).toHaveAttribute('aria-label', /^ME01 commons/)
+  await expect(page.locator('.card-locations-row.is-current .card-locations-identity')).toHaveAttribute('aria-label', 'Box 2, Section 1, Card 1')
+})
+
+test('F8 — the top match being sold says so, with a press that reveals it', async ({ page }) => {
+  /* Hand Hammer's one copy has sold. Jayce, Hammer in Hand still has one live, in another box —
+   * so the walk has somewhere live to go, and the banner is what says the BEST match is gone. */
+  const cards: Cards = {
+    '2/1': card({ index: 1, state: 'sold', name: 'Hand Hammer', sku: '9002001', section: 1, sectionStart: 1, sectionEnd: 1 }),
+    '7/38': card({ index: 38, state: 'identified', name: 'Jayce, Hammer in Hand', sku: '9002002', section: 1, sectionStart: 1, sectionEnd: 40, box: 7, boxName: 'ME01 spares', boxTotal: 40 }),
+  }
+  const store: Store = {
+    cards,
+    search: (query) => ({ query, groups: [rankedGroup('9002001', 1, cards), rankedGroup('9002002', 2, cards)] }),
+  }
+  await open(page, TWO_BOXES, store, () => PRICING, SALE, { route: '/#/inventory?box=7', hideSold: null })
+  await page.getByRole('searchbox').fill('hand hammer')
+
+  await expect(page.locator('.browse-topsold')).toContainText('Hand Hammer: 1 copy, all sold')
+  await expect(page.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Show sold cards' }).click()
+  await expect(page.locator('.browse-hidesold')).toHaveAttribute('aria-pressed', 'false')
 })
 
 /* ------------------------------------------------------- the order stops moving under a sale
@@ -8049,7 +8150,7 @@ test.skip(
        mechanism. */
     const cardActionsBtn = card === null
       ? null
-      : [...card.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Card actions') ?? null
+      : [...card.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Actions') ?? null
     const before = document.activeElement
     cardActionsBtn?.focus()
     const cardActionsFocused = cardActionsBtn !== null && document.activeElement === cardActionsBtn
@@ -8102,8 +8203,8 @@ test.skip(
   expect(snap.cardOpacity, '.browse-card computed opacity').toBeLessThan(1)
   expect(snap.cardPointerEvents, '.browse-card computed pointer-events').toBe('none')
   expect(snap.cardInert, '.browse-card is inert while dimmed').toBe(true)
-  expect(snap.cardActionsPresent, '"Card actions" button exists in the dimmed panel').toBe(true)
-  expect(snap.cardActionsFocusable, '"Card actions" is NOT focusable while the panel is inert').toBe(false)
+  expect(snap.cardActionsPresent, '"Actions" button exists in the dimmed panel').toBe(true)
+  expect(snap.cardActionsFocusable, '"Actions" is NOT focusable while the panel is inert').toBe(false)
   expect(snap.box2Photo, "box 2's photo alt count, held dimmed").toBe(1)
   expect(snap.underOwnerCount, '.browse-under draws the held CopiesPanel, not nothing').toBe(1)
   expect(snap.underRowCount, '.browse-under draws real held copy rows, not an empty panel').toBeGreaterThan(0)
@@ -8351,7 +8452,7 @@ test('D218: this lane\'s own facts draw the separator, never type it', async ({ 
   expect(await census.innerText()).not.toMatch(/[·•]/)
 
   await openBoxOps(page)
-  await page.getByRole('button', { name: /^Name sections/ }).click()
+  await page.getByRole('button', { name: /^Naming/ }).click()
   const sheet = page.locator('.boxops-sheet')
   expect(await sheet.innerText()).not.toMatch(/[·•]/)
 })

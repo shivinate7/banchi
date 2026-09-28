@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useId } from 'react'
-import type { HTMLAttributes, ReactNode } from 'react'
+import type { CSSProperties, HTMLAttributes, ReactNode } from 'react'
 import { Icon, type IconName } from './Icon'
 import { useInOverlay } from './overlay'
 
@@ -215,6 +215,27 @@ export function Loading({
       )}
     </div>
   )
+}
+
+/** ONE SHIMMERING BAR, `--bn-skeleton`'s own shape as a component (R2-class): the class is
+ *  reserved to the kit, so a screen whose own loading shape is not one of `Loading`'s three
+ *  (a bespoke card, a report's own uneven lines) reaches for this rather than typing
+ *  `className="bn-skeleton"` by hand. `width`/`height` take anything CSS would; `className`
+ *  reaches the screen's own sizing rule where a fixed inline size is not enough (a row that
+ *  sizes itself, or a `:nth-child` set of uneven widths). Decorative by construction
+ *  (`aria-hidden`) — the sentence naming what is loading lives beside it, in `role="status"`. */
+export function Skeleton({
+  width,
+  height,
+  className,
+  style,
+}: {
+  readonly width?: string | number
+  readonly height?: string | number
+  readonly className?: string
+  readonly style?: CSSProperties
+}) {
+  return <div aria-hidden="true" className={['bn-skeleton', className].filter(Boolean).join(' ')} style={{ ...style, width, height }} />
 }
 
 /** A titled part of a page. The title is a heading a screen reader can jump to (UX-095): an h2

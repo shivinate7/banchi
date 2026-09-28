@@ -13,7 +13,8 @@
  * the base path is answered from `dist-demo/` and nothing reaches Vite). With
  * `DEMO_PREVIEW_URL` set — for example `http://localhost:4173` while `make demo-preview`
  * runs — each file is fetched from that preview server instead, so the same assertions read
- * what the preview serves. Either way the page itself talks to one origin only, and
+ * what the preview serves. Either way the page itself talks to its own origin and to one named
+ * outside host, `tcgplayer-cdn.tcgplayer.com` (DEBT47, closed — see the allow-list below), and
  * `sealEveryTest` still refuses anything else.
  *
  * SKIPPED, BY NAME, WHEN THERE IS NO BUILD. `make design-check` does not build the demo, so a
@@ -34,7 +35,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DEV_URL } from '../devPort'
-import { sealEveryTest } from './shell'
+import { isOutside, sealEveryTest } from './shell'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DIST = join(HERE, '..', '..', 'dist-demo')
@@ -52,31 +53,36 @@ function basePath(): string {
 
 const REFUSAL = 'Not in this demo.'
 
-// A ONE-PIXEL STUB, NEVER THE GUARD. `pipeline/stockimages.py` (D301) hotlinks Riftbound and
-// One Piece stock images straight from `tcgplayer-cdn.tcgplayer.com` — that is the design, not
-// a leak, and the published page really does load them. `sealOutside` (shell.ts) exists to
-// catch every OTHER outside request, and widening its allow-list to a real vendor host would
-// weaken it for every spec that imports it, not only this one. So this file alone routes that
-// one host to a local image, registered AFTER `sealEveryTest()` — Playwright checks the most
-// recently registered handler first, so this answers before `sealOutside`'s catch-all ever
-// sees the request.
-const STUB_PIXEL = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64',
-)
-
-sealEveryTest()
-
-test.beforeEach(async ({ page }) => {
-  await page.route('https://tcgplayer-cdn.tcgplayer.com/**', (route) =>
-    route.fulfill({ contentType: 'image/png', body: STUB_PIXEL }),
-  )
-})
+// THE ONE NAMED HOST, NEVER A STUB (DEBT47, closed). `pipeline/stockimages.py` (D301)
+// hotlinks Riftbound and One Piece stock images straight from `tcgplayer-cdn.tcgplayer.com` —
+// that is the design, not a leak, and the published page really does load them. A one-pixel
+// stub used to answer in its place, which tested a rule the shipped page does not follow: the
+// owner's own words, "isn't that a scenario of revising the test like the test is the wrong
+// test to keep now?" So this file names the one host it is allowed to actually reach —
+// `sealOutside`'s own `allowOutside` option (shell.ts), never a widened default there, which
+// would weaken the seal for every OTHER spec that imports it — and lets the real request land.
+// `the seal still refuses a host not on the allow list` below proves every other outside host
+// is refused exactly as before.
+sealEveryTest({ allowOutside: ['tcgplayer-cdn.tcgplayer.com'] })
 
 test.skip(!BUILT && !REQUIRED, 'no dist-demo/ in this checkout: run `make demo-static` first')
 
 test('the demo was built', () => {
   expect(BUILT, 'DEMO_REQUIRED=1 and there is no dist-demo/index.html').toBe(true)
+})
+
+// A UNIT TEST OF THE PREDICATE, NOT A LIVE FETCH — the reason is `sealOutside`'s own
+// mechanism: it both ABORTS and RECORDS an outside request, and this file's own `afterEach`
+// (`sealEveryTest`, shell.ts) fails any test that leaves a recorded escape behind, on purpose.
+// So a case that deliberately drove a second host through the real page would trip that
+// blanket assertion regardless of what it itself expected, which is the wrong test to write
+// against a guard built to fail loudly. `isOutside` is the whole rule the seal applies; reading
+// it directly proves the allow-list names exactly one host and nothing wider.
+test('the seal still refuses a host that is not on the allow list', () => {
+  const allowed = new URL('https://tcgplayer-cdn.tcgplayer.com/product/684215_200w.jpg')
+  const other = new URL('https://example.com/anything')
+  expect(isOutside(allowed, ['tcgplayer-cdn.tcgplayer.com'])).toBe(false)
+  expect(isOutside(other, ['tcgplayer-cdn.tcgplayer.com'])).toBe(true)
 })
 
 /** Serve the built demo on this checkout's own origin, the way a static host would. On the
@@ -137,7 +143,7 @@ async function visitFulfiller(page: Page): Promise<Page> {
   await openRoot(page)
   const [fulfiller] = await Promise.all([
     page.waitForEvent('popup'),
-    page.locator('.bn-side').getByRole('link', { name: /^Cards to pull/ }).first().click(),
+    page.locator('.bn-side').getByRole('link', { name: 'Pull' }).first().click(),
   ])
   await fulfiller.locator('main, body').first().waitFor()
   await fulfiller.waitForTimeout(600)
@@ -178,7 +184,7 @@ test.describe('the published demo draws what reviewers grade', () => {
   test.afterEach(async ({ page }, testInfo) => {
     if (testInfo.status === 'passed') return
     if (testInfo.title !== 'Orders draws a walk') return
-    const walkAll = page.getByRole('button', { name: /^Walk all \d+ buyers?$/ })
+    const walkAll = page.getByRole('button', { name: /^Walk \d+$/ })
     const walkAllCount = await walkAll.count().catch(() => -1)
     const walkAllLabel =
       walkAllCount > 0
@@ -196,8 +202,8 @@ test.describe('the published demo draws what reviewers grade', () => {
       .innerText({ timeout: 3_000 })
       .catch((exc) => `<could not read main: ${String(exc).slice(0, 200)}>`)
     console.log('=== Orders draws a walk: failure evidence ===')
-    console.log('"Walk all N buyers" button count:', walkAllCount)
-    console.log('"Walk all N buyers" button label:', walkAllLabel)
+    console.log('"Walk N" button count:', walkAllCount)
+    console.log('"Walk N" button label:', walkAllLabel)
     console.log(`"${REFUSAL}" count:`, refusalCount)
     console.log('console/pageerror during this test:', ordersConsole.length === 0 ? '<none>' : '')
     for (const line of ordersConsole) console.log(' ', line)
@@ -236,10 +242,10 @@ test.describe('the published demo draws what reviewers grade', () => {
       if (screen === 'Review') {
         // `/Card \d+ of \d+/` matched no text `ReviewQueue.tsx` has ever drawn — the
         // progress line reads "Nothing is waiting." when the queue is empty and
-        // "<N> done, <M> to go" otherwise (UX-256). Invisible until this branch's own
+        // "Progress <N> of <M>" otherwise (UX-256). Invisible until this branch's own
         // re-snapshot put a real, non-empty queue in the recording for the first time.
         const empty = page.getByText('Nothing is waiting.')
-        await expect(empty.or(page.getByText(/\d+ done, \d+ to go/))).toBeVisible()
+        await expect(empty.or(page.getByText(/Progress \d+ of \d+/))).toBeVisible()
         if ((await empty.count()) > 0) {
           await expect(page.getByText(REFUSAL)).toHaveCount(0)
           return
@@ -328,7 +334,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     // STALE, REWRITTEN 2026-09-27 (D295 full mirror, plus an unrelated aria-label rename):
     // no order is ticked by default, and nothing named "cards this walk covers" exists any
     // more — `OrdersWalkPane.tsx:WalkList`'s list is now "The cards to pick, in the order
-    // the boxes are walked". Press "Walk all N buyers" first (the demo-mirror-data-build
+    // the boxes are walked". Press "Walk N" first (the demo-mirror-data-build
     // lane's walk-plan fix records exactly this "walk all" set), then read the current list.
     //
     // THE PRIOR FIX (CI run 36314954311) RAISED THE WRONG TIMEOUT. Pressing "Walk all"
@@ -342,7 +348,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     // is the knob that actually needed raising.
     test.setTimeout(60_000)
     await visit(page, 'Orders')
-    await page.getByRole('button', { name: /^Walk all \d+ buyers?$/ }).first().click()
+    await page.getByRole('button', { name: /^Walk \d+$/ }).first().click()
     const walk = page.getByRole('list', { name: /cards to pick/i })
     await expect(walk).toBeVisible({ timeout: 45_000 })
     // DEBT23's shape: the list container appearing does not mean its rows have. A bare
@@ -358,11 +364,11 @@ test.describe('the published demo draws what reviewers grade', () => {
     await visit(page, 'Review')
     // REAL, NOT STALE (2026-09-27, D295 full mirror). Whether the owner's store owes an
     // answer right now is a fact about today, so this reads the queue's own progress line
-    // ("Nothing is waiting." when empty, "<N> done, <M> to go" otherwise, UX-256 — never
+    // ("Nothing is waiting." when empty, "Progress <N> of <M>" otherwise, UX-256 — never
     // `/Card \d+ of \d+/`, which no version of ReviewQueue.tsx has drawn) rather than
     // asserting either shape by name. Answer-then-undo runs only when a card is queued;
     // an empty queue asserts the honest empty state instead of fabricating a card.
-    const label = page.getByText(/\d+ done, \d+ to go/)
+    const label = page.getByText(/Progress \d+ of \d+/)
     const empty = page.getByText('Nothing is waiting.')
     await expect(label.or(empty)).toBeVisible()
     if ((await empty.count()) > 0) {

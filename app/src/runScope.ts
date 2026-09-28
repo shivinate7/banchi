@@ -1,3 +1,4 @@
+import { boxTitle } from './kit/data'
 import type { RunSummary } from './types'
 
 /* WHICH DRAWER A RUN WAS OVER, AND WHAT THE OWNER CALLS IT — one answer, three screens.
@@ -48,18 +49,17 @@ export function boxOf(row: RunSummary): number | null {
   return null
 }
 
-/** `Box 3 · RB Epics`, or `Box 3` where the owner has not named it.
+/** The drawer's own NAME, or `Box <n>` where it has none — `boxTitle`'s own fallback.
  *
- *  BOTH HALVES, NEVER ONE. `CLAUDE.md` is explicit that the name travels BESIDE the number
- *  rather than replacing it, and both are load-bearing on these screens: the name is what the
- *  operator recognises, and the number is the shelf they walk to, the directory the
- *  photographs are in, and what every refusal in `server/pipeline_routes.py` names.
- *
- *  AN UNNAMED BOX DRAWS NO SEPARATOR AND NO PLACEHOLDER. D20 makes a name unique and
- *  deliberately NOT required, so unnamed is an ordinary box rather than a defect, and `Box 3 ·
- *  —` would draw a fault where there is none. Same for a box that has since been deleted:
- *  the run remembers a number the registry no longer has, and the number alone is the honest
- *  rendering of that. */
+ *  D259 OVERRIDES THIS FUNCTION'S OWN EARLIER ARGUMENT. It used to draw `Box 3 · RB Epics`,
+ *  both halves always, because D56 has the number travel beside the name. The owner's later
+ *  ruling is explicit that the number is never shown, "those box numbers are arbitrary index
+ *  values". The box-sweep that found this also found the typed `·` itself was a defect on its
+ *  own: a literal middle dot baked into the template, which D218 forbids independently of
+ *  D259. Both are fixed the same way, by falling to `boxTitle`'s single name-or-number
+ *  answer. A box that has since been deleted still gets the honest fallback: the run
+ *  remembers a number the registry no longer has, and the number alone is what is left to
+ *  say. */
 /*  A REAL BOX NUMBER GETS A STRING BACK. Every caller but `runBoxLabel` passes a number the
  *  types already guarantee — `CartBox.box` and `RunScope.box` are both plain `number` — so a
  *  nullable return had three call sites each answering a state none of them can be in, and
@@ -88,8 +88,7 @@ export function boxLabel(
   name: string | null | undefined,
 ): string | null {
   if (typeof box !== 'number') return null
-  const named = typeof name === 'string' ? name.trim() : ''
-  return named === '' ? `Box ${box}` : `Box ${box} · ${named}`
+  return boxTitle(name, box)
 }
 
 /** The same, for a run, which carries all three fields itself. `null` where the run names no
@@ -109,23 +108,16 @@ export function boxLabel(
  *  performing. `docs/DESIGN.md`'s register rule is sentences a person reads, and the sentence
  *  here is *the box 1 I deleted*.
  *
- *  THE NUMBER STAYS, AND THE ID NEVER APPEARS. `Box 1 (deleted)` rather than `Box #1` or a bare
- *  id: the number is what the run's directory name says, what its photographs are filed under
- *  and what every refusal in `server/pipeline_routes.py` names, so removing it would cost the
- *  operator the thread back to all three (D56's argument for keeping both halves). What is
- *  added is the one word saying that drawer is not on the shelf any more.
- *
- *  THE NAME IS THE DEPARTED DRAWER'S OWN, joined by the server off the `box_deleted` history
- *  line rather than off the registry — there is no registry entry left. So `Box 1 (deleted) ·
- *  Pokemon shakedown` is the full sentence where the drawer was named, and `Box 1 (deleted)`
- *  where it was not, or where the run is old enough that the server could tell THAT the drawer
- *  departed without being able to say WHICH it was. */
+ *  D259 OVERRIDES THE REST OF THIS ENTRY'S OWN ARGUMENT (this function used to say the
+ *  reverse — see `boxLabel`'s own note above). The title is `boxTitle`'s single answer, name
+ *  or number, and `(deleted)` is appended after it rather than typed beside a second `·`. The
+ *  name behind that title is the departed drawer's own, joined by the server off the
+ *  `box_deleted` history line rather than off the registry — there is no registry entry left. */
 export function runBoxLabel(row: RunSummary): string | null {
   const box = boxOf(row)
   if (typeof box !== 'number') return null
-  if (row.box_former !== true) return boxLabel(box, row.box_name)
-  const named = typeof row.box_name === 'string' ? row.box_name.trim() : ''
-  return named === '' ? `Box ${box} (deleted)` : `Box ${box} (deleted) · ${named}`
+  const title = boxTitle(row.box_name, box)
+  return row.box_former === true ? `${title} (deleted)` : title
 }
 
 /** What the capture screen calls the drawer in front of the operator: its NAME, and its number
@@ -153,8 +145,7 @@ export function runBoxLabel(row: RunSummary): string | null {
  *  screen's own filmstrip and receipts included: the Fulfiller reads those, and he is walking a
  *  shelf he did not pack. */
 export function captureBoxLabel(box: number, name: string | null | undefined): string {
-  const named = typeof name === 'string' ? name.trim() : ''
-  return named === '' ? `Box ${box}` : named
+  return boxTitle(name, box)
 }
 
 /** SEVERAL DRAWERS, AS ONE PHRASE — `boxLabel`'s plural, and the name is deliberately dropped

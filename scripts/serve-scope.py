@@ -61,6 +61,12 @@ SCOPE = (
     {"path": "scripts/primary_sync.py",
      "why": "in the supervisor's SELF_FILES and imported at module scope, so a tree without "
             "it cannot start one at all."},
+    {"path": "scripts/reap_mark.py",
+     "why": "`do_up` imports this at module scope since 7e80e3df to mark the real detached "
+            "supervisor child, so a tree without it fails every `serve.py` invocation at "
+            "import time."},
+    {"path": "scripts/reap.py",
+     "why": "`reap_mark.py` imports `checkout_root` and `proc_start_epoch` from here."},
     {"path": "envfile.py", "why": "carried into the copy; the supervisor reads it at start."},
     {"path": "server/**", "why": "the capture server the supervisor re-execs."},
     {"path": "store/**", "why": "carried; the capture server opens the store on boot."},

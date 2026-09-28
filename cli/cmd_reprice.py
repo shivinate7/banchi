@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -858,6 +859,12 @@ def _apply(args, say) -> int:
         say("and sales may have moved since. Read what is live again, then price from that read.")
         return 1
 
+    # THE FAST REFUSAL, FOR THE ORDINARY CASE, BEFORE ANY BYTE IS BUILT. Checked again below,
+    # INSIDE THE LOCK, right before the write — that second check is the one that counts
+    # (DEBT53). A caller that read a revision, then waited here for CSV building and a
+    # `Store().write()` block, then waited AGAIN for another writer's corpus lock, was
+    # checking a revision that could go stale on either wait. This one only saves the work of
+    # building a file this command is about to refuse to write.
     offered_revision = getattr(args, "corpus_revision", None)
     if offered_revision:
         current = corpus.revision()
@@ -887,14 +894,155 @@ def _apply(args, say) -> int:
         seen.add(sku)
 
     target = path.parent / IMPORT
-    tcgcsv.write_csv(target, tcgcsv.CANONICAL_HEADER, rows)
 
-    # THIS IS THE ROUND THE OWNER ASKED ABOUT — a SKU marked down a second, third or fourth
-    # time. `edit.was` is the price this markdown replaces, already in hand from the
-    # worklist's own manifest read, so `replaced` is never a guess or a second store lookup
-    # (D243). `run` names the markdown by its own folder stamp, since a
-    # reprice apply has no run directory of its own.
+    # ONE LOCK, HELD ONCE, AND THE REVISION IS REFUSED BEFORE ANYTHING IS WRITTEN (fixes
+    # the defect DEBT53's own fix left behind). `Store().write()` already takes
+    # `files.exclusive(files.inventory_dir())` inside itself (`store/session.py:Store.write`)
+    # — the SAME flock this command used to take a SECOND time, over the same directory, for
+    # the corpus half. `flock` is not re-entrant across two open file descriptions even in one
+    # process, so the old code — a `Store().write()` block for the posting, THEN a fresh
+    # `files.exclusive(files.inventory_dir())` for the corpus check-and-write — was one hold
+    # nested inside a lookalike of itself. It happened not to deadlock only because the first
+    # `with` closed (releasing the flock) before the second opened it again. That gap is
+    # exactly where `import.csv` and the posting were already on disk before the ONE check
+    # that matters could still refuse the corpus answer — the defect this fixes.
+    #
+    # So there is now one hold, and everything moves inside it: the fresh revision check,
+    # the corpus write, the posting, and `import.csv` last. A refusal here writes NONE of the
+    # three. THIS IS THE CHECK THAT COUNTS (DEBT53): the one above only saves the work of
+    # building a file this command may still refuse to write; this one is taken immediately
+    # before the write, so nothing after it can move the file first.
     with Store().write() as writable:
+        if offered_revision:
+            current = corpus.revision()
+            if current and offered_revision != current:
+                say("")
+                say("REFUSED — the pricing file changed since this was read: another tab, "
+                    "another command, or an edit on disk. Nothing is written. Re-read and "
+                    "try again.")
+                return 1
+
+        # `os.replace(temp, target)` IS THE LAST STEP, AND ITS FAILURE IS UNDONE BY WRITING
+        # THE CORPUS'S OWN PRE-IMAGE BACK — NEVER BY DELETING A FILE (round 4, found by
+        # re-review of round 3). Round 3 renamed the CSV into place FIRST, reasoning that an
+        # `os.replace` failure afterward could just unlink what it had landed. Re-review found
+        # two holes in that:
+        #
+        # (a) `target` is the markdown directory's fixed name. A SECOND apply over the same
+        # markdown lands its rename on top of the FIRST apply's real `import.csv`. Undoing by
+        # unlinking then deletes that earlier file too — the rename cannot tell "a file I just
+        # created" from "a file that was already there and I overwrote", because a rename
+        # destroys that distinction the instant it lands. A REFUSED sentence claiming nothing
+        # was written was then false: an earlier, real file was gone.
+        #
+        # (b) The cleanup unlinks carried no guard of their own. An unlink that raises (a
+        # permissions change mid-cleanup) left the corpus-write exception PROPAGATING RAW,
+        # past `cli/__main__.py:main` — which catches only `RunError`, `FileNotFoundError`
+        # and `KeyboardInterrupt` — as a traceback in front of the operator, with `import.csv`
+        # still on disk and nothing in the corpus behind it.
+        #
+        # SO THE ORDER CHANGES AGAIN, TO ONE WHERE `target` IS NEVER TOUCHED UNTIL THE FINAL,
+        # INTENDED OVERWRITE, AND NOTHING IS EVER UNDONE BY DELETING SOMETHING ELSE COULD HAVE
+        # WRITTEN. Write the temp CSV. Keep the corpus's PRE-IMAGE (`before`), read under this
+        # same lock. Write the corpus. Only THEN `os.replace` the temp CSV into `target` — the
+        # one deliberate overwrite this command makes, and the last thing that may still fail.
+        # If it does, the corpus write already landed, so it is undone by WRITING THE
+        # PRE-IMAGE BACK, in its own try. The temp file is removed, in its own try. Neither
+        # cleanup step touches `target`: whatever was there before this press — nothing, or an
+        # earlier real `import.csv` — is exactly what is there after a refusal, because the
+        # one operation that could have changed it never completed.
+        #
+        # IF THE CORPUS RESTORE ITSELF FAILS, the corpus is left holding this press's price
+        # with no file behind it. That is said OUT LOUD, by SKU and price, rather than
+        # silently claimed as "nothing written" — the one state this fix cannot repair, named
+        # instead of hidden. Every branch here is caught: the exit is 1, the sentence is
+        # REFUSED, and nothing ever reaches `cli/__main__.py:main` as a raw exception.
+        temp_target = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+        try:
+            tcgcsv.write_csv(temp_target, tcgcsv.CANONICAL_HEADER, rows)
+
+            # THE ANSWER GOES IN THE CORPUS, KEYED BY SKU (D86). Without this the next `emit`
+            # over another copy of the same card re-lists it at the rule price and quietly
+            # undoes the markdown — the marked-down price is the store's price for that SKU
+            # from now on, not a property of this file. `at` is what the ratchet reads next
+            # time: a SKU answered inside the window is refused as `priced_recently` unless
+            # `--again`.
+            #
+            # THE STAMP GOES THROUGH `corpus.stamp_answers` RATHER THAN BEING SET HERE, so
+            # that this command and `PUT /pricing` date an answer by one rule. Setting `at`
+            # inline was the only place in the repo that ever wrote it, which is why
+            # `priced_recently` meant "marked down recently" while D100 claimed it meant
+            # "priced recently, by any hand".
+            #
+            # `before` IS KEPT, NOT ONLY READ — it is this press's ROLLBACK, verbatim, if the
+            # rename below fails after this write has already landed.
+            before = corpus.Corpus.read()
+            book = corpus.Corpus.read()
+            stamp = master.now()
+            for edit in application.edits:
+                book.answers[edit.sku] = corpus.Answer(value=str(edit.now))
+            corpus.stamp_answers(before, book, stamp)
+            book.write()
+        except Exception as exc:
+            # NOTHING LANDED YET: the corpus write either never ran or never completed
+            # (`write_atomic` — what `Corpus.write()` uses — never leaves `prices.json`
+            # half-written on its own exception), and `target` was never touched. Only the
+            # temp file can exist here, so only it is removed.
+            try:
+                if temp_target.exists():
+                    temp_target.unlink()
+            except Exception:
+                pass
+            say("")
+            say(f"REFUSED — could not write the markdown: {exc}. Nothing from this attempt "
+                "landed: no corpus answer, and any earlier import.csv is untouched.")
+            return 1
+
+        try:
+            os.replace(temp_target, target)
+        except Exception as exc:
+            # THE CORPUS ALREADY HOLDS THIS PRESS'S PRICE. UNDO IT BY WRITING THE PRE-IMAGE
+            # BACK — never by touching `target`, which this branch never renamed into and so
+            # never owns. Each cleanup step is its own try, so one failing never hides the
+            # other or escapes as a raw exception.
+            restore_exc = None
+            try:
+                before.write()
+            except Exception as re_exc:
+                restore_exc = re_exc
+            try:
+                if temp_target.exists():
+                    temp_target.unlink()
+            except Exception:
+                pass
+            say("")
+            if restore_exc is None:
+                say(f"REFUSED — could not write {IMPORT}: {exc}. The corpus answer was put "
+                    "back to what it was; any earlier import.csv is untouched. Fix the "
+                    "problem and try again.")
+            else:
+                say(f"REFUSED — could not write {IMPORT}: {exc}.")
+                say(f"WORSE — the corpus answer could not be put back either: {restore_exc}.")
+                say("The corpus now holds these markdown prices with NO file behind them:")
+                for edit in application.edits:
+                    say(f"  {edit.sku:<10} {tcgcsv.format_price(edit.now)}")
+                say(f"No {IMPORT} landed. Check {corpus.FILENAME} by hand before trusting it.")
+            return 1
+
+        # THIS IS THE ROUND THE OWNER ASKED ABOUT — a SKU marked down a second, third or
+        # fourth time. `edit.was` is the price this markdown replaces, already in hand from
+        # the worklist's own manifest read, so `replaced` is never a guess or a second store
+        # lookup (D243). `run` names the markdown by its own folder stamp, since a reprice
+        # apply has no run directory of its own.
+        #
+        # RECORDED LAST, AND IT IS THE ONE WINDOW THIS FIX DOES NOT CLOSE. The corpus and
+        # `import.csv` are both real by this line. `record()` only appends to a list;
+        # `Store().write()` flushes it with `db.append_postings` at its own `COMMIT`, on the
+        # way out of this `with` block. A crash or a disk failure between here and that
+        # `COMMIT` leaves the corpus and `import.csv` consistent WITH EACH OTHER, and only the
+        # posting row missing — never the reverse, and never a file or a price with nothing
+        # behind it. Closing this last window needs one transaction across two stores
+        # (`store.sqlite` and `inventory/prices.json`), which is not built here (DEBT53).
         for edit in application.edits:
             writable.postings.record(
                 sku=edit.sku,
@@ -903,24 +1051,6 @@ def _apply(args, say) -> int:
                 run=path.parent.name,
                 replaced=tcgcsv.format_price(edit.was) if edit.was is not None else None,
             )
-
-    # THE ANSWER GOES IN THE CORPUS, KEYED BY SKU (D86). Without this the next `emit` over
-    # another copy of the same card re-lists it at the rule price and quietly undoes the
-    # markdown — the marked-down price is the store's price for that SKU from now on, not a
-    # property of this file. `at` is what the ratchet reads next time: a SKU answered inside
-    # the window is refused as `priced_recently` unless `--again`.
-    #
-    # THE STAMP GOES THROUGH `corpus.stamp_answers` RATHER THAN BEING SET HERE, so that this
-    # command and `PUT /pricing` date an answer by one rule. Setting `at` inline was the only
-    # place in the repo that ever wrote it, which is why `priced_recently` meant "marked down
-    # recently" while D100 claimed it meant "priced recently, by any hand".
-    before = corpus.Corpus.read()
-    book = corpus.Corpus.read()
-    stamp = master.now()
-    for edit in application.edits:
-        book.answers[edit.sku] = corpus.Answer(value=str(edit.now))
-    corpus.stamp_answers(before, book, stamp)
-    book.write()
 
     lines = [
         f"markdown applied {stamp}",

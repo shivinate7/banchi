@@ -250,7 +250,7 @@ test('the listing-correction control is reachable on #/inventory for a card not 
 
   // The control sits beside the card's identity, inside the Details disclosure this file's
   // sibling already asserts is on screen without a click at desktop width.
-  const wrongCard = page.getByRole('button', { name: 'Wrong card?' })
+  const wrongCard = page.getByRole('button', { name: 'Correct' })
   await expect(wrongCard).toBeVisible()
   await wrongCard.click()
 

@@ -18,6 +18,13 @@ import { sealEveryTest } from './shell'
  *   h1       exactly one visible h1, and its text is the route's `title ?? label`
  *   width    the page's max-width is `--bn-page-w`
  *   top      the h1 sits `--bn-page-top` below the page's top
+ *   headGap  `.bn-page-body`'s top minus the bottom of whatever `Page` draws directly above
+ *            it (the header, or its own verdict/toolbar/status when the screen passes one)
+ *            equals THAT element's own `margin-bottom`, with no second gap stacked on top of
+ *            it (F4: Capture's own flex `gap` once doubled the header's margin — 28px at
+ *            1440, 20px at 390, against every other screen's 16-24px). A route with no header
+ *            (`header={false}`, the Fulfiller's screen) is exempt: there is no header to
+ *            leave a gap after.
  *   scroll   nothing scrolls sideways
  *   title    `document.title` is one FIXED title, "番地 " and the screen name in lowercase
  *            ("番地 pricing", "番地 home"). No alternation, no "— Banchi". The owner's ruling,
@@ -73,7 +80,7 @@ type Allow = Record<string, Record<string, string>>
 const ALLOW: Allow =
   (JSON.parse(readFileSync(resolve(ROOT, 'scripts/kit-adoption-allow.json'), 'utf8')) as { runtime?: Allow }).runtime ?? {}
 
-const PER_ROUTE = ['page', 'h1', 'width', 'top', 'scroll', 'title'] as const
+const PER_ROUTE = ['page', 'h1', 'width', 'top', 'headGap', 'scroll', 'title'] as const
 const SHELL_WIDE = ['palette', 'keys'] as const
 const ASSERTIONS: readonly string[] = [...PER_ROUTE, ...SHELL_WIDE]
 
@@ -143,6 +150,7 @@ const EXEMPT: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   fulfiller: {
     width: 'D5 (two personas) and docs/DESIGN.md\'s Fulfillment floors: the Fulfiller\'s screen has no shell and sizes its own column.',
     top: 'D5 and docs/DESIGN.md\'s Fulfillment floors: no shell, so no shared top gap to sit under.',
+    headGap: 'D5: `header={false}` (no shell) means there is no `.bn-page-head` to leave a gap after.',
     title: 'D5: the Fulfiller\'s tab names the task and carries no brand.',
   },
 }
@@ -252,6 +260,14 @@ for (const route of ROUTE_TABLE) {
         const main = pages.length === 1 ? pages[0] : null
         const h1s = Array.from(document.querySelectorAll<HTMLElement>('h1')).filter((h) => h.checkVisibility())
         const h1 = h1s.length === 1 ? h1s[0] : null
+        const head = main ? main.querySelector<HTMLElement>(':scope > .bn-page-head') : null
+        const body = main ? main.querySelector<HTMLElement>(':scope > .bn-page-body') : null
+        /* THE ELEMENT DIRECTLY ABOVE THE BODY, NOT ALWAYS THE HEADER: `Page` may also draw a
+           verdict, a toolbar or a status slot between them (Page.tsx), each with its own
+           `margin-bottom`. The gap onto the body must equal THAT element's own margin, whichever
+           one it is — never a header-to-body distance that a verdict or toolbar would legitimately
+           widen past `head`'s own margin, and never a second gap stacked on top of it either. */
+        const lastBeforeBody = body ? (body.previousElementSibling as HTMLElement | null) : null
         return {
           pages: pages.length,
           h1s: h1s.map((h) => (h.textContent ?? '').trim()),
@@ -259,6 +275,9 @@ for (const route of ROUTE_TABLE) {
           pageW: probe('width', 'var(--bn-page-w)'),
           gap: main && h1 && main.contains(h1) ? h1.getBoundingClientRect().top - main.getBoundingClientRect().top : null,
           pageTop: probe('height', 'var(--bn-page-top)'),
+          headGap: lastBeforeBody && body ? body.getBoundingClientRect().top - lastBeforeBody.getBoundingClientRect().bottom : null,
+          headGapWant: lastBeforeBody ? parseFloat(getComputedStyle(lastBeforeBody).marginBottom) : null,
+          hasHead: head !== null,
           sideways: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         }
       })
@@ -269,6 +288,13 @@ for (const route of ROUTE_TABLE) {
       const wide = applies(route, 'width') ? widthFailure(m.maxWidth, m.pageW) : null
       if (wide !== null) fail('width', `${at}: ${wide}`)
       if (applies(route, 'top') && (m.gap === null || Math.abs(m.gap - m.pageTop) > 1)) fail('top', `${at}: h1 gap ${m.gap === null ? 'none' : m.gap.toFixed(1)}, want ${m.pageTop}`)
+      if (applies(route, 'headGap')) {
+        if (!m.hasHead || m.headGap === null || m.headGapWant === null) {
+          fail('headGap', `${at}: no .bn-page-head/.bn-page-body pair to measure`)
+        } else if (Math.abs(m.headGap - m.headGapWant) > 1) {
+          fail('headGap', `${at}: gap onto the body ${m.headGap.toFixed(1)}, want ${m.headGapWant.toFixed(1)} (the element right above it's own margin-bottom, no extra gap stacked on it)`)
+        }
+      }
       if (m.sideways > 0) fail('scroll', `${at}: scrolls sideways by ${m.sideways}px`)
     }
     const measured = PER_ROUTE.filter((a) => a !== 'title' && applies(route, a))
@@ -387,9 +413,9 @@ test('the palette and the keyboard sheet name every route', async ({ page }) => 
   await expect(palette).toBeHidden()
 
   await page.keyboard.press('?')
-  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+  const sheet = page.getByRole('dialog', { name: 'Shortcuts' })
   await expect(sheet).toBeVisible()
-  const showAll = sheet.getByRole('button', { name: /Show every screen/ })
+  const showAll = sheet.getByRole('button', { name: 'More' })
   if (await showAll.isVisible()) await showAll.click()
   /* An entry names a route when a row's own text is the route's label: "Home" in the jump
      group. The row's own text is its direct text, without the "when" note beside it. */

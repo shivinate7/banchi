@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest hand-search-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -56,284 +56,19 @@ RUFF_GUARD = @$(PYTHON) -m ruff --version >/dev/null 2>&1 || { \
 	echo "  Fix: make venv"; \
 	exit 1; }
 
+# ONE SOURCE: the comment directly above each target's rule (token-budget audit,
+# 2026-09-27, Q1). This used to be a second, hand-typed ~22 KB copy of every target's
+# purpose, and CLAUDE.md's Commands section carried a third; the three had already
+# drifted. `scripts/make-help.py` renders this one, so there is one place to edit a
+# target's description. `make docs-audit`'s `commands roster` row reconciles CLAUDE.md's
+# short list against the real targets, both ways.
+# python3, not $(PYTHON): a step-away tool that needs `make venv` first is not a
+# step-away tool. Same rule as `status`, `map`, `explain` and `docs-audit`.
 help:
-	@echo "PKMNSCAN — run 'make status' for where the build actually stands."
-	@echo
-	@echo "  make status       where you are: next step, T1 score, branch. Derived."
-	@echo "  make map          docs/map.py, rendered. ARGS=<package|path|D<n>|--stale>"
-	@echo "                    ARGS=\"D<n> --full\" prints that entry in full."
-	@echo "  make explain      what \`make check\` runs, and what each row is worth."
-	@echo "                    ARGS=<target> for one entry in full."
-	@echo "  make venv         .venv + requirements.txt   (before the first harness run, and"
-	@echo "                    again whenever requirements.txt changes — safe to re-run)"
-	@echo "  make worktree-setup  venv + T1's banked cache, for a fresh git worktree"
-	@echo "  make worktree-provision-selftest  that node_modules clone/install logic, on a fixture"
-	@echo "  make launch-config   .claude/launch.json for THIS checkout's dev port (D43)"
-	@echo "  make hooks        arm the git hooks          (once, and again after every clone)"
-	@echo "  make harness      T1-T8 verification tests. Run at turn end by the Stop hook."
-	@echo "  make docs-audit   markdown vs the code it describes. Reports; never writes."
-	@echo "  make map-fix      add the ids a file cites to its governed_by in docs/map.py."
-	@echo "                    THE ONE GENERATOR INTO A DOC: it gates nothing (D18)."
-	@echo "                    Previews. ARGS=--write applies. ARGS=--selftest proves it."
-	@echo "  make map-fix-selftest  that generator, over a throwaway map it writes and drops."
-	@echo "  make offenders-prune  delete stale entries from the two offender lists, and"
-	@echo "                    re-key a renamed file. Never adds one. Gates nothing (D18)."
-	@echo "                    Previews. ARGS=--write applies."
-	@echo "  make offenders-prune-selftest  that pruner, in memory and in a throwaway repo."
-	@echo "  make text-density  on-demand cut table over the text checks' own seeded screens"
-	@echo "                    (D-text-shape-checks). Never a gate. ARGS=\"--route '#/x'\"."
-	@echo "  make orient       which component renders the thing, and what selects it."
-	@echo "                    ARGS=<file.tsx> [--name <Component>]. Derived, never stored."
-	@echo "  make vale         prose style over every tracked .md. Needs vale; never gates."
-	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
-	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
-	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
-	@echo "  make merge-selftest  the merge wrapper's local half, in a throwaway repo and worktree."
-	@echo "  make revert-guard  does this branch put a file back the way main had it before a"
-	@echo "                    commit main already carries? Refuses an unexplained reversal (D133)."
-	@echo "  make revert-selftest  the guard, proved by rebuilding PR #218/#221 in a throwaway repo."
-	@echo "  make claim-ids        what the merge will allocate for this branch's slug ids. ARGS=--write."
-	@echo "  make claim-stale      has an id this branch already claimed been taken by main"
-	@echo "                    since? Reports and never repairs (D140, amended). Writes nothing."
-	@echo "  make claim-selftest   the claimer, proved with main moving underneath the branch."
-	@echo "  make decisions-selftest  docs/decisions/ is complete and still round-trips."
-	@echo "  make debts-selftest      docs/debts/ is complete and still round-trips."
-	@echo "  make gates-selftest      docs/gates/ is complete and still round-trips."
-	@echo "  make catalog-refresh  re-clone pokemon-tcg-data and refresh vendor/pokemon-tcg-data/"
-	@echo "                    (D15). Writes; never gates. ARGS=--dry-run to preview the diff."
-	@echo "  make catalog-index  build vendor/pokemon-tcg-data/catalog.sqlite from the snapshot."
-	@echo "  make catalog-index-selftest  that builder and pipeline/catalog.py, proved on a"
-	@echo "                    throwaway fixture. Fast. NOT wired into \`make check\`'s list as"
-	@echo "                    shipped, deliberately — never in the hook either."
-	@echo "  make catalog-mirror  fill the pokemontcg.io image mirror. ARGS=--dry-run samples up"
-	@echo "                    to 200 images over HTTP HEAD and reports the byte total; writes"
-	@echo "                    nothing. Bare form fills it for real — not run by any target here."
-	@echo "  make submission-selftest  the identify claim table, proved by racing two presses"
-	@echo "                    over one card. In \`check\`, never in the hook."
-	@echo "  make cid-selftest  the card's stable name and the photograph store, proved by"
-	@echo "                    violating them: a stripped name that heals byte-identically, a"
-	@echo "                    renumber that renames nothing, a move that touches no file, a"
-	@echo "                    re-shoot excused by a RECORDED digest, and a -9 mid-transaction."
-	@echo "                    Counts syscalls, because an outcome assertion cannot see work"
-	@echo "                    that no longer happens. In \`check\`, never in the hook."
-	@echo "  make pricearchive-selftest  D-pricehistory-resolves-by-sku's three tiers,"
-	@echo "                    merged_export_rows_by_sku and row_for_sku, proved against a"
-	@echo "                    throwaway store and real cached-export files under mktemp."
-	@echo "                    PATH GATED (D247's sixteenth). In \`check\`, never in the hook."
-	@echo "  make archive-review-selftest  cli/archive_review.py, proved against a throwaway"
-	@echo "                    store, no network: an identification refusal reaches the"
-	@echo "                    review queue with its photo, a network-shaped one never does."
-	@echo "                    PATH GATED (D247's seventeenth). In \`check\`, never in the hook."
-	@echo "  make holdings-selftest  pipeline/holdings.py, proved against in-memory fixtures,"
-	@echo "                    no store on disk, no network: on-hand quantity, the gap"
-	@echo "                    guard, sealed-product exclusion, each with a mutation arm."
-	@echo "                    PATH GATED (D247's eighteenth). In \`check\`, never in the hook."
-	@echo "  make identity-checks-selftest  pipeline/identity_checks.py's four stored-data"
-	@echo "                    checks, proved against literal fixtures, no store, no network."
-	@echo "                    PATH GATED (D247's nineteenth). In \`check\`, never in the hook."
-	@echo "  make price-postings-selftest  store/postings.py's price_postings table, proved"
-	@echo "                    against a throwaway store: two postings of one SKU land two"
-	@echo "                    rows, and --mutate-to-upsert proves the append-only property."
-	@echo "                    PATH GATED (D247's twentieth). In \`check\`, never in the hook."
-	@echo "  make product-history-selftest  pipeline/productview.py and"
-	@echo "                    server/pipeline_routes.py:do_product_history, proved against a"
-	@echo "                    throwaway store: archive-hit and live-fallback, no network"
-	@echo "                    call on the archive-hit arm."
-	@echo "                    PATH GATED (D247's twenty-first). In \`check\`, never in the hook."
-	@echo "  make sku-number-contradictions-selftest  pipeline/sku_number_contradictions.py,"
-	@echo "                    proved against literal fixtures and duck-typed Market fakes,"
-	@echo "                    no store, no network."
-	@echo "                    PATH GATED (D247's twenty-second). In \`check\`, never in the hook."
-	@echo "  make cid-audit    does every card's name still resolve to its photograph? Reads"
-	@echo "                    the whole corpus, so it is NOT in \`check\` — \`make lan-check\`'s"
-	@echo "                    reason. Three verdicts, and the third is \`not known\`."
-	@echo "  make readings-selftest  the cached market-reading table, proved against an"
-	@echo "                    independent reimplementation of its own two-source walk."
-	@echo "                    In \`check\`, never in the hook."
-	@echo "  make skus-selftest  the store-owned SKU table (identity-follows-sku.md lane 0):"
-	@echo "                    rows equal distinct ids, an older file never overwrites a"
-	@echo "                    newer one, a changed fact writes one event and keeps the row,"
-	@echo "                    no delete path, a version-10 store upgrades to 11 with every"
-	@echo "                    other table's rows intact. In \`check\`, never in the hook."
-	@echo "  make identity-store-selftest  the one writer (identity-follows-sku.md lane 1):"
-	@echo "                    bind_sku stamps the identity off a skus row for Pokemon,"
-	@echo "                    Riftbound and a double-sided token cell; unbind_sku round-trips"
-	@echo "                    it; SkuUnknown/GameMismatch both write nothing;"
-	@echo "                    record_identification writes only read_* on a bound card. No"
-	@echo "                    store, no disk write at all. In \`check\`, never in the hook."
-	@echo "  make identity-binding-selftest  the migration's classifier and the merged"
-	@echo "                    D242/D255 report (identity-follows-sku.md §5.5/§7, lane 2):"
-	@echo "                    every class T1-T6/sku_unknown in order, the human-bound"
-	@echo "                    exclusion, both report halves. No store. In \`check\`, never"
-	@echo "                    in the hook."
-	@echo "  make identity-replay ARGS=\"--store <copy.sqlite>\"  the replay, before any"
-	@echo "                    write (identity-follows-sku.md §7.4): the same classifier,"
-	@echo "                    against a COPY of a real store, asserting the six checks"
-	@echo "                    §7.4 names. Never \`check\`-gated — it needs a store copy the"
-	@echo "                    owner supplies, not a fixture."
-	@echo "  make identity-readers-selftest  the evidence readers (identity-follows-sku.md"
-	@echo "                    lane 4): requeue.identified and resolve.store_payload both"
-	@echo "                    carry a bound card's DISPUTED read name, never its bound"
-	@echo "                    SKU's own catalog row, and both refuse loudly on a bound"
-	@echo "                    card with no recorded evidence rather than echo the catalog."
-	@echo "                    No store, no disk write at all. In \`check\`, never in the hook."
-	@echo "  make identity-cli-selftest  the CLI writers (identity-follows-sku.md lane 3b):"
-	@echo "                    emit upserts the matched row then binds through bind_sku;"
-	@echo "                    a re-identification writes only read_* on a bound card;"
-	@echo "                    join --export and reconcile --live fill the table from every"
-	@echo "                    row. In \`check\`, never in the hook."
-	@echo "  make janitor-selftest  the sweep, proved against a throwaway clone. In \`check\`, never in the hook."
-	@echo "  make reap-selftest  the kill guard, proved by pointing it at what it must not kill."
-	@echo "  make silent-write-selftest  the silenced-write guard, proved by reproducing the"
-	@echo "                    refused commit whose refusal went to /dev/null."
-	@echo "  make guard-shell-selftest  the eight-clause shell guard, proved by committing its"
-	@echo "                    mistakes in a throwaway repo: a destroyed file, a write into"
-	@echo "                    another checkout, a nested symlink, a pattern that is not a process."
-	@echo "  make coordinator-selftest  the merge-queue verdict rules. No network."
-	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
-	@echo "  make browser-scope-selftest  the browser-matrix classifier's spec map, on"
-	@echo "                    fixtures and on the real tree (D-browser-spec-allow-list)."
-	@echo "  make js-breakpoints-selftest  a JS media query's viewport width against what"
-	@echo "                    the stylesheets declare (D123), proved by violating it then"
-	@echo "                    fixing it. python3 only, no browser."
-	@echo "  make subagent-override-selftest  the subagent-model override row, proved in a"
-	@echo "                    real throwaway git repo with a real nested worktree: an"
-	@echo "                    undated override is red, a currently-dated one is green,"
-	@echo "                    an expired or too-far-dated one is red again."
-	@echo "  make verdict-selftest  the design-check verdict reporter, run for real. No browser."
-	@echo "  make serve-selftest  the supervisor's build job, against a throwaway tree. No node."
-	@echo "                    PATH GATED: skipped when nothing in the branch reaches it."
-	@echo "                    PKMNSCAN_SERVE_SCOPE=off runs it regardless."
-	@echo "  make serve-scope   what serve-selftest reads, and whether this branch touches it."
-	@echo "                    ARGS=list | ARGS=\"classify --base <rev>\". Fails open."
-	@echo "  make serve-scope-selftest  that gate, including a CARRY drift it must catch."
-	@echo "  make guard-scope   the SECOND path gate: what each of 22 guard self-tests reads,"
-	@echo "                    derived from its own source. ARGS=list [--target <name>] |"
-	@echo "                    ARGS=\"classify --target <name> --base <rev>\". Fails open."
-	@echo "                    PKMNSCAN_GUARD_SCOPE=off runs every gated self-test regardless."
-	@echo "  make guard-scope-selftest  that gate, both-ways wiring included."
-	@echo "  make sync-selftest  the primary checkout's self-sync, proved by violating it."
-	@echo "  make port-agreement  server/ports.py and app/devPort.ts answer the same numbers."
-	@echo "  make port-slots-selftest  two throwaway trees forced into one port slot: a test run in"
-	@echo "                    one refuses the other's server, and a claim gives each its own."
-	@echo "  make set-hint-agreement  the capture screen and the export fetch resolve a set hint alike."
-	@echo "  make readiness-agreement  app/src/readiness.ts against pipeline/decisions.py:blocking."
-	@echo "  make mutate-anchors  every mutation anchor still present in the guard it targets. 0.03s."
-	@echo "  make mutate-guards   RUN the mutations: each guard's suite must go red. ~190s, off check."
-	@echo "  make screen-freshness  every server write in app/ has a way back. Needs node."
-	@echo "  make screen-freshness-selftest  that guard's own cases, both directions. It sat"
-	@echo "                    on no target at all until 2026-09-12 and was red on main."
-	@echo "  make sigil-check   a bare \`#\` on a screen is a COUNT, never a store key (D92)."
-	@echo "  make css-var-check   a \`var(--x)\` with no fallback where \`--x\` is defined"
-	@echo "                    nowhere — the whole declaration drops silently."
-	@echo "  make css-var-check-selftest  that checker, proved on fixtures in both directions,"
-	@echo "                    including a property defined only from TSX."
-	@echo "  make token-literal-check  a CSS literal exactly equal to a design token's value,"
-	@echo "                    in its own property family — should have been var(...)."
-	@echo "                    Ratcheted per file; PKMNSCAN_TOKEN_LITERALS=off skips it."
-	@echo "  make token-literal-check-selftest  that checker, on fixtures in both directions."
-	@echo "  make kit-adoption  every route renders <Page> from the kit, and no screen hand-rolls"
-	@echo "                    a kit primitive (D-page-scaffold). A shrinking allow list."
-	@echo "  make kit-adoption-selftest  that checker, on in-memory fixtures in both directions."
-	@echo "  make demo-determinism-selftest  scripts/demo-determinism.py's own path-matcher,"
-	@echo "                    on fixtures — no subprocess, no \`make demo\`."
-	@echo "  make match-selftest  the one forgiving matcher, server side (FLT-06/04, UX-173):"
-	@echo "                    server/match.py against match.cases.json, then _match_rank and"
-	@echo "                    do_search end to end against a throwaway store."
-	@echo "  make ignore-check  every path a worktree provisions is gitignored, link or not (D47)."
-	@echo "  make icloud-sweep  list iCloud conflict copies. ARGS=--delete removes the identical ones."
-	@echo "  make janitor      what a finished session left behind. ARGS=--confirm reaps tier 2."
-	@echo "  make janitor-agent  run that sweep daily, unattended, with a log as its receipt."
-	@echo "                    MAIN TREE ONLY. ARGS=--remove takes it away."
-	@echo "  make reap         stop what THIS session started, and nothing else. Previews;"
-	@echo "                    ARGS=--confirm presses. ARGS=\"port:5484 --confirm\" for one port."
-	@echo "  make ci-check     what a fresh clone can prove: everything in check but vale."
-	@echo "  make janitor-install  copy the sweep to ~/.claude/bin so every repo's hooks can reach it."
-	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
-	@echo "                    write. Reaches the network, so it never gates a commit."
-	@echo "  make coordinator  the merge queue, READ rather than remembered: main, every open"
-	@echo "                    PR with a SHA-pinned verdict, the worktrees, the live sessions."
-	@echo "                    Reaches the network, so it never gates a commit."
-	@echo "  make heartbeat    docs/GATES.md item 24: calls coordinator.py plus whether main's"
-	@echo "                    own last push is green and janitor's preview. Never a daemon,"
-	@echo "                    never --confirm. Writes .serve/heartbeat/, never gates a commit."
-	@echo "  make check        harness + docs-audit + claim-stale + revert-guard +"
-	@echo "                    port-agreement + set-hint-agreement + readiness-agreement +"
-	@echo "                    screen-freshness +"
-	@echo "                    screen-freshness-selftest + sigil-check +"
-	@echo "                    css-var-check + css-var-check-selftest + token-literal-check +"
-	@echo "                    kit-adoption + ignore-check +"
-	@echo "                    lint + vale + typecheck + audit-self-test +"
-	@echo "                    mutate-anchors +"
-	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
-	@echo "                    claim-selftest + decisions-selftest + debts-selftest +"
-	@echo "                    gates-selftest + submission-selftest +"
-	@echo "                    cid-selftest + pricearchive-selftest +"
-	@echo "                    archive-review-selftest + holdings-selftest +"
-	@echo "                    identity-checks-selftest + price-postings-selftest +"
-	@echo "                    product-history-selftest +"
-	@echo "                    sku-number-contradictions-selftest + readings-selftest +"
-	@echo "                    skus-selftest + identity-store-selftest +"
-	@echo "                    identity-binding-selftest +"
-	@echo "                    identity-readers-selftest +"
-	@echo "                    identity-cli-selftest +"
-	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
-	@echo "                    guard-shell-selftest +"
-	@echo "                    coordinator-selftest + suite-lock-selftest +"
-	@echo "                    browser-scope-selftest +"
-	@echo "                    serve-selftest + sync-selftest + verdict-selftest +"
-	@echo "                    js-breakpoints-selftest + subagent-override-selftest +"
-	@echo "                    guard-scope-selftest + token-literal-check-selftest +"
-	@echo "                    kit-adoption-selftest + port-slots-selftest +"
-	@echo "                    demo-determinism-selftest + match-selftest"
-	@echo
-	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
-	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
-	@echo "  ./pkmnscan emit     <run-dir>                     write import CSVs. Free."
-	@echo "  ./pkmnscan reconcile <run-dir> <staged-export>    confirm what TCGplayer staged."
-	@echo "  make up           THE server, detached: the API and the app on one port, and it"
-	@echo "                    reloads itself when you edit Python and rebuilds the app when"
-	@echo "                    you edit a screen (D138). Prints the link. Start here."
-	@echo "  make merge        merge a PR and move main onto it (D42). ARGS=<n> previews;"
-	@echo "                    ARGS=\"<n> --confirm\" performs it. On the owner's word only."
-	@echo "  make down         stop it.  make up ARGS=--restart  stop and start."
-	@echo "  make launch-agent start at login, so the link is always live. Main tree only."
-	@echo "                    ARGS=--remove to undo it."
-	@echo "  make dev          Vite with hot reload on :5173, against the server make up is"
-	@echo "                    running. Blocks — background it in a session."
-	@echo "  make server       Python capture server. :8000 in the main tree, its own port in a"
-	@echo "                    worktree (D43) — it prints which. Blocks — background it."
-	@echo "  make screenshot   render the views in scripts/views.txt to captures/ui/"
-	@echo "  make design-check docs/DESIGN.md's Fulfillment floors, asserted in a browser. Takes"
-	@echo "                    a machine-wide lock: one browser fleet at a time, across every"
-	@echo "                    checkout (D122). ARGS=--wait queues instead of refusing."
-	@echo "                    Leaves the verdict in .serve/design-check.json — read that,"
-	@echo "                    never a \`tail\` pipe, which buffers the whole run."
-	@echo "                    PW_ARGS=<flags> reaches Playwright itself (--shard, one spec);"
-	@echo "                    ARGS never does. CI shards it three ways this way (D136)."
-	@echo "  make design-check-quiet  the same run without the per-test progress stream."
-	@echo
-	@echo "  make demo         seed a demo store and record the wire into a fixture bundle."
-	@echo "  make demo-photos  curate real card photographs into the tracked set. Needs a"
-	@echo "                    store: SOURCE=<checkout>. Refuses any photo carrying a QR."
-	@echo "  make demo-histories  record the demo's price histories into new fixtures. The"
-	@echo "                    owner's Mac only, with PKMNSCAN_TCG_USER_AGENT set. Never CI."
-	@echo "  make demo-seed    the store alone, built on the curated photographs."
-	@echo "  make demo-record  the bundle alone — sweep every GET the client can build."
-	@echo "  make demo-mirror  THE PUBLISHED SOURCE (D-demo-mirror): scrub a real store copy."
-	@echo "                    Owner's Mac only. SOURCE=<checkout>. Commits only the scrub."
-	@echo "  make demo-mirror-rebuild  re-scrub the existing snapshot, no real store read."
-	@echo "  make demo-mirror-install  CI's step: install the committed scrub. No store, no net."
-	@echo "  make demo-static  demo-mirror-install, then a static build to dist-demo/."
-	@echo "                    DEMO_BASE=<path> is where it will be served from."
-	@echo "  make demo-preview serve dist-demo/ exactly as a static host would."
-	@echo "  make demo-freshness  whether the bundle still matches the wire it recorded."
-	@echo "  make demo-determinism  whether two \`make demo\` runs write the same bundle content."
-	@echo "  make lint         eslint over app/, ruff over the Python packages (D82)."
-	@echo "  make typecheck    tsc --noEmit over app/"
-	@echo
-	@echo "Build order and gates: docs/GATES.md"
+	@python3 scripts/make-help.py
 
+# `.venv` + requirements.txt. Idempotent — safe to re-run whenever
+# requirements.txt changes (VENV_GUARD is what notices and asks for the re-run).
 venv: launch-config
 	@python3 -m venv .venv
 	@.venv/bin/python -m pip install --quiet --upgrade pip
@@ -547,8 +282,8 @@ map:
 #
 # scripts/checks.py is a PARALLEL DECLARATION and deliberately does not drive the recipe.
 # A registry that drove the suite could silently stop running a check; this one can only lie,
-# and `make docs-audit` has three rows that catch it lying — `check registry` against the
-# recipe, `check census` against the published prose, and `commit path writes`, which asserts
+# and `make docs-audit` has two rows that catch it lying — `check registry` against the
+# recipe and the published prose, and `commit path writes`, which asserts
 # D18 mechanically by refusing any writing check on the commit path.
 #
 # python3, not $(PYTHON): a step-away tool that needs `make venv` first is not a step-away
@@ -557,6 +292,8 @@ explain:
 	@python3 scripts/checks.py $(ARGS)
 
 
+# T1-T9 and T11, the ten verification tests. No longer run automatically at turn
+# end (D248) — a session runs this itself before saying something works.
 harness:
 	$(VENV_GUARD)
 	@$(PYTHON) harness/run.py
@@ -585,14 +322,21 @@ docs-audit:
 map-fix:
 	@python3 scripts/map-fix.py $(ARGS)
 
+# That generator, over a throwaway map it writes and drops. Not in `make check`,
+# on `map-fix`'s own precedent above.
 map-fix-selftest:
 	@python3 scripts/map-fix.py --selftest
 
 # A DELETING GENERATOR, AND IT GATES NOTHING (D18; D-ratchets-become-offender-lists). It deletes
-# the STALE entries from the two shrinking offender lists, scripts/ste-offenders.json and
-# scripts/typed-interpunct-allow.json, and re-keys a file that git's rename detection says
-# moved. It never adds an entry. It reads with the rows' own functions, imported, so the two
-# cannot disagree about what is stale. Previews. ARGS=--write applies.
+# the STALE entries from the three shrinking offender lists, scripts/typed-interpunct-allow.json,
+# scripts/line-anchor-offenders.json and scripts/markdown-spelling-allow.json, and re-keys a
+# file that git's rename detection says moved. It never adds an entry. It reads with the rows'
+# own functions, imported, so the pruner and the gates cannot disagree about what is stale.
+# Previews. ARGS=--write applies.
+# A fourth list, scripts/ste-offenders.json, was cut 2026-09-27 (test-audit plan): the
+# write-time STE hook already lints new prose, so the `ste offenders` row was retired with it
+# (D226; D229; D280 amended). scripts/markdown-spelling-allow.json joined the same day (owner's
+# ruling: "Shrinking offender list now"), over the `identifier spelling` row's markdown half.
 #
 # NOT A PREREQUISITE OF ANYTHING, never wired to a hook, and its self-test is not in
 # `make check`, on `map-fix`'s precedent above: the rows that read these lists already run on
@@ -600,6 +344,8 @@ map-fix-selftest:
 offenders-prune:
 	@python3 scripts/offenders-prune.py $(ARGS)
 
+# That pruner, in memory and in a throwaway repo. Not in `make check`, on the
+# same precedent as `map-fix-selftest`.
 offenders-prune-selftest:
 	@python3 scripts/offenders-prune.py --selftest
 
@@ -635,6 +381,29 @@ orient:
 audit-history:
 	@python3 scripts/audit-history.py
 
+# THE CLAIM `check registry` READS ON THE MAKEFILE SIDE. CLAUDE.md's own Commands
+# section carries the same list; the row reconciles both against the recipe above,
+# both ways, so this line and CLAUDE.md's cannot drift from each other or from it.
+# make check        harness + docs-audit + revert-guard + port-agreement + set-hint-agreement +
+#                   readiness-agreement + screen-freshness + screen-freshness-selftest +
+#                   sigil-check + css-var-check + css-var-check-selftest +
+#                   hand-search-selftest + token-literal-check +
+#                   kit-adoption + ignore-check + lint + typecheck + audit-self-test +
+#                   mutate-anchors + githooks-selftest + merge-selftest + revert-selftest +
+#                   claim-selftest + decisions-selftest + debts-selftest + gates-selftest +
+#                   submission-selftest + cid-selftest + pricearchive-selftest +
+#                   archive-review-selftest + holdings-selftest + identity-checks-selftest +
+#                   price-postings-selftest + product-history-selftest +
+#                   sku-number-contradictions-selftest + readings-selftest + skus-selftest +
+#                   identity-store-selftest + identity-binding-selftest +
+#                   identity-readers-selftest + identity-cli-selftest + janitor-selftest +
+#                   reap-selftest + silent-write-selftest + guard-shell-selftest +
+#                   suite-lock-selftest + browser-scope-selftest + serve-selftest +
+#                   sync-selftest + verdict-selftest + js-breakpoints-selftest +
+#                   subagent-override-selftest + guard-scope-selftest +
+#                   token-literal-check-selftest + kit-adoption-selftest + port-slots-selftest +
+#                   match-selftest
+
 # Not prerequisites: make is free to reorder those, and with -j it runs them in parallel.
 # A check suite has to run in a known order and stop at the first failure.
 # THE SELF-TEST RUNS HERE AND NOT IN THE GIT HOOK, and the split is D18's rather than a
@@ -649,7 +418,6 @@ audit-history:
 check:
 	@$(MAKE) --no-print-directory harness
 	@$(MAKE) --no-print-directory docs-audit
-	@$(MAKE) --no-print-directory claim-stale
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -659,11 +427,11 @@ check:
 	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory css-var-check
 	@$(MAKE) --no-print-directory css-var-check-selftest
+	@$(MAKE) --no-print-directory hand-search-selftest
 	@$(MAKE) --no-print-directory token-literal-check
 	@$(MAKE) --no-print-directory kit-adoption
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
-	@$(MAKE) --no-print-directory vale
 	@$(MAKE) --no-print-directory typecheck
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory mutate-anchors
@@ -693,7 +461,6 @@ check:
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
 	@$(MAKE) --no-print-directory guard-shell-selftest
-	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory browser-scope-selftest
 	@$(MAKE) --no-print-directory serve-selftest
@@ -705,7 +472,6 @@ check:
 	@$(MAKE) --no-print-directory token-literal-check-selftest
 	@$(MAKE) --no-print-directory kit-adoption-selftest
 	@$(MAKE) --no-print-directory port-slots-selftest
-	@$(MAKE) --no-print-directory demo-determinism-selftest
 	@$(MAKE) --no-print-directory match-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
@@ -736,7 +502,6 @@ ci-check:
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
 	@$(MAKE) --no-print-directory claim-selftest
-	@$(MAKE) --no-print-directory claim-stale
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory debts-selftest
 	@$(MAKE) --no-print-directory gates-selftest
@@ -760,7 +525,6 @@ ci-check:
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
 	@$(MAKE) --no-print-directory guard-shell-selftest
-	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory browser-scope-selftest
 	@$(MAKE) --no-print-directory serve-selftest
@@ -772,7 +536,6 @@ ci-check:
 	@$(MAKE) --no-print-directory token-literal-check-selftest
 	@$(MAKE) --no-print-directory kit-adoption-selftest
 	@$(MAKE) --no-print-directory port-slots-selftest
-	@$(MAKE) --no-print-directory demo-determinism-selftest
 	@$(MAKE) --no-print-directory match-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -782,6 +545,7 @@ ci-check:
 	@$(MAKE) --no-print-directory sigil-check
 	@$(MAKE) --no-print-directory css-var-check
 	@$(MAKE) --no-print-directory css-var-check-selftest
+	@$(MAKE) --no-print-directory hand-search-selftest
 	@$(MAKE) --no-print-directory token-literal-check
 	@$(MAKE) --no-print-directory kit-adoption
 	@$(MAKE) --no-print-directory ignore-check
@@ -852,6 +616,16 @@ css-var-check:
 css-var-check-selftest:
 	@python3 scripts/css-var-check.py --self-test
 
+# THE HAND-ROLLED-SEARCH ESLINT RULE (D271, F11c), PROVED ON FIXTURES OVER THE REAL
+# `npx eslint --stdin`, THE SAME METHOD css-var-check-selftest USES. Not on the
+# guard-scope roster: its real subject is app/eslint.config.js, a JS file no Python
+# import can name, so `derive_subjects` has nothing to read (scripts/hand-search-selftest.py's
+# own header argues this in full). Ungated in `make check`, the same as
+# css-var-check-selftest and kit-adoption-selftest.
+hand-search-selftest:
+	$(NPM_GUARD)
+	@python3 scripts/hand-search-selftest.py
+
 # A CSS LITERAL EXACTLY EQUAL TO A DESIGN TOKEN'S VALUE, IN ITS OWN PROPERTY FAMILY
 # (`docs/reviews/ux-2026-09-20/RANKING.md` §4): `font-size: 22px` where `--bn-fs-2xl: 22px`
 # means nothing here stops the two diverging the next time the scale moves. `css-var-check`'s
@@ -907,13 +681,11 @@ kit-adoption-selftest:
 # reaches a real checkout's server, and it stops only the processes it started.
 port-slots-selftest:
 	$(NPM_GUARD)
-	@python3 scripts/port-slots.py selftest
-
-# identity-follows-sku.md, lane 7: scripts/demo-determinism.py's own ALLOWED_PATTERNS
-# matcher, proved on fixtures rather than by spending two full `make demo` runs. Pure
-# functions, no subprocess, no write — unlike `demo-determinism` itself (D18).
-demo-determinism-selftest:
-	@python3 scripts/demo-determinism-selftest.py
+	@if python3 scripts/guard-scope.py classify --target port-slots-selftest --base origin/main; then \
+		python3 scripts/port-slots.py selftest; \
+	else \
+		echo "port-slots-selftest: SKIPPED — this branch does not touch the port-slot claim or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # FLT-06/04, UX-173: the one forgiving matcher, server side. `server/match.py` against every
 # row of app/src/kit/match.cases.json (the filtering lane's own case table, so the server and
@@ -927,7 +699,11 @@ demo-determinism-selftest:
 # still applies to the temp store it writes, which is why it gates rather than runs in the
 # commit hook).
 match-selftest:
-	@python3 scripts/match-selftest.py
+	@if python3 scripts/guard-scope.py classify --target match-selftest --base origin/main; then \
+		$(PYTHON) scripts/match-selftest.py; \
+	else \
+		echo "match-selftest: SKIPPED — this branch does not touch search, matching or their callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
 # its own. D18 is the first: this writes — a bare repo, a clone, commits, pushes — and nothing
@@ -954,6 +730,10 @@ githooks-selftest:
 #
 # It never sets PKMNSCAN_MAIN and no refusal it prints suggests it — a session typing that
 # variable is doing something else (D42).
+#
+# A STANDING MERGE INSTRUCTION CARRIES A NEEDED REBASE AND FORCE-PUSH, on a branch nobody else
+# holds (owner ruling, 2026-09-18). The session does not stop and ask again for the rebase —
+# only for whether to merge at all.
 merge:
 	@$(PYTHON) scripts/merge-pr.py $(ARGS)
 
@@ -1108,9 +888,13 @@ port-agreement:
 set-hint-agreement:
 	@python3 scripts/set-hint-agreement.py
 
+# app/src/readiness.ts against pipeline/decisions.py:blocking — the same blocking
+# reasons on both sides of the wire.
 readiness-agreement:
 	@python3 scripts/readiness-agreement.py
 
+# Every mutation anchor named in a guard's own test file still exists in the guard
+# it targets. Fast (well under a second).
 mutate-anchors:
 	@python3 scripts/mutate-guards.py --verify-anchors
 
@@ -1232,15 +1016,44 @@ serve-selftest:
 		echo "serve-selftest: SKIPPED — nothing in this branch reaches what it reads."; \
 	fi
 
+# THE FIRST PATH GATE. What `make serve-selftest` reads, and whether this branch
+# touches it. ARGS=list, or ARGS="classify --base <rev>". Derived from the self-test's
+# own CARRY, reconciled by `make docs-audit`'s `serve scope` row BOTH WAYS. Fails open:
+# no merge-base, an unreadable diff and an EMPTY diff all run the test.
+# `make serve-selftest` was the only path-gated target from 2026-09-17 to 2026-09-20 —
+# 70.1s of `make check`'s own total, copying the checkout with a STUB app/ so no screen
+# change can reach it. `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every
+# skip.
 serve-scope:
 	@python3 scripts/serve-scope.py $(ARGS)
 
+# That gate, including a CARRY drift it must catch.
 serve-scope-selftest:
 	@python3 scripts/serve-scope.py selftest
 
+# THE SECOND PATH GATE (D247, owner's word 2026-09-20 on a fresh measurement): what each
+# guard and product self-test reads. ARGS=list [--target <name>], or
+# ARGS="classify --target <name> --base <rev>". A guard self-test proves a MECHANISM,
+# never the product, so it cannot go stale between two moments: the guard script it
+# proves changing, or its own fixture changing. THE SUBJECT LIST IS DERIVED FROM EACH
+# SELF-TEST'S OWN SOURCE, never typed beside it — `scripts/guard-scope.py:
+# derive_subjects` reads local-package imports and `Path`-style chains straight out of
+# the test file. Only WHICH targets are gated is a hand-typed roster, on
+# `serve-scope.py`'s own precedent, grown from nineteen entries as each joining
+# self-test proved a real caller (`archive sweep --write`, `#/revenue`'s unsold-stock
+# panel, `cards checks`, `emit`/`reprice apply`, `#/product`, `cards contradictions`,
+# and, 2026-09-27, `match-selftest`, `browser-scope-selftest` and
+# `port-slots-selftest`). Fails open exactly like `serve-scope`: no merge-base, an
+# unreadable diff, an EMPTY diff, an unscoped target, and any exception all run the
+# test. `PKMNSCAN_GUARD_SCOPE=off` runs every gated self-test regardless, printed in
+# every skip. Reconciled BOTH WAYS by `make docs-audit`'s `guard scope` row: every
+# roster target is wired into the Makefile and every wired recipe names a roster
+# target. A THIRD GATE MECHANISM needs the owner's word again — a new roster entry
+# under this same gate does not.
 guard-scope:
 	@python3 scripts/guard-scope.py $(ARGS)
 
+# That gate, both-ways wiring included.
 guard-scope-selftest:
 	@python3 scripts/guard-scope.py selftest
 
@@ -1355,6 +1168,8 @@ archive-review-selftest:
 		echo "archive-review-selftest: SKIPPED — this branch does not touch the archive review queue or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
 
+# pipeline/holdings.py, proved against in-memory fixtures, no store, no network:
+# on-hand quantity, the gap guard, sealed-product exclusion. PATH GATED (D247).
 holdings-selftest:
 	@if python3 scripts/guard-scope.py classify --target holdings-selftest --base origin/main; then \
 		$(PYTHON) scripts/holdings-selftest.py; \
@@ -1362,6 +1177,8 @@ holdings-selftest:
 		echo "holdings-selftest: SKIPPED — this branch does not touch unsold-stock holdings or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
 
+# pipeline/identity_checks.py's four stored-data checks, proved against literal
+# fixtures, no store, no network. PATH GATED (D247).
 identity-checks-selftest:
 	@if python3 scripts/guard-scope.py classify --target identity-checks-selftest --base origin/main; then \
 		$(PYTHON) scripts/identity-checks-selftest.py; \
@@ -1380,6 +1197,8 @@ price-postings-selftest:
 		echo "price-postings-selftest: SKIPPED — this branch does not touch the price-postings ledger or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
 
+# pipeline/productview.py and server/pipeline_routes.py:do_product_history, proved
+# against a throwaway store: archive-hit and live-fallback. PATH GATED (D247).
 product-history-selftest:
 	@if python3 scripts/guard-scope.py classify --target product-history-selftest --base origin/main; then \
 		$(PYTHON) scripts/product-history-selftest.py; \
@@ -1387,6 +1206,8 @@ product-history-selftest:
 		echo "product-history-selftest: SKIPPED — this branch does not touch the per-product history route or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
 
+# pipeline/sku_number_contradictions.py, proved against literal fixtures and
+# duck-typed Market fakes, no store, no network. PATH GATED (D247).
 sku-number-contradictions-selftest:
 	@if python3 scripts/guard-scope.py classify --target sku-number-contradictions-selftest --base origin/main; then \
 		$(PYTHON) scripts/sku-number-contradictions-selftest.py; \
@@ -1394,6 +1215,8 @@ sku-number-contradictions-selftest:
 		echo "sku-number-contradictions-selftest: SKIPPED — this branch does not touch the SKU self-contradiction check or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
 
+# Does every card's name still resolve to its photograph? Reads the whole corpus,
+# so it is NOT in `make check`. Three verdicts, and the third is `not known`.
 cid-audit:
 	@./pkmnscan cards audit
 
@@ -1553,42 +1376,6 @@ guard-shell-selftest:
 
 .PHONY: guard-shell-selftest
 
-# THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other half of 2026-09-12: a session relayed
-# `#300 GREEN — merging` for several turns while nothing merged, because the line came from a
-# driver's stdout and two copies of that driver were racing behind a `pgrep` waiter that matched
-# its own command line. Every figure here is read from the repository or from GitHub at the
-# moment you run it, and a PR's verdict is pinned to its HEAD SHA.
-#
-# NOT IN `check`, and `lan-check` above is the precedent: it reaches the network, and `check`
-# answers from the tree alone — a row that fails on a train is a row people learn to ignore.
-# Its VERDICT RULES do gate, through `make coordinator-selftest`, which needs no network; that
-# is the same split `verdict-selftest` makes.
-#
-# Exit 1 means a block could not be read, which is the point: an incomplete report must not be
-# relayable as the state of the queue.
-coordinator:
-	@python3 scripts/coordinator.py $(ARGS)
-
-# The verdict rules, against synthetic check-run payloads. No network, so this is in `check`.
-# Every case is a payload a reader looking at conclusions alone would call clean: one required
-# check of two all passing, a required check that reported `skipped`, a null conclusion that
-# must read as `running` and never as failed.
-coordinator-selftest:
-	@python3 scripts/coordinator.py --selftest
-
-.PHONY: coordinator coordinator-selftest
-
-# docs/GATES.md item 24, D-heartbeat-is-a-caller. A thin caller of coordinator.py --json (open
-# PRs, id claims, dirty worktrees, live sessions) plus the two bullets that leaves unanswered —
-# whether main's own last push is green, and janitor.py's own preview with --confirm never
-# passed. Writes .serve/heartbeat/latest.json and appends history.jsonl, which is the memory a
-# fresh, context-free run needs. NEVER A DAEMON: one run, one exit — the cadence is whatever
-# scheduled task calls this, never a loop in here. Read-and-report authority only.
-heartbeat:
-	@python3 scripts/heartbeat.py $(ARGS)
-
-.PHONY: heartbeat
-
 # THE SWEEP, WHERE EVERY REPO CAN REACH IT. `~/.claude/settings.json` hooks apply to every
 # session in every project, but the command they name has to exist without this checkout in
 # sight — so the two files are COPIED, exactly as `make hooks` copies the git hooks out of the
@@ -1630,6 +1417,8 @@ janitor-install:
 .PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check
 
 .PHONY: lan-check
+# Is the LAN URL still good? DNS, both servers, and a real write. Reaches the
+# network, so it never gates a commit.
 lan-check:
 	@python3 scripts/lan-check.py
 
@@ -1659,10 +1448,14 @@ lan-check:
 # reach around the guard entirely. Found 2026-09-06 by following the printed instruction.
 #
 # `up` takes them too, for `--no-watch` and for `--restart`, which is the bounce now.
+#
+# WILL NOT SERVE A PRIMARY CHECKOUT OFF MAIN (D158, D53). `PKMNSCAN_SERVE_MAIN=off` overrides,
+# printed in every refusal.
 up:
 	$(PORT_CLAIM)
 	@$(PYTHON) scripts/serve.py up $(ARGS)
 
+# Stop the one process `make up` started.
 down:
 	@$(PYTHON) scripts/serve.py down $(ARGS)
 
@@ -1684,7 +1477,7 @@ launch-agent:
 dev:
 	$(NPM_GUARD)
 	$(PORT_CLAIM)
-	@npm --prefix app run dev
+	@python3 scripts/reap_mark.py dev; exec npm --prefix app run dev
 
 # Foreground and blocking, like any server. An agent that runs this in the foreground hangs
 # its own turn — the Stop hook runs the harness at turn end and never gets there — so
@@ -1705,7 +1498,7 @@ dev:
 server:
 	@$(PYTHON) scripts/serve.py guard-foreground
 	$(PORT_CLAIM)
-	@$(PYTHON) server/capture_server.py
+	@python3 scripts/reap_mark.py server; exec $(PYTHON) server/capture_server.py
 
 # The manifest is an INPUT and lives beside the script that reads it. It used to point at
 # captures/views.txt, which .gitignore excludes wholesale — so the one file that says which
@@ -1730,7 +1523,8 @@ screenshot:
 #
 # IT REFUSES RATHER THAN QUEUES, and exits 75 so the refusal cannot read as a failing suite.
 # `ARGS=--wait` queues instead, out loud. The `--` is what separates the guard's flags from
-# the command it guards, so `ARGS` can never reach npm.
+# the command it guards, so `ARGS` can never reach npm. `PKMNSCAN_SUITE_LOCK=off` overrides
+# the lock outright, printed in every refusal (D122).
 #
 # AND IT LEAVES A VERDICT BEHIND, WHICH IS HOW A SESSION WAITS FOR IT. The suite is ~90-175s
 # against the 120s tool timeout an agent session runs under, so every invocation from one is
@@ -1764,7 +1558,7 @@ design-check:
 	$(NPM_GUARD)
 	$(PORT_CLAIM)
 	@rm -f .serve/design-check.json
-	@python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
+	@python3 scripts/reap_mark.py design-check; python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # The lock itself, exercised by violating it — a holder, a refusal, a wait, and a holder
 # killed with -9 to prove the OS releases what it took. In `check`, never in the git hook: it
@@ -1781,7 +1575,11 @@ suite-lock-selftest:
 # real tree (D-browser-spec-allow-list). Reads only; nothing here writes, so it sits beside
 # the other guard selftests rather than on the commit path (D18).
 browser-scope-selftest:
-	@python3 scripts/browser-scope.py selftest
+	@if python3 scripts/guard-scope.py classify --target browser-scope-selftest --base origin/main; then \
+		python3 scripts/browser-scope.py selftest; \
+	else \
+		echo "browser-scope-selftest: SKIPPED — this branch does not touch the browser-matrix classifier or its spec map. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # A JS media query's viewport width against what a stylesheet under app/src declares
 # (D123): the pure extraction and comparison `make docs-audit`'s `js breakpoints` row
@@ -1805,7 +1603,7 @@ design-check-quiet:
 	$(NPM_GUARD)
 	$(PORT_CLAIM)
 	@rm -f .serve/design-check.json
-	@DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
+	@python3 scripts/reap_mark.py design-check; DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # eslint over app/, config and rules in app/eslint.config.js. It began 2026-08-13 as the two
 # guards docs/DECISIONS.md's v1 bug table promised — no `facingMode` (bug 3), no `split(",")`
@@ -1832,48 +1630,8 @@ design-check-quiet:
 #
 # No `--fix`, here or in the npm script, for either language. `check` below runs this
 # target, and D18 keeps anything that writes off the path that decides whether work is done.
-# Vale, the prose linter, over EVERY tracked markdown file.
-#
-# NOT on the commit path and it must not go there. scripts/githooks/pre-commit runs a bare
-# python3 with nothing installed (D18), and vale is a third-party Go binary — a commit gate
-# that needs software present would make the three opsec rules depend on it too. `make check`
-# is invoked by a person, which is where port-agreement and the audit's self-test already sit.
-#
-# It answers the STYLE half of D60 and none of the size half; `entry budget` in
-# scripts/docs-audit.py is what knows an entry costs tokens to load.
-#
-# IT RAN OVER FOUR FILES UNTIL 2026-08-30 AND .vale.ini ALWAYS SAID `[*.md]`. The target was
-# the narrow half of that disagreement, so docs/specs/ and docs/design-refs/ were never linted
-# at all: 35 AmericanSpelling errors had accumulated there, none of them reachable by any check
-# in this repo. D60's rule is written about the four docs a session loads, and that is an
-# argument about which prose must be DENSE — never an argument for leaving the rest unspelled.
-# The file list is `git ls-files` so a new document is linted the day it is committed rather
-# than the day somebody remembers to add it here.
-#
-# A missing binary reports and does not fail, so `make check` still runs on a machine
-# without it — the same shape NPM_GUARD takes, minus the exit.
-#
-# ONE RECIPE LINE, DELIBERATELY. Split across two — a guard line ending `exit 0`, then a
-# bare `git ls-files | xargs vale` — the guard's `exit 0` only ends ITS OWN shell; each `@`
-# line is a separate invocation, and make advances to the next line on any zero exit, guard
-# or not. So the message printed, the target reported nothing wrong, and `xargs` ran anyway
-# with no `vale` to run — `xargs: vale: No such file or directory`, exit 127, `make check`
-# failing on the one row this comment says cannot fail it. Measured, not hypothetical: that
-# is the exact output a binary-less machine produced. One `if` keeps the run inside the
-# branch that only exists once the guard has already passed.
-vale:
-	@echo "NOT A GATE: prose style is reported and never blocks (D18). --no-exit swallows"
-	@echo "  the status, and a missing binary reports and exits 0 — so this slot in"
-	@echo "  \`make check\` cannot fail, and a reader of a green run should not count it"
-	@echo "  among the ones that can. \`make docs-audit\`'s \`check registry\` row pairs this"
-	@echo "  line against the entry's \`gates: False\` in both directions."
-	@if command -v vale >/dev/null; then \
-		git ls-files '*.md' | xargs vale --no-exit; \
-	else \
-		echo "vale is not installed — prose style unchecked."; \
-		echo "  Fix: brew install vale"; \
-	fi
 
+# eslint over app/, ruff over the Python packages (D82).
 lint:
 	$(NPM_GUARD)
 	@npm --prefix app run lint
@@ -1881,6 +1639,7 @@ lint:
 	$(RUFF_GUARD)
 	@$(PYTHON) -m ruff check .
 
+# `tsc --noEmit` over app/.
 typecheck:
 	$(NPM_GUARD)
 	@npm --prefix app run typecheck
@@ -1922,12 +1681,8 @@ typecheck:
 # next rename and wrong in exactly the way this comment describes — override it there.
 DEMO_HOME ?= demo
 # Extra flags for `scripts/demo-record.py`, past what `demo-record` already passes. Empty by
-# default (an ordinary `make demo` keeps its real network — the same "best effort" reads
-# every other price-history route already makes, D216). `make demo-determinism` sets this to
-# `--offline`, the SAME flag `demo-mirror.py:record` already runs the real mirror's own
-# recorder with (D295) — see its own comment for why: two recordings of a server with a
-# live-network stock-image warmer race each other (D301), which the real mirror build never
-# hits because it is already offline and this check was not.
+# default — an ordinary `make demo` keeps its real network, the same "best effort" reads
+# every other price-history route already makes (D216).
 DEMO_RECORD_ARGS ?=
 DEMO_REPO := $(shell n=$$(basename -s .git "$$(git config --get remote.origin.url 2>/dev/null)" 2>/dev/null); [ -n "$$n" ] && echo "$$n" || echo banchi)
 DEMO_BASE ?= /$(DEMO_REPO)/
@@ -1945,6 +1700,8 @@ DEMO_BASE ?= /$(DEMO_REPO)/
 DEMO_PHOTO_COUNT ?= 132
 DEMO_PHOTO_JOINABLE ?= 92
 
+# Curate real card photographs into the tracked set. Needs a store:
+# SOURCE=<checkout>. Refuses any photo carrying a QR.
 demo-photos:
 	@[ -n "$(SOURCE)" ] || { \
 		echo "SOURCE=<checkout> is required — the store whose photographs to curate."; \
@@ -1989,6 +1746,7 @@ demo-mirror-install:
 demo-histories:
 	@$(PYTHON) scripts/demo-histories.py $(ARGS)
 
+# The store alone, built on the curated photographs.
 demo-seed:
 	@PKMNSCAN_HOME=$(DEMO_HOME) $(PYTHON) scripts/demo-seed.py --force
 # THE JOIN IS THE REAL ONE, and that is the point of doing it here rather than writing a
@@ -2014,6 +1772,8 @@ demo-record:
 # shows the recording moving with the contract it was recorded against.
 demo: demo-seed demo-record
 
+# demo-mirror-install, then a static build to dist-demo/. DEMO_BASE=<path> is
+# where it will be served from.
 demo-static: demo-mirror-install
 	$(NPM_GUARD)
 	@cd app && VITE_DEMO=1 DEMO_BASE=$(DEMO_BASE) npx vite build --outDir ../dist-demo --emptyOutDir
@@ -2028,18 +1788,12 @@ demo-preview:
 	$(NPM_GUARD)
 	@cd app && DEMO_BASE=$(DEMO_BASE) npx vite preview --outDir ../dist-demo --port 4173 --strictPort
 
-# Whether app/demo/bundle.json still describes the wire it was recorded against. On no gate
-# at all: the bundle is not committed and CI rebuilds it from source on every push, so the
-# only staleness left is a local preview serving a recording that predates your last edit.
-# Worth one command; not worth failing `make check` over.
-demo-freshness:
-	@$(PYTHON) scripts/demo-freshness.py
-
-# Whether `make demo` writes the same bundle twice. `demo-freshness` above proves the WIRE
-# SHAPE still matches; this proves the recorded CONTENT is reproducible — the one thing the
-# committed wire hash cannot see (review round, identity-follows-sku.md lane 6: 97 `bound_at`
-# values differed between two runs before `bind_sku` took an `at` parameter, and
-# `demo-freshness` was green throughout). Two full `make demo` runs into scratch homes; not
-# in `make check` for the same reason `demo-freshness` is not (D18).
-demo-determinism:
-	@$(PYTHON) scripts/demo-determinism.py
+# `demo-freshness`, which compared app/demo/bundle.json against the wire it was recorded
+# against, and `demo-determinism`, which compared two `make demo` runs' recorded CONTENT
+# byte for byte, are BOTH RETIRED (D295 amended, L5, 2026-09-27, the test-audit plan's Q5 —
+# "cut the old seed guards"). Neither ever gated a commit or a publish. Both proved only the
+# invented seed's own bundle, which the published demo has not built from since D295 — the
+# published mirror never goes near `app/demo/bundle.json`. `demo-determinism` found a real
+# defect once — 97 `bound_at` values differed between two runs before `bind_sku` took an
+# `at` parameter, invisible to `demo-freshness` — recorded here so the finding is not lost
+# with the targets.

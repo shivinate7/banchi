@@ -1128,9 +1128,7 @@ _WAIT_ADVICE = [
     "  Background the WORK and take its completion notification. A backgrounded command",
     "  re-invokes this session when it EXITS, and carries its result; a poll produces one "
     "wake-up",
-    "  per round, none of which carry anything. For the state of the merge queue,",
-    "  `make coordinator` READS the repo — main, every open PR with a SHA-pinned verdict, the",
-    "  worktrees, the live sessions — rather than composing a report out of a driver's stdout.",
+    "  per round, none of which carry anything.",
     "",
     "  A wait on a pid this session started is the sanctioned form, and it is bounded by the",
     "  process rather than by a pattern:",

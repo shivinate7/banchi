@@ -95,10 +95,26 @@ def with_claimer(repo: Path) -> None:
     # index through these, and it is written to survive their absence — so a fixture without
     # them would exercise the SURVIVAL path on every arm and never the settling one, which is
     # a self-test passing for the wrong reason.
-    for helper in ("decisions_corpus.py", "index-decisions.py"):
+    for helper in ("decisions_corpus.py", "index-decisions.py", "debts_corpus.py"):
         source = CLAIMER.parent / helper
         if source.exists():
             shutil.copy(source, repo / "scripts" / helper)
+    # AND THE VIEW THE CLAIM'S EFFECT IS NOW CHECKED THROUGH. CLAUDE.md's decision index is a
+    # rendering (`make map ARGS=--decisions`, D60 amended), not a stored copy `settle_corpus`
+    # regenerates any more — so an arm proving the claim landed reads this instead.
+    shutil.copy(CLAIMER.parent / "map-view.py", repo / "scripts" / "map-view.py")
+    (repo / "docs").mkdir(parents=True, exist_ok=True)
+    map_py = repo / "docs" / "map.py"
+    if not map_py.exists():
+        map_py.write_text("", encoding="utf-8")
+
+
+def decisions_index(repo: Path) -> str:
+    """`make map ARGS=--decisions` against `repo`, run the way the Makefile runs it."""
+    done = subprocess.run(
+        [sys.executable, str(repo / "scripts" / "map-view.py"), "--decisions"],
+        cwd=str(repo), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+    return done.stdout.decode("utf-8", errors="replace")
 
 # ------------------------------------------------- driving the wait for the claim commit
 #
@@ -581,6 +597,30 @@ def main() -> int:
         ok(".claude/skills/text-density/SKILL.md" in walked_by_claimer,
            "named concretely: the file whose citation broke PR #462's merge is in the set",
            "")
+
+        print("\n  -- and it skips what git ignores, not only what SKIP names --")
+        # `demo`, `app/demo` and `app/public/demo` are gitignored build output (D295), and
+        # none of the three was ever in `SKIP` — a branch that had built the demo locally
+        # handed this walk 24-133 MB of JSON it had no business reading, a demo build never
+        # holds a citation the claim commit could need to rewrite (owner's ruling,
+        # 2026-09-27). THE FIXTURE IS WRITTEN AND REMOVED BY THIS CASE, so it holds whether
+        # or not a demo has actually been built in this worktree.
+        demo_dir = claimer.ROOT / "app" / "demo"
+        made_demo_dir = not demo_dir.exists()
+        demo_dir.mkdir(parents=True, exist_ok=True)
+        ignored_fixture = demo_dir / "claim-selftest-fixture.json"
+        ignored_fixture.write_text('{"not": "a citation"}\n', encoding="utf-8")
+        try:
+            walked_with_demo = {
+                str(p.relative_to(claimer.ROOT)) for p in claimer.text_files(claimer.ROOT)
+            }
+            ok("app/demo/claim-selftest-fixture.json" not in walked_with_demo,
+               "a gitignored file under app/demo/, never named in SKIP, is not walked", "")
+        finally:
+            ignored_fixture.unlink(missing_ok=True)
+            if made_demo_dir:
+                with contextlib.suppress(OSError):
+                    demo_dir.rmdir()
 
         print("\n  -- one slug is not allowed to be eaten by another --")
         # One fixture slug is a PREFIX of the other. An unbounded substitution
@@ -1568,11 +1608,9 @@ def main() -> int:
         ok(manifest["order"][-1] == landed_name,
            "and appends it LAST, so the three non-entry sections keep their place",
            str(manifest["order"][-3:]))
-        index_lines = [row for row in
-                       (split / "CLAUDE.md").read_text(encoding="utf-8").split("\n")
-                       if re.match(r"^D[0-9]+\s", row)]
+        index_lines = decisions_index(split).split("\n")
         ok(any(row.startswith(f"D{number} ") for row in index_lines),
-           "and the CLAUDE.md index is regenerated with the allocated number",
+           "and `make map ARGS=--decisions` shows the allocated number",
            str(index_lines))
         ok(f"{entry}-a-third-thing.md" not in manifest["order"],
            "and does not still name the file that no longer exists")
@@ -2258,6 +2296,290 @@ def main() -> int:
            and (moved_repo / "note.md").read_text(encoding="utf-8") == "b\n",
            "and it refuses to revert when HEAD is not the commit it was told to undo — a "
            "backout that guesses is the thing this whole file exists to delete", out)
+
+        # ------------------------------------------------------------------ debts join the claim
+        # THE OWNER'S RULING: "they just get assigned numbers upon merge with CI" — debts reuse
+        # the exact decision machinery (D140), parameterized by `DIR_KINDS` rather than copied.
+        # Proved here the same way the decision/codes/step namespaces already are above: one
+        # honest joint claim (a decision AND a debt in the same merge), then the collision D140's
+        # own amendment exists to catch — main taking the next debt number first.
+        print("\n  -- a debt slug claims alongside a decision slug, in one merge --")
+        dtmp = tmp / "debts"
+        dtmp.mkdir()
+        dwork = build_split(dtmp)
+        with_claimer(dwork)
+        write(dwork, "docs/debts/_preamble.md", "# Fixture\n")
+        write(dwork, "docs/debts/001-first.md", "## 1 — First finding\n\nbody\n")
+        write(dwork, "docs/debts/ORDER.json", json.dumps(
+            {"source": "docs/DEBTS.md", "order": ["_preamble.md", "001-first.md"]}))
+        write(dwork, "docs/DEBTS.md",
+             "# Known gaps\n\n## Index\n\n```\nDEBT1  First finding\n```\n")
+        git(dwork, "add", "-A")
+        git(dwork, "commit", "-qm", "seed the debts corpus")
+        git(dwork, "push", "-q", "origin", "main")
+
+        SD2 = "D-" + "another-thing"
+        SDEBT = "DEBT-" + "a-second-finding"
+        git(dwork, "checkout", "-q", "-b", "feature-debt")
+        write(dwork, "docs/decisions/" + SD2 + ".md", f"## {SD2} — Another\n\nbody\n")
+        write(dwork, "docs/debts/" + SDEBT + ".md", f"## {SDEBT} — A second finding\n\nbody\n")
+        write(dwork, "CLAUDE.md",
+             f"# Fixture\n\nmain cites {D(2)} and step 2 and {C(1)}.\n\n```\n{D(1)} First\n"
+             f"{D(2)} Second\n```\n\nthe branch cites {SD2} and {SDEBT}.\n")
+        git(dwork, "add", "-A")
+        git(dwork, "commit", "-qm", "a decision and a debt, one branch")
+
+        out = claim(dwork, "--porcelain")
+        ok(f"{SD2}\t{D(3)}" in out and f"{SDEBT}\tDEBT2" in out,
+           f"both namespaces allocate max+1 against main IN THE SAME PLAN — a decision "
+           f"({D(3)}, since main already holds {D(1)} and {D(2)} from build_split's own seed) "
+           f"and a debt (DEBT2, the debts corpus' own first free number)", out)
+
+        claim(dwork, "--write")
+        claude_after = (dwork / "CLAUDE.md").read_text(encoding="utf-8")
+        ok(SD2 not in claude_after and SDEBT not in claude_after,
+           "neither slug survives in prose after --write", claude_after)
+        ok(f"the branch cites {D(3)} and DEBT2." in claude_after,
+           "both citations were rewritten to their claimed numbers, IN ONE COMMIT", claude_after)
+        ok("DEBT2" in (dwork / "docs/DEBTS.md").read_text(encoding="utf-8"),
+           "the debt index (docs/DEBTS.md) was ALSO regenerated, alongside the decision index — "
+           "settle_corpus settles both directory corpora in the same claim, D18's write-time half")
+        debt_names = sorted(p.name for p in (dwork / "docs/debts").glob("*.md"))
+        ok("002-a-second-finding.md" in debt_names,
+           "the debt's FILE is renamed too, bare — no `DEBT` letter in the filename, matching "
+           "every real entry docs/debts/ already holds (only the heading/citation carry the "
+           "word) — DirKind.filename_letter is the empty string for the debt kind", debt_names)
+        decision_names = sorted(p.name for p in (dwork / "docs/decisions").glob("*.md"))
+        ok("D003-another-thing.md" in decision_names,
+           "and the decision's FILE keeps its `D` letter, unchanged from before debts joined",
+           decision_names)
+        debt_manifest = json.loads((dwork / "docs/debts/ORDER.json").read_text(encoding="utf-8"))
+        ok("002-a-second-finding.md" in debt_manifest["order"],
+           "and the debt's own manifest gained the entry, the same as the decision's",
+           debt_manifest)
+
+        print("\n  -- and the exact 2026-09-11 incident, one namespace over: main takes the "
+              "next debt number first --")
+        # THE SAME SHAPE AS THE DECISION/CODES/STEP ARM ABOVE ("a branch claims honestly, and "
+        # main takes the number afterwards"), proved for `debt` because `stale_claims`' own
+        # directory-corpus special case (`kind_text`/`kind_text_at`) is new code for this kind —
+        # a decision passing this arm proves nothing about whether `DIR_KINDS["debt"]` is wired
+        # into the SAME function correctly.
+        ctmp = tmp / "debt-collision"
+        ctmp.mkdir()
+        cwork = build_split(ctmp)
+        write(cwork, "docs/debts/_preamble.md", "# Fixture\n")
+        write(cwork, "docs/debts/001-first.md", "## 1 — First finding\n\nbody\n")
+        write(cwork, "docs/debts/ORDER.json", json.dumps(
+            {"source": "docs/DEBTS.md", "order": ["_preamble.md", "001-first.md"]}))
+        write(cwork, "docs/DEBTS.md",
+             "# Known gaps\n\n## Index\n\n```\nDEBT1  First finding\n```\n")
+        git(cwork, "add", "-A")
+        git(cwork, "commit", "-qm", "seed the debts corpus")
+        git(cwork, "push", "-q", "origin", "main")
+
+        git(cwork, "checkout", "-q", "-b", "feature-collision")
+        # Honest at the time: main holds DEBT1 alone, so DEBT2 is free — the branch claims it
+        # itself (as `make merge` already would have), simulating a claim that already landed.
+        write(cwork, "docs/debts/002-the-branchs-finding.md",
+             "## DEBT2 — The branch's finding\n\nbody\n")
+        write(cwork, "docs/debts/ORDER.json", json.dumps(
+            {"source": "docs/DEBTS.md",
+             "order": ["_preamble.md", "001-first.md", "002-the-branchs-finding.md"]}))
+        write(cwork, "docs/DEBTS.md",
+             "# Known gaps\n\n## Index\n\n```\nDEBT1 First finding\nDEBT2 The branch's finding\n```\n")
+        git(cwork, "add", "-A")
+        git(cwork, "commit", "-qm", "the branch claims DEBT2")
+
+        out, code = claim_rc(cwork, "--stale")
+        ok(code == 0 and "nothing has gone stale" in out,
+           "while main has not moved, an honestly claimed debt number reports clean", out)
+
+        rival = ctmp / "rival"
+        subprocess.run(["git", "clone", "-q", str(ctmp / "origin.git"), str(rival)],
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        write(rival, "docs/debts/002-somebody-elses-finding.md",
+             "## DEBT2 — Somebody else's finding\n\nbody\n")
+        write(rival, "docs/debts/ORDER.json", json.dumps(
+            {"source": "docs/DEBTS.md",
+             "order": ["_preamble.md", "001-first.md", "002-somebody-elses-finding.md"]}))
+        write(rival, "docs/DEBTS.md",
+             "# Known gaps\n\n## Index\n\n```\nDEBT1 First finding\n"
+             "DEBT2 Somebody else's finding\n```\n")
+        git(rival, "add", "-A")
+        git(rival, "commit", "-qm", "main takes DEBT2 for something else")
+        git(rival, "push", "-q", "origin", "main")
+        git(cwork, "fetch", "-q", "origin", "main")
+
+        out, code = claim_rc(cwork, "--stale")
+        ok(code == 3, "the debt collision exits non-zero, exactly like the other three "
+           "namespaces", f"exit={code}\n{out}")
+        ok("DEBT2" in out and "DEBT3" in out,
+           "named, with what it would become if put back to a slug and reclaimed", out)
+
+        print("\n  -- RED ON THE OLD CODE: the pre-debt claimer cannot see any of the above --")
+        # THE .bak PROOF (never `git checkout <path>` over a shared tree — see this repo's own
+        # guard-shell.py PKMNSCAN_CHECKOUT clause): the branch this entry landed on
+        # (ux/pr4b-debt-claim) forked from a commit where `scripts/claim-ids.py` had no `debt`
+        # kind at all. That exact file is fetchable from THIS repo's own git history without
+        # touching the working tree — `git show <merge-base>:scripts/claim-ids.py`, written to a
+        # `.bak`-suffixed scratch path (never this checkout's own `scripts/claim-ids.py`) and run
+        # DIRECTLY, since `claim_rc`'s own subprocess always targets the real, current CLAIMER —
+        # a fixture's own `scripts/claim-ids.py` is never what runs a claim, only what
+        # `settle_corpus`'s dynamic import of its HELPER modules reads.
+        base_sha = git(ROOT, "merge-base", "origin/main", "HEAD").strip()
+        old_claimer_text = git(ROOT, "show", f"{base_sha}:scripts/claim-ids.py")
+        if old_claimer_text and '"debt"' not in old_claimer_text:
+            old_claimer_bak = tmp / "claim-ids.py.bak"
+            old_claimer_bak.write_text(old_claimer_text, encoding="utf-8")
+
+            otmp = tmp / "old-claimer"
+            otmp.mkdir()
+            owork = build_split(otmp)
+            write(owork, "docs/debts/_preamble.md", "# Fixture\n")
+            write(owork, "docs/debts/001-first.md", "## 1 — First finding\n\nbody\n")
+            write(owork, "docs/debts/ORDER.json", json.dumps(
+                {"source": "docs/DEBTS.md", "order": ["_preamble.md", "001-first.md"]}))
+            write(owork, "docs/DEBTS.md",
+                 "# Known gaps\n\n## Index\n\n```\nDEBT1  First finding\n```\n")
+            git(owork, "add", "-A")
+            git(owork, "commit", "-qm", "seed")
+            git(owork, "checkout", "-q", "-b", "feature-old")
+            write(owork, "docs/debts/" + SDEBT + ".md", f"## {SDEBT} — A second finding\n\nbody\n")
+            git(owork, "add", "-A")
+            git(owork, "commit", "-qm", "a debt slug, on the pre-debt claimer")
+
+            old_done = subprocess.run(
+                [sys.executable, str(old_claimer_bak), "--root", str(owork), "--porcelain"],
+                cwd=str(owork), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+            out = old_done.stdout.decode("utf-8", errors="replace")
+            ok(SDEBT not in out,
+               "RED, as expected: the pre-debt claimer's `pending()` has no 'debt' key at all, "
+               "so a debt slug is invisible to it and never allocated — this is the exact gap "
+               "the fix closes", out)
+        else:
+            print("  (skipped: the merge-base already carries debt support, or could not be "
+                  "read — this arm proves the fix against the commit this branch actually "
+                  "forked from, not a fabricated 'before')")
+
+        print("\n  -- and docs-audit refuses a NUMBERED record a branch allocates by hand --")
+        # THE EXACT DEFECT `DEBT53` WAS: a branch writing
+        # `docs/debts/048-....md` straight, never a slug, so `scripts/claim-ids.py` could
+        # independently plan the same number for a pending slug elsewhere.
+        # `scripts/docs-audit.py:check_numbered_record_growth` is the mechanized refusal
+        # (D140) — proved here against a real repo, because the question is a real
+        # `git merge-base`/`git diff` against `origin/main`, not a fixture
+        # `check_numbered_record_growth` could be fooled by. FULL MODE (`staged_only=False`):
+        # this arm asks the branch's whole history since the merge-base, the same question a
+        # full `python3 scripts/docs-audit.py` run asks.
+        ntmp = tmp / "numbered-growth"
+        ntmp.mkdir()
+        nwork = build_split(ntmp)
+        git(nwork, "checkout", "-q", "-b", "feature-numbered")
+        write(nwork, "docs/debts/048-a-branch-allocated-this-number.md",
+              "## 48 — a branch allocated this number\n\nbody\n")
+        git(nwork, "add", "-A")
+        git(nwork, "commit", "-qm", "a branch writes a numbered debt directly")
+
+        audit = docs_audit_module()
+        audit.ROOT = nwork
+        report = audit.Report()
+        audit.check_numbered_record_growth(report, False)
+        row = next(r for r in report.checks if r.check == "numbered record growth")
+        ok(len(row.findings) == 1 and
+           "048-a-branch-allocated-this-number.md" in row.findings[0].where,
+           "a numbered debt file with no matching slug rename behind it is refused",
+           "\n".join(f.where + ": " + f.message for f in row.findings))
+
+        # AND SILENT ON MAIN ITSELF — the branch's own numbered files are exactly what main
+        # already carries once HEAD sits at origin/main, so `merge-base == HEAD` and the diff
+        # is empty. Proves the row does not fire on every numbered file in the tree.
+        git(nwork, "checkout", "-q", "main")
+        clean_report = audit.Report()
+        audit.check_numbered_record_growth(clean_report, False)
+        clean_row = next(r for r in clean_report.checks if r.check == "numbered record growth")
+        ok(not clean_row.findings,
+           "on main itself, with no branch growth, the row finds nothing",
+           "\n".join(f.where for f in clean_row.findings))
+
+        print("\n  -- and it does NOT refuse the sanctioned claim itself --")
+        # THE ROUND THIS ARM CLOSES: `merge-pr.py:claim_half` runs `claim-ids.py --write`
+        # (a plain filesystem rename, no `git mv`), `git add -A`, then a plain `git commit`
+        # through the ARMED pre-commit hook. The first version of `numbered record growth`
+        # refused THAT COMMIT — its own sanctioned rename read as a hand-added numbered
+        # file, so a claim could never land. A stub or a fixture could not have caught this:
+        # the fixture in `merge-selftest.sh` never carries a `scripts/docs-audit.py` at all
+        # (the hook's own `[ -f scripts/docs-audit.py ]` guard skips the whole audit there),
+        # and this file's OWN two arms above call `check_numbered_record_growth` directly,
+        # never through a real commit. So this arm clones THIS repository — the only tree
+        # docs-audit.py's own sibling data (`scripts/machine-words.json` and the rest) is
+        # guaranteed to be complete and consistent for — writes ONE pending debt slug,
+        # and drives the exact three commands `claim_half` runs: `claim-ids.py --write`,
+        # `git add -A`, `git commit`, through the clone's OWN, real, armed pre-commit hook.
+        rtmp = tmp / "real-claim-commit"
+        rtmp.mkdir()
+        rwork = rtmp / "repo"
+        cloned = subprocess.run(
+            ["git", "clone", "-q", "--local", "--no-hardlinks", str(ROOT), str(rwork)],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+        if cloned.returncode != 0:
+            print("  (skipped: could not clone this repository locally for the real-hook "
+                  "arm)\n" + cloned.stdout.decode("utf-8", errors="replace"))
+        else:
+            # `app/node_modules` IS GITIGNORED, so the clone above does not carry it, and
+            # `no mechanism on screen`/`typed interpunct` shell out to `node` over it —
+            # unrelated to this arm's own subject, and a real failure there would be read as
+            # this arm's claim commit refused for the wrong reason. Symlinked, never copied
+            # or installed: the same "clone the real tree" argument two comments up applies
+            # here too, and `make worktree-setup`'s own choice for a linked worktree is this
+            # same symlink, timed at under a second.
+            node_modules = ROOT / "app" / "node_modules"
+            if node_modules.is_dir():
+                (rwork / "app").mkdir(parents=True, exist_ok=True)
+                os.symlink(node_modules, rwork / "app" / "node_modules")
+            # `origin/main` MUST EXIST HERE WITHOUT ASKING WHAT BRANCH THIS SESSION'S OWN
+            # CHECKOUT IS ON. A CI runner checks out one ref (often a detached PR commit,
+            # fetch-depth 1) and never fetches `main` at all, so `git clone --local ROOT`
+            # would carry no `origin/main` remote-tracking branch and `claim-ids.py --write`
+            # (default `--ref origin/main`) would refuse: "`origin/main` does not name a
+            # commit". A developer checkout happens to have `origin/main` already, which is
+            # why this only ever failed on CI. The fixture's base — `rwork`'s own HEAD, right
+            # after the clone and before this arm's own commits — IS what "main" means for
+            # this arm's purposes, so it is recorded as `refs/remotes/origin/main` directly,
+            # the same ref shape `git fetch` would have left, without depending on ROOT
+            # having a branch by that name at all.
+            base_sha = git(rwork, "rev-parse", "HEAD").strip()
+            git(rwork, "update-ref", "refs/remotes/origin/main", base_sha)
+            git(rwork, "checkout", "-q", "-b", "feature-real-claim-proof")
+            # COMPOSED, NEVER WRITTEN — this file's own standing rule for test ids (see the
+            # comment above `D()`/`C()`): written out, this slug is a citation of a debt
+            # entry that does not exist, and `debt ids` reports it, correctly.
+            proof_slug = "DEBT-" + "claim-selftest-real-hook-proof"
+            write(rwork, "docs/debts/" + proof_slug + ".md",
+                  f"## {proof_slug} — a slug this arm claims for real\n\nbody\n")
+            git(rwork, "add", "-A")
+            git(rwork, "commit", "-qm", "a pending debt slug, for the real-hook arm")
+
+            claim_out, claim_code = claim_rc(rwork, "--write")
+            ok(claim_code == 0,
+               "the real claim-ids.py --write allocates the pending debt slug",
+               claim_out)
+
+            git(rwork, "add", "-A")
+            # ARMED STRAIGHT AT THE CLONE'S OWN scripts/githooks — fine for a throwaway,
+            # single-use repository (merge-selftest.sh's own pattern). The armed-copy
+            # comment in scripts/githooks/pre-commit is about a SHARED clone's worktrees
+            # disagreeing on the hook version, which cannot happen here: there is exactly
+            # one working tree and it never changes branch again.
+            git(rwork, "config", "core.hooksPath", "scripts/githooks")
+            committed = subprocess.run(
+                ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm",
+                 "the claim commit"],
+                cwd=str(rwork), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+            ok(committed.returncode == 0,
+               "the claim commit passes the REAL armed pre-commit hook — `numbered record "
+               "growth` recognizes its own sanctioned rename and does not refuse its own claim",
+               committed.stdout.decode("utf-8", errors="replace"))
 
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))

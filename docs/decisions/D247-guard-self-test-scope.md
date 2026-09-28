@@ -105,3 +105,8 @@ The 76.6-second figure at the top of this entry is the orchestrator's own measur
 a different Mac. Both are real. Neither restates the other. A commit touching one guard
 script, such as `scripts/reap.py`, still runs that one self-test. It skips the other
 fourteen.
+
+**AMENDMENT, 2026-09-27.** D247 argued the gate for guard self-tests only. The owner ruled
+(test-audit plan Q3, 2026-09-27): `match-selftest`, a product test, may join. It is
+deterministic over what it imports. A docs or app-only branch cannot change its verdict. The
+twenty-third entry is now on the roster.

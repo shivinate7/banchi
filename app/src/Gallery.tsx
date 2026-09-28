@@ -40,7 +40,8 @@ import './Gallery.css'
  * missing-photo sentence.
  *
  * The four pull-confirm specimens keep their `data-specimen` names and their order:
- * app/tests/pull-confirm.spec.ts measures the vertical gaps between exactly those. */
+ * app/tests/fulfillment.spec.ts's pull-confirm describe block measures the vertical gaps
+ * between exactly those (folded from app/tests/pull-confirm.spec.ts, test-audit M1). */
 
 const noop = () => {}
 
@@ -120,6 +121,7 @@ const GROUP: SearchGroup = {
      purpose is being looked at. */
   on_hand: 4,
   listable: 4,
+  rank: 0,
   /* `capture_id` ON EVERY ROW BUT ONE, and the null is the specimen (D93): a record written
      before ids were kept cannot be aimed at, so the order walk draws a reason where the take
      would be. A gallery whose every copy carried one would never show that row. */
@@ -167,6 +169,7 @@ const LOOSE_GROUP: SearchGroup = {
   live_as_of: null,
   on_hand: 1,
   listable: 1,
+  rank: 0,
   copies: [
     { key: '5/9', state: 'captured', state_at: null, has_photo: true, capture_id: 'cap-5-9', place: OPEN_BOX },
   ],
@@ -1589,6 +1592,15 @@ export function Gallery() {
                   /* THE ONE CALL SITE OF `photoSrc` IN THIS PRODUCT. See the header. */
                   photoSrc={() => SPECIMEN_PHOTO}
                 />
+              </Spec>
+              <Spec
+                name="locations-owner-head-off"
+                label="owner, head off, for a caller with its own heading"
+                note="No heading, stats or SKU line — the rows alone, for the walk's own row. LOOSE_GROUP here, not GROUP: the departed and pooled row counts above are asserted page-wide."
+              >
+                <div className="kit-copies">
+                  <CardLocations group={LOOSE_GROUP} persona="owner" onSell={noop} busyKey={null} soldKeys={new Set()} head={false} />
+                </div>
               </Spec>
             </div>
           </Section>

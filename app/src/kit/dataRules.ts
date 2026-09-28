@@ -35,11 +35,25 @@ export const STATUS_TONES: Readonly<Record<StatusKind, StatusTone>> = {
 }
 
 /** What a box with no stored name is called. Never its number (the owner's ruling,
- *  2026-09-23). */
-export const UNNAMED_BOX = 'Unnamed box'
+ *  2026-09-23). F5 verbiage cut (row 162): "Untitled" — "box" was redundant, every card in
+ *  the view this fell back for is already a box. */
+export const UNNAMED_BOX = 'Untitled'
 
 /** When this browser last reached for each box, by box number (`deviceMemory.ts`). */
 export type BoxRecency = ReadonlyMap<number, string>
+
+/** A box's name for a label or a sentence: the stored name, or `Box <number>` without one.
+ *  MIRRORS `store/numbers.py:box_title` EXACTLY (D259). This is not `UNNAMED_BOX` above —
+ *  that placeholder is for a box that SHOULD already carry a stored name after the backfill,
+ *  and never shows a number. `boxTitle` is for a caller with no registry row to ask at all: a
+ *  box the registry no longer holds (deleted, D145), a legacy record from before the
+ *  backfill, or a bare `(box, name)` pair passed down without a lookup. The number is the one
+ *  fact those callers have, and it is the same fallback the server already writes for a new
+ *  unnamed box, never a second vocabulary. */
+export function boxTitle(name: string | null | undefined, number: number): string {
+  const text = typeof name === 'string' ? name.trim() : ''
+  return text !== '' ? text : `Box ${number}`
+}
 
 /** A list of boxes, MOST RECENT FIRST (the owner's ruling, 2026-09-23, for every list of boxes).
  *

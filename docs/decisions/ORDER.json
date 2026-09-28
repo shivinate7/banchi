@@ -307,6 +307,10 @@
     "D298-sales-rows-by-sku.md",
     "D299-sealed-boxes-removed.md",
     "D300-sections-are-sub-boxes.md",
-    "D301-stock-images.md"
+    "D301-stock-images.md",
+    "D302-demo-stock-images.md",
+    "D303-every-image-is-scanned.md",
+    "D304-orders-walk-rejoins-inventory.md",
+    "D305-reap-stops-only-its-own.md"
   ]
 }

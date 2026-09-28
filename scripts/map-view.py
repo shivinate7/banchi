@@ -8,7 +8,7 @@ a human ever got was the three lines `make status` lifts for its header. A file 
 only be read whole, at ~56,000 tokens, is read by nobody and edited by everybody — which is
 exactly how `TRACKS` sat wrong for three weeks (D80).
 
-Four views, because four questions get asked of this file:
+Six views, because six questions get asked of this file:
 
     make map                    the shape: tracks, the build order, every package
     make map ARGS=app/          one package: what it does, what governs it, its modules
@@ -16,6 +16,8 @@ Four views, because four questions get asked of this file:
     make map ARGS=D17           every entry D17 governs, and the entry's own title
     make map ARGS="D17 --full"  that entry, in full, straight out of docs/decisions/
     make map ARGS=--stale       entries whose FILE has moved since the prose about it did
+    make map ARGS=--decisions   one line per entry, id and title, off its own heading —
+                                 the decision index CLAUDE.md used to hand-type (D60)
 
 `--stale` is the one view that reports something no other check in this repo can. The
 repo-map row proves a path exists and that its citations resolve; nothing anywhere asks
@@ -176,7 +178,8 @@ def decisions(ids: Sequence[str], resolved: Dict[str, Tuple[str, List[str]]],
 
 def shape(data: Dict[str, object], resolved: Dict[str, Tuple[str, List[str]]]) -> List[str]:
     out: List[str] = [f"docs/map.py — {len(MAP.read_text(encoding='utf-8').splitlines())} lines, "
-                      f"rendered. `make map ARGS=<package|path|D<n>|--stale>` for one thing.",
+                      f"rendered. `make map ARGS=<package|path|D<n>|--stale|--decisions>` for "
+                      f"one thing.",
                       '`make map ARGS="D<n> --full"` prints that entry in full.']
 
     tracks = data.get("TRACKS") or []
@@ -288,6 +291,43 @@ def by_decision(name: str, data: Dict[str, object],
     return out
 
 
+def decisions_index() -> List[str]:
+    """One line per corpus entry, id and title, straight off its own `## D<id> — <title>`
+    heading, in manifest order.
+
+    This is D60's index. It used to be hand-typed into CLAUDE.md, so it could say a title
+    the heading no longer carried, or list an id the heading no longer had — the same drift
+    `check_decision_index` used to gate a commit over. Rendering it instead of storing it
+    closes the drift by construction: there is no second copy left to disagree with the
+    corpus.
+    """
+    module = sibling("decisions_corpus.py")
+    if module is None:
+        return ["", "docs/decisions/ is not readable (scripts/decisions_corpus.py missing)."]
+    # Reuses decisions_corpus's own id pattern (a number, or a claim slug) rather than a
+    # second guess at it — `_ID` is what HEADING_RE is built from, and a fake match here
+    # (e.g. "## Deferred — ...") is the bug this closes: "Deferred" starts with "D" but is
+    # neither digits nor a "-slug".
+    heading_re = re.compile(r"^##\s+(D" + module._ID + r")\s*[—-]\s*(.+)$")
+    try:
+        paths = module.files()
+    except Exception:  # noqa: BLE001 - a broken corpus must not take the renderer down
+        return ["", "docs/decisions/ read as EMPTY."]
+    out: List[str] = []
+    for path in paths:
+        if path.name.startswith("_"):
+            continue  # a filed-under-the-corpus section (Deferred, Someday, v1 bugs), not an entry
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in text.split("\n"):
+            m = heading_re.match(line)
+            if m:
+                out.append(f"{m.group(1):<5} {m.group(2).strip()}")
+    return out
+
+
 def stale(data: Dict[str, object]) -> List[str]:
     """Entries whose file has moved since the map's prose about it did.
 
@@ -392,6 +432,8 @@ def main(argv: Sequence[str]) -> int:
         lines = shape(data, resolved)
     elif query in ("--stale", "stale"):
         lines = stale(data)
+    elif query in ("--decisions", "decisions"):
+        lines = decisions_index()
     elif re.fullmatch(r"[CD]\d+", query.upper()):
         lines = by_decision(query.upper(), data, resolved, full="--full" in argv[1:])
     else:

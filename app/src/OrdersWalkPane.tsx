@@ -1,5 +1,5 @@
 /* app/src/OrdersWalkPane.tsx — the walk: the cards to pick for the buyers walked, in the order
- * the boxes are walked (`docs/specs/order-walk-plan.md` §13), and the card pane beside it.
+ * the boxes are walked (`docs/specs/order-walk-plan.md` §13).
  *
  * THE WIRE IS UNCHANGED: `POST /orders/walk-plan` (`server.ts:walkPlan`), `WalkPlan` and its
  * parts, and the pull/undo write `Orders.tsx` already makes (`onWalkPull`/`onWalkUndo`,
@@ -11,21 +11,21 @@
  * copy of the solver's reach, because the press and its undo act on one physical copy; the list
  * folds them by take. `here` is the solver's own flag and this file does not recompute it.
  *
- * THE CARD PANE (UX-169) is the photograph, what the card is, and every copy of it with its place
- * and Mark sold, in the wire's own order (this stop's copies first, D212/D93/D97). Positions
- * patched from a pull's own post-write facts are folded into `facts` and never change which row
- * is first. The card's full inventory detail stays on `#/inventory`.
+ * THE CARD PANE MOVED OUT (D304, lane A3): what
+ * used to be `WalkCardPane` here is now `Orders.tsx`'s own use of `CardHero.tsx:CardPane` and
+ * `CardLocations.tsx:CardLocations`, reused whole rather than forked — the walk-only pane and
+ * its `orders-card-*` classes are deleted, not adapted. `pickFigureOf` and `RowAction` are
+ * exported from here because `Orders.tsx` still needs them: the "Pick N of M" figure, and the
+ * one press (Mark sold / Undo) `CardLocations`'s own `renderAction` slot calls per copy.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { marketTable, PhotoPanel, type MarketRead, type Row } from './CardHero'
-import { forSale } from './cardState'
-import { Dialog as Overlay } from './kit/overlay'
-import { Icon, IconButton, Loading, Location, Money, Notice, Pill, ProductLink } from './kit'
+import { Icon, IconButton, Loading, Notice, Pill } from './kit'
 import { toast } from './kit/toast'
 import { sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { orderBuyerLabel } from './orderView'
 import { SectionTitle } from './SectionTitle'
-import { describeFailure, getPricing, photoUrl, walkPlan } from './server'
+import { CardLocations } from './CardLocations'
+import { describeFailure, walkPlan } from './server'
 import type { Failure } from './server'
 import type {
   InventoryCard,
@@ -35,12 +35,12 @@ import type {
   PullTarget,
   SearchCopy,
   SearchGroup,
+  SectionDetail,
   WalkPlan,
   WalkPlanCopy,
   WalkPlanStop,
   WalkPlanTake,
 } from './types'
-import './OrdersWalkPane.css'
 
 export type WalkPullOutcome =
   | { readonly ok: true; readonly place: string; readonly refreshed: readonly Place[] }
@@ -116,7 +116,7 @@ function pickOrderFor(
  *  `of` is capped at what is really here and `short` carries the gap, so the row can say "7
  *  short" instead of a wrong count (the owner's wording ruling, 2026-09-25: "say what's short
  *  but it's not intuitive to use so much verbiage"). */
-function pickFigureOf(
+export function pickFigureOf(
   take: WalkPlanTake,
   owedBySku: ReadonlyMap<string, number>,
 ): { readonly of: number; readonly short: number } {
@@ -170,10 +170,10 @@ function rowsOf(plan: WalkPlan | null): WalkRow[] {
  *  this stop's box and section. */
 function stopTitle(stop: WalkPlanStop, place: Place): SectionTitleParts {
   if (stop.pooled) return { head: `Pooled: ${stop.game_display ?? 'cards'}`, count: null }
-  const box = stop.box_name ?? (stop.box === null ? 'Box' : `Box ${stop.box}`)
+  const box = stop.box_name ?? ''
   if (stop.section === null) return { head: box, count: null }
   const named = stop.section_name ? `Section ${stop.section}: ${stop.section_name}` : `Section ${stop.section}`
-  return { head: `${box}, ${named}`, count: sectionCountWords(sectionCountOf(place)) }
+  return { head: box ? `${box}, ${named}` : named, count: sectionCountWords(sectionCountOf(place)) }
 }
 
 export type WalkSection = { readonly key: string; readonly title: string; readonly parts: SectionTitleParts; readonly rows: readonly WalkRow[] }
@@ -196,6 +196,48 @@ function sectionsOf(plan: WalkPlan | null, rows: readonly WalkRow[]): WalkSectio
     out.push({ key: row.stopKey, title: sectionTitleText(parts), parts, rows: [row] })
   }
   return out
+}
+
+/** `Inventory.tsx`'s own `loneGroup` and the old `TakeBlock`'s `group`, restated: a
+ *  `SearchGroup` synthesised from one take's wire fields, over WHICHEVER copies the caller
+ *  hands it — every on-hand copy for the pane's own `currentGroup`, or just this stop's `here`
+ *  copies for one `WalkList` line (A4) — in the WIRE's own order, never re-sorted here, and
+ *  drawn with `preserveOrder` below so `CardLocations` never re-sorts it either. `on_hand`
+ *  stays the take's TRUE store-wide count regardless of which subset `copies` draws, because a
+ *  line's own group still answers "how many are there", not "how many are here".
+ *  `facts` OVERLAYS A COPY'S REFRESHED PLACE (D58's renumbering after a sale elsewhere in the
+ *  same box) — the same map both callers share, off the one hook. */
+function groupOf(take: WalkPlanTake, copies: readonly WalkPlanCopy[], facts: ReadonlyMap<string, Place>): SearchGroup {
+  return {
+    sku: take.sku,
+    names: take.name === null ? [] : [take.name],
+    number: null,
+    printed_total: null,
+    number_display: take.number_display,
+    set_hint: null,
+    set: take.set,
+    rarity: take.rarity,
+    condition: take.condition,
+    listed: take.listed ?? { pushed: 0, staged: 0, live: 0 },
+    sold_here: take.sold_here ?? 0,
+    on_hand: take.copies.length,
+    listable: 0,
+    live_as_of: take.live_as_of ?? null,
+    // NEVER READ HERE. A synthesised group, one take and never ranked against another.
+    rank: 0,
+    copies: copies.map((copy): SearchCopy => {
+      const fresh = facts.get(copy.key)
+      return {
+        key: copy.key,
+        state: copy.state,
+        state_at: null,
+        has_photo: copy.has_photo,
+        capture_id: copy.capture_id,
+        cid: copy.cid,
+        place: fresh ?? copy.place,
+      }
+    }),
+  }
 }
 
 /* ------------------------------------------------------------------ one receipt (a Mark sold) */
@@ -323,35 +365,7 @@ export function useOrderWalk({
    *  re-sorts it either. */
   const currentGroup: SearchGroup | null = useMemo(() => {
     if (currentRow === null) return null
-    const { take } = currentRow
-    return {
-      sku: take.sku,
-      names: take.name === null ? [] : [take.name],
-      number: null,
-      printed_total: null,
-      number_display: take.number_display,
-      set_hint: null,
-      set: take.set,
-      rarity: take.rarity,
-      condition: take.condition,
-      listed: { pushed: 0, staged: 0, live: 0 },
-      sold_here: 0,
-      on_hand: take.copies.length,
-      listable: 0,
-      live_as_of: null,
-      copies: take.copies.map((copy): SearchCopy => {
-        const fresh = facts.get(copy.key)
-        return {
-          key: copy.key,
-          state: copy.state,
-          state_at: null,
-          has_photo: copy.has_photo,
-          capture_id: copy.capture_id,
-          cid: copy.cid,
-          place: fresh ?? copy.place,
-        }
-      }),
-    }
+    return groupOf(currentRow.take, currentRow.take.copies, facts)
   }, [currentRow, facts])
 
   /** THE CURRENT CARD, WHOLE (§13: inventory's card pane, unchanged) — the real `InventoryCard`
@@ -405,7 +419,7 @@ export function useOrderWalk({
     if (next !== undefined) setCurrent(next.rowKey)
   }
 
-  const onSell = (copy: SearchCopy) => {
+  const onSell = (copy: SearchCopy, forTake?: WalkPlanTake) => {
     if (busyCopy !== null) return
     /* THE CARD PANE OFFERS MARK SOLD ON EVERY COPY OF THE TAKE, D212's own copies list — not
        only the ones physically AT this stop (`here: true`). `rows` flattens only the `here`
@@ -414,9 +428,15 @@ export function useOrderWalk({
        5, D171 again): no request, no toast, nothing. `currentRow` is the take the pane is
        standing on regardless of which of its copies was pressed, and every copy the pane
        draws a button for belongs to that one take (`currentGroup.copies` is `take.copies`
-       whole) — so it is the right anchor for every press this function makes. */
-    if (currentRow === null) return
-    const { take } = currentRow
+       whole) — so it is the right anchor for every press the PANE makes.
+
+       A4 ADDS A SECOND CALLER: `WalkList`'s own rows, one per take, drawn beside the pane
+       rather than only inside it. A row there can belong to a DIFFERENT take than the one the
+       pane happens to be showing, so `currentRow.take` is the wrong anchor for it — `forTake`
+       is how that caller names its own take explicitly. Omitted, the pane's own behaviour is
+       unchanged. */
+    const take = forTake ?? currentRow?.take
+    if (take === undefined) return
     const order = pickOrderFor(take, ordersByKey, recorded.get(take.sku) ?? new Map())
     if (order === null) {
       /* D171: a refusal that reaches nobody did not happen. This pass's own tally may be
@@ -561,6 +581,10 @@ export function useOrderWalk({
     receipts,
     soldKeys,
     newestUndoKey,
+    /** THE REFRESHED PLACES (A4), so `WalkList`'s own per-line groups can read the same
+     *  post-sale facts the pane already does — `groupOf`'s own overlay, shared rather than
+     *  copied. */
+    facts,
   }
 }
 
@@ -580,6 +604,17 @@ function takeLinesOf(rows: readonly WalkRow[]): WalkTakeLine[] {
     else out.push({ takeKey: row.takeKey, take: row.take, rows: [row] })
   }
   return out
+}
+
+/** Every copy the wanted count is asking for has a receipt against it. Shared by the press's
+ *  own snapshot (below) and each line's `is-done` styling — one formula, not two. */
+function pickedAllOf(line: WalkTakeLine, soldKeys: ReadonlySet<string>): boolean {
+  return line.rows.filter((row) => soldKeys.has(row.copy.key)).length >= line.take.wanted
+}
+
+/** Every take key across every section, flat — what a press of Hide picked snapshots. */
+function allTakeLinesOf(sections: readonly WalkSection[]): WalkTakeLine[] {
+  return sections.flatMap((section) => takeLinesOf(section.rows))
 }
 
 /** Who a take is for, in words: the buyers' names, once each. */
@@ -603,6 +638,8 @@ export function WalkList({
   collapsed = false,
   owedBySku,
   showBuyers,
+  sections,
+  onPick,
 }: {
   readonly walk: OrderWalk
   readonly hideSold: boolean
@@ -610,7 +647,41 @@ export function WalkList({
   /** What the walked orders still want of each SKU, across every stop. The "of N". */
   readonly owedBySku: ReadonlyMap<string, number>
   readonly showBuyers: boolean
+  /** Each box's own divider layout (A4), the SAME one `getBoxes()` read `Orders.tsx` already
+   *  turns into a map for the pane's own `CardLocations` — never a second read for the walk
+   *  list's copies. Optional; the strip is honest without it (`PositionBar`'s own contract). */
+  readonly sections?: ReadonlyMap<number, readonly SectionDetail[]>
+  /** LANE A5, Q4: on a phone, a tap opens the card in a sheet. `Orders.tsx` passes this only
+   *  while its own column reads narrow — `WalkList` never reads a width itself. Undefined at a
+   *  desk width, where the pane sits beside the walk already and needs no sheet to open. */
+  readonly onPick?: () => void
 }) {
+  /* THE OWNER'S RULING, 2026-09-27: THE PRESS FOLDS, NOT THE SALE. Turning Hide picked ON is
+   * itself allowed to fold every row picked SO FAR, right then — D118 permits this, because
+   * the fold is the PRESS's own result, not a side effect of some other action. A sale made
+   * while it is already on stays drawn, marked sold, until the NEXT press (off then on again
+   * re-snapshots) or the walk's own next load (a fresh plan) — D263 ruling 2, unchanged from
+   * this file's earlier fix. This is `BoxBrowse.tsx`'s `enteredLive` shape, ported again: a
+   * snapshot taken at one deliberate moment, held fixed until that moment repeats, never
+   * recomputed on every render — which is what made the previous `planTakeKeys` a tautology
+   * (it recomputed from the very data it was meant to hold still against). */
+  const [foldedKeys, setFoldedKeys] = useState<ReadonlySet<string>>(new Set())
+  const wasHiding = useRef(hideSold)
+  const planRef = useRef(walk.plan)
+  useEffect(() => {
+    if (walk.plan !== planRef.current) {
+      planRef.current = walk.plan
+      setFoldedKeys(new Set())
+    } else if (hideSold && !wasHiding.current) {
+      const picked = new Set<string>()
+      for (const line of allTakeLinesOf(walk.sections)) {
+        if (pickedAllOf(line, walk.soldKeys)) picked.add(line.takeKey)
+      }
+      setFoldedKeys(picked)
+    }
+    wasHiding.current = hideSold
+  }, [hideSold, walk.plan, walk.sections, walk.soldKeys])
+
   if (walk.loading && walk.plan === null) {
     return (
       <Loading rows={4} label="Reading the walk" />
@@ -630,9 +701,7 @@ export function WalkList({
     <ul className="orders-walk-list" aria-label="The cards to pick, in the order the boxes are walked">
       {walk.sections.map((section) => {
         const lines = takeLinesOf(section.rows)
-        const pickedAll = (line: WalkTakeLine) =>
-          line.rows.filter((row) => walk.soldKeys.has(row.copy.key)).length >= line.take.wanted
-        const shown = hideSold ? lines.filter((line) => !pickedAll(line)) : lines
+        const shown = hideSold ? lines.filter((line) => !foldedKeys.has(line.takeKey)) : lines
         if (shown.length === 0) return null
         return (
           <li className="orders-walk-group" key={section.key}>
@@ -649,20 +718,17 @@ export function WalkList({
                   const current = line.rows.some((row) => row.rowKey === walk.current)
                   const slots = line.rows.map((row) => row.copy.place.card).filter((card): card is number => card !== null)
                   const next = line.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? line.rows[0]
-                  /* FINDING #16 (the Opus review round): the struck-out row is reached only
-                   * through the card pane before this — the operator had to re-select the take
-                   * to find its own copy's Undo. `newestUndoKey` names the one reversible copy
-                   * store-wide (no clock, see above), so a line carrying it draws its own Undo
-                   * beside the row instead of nesting a second button inside `orders-walk-press`
-                   * (D57: the row's own control becomes Undo). */
-                  const undoRow = line.rows.find((row) => row.copy.key === walk.newestUndoKey)
                   return (
                     <li className={done ? 'orders-walk-line is-done' : 'orders-walk-line'} key={line.takeKey}>
                       <button
                         className="orders-walk-press"
                         type="button"
                         aria-current={current ? 'true' : undefined}
-                        onClick={() => next !== undefined && walk.select(next.rowKey)}
+                        onClick={() => {
+                          if (next === undefined) return
+                          walk.select(next.rowKey)
+                          onPick?.()
+                        }}
                       >
                         <span className="orders-walk-slot">
                           {slots.length === 0 ? '—' : slots.map((slot) => `#${slot}`).join(', ')}
@@ -689,17 +755,29 @@ export function WalkList({
                         </span>
                         {showBuyers ? <span className="orders-walk-for">{takeBuyers(line.take)}</span> : null}
                       </button>
-                      {undoRow === undefined ? null : (
-                        <IconButton
-                          icon="undo"
-                          label="Undo"
-                          name={`Undo: ${undoRow.copy.place.label === null ? undoRow.copy.key : sayPlace(undoRow.copy.place.label)}`}
-                          className="orders-walk-line-undo"
-                          busy={walk.busyCopy === undoRow.copy.key}
-                          disabled={walk.busyCopy !== null && walk.busyCopy !== undoRow.copy.key}
-                          onClick={() => walk.undoCopy(undoRow.copy.key)}
-                        />
-                      )}
+                      {/* A4: EVERY here-COPY, AS INVENTORY DRAWS IT (the owner's Q3, "full
+                       * detail on every row") — box, section and card, the neighbours, the
+                       * strip and the ruler, and Mark sold, reused whole from `CardLocations`
+                       * rather than forked (D304).
+                       * `head={false}` draws the rows alone: the heading, the stats and the SKU
+                       * line already sit above, in this same button. FINDING #16 (the Opus
+                       * review round) is answered by THIS, not by a row-level Undo of its own
+                       * any more — `renderAction` puts `RowAction` on every copy here exactly as
+                       * it sits in the pane, so the struck-out copy's own Undo is drawn right
+                       * where the copy is, never only in the pane above. */}
+                      <CardLocations
+                        group={groupOf(line.take, line.rows.map((row) => row.copy), walk.facts)}
+                        persona="owner"
+                        onSell={walk.onSell}
+                        busyKey={walk.busyCopy}
+                        soldKeys={walk.soldKeys}
+                        sections={sections}
+                        currentKey={walk.currentRow?.copy.key}
+                        preserveOrder
+                        head={false}
+                        className="walk-pick-where"
+                        renderAction={(copy) => <RowAction walk={walk} copy={copy} take={line.take} />}
+                      />
                     </li>
                   )
                 })}
@@ -714,8 +792,10 @@ export function WalkList({
 
 /** The press on a copy row: an icon in every row (the iconography rule, a press repeated per
  *  row), its name carrying the place so thirty rows never announce the same word. `Undo` stands
- *  only on the newest sale (`newestUndoKey`). */
-function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly copy: SearchCopy }) {
+ *  only on the newest sale (`newestUndoKey`). `take` names which take this copy is being sold
+ *  against (A4): the pane omits it, since `onSell` falls back to the row it is showing, but a
+ *  `WalkList` row names its own take explicitly — it may not be the one the pane is on. */
+export function RowAction({ walk, copy, take }: { readonly walk: OrderWalk; readonly copy: SearchCopy; readonly take?: WalkPlanTake }) {
   const receipt = walk.receipts.get(copy.key)
   const busy = walk.busyCopy === copy.key
   const where = copy.place.label === null ? copy.key : sayPlace(copy.place.label)
@@ -728,179 +808,7 @@ function RowAction({ walk, copy }: { readonly walk: OrderWalk; readonly copy: Se
       name={`${undo ? 'Undo' : 'Mark sold'}: ${where}`}
       busy={busy}
       disabled={walk.busyCopy !== null && !busy}
-      onClick={() => (undo ? walk.undoCopy(copy.key) : walk.onSell(copy))}
+      onClick={() => (undo ? walk.undoCopy(copy.key) : walk.onSell(copy, take))}
     />
-  )
-}
-
-/* ------------------------------------------------------------------------------ the card pane */
-
-/** THE CARD THE WALK STANDS ON, AND WHERE EVERY COPY OF IT IS (UX-169). The photograph, what the
- *  card is, how many to pick, and one row per copy with its place and Mark sold: every copy, this
- *  stop's first, in the server's order (D212). The card's full inventory detail (stats, listing
- *  counts, the details table) is `#/inventory`'s, not this screen's. */
-export function WalkCardPane({
-  walk,
-  owedBySku,
-  showBuyers,
-}: {
-  readonly walk: OrderWalk
-  readonly owedBySku: ReadonlyMap<string, number>
-  readonly showBuyers: boolean
-}) {
-  const { currentRow, currentGroup, currentCard } = walk
-  const [broken, setBroken] = useState(false)
-  const [zoomed, setZoomed] = useState(false)
-  useEffect(() => {
-    setBroken(false)
-    setZoomed(false)
-  }, [currentRow?.copy.key])
-
-  /* THE MARKET READING, ONE READ PER RUN (the owner's pick, 2026-09-24: B, one quiet line under
-     the card). The same per-run cache the old pane kept. A failed read is a quiet dash. */
-  const [priced, setPriced] = useState<Record<string, MarketRead>>({})
-  const asked = useRef<Set<string>>(new Set())
-  const pricedRun = currentCard?.run ?? null
-  useEffect(() => {
-    if (pricedRun === null || asked.current.has(pricedRun)) return
-    asked.current.add(pricedRun)
-    let live = true
-    getPricing(pricedRun)
-      .then((payload) => {
-        if (live) setPriced((held) => ({ ...held, [pricedRun]: marketTable(payload) }))
-      })
-      .catch(() => {
-        if (live) setPriced((held) => ({ ...held, [pricedRun]: { kind: 'absent', why: 'could not be read' } }))
-      })
-    return () => {
-      live = false
-    }
-  }, [pricedRun])
-
-  if (currentGroup === null || currentRow === null) return null
-  const take = currentRow.take
-  /* NEVER A PHOTOGRAPH OF A POOLED CARD: a code card's photo is a live code (D24, opsec). */
-  const row: Row | null =
-    currentCard === null || currentRow.copy.place.located === false ? null : { key: currentRow.copy.key, card: currentCard }
-  const figure = pickFigureOf(take, owedBySku)
-  const sub = [take.number_display, take.set].filter((part): part is string => Boolean(part))
-
-  const here = currentGroup.copies.find((copy) => copy.key === currentRow.copy.key) ?? null
-  const read = currentCard?.run == null ? undefined : priced[currentCard.run]
-  const rawMarket = read?.kind === 'table' && currentCard !== null ? read.rows[`${currentCard.box}/${currentCard.index}`] : null
-  const market = rawMarket === null || rawMarket === undefined || Number.isNaN(Number(rawMarket)) ? null : Number(rawMarket)
-  const liveNow = take.listed === undefined ? null : forSale(take.listed.live, take.sold_here ?? 0)
-  const hereWords = currentRow.copy.place.label === null ? null : sayPlace(currentRow.copy.place.label)
-
-  return (
-    <section className="orders-card-pane bn-panel" aria-label="The card to pick">
-      <div className="orders-card-thin">
-        <button
-          type="button"
-          className="orders-card-thumb"
-          aria-label="Open the photograph"
-          disabled={row === null}
-          onClick={() => setZoomed(true)}
-        >
-          {row === null ? (
-            <Icon name="image" size={18} />
-          ) : (
-            <img src={photoUrl(row.card.box, row.card.index, row.card.cid)} alt="" loading="lazy" />
-          )}
-        </button>
-        <span className="orders-card-thin-text">
-          <span className={take.name === null ? 'orders-card-thin-name is-unnamed' : 'orders-card-thin-name'}>
-            {take.name ?? 'Not identified yet'}
-          </span>
-          <span className="orders-card-thin-meta">
-            <span className="orders-card-thin-place">
-              {hereWords === null ? `Pick ${take.wanted}` : `${hereWords}, pick ${take.wanted}`}
-              {figure.short > 0 ? '' : ` of ${figure.of}`}
-            </span>
-            {figure.short > 0 ? (
-              <>
-                {' '}
-                <Pill tone="warn">{figure.short} short</Pill>
-              </>
-            ) : null}
-          </span>
-        </span>
-        {here === null ? null : (
-          <span className="orders-card-thin-action">
-            <RowAction walk={walk} copy={here} />
-          </span>
-        )}
-      </div>
-      <div className="orders-card-top">
-        <div className="orders-card-shot">
-          {row === null ? (
-            <div className="orders-walk-photo">
-              <Icon name="image" size={28} />
-            </div>
-          ) : (
-            <PhotoPanel
-              row={row}
-              label={currentRow.copy.place.label}
-              absent={broken}
-              onAbsent={() => setBroken(true)}
-              nonce={null}
-              onZoom={() => setZoomed(true)}
-              reshoot={null}
-            />
-          )}
-        </div>
-        <div className="orders-card-text">
-          <h2 className={take.name === null ? 'orders-card-name is-unnamed' : 'orders-card-name'}>{take.name ?? 'Not identified yet'}</h2>
-          {sub.length === 0 ? null : (
-            <p className="orders-card-sub bn-facts">
-              {sub.map((part, at) => (
-                <span key={at}>{part}</span>
-              ))}
-            </p>
-          )}
-          <p className="orders-card-pick">
-            Pick <strong>{take.wanted}</strong>
-            {figure.short > 0 ? null : <> of {figure.of}</>}
-            {figure.short > 0 ? (
-              <>
-                {' '}
-                <Pill tone="warn">{figure.short} short</Pill>
-              </>
-            ) : null}
-          </p>
-          {showBuyers ? <p className="orders-card-for">For {takeBuyers(take)}</p> : null}
-          <p className="orders-card-market">
-            <ProductLink sku={take.sku} name={take.name ?? undefined}>
-              {market === null ? '—' : <Money value={market} />} market, {liveNow === null ? '—' : liveNow} live
-            </ProductLink>
-          </p>
-        </div>
-      </div>
-      <ul className="orders-card-copies" aria-label="Every copy of this card">
-        {currentGroup.copies.map((copy) => {
-          const here = copy.key === currentRow.copy.key
-          return (
-            <li className={here ? 'orders-card-copy is-current' : 'orders-card-copy'} key={copy.key} aria-current={here ? 'true' : undefined}>
-              {copy.place.located === false ? (
-                <span className="orders-card-place">Pooled: {copy.place.game_display ?? 'cards'}</span>
-              ) : (
-                <Location place={copy.place} className="orders-card-place" />
-              )}
-              <span className="orders-card-action">
-                <RowAction walk={walk} copy={copy} />
-              </span>
-            </li>
-          )
-        })}
-      </ul>
-      {!zoomed || row === null ? null : (
-        <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
-          <img
-            src={photoUrl(row.card.box, row.card.index, row.card.cid)}
-            alt={`The card at ${currentRow.copy.place.label === null ? row.key : sayPlace(currentRow.copy.place.label)}`}
-          />
-        </Overlay>
-      )}
-    </section>
   )
 }

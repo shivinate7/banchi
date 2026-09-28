@@ -1,8 +1,8 @@
 ## D200 — The repo-state heartbeat is a thin caller of what already exists, and it remembers across runs in a file
 
-**docs/GATES.md item 24 ("A durable scheduled heartbeat that watches repo state across sessions") is BUILT.** `scripts/heartbeat.py`, added 2026-09-13.
+**RETIRED 2026-09-27.** Owner's ruling: "Retire both" (test-audit plan Q6). The coordinator and heartbeat scripts and their make targets were retired per owner directive. Nothing scheduled either since 2026-09-16. The narrative below is historical record of what the system did. Recorded in `scripts/docs-audit.py:RECORDED_DELETIONS` and `scripts/docs-audit-allow.txt`.
 
-### What it answers, and what it does not build to answer it
+### What it answers, and what it does not build to answer it (HISTORICAL)
 
 Every session here sees only its own tree and its own branch — a worktree cannot tell whether
 another one has gone stale, whether a PR nobody touched has sat green and unmerged for a day,
@@ -41,8 +41,8 @@ waits for a next tick. The cadence is the scheduled task's job, registered again
 `mcp__scheduled-tasks` mechanism this environment already exposes for a periodic agent run — a
 fresh Claude session invoking `python3 scripts/heartbeat.py --json` on a schedule the desktop
 app owns, never a process this repository starts or keeps alive. There is no `make` target
-that backgrounds anything; `make heartbeat` runs the script in the foreground and prints, the
-same shape as `make status` and `make coordinator`.
+that backgrounds anything. The retired heartbeat script runs once and prints, like `make status`
+and the retired coordinator script did.
 
 **Each run is a fresh session with no conversation context.** The script itself starts knowing
 nothing, and so would an agent session spawned to run it. Anything needing memory of a

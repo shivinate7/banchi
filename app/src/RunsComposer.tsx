@@ -288,7 +288,7 @@ export function selectionLine(
   const named = (box: number) => boxLabel(box, boxes?.find((row) => row.box === box)?.name)
   const parts: string[] = []
   if (draft.start === 'needed') {
-    parts.push('Every card waiting to be identified')
+    parts.push('Pending')
   } else if (draft.start === 'drawers') {
     if (draft.boxes.length === 0) return 'Pick a box. You can pick several.'
     parts.push(

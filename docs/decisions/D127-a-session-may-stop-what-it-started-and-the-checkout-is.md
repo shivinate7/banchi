@@ -168,3 +168,13 @@ somewhere the list does not reach).
 for everywhere-else, a real socket with a real client on it, and a `.serve/` pidfile — both
 incidents reproduced rather than asserted about. **Mutation-tested: thirteen guards removed one at a time, all thirteen caught.** D18 keeps it out of the git hook and in `make check`, beside
 `janitor-selftest`, for the reason that entry gives — it writes, and it signals.
+
+### Amended 2026-09-27: "under this checkout" is no longer "one session's"
+
+Two sessions can now stand in one checkout. An agent's own wandering session proved it: it lost
+its worktree, carried on inside another session's, and ran a blanket `--confirm` there. That
+sweep did exactly what this entry describes, correctly, and still stopped a process it should
+not have — the owning session's own pre-push check. `D305` reads
+`OURS` a second way, by WHO started it, not only by WHERE. This entry's own full-checkout sweep
+survives unchanged for the top-level session driving a call by hand. A subagent's own blanket
+sweep is narrowed to its own tag. Read that entry before touching ownership here.

@@ -268,9 +268,9 @@ export function RunsContent({
   return (
     <div className="runs">
       {/* The sheet's own header carries the title and icon now (Review's Sheet, "Runs").
-         This row is the one worded primary — "Identify cards" — plus icons for the rest
-         (the header rule, owner 2026-09-24). */}
-      <p className="runs-lede">Only Identify costs money.</p>
+         This row is the one worded primary — "Identify" — plus icons for the rest
+         (the header rule, owner 2026-09-24). F5 cut its own two words to one. */}
+      <p className="runs-lede">Paid</p>
       <div className="runs-actions">
         {scopeLine === '' ? null : (
           <Pill tone="accent" icon="box" className="runs-scope">
@@ -279,17 +279,18 @@ export function RunsContent({
         )}
         <ReloadButton onReload={() => setReloads((n) => n + 1)} busy={boxes === null && failure === null} label="Reload boxes and runs" hotkey={false} />
         {/* WORDS, NOT AN ICON (ICON-MAP's Runs row): its verb is not in the icon vocabulary, and a
-            second refresh glyph beside the reload would read as the same control. Ghost, because
-            Identify cards is this row's one primary. */}
+            second refresh glyph beside the reload would read as the same control if this one drew
+            no text at all. Ghost, because Identify is this row's one primary. */}
         <Button variant="ghost" icon="refresh" onClick={() => setSyncOpen(true)}>
-          Check what is live
+          Refresh
         </Button>
         {/* ONE VERB, WHATEVER THE SELECTION IS OVER. It read `Identify a box` / `Identify N
             boxes`, which named the unit of work in the label of the button that opens the
             dialog where the unit is chosen — so the operator had to have decided before
-            pressing. `Identify cards` is true of every selection this now composes. */}
+            pressing. `Identify` is true of every selection this now composes (F5 cut "cards",
+            redundant on a screen with no other object). */}
         <Button variant="primary" icon="zap" onClick={() => setComposerOpen(true)}>
-          Identify cards
+          Identify
         </Button>
       </div>
 

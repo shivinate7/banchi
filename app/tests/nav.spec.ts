@@ -518,12 +518,15 @@ test('the step is announced on the sidebar and documented in the shortcuts sheet
   const sheet = page.locator('.app-keys[role="dialog"]')
   await expect(sheet).toBeVisible()
 
-  /* Both caps, in one row, described by a sentence rather than left as two glyphs. Read as
-     text off the sheet's own rows: the keycaps there are bare `<kbd>` and NOT aria-hidden,
-     which is the difference between a reference and a decoration. */
+  /* All four caps, in one row, described by a word rather than left as glyphs. F5 verbiage
+     cut merged the arrow-pair row and its no-arrow-keyboard alternate into one row of
+     alternatives (`⌘←/⌘→/⌘↑/⌘↓`, all doing "Navigate") — the same row this test already
+     reads, now with two more caps in it. Read as text off the sheet's own rows: the keycaps
+     there are bare `<kbd>` and NOT aria-hidden, which is the difference between a reference
+     and a decoration. */
   const stepRow = sheet.locator('.app-keys-row', { has: page.locator('kbd', { hasText: '⌘←' }) })
   await expect(stepRow).toHaveCount(1)
-  await expect(stepRow.locator('kbd')).toHaveText(['⌘←', '⌘→'])
+  await expect(stepRow.locator('kbd')).toHaveText(['⌘←', '⌘→', '⌘↑', '⌘↓'])
   await expect(stepRow.locator('.app-keys-does')).not.toBeEmpty()
 
   await page.keyboard.press('Escape')
@@ -787,7 +790,7 @@ test('a throwaway ROUTES row gets its nav, palette, keys, title and scaffold wit
   // KEYS: a jump entry, and the screen's own group, open by default on its own screen
   await page.locator('h1').focus()
   await page.keyboard.press('?')
-  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+  const sheet = page.getByRole('dialog', { name: 'Shortcuts' })
   await expect(sheet).toBeVisible()
   await expect(sheet.locator('dd', { hasText: /^Throwaway/ })).toHaveCount(1)
   await expect(sheet.getByRole('heading', { name: 'Throwaway' })).toBeVisible()
@@ -973,7 +976,7 @@ test('no global key acts under an open layer', async ({ page }) => {
 test('the first Tab reaches the skip link, and a navigation hands focus to the screen (UX-092)', async ({ page }) => {
   await open(page, RING[0])
   await page.keyboard.press('Tab')
-  const skip = page.getByRole('button', { name: 'Skip to the screen' })
+  const skip = page.getByRole('button', { name: 'Skip' })
   await expect(skip).toBeFocused()
   await page.keyboard.press('Enter')
   await expect.poll(() => page.evaluate(() => document.activeElement?.closest('.bn-view') !== null)).toBe(true)

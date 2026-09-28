@@ -559,6 +559,21 @@ class QuietHandler(capture_server.CaptureHandler):
         pass
 
 
+def _spawn_server(httpd) -> threading.Thread:
+    """Start `httpd.serve_forever` on a daemon thread with a short poll, and return it.
+
+    Every throwaway server in this file used the 0.5s default `poll_interval`. `shutdown()`
+    only sets a flag — the `serve_forever` loop notices it on its NEXT poll tick, so each of
+    the two dozen servers here idled up to half a second on teardown for zero coverage. That
+    idle time was 30s of T7's own 99.9s wall clock, measured before this helper existed
+    (S1, docs/reviews/test-audit-2026-09-27/PLAN.md). One helper, one short poll, so a
+    `shutdown()` call anywhere in this file is answered almost at once.
+    """
+    thread = threading.Thread(target=httpd.serve_forever, args=(0.02,), daemon=True)
+    thread.start()
+    return thread
+
+
 # EVERY CAPTURE THIS FILE MAKES CARRIES BYTES OF ITS OWN, AND SINCE D172 THAT IS THE STORE'S
 # REQUIREMENT RATHER THAN A CASE'S PREFERENCE. A card is NAMED by the sha256 of its photograph
 # and `cards_cid` holds that name UNIQUE, so two captures of one blob are two rows carrying one
@@ -868,7 +883,7 @@ def command(checks: Checks, *argv, exits: int = 0):
     Through `cli/__main__.py:main` rather than by importing the command module, because the
     dispatch and the argument defaults are part of the seam: a flag whose default moved would
     otherwise be invisible here. `exits=1` is for an emit that adds nothing, which is
-    refused on both paths (DEBT35).
+    refused on both paths.
     """
     from cli import __main__ as entry
 
@@ -6802,6 +6817,693 @@ def check_undo_until_built_on(checks: Checks) -> None:
         )
         checks.equal(field(back, "restored"), [], "nothing restored twice")
 
+    def put_price_with_retry(sku: str, value: str, attempts: int = 5) -> None:
+        """`PUT /pricing`, adding one SKU, retried on `corpus_moved` — the real client's own
+        recovery path (D103's "Reload before saving"), never a silent overwrite. A lock that
+        forces two writers to serialize can still leave the second one holding a revision the
+        first just moved — the lock's job is to stop a SILENT loss, not to stop the second
+        writer from ever needing to look again."""
+        for _ in range(attempts):
+            current = pipeline_routes.do_pricing_corpus()
+            document = current["corpus"]
+            document["skus"][sku] = {"value": value}
+            try:
+                pipeline_routes.do_pricing_corpus_write(
+                    {"corpus": document, "revision": current["revision"]}
+                )
+                return
+            except pipeline_routes.PipelineRefusal as exc:
+                if exc.code != "corpus_moved":
+                    raise
+        raise AssertionError(f"corpus_moved kept refusing {sku} after {attempts} attempts")
+
+    # ------------------------------------------------ T7-RACE (DEBT53): the restore lost-update race
+    # `do_pricing_restore`, `PUT /pricing`, `POST /pricing/clear` and both CLI writers
+    # (`cli/cmd_join.py`, `cli/cmd_reprice.py`) now share ONE lock, `store/files.py:exclusive`,
+    # around their whole read-modify-write. Before this fix, none of them took it, so a
+    # `Corpus.read()` here, followed by another writer's whole `Corpus.write()` there, followed
+    # by THIS call's own `write()`, would silently discard the other write. Forced with REAL
+    # threads and the REAL flock, never a stubbed lock: `corpus.Corpus.read` is patched to
+    # sleep, on the ONE call the restore makes, for exactly as long as that call now holds the
+    # lock. Proven RED against a `.bak` copy of the pre-lock file, and proven GREEN here,
+    # against the file as it stands, never `git checkout`.
+    with isolated_home():
+        book = corpus.Corpus()
+        book.answers = {"7500": corpus.Answer(value="1.00")}
+        book.write()
+        clear_id = pipeline_routes.do_pricing_clear({"skus": ["7500"]})["clear_id"]
+
+        real_corpus_read = corpus.Corpus.read
+        seen = {"n": 0}
+        paused = threading.Event()
+
+        def racing_read(path=None):
+            seen["n"] += 1
+            result = real_corpus_read(path)
+            if seen["n"] == 1:
+                # THE RESTORE'S OWN READ — the one call `do_pricing_restore` makes, now
+                # inside `files.exclusive`. Sleeping here holds the real flock.
+                paused.set()
+                time.sleep(0.2)
+            return result
+
+        corpus.Corpus.read = racing_read
+        outcome: dict = {}
+        try:
+            def run_restore():
+                outcome["restored"] = pipeline_routes.do_pricing_restore({"clear": clear_id})
+
+            worker = threading.Thread(target=run_restore)
+            worker.start()
+            fired = paused.wait(timeout=5)
+            # WRITER B, ON THIS THREAD, WHILE THE RESTORE SLEEPS INSIDE ITS LOCK. Unlocked,
+            # this lands at once; locked, this call blocks here until the restore's
+            # `with files.exclusive(...)` releases — never a hang, since it releases in ~0.2s.
+            put_price_with_retry("7501", "3.25")
+            worker.join(timeout=10)
+        finally:
+            corpus.Corpus.read = real_corpus_read
+
+        checks.ok(fired, "T7-RACE: the restore's read fires before the wait times out")
+        checks.ok(not worker.is_alive(), "T7-RACE: the restore finished")
+        final = corpus.Corpus.read().answers
+        checks.ok(
+            "7501" in final and final["7501"].value == "3.25",
+            "T7-RACE (DEBT53): PUT /pricing's edit survives a concurrent restore",
+        )
+        checks.ok(
+            "7500" in final and final["7500"].value == "1.00",
+            "and the restore's own answer still lands",
+        )
+
+    # ------------------------------------------------ T7-RACE (DEBT53): the same race, over a real join
+    # The identical hazard, over `cli/cmd_join.py`'s own writer (D105's second unguarded
+    # writer). `join` reads the corpus TWICE: once at the top, read-only, for the threshold
+    # that shapes matching; once again, fresh, right before the write this lane put under the
+    # lock. The second call is the one this test targets.
+    with isolated_home():
+        run_dir = runs.create("t7-b2race")
+        capture_server.do_capture(capture_payload(1, game="riftbound"))
+        with Store().write() as snapshot:
+            snapshot.inventory.set_state("1/1", master.IDENTIFIED)
+            snapshot.inventory.cards["1/1"].game = "riftbound"
+        run_dir.write_identifications(
+            {
+                "prompt_fingerprint": "t7-b2race",
+                "cards": {
+                    "1/1": {
+                        "photo": run_photo(1, 1),
+                        "box": 1,
+                        "index": 1,
+                        "set_hint": None,
+                        "metadata_finish": "foil",
+                        "status": "ok",
+                        "error": None,
+                        "identification": {
+                            "name": "Vilemaw",
+                            "number": "060/219",
+                            "printed_total": "219",
+                            "confidence": "high",
+                            "finish": "foil",
+                        },
+                    }
+                },
+            }
+        )
+
+        real_corpus_read = corpus.Corpus.read
+        seen = {"n": 0}
+        paused = threading.Event()
+
+        def racing_read(path=None):
+            seen["n"] += 1
+            result = real_corpus_read(path)
+            if seen["n"] == 2:
+                paused.set()
+                time.sleep(0.2)
+            return result
+
+        corpus.Corpus.read = racing_read
+        exit_codes: list = []
+        try:
+            def run_join():
+                from cli import __main__ as cli_entry
+
+                with quiet():
+                    exit_codes.append(
+                        cli_entry.main(["join", str(run_dir.directory), "--export", str(RIFTBOUND_EXPORT)])
+                    )
+
+            worker = threading.Thread(target=run_join)
+            worker.start()
+            fired = paused.wait(timeout=5)
+            put_price_with_retry("8888", "4.50")
+            worker.join(timeout=15)
+        finally:
+            corpus.Corpus.read = real_corpus_read
+
+        checks.ok(fired, "T7-RACE: the join's second corpus read fires before the wait times out")
+        checks.ok(not worker.is_alive(), "T7-RACE: the join finished")
+        checks.equal(exit_codes, [0], "and it exited clean")
+        final = corpus.Corpus.read().answers
+        checks.ok(
+            "8888" in final and final["8888"].value == "4.50",
+            "T7-RACE (DEBT53): PUT /pricing's edit survives a concurrent join",
+        )
+
+    # ------------------------------------------------ T7-RACE (DEBT53): reprice apply's own
+    # revision check, read again inside the lock
+    # `cli/cmd_reprice.py:_apply`'s `--corpus-revision` guard used to run once, before the
+    # import CSV was built and before the `Store().write()` block for the sale posting — both
+    # of which take real time. A concurrent write that moved the revision in that gap passed
+    # right by a check that had already run and would never run again. This is a different
+    # shape from the other three: the write itself was always safe (a fresh read, its own
+    # SKUs only), so nothing here can lose an edit — what could silently fail was the
+    # OPERATOR'S "the pricing file changed, reload" refusal itself.
+    #
+    # Forced by making `corpus.revision()` answer the value it was offered on its first call
+    # (so the early check passes), landing a real, unrelated corpus write of its own, then
+    # answering fresh — the real, moved revision — on every later call. The fresh answer is
+    # what the check now inside the lock reads.
+    with isolated_home() as home:
+        cards = [(3, 1, "Dunsparce", "120", "normal")]
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(run_dir.directory))
+
+        source = tcgcsv.read_export(FIXTURE_EXPORT)
+        row = dict(source.by_sku()[DUNSPARCE_SKU])
+        row[tcgcsv.LIVE_QUANTITY_COLUMN] = "2"
+        row[tcgcsv.PRICE_COLUMN] = "2.0000"
+        export = home / "live-b2race.csv"
+        tcgcsv.write_csv(export, source.header, [row])
+
+        command(checks, "reprice", "list", str(export), "--days", "7", "--percent", "10", "--write")
+        directory = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[-1]
+        tcgcsv.write_csv(
+            directory / cmd_reprice.WORKLIST,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.50"}],
+        )
+
+        offered = corpus.revision()
+        real_revision = corpus.revision
+        seen = {"n": 0}
+
+        def racing_revision(path=None):
+            seen["n"] += 1
+            if seen["n"] == 1:
+                # THE EARLY CHECK'S OWN READ. Answer with the value it was handed, so that
+                # check passes, then land a real, unrelated corpus edit before anything else
+                # reads this file again — the concurrent write the early check cannot see.
+                unrelated = corpus.Corpus.read()
+                unrelated.answers["b2race-unrelated"] = corpus.Answer(value="9.99")
+                unrelated.write()
+                return offered
+            return real_revision(path)
+
+        corpus.revision = racing_revision
+        try:
+            from cli import __main__ as cli_entry
+
+            with quiet() as said_buf:
+                code = cli_entry.main(
+                    [
+                        "reprice", "apply", str(directory / cmd_reprice.WORKLIST), "--write",
+                        "--corpus-revision", offered,
+                    ]
+                )
+            said = said_buf.getvalue()
+        finally:
+            corpus.revision = real_revision
+
+        checks.equal(
+            seen["n"], 2,
+            "T7-RACE: the revision is read twice — the early check, then the one this lane "
+            "added inside the lock",
+        )
+        checks.equal(
+            code, 1,
+            "T7-RACE (DEBT53): reprice apply refuses when the revision moves during the run, "
+            "not only when it has already moved at the start",
+        )
+        checks.ok(
+            "REFUSED" in said and "pricing file changed" in said,
+            "and names why", said,
+        )
+        checks.ok(
+            DUNSPARCE_SKU not in corpus.Corpus.read().answers,
+            "and the markdown's own answer is never written on top of the stale premise",
+        )
+        # LANE B3 (DEBT53's own nesting risk, closed): the corpus check and the corpus write,
+        # the posting, and `import.csv` now share ONE `Store().write()` hold. A refusal inside
+        # it runs before any of the three exists, never after two of them are already on disk.
+        target = directory / cmd_reprice.IMPORT
+        checks.ok(
+            not target.is_file(),
+            "T7-RACE (DEBT53): and import.csv is never written on that same stale premise",
+        )
+        conn = db.connect(files.inventory_dir())
+        try:
+            stale_postings = [
+                entry for entry in db.postings_for_sku(conn, DUNSPARCE_SKU)
+                if entry["source"] == "reprice"
+            ]
+        finally:
+            conn.close()
+        checks.ok(
+            not stale_postings,
+            "and no reprice posting row lands on that same stale premise (`emit` already "
+            "posted this SKU at the rule price, and that row is not this check's business)",
+        )
+
+        # THE ORDINARY CASE, RIGHT AFTER, WITH NO RACE: the same worklist, the real revision.
+        # All three land, because the fix is one hold and not a smaller check.
+        fresh_revision = corpus.revision()
+        with quiet() as said_buf2:
+            code2 = cli_entry.main(
+                [
+                    "reprice", "apply", str(directory / cmd_reprice.WORKLIST), "--write",
+                    "--corpus-revision", fresh_revision,
+                ]
+            )
+        said2 = said_buf2.getvalue()
+        checks.equal(
+            code2, 0, "T7-RACE (DEBT53): the ordinary apply, with no race, succeeds",
+        )
+        checks.ok(
+            "wrote" in said2 and str(target) in said2,
+            "and says it wrote import.csv, not only a silent exit 0", said2,
+        )
+        checks.ok(target.is_file(), "and writes import.csv")
+        checks.equal(
+            corpus.Corpus.read().answers[DUNSPARCE_SKU].value, "1.50",
+            "and writes the corpus answer",
+        )
+        conn = db.connect(files.inventory_dir())
+        try:
+            landed_postings = [
+                entry for entry in db.postings_for_sku(conn, DUNSPARCE_SKU)
+                if entry["source"] == "reprice"
+            ]
+        finally:
+            conn.close()
+        checks.ok(landed_postings, "and writes the posting row")
+
+    # ------------------------------------------------ T7-RACE (DEBT53): reprice apply's own
+    # write, split the other way — a failure between the temp CSV and the corpus write
+    # Round 1 (above) closed the revision race. Re-review found round 1's OWN write order
+    # unsafe: `import.csv` went to its final name FIRST, then the corpus, both inside the
+    # one hold. A caller that patched `write_csv` to raise during an ordinary apply got a
+    # raw crash — no clean refusal, no import.csv, no posting — but the corpus already held
+    # the markdown price. The next `emit` would sell at a price never sent or recorded.
+    #
+    # Round 2: `import.csv` now goes to a temp name first, the corpus write is the last step
+    # that may still fail, and the rename happens only once it has. A failure there is
+    # caught and refused in a sentence, never a raw traceback.
+    with isolated_home() as home:
+        cards = [(3, 1, "Dunsparce", "120", "normal")]
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(run_dir.directory))
+
+        source = tcgcsv.read_export(FIXTURE_EXPORT)
+        row = dict(source.by_sku()[DUNSPARCE_SKU])
+        row[tcgcsv.LIVE_QUANTITY_COLUMN] = "2"
+        row[tcgcsv.PRICE_COLUMN] = "2.0000"
+        export = home / "live-b3exc.csv"
+        tcgcsv.write_csv(export, source.header, [row])
+
+        command(checks, "reprice", "list", str(export), "--days", "7", "--percent", "10", "--write")
+        exc_directory = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[-1]
+        tcgcsv.write_csv(
+            exc_directory / cmd_reprice.WORKLIST,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.50"}],
+        )
+        before_corpus = dict(corpus.Corpus.read().answers)
+
+        real_write_csv = tcgcsv.write_csv
+
+        def raising_write_csv(path, header, rows):
+            raise OSError("T7-RACE (DEBT53): simulated write failure")
+
+        from cli import __main__ as cli_entry
+
+        tcgcsv.write_csv = raising_write_csv
+        raised = None
+        code3 = None
+        try:
+            with quiet() as said_buf3:
+                try:
+                    code3 = cli_entry.main(
+                        [
+                            "reprice", "apply", str(exc_directory / cmd_reprice.WORKLIST),
+                            "--write",
+                        ]
+                    )
+                except Exception as exc:  # the pre-fix crash this case proves against
+                    raised = exc
+            said3 = said_buf3.getvalue()
+        finally:
+            tcgcsv.write_csv = real_write_csv
+
+        checks.ok(
+            raised is None,
+            "T7-RACE (DEBT53): a write failure between the temp CSV and the corpus write "
+            "refuses cleanly, never a raw crash", repr(raised),
+        )
+        checks.equal(
+            code3, 1,
+            "and exits non-zero, which `do_markdown_apply` reads as nothing written",
+        )
+        checks.ok(
+            said3 is not None and "REFUSED" in said3 and "Traceback" not in said3,
+            "and prints a clean refusal sentence, never a raw traceback", said3,
+        )
+        temp_target = (exc_directory / cmd_reprice.IMPORT).with_name(
+            f".{cmd_reprice.IMPORT}.{os.getpid()}.tmp"
+        )
+        checks.ok(not temp_target.exists(), "and leaves no temp file behind")
+        checks.ok(
+            not (exc_directory / cmd_reprice.IMPORT).is_file(),
+            "and writes no import.csv",
+        )
+        checks.equal(
+            dict(corpus.Corpus.read().answers), before_corpus,
+            "and the corpus is unchanged",
+        )
+        conn = db.connect(files.inventory_dir())
+        try:
+            exc_postings = [
+                entry for entry in db.postings_for_sku(conn, DUNSPARCE_SKU)
+                if entry["source"] == "reprice"
+            ]
+        finally:
+            conn.close()
+        checks.ok(not exc_postings, "and no posting row lands")
+
+    # ------------------------------------------------ T7-RACE (DEBT53): reprice apply's own
+    # write, round 3 — a failure landing the file, AFTER the corpus already held the price
+    # Round 2 (above) moved `import.csv`'s own write to a temp name, but still renamed it
+    # into place LAST, after the corpus write, on the reasoning that `os.replace` on one
+    # filesystem "is not expected to fail". Re-review made it fail: the corpus write had
+    # ALREADY LANDED by the time the rename raised, so the operator saw a raw crash AND the
+    # corpus held the markdown price with no file behind it — the same defect round 2 closed,
+    # moved one step later.
+    #
+    # Round 3: the rename now runs BEFORE the corpus write, and a corpus-write exception
+    # unlinks the file it just landed. A rename failure itself is caught the same way write_csv
+    # failing already was: no corpus touched, temp file cleaned up, a clean refusal.
+    with isolated_home() as home:
+        cards = [(3, 1, "Dunsparce", "120", "normal")]
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(run_dir.directory))
+
+        source = tcgcsv.read_export(FIXTURE_EXPORT)
+        row = dict(source.by_sku()[DUNSPARCE_SKU])
+        row[tcgcsv.LIVE_QUANTITY_COLUMN] = "2"
+        row[tcgcsv.PRICE_COLUMN] = "2.0000"
+        export = home / "live-b3exc2.csv"
+        tcgcsv.write_csv(export, source.header, [row])
+
+        command(checks, "reprice", "list", str(export), "--days", "7", "--percent", "10", "--write")
+        replace_directory = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[-1]
+        tcgcsv.write_csv(
+            replace_directory / cmd_reprice.WORKLIST,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.50"}],
+        )
+        before_corpus_r3 = dict(corpus.Corpus.read().answers)
+
+        real_os_replace = os.replace
+
+        # SELECTIVE ON PURPOSE: `Corpus.write()` ALSO calls `os.replace`, through
+        # `store/files.py:write_atomic`, to land `prices.json` itself. A blanket patch fails
+        # that call too, and — in round 2's own order (corpus write, THEN the CSV rename) —
+        # the corpus's OWN replace sits inside round 2's try/except, so a blanket patch is
+        # "caught" there and never reaches the CSV rename at all: a false green that proves
+        # nothing about the defect this case exists to catch. Matching only the CSV's own
+        # temp name reproduces the reviewer's exact call.
+        def raising_replace(src, dst):
+            if Path(src).name.startswith(f".{cmd_reprice.IMPORT}."):
+                raise OSError("T7-RACE (DEBT53): simulated rename failure")
+            return real_os_replace(src, dst)
+
+        from cli import __main__ as cli_entry
+
+        os.replace = raising_replace
+        raised_r3 = None
+        code4 = None
+        try:
+            with quiet() as said_buf4:
+                try:
+                    code4 = cli_entry.main(
+                        [
+                            "reprice", "apply", str(replace_directory / cmd_reprice.WORKLIST),
+                            "--write",
+                        ]
+                    )
+                except Exception as exc:  # round 2's own crash this case proves against
+                    raised_r3 = exc
+            said4 = said_buf4.getvalue()
+        finally:
+            os.replace = real_os_replace
+
+        checks.ok(
+            raised_r3 is None,
+            "T7-RACE (DEBT53): a failure landing import.csv, after the corpus write, still "
+            "refuses cleanly, never a raw crash", repr(raised_r3),
+        )
+        checks.equal(
+            code4, 1,
+            "and exits non-zero, which `do_markdown_apply` reads as nothing written",
+        )
+        checks.ok(
+            said4 is not None and "REFUSED" in said4 and "Traceback" not in said4,
+            "and prints a clean refusal sentence, never a raw traceback", said4,
+        )
+        replace_temp = (replace_directory / cmd_reprice.IMPORT).with_name(
+            f".{cmd_reprice.IMPORT}.{os.getpid()}.tmp"
+        )
+        checks.ok(not replace_temp.exists(), "and leaves no temp file behind")
+        checks.ok(
+            not (replace_directory / cmd_reprice.IMPORT).is_file(),
+            "and writes no import.csv",
+        )
+        checks.equal(
+            dict(corpus.Corpus.read().answers), before_corpus_r3,
+            "and the corpus is unchanged — round 2 would have failed this: `os.replace` "
+            "raised AFTER `book.write()` had already landed the markdown price",
+        )
+        conn = db.connect(files.inventory_dir())
+        try:
+            replace_postings = [
+                entry for entry in db.postings_for_sku(conn, DUNSPARCE_SKU)
+                if entry["source"] == "reprice"
+            ]
+        finally:
+            conn.close()
+        checks.ok(not replace_postings, "and no posting row lands")
+
+    # ------------------------------------------------ T7-RACE (DEBT53): reprice apply's own
+    # write, round 4 — undo by restoring the corpus, never by deleting a file
+    # Round 3 renamed the CSV into place FIRST, so a later corpus-write failure could "undo"
+    # by unlinking `target`. Re-review found two holes. (a) `target` is a fixed name — a
+    # SECOND apply over the same markdown lands its rename on the FIRST apply's real
+    # `import.csv`, and unlinking to undo then destroys that earlier, real file. (b) the
+    # cleanup unlinks had no guard of their own, so an unlink that itself raised propagated a
+    # raw traceback past `cli/__main__.py:main`.
+    #
+    # Round 4: `os.replace(temp, target)` is the LAST step. If it fails, the corpus (already
+    # written by then) is undone by writing its OWN PRE-IMAGE back — never by touching
+    # `target`, which this branch never renamed into. Every cleanup step is its own try.
+    with isolated_home() as home:
+        cards = [(3, 1, "Dunsparce", "120", "normal")]
+        run_dir, _ = seam_run(checks, cards)
+        book0 = corpus.Corpus()
+        book0.sub_threshold = "floor"
+        book0.write()
+        command(checks, "emit", str(run_dir.directory))
+
+        source = tcgcsv.read_export(FIXTURE_EXPORT)
+        row = dict(source.by_sku()[DUNSPARCE_SKU])
+        row[tcgcsv.LIVE_QUANTITY_COLUMN] = "2"
+        row[tcgcsv.PRICE_COLUMN] = "2.0000"
+        export = home / "live-b3r4.csv"
+        tcgcsv.write_csv(export, source.header, [row])
+
+        command(checks, "reprice", "list", str(export), "--days", "7", "--percent", "10", "--write")
+        r4_directory = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[-1]
+        worklist_path = r4_directory / cmd_reprice.WORKLIST
+        earlier_target = r4_directory / cmd_reprice.IMPORT
+
+        from cli import __main__ as cli_entry
+
+        # THE FIRST, REAL APPLY — an earlier `import.csv` this whole case is built to
+        # protect. Nothing here refuses a second apply over the same markdown (found by
+        # re-review), so this file is exactly what a real second press would find.
+        tcgcsv.write_csv(
+            worklist_path,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.50"}],
+        )
+        with quiet():
+            first_code = cli_entry.main(["reprice", "apply", str(worklist_path), "--write"])
+        checks.equal(first_code, 0, "T7-RACE (DEBT53) round 4: the first, real apply succeeds")
+        earlier_bytes = earlier_target.read_bytes()
+        earlier_corpus = dict(corpus.Corpus.read().answers)
+
+        # CASE 1: THE FINAL REPLACE RAISES. A second apply, a different price, over the SAME
+        # markdown — `os.replace` fails on its way to `target`, selectively, the same way
+        # round 3's own case isolated the CSV's own temp name from `Corpus.write()`'s
+        # internal rename.
+        tcgcsv.write_csv(
+            worklist_path,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.25"}],
+        )
+        real_os_replace = os.replace
+
+        def raising_replace_r4(src, dst):
+            if Path(src).name.startswith(f".{cmd_reprice.IMPORT}."):
+                raise OSError("T7-RACE (DEBT53) round 4: simulated rename failure")
+            return real_os_replace(src, dst)
+
+        os.replace = raising_replace_r4
+        raised1 = None
+        code_r4a = None
+        try:
+            with quiet() as said_buf_r4a:
+                try:
+                    code_r4a = cli_entry.main(
+                        ["reprice", "apply", str(worklist_path), "--write"]
+                    )
+                except Exception as exc:
+                    raised1 = exc
+            said_r4a = said_buf_r4a.getvalue()
+        finally:
+            os.replace = real_os_replace
+
+        checks.ok(
+            raised1 is None,
+            "T7-RACE (DEBT53) round 4, case 1: a final-replace failure, over an EARLIER "
+            "real import.csv, still refuses cleanly", repr(raised1),
+        )
+        checks.equal(code_r4a, 1, "and exits non-zero")
+        checks.ok(
+            said_r4a is not None and "REFUSED" in said_r4a and "Traceback" not in said_r4a,
+            "and prints a clean refusal, never a raw traceback", said_r4a,
+        )
+        temp_r4a = earlier_target.with_name(f".{cmd_reprice.IMPORT}.{os.getpid()}.tmp")
+        checks.ok(not temp_r4a.exists(), "and leaves no temp file behind")
+        checks.equal(
+            earlier_target.read_bytes(), earlier_bytes,
+            "and the EARLIER import.csv is byte-identical — round 3's own undo would have "
+            "unlinked whatever sat at this name, real or not",
+        )
+        checks.equal(
+            dict(corpus.Corpus.read().answers), earlier_corpus,
+            "and the corpus is back to the first apply's own price, not the second's",
+        )
+
+        # CASE 2: THE CORPUS WRITE ITSELF RAISES, BEFORE THE REPLACE IS EVEN ATTEMPTED. The
+        # earlier `import.csv` was never touched by this attempt at all — no rename ran — so
+        # it must still be exactly the bytes the first apply wrote.
+        tcgcsv.write_csv(
+            worklist_path,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.10"}],
+        )
+        real_corpus_write = corpus.Corpus.write
+
+        def raising_corpus_write(self, path=None):
+            raise OSError("T7-RACE (DEBT53) round 4: simulated corpus write failure")
+
+        corpus.Corpus.write = raising_corpus_write
+        raised2 = None
+        code_r4b = None
+        try:
+            with quiet() as said_buf_r4b:
+                try:
+                    code_r4b = cli_entry.main(
+                        ["reprice", "apply", str(worklist_path), "--write"]
+                    )
+                except Exception as exc:
+                    raised2 = exc
+            said_r4b = said_buf_r4b.getvalue()
+        finally:
+            corpus.Corpus.write = real_corpus_write
+
+        checks.ok(
+            raised2 is None,
+            "T7-RACE (DEBT53) round 4, case 2: a corpus-write failure, before the replace "
+            "is attempted, still refuses cleanly", repr(raised2),
+        )
+        checks.equal(code_r4b, 1, "and exits non-zero")
+        checks.ok(
+            said_r4b is not None and "REFUSED" in said_r4b and "Traceback" not in said_r4b,
+            "and prints a clean refusal, never a raw traceback", said_r4b,
+        )
+        checks.equal(
+            earlier_target.read_bytes(), earlier_bytes,
+            "and the prior import.csv is byte-identical — the rename was never reached",
+        )
+        checks.equal(
+            dict(corpus.Corpus.read().answers), earlier_corpus,
+            "and the corpus is unchanged",
+        )
+
+        # CASE 3: THE FINAL REPLACE RAISES, AND THE CLEANUP UNLINK ALSO RAISES. Both the
+        # rename and the temp-file cleanup that follows a failed rename fail. Still no raw
+        # crash: each cleanup step is its own try (found by re-review's own case (b)).
+        tcgcsv.write_csv(
+            worklist_path,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.05"}],
+        )
+        real_unlink = Path.unlink
+
+        def raising_unlink_r4(self, *a, **kw):
+            if self.name.startswith(f".{cmd_reprice.IMPORT}."):
+                raise OSError("T7-RACE (DEBT53) round 4: simulated unlink failure")
+            return real_unlink(self, *a, **kw)
+
+        os.replace = raising_replace_r4
+        Path.unlink = raising_unlink_r4
+        raised3 = None
+        code_r4c = None
+        try:
+            with quiet() as said_buf_r4c:
+                try:
+                    code_r4c = cli_entry.main(
+                        ["reprice", "apply", str(worklist_path), "--write"]
+                    )
+                except Exception as exc:
+                    raised3 = exc
+            said_r4c = said_buf_r4c.getvalue()
+        finally:
+            os.replace = real_os_replace
+            Path.unlink = real_unlink
+
+        checks.ok(
+            raised3 is None,
+            "T7-RACE (DEBT53) round 4, case 3: the replace AND the cleanup unlink both "
+            "fail, still no raw crash", repr(raised3),
+        )
+        checks.equal(code_r4c, 1, "and exits non-zero")
+        checks.ok(
+            said_r4c is not None and "REFUSED" in said_r4c and "Traceback" not in said_r4c,
+            "and prints a clean refusal sentence, never a raw traceback", said_r4c,
+        )
+
     # ------------------------------------------------ UN-14: a move, until either box changes
     with isolated_home():
         for _ in range(2):
@@ -9107,8 +9809,7 @@ def check_inventory_filter_facets(checks: Checks) -> None:
         # --- the wire itself: `?set=` (blank) means the unclassified bucket, not "unset" --
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             status, raw, _ = request(port, "GET", "/boxes?game=riftbound&set=")
             checks.equal(status, 200, "GET /boxes?game=riftbound&set= answers 200")
@@ -9381,8 +10082,7 @@ def check_box_routes_and_search(checks: Checks) -> None:
         # would arrive.
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             for wire_query in ("/search?q=%00", "/search?q=a%00b"):
                 status, body, _ = request(port, "GET", wire_query)
@@ -9396,6 +10096,7 @@ def check_box_routes_and_search(checks: Checks) -> None:
         finally:
             httpd.shutdown()
             httpd.server_close()
+            thread.join(timeout=5)
 
         found = capture_server.do_search("eiscue")["groups"]
         if checks.equal(
@@ -11514,8 +12215,7 @@ def check_concurrency(checks: Checks) -> None:
         capture_server.captures_root().mkdir(parents=True, exist_ok=True)
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             for count in (2, 4):
                 results: list = []
@@ -11763,8 +12463,7 @@ def check_origin_gate(checks: Checks) -> None:
 
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             # --- a mutating verb from an origin this server does not know ---------------
             # THE BODY IS HELD RATHER THAN INLINED, because the assertion below is about the
@@ -12043,8 +12742,7 @@ def check_photo_cache(checks: Checks) -> None:
             )
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             status, body, headers = request(port, "GET", "/photo/3/1")
             first = headers.get("ETag")
@@ -12114,6 +12812,7 @@ def check_photo_cache(checks: Checks) -> None:
         finally:
             httpd.shutdown()
             httpd.server_close()
+            thread.join(timeout=5)
 
 
 def check_app_serve(checks: Checks) -> None:
@@ -12159,8 +12858,7 @@ def check_app_serve(checks: Checks) -> None:
         with isolated_home():
             httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
             port = httpd.server_address[1]
-            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-            thread.start()
+            thread = _spawn_server(httpd)
             try:
                 status, body, headers = request(port, "GET", "/")
                 checks.equal(status, 200, "`GET /` answers with the app")
@@ -12405,6 +13103,7 @@ def check_app_serve(checks: Checks) -> None:
             finally:
                 httpd.shutdown()
                 httpd.server_close()
+                thread.join(timeout=5)
     capture_server.APP_DIST = original
 
 
@@ -18714,8 +19413,7 @@ def check_readings_writer_after_live_export(checks: Checks) -> None:
                 self.wfile.write(body)
 
     portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
-    portal_thread = threading.Thread(target=portal.serve_forever, daemon=True)
-    portal_thread.start()
+    portal_thread = _spawn_server(portal)
 
     os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
         f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
@@ -20186,8 +20884,7 @@ def send_portal():
     previous = {name: os.environ.get(name) for name in keys}
     portal = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Portal)
     portal.daemon_threads = True
-    thread = threading.Thread(target=portal.serve_forever, daemon=True)
-    thread.start()
+    thread = _spawn_server(portal)
     os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
         f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
     )
@@ -20203,6 +20900,7 @@ def send_portal():
     finally:
         portal.shutdown()
         portal.server_close()
+        thread.join(5)
         envfile.ENV_FILE, from_file, envfile._loaded = env_before
         envfile._from_file.clear()
         envfile._from_file.update(from_file)
@@ -21813,8 +22511,7 @@ def check_send_review_r4(checks: Checks) -> None:
         (directory / "import.csv").write_text("x\n", encoding="utf-8")
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             file_status, _, _ = request(port, "GET", f"/pipeline/sends/{stamp}/file?name=import.csv")
             back_status, back_body, _ = request(
@@ -22381,8 +23078,7 @@ def check_send_review_r7(checks: Checks) -> None:
         named = {"sku": ARTICUNO_SKU, "price": "30.00", "was": "25.99"}
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             status, body, _ = request(
                 port, "POST", "/pipeline/send",
@@ -23327,8 +24023,7 @@ def check_unsent_copies_worklist(checks: Checks) -> None:
     with isolated_home():
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             run_dir, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, 8)])
             book = corpus.Corpus.read()
@@ -23844,8 +24539,7 @@ def check_pricing_route(checks: Checks) -> None:
     with isolated_home():
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             bare = runs.create("unjoined")
             bare.set(capture_dir="/tmp/nowhere")
@@ -24798,8 +25492,7 @@ def check_connection_close(checks: Checks) -> None:
             )
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         held: list = []
         try:
             # ------------------------------------------------ leg 1: the header, every path
@@ -24867,6 +25560,7 @@ def check_connection_close(checks: Checks) -> None:
                     conn.close()
             httpd.shutdown()
             httpd.server_close()
+            thread.join(timeout=5)
 
 
 def check_crop_preview(checks: Checks) -> None:
@@ -25673,6 +26367,20 @@ def check_listing_commands(checks: Checks) -> None:
             (landed.get("7/1").state, landed.get("7/1").sku),
             (master.IDENTIFIED, ARTICUNO_SKU),
             "emit UPSERTS the position first, so the identity write lands somewhere",
+        )
+        checks.equal(
+            landed.get("7/1").game,
+            "pokemon",
+            "F1'S DEFECT (owner's report, 2026-09-27: two sets of Unleashed, the 99-card one "
+            "with no photos). `_stamp_single` resolves this SAME match's game two lines "
+            "before it births this position, to pass `bind_sku`'s `expected_product_line` — "
+            "but never carried it into the `Card(...)` that upserts the position itself, so "
+            "a never-seen position born through `emit` was born with `game IS NULL`. "
+            "`server/pipeline_routes.py:do_pipeline_sets` groups on `(game, set_name)`, so a "
+            "null game formed a second, photo-less group — `pipeline/stockimages.py:url_for` "
+            "returns no photo for one. A card `join` HAS seen before its emit never showed "
+            "this: `allocate_capture` already stamped a game at the capture screen, so this "
+            "birth site is the one place D21's claim was silently dropped rather than carried",
         )
         checks.equal(
             landed.listing_for(ARTICUNO_SKU).pushed,
@@ -26821,8 +27529,7 @@ def check_pipeline_routes(checks: Checks) -> None:
 
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             # ---------------------------------------------------------- the money gate
             status, body, _ = request(
@@ -26858,8 +27565,7 @@ def check_pipeline_routes(checks: Checks) -> None:
             with isolated_home():
                 bare_server = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
                 bare_port = bare_server.server_address[1]
-                bare_thread = threading.Thread(target=bare_server.serve_forever, daemon=True)
-                bare_thread.start()
+                bare_thread = _spawn_server(bare_server)
                 try:
                     status, body, _ = request(
                         bare_port, "POST", "/pipeline/identify", payload={"confirm": True}
@@ -28105,8 +28811,7 @@ def check_open_section(checks: Checks) -> None:
 
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             status, body, _ = request(port, "POST", "/boxes/6/sections", payload={})
             checks.equal(
@@ -28318,8 +29023,7 @@ def check_export_fetch(checks: Checks) -> None:
     Portal.do_POST = _do_POST
 
     portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
-    portal_thread = threading.Thread(target=portal.serve_forever, daemon=True)
-    portal_thread.start()
+    portal_thread = _spawn_server(portal)
 
     cookie = "TCGAuthTicket_Production=t7-not-a-real-session"
     os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
@@ -28378,8 +29082,7 @@ def check_export_fetch(checks: Checks) -> None:
         with isolated_home() as home:
             httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
             port = httpd.server_address[1]
-            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-            thread.start()
+            thread = _spawn_server(httpd)
             try:
                 # THE FIXTURE COOKIE IS WHAT THIS BLOCK READS, ASSERTED BEFORE ANYTHING
                 # FETCHES. Everything below sends a Cookie header to a stub and then reads
@@ -34629,7 +35332,7 @@ def check_price_history(checks: Checks) -> None:
             self.wfile.write(body)
 
     agent_server = http.server.HTTPServer(("127.0.0.1", 0), Agent)
-    threading.Thread(target=agent_server.serve_forever, daemon=True).start()
+    _spawn_server(agent_server)
     agent_url = f"http://127.0.0.1:{agent_server.server_address[1]}/"
 
     checks.equal(
@@ -35743,8 +36446,7 @@ def check_request_slots(checks: Checks) -> None:
     gate = threading.Event()
     httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
     port = httpd.server_address[1]
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
+    thread = _spawn_server(httpd)
     capture_server.do_status = instrumented(gate, state)
     try:
         # EVERY THREAD ALIVE BEFORE THE LOAD, so the ones the SERVER makes can be told from the
@@ -35810,8 +36512,7 @@ def check_request_slots(checks: Checks) -> None:
         max_workers=asking, thread_name_prefix="t7-wide"
     )
     httpd._pool = wide  # noqa: SLF001 — the transport is the confound this leg removes
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
+    thread = _spawn_server(httpd)
     capture_server.do_status = instrumented(gate, state)
     # THE WAIT FOR A SLOT, SHORTENED FOR THIS LEG, AND IT IS WHAT MAKES THE READING DETERMINISTIC
     # RATHER THAN TIMED. The first draft of this leg slept half a second after the bound was met
@@ -35927,8 +36628,7 @@ def check_request_slots(checks: Checks) -> None:
         max_workers=asking, thread_name_prefix="t7-wide"
     )
     httpd._pool = wide  # noqa: SLF001 — as leg 2: the pool must not be what refuses
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
+    thread = _spawn_server(httpd)
     capture_server.do_status = instrumented(gate, state)
     # THE TIMEOUT, SHORTENED FOR THE LENGTH OF THIS LEG ONLY. `_dispatch` reads
     # `files.LOCK_TIMEOUT_SECONDS` at call time, so the module attribute is the seam; nothing
@@ -35981,6 +36681,7 @@ def check_request_slots(checks: Checks) -> None:
         gate.set()
         httpd.shutdown()
         httpd.server_close()
+        thread.join(timeout=5)
         wide.shutdown(wait=False)
 
     checks.equal(
@@ -37937,6 +38638,10 @@ _M_SUBALL = {_M_A: "0.05", _M_D: "0.10", _M_R: "0.12"}
 _M_LAYOUT = {
     "one": [[0, 1, 2]], "two": [[0, 2], [1]], "share": [[0, 1, 2], [3, 4]],
     "deep1": [[0, 1, 2, 5, 6]], "deep2": [[0, 2, 5], [1, 6]], "share1": [[0, 1, 2, 5]],
+    # ONE SKU ALONE, NO R AND NO A, for the D7 2026-09-27 cap-reconcile rows below: three
+    # normal Dunsparce and nothing else, so a case can push, reconcile and cap one SKU
+    # without a second card's own reasons crowding the assertions.
+    "pure1": [[0, 5, 6]], "pure2": [[0, 5], [6]],
 }
 _M_NONE_NAMED = {"prices": [], "moves": []}
 
@@ -38072,9 +38777,9 @@ def _m_cases() -> Dict[str, dict]:
         add("suball/listed", market=_M_SUBALL, flags=["--listed-only"], exit=1, files={},
             says=[f"{sku} — under the cut-off" for sku in (_M_D, _M_R, _M_A)] + [_M_ONLY_CUT],
             route=("under_cut_off", ["Every priced card on this list is under the cut-off"]),
-            home={"line": "send 3 copies to TCGplayer", "behind": None, "tile": "3 copies ready to send",
+            home={"line": "send 3 copies to TCGplayer", "behind": None, "tile": "3 ready",
                   "chip": "Never sent"})
-        # DEBT35: ONE ANSWER ON BOTH PATHS. One run exited 0 with its own sentence, and several
+        # ONE ANSWER ON BOTH PATHS. One run exited 0 with its own sentence, and several
         # exited 1 with another. Both exit 1 now, with one headline and each card's reason.
         add("suball/listed-sent", market=_M_SUBALL, flags=["--listed-only"], twice=True, exit=1,
             files={last: [_m_row(_M_D, "0.49"), _m_row(_M_R, "0.49"), _m_row(_M_A, "0.49")]},
@@ -38094,37 +38799,143 @@ def _m_cases() -> Dict[str, dict]:
         "says": [f"{_M_R} — {_M_LIVE}"], "never": [_M_ASKED0], "route": None,
         "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "runs to price, 3 ready"},
     }
-    # R7 F5 UNDER A CAP THE GUARD CLOSES, ON BOTH PATHS (the lane-end review of send-fixes). A
-    # cap of 1 with one Dunsparce live leaves no room, and the guard trims the reverse holo. The
-    # reverse holo is still the guard's trim, never "asked for none", and the headline names it.
-    # The cap fix first measured the trim with the guard's own reading, saw nothing to trim, and
-    # said "every card left needs a price first".
+    # R7 F5, UNDER A CAP THE GUARD USED TO CLOSE AND NO LONGER DOES (the owner's ruling,
+    # 2026-09-27, replacing the 2026-09-25 "take the larger" amendment, DEBT37). A cap of 1
+    # with one Dunsparce live guard-side now leaves room for exactly one, because the guard's
+    # own reading no longer feeds the cap at all — only the store's own `copies_out` does, and
+    # it is fresh here (no prior push, no pending). What the guard STILL does, unchanged, is
+    # trim the reverse holo to nothing on its own reading: R7 F5's own fence, "the guard's
+    # on-hand trim must not change", proved by this row surviving the cap rewrite intact.
     for layout, runs_label in (("share1", "one"), ("share", "two")):
         cases[f"share/{runs_label}/cap1-guardall"] = {
             "layout": layout, "market": _M_MIX, "flags": ["--cap", "1"],
-            "live": {_M_D: 1, _M_R: 1, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 1, "files": {},
-            "says": [f"{_M_R} — {_M_LIVE}", f"{_M_D} — 1 live, at the cap of 1", _M_A, _M_PRICE_LIVE1,
-                     f'"sku": "{_M_R}"'],
-            "never": [_M_ASKED0, _M_ONLY_PRICE],
-            "route": ("needs_price", ["1 card needs a price first", "TCGplayer already had every copy of 1 card"]),
-            "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price", "tile": "3 ready"},
+            "live": {_M_D: 1, _M_R: 1, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 0,
+            "files": {"import.csv": [d_mix]},
+            "says": [f"{_M_R} — {_M_LIVE}"],
+            "never": [_M_ASKED0, "read what is live, then send again", "1 live, at the cap of 1"],
+            "route": None,
+            "home": {"line": "send 3 copies to TCGplayer", "behind": "1 card needs a price",
+                     "tile": "3 ready"},
         }
-    # `--cap N` WITH `--live-guard`: THE CAP COUNTS THE COPIES THE GUARD SAYS ARE LIVE (D7: "at
-    # most N copies LIVE"). Three Dunsparce are on hand, so the guard alone leaves room past the
-    # cap. Before the fix the cap read only the store and the join's export, both 0 here, and
-    # each row below sent one copy more than the cap allows. Below, at and over, on both paths.
+
+    # ============================================================ D7, THE 2026-09-27 RULING
+    #
+    # `--cap` REFUSES A CARD OUTRIGHT WHILE A COPY SENT SINCE IS STILL PENDING (DEBT37), and
+    # once reconciled the cap reads the store's own one reading alone — nothing maxed or
+    # summed with a guard any more. `pure1`/`pure2` hold Dunsparce alone (no R, no A), so a
+    # case can push, reconcile and cap one SKU with nothing else to crowd the assertions;
+    # `deep1`/`deep2` (R and A present) are for the rows that need a second card to prove it
+    # still sends. Every group runs on both the one-run and the several-run path.
+
+    # --- fresh (no pending) caps on the store's own count exactly: below, at and over -------
+    # `setup` pushes copies with no `--live-guard` and no `--cap` bigger than it needs to be
+    # wrong about; `reconcile` then plants the store's own live reading at exactly that many,
+    # closing the pending gap before the row's own `--cap` is asked. THIS IS ALSO THE "STALE
+    # READING NO LONGER UNDER-SENDS ONCE RECONCILED" ROW: before the reconcile the SKU is
+    # pending and `--cap` would refuse it (the row above proves that refusal); the reconcile
+    # is the fix, and "below" is the proof it worked — the cap opens back up to the fresh
+    # figure rather than staying stuck on the stale one.
+    for layout, runs_label in (("pure1", "one"), ("pure2", "two")):
+        cases[f"freshcap/{runs_label}/below"] = {
+            "layout": layout, "market": _M_MIX, "flags": ["--cap", "5"],
+            "setup": ["--quantity", f"{_M_D}=1"], "reconcile": {_M_D: 1},
+            "exit": 0, "files": {"import.csv": [(_M_D, 2, "2.06")]},
+            "says": [], "never": [_M_ASKED0, "read what is live, then send again"], "route": None,
+            "home": {"line": "send 2 copies to TCGplayer", "behind": None,
+                     "tile": "2 ready"},
+        }
+        # AT AND OVER LEAVE THE SETUP PRESS'S OWN FILE ON DISK (D54): the real press adds
+        # nothing, and a refusal never touches a file an earlier press wrote.
+        cases[f"freshcap/{runs_label}/at"] = {
+            "layout": layout, "market": _M_MIX, "flags": ["--cap", "1"],
+            "setup": ["--quantity", f"{_M_D}=1"], "reconcile": {_M_D: 1},
+            "exit": 1, "files": {"import.csv": [(_M_D, 1, "2.06")]},
+            "says": [f"{_M_D} — 1 live, at the cap of 1"],
+            "never": [_M_ASKED0, "read what is live, then send again"],
+            "route": ("nothing_to_send", ["already at TCGplayer"]),
+            # HOME READS NO CAP AT ALL (`do_pipeline_worklist` never asks `--cap` for), so it
+            # still counts the two backstock copies as ready — the SAME reason `capguard`'s
+            # own home block never claimed otherwise before this rewrite.
+            "home": {"line": "send 2 copies to TCGplayer", "behind": None,
+                     "tile": "2 ready"},
+        }
+        cases[f"freshcap/{runs_label}/over"] = {
+            "layout": layout, "market": _M_MIX, "flags": ["--cap", "1"],
+            "setup": ["--cap", "2"], "reconcile": {_M_D: 2},
+            "exit": 1, "files": {"import.csv": [(_M_D, 2, "2.06")]},
+            "says": [f"{_M_D} — 2 live, over the 1 this send asked for"],
+            "never": [_M_ASKED0, "read what is live, then send again"],
+            "route": ("nothing_to_send", ["already at TCGplayer"]),
+            "home": {"line": "send 1 copy to TCGplayer", "behind": None,
+                     "tile": "1 ready"},
+        }
+
+    # --- a pending copy refuses that card, and the other card in the send still goes --------
+    # TWO of Dunsparce's three copies are pushed and NEVER reconciled, so one copy is left
+    # uncommitted behind the pending pair — the shape that tells a pending refusal apart from
+    # "every copy is already listed" (D59's own, unrelated, branch, which is what a FULLY
+    # pushed SKU reaches instead: nothing is left to decide, cap or no cap). The reverse holo
+    # is left untouched by naming it `=0` in the setup press. The real press then asks a cap
+    # of any size: Dunsparce refuses outright, on the remedy — including the one copy that
+    # was never sent — and the reverse holo sends normally.
     for layout, runs_label in (("deep1", "one"), ("deep2", "two")):
-        for flag, cap, seen, want, said in (
-            ("below", "2", 1, [d_mix, r_mix], []),
-            ("at", "1", 1, [r_mix], [f"{_M_D} — 1 live, at the cap of 1"]),
-            ("over", "1", 2, [r_mix], [f"{_M_D} — 2 live, over the 1 this send asked for"]),
-        ):
-            cases[f"capguard/{runs_label}/{flag}"] = {
-                "layout": layout, "market": _M_MIX, "flags": ["--cap", cap],
-                "live": {_M_D: seen, _M_R: 0, _M_A: 0}, "named": _M_NONE_NAMED, "exit": 0,
-                "files": {"import.csv": want}, "says": said, "never": [_M_ASKED0], "route": None,
-                "home": {"line": "send 4 copies to TCGplayer", "behind": "1 card needs a price", "tile": "4 ready"},
-            }
+        cases[f"pendingcap/{runs_label}"] = {
+            "layout": layout, "market": _M_MIX, "flags": ["--cap", "5"],
+            "setup": ["--quantity", f"{_M_D}=2", "--quantity", f"{_M_R}=0"],
+            "exit": 0, "files": {"import.csv": [r_mix]},
+            "says": [f"{_M_D} — 2 copies sent and not yet seen live — read what is live, then send again"],
+            "never": [_M_ASKED0, _M_LIVE, "1 live, at the cap of"], "route": None,
+            "home": {"line": "send 2 copies to TCGplayer", "behind": "1 card needs a price",
+                     "tile": "2 ready"},
+        }
+
+    # --- DEBT37's wording gap 2: the empty-send headline names a card the cap closed --------
+    # Two of Dunsparce's three copies are pushed and never reconciled (one stays uncommitted,
+    # for the same reason as the row above), the reverse holo's one copy is pushed in full,
+    # and Articuno still has no price — nothing is left to send at all, which is what reaches
+    # `empty_send_sentence`. Before this fix the headline counted `needs_price` and `live` (a
+    # guard trim) and said nothing about the card the CAP closed.
+    for layout, runs_label in (("deep1", "one"), ("deep2", "two")):
+        cases[f"capsempty/{runs_label}"] = {
+            "layout": layout, "market": _M_MIX,
+            "flags": ["--cap", "5"], "setup": ["--cap", "5", "--quantity", f"{_M_D}=2"],
+            # THE SETUP PRESS'S FILE STAYS (D54): Dunsparce at 2, the reverse holo at 1.
+            "exit": 1, "files": {"import.csv": [(_M_D, 2, "2.06"), r_mix]},
+            "says": [
+                f"{_M_D} — 2 copies sent and not yet seen live — read what is live, then send again",
+                f"{_M_R} — {_M_SENT}",
+                _M_A,
+                "nothing to send: 1 card needs a price first, and 1 card is held at this "
+                "send's cap",
+            ],
+            "never": [_M_ASKED0, _M_LIVE, _M_ONLY_PRICE],
+            "route": (
+                "needs_price",
+                ["1 card needs a price first", "1 card is held at this send's cap"],
+            ),
+            "home": {"line": "send 1 copy to TCGplayer", "behind": "1 card needs a price",
+                     "tile": "run to price, 1 ready"},
+        }
+
+    # --- DEBT37's wording gap 1: a guard-zeroed `asked` is not a typed zero -----------------
+    # The cap already closes Dunsparce to nothing on its own (one pushed and reconciled,
+    # exactly at a cap of one, with two more uncommitted behind it) — so the guard's OWN
+    # independent closure (it shows the whole three on hand as live) trims `would` from zero,
+    # which `sendguard.trims()` never names as a visible trim. Before this fix the row printed
+    # "this send asked for none of this card", as if the operator had typed the zero.
+    for layout, runs_label in (("pure1", "one"), ("pure2", "two")):
+        cases[f"guardzero/{runs_label}"] = {
+            "layout": layout, "market": _M_MIX, "flags": ["--cap", "1"],
+            "setup": ["--quantity", f"{_M_D}=1"], "reconcile": {_M_D: 1},
+            "live": {_M_D: 3}, "named": None,
+            # THE SETUP PRESS'S FILE STAYS (D54): one Dunsparce, from before the reconcile.
+            "exit": 1, "files": {"import.csv": [(_M_D, 1, "2.06")]},
+            "says": [_M_LIVE],
+            "never": [_M_ASKED0, "1 live, at the cap of 1", "read what is live, then send again"],
+            "route": ("nothing_to_send", ["already at TCGplayer"]),
+            "home": {"line": "send 2 copies to TCGplayer", "behind": None,
+                     "tile": "2 ready"},
+        }
     return cases
 
 
@@ -38241,6 +39052,19 @@ def check_send_matrix(checks: Checks) -> None:
                 extra += ["--reprice-live", str(told)]
             if spec.get("twice"):
                 emit(dirs)
+            # A PRELIMINARY PRESS, FOR THE D7 2026-09-27 CAP-RECONCILE ROWS: pushes copies
+            # under its OWN flags (typically its own `--cap`/`--quantity`), so the real press
+            # under test meets a store that already carries a claim — pending, unless
+            # `reconcile` below catches it up.
+            if spec.get("setup"):
+                emit(dirs + spec["setup"])
+            # A REAL `reconcile --live --write`, off the same seam rows `_live_export_bytes`
+            # already builds for the guard. Closes (or, left out, leaves open) the pending gap
+            # `SkuMatch._cap_pending` reads.
+            if spec.get("reconcile") is not None:
+                reconciled = home / "reconciled.csv"
+                reconciled.write_bytes(_live_export_bytes(spec["reconcile"]))
+                command(checks, "reconcile", "--live", str(reconciled), "--write")
             worklists[name] = {
                 "pricing": pipeline_routes.do_pipeline_worklist([]),
                 "book": pipeline_routes.do_pricing_corpus().get("corpus") or {},
@@ -38787,6 +39611,295 @@ def check_stock_images(checks: Checks) -> None:
     )
 
 
+def check_sales_stock_photo_fallback(checks: Checks) -> None:
+    """F2, the owner's report: *"why does the sales page not pull the icons like you're
+    able to do on sets and pricing?"* `#/revenue`'s `GET /skus/photos` gains a stock-photo
+    fallback for a SKU with no own photographed copy on hand (D89 usually reclaimed it),
+    off the SAME `StockImages` resolver Sets and Pricing already use — never a second
+    resolver.
+
+    THREE PARTS. `games.game_for_product_line` — the reverse lookup a Sales row's SKU needs,
+    since it carries `product_line` text and no `game` key. `StockImages.url_for_product` —
+    a SEALED product (no card number) resolving by name, Pokemon included, off the same
+    cached tcgcsv group `url_for` already fetches. And `do_skus_photos` itself, end to end:
+    the own photo wins, a single's SKU falls back through `url_for`, a sealed SKU falls
+    back through `url_for_product`, and a genuine miss stays absent from both fields.
+    """
+    checks.note("")
+    checks.note("SALES STOCK-PHOTO FALLBACK — game_for_product_line, url_for_product, GET /skus/photos (F2)")
+
+    checks.equal(
+        games.game_for_product_line("Pokemon"),
+        "pokemon",
+        "the real singles/sealed catalog wins over pokemon_code, which shares the same text",
+    )
+    checks.equal(
+        games.game_for_product_line("One Piece Card Game"), "one_piece", "a clean match",
+    )
+    checks.equal(
+        games.game_for_product_line("Nothing Registered Claims This"),
+        None,
+        "an unregistered product line is None, never a guess",
+    )
+    checks.equal(games.game_for_product_line(""), None, "a blank cell is None")
+
+    def make_fetcher():
+        def fetcher(url: str):
+            if url.endswith("/categories"):
+                return {"results": [
+                    {"name": "Pokemon", "categoryId": 3},
+                    {"name": "Riftbound League of Legends Trading Card Game", "categoryId": 89},
+                ]}
+            if url.endswith("/3/groups"):
+                return {"results": [{"name": "Scarlet & Violet", "groupId": 501}]}
+            if url.endswith("/3/501/products"):
+                return {"results": [
+                    {"imageUrl": "https://img/etb.jpg", "name": "Scarlet & Violet Elite Trainer Box", "productId": 900001},
+                ]}
+            if url.endswith("/89/groups"):
+                return {"results": [{"name": "Vendetta", "groupId": 24698}]}
+            if url.endswith("/89/24698/products"):
+                return {"results": [
+                    {
+                        "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+                        "extendedData": [{"name": "Number", "value": "SP3/006"}],
+                        "productId": 705996,
+                    },
+                    {"imageUrl": "https://img/rift-booster.jpg", "name": "Vendetta Booster Box", "productId": 900002},
+                    # A NAME COLLISION (review round, 2026-09-27): two distinct products
+                    # sharing one name in this same group. `url_for_product` must refuse
+                    # rather than answer either one's photo.
+                    {"imageUrl": "https://img/collide-a.jpg", "name": "Vendetta Booster Case", "productId": 900003},
+                    {"imageUrl": "https://img/collide-b.jpg", "name": "Vendetta Booster Case", "productId": 900004},
+                ]}
+            raise AssertionError(f"unexpected fetch: {url}")
+        return fetcher
+
+    images = stockimages.StockImages(market=pricehistory.Market(cache_dir=None, fetcher=make_fetcher()))
+    # `allow_pokemon=True`: THE ONE NAMED EXCEPTION `warm`'s own docstring argues for — see
+    # `check_stock_images_pokemon_warm_refusal` below for the DEFAULT case (no exception),
+    # which is finding 2's own proof.
+    for pair in (("pokemon", "Scarlet & Violet"), ("riftbound", "Vendetta")):
+        for thread in images.warm([pair], allow_pokemon=True):
+            thread.join(timeout=5)
+
+    checks.equal(
+        images.url_for_product("Pokemon", "Scarlet & Violet", "Scarlet & Violet Elite Trainer Box"),
+        "https://img/etb.jpg",
+        "POKEMON SEALED resolves through tcgcsv — the vendored tree carries no sealed row "
+        "at all, unlike a Pokemon CARD's own number",
+    )
+    checks.equal(
+        images.url_for_product(
+            "Riftbound League of Legends Trading Card Game", "Vendetta", "Vendetta Booster Box"
+        ),
+        "https://img/rift-booster.jpg",
+        "a non-Pokemon sealed product resolves by name off the SAME cached group its "
+        "singles already warmed",
+    )
+    checks.equal(
+        images.url_for_product("Pokemon", "Scarlet & Violet", "No Such Product"),
+        None,
+        "a sealed-product NAME miss is None, never a guess",
+    )
+    checks.equal(
+        images.url_for_product(
+            "Riftbound League of Legends Trading Card Game", "Vendetta", "Vendetta Booster Case"
+        ),
+        None,
+        "TWO PRODUCTS SHARING ONE NAME IN ONE GROUP answer None — never a guess at the "
+        "first product a group happens to list (review round, 2026-09-27: a `setdefault` "
+        "by-name dict answered the first one silently, breaking D301's own 'never a guess')",
+    )
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(1, name="skus-photos box")
+
+        # OWN PHOTO WINS — a real on-hand, photographed card, over anything the SKU table
+        # or the resolver could otherwise answer.
+        capture_server.do_capture(capture_payload(1, capture_id="own-photo"))
+        with Store().write() as snapshot:
+            card = snapshot.inventory.get(master.position_key(1, 1))
+            card.sku = "own-photo-sku"
+
+        # A SINGLE with no own photo on hand at all — the SKU table's own `number` cell
+        # routes through `url_for`, exactly as `#/pricing` and Sets already do.
+        with Store().write() as snapshot:
+            snapshot.skus.entries["single-sku"] = SkuRow(
+                product_line="Riftbound League of Legends Trading Card Game",
+                set_name="Vendetta",
+                product_name="Ahri, Inquisitive",
+                number="SP3/006",
+                rarity="Rare",
+                condition="Near Mint",
+                grade=None,
+                printing=None,
+                first_seen=1_700_000_000,
+                last_seen=1_700_000_000,
+                source="t7-fixture",
+                raw={},
+            )
+            # A SEALED SKU, no number at all — routes through `url_for_product` by name.
+            snapshot.skus.entries["sealed-sku"] = SkuRow(
+                product_line="Pokemon",
+                set_name="Scarlet & Violet",
+                product_name="Scarlet & Violet Elite Trainer Box",
+                number="",
+                rarity="",
+                condition="",
+                grade=None,
+                printing=None,
+                first_seen=1_700_000_000,
+                last_seen=1_700_000_000,
+                source="t7-fixture",
+                raw={},
+            )
+            # A SKU no `skus` row and no on-hand copy names at all — a genuine miss.
+            # (nothing to write — "miss-sku" is simply never seeded)
+            # A SKU whose row exists but whose product line no game claims — also a miss.
+            snapshot.skus.entries["unregistered-sku"] = SkuRow(
+                product_line="Not A Real Product Line",
+                set_name="Anywhere",
+                product_name="Anything",
+                number="1",
+                rarity="",
+                condition="",
+                grade=None,
+                printing=None,
+                first_seen=1_700_000_000,
+                last_seen=1_700_000_000,
+                source="t7-fixture",
+                raw={},
+            )
+
+        bare = answers(
+            checks,
+            lambda: capture_server.do_skus_photos(
+                ["own-photo-sku", "single-sku", "sealed-sku", "miss-sku", "unregistered-sku"]
+            ),
+            "no resolver handed in, the route still answers",
+        )
+        if bare is not None:
+            checks.equal(
+                bare["stock_photos"], {},
+                "no resolver, no stock photos — and no socket, the route's own bare posture",
+            )
+            checks.ok(
+                "own-photo-sku" in bare["photos"],
+                "the own photo still answers with no resolver at all",
+            )
+
+        threaded = answers(
+            checks,
+            lambda: capture_server.do_skus_photos(
+                ["own-photo-sku", "single-sku", "sealed-sku", "miss-sku", "unregistered-sku"],
+                images=images,
+            ),
+            "a resolver handed in, the route answers",
+        )
+        if threaded is not None:
+            checks.ok(
+                "own-photo-sku" in threaded["photos"] and "own-photo-sku" not in threaded["stock_photos"],
+                "OWN PHOTO WINS — it never falls through to the resolver even though one "
+                "is handed in",
+            )
+            checks.equal(
+                threaded["stock_photos"].get("single-sku"),
+                "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+                "a SINGLE with no own photo falls back through url_for, by number",
+            )
+            checks.equal(
+                threaded["stock_photos"].get("sealed-sku"),
+                "https://img/etb.jpg",
+                "a SEALED SKU (no number) falls back through url_for_product, by name — "
+                "Pokemon included",
+            )
+            checks.ok(
+                "miss-sku" not in threaded["photos"] and "miss-sku" not in threaded["stock_photos"],
+                "a SKU with no on-hand copy and no skus-table row is absent from both "
+                "fields, never a guess",
+            )
+            checks.ok(
+                "unregistered-sku" not in threaded["photos"]
+                and "unregistered-sku" not in threaded["stock_photos"],
+                "a SKU whose product line no game claims is absent from both fields too",
+            )
+
+
+def check_stock_images_pokemon_warm_refusal(checks: Checks) -> None:
+    """Finding 2, review round 2026-09-27: `warm_stock_images`'s startup pairs are every
+    distinct `(game, set_name)` among IDENTIFIED CARDS, Pokemon singles included — `url_for`
+    never reads this cache for a Pokemon CARD (it answers off the vendored tree instead), so
+    warming it at startup was a real tcgcsv fetch, per Pokemon set the store holds, for
+    nothing, on every restart. `warm()` refuses a Pokemon pair BY DEFAULT, restored here;
+    only `_tcgcsv_name_lookup`'s own sealed-product lookup may ask for one, by naming
+    `allow_pokemon=True` explicitly — this compares the two calls directly, which is the
+    real mechanism `warm_stock_images` and `_tcgcsv_name_lookup` each choose between.
+    """
+    checks.note("")
+    checks.note("POKEMON STARTUP WARM REFUSAL — warm(), allow_pokemon (F2, finding 2, review round 2026-09-27)")
+
+    calls: List[str] = []
+
+    def counting_fetcher(url: str):
+        calls.append(url)
+        if url.endswith("/categories"):
+            return {"results": [{"name": "Pokemon", "categoryId": 3}]}
+        if url.endswith("/3/groups"):
+            return {"results": [
+                {"name": "Scarlet & Violet", "groupId": 1},
+                {"name": "Paldea Evolved", "groupId": 2},
+                {"name": "Obsidian Flames", "groupId": 3},
+            ]}
+        if url.endswith("/3/1/products") or url.endswith("/3/2/products") or url.endswith("/3/3/products"):
+            return {"results": []}
+        raise AssertionError(f"unexpected fetch: {url}")
+
+    # THREE DISTINCT POKEMON SETS — the shape `warm_stock_images` would build from a store
+    # that has identified Pokemon cards across three sets, the case the review round asked
+    # to be shown.
+    pairs = [
+        ("pokemon", "Scarlet & Violet"),
+        ("pokemon", "Paldea Evolved"),
+        ("pokemon", "Obsidian Flames"),
+    ]
+    images = stockimages.StockImages(market=pricehistory.Market(cache_dir=None, fetcher=counting_fetcher))
+
+    # AFTER (the shipped default, no caller names an exception) — `warm_stock_images` calls
+    # exactly this, unchanged by F2.
+    default_threads = images.warm(pairs)
+    for thread in default_threads:
+        thread.join(timeout=5)
+    checks.equal(
+        len(default_threads), 0,
+        "warm() schedules NOTHING for a Pokemon pair by default — 0 of 3 threads started",
+    )
+    checks.equal(
+        len(calls), 0,
+        f"and NO REQUEST reaches tcgcsv at all — measured {len(calls)} requests at startup, "
+        "against 5 before this fix, below (the bug: every restart fetched every Pokemon "
+        "set for a lookup url_for never makes)",
+    )
+
+    # BEFORE (what the bug did, and the one path that is STILL SUPPOSED to reach here — a
+    # Pokemon SEALED lookup, `_tcgcsv_name_lookup`'s own named exception).
+    forced_threads = images.warm(pairs, allow_pokemon=True)
+    checks.equal(
+        len(forced_threads), 3,
+        "allow_pokemon=True is the one named exception, and schedules every pair asked",
+    )
+    for thread in forced_threads:
+        thread.join(timeout=5)
+    checks.equal(
+        len(calls), 5,
+        f"and THIS is what the bug did at every restart, unconditionally: measured "
+        f"{len(calls)} real tcgcsv requests for 3 Pokemon sets (1 categories + 1 groups, "
+        "both shared and cached after the first pair, + 1 products call per set) — 0 with "
+        "the refusal restored, against 5 on a cold process before it was",
+    )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -38938,6 +40051,8 @@ def run() -> Result:
     check_undo_until_built_on(checks)
     check_pipeline_sets(checks)
     check_stock_images(checks)
+    check_sales_stock_photo_fallback(checks)
+    check_stock_images_pokemon_warm_refusal(checks)
     # The box map's cases live in a sibling file (D264). Imported here, not at the top,
     # because that file imports its fixtures from this one.
     from harness.tests import t7_box_map

@@ -50,11 +50,13 @@ import {
   touchBox,
 } from './deviceMemory'
 import type { CaptureSetup, SectionPick } from './deviceMemory'
+import { boxTitle } from './kit/data'
 import { captureBoxLabel } from './runScope'
 // The one thing this screen takes from the library drawing: how long a pause has to be
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
 import { Button, Icon, IconButton, Kbd, Notice, Page, Pill, Stat } from './kit'
+import { matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
 import type { IconName, PillTone } from './kit'
@@ -101,7 +103,7 @@ const SECTION_STEP_KEYS: readonly [string, string] = [SECTION_BACK_KEY, SECTION_
 // The list itself used to live here as `FINISHES`, Pokemon's three. It is per-game data now
 // and comes from `GET /games`; see `finishChips` below.
 
-const NO_CLAIM_LABEL = 'No claim'
+const NO_CLAIM_LABEL = 'None'
 
 /** UX-076 (owner, 2026-09-24): "do we have that data? if so name the reason." We do —
  *  `halt.code` already carries the server's own refusal code, and the screen used to print
@@ -1924,17 +1926,13 @@ export function CaptureScreen() {
   
   const boxQuery = boxEntry.trim()
 
-  /* SUBSTRING OVER THE NUMBER AND THE NAME, and the two are not two modes. `9` keeps 9, 19,
-   * 95 and 99 exactly as it always did; `com` keeps every box whose name carries it; `box 3`
-   * keeps "common box 3". Case-folded on the name side only, because nobody narrows with a
-   * shift key and a box number has no case to fold. */
+  /* THE SHARED MATCHER (D271). `9` keeps 9, 19, 95 and 99 through the `raw` field (rule 8,
+   * a plain substring — a box number is not read in words). `com` keeps every box whose
+   * name carries it, and `box 3` keeps "common box 3", both through `text` (rule 7). */
   const boxMatchesAll = useMemo(() => {
     if (boxQuery === '') return boxOptions
-    const folded = boxQuery.toLowerCase()
-    return boxOptions.filter(
-      (option) =>
-        String(option.box).includes(boxQuery) ||
-        (option.name ?? '').toLowerCase().includes(folded),
+    return boxOptions.filter((option) =>
+      matchQuery(boxQuery, { text: [option.name], raw: [String(option.box)] }),
     )
   }, [boxOptions, boxQuery])
 
@@ -2155,7 +2153,15 @@ export function CaptureScreen() {
               'browser remembered the number before it started recording which box that was, ' +
               'and a deleted box hands its number to the next one. Nothing is selected; pick ' +
               'the drawer in front of you.'
-          : `Box ${found.box} is a different drawer now — the one you last captured into was ` +
+          : /* D153's OWN EXCEPTION SURVIVES D259, confirmed by this file's own test
+               ("it says it by number... naming the box now at it (`Epics`) would be telling
+               the operator their drawer is something it has never been"). The number is the
+               one fact the two drawers share, and this sentence is ABOUT the number's own
+               reallocation, not a label identifying the current drawer — D259's "never a bare
+               number standing for the drawer" is about identifying a box, which this is not.
+               Allow-listed in kit-adoption for the same reason the picker's search suffix is
+               (below). */
+            `Box ${found.box} is a different drawer now — the one you last captured into was ` +
               'deleted, and its number went to this one. Nothing is selected; pick the drawer ' +
               'in front of you.',
       )
@@ -3312,7 +3318,7 @@ export function CaptureScreen() {
           // The act's own name, kept through the flow (docs/DESIGN.md's copy rule), with what
           // it produced beside it. `from card N` and not `at card N`: the number is where the
           // section STARTS, and the next card is the first one in it.
-          text: 'New section',
+          text: 'Section',
           place: opened === null ? null : { section: opened.section, fromCard: opened.start },
           renumbered,
           code: null,
@@ -3562,7 +3568,7 @@ export function CaptureScreen() {
         icon: 'camera',
         tone: 'plain',
         text: null,
-        fix: { label: 'Open the camera', icon: 'camera', onPress: camera.retry },
+        fix: { label: 'Camera', icon: 'camera', onPress: camera.retry },
       })
     } else if (!camera.ready) {
       /* STARTED BUT NOT READY — asked for, and not delivering frames: a device that vanished,
@@ -3586,7 +3592,7 @@ export function CaptureScreen() {
         icon: 'box',
         tone: 'plain',
         text: null,
-        fix: { label: 'Pick a box', icon: 'box', onPress: () => toggleField('box') },
+        fix: { label: 'Box', icon: 'box', onPress: () => toggleField('box') },
       })
     }
     if (gameEntry === null) {
@@ -3648,7 +3654,7 @@ export function CaptureScreen() {
 
   /* The stage lamp: what the feed is doing, in one pill. */
   const lamp: { tone: PillTone; icon: IconName; text: string } = !camera.started
-    ? { tone: 'default', icon: 'camera', text: 'Camera off' }
+    ? { tone: 'default', icon: 'camera', text: 'Off' }
     : cameraFault
       ? { tone: 'danger', icon: 'alert', text: 'Camera fault' }
       : !camera.ready
@@ -3723,7 +3729,7 @@ export function CaptureScreen() {
   /* The stage foot's word for the drawer: the name, or the number where there is no name
      (D142). This read `Box 3 · RB Epics` and carried the number twice on one
      screen, since the row above it opened with `Box 3` too. */
-  const boxSentence = box === null ? 'No box' : captureBoxLabel(box, boxName)
+  const boxSentence = box === null ? 'None' : captureBoxLabel(box, boxName)
 
   /* THE COUNTED NUMBER, NOT THE STORED SLOT (D58, D92, the R1c finding): this used to read
    * `next index ${nextForBox}`, the raw stored-slot high-water mark, and said so on purpose
@@ -4067,7 +4073,7 @@ export function CaptureScreen() {
                           <Icon name="camera" size={26} />
                         </span>
                         <Button variant="primary" icon="camera" className="capture-frame-open-words" onClick={camera.retry}>
-                          Open the camera
+                          Camera
                         </Button>
                         {/* A SHORT VIEWFINDER DRAWS ONLY THE ICON (the PR 3 integration). The
                             frame is 9:16, so its width follows the stage's height, and on a
@@ -4075,7 +4081,7 @@ export function CaptureScreen() {
                             390x844, against a 166px press). CaptureScreen.css shows exactly one
                             of these two presses by the viewport's own height; the other is
                             `display: none`, so a screen reader meets one "Open the camera". */}
-                        <IconButton icon="camera" size="lg" label="Open the camera" className="capture-frame-open-icon" onClick={camera.retry} />
+                        <IconButton icon="camera" size="lg" label="Camera" className="capture-frame-open-icon" onClick={camera.retry} />
                       </>
                     ) : cameraFault ? (
                       <>
@@ -4193,9 +4199,7 @@ export function CaptureScreen() {
                 <Icon name="chevronUp" size={13} className="capture-chev" />
               </summary>
               <div className="capture-tuning-body">
-                {triggerMode === 'manual' ? (
-                  <p className="capture-quiet">Trigger is off.</p>
-                ) : motionDiag === null ? (
+                {triggerMode === 'manual' ? null : motionDiag === null ? (
                   <p className="capture-quiet">
                     Motion is armed but no frame has reached it yet. Open a camera and the readout
                     appears here.
@@ -4277,7 +4281,6 @@ export function CaptureScreen() {
                 <span className="capture-frame-glyph" aria-hidden="true">
                   <Icon name="image" size={24} />
                 </span>
-                <p className="capture-frame-title">Your first capture lands here</p>
               </div>
             ) : (
               <img
@@ -4392,8 +4395,7 @@ export function CaptureScreen() {
             right={
               box === null ? (
                 <span className="capture-box-val is-empty">
-                  <strong>No box yet</strong>
-                  <span>Pick one, or type a new name</span>
+                  <strong>None</strong>
                 </span>
               ) : (
                 /* THE NAME IS THE HEADLINE AND THE NUMBER IS GONE (D142).
@@ -4494,7 +4496,7 @@ export function CaptureScreen() {
                 {boxOffer === null ? null : (
                   <Opt
                     on={false}
-                    name={boxOffer.box === null ? (boxOffer.name ?? '') : `Box ${boxOffer.box}`}
+                    name={boxOffer.box === null ? (boxOffer.name ?? '') : boxTitle(boxOffer.name, boxOffer.box)}
                     trail="New"
                     trailWord
                     onPick={() => void createOfferedBox()}
@@ -4546,7 +4548,7 @@ export function CaptureScreen() {
             right={
               box === null ? (
                 <span className="capture-section-val is-empty">
-                  <strong>Pick a box first</strong>
+                  <strong>Locked</strong>
                 </span>
               ) : pickedSection === null ? (
                 <span className="capture-section-val is-default">
@@ -4640,7 +4642,7 @@ export function CaptureScreen() {
                  button itself stays live in both modes as an override. */
               kbd={triggerMode === 'manual' ? CAPTURE_KEY_LABEL : undefined}
             >
-              Capture card
+              Capture
             </Button>
 
             {/* FOLD INTO THE BUTTON (owner's ruling): when the camera is the ONLY thing
@@ -4651,8 +4653,8 @@ export function CaptureScreen() {
             {blockers.length === 1 && blockers[0]?.key === 'camera' ? (
               <p className="capture-quiet capture-camera-note">Open the camera first</p>
             ) : blockers.length === 0 ? null : (
-              <div className="capture-block" role="group" aria-label="Before you can capture">
-                <span className="bn-label capture-block-word">Before you can capture</span>
+              <div className="capture-block" role="group" aria-label="Setup">
+                <span className="bn-label capture-block-word">Setup</span>
                 <ul className="capture-block-list">
                   {blockers.map((blocker) => (
                     <li key={blocker.key} className="capture-block-row" data-tone={blocker.tone}>
@@ -4696,7 +4698,7 @@ export function CaptureScreen() {
               disabled={box === null || sectionBusy}
               busy={sectionBusy}
             >
-              New section
+              Section
             </Button>
             {sectionNote === null ? null : (
               <p className={sectionNote.done ? 'capture-quiet capture-note-ok' : 'capture-refused'}>
@@ -4780,14 +4782,10 @@ export function CaptureScreen() {
 
           {undoStack.length === 0 ? (
             <p className="capture-quiet capture-film-empty">
+              {/* F5 verbiage cut: the "Recent" heading above already says this filmstrip is
+                  empty of anything to undo — a bare glyph carries it, and the section's own
+                  aria-label ("Recent captures") is what a screen reader has instead. */}
               <Icon name="film" size={14} />
-              {/* ONE SENTENCE FOR BOTH CASES (TXT-30, density): "Pick a box to start." repeated
-                  the Box field a few rows up and was cut. The stack falls back to the box's
-                  own newest when this sitting has no shots, so an empty strip with a box
-                  picked means this sitting is empty AND the box is — the same sentence
-                  answers both, which used to be "Nothing in this box to undo yet" before a
-                  sitting-ordered stack made a full box and an empty strip impossible together. */}
-              Nothing to undo yet.
             </p>
           ) : (
             <ul className="capture-undo-list">
@@ -5354,7 +5352,7 @@ export function CaptureScreen() {
                     {signal.width} × {signal.height}
                   </span>
                 ) : !camera.started ? (
-                  'Not open'
+                  'Closed'
                 ) : (
                   `${camera.devices.length} found`
                 )
@@ -5363,8 +5361,13 @@ export function CaptureScreen() {
             >
               {!camera.started ? (
                 <>
+                  {/* F5 verbiage cut, corrected: this button sits inside the "Camera" field it
+                      opens (the row above already reads "Camera Closed"), so "Camera" here
+                      collided with that row's own accessible name — same problem the reason
+                      for row 65 argued away by icon alone, wrong for THIS one nested spot.
+                      "Connect" names the action without repeating the field's own label. */}
                   <Button variant="primary" size="sm" icon="camera" onClick={camera.retry}>
-                    Open the camera
+                    Connect
                   </Button>
                 </>
               ) : (
@@ -5411,7 +5414,7 @@ export function CaptureScreen() {
               icon="camera"
               right={
                 !camera.started ? (
-                  <span className="capture-val is-default">Not open</span>
+                  <span className="capture-val is-default">Closed</span>
                 ) : cameraFault ? (
                   <span className="capture-val capture-val-alert">
                     <Icon name="alert" size={12} />
@@ -5556,7 +5559,7 @@ export function CaptureScreen() {
               onClick={clearSetup}
               disabled={!setupChosen}
             >
-              Clear the setup
+              Clear
             </Button>
             {/* TXT-31 (density): "Nothing to clear." under a disabled button said nothing the
                 disabled state had not already said. The sentence now only earns its place

@@ -317,9 +317,9 @@ its last item. It opens above its control when there is no room below, and stays
 phone's tab bar.
 
 **Every primitive is on one page, at `#/gallery`.** It is the kit rather than a component
-sheet now, it is reachable from the command palette (never the nav), `make screenshot`
-renders it, and `app/tests/pull-confirm.spec.ts` measures three of the Fulfillment floors on
-its pull-confirm specimens.
+sheet now, it is reachable from the command palette (never the nav), and `make screenshot`
+renders it. `app/tests/fulfillment.spec.ts`'s pull-confirm describe block measures three of
+the Fulfillment floors on its pull-confirm specimens.
 
 ## Motion, and what a control owes the person pressing it
 
@@ -461,6 +461,8 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
   bn-page 559   Pricing — the row becomes two lines, the price on the right with Market under it
   bn-page 899   Pricing — Lowest and the trend leave the row (the product view carries both)
   (unnamed) 520, 640   RunPanel — the run detail's own steps, on `.runs-detail`
+  runs    699   RunPanel — the run list and an opened run stay one pushed-nav column below this
+  runs    700   RunPanel — the run list and the opened run split into a master and a detail pane
   bn-page 640   kit — a `Page`'s toolbar folds into equal cells, and its actions take a line;
                 Gallery — the specimen grids go to one column
   bn-page 879   Gallery — the section index becomes a strip over the specimens
@@ -468,6 +470,11 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
 
 COLUMN-BLIND    a sheet allowed to ask the VIEWPORT a question at or above 1024, with why.
   Fulfillment.css   `persona: 'fulfiller'` draws no shell (D5), so the viewport IS its column
+  CaptureScreen.css  1280-1359: the live capture stage (D19, D32), not a scrollable
+                     column — the rule trades padding so the four stacked cards fit the fold
+                     at 800px of HEIGHT, an input-modality question (the rig's own frame) the
+                     docstring's own "100dvh stage" exception names, and no `--bn-shell-main`
+                     column width changes what it is deciding
 ```
 
 **Above 1024, prefer a cap or a container to a viewport width.** Every screen but the
@@ -1085,8 +1092,8 @@ The agent cannot see its own output, so these are Playwright assertions, not pro
 
 **All ten rows run, against the view itself, and every one was re-checked against the tree
 on 2026-09-03.** `app/tests/fulfillment.spec.ts` asserts every row of the table below on the
-Fulfillment view; `app/tests/pull-confirm.spec.ts` keeps three of them on the kit's
-pull-confirm. `make design-check` runs both. Every contrast ratio is computed from the
+Fulfillment view. Its own pull-confirm block keeps three of them on the kit's pull-confirm
+too. `make design-check` runs it. Every contrast ratio is computed from the
 *rendered* colors rather than compared against a number published here, so a token edited in
 `app/src/tokens.css` without being re-argued in this file has to break something — which is
 the only reason the Banchi palette could be swapped underneath this view at all.
@@ -1166,10 +1173,10 @@ That two-step is not the confirm dialog the rule bans; it is a displacement guar
 
 Step 6 locked a palette on 2026-08-12 and built one component against it, on the argument
 that catching a gap on one component is far cheaper than after ten screens. The palette is
-gone and the component is not: `app/src/PullConfirm.tsx` and `app/src/PullConfirm.css` are
-still the Fulfiller's pull button, still the only solid fill he ever sees, and still the
-thing `app/tests/pull-confirm.spec.ts` measures on `#/gallery`. What it is built against
-now:
+gone. The component is not: `app/src/PullConfirm.tsx` and `app/src/PullConfirm.css` are
+still the Fulfiller's pull button and the only solid fill he ever sees.
+`app/tests/fulfillment.spec.ts`'s pull-confirm block still measures it on `#/gallery`. What
+it is built against now:
 
 ```
 fill        --bn-accent-press in light, --bn-accent-hover in dark

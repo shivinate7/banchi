@@ -590,7 +590,7 @@ case "$out" in *"platform-dependent"*) ok "and names the platform dependency rat
   *) bad "the refusal asserts a self-match this platform does not produce" ;; esac
 case "$out" in *"PKMNSCAN_WAIT=off"*) ok "the refusal prints its escape hatch" ;;
   *) bad "the refusal does not name PKMNSCAN_WAIT=off" ;; esac
-case "$out" in *"make coordinator"*) ok "the refusal names what to do instead" ;;
+case "$out" in *"sanctioned form"*) ok "the refusal names what to do instead" ;;
   *) bad "the refusal does not name the alternative" ;; esac
 
 # ------------------------------------------------------- 5b. the runaway, backgrounded

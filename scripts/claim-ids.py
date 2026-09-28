@@ -46,7 +46,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # `claim vocabulary` row reconciles them. The auditor is stdlib-only, parses rather than
 # imports, and must not run project code; importing this module would break that promise for
 # the one check that gates every commit. Two declarations plus a reader is this repo's
-# standing answer to that shape — `port-agreement`, `set-hint-agreement`, `logo parity`.
+# standing answer to that shape — `port-agreement`, `set-hint-agreement`, `logo`.
 SLUG = r"[a-z][a-z0-9]*(?:-[a-z0-9]+)+"
 DECISION_SLUG = re.compile(r"\b(D-" + SLUG + r")\b")
 CODES_SLUG = re.compile(r"\b(C-" + SLUG + r")\b")
@@ -62,6 +62,23 @@ DECISIONS = "docs/DECISIONS.md"
 CODES_DECISIONS = "docs/CODES-DECISIONS.md"
 MAP = "docs/map.py"
 GATES = "docs/GATES.md"
+DEBTS = "docs/DEBTS.md"
+
+# DEBTS JOINED THE CLAIM PATH ON THE OWNER'S WORD ("they just get assigned numbers upon
+# merge with CI"), REUSING THE DECISION MACHINERY RATHER THAN A SECOND ONE. A debt is a
+# DIRECTORY CORPUS exactly like a decision (D160's own shape: one file per entry, a manifest
+# recording order) — the two differ only in TWO SPELLINGS, both handled as data rather than
+# as a second code path: the CLAIMED heading a decision writes IS its citation form (`## D188`
+# cites as `D188`), while a debt's citation has always carried a prefix its heading did not
+# (`docs/DEBTS.md`: "CITE BY ID, DEBT<n>... never a bare §<n>", while the ~50 real entries
+# under `docs/debts/` head themselves bare — `## 11`, not `## DEBT11`). Rather than migrate
+# every existing file, a NEWLY CLAIMED entry's heading matches its citation (`## DEBT<n>`),
+# and `DEBT_HEADING` below — and `scripts/debts_corpus.py`'s own `HEADING_RE` — read EITHER
+# spelling for the ceiling/lookup half, so no existing file moves. The FILENAME keeps the
+# bare, unlettered convention every real entry already uses (`188-tail.md`, not
+# `DEBT<n>-tail.md`) — `rename_claimed_entries` takes the filename letter as a parameter for
+# exactly this asymmetry.
+DEBT_HEADING = re.compile(r"^##\s+(?:DEBT)?([1-9][0-9]{0,2})\b", re.M)
 
 # THE THREE NAMESPACES, DECLARED ONCE AND READ TWICE. `ceiling_at` asks each for its highest
 # allocated id and `stale_claims` asks the same three for their whole sets. Spelling the list
@@ -69,11 +86,47 @@ GATES = "docs/GATES.md"
 # which is the shape `storage keys` and `codex hooks` both exist to catch elsewhere in this
 # repo. The last field is the form a person READS the id in, which is also the token every
 # citation of it carries.
+#
+# DEBT IS THE FOURTH, AND A DIRECTORY-CORPUS KIND LIKE `decision` — `ceiling_at`, `pending`,
+# `stale_claims` and `duplicate_numbers` each special-case the two kinds whose corpus is a
+# directory rather than reading `path` as a flat file, exactly as `decision` already needed
+# before `debt` existed.
 KINDS = (
     ("decision", DECISIONS, DECISION_HEADING, "D{0}"),
     ("codes", CODES_DECISIONS, CODES_HEADING, "C{0}"),
     ("step", GATES, GATES_NUMBERED, "step {0}"),
+    ("debt", DEBTS, DEBT_HEADING, "DEBT{0}"),
 )
+
+# A DIRECTORY-CORPUS KIND'S OWN SHAPE, ONE ROW PER KIND, READ BY EVERY FUNCTION BELOW THAT
+# USED TO SAY "decision" BY NAME. `unclaimed_letter` is the literal text a PENDING heading
+# wears after `## ` (`D-<slug>`, `DEBT-<slug>`) — `unclaimed_from_pieces`'s own `letter`
+# argument. `filename_letter` is what a CLAIMED entry's file is renamed to carry in front of
+# its zero-padded number (`D` for a decision, `` for a debt — see the block comment above
+# `DEBT_HEADING`).
+class DirKind(NamedTuple):
+    kind: str
+    directory: str
+    manifest: str
+    stub: str
+    unclaimed_letter: str
+    filename_letter: str
+    index_stub: str   # the file carrying the rendered INDEX BLOCK, never the corpus's own
+                       # pointer stub — a decision's index lives in CLAUDE.md, a debt's in
+                       # its own `docs/DEBTS.md` (the two coincide for debt, not for decision)
+
+
+DIR_KINDS = {
+    "decision": DirKind("decision", "docs/decisions",
+                        "docs/decisions/ORDER.json", DECISIONS, "D", "D", "CLAUDE.md"),
+    "debt": DirKind("debt", "docs/debts", "docs/debts/ORDER.json", DEBTS, "DEBT", "",
+                    "docs/DEBTS.md"),
+}
+
+# EVERY DIRECTORY-CORPUS KIND KEEPS ITS SLUG SOMEWHERE ONCE CLAIMED — its entry's own
+# FILENAME, per `rename_claimed_entries` — unlike a codes id or a build step, which keep it
+# nowhere and need `--unclaim ... --to-slug`. Read wherever a message branches on that.
+DIR_KEEPS_SLUG = frozenset(DIR_KINDS)
 
 # Binary and generated trees the substitution has no business walking. `.git` is the one that
 # would be catastrophic rather than merely slow.
@@ -104,7 +157,7 @@ HOOK_DIR = "scripts/githooks"
 
 
 class Claim(NamedTuple):
-    kind: str      # "decision" | "codes" | "step"
+    kind: str      # "decision" | "codes" | "step" | "debt"
     slug: str      # the unclaimed form, with its letter for D and C and bare for a step
     number: str    # the allocated form: a letter and digits, or a bare number for a step
     token: str     # the exact text replaced
@@ -116,9 +169,9 @@ def say(*lines: str) -> None:
         print(line)
 
 
-def git(*args: str, cwd: Optional[str] = None) -> str:
+def git(*args: str, cwd: Optional[str] = None, input_bytes: Optional[bytes] = None) -> str:
     try:
-        done = subprocess.run(["git"] + list(args), cwd=cwd or str(ROOT),
+        done = subprocess.run(["git"] + list(args), cwd=cwd or str(ROOT), input=input_bytes,
                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)
     except OSError:
         return ""
@@ -129,8 +182,36 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def ignored_paths(root: Path, paths: Sequence[Path]) -> Set[Path]:
+    """Every path in `paths` that git ignores, asked in ONE call rather than one per file.
+
+    `SKIP` prunes a fixed, hand-typed list of directory NAMES, which is a performance floor
+    rather than a correctness claim — it has no way to know about a directory `.gitignore`
+    names but nobody thought to type here. `demo`, `app/demo` and `app/public/demo` are
+    gitignored (D295, docs/specs/demo.md) and none of them were in `SKIP`, so a branch that
+    had built the demo locally handed `text_files()` two 24-133 MB JSON bundles it had no
+    business reading — gitignored build output, never a source a citation could live in.
+
+    `git check-ignore --no-index` is asked rather than `git ls-files`, because `--no-index`
+    answers from `.gitignore` alone and does not care whether the path has ever been staged —
+    a freshly generated file that is gitignored answers the same as one nobody has touched in
+    years. FAILS OPEN: no git, or `root` outside a checkout, answers with no ignored paths at
+    all, because a text file this cannot classify is a text file the walk already knew how to
+    read before this existed.
+    """
+    if not paths:
+        return set()
+    rels = [str(p.relative_to(root)) for p in paths]
+    out = git("check-ignore", "--no-index", "-z", "--stdin", cwd=str(root),
+              input_bytes=("\0".join(rels) + "\0").encode("utf-8"))
+    if not out:
+        return set()
+    return {root / rel for rel in out.split("\0") if rel}
+
+
 def text_files(root: Path) -> List[Path]:
-    """Every tracked-looking text file under `root`, excluding the trees SKIP names.
+    """Every tracked-looking text file under `root`, excluding the trees SKIP names and
+    whatever git ignores.
 
     A DOTTED DIRECTORY IS NOT SKIPPED FOR BEING DOTTED. `SKIP` names the trees to prune, the
     same way `docs-audit.py`'s own `SKIP_DIRS` does — by name, never by a leading dot — and
@@ -142,6 +223,12 @@ def text_files(root: Path) -> List[Path]:
     coverage this walk must be a superset of — proved in `scripts/claim-selftest.py`. `.git`,
     `.venv`, `venv` and `.serve` stay excluded because they are named in `SKIP`, not because
     they start with a dot.
+
+    `SKIP` IS A PERFORMANCE FLOOR, NOT A CORRECTNESS CLAIM, and `ignored_paths` is the
+    correctness half. `demo`, `app/demo` and `app/public/demo` are gitignored build output
+    (D295) that nobody had typed into `SKIP`, so a branch that had built the demo locally
+    handed every caller of this walk two 24-133 MB JSON bundles to read for citations they
+    could never hold — the owner's ruling, 2026-09-27: this walk skips what git ignores.
     """
     out: List[Path] = []
     for base, dirs, names in os.walk(root):
@@ -160,7 +247,8 @@ def text_files(root: Path) -> List[Path]:
             # `make hooks` copies into the common git dir, and text like any other here.
             if path.parent.as_posix().endswith(HOOK_DIR) and not path.suffix:
                 out.append(path)
-    return out
+    ignored = ignored_paths(root, out)
+    return [p for p in out if p not in ignored]
 
 
 # --------------------------------------------------------------------- what main has taken
@@ -182,6 +270,31 @@ def highest(text: str, pattern: re.Pattern) -> int:
     return max(found) if found else 0
 
 
+def kind_text_at(kind: str, path: str, ref: str, cwd: Optional[str] = None) -> str:
+    """One `KINDS` row's own corpus text, as of `ref` — a DIRECTORY (`DIR_KINDS`) read
+    through `corpus_text_at`, or a flat file read straight with `git show`.
+
+    ONE DISPATCH, USED BY EVERY READER BELOW THAT USED TO SPECIAL-CASE `kind == "decision"`
+    BY NAME. `debt` joined the claim path reusing this exact branch (D160's directory-corpus
+    shape, not a second one) — a THIRD directory kind needs no new `if` here, only a `DIR_KINDS`
+    entry.
+    """
+    if kind in DIR_KINDS:
+        d = DIR_KINDS[kind]
+        return corpus_text_at(ref, cwd=cwd, directory=d.directory, manifest=d.manifest,
+                              stub=d.stub)
+    return git("show", f"{ref}:{path}", cwd=cwd)
+
+
+def kind_text(kind: str, root: Path) -> str:
+    """`kind_text_at`'s own question, over a working tree instead of a ref."""
+    if kind in DIR_KINDS:
+        d = DIR_KINDS[kind]
+        return corpus_text(root, d.directory, d.manifest, d.stub)
+    path = next(p for k, p, _, _ in KINDS if k == kind)
+    return read(root / path) if (root / path).exists() else ""
+
+
 def ceiling_at(ref: str, cwd: Optional[str] = None) -> Dict[str, int]:
     """The highest allocated id of each kind, as of `ref`.
 
@@ -189,8 +302,7 @@ def ceiling_at(ref: str, cwd: Optional[str] = None) -> Dict[str, int]:
     what main holds at the moment of the merge; allocating against the branch's own copy is
     the guess this entry exists to delete.
     """
-    return {kind: highest(corpus_text_at(ref, cwd=cwd) if kind == "decision"
-                          else git("show", f"{ref}:{path}", cwd=cwd), pattern)
+    return {kind: highest(kind_text_at(kind, path, ref, cwd=cwd), pattern)
             for kind, path, pattern, _ in KINDS}
 
 
@@ -244,8 +356,15 @@ def unclaimed_from_flat(text: str, letter: str) -> List[str]:
 
 
 def pending_in(decisions: str, codes: str, gates: str,
-                decision_pieces: Optional[List[str]] = None) -> Dict[str, List[str]]:
+                decision_pieces: Optional[List[str]] = None,
+                debt_pieces: Optional[List[str]] = None) -> Dict[str, List[str]]:
     """Every slug HEADING in these three texts, by kind, in the order they declare them.
+
+    `debt_pieces` IS THE SAME SPLIT-CORPUS ANSWER AS `decision_pieces`, one namespace over.
+    `docs/debts/` has carried a manifest from day one on this branch (D160's own shape,
+    never a pre-split flat-file era to fall back on), so `debt_pieces` is `None` only when
+    the checkout has no `docs/debts/ORDER.json` at all — a fixture that never wrote one, or
+    this file imported against a tree that predates debts joining the claim path.
 
     Headings rather than citations: a citation of a slug that has no heading is a dangling
     id, which is `id claims`' job to report and not this command's to invent an entry for.
@@ -263,13 +382,15 @@ def pending_in(decisions: str, codes: str, gates: str,
     it as unreachable, and a real per-file entry cannot be shaped that way to begin with —
     D160's own naming convention already forces a multi-segment slug at file-creation.
     """
-    out: Dict[str, List[str]] = {"decision": [], "codes": [], "step": []}
+    out: Dict[str, List[str]] = {"decision": [], "codes": [], "step": [], "debt": []}
     if decision_pieces is not None:
         out["decision"] = unclaimed_from_pieces(decision_pieces, "D")
     else:
         out["decision"] = [f"D{i}" for i in DECISION_HEADING.findall(decisions) if i.startswith("-")]
     out["codes"] = unclaimed_from_flat(codes, "C")
     out["step"] = re.findall(r"^0\.\s+`step (" + SLUG + r")`", gates, re.M)
+    if debt_pieces is not None:
+        out["debt"] = unclaimed_from_pieces(debt_pieces, "DEBT")
     for kind in out:
         seen: List[str] = []
         for slug in out[kind]:
@@ -296,7 +417,8 @@ DECISIONS_DIR = "docs/decisions"
 DECISIONS_MANIFEST = DECISIONS_DIR + "/ORDER.json"
 
 
-def corpus_order(root: Path) -> List[str]:
+def corpus_order(root: Path, directory: str = DECISIONS_DIR,
+                 manifest: str = DECISIONS_MANIFEST) -> List[str]:
     """Corpus membership: the manifest's list, then anything on disk it has not been told of.
 
     DERIVED, BECAUSE A BRANCH DOES NOT EDIT THE MANIFEST. An entry-adding branch carries its
@@ -304,37 +426,44 @@ def corpus_order(root: Path) -> List[str]:
     claimer reading only the manifest would therefore be blind to exactly the entry it exists
     to claim, which is how this was found: an unregistered slug reported `nothing to claim`
     while sitting in the directory.
+
+    `directory`/`manifest` ARE PARAMETERS, NOT A SECOND FUNCTION, because a debt corpus asks
+    this exact question of `docs/debts/` — same manifest shape, same derivation — and the
+    default keeps every existing decision call site unchanged.
     """
-    manifest = root / DECISIONS_MANIFEST
-    if not manifest.exists():
+    manifest_path = root / manifest
+    if not manifest_path.exists():
         return []
-    listed = json.loads(read(manifest))["order"]
+    listed = json.loads(read(manifest_path))["order"]
     known = set(listed)
-    extra = sorted(p.name for p in (root / DECISIONS_DIR).glob("*.md")
+    extra = sorted(p.name for p in (root / directory).glob("*.md")
                    if p.name not in known)
     return listed + extra
 
 
-def corpus_pieces(root: Path) -> Optional[List[str]]:
+def corpus_pieces(root: Path, directory: str = DECISIONS_DIR,
+                  manifest: str = DECISIONS_MANIFEST) -> Optional[List[str]]:
     """Each entry's own file text, in corpus order. `None` when there is no split corpus at
-    all (no manifest) — the caller's cue to fall back to the flat `docs/DECISIONS.md`.
+    all (no manifest) — the caller's cue to fall back to the flat stub file.
     """
-    if not (root / DECISIONS_MANIFEST).exists():
+    if not (root / manifest).exists():
         return None
-    return [read(root / DECISIONS_DIR / name)
-            for name in corpus_order(root)
-            if (root / DECISIONS_DIR / name).exists()]
+    return [read(root / directory / name)
+            for name in corpus_order(root, directory, manifest)
+            if (root / directory / name).exists()]
 
 
-def corpus_text(root: Path) -> str:
+def corpus_text(root: Path, directory: str = DECISIONS_DIR,
+                manifest: str = DECISIONS_MANIFEST, stub: str = DECISIONS) -> str:
     """The entries of a working tree, concatenated in corpus order."""
-    pieces = corpus_pieces(root)
+    pieces = corpus_pieces(root, directory, manifest)
     if pieces is None:
-        return read(root / DECISIONS) if (root / DECISIONS).exists() else ""
+        return read(root / stub) if (root / stub).exists() else ""
     return "\n".join(pieces)
 
 
-def corpus_order_at(rev: str, cwd: Optional[str] = None) -> List[str]:
+def corpus_order_at(rev: str, cwd: Optional[str] = None, directory: str = DECISIONS_DIR,
+                    manifest: str = DECISIONS_MANIFEST) -> List[str]:
     """`corpus_order`'s own question, asked of a REF instead of a working tree.
 
     A REF HAS NO WORKING DIRECTORY TO `Path.glob` OVER, so `corpus_order`'s trick — list the
@@ -347,13 +476,13 @@ def corpus_order_at(rev: str, cwd: Optional[str] = None) -> List[str]:
     reader whose whole job is asking a REF what it carries — read the manifest's list alone
     and reported the commit clean.
     """
-    manifest = git("show", f"{rev}:{DECISIONS_MANIFEST}", cwd=cwd)
-    listing = git("ls-tree", "-r", "--name-only", rev, "--", DECISIONS_DIR, cwd=cwd)
+    manifest_text = git("show", f"{rev}:{manifest}", cwd=cwd)
+    listing = git("ls-tree", "-r", "--name-only", rev, "--", directory, cwd=cwd)
     on_disk = sorted(Path(p).name for p in listing.splitlines() if p.endswith(".md"))
-    if not manifest.strip():
+    if not manifest_text.strip():
         return on_disk
     try:
-        listed = json.loads(manifest)["order"]
+        listed = json.loads(manifest_text)["order"]
     except Exception:
         return on_disk
     known = set(listed)
@@ -361,27 +490,29 @@ def corpus_order_at(rev: str, cwd: Optional[str] = None) -> List[str]:
     return listed + extra
 
 
-def corpus_pieces_at(rev: str, cwd: Optional[str] = None) -> Optional[List[str]]:
+def corpus_pieces_at(rev: str, cwd: Optional[str] = None, directory: str = DECISIONS_DIR,
+                     manifest: str = DECISIONS_MANIFEST) -> Optional[List[str]]:
     """`corpus_pieces`'s own question, asked of a REF. `None` when that rev has no split
     corpus at all (pre-D160, or the manifest blob does not exist there).
     """
-    manifest = git("show", f"{rev}:{DECISIONS_MANIFEST}", cwd=cwd)
-    if not manifest.strip():
+    manifest_text = git("show", f"{rev}:{manifest}", cwd=cwd)
+    if not manifest_text.strip():
         return None
-    return [git("show", f"{rev}:{DECISIONS_DIR}/{name}", cwd=cwd)
-            for name in corpus_order_at(rev, cwd=cwd)]
+    return [git("show", f"{rev}:{directory}/{name}", cwd=cwd)
+            for name in corpus_order_at(rev, cwd=cwd, directory=directory, manifest=manifest)]
 
 
-def corpus_text_at(rev: str, cwd: Optional[str] = None) -> str:
+def corpus_text_at(rev: str, cwd: Optional[str] = None, directory: str = DECISIONS_DIR,
+                   manifest: str = DECISIONS_MANIFEST, stub: str = DECISIONS) -> str:
     """The entries AT A COMMIT, concatenated in that commit's own corpus order.
 
-    Falls back to that commit's `docs/DECISIONS.md` when it has no manifest, which is every
+    Falls back to that commit's flat stub file when it has no manifest, which is every
     commit before the split — so `ceiling_at` and `pending_at` keep answering across the
-    boundary rather than reporting a repository with no decisions in it.
+    boundary rather than reporting a repository with no entries in it.
     """
-    pieces = corpus_pieces_at(rev, cwd=cwd)
+    pieces = corpus_pieces_at(rev, cwd=cwd, directory=directory, manifest=manifest)
     if pieces is None:
-        return git("show", f"{rev}:{DECISIONS}", cwd=cwd)
+        return git("show", f"{rev}:{stub}", cwd=cwd)
     return "\n".join(pieces)
 
 
@@ -392,6 +523,7 @@ def pending(root: Path) -> Dict[str, List[str]]:
         read(root / CODES_DECISIONS) if (root / CODES_DECISIONS).exists() else "",
         read(root / GATES) if (root / GATES).exists() else "",
         decision_pieces=corpus_pieces(root),
+        debt_pieces=corpus_pieces(root, DIR_KINDS["debt"].directory, DIR_KINDS["debt"].manifest),
     )
 
 
@@ -404,11 +536,14 @@ def pending_at(rev: str, cwd: Optional[str] = None) -> Dict[str, List[str]]:
     file missing at that commit reads as empty, which is right: a repository with no
     docs/CODES-DECISIONS.md has no unclaimed code-card id in it.
     """
+    debt = DIR_KINDS["debt"]
     return pending_in(
         corpus_text_at(rev, cwd=cwd),
         git("show", f"{rev}:{CODES_DECISIONS}", cwd=cwd),
         git("show", f"{rev}:{GATES}", cwd=cwd),
         decision_pieces=corpus_pieces_at(rev, cwd=cwd),
+        debt_pieces=corpus_pieces_at(rev, cwd=cwd, directory=debt.directory,
+                                     manifest=debt.manifest),
     )
 
 
@@ -423,7 +558,12 @@ def plan(root: Path, ref: str, cwd: Optional[str] = None) -> List[Claim]:
             if kind == "step":
                 claims.append(Claim(kind, slug, str(nxt), f"step {slug}", f"step {nxt}"))
             else:
-                letter = slug[0]
+                # THE CLAIMED LETTER IS THE SLUG'S FIRST CHARACTER FOR `decision`/`codes`
+                # (`D-foo` -> `D`, `C-foo` -> `C`), BUT NOT FOR `debt`: its unclaimed slug is
+                # `DEBT-<slug>`, and `slug[0]` alone would give the wrong, one-letter prefix
+                # (`D188` instead of `DEBT<n>`) — see the block comment above `DEBT_HEADING`
+                # for why a debt's heading/citation letter is a whole word, not one letter.
+                letter = DIR_KINDS[kind].unclaimed_letter if kind in DIR_KINDS else slug[0]
                 claims.append(Claim(kind, slug, f"{letter}{nxt}", slug, f"{letter}{nxt}"))
     return claims
 
@@ -461,7 +601,7 @@ def plan(root: Path, ref: str, cwd: Optional[str] = None) -> List[Claim]:
 
 
 class Stale(NamedTuple):
-    kind: str      # "decision" | "codes" | "step"
+    kind: str      # "decision" | "codes" | "step" | "debt"
     taken: str     # the id as a person reads it: `D140`, `C11`, `step 23`
     becomes: str   # what it would be allocated if it went back to being a slug
     where: str     # the file whose headings were read
@@ -532,14 +672,9 @@ def stale_claims(root: Path, ref: str, base: str, cwd: Optional[str] = None) -> 
     out: List[Stale] = []
     ceiling = ceiling_at(ref, cwd=cwd)
     for kind, path, pattern, shape in KINDS:
-        if kind == "decision":
-            here = corpus_text(root)
-            was = corpus_text_at(base, cwd=cwd)
-            now = corpus_text_at(ref, cwd=cwd)
-        else:
-            here = read(root / path) if (root / path).exists() else ""
-            was = git("show", f"{base}:{path}", cwd=cwd)
-            now = git("show", f"{ref}:{path}", cwd=cwd)
+        here = kind_text(kind, root)
+        was = kind_text_at(kind, path, base, cwd=cwd)
+        now = kind_text_at(kind, path, ref, cwd=cwd)
         added = allocated_ids(here, pattern) - allocated_ids(was, pattern)
         taken = allocated_ids(now, pattern)
         nxt = ceiling[kind]
@@ -565,7 +700,7 @@ def report_stale(stale: Sequence[Stale], ref: str) -> None:
         "  Put it back to slug form and let a fresh plan allocate it again:",
         "")
     for item in stale:
-        if item.kind == "decision":
+        if item.kind in DIR_KEEPS_SLUG:
             say(f"    python3 scripts/claim-ids.py --unclaim {item.taken} --write")
         else:
             say(f"    python3 scripts/claim-ids.py --unclaim '{item.taken}' "
@@ -604,9 +739,8 @@ def report_stale(stale: Sequence[Stale], ref: str) -> None:
 def duplicate_numbers(root: Path) -> List[Tuple[str, int]]:
     """`(token, how many headings carry it)` for every id this tree declares more than once."""
     out: List[Tuple[str, int]] = []
-    for kind, path, pattern, shape in KINDS:
-        text = corpus_text(root) if kind == "decision" else (
-            read(root / path) if (root / path).exists() else "")
+    for kind, _path, pattern, shape in KINDS:
+        text = kind_text(kind, root)
         counts: Dict[int, int] = {}
         for found in pattern.findall(text):
             if str(found).lstrip("-").isdigit():
@@ -666,25 +800,34 @@ def report_duplicate_numbers(doubled: Sequence[Tuple[str, int]], ref: str) -> No
 
 
 def duplicate_pending(root: Path, ref: str, cwd: Optional[str] = None) -> List[Tuple[str, str]]:
-    """(pending slug, the number `ref` already claimed it under) for every decision slug this
-    branch still carries unclaimed that `ref` has already resolved under a different number.
+    """(pending slug, the number `ref` already claimed it under) for every DIRECTORY-CORPUS
+    slug (`decision`, `debt`) this branch still carries unclaimed that `ref` has already
+    resolved under a different number.
 
-    DECISIONS ONLY. `codes` and `step` slugs are headings inside one shared file apiece, never
-    a filename of their own — the rename ambiguity this function exists for cannot arise for
-    either, and `decision index`/`id claims` already watch the shared-file kinds for the
-    ordinary two-number collision.
+    ONLY THE DIRECTORY KINDS. `codes` and `step` slugs are headings inside one shared file
+    apiece, never a filename of their own — the rename ambiguity this function exists for
+    cannot arise for either, and `decision index`/`debt index`/`id claims` already watch the
+    shared-file kinds for the ordinary two-number collision.
     """
     out: List[Tuple[str, str]] = []
-    listing = git("ls-tree", "-r", "--name-only", ref, "--", DECISIONS_DIR, cwd=cwd)
-    claimed_text = {}
-    for name in listing.splitlines():
-        m = re.match(r"^D(\d+)-(.+)\.md$", Path(name).name)
-        if m:
-            claimed_text[m.group(2)] = m.group(1)
-    for slug in pending(root)["decision"]:
-        text = slug[len("D-"):] if slug.startswith("D-") else slug
-        if text in claimed_text:
-            out.append((slug, f"D{claimed_text[text]}"))
+    pend = pending(root)
+    for kind, d in DIR_KINDS.items():
+        letter = d.filename_letter
+        # A DECISION'S CLAIMED FILE CARRIES ITS LETTER (`D188-tail.md`); A DEBT'S DOES NOT
+        # (`188-tail.md`, matching every real entry under `docs/debts/` today) — see the
+        # block comment above `DEBT_HEADING`. `letter` may be empty, and the pattern below
+        # still anchors correctly either way.
+        listing = git("ls-tree", "-r", "--name-only", ref, "--", d.directory, cwd=cwd)
+        claimed_text: Dict[str, str] = {}
+        for name in listing.splitlines():
+            m = re.match(r"^" + re.escape(letter) + r"(\d+)-(.+)\.md$", Path(name).name)
+            if m:
+                claimed_text[m.group(2)] = m.group(1)
+        prefix = d.unclaimed_letter + "-"
+        for slug in pend[kind]:
+            text = slug[len(prefix):] if slug.startswith(prefix) else slug
+            if text in claimed_text:
+                out.append((slug, f"{d.unclaimed_letter}{claimed_text[text]}"))
     return out
 
 
@@ -852,14 +995,17 @@ def rewrite_decision_paths(text: str, claims: Sequence[Claim]) -> str:
     double-substitute inside what was the path, and still catches every OTHER, bare citation
     of the same token elsewhere in the file.
 
-    DECISIONS ONLY. A codes id and a build step have no file of their own to be pointed at —
-    `docs/CODES-DECISIONS.md` and `docs/GATES.md` are one shared file apiece, never a
-    directory with one file per entry — so there is no path shape for either to produce, and
-    none is built here for a citation that cannot exist.
+    DIRECTORY KINDS ONLY (`decision`, `debt`). A codes id and a build step have no file of
+    their own to be pointed at — `docs/CODES-DECISIONS.md` and `docs/GATES.md` are one shared
+    file apiece, never a directory with one file per entry — so there is no path shape for
+    either to produce, and none is built here for a citation that cannot exist. `docs/DEBTS.md`
+    carries the identical "cite by id, never by path" rule for `DEBT<n>`, so a debt's own
+    unclaimed path (`` `docs/debts/DEBT-<slug>.md` ``) is the same defect one namespace over.
     """
     for claim in claims:
-        if claim.kind != "decision":
+        if claim.kind not in DIR_KINDS:
             continue
+        directory = DIR_KINDS[claim.kind].directory
         # THE FILE'S OWN TAIL, AND NOT ONLY THE BARE `<token>.md`, MATCHING
         # `rename_claimed_entries`'S OWN RULE: that function finds the pre-claim file by
         # `n.startswith(claim.slug + "-") or n == claim.slug + ".md"`, because the file a
@@ -869,17 +1015,25 @@ def rewrite_decision_paths(text: str, claims: Sequence[Claim]) -> str:
         # while the file underneath it renamed. An optional backtick on each side: every
         # live example in this tree backtick-quotes the path, but the citation is dropped
         # either way rather than left half-repaired.
-        pattern = re.compile(r"`?docs/decisions/" + re.escape(claim.token) + r"[\w-]*\.md`?")
+        pattern = re.compile(r"`?" + re.escape(directory) + "/" + re.escape(claim.token)
+                             + r"[\w-]*\.md`?")
         text = pattern.sub(claim.becomes, text)
     return text
 
 
-def rename_claimed_entries(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, str]:
+def rename_claimed_entries(root: Path, claims: Sequence[Claim], write: bool,
+                           kind: str = "decision") -> Dict[str, str]:
     """Rename each claimed entry's FILE, and rewrite the manifest to match.
 
     A CLAIM USED TO BE A SUBSTITUTION AND NOTHING ELSE. With the corpus as a directory it is
     also a rename: the slug-named file holds a heading that now reads as a number, and a file
     named after an id it no longer carries is the drift `path_for` would resolve wrongly.
+
+    `kind` PICKS THE DIRECTORY CORPUS (`DIR_KINDS`) — `decision` by default, so every existing
+    caller of this function keeps its exact behaviour. `debt` is the second: its claimed
+    filename carries NO letter (`188-tail.md`, `DirKind.filename_letter == ""`), matching
+    every real entry under `docs/debts/` today, while its heading and citation both carry
+    `DEBT` (see the block comment above `DEBT_HEADING` for why the two spellings differ).
 
     THE MANIFEST IS EDITED HERE, AND ITS EXCLUSION FROM THE GENERIC PASS IS DEFENCE IN DEPTH
     RATHER THAN THE THING HOLDING IT UP. `ORDER.json` carries the slug inside a longer
@@ -893,17 +1047,18 @@ def rename_claimed_entries(root: Path, claims: Sequence[Claim], write: bool) -> 
     corpus stops reassembling with every audit row still green until something opens it.
     That is the invariant the self-test asserts.
     """
+    d = DIR_KINDS[kind]
     renames: Dict[str, str] = {}
-    manifest_path = root / DECISIONS_MANIFEST
+    manifest_path = root / d.manifest
     if not manifest_path.exists():
         return renames
     manifest = json.loads(read(manifest_path))
     listed = list(manifest["order"])
     # The file may not be in the manifest yet — a branch does not put it there. Look in the
     # DERIVED order so a claim can rename an entry the manifest has never heard of.
-    order = corpus_order(root)
+    order = corpus_order(root, d.directory, d.manifest)
     for claim in claims:
-        if claim.kind != "decision":
+        if claim.kind != kind:
             continue
         old_name = next((n for n in order if n.startswith(claim.slug + "-")
                          or n == claim.slug + ".md"), None)
@@ -913,16 +1068,17 @@ def rename_claimed_entries(root: Path, claims: Sequence[Claim], write: bool) -> 
         # heading's file is named for the whole slug, so there is no separate tail to lift
         # off; treating it as if there were produced a bare numeric filename that says
         # nothing and sorts nowhere near its neighbours.
-        number = int(claim.number[1:])
-        described = claim.slug[2:] if claim.slug.startswith("D-") else claim.slug
+        number = int(claim.number[len(d.unclaimed_letter):])
+        prefix = d.unclaimed_letter + "-"
+        described = claim.slug[len(prefix):] if claim.slug.startswith(prefix) else claim.slug
         tail = old_name[len(claim.slug) + 1:-3] if old_name.startswith(claim.slug + "-") else described
-        new_name = f"D{number:03d}-{tail}.md"
+        new_name = f"{d.filename_letter}{number:03d}-{tail}.md"
         renames[old_name] = new_name
         order[order.index(old_name)] = new_name
         if old_name in listed:
             listed[listed.index(old_name)] = new_name
         if write:
-            (root / DECISIONS_DIR / old_name).rename(root / DECISIONS_DIR / new_name)
+            (root / d.directory / old_name).rename(root / d.directory / new_name)
     if renames and write:
         # Only what the manifest already NAMED is rewritten here; an entry it has never heard
         # of is appended by `settle_corpus`, which runs after this and knows the final order.
@@ -934,11 +1090,11 @@ def rename_claimed_entries(root: Path, claims: Sequence[Claim], write: bool) -> 
 def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
     """Substitute every claim across the tree. Returns path -> replacements."""
     touched: Dict[str, int] = {}
-    manifest_path = root / DECISIONS_MANIFEST
+    manifest_paths = {root / d.manifest for d in DIR_KINDS.values()}
     for path in text_files(root):
-        # The manifest is names, not prose, and `rename_claimed_entries` owns it. Belt and
+        # A manifest is names, not prose, and `rename_claimed_entries` owns it. Belt and
         # braces — the token grammar already declines a match inside a longer slug. See there.
-        if path == manifest_path:
+        if path in manifest_paths:
             continue
         before = read(path)
         after = before
@@ -955,49 +1111,68 @@ def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
         ) or 1
         if write:
             path.write_text(after, encoding="utf-8")
-    for old_name, new_name in rename_claimed_entries(root, claims, write).items():
-        touched[f"{DECISIONS_DIR}/{old_name} -> {new_name}"] = 1
+    for kind, d in DIR_KINDS.items():
+        for old_name, new_name in rename_claimed_entries(root, claims, write, kind=kind).items():
+            touched[f"{d.directory}/{old_name} -> {new_name}"] = 1
     for label in settle_corpus(root, write):
         touched[label] = 1
     return touched
 
 
 def settle_corpus(root: Path, write: bool) -> List[str]:
-    """Write the two DERIVED things at claim time: the manifest's order and the index.
+    """Write the one DERIVED thing at claim time: the manifest's order.
 
-    THE MERGE IS THE ONE MOMENT EITHER IS KNOWABLE, which is exactly D140's argument for the
-    number and the reason both belong here rather than on a branch. A branch adding an entry
-    would otherwise have to append to a shared JSON array and add a line to CLAUDE.md's index
-    at the position every other such branch touches — two more collisions, in the change that
-    exists to remove one.
+    THE MERGE IS THE ONE MOMENT THIS IS KNOWABLE, which is exactly D140's argument for the
+    number and the reason it belongs here rather than on a branch. A branch adding an entry
+    would otherwise have to append to a shared JSON array at the position every other such
+    branch touches — one more collision, in the change that exists to remove one.
 
     So a branch carries its entry FILE and nothing shared. Corpus membership is derived by
-    `decisions_corpus.order()` until this runs, and the index is regenerated from the headings
-    that exist after the claim — including the number this claim just allocated, which is why
-    it runs AFTER the substitution and the rename rather than beside them.
+    `decisions_corpus.order()`/`debts_corpus.order()` until this runs, and each manifest is
+    appended from the headings that exist after the claim — including the number this claim
+    just allocated, which is why it runs AFTER the substitution and the rename rather than
+    beside them.
 
-    D18 PUTS THIS ON THE WRITING SIDE and keeps the checking side elsewhere: `decision index`
-    still computes the index independently and blocks, and it is a different program. A
-    generator that also gated could satisfy itself.
+    CLAUDE.md'S DECISION INDEX IS RETIRED (D60 amended). `make map ARGS=--decisions` renders
+    the same id-and-title list off the corpus itself, on demand, never a stored copy — so
+    nothing here writes CLAUDE.md, and nothing ever will again. `docs/DEBTS.md` KEEPS ITS
+    WRITTEN INDEX — no rendered view has replaced it — so the debt kind's own stub still gets
+    regenerated here, the one asymmetry between the two `IndexSpec`s
+    (`scripts/index-decisions.py`). `debt` reused decisions' own scheme (the owner's word:
+    assign numbers at merge, the way decisions already do) rather than a second settling
+    mechanism.
+
+    D18 PUTS THIS ON THE WRITING SIDE and keeps the checking side elsewhere: `debt index`
+    still computes its own index independently and blocks, a different program. A generator
+    that also gated could satisfy itself.
     """
     moved: List[str] = []
     try:
         import importlib.util
 
-        spec = importlib.util.spec_from_file_location(
+        gen_spec = importlib.util.spec_from_file_location(
             "index_decisions", root / "scripts" / "index-decisions.py")
-        index = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(index)
+        index = importlib.util.module_from_spec(gen_spec)
+        gen_spec.loader.exec_module(index)
     except Exception as exc:                       # a tree without the generator still claims
         return [f"(index generator not runnable: {exc})"]
-    try:
-        appended = index.normalize(root, write)
-        if appended:
-            moved.append(f"{DECISIONS_MANIFEST} (+{len(appended)} entry)")
-        if index.rewrite_index(root, write):
-            moved.append("CLAUDE.md (decision index regenerated)")
-    except Exception as exc:
-        return [f"(corpus not settled: {exc})"]
+    # CLAUDE.md NEVER APPEARS HERE. `index.DECISION_SPEC`'s manifest is folded (below), and its
+    # `rewrite_index` is never called — that half is retired along with the stub it used to
+    # write. `index.DEBT_SPEC` is the one kind whose stub (`docs/DEBTS.md`) still gets
+    # regenerated, because nothing renders that index yet.
+    for kind_spec, manifest, rewrite, stub_label in (
+        (index.DECISION_SPEC, DECISIONS_MANIFEST, False, None),
+        (index.DEBT_SPEC, DIR_KINDS["debt"].manifest, True,
+         "docs/DEBTS.md (debt index regenerated)"),
+    ):
+        try:
+            appended = index.normalize(root, write, kind_spec)
+            if appended:
+                moved.append(f"{manifest} (+{len(appended)} entry)")
+            if rewrite and index.rewrite_index(root, write, kind_spec):
+                moved.append(stub_label)
+        except Exception as exc:            # a tree without that corpus still claims the rest
+            moved.append(f"({kind_spec.corpus_script} not settled: {exc})")
     return moved
 
 
@@ -1039,18 +1214,19 @@ def settle_corpus(root: Path, write: bool) -> List[str]:
 
 
 class Unclaim(NamedTuple):
-    kind: str        # "decision" | "codes" | "step"
+    kind: str        # "decision" | "codes" | "step" | "debt"
     number: int       # the bare integer: 188, 4, 12
     token: str        # the literal claimed form, as it is cited in prose: "D188", "C4", "step 12"
     becomes: str      # the literal slug form citations revert to: "D-...", "C-...", "step ..."
     slug: str         # the BARE slug, no letter and no `step ` prefix — what `--to-slug` takes
-    old_name: str = ""  # decisions only: the D<n>-<slug>.md file this checkout holds right now
-    new_name: str = ""  # decisions only: the D-<slug>.md file it reverts to
+    old_name: str = ""  # directory kinds only: the <letter><n>-<slug>.md file held right now
+    new_name: str = ""  # directory kinds only: the <letter>-<slug>.md file it reverts to
 
 
 _UNCLAIM_DECISION = re.compile(r"^D([1-9][0-9]{0,2})$")
 _UNCLAIM_CODES = re.compile(r"^C([1-9][0-9]{0,2})$")
 _UNCLAIM_STEP = re.compile(r"^step\s+([1-9][0-9]*)$")
+_UNCLAIM_DEBT = re.compile(r"^DEBT([1-9][0-9]{0,2})$")
 
 
 def parse_claimed_ident(ident: str) -> Tuple[str, int]:
@@ -1059,7 +1235,14 @@ def parse_claimed_ident(ident: str) -> Tuple[str, int]:
     A CLAIMED ID, NEVER A SLUG — there is nothing to unclaim from a slug, because a slug is
     already the form this command puts things back into. Rejecting one here is the same
     refusal-over-guessing this whole file is built on, one function along.
+
+    `DEBT<n>` IS CHECKED BEFORE `D<n>`, because `DEBT<n>` also starts with `D` and the
+    decision pattern is anchored (`^D([1-9]...)$`), which already refuses it — `T` is not a
+    digit — so the order here is belt and braces, not load-bearing.
     """
+    match = _UNCLAIM_DEBT.match(ident)
+    if match:
+        return "debt", int(match.group(1))
     match = _UNCLAIM_DECISION.match(ident)
     if match:
         return "decision", int(match.group(1))
@@ -1071,31 +1254,39 @@ def parse_claimed_ident(ident: str) -> Tuple[str, int]:
         return "step", int(match.group(1))
     raise ValueError(
         f"{ident!r} is not a claimed id's own spelling. A claimed id is a bare number in one "
-        f"of the three namespaces this file allocates: `D188`, `C4`, `step 12` — never a "
-        f"slug, since a slug is already unclaimed.")
+        f"of the four namespaces this file allocates: `D188`, `C4`, `step 12`, `DEBT12` — "
+        f"never a slug, since a slug is already unclaimed.")
 
 
-def entries_at(ref: str, number: int, cwd: Optional[str] = None) -> Set[str]:
-    """The FILENAMES `ref` itself carries at this decision number. Empty when it carries none.
+def entries_at(ref: str, number: int, cwd: Optional[str] = None, kind: str = "decision") -> Set[str]:
+    """The FILENAMES `ref` itself carries at this number, for one directory-corpus `kind`.
+    Empty when it carries none.
 
     THE ONE FACT THAT TELLS TWO COLLIDING ENTRIES APART, and the branch is the side that
     knows it: a file `ref` has is `ref`'s, and the entry this branch is holding is the one
     `ref` does not have. Nothing here reads content — a name is enough, because the collision
     is two DIFFERENT slugs wearing one number and the tail after the number is the slug.
     """
-    prefix = f"{DECISIONS_DIR}/D{number:03d}-"
-    listing = git("ls-tree", "-r", "--name-only", ref, DECISIONS_DIR, cwd=cwd)
+    d = DIR_KINDS[kind]
+    prefix = f"{d.directory}/{d.filename_letter}{number:03d}-"
+    listing = git("ls-tree", "-r", "--name-only", ref, d.directory, cwd=cwd)
     return {line.split("/")[-1] for line in listing.splitlines() if line.startswith(prefix)}
 
 
 def find_decision_file(root: Path, number: int, ref: Optional[str] = None,
-                       cwd: Optional[str] = None) -> Tuple[Optional[Path], str]:
+                       cwd: Optional[str] = None, kind: str = "decision"
+                       ) -> Tuple[Optional[Path], str]:
     """The claimed entry's own file, and the slug tail its filename still carries.
 
+    `kind` PICKS THE DIRECTORY CORPUS (`DIR_KINDS`), `decision` by default so every existing
+    call keeps its exact behaviour. The name stays singular even though `debt` reuses it,
+    matching this whole file's practice of not renaming a function just because a second
+    caller arrived — see `rename_claimed_entries`.
+
     THE FILENAME IS THE ONE SURVIVING RECORD. `rename_claimed_entries` renames the slug-named
-    file to `D<n>-<tail>.md` rather than deleting it, so the tail after the number is exactly
-    the descriptive half of the original slug — no guessing, the same fact `plan_unclaim`'s
-    docstring above spells out.
+    file to `<letter><n>-<tail>.md` rather than deleting it, so the tail after the number is
+    exactly the descriptive half of the original slug — no guessing, the same fact
+    `plan_unclaim`'s docstring above spells out.
 
     TWO FILES AT ONE NUMBER IS THE STATE THIS COMMAND EXISTS FOR, NOT A REASON TO GIVE UP.
     Until 2026-09-19 a second match refused outright — `no single D<n>-*.md file in this
@@ -1112,10 +1303,11 @@ def find_decision_file(root: Path, number: int, ref: Optional[str] = None,
     zero matches is "not claimed here", and an unresolvable several is refused rather than
     picked from.
     """
-    prefix = f"D{number:03d}-"
-    matches = sorted((root / DECISIONS_DIR).glob(prefix + "*.md"))
+    d = DIR_KINDS[kind]
+    prefix = f"{d.filename_letter}{number:03d}-"
+    matches = sorted((root / d.directory).glob(prefix + "*.md"))
     if len(matches) > 1 and ref:
-        theirs = entries_at(ref, number, cwd=cwd)
+        theirs = entries_at(ref, number, cwd=cwd, kind=kind)
         mine = [path for path in matches if path.name not in theirs]
         if len(mine) == 1:
             matches = mine
@@ -1136,31 +1328,39 @@ def plan_unclaim(root: Path, ident: str, to_slug: Optional[str], ref: Optional[s
     """
     kind, number = parse_claimed_ident(ident)
 
-    if kind == "decision":
-        path, tail = find_decision_file(root, number, ref=ref, cwd=cwd)
+    if kind in DIR_KINDS:
+        d = DIR_KINDS[kind]
+        path, tail = find_decision_file(root, number, ref=ref, cwd=cwd, kind=kind)
+        glob_pat = f"{d.filename_letter}{number:03d}-*.md"
         if path is None:
-            held = sorted(x.name for x in (root / DECISIONS_DIR).glob(f"D{number:03d}-*.md"))
+            held = sorted(x.name for x in (root / d.directory).glob(glob_pat))
             if len(held) > 1:
                 raise ValueError(
-                    f"{len(held)} files in {DECISIONS_DIR} carry D{number:03d} — "
+                    f"{len(held)} files in {d.directory} carry {glob_pat.split('-')[0]} — "
                     + ", ".join(held)
                     + f" — and `{ref}` accounts for none of them or for all but one of them "
                     f"in a way this cannot read. Exactly one of these is this branch's own; "
                     f"the rest belong to `{ref}`. Nothing is guessed here.")
             raise ValueError(
-                f"no single {DECISIONS_DIR}/D{number:03d}-*.md file in this tree — `{ident}` "
-                f"is not a claimed decision this checkout holds.")
+                f"no single {d.directory}/{glob_pat} file in this tree — `{ident}` "
+                f"is not a claimed {kind} this checkout holds.")
         heading = read(path).split("\n", 1)[0]
-        if not re.match(r"^##\s+D" + str(number) + r"\b", heading):
+        # A DEBT'S CLAIMED HEADING MAY BE BARE (`## 188`, every real entry today) OR CARRY
+        # THE WORD (`## DEBT<n>`, a newly claimed one) — see the block comment above
+        # `DEBT_HEADING` in this file. A DECISION'S NEVER IS BARE, so its own check stays
+        # strict.
+        heading_letter = re.escape(d.unclaimed_letter) if kind == "decision" \
+            else "(?:" + re.escape(d.unclaimed_letter) + ")?"
+        if not re.match(r"^##\s+" + heading_letter + str(number) + r"\b", heading):
             raise ValueError(
                 f"{path.relative_to(root)}: heading is {heading!r}, which does not start "
-                f"`## D{number}` — refusing to guess which entry this is.")
+                f"`## {d.unclaimed_letter}{number}` — refusing to guess which entry this is.")
         bare = to_slug if to_slug else tail
         if not re.fullmatch(SLUG, bare):
             raise ValueError(
                 f"{bare!r} is not a slug — two or more lowercase hyphenated segments.")
-        slug = "D-" + bare
-        return Unclaim("decision", number, f"D{number}", slug, bare,
+        slug = d.unclaimed_letter + "-" + bare
+        return Unclaim(kind, number, f"{d.unclaimed_letter}{number}", slug, bare,
                        old_name=path.name, new_name=slug + ".md")
 
     if kind == "codes":
@@ -1227,11 +1427,11 @@ def local_heading(root: Path, u: Unclaim) -> str:
     already made unreachable for a valid `Unclaim` other than a step/codes id whose own file
     went missing between planning and this read.
     """
-    if u.kind == "decision":
+    if u.kind in DIR_KINDS:
         # THE PLAN ALREADY RESOLVED WHICH FILE IS OURS, so this reads that answer rather than
         # asking the question a second time — a second glob would be a second chance to pick
         # the wrong one of two files sharing a number, with no ref in hand to tell them apart.
-        path = root / DECISIONS_DIR / u.old_name if u.old_name else None
+        path = root / DIR_KINDS[u.kind].directory / u.old_name if u.old_name else None
         return read(path).split("\n", 1)[0] if path and path.exists() else ""
     if u.kind == "codes":
         path = root / CODES_DECISIONS
@@ -1249,9 +1449,10 @@ def local_heading(root: Path, u: Unclaim) -> str:
 def ref_heading(ref: str, u: Unclaim, cwd: Optional[str] = None) -> str:
     """The SAME line, as `ref` carries it right now — which may belong to a completely
     different entry that merely landed on the same number (see `same_entry_on_ref`)."""
-    if u.kind == "decision":
-        listing = git("ls-tree", "-r", "--name-only", ref, DECISIONS_DIR, cwd=cwd)
-        prefix = f"{DECISIONS_DIR}/D{u.number:03d}-"
+    if u.kind in DIR_KINDS:
+        d = DIR_KINDS[u.kind]
+        listing = git("ls-tree", "-r", "--name-only", ref, d.directory, cwd=cwd)
+        prefix = f"{d.directory}/{d.filename_letter}{u.number:03d}-"
         match = next((line for line in listing.splitlines() if line.startswith(prefix)), None)
         return git("show", f"{ref}:{match}", cwd=cwd).split("\n", 1)[0] if match else ""
     if u.kind == "codes":
@@ -1346,10 +1547,11 @@ def unindex(text: str, u: Unclaim) -> str:
     rather than asking the generator to recompute the whole set and hoping it lands on
     nothing.
 
-    ONLY A DECISION HAS ONE TO REMOVE: codes and steps get no index line from `settle_corpus`
-    to begin with (the index is `docs/decisions/`'s alone).
+    ONLY A DIRECTORY-CORPUS KIND HAS ONE TO REMOVE: codes and steps get no index line from
+    `settle_corpus` to begin with (a decision's index is `docs/decisions/`'s alone, a debt's
+    is `docs/debts/`'s).
     """
-    if u.kind != "decision":
+    if u.kind not in DIR_KINDS:
         return text
     pattern = re.compile(r"^" + re.escape(u.token) + r"\s")
     lines = [line for line in text.split("\n") if not pattern.match(line)]
@@ -1368,26 +1570,27 @@ def unsettle_manifest(root: Path, u: Unclaim, write: bool) -> List[str]:
     hidden inside a diff that looked like one change.
     """
     moved: List[str] = []
-    if u.kind != "decision":
+    if u.kind not in DIR_KINDS:
         return moved
-    manifest_path = root / DECISIONS_MANIFEST
+    manifest = DIR_KINDS[u.kind].manifest
+    manifest_path = root / manifest
     if not manifest_path.exists():
         return moved
-    manifest = json.loads(read(manifest_path))
-    order = list(manifest["order"])
+    contents = json.loads(read(manifest_path))
+    order = list(contents["order"])
     if u.old_name not in order:
         return moved
     order.remove(u.old_name)
-    manifest["order"] = order
+    contents["order"] = order
     if write:
-        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    moved.append(f"{DECISIONS_MANIFEST} (-1 entry)")
+        manifest_path.write_text(json.dumps(contents, indent=2) + "\n", encoding="utf-8")
+    moved.append(f"{manifest} (-1 entry)")
     return moved
 
 
 def is_index_line(line: str, u: Unclaim) -> bool:
     """`unindex`'s own test, one line at a time — see that function for why it exists."""
-    return u.kind == "decision" and bool(re.match(r"^" + re.escape(u.token) + r"\s", line))
+    return u.kind in DIR_KINDS and bool(re.match(r"^" + re.escape(u.token) + r"\s", line))
 
 
 def protected_lines(ref: str, u: Unclaim, cwd: Optional[str] = None) -> Dict[str, Set[str]]:
@@ -1443,11 +1646,14 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
     every file's content by name has already finished.
     """
     touched: Dict[str, int] = {}
-    manifest_path = root / DECISIONS_MANIFEST
-    claude_path = root / "CLAUDE.md"
+    manifest_paths = {root / d.manifest for d in DIR_KINDS.values()}
+    # THE INDEX FILE FOR *THIS* UNCLAIM, ONLY — never every kind's, matching `is_index_line`/
+    # `unindex`'s own `u.kind` check. A debt's index lives in `docs/DEBTS.md`; a decision's in
+    # `CLAUDE.md` (`DirKind.index_stub`).
+    index_path = root / DIR_KINDS[u.kind].index_stub if u.kind in DIR_KINDS else None
     guard = guard or {}
     for path in text_files(root):
-        if path == manifest_path:
+        if path in manifest_paths:
             continue
         rel = str(path.relative_to(root))
         before = read(path)
@@ -1463,7 +1669,7 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
                 if line in keep:
                     kept.append(line)
                     continue
-                if path == claude_path and is_index_line(line, u):
+                if path == index_path and is_index_line(line, u):
                     continue
                 line = unrenumber_gates(line, u) if path == root / GATES else line
                 line = unrenumber_map(line, u) if path == root / MAP else line
@@ -1477,7 +1683,7 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
                 after = unrenumber_gates(after, u)
             if path == root / MAP:
                 after = unrenumber_map(after, u)
-            if path == claude_path:
+            if path == index_path:
                 after = unindex(after, u)
             after, hits = apply_unclaim_to_text(after, u)
         if after == before:
@@ -1486,11 +1692,12 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
         if write:
             path.write_text(after, encoding="utf-8")
 
-    if u.kind == "decision" and u.old_name:
-        old_path = root / DECISIONS_DIR / u.old_name
-        new_path = root / DECISIONS_DIR / u.new_name
+    if u.kind in DIR_KINDS and u.old_name:
+        directory = DIR_KINDS[u.kind].directory
+        old_path = root / directory / u.old_name
+        new_path = root / directory / u.new_name
         if old_path.exists():
-            touched[f"{DECISIONS_DIR}/{u.old_name} -> {u.new_name}"] = 1
+            touched[f"{directory}/{u.old_name} -> {u.new_name}"] = 1
             if write:
                 old_path.rename(new_path)
 
@@ -1595,16 +1802,16 @@ def build_parser() -> argparse.ArgumentParser:
                              "there are any. The subject is a COMMIT and never a checkout. "
                              "Writes nothing, ever.")
     parser.add_argument("--unclaim", metavar="ID",
-                        help="put an already-claimed id back to slug form: `D188`, `C4`, or "
-                             "`step 12`. The exact inverse of a claim, for the id "
+                        help="put an already-claimed id back to slug form: `D188`, `C4`, "
+                             "`step 12`, or `DEBT12`. The exact inverse of a claim, for the id "
                              "`stale_claims` reported gone stale — REFUSES when ID is already "
                              "on --ref, since an id main holds is not this branch's to give "
                              "back. Previews by default; needs --write to perform it.")
     parser.add_argument("--to-slug", metavar="SLUG",
                         help="the bare slug (no letter, no `step `) a codes id or a build "
                              "step reverts to. REQUIRED for both, because neither keeps its "
-                             "slug anywhere once claimed — only a decision's does, in its own "
-                             "entry's filename, which --unclaim reads automatically. Ignored "
+                             "slug anywhere once claimed — a decision's and a debt's both do, "
+                             "in their own entry's filename, which --unclaim reads automatically. Ignored "
                              "for a decision id unless it is given, in which case it "
                              "overrides the filename's own tail.")
     return parser

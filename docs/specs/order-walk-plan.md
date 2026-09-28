@@ -1163,3 +1163,42 @@ would do. For a "Pick 1" line, that read as "take both" (the review's Allen Petl
 The fix is one word, `(either)`. `OrdersWalkPane.tsx` appends it only when the stop holds more
 candidates than the take wants. It never picks one for the operator — D97 still forbids
 that. It only says the choice is free.
+
+## 16. The walk rejoins Inventory's own components — the owner's answers, 2026-09-27
+
+`docs/reviews/ux-2026-09-23/orders-a/PLAN.md` names where the built screen (§13, §14, §15)
+drifted from D220 and D274. `D304` is the decision record. This
+section points there for the design and adds the one argument that belongs in this spec: the
+sort key.
+
+**The layout, the row detail, the pane and the phone order** are all the owner's answers, in
+that decision entry. This section does not restate them.
+
+**The sort key changes, and only in `plan`.** `StopKey.walk_order` has four callers in
+`pipeline/walkplan.py`. Three are the solver's own determinism, and stay untouched:
+`_dominated` (the order dominated stops are dropped in), `_greedy` (the order candidates are
+offered in, which breaks ties) and `solve` (the supplier order the exact search walks). The
+fourth, `plan`, is the drawn order: `walk = sorted(solution.chosen, key=lambda k:
+k.walk_order)`.
+
+A change to `walk_order` itself can change which stops the solver picks on a tie. That would
+change what the walk holds, not only its order. So `plan` alone changes. It already holds
+`inventory`. Its new key is `(pooled flag, density, name key of inventory.box_title(box),
+section)`: density first, and the box name in natural order breaks a tie only.
+`store/master.py:box_title` composes a box's name, the same function the refusals already
+use. Pooled stops stay last.
+
+Every caller of the drawn order was checked against this change:
+
+- `server/capture_server.py:do_order_walk_plan` and `_walk_plan_stop` serialize `result.stops`
+  in order and send `order`. No change.
+- `app/src/OrdersWalkPane.tsx:rowsOf` sorts nothing of its own. The screen follows the wire.
+  No change.
+- `app/src/Fulfillment.tsx` folds `plan.stops[].takes[]` to one entry per SKU. A lane checks
+  whether that fold keeps first-seen order anywhere a person sees it.
+- `app/src/orderView.ts`'s "Fewest drawers" buyer sort reads counts, not order. No change.
+- `harness/tests/t11_walk_plan.py` asserts that `order` is contiguous from 1. A new case adds
+  two boxes whose number order and name order disagree, and is red on the old sort.
+
+This is lane A1 of the lane plan. `docs/reviews/ux-2026-09-23/orders-a/PLAN.md` names the
+rest of the lanes and their checks.

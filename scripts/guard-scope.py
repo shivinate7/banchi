@@ -76,6 +76,11 @@ LOCAL_PACKAGES = ("store", "cli", "pipeline", "identify", "geometry", "codes", "
 # are gated is declared here, on `serve-scope.py`'s own precedent (it declares its one
 # target the same way). What each one READS is never declared beside it; see
 # `derive_subjects()`. Count it with `len(ROSTER)`, never by re-typing a number in prose.
+#
+# `guard-scope-selftest` ITSELF IS NOT ON THIS ROSTER. A gate cannot skip its own proof: if
+# `guard-scope-selftest` gated itself, a branch that broke this file's own gating logic could
+# skip the one test that would catch it, on the strength of that same broken logic saying
+# skip.
 ROSTER = (
     {"target": "reap-selftest", "test": "scripts/reap-selftest.sh"},
     {"target": "claim-selftest", "test": "scripts/claim-selftest.py"},
@@ -100,6 +105,9 @@ ROSTER = (
     {"target": "product-history-selftest", "test": "scripts/product-history-selftest.py"},
     {"target": "sku-number-contradictions-selftest",
      "test": "scripts/sku-number-contradictions-selftest.py"},
+    {"target": "match-selftest", "test": "scripts/match-selftest.py"},
+    {"target": "browser-scope-selftest", "test": "scripts/browser-scope.py"},
+    {"target": "port-slots-selftest", "test": "scripts/port-slots.py"},
 )
 
 TARGETS = {entry["target"] for entry in ROSTER}

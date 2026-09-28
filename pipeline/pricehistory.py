@@ -1341,13 +1341,12 @@ def catalogued_row(row: tcgcsv.Row) -> bool:
     by construction (D22), so a misc card has no cell to look a category up by and there is
     no history to fetch for it. Checking here rather than raising inside the walk keeps the
     refusal where the caller can act on it.
+
+    `games.game_for_product_line` NOW OWNS THE FOLD, so a caller wanting the game key itself
+    (`pipeline/stockimages.py`'s stock-photo lookup) and this yes/no predicate agree by
+    construction rather than by two copies staying in step.
     """
     line = str(row.get(tcgcsv.PRODUCT_LINE_COLUMN, "") or "").strip()
     if not line:
         return False
-    folded = join.normalize_set(line)
-    return any(
-        join.normalize_set(str(entry["product_line"])) == folded
-        for entry in games.GAMES
-        if entry["catalogued"] and entry["product_line"]
-    )
+    return games.game_for_product_line(line) is not None

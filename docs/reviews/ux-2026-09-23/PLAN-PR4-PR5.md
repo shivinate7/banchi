@@ -1,191 +1,252 @@
-# The UX overhaul plan after PR 3: PR 4A, PR 4B and PR 5
+# The UX overhaul after PR 3: PR 4B, with PR 5 folded in
 
 This record survives a handoff. Any session reads it to resume the UX overhaul. It was
-written on 2026-09-27, after PR 3 (#465) merged as `5b7f5d295`. The owner's rulings it
-carries are quoted in backticks.
+rewritten on 2026-09-27 as a status board: finished, in motion, still to come. The owner's
+rulings are quoted in backticks, and the full log sits at the foot of this file.
+
+PR 5's work now lives inside PR 4B. Owner: `bring everything that was PR5 into PR4`.
 
 ## How to resume
 
 - The orchestrator plans, briefs, verifies and merges. It never builds product code.
-- **Model cap (owner, 2026-09-26):** `going forward no subagent is allowed to be above sonnet in this session`.
-- **Merge grant:** it is session-bound. A new session asks the owner for it again.
-- **Autonomous run (owner, 2026-09-27, process-only, this session):** after PR 4A merges on
-  green, the session does the PR 3B demo work alone, then stops. Grants for that run:
-  - Merge PR 3B on green, once the scrub check, the 512 MB cap and a leak check pass.
-  - A product question from a review or CI: take the orchestrator's recommendation. Owner:
-    `your recommendation is fine, note it explicitly at the end of your FINAL autonomous turn of this session`.
-  - A CI red on a test that a recorded owner ruling clearly supersedes: a builder may rewrite
-    it. The commit names the ruling, and a reviewer confirms no guard got weaker.
-- **Cadence (owner, 2026-09-26):**
-  - Each lane gets one review. A re-review happens only after a FAIL.
-  - A reviewer never re-runs a suite that the builder ran green at the same head.
-  - A lane merge into the integration branch gets only `cd app && npx tsc --noEmit`.
-  - On the final head, run `make vale` only, the one part of `make check` that CI skips. Then
-    open the PR, wait for green CI, and merge. Owner, 2026-09-27: `Agreed and proceed`. This
-    replaced one full `make check` at the end, because CI's `check` job runs `make ci-check`.
-  - CI is the only browser gate before main.
-- **A stale test:** a test that asserts a superseded rule is flagged to the owner. Nobody
-  rewrites it silently. Owner: `let me know if the rule in ci itself is bad/stale`.
-- **Order:** PR 4A, then PR 4B, then the post-PR 4 checks, then PR 5. PR 4A and PR 4B merge
-  independently.
+- The integration branch is `ux/pr4b`. Each lane branches from it and merges back. PR 4B is
+  one PR from it. Its worktree for records is `.claude/worktrees/pr4b-orch`.
+- Session grants lapse with their session. A new session asks the owner again for the merge
+  grant and the model cap. This session's grants are in the log below.
+- Cadence (owner, 2026-09-26): each lane gets one review, and a re-review only after a FAIL. A
+  reviewer never re-runs a suite that the builder ran green at the same head. A lane merge gets
+  only `cd app && npx tsc --noEmit`. The final head gets linting only (Vale retired 2026-09-27), then the PR, green CI,
+  and the merge. CI is the only browser gate before main.
+- A test that asserts a superseded rule goes to the owner. Nobody rewrites it silently.
 
-## PR 3B: the demo data follow-up (DONE, 2026-09-27)
+## Finished (merged into `ux/pr4b`)
 
-The full mirror is live at `shivinate7.github.io/banchi/`, publish run 36329643153 on main
-`b61f995e2`. PRs #467 to #474 carried it. 808 buyers are scrubbed to `Jane Doe N`, 3,510
-photos total 94.7 MB, and a leak check against a store copy found 0 real names.
-
-Stock images: #476 and #477 (2026-09-27) fill Riftbound and One Piece images in the demo.
-They come from the live server's own tcgcsv cache, offline, for 795 of 796 SKUs. The bundle is split into
-files under 50 MB for GitHub's limit. The test stubs the image host for now (DEBT47).
-
-Left for PR 4B (lane M):
-- The demo records a walk plan for each order and for the screens' own "walk all" sets. Any
-  other ticked combination shows the demo's honest refusal, by design.
-
-## PR 4A (DONE, 2026-09-27)
-
-Merged as #466. It carried lanes J, K, F, N1, N2, E (search), B and F2, and the records. Every
-lane passed one review. N2 passed a strict review in three rounds.
-
-## PR 4B lanes (rewritten 2026-09-27)
-
-Lanes B and F2 moved into PR 4A. This is what PR 4B still holds. The lanes are independent,
-except where a line says otherwise.
-
-| Lane | What | Starts |
+| Lane | What | Proof |
 |---|---|---|
-| E | The Orders jump, unpinned | Now |
-| B2 | The restore lost-update race | Now |
-| C | The send path (money) | Now |
-| D | Leftover screens and the lock glyph | Now |
-| M | Demo mirror resumability | Now |
-| G | Records and tooling | Now |
-| T | The test pass: DEBT45 and DEBT47 | Now |
-| S | Remove Lane F's redundant `_lookup_key` wrapper | Now |
-| A | Orders becomes Inventory's screen | After a mockup the owner approves |
-| H | Cyberpunk dark mode | Last, as the epilogue |
+| S | Removed the redundant `_lookup_key` in `pipeline/stockimages.py` | Review PASS |
+| D1 | Re-centered the lock glyph, and removed Pricing's 1px nudge | Review PASS |
+| E | An Orders sale no longer jumps the screen, and Hide picked folds on its own press | Review PASS |
+| M | The demo recorder resumes, and scrubs each route before it caches it | Re-review PASS after a FAIL |
+| B2 | DEBT53: every writer of `prices.json` takes the store lock, with four revision checks inside it | Re-review PASS after a FAIL |
+| F1 | Cards born by join or emit keep their game, plus a one-off repair script with a logged event | Review PASS |
+| F2 | Sales falls back to the stock photo, Pokemon sealed included | Re-review PASS after a FAIL |
+| C | `emit --cap` refuses a card with a pending copy, DEBT37 closed, D7 amended and names DEBT24 | Re-review PASS after a FAIL |
+| A0 | The decision slug `D304`, amending D220 and D274, and spec §16 | Orchestrator check, key fixed |
+| A1 | The walk draws stops densest first (cards to pick), and the box name breaks a tie | Review PASS |
+| A2a | `CardPane` and one hero head, moved out of `BoxBrowse.tsx` | Review PASS, 0-pixel diff |
+| A2b | `RailFrame`, moved out of `BoxBrowse.tsx` | Review PASS, 0-pixel diff |
+| A2c | `CardLocations` gains `head={false}`, and `layoutsOf` moved to a shared home | Review PASS |
+| A3 | The Orders pane becomes `CardPane`, with no Details fold | Merged (c8562273) |
+| A4 | Every Orders walk row carries its copies as `CardLocations` rows | Merged (1736fc8e) |
+| A5 | Orders takes Inventory's three-column skeleton, a phone sheet for the card | Merged (952fbd34) |
+| A6 | No `Box <n>` fallback in the walk | Merged (633aff52) |
+| B3 | A refused markdown apply writes nothing | Merged (49e12373) after four rounds |
+| D2 | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | Merged (752d638b, plus the z-index follow-up) |
+| F5 | Cut the excess words on every screen. The palette keeps "Go to" | Merged (ee17847c), plus T7's own fix (5918d8ab) |
+| F8 | Inventory search leads with the best-ranked match, and says when it is sold | Merged (bc66af69) |
+| F9 | An empty section leaves the Inventory walk's ruler and box header | Merged (66992bce) |
+| F9b | Four stale tests follow F5's approved copy and the server's box contract | Merged (6aea8d15) |
+| F10 | The box rail counts matches while a printing waits to be picked | Merged (8e2476e8) |
+| F11 | Every search field uses the one matcher (D271 amended), F11b folded in | Merged (1eaa5939) |
+| F11c | The hand-search lint catches every folded comparison, with a self-test | Merged (ad379c57) |
+| G | Every staged image gets the QR scan, fail closed. `claim-selftest` skips ignored files. The tsc premise no longer held | Merged (73037a92) |
+| L1 | Cut T7's idle waits | Merged. T7 median 130s to 72s, measured by the reviewer |
+| L2 | docs-audit reads the commit, not the tree. Markdown spelling joins a shrinking list | Merged (6b8e3f2d, plus the spelling fix 0481a743) |
+| L3 | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | Merged (31355eea) after two FAILs |
+| L4 | Breakpoint questions answered. `RunPanel` asks its own sheet (container runs) | Merged (7e33c5ac) |
+| L5 | Cut the old demo seed guards, keep the generator | Merged (7481619a) |
+| L6 | DEBT47 closed, pull-confirm folded into fulfillment | Merged (29c32166) |
+| L7 | Measure the slow CI shard, then one route sweep | Merged (ed07efd9), after one FAIL |
+| L8 | docs-audit merges 16 rows into families, 107 to 93 (M3, Q8) | Merged (db207f3c) |
+| L10 | Heartbeat and coordinator retired | Merged (4c58fbfb) |
+| L12 | docs-audit rows block by tier, 11 rows cut, commit hook 8.63s to 6.12s | Merged (bd88525f) |
+| debt48 | B2's debt becomes a slug, and `numbered record growth` refuses a record numbered on a branch | Merged (c5766886) |
+| L11 | `match-selftest` joins the path gate | Merged (568f81a2) |
+| P5 | Stub D48 and D194 to one line each. Delete debts 5, 6, 18, 28, 35 and 42 | Merged (afc2ca83) |
+| R | `make reap` stops only processes tagged with the caller's id | Merged (215dd646) |
+| T-claude | `CLAUDE.md` cut from 112 KB to 58 KB. The decision index is a rendered view (D60 amended) | Merged (286d4add) |
+| T-hook | `decision-context.py`'s entry says it prints id and title only | Merged (4a2e81bd) |
+| debt-claim | Debt slugs are claimed at merge, like decisions. Five debts filed | Merged (9b304772) |
+| Box sweep | Every screen names a box through `boxTitle` (D259) | Merged (008a7ccc) |
+| memory migration | 71 memory entries judged, each fact given a repo home | Merged (daaccd8d) |
+| auto memory off | `autoMemoryEnabled: false`, once the migration landed | Merged (f642a5b5) |
+| token-audit report | The token-budget audit report, record only | Merged (b74f9e79) |
+| rulings | Two test-audit rulings recorded. Old docs-audit row names in comments follow L8 | 262f3351 |
 
-### E. The Orders jump, unpinned
+Records and studies, also merged:
 
-Owner, 2026-09-27: `save it in the markdown as an item for PR4B, ironically rpelcaing the current E you have in there since we solved that now`.
+- Lane A's design: mockups and plan in `orders-a/`.
+- The test audit: four Sonnet slices and the Opus plan in `docs/reviews/test-audit-2026-09-27/`.
+- F5's verbiage list: `verbiage-blind/verbiage.csv`.
+- Lane H's blind review: `cyberpunk-blind.md`.
 
-- The defect: in an Orders walk, Mark sold hides the row at once under `hideSold`. The page
-  shrinks, and the view jumps about 48px. `OrdersWalkPane.tsx` does this, on main since
-  `fc58ca3f`. D118 (a press never moves the rest of the screen) forbids it.
-- PR 3 made CI green with a bandaid. A `scrollTo` pin in `app/tests/orders.spec.ts` UN-6 hides
-  the jump from the test. The test no longer guards the real behavior.
-- The fix: a sold walk row stays in place until the next load, as D263 (a sold row folds on
-  the next load) already rules for Inventory. Remove the pin. Prove UN-6 red on the old
-  behavior, then green. Add a DEBT for the jump first, and close it in the same lane.
+Earlier PRs, done: PR 3B, the demo mirror (#467 to #477), and PR 4A (#466).
 
-### B2. The restore lost-update race
+## In motion (state at 709ef385)
 
-- Found by lane B's reviewer, older than lane B. `do_pricing_restore` reads the corpus, then
-  the clears, with no lock across both. Two concurrent restores can lose an unrelated price
-  edit.
-- Fix it under the store lock, with a harness case that forces the interleaving. If the fix is
-  larger than it looks, record a DEBT and ask the owner.
+Every PR 4B lane is merged. Next: open PR 4B, wait for green CI, and merge with `make merge`.
 
-### C. The send path (money, so an adversarial review)
+## Still to come
 
-- The `--cap` plus `--live-guard` defect. The owner's ruling (2026-09-25) is in `RULINGS.md`:
-  the cap counts the larger of the guard's live count and the store's own count.
-- The DEBT35 exit split for `emit`.
+Lane A, in order, each after the lanes it needs:
 
-### D. Leftover screens
+- A4: walk rows carry their copies as `CardLocations` rows. It starts after A3 merges (both edit `OrdersWalkPane.tsx`).
+- A5: layout R, with the buyer list in `RailFrame` and the phone order. It needs A3 and A4.
 
-- The Home h1 greeting, the Capture top gap, the Fulfillment `<Page>` variant, the Runs R2
-  entries, and the six icon entries (see `STATE.md` in this folder).
-- The lock glyph sits low in its drawing (`kit/Icon.tsx`, `lock`). Lane K nudged one Pricing
-  button 1px as a bandaid. Fix the glyph, and remove the nudge.
+The test audit's lanes (plan: `docs/reviews/test-audit-2026-09-27/PLAN.md`):
 
-### M. Demo mirror resumability
+- L1 cuts T7's idle waits (99.9s to 69.8s, all 4,568 checks green). L3 moves `vale` and
+  `claim-stale` out of `make check`. L6 holds DEBT47's close and folds pull-confirm into
+  fulfillment. L7 runs six route walkers as one sweep. These need no ruling and wait for the
+  owner's word to start.
+- L2 makes the per-commit docs audit read only changed files. It waits on Q1.
+- L4, L5, L8, L9, L10 and L12 wait on their questions or on other lanes. L9 is DEBT45's form:
+  `make explain` reads each test's own header every run.
 
-Owner: `is there anyway u can have it chunking so that way it's not starting from zero each time`.
+Lane G, folded in with the audit:
 
-- The recorder writes each route as it lands. A re-run over the same snapshot skips the routes
-  already recorded.
-- The build log already moved out of `demo-mirror/` in PR 3B.
+- `claim-selftest` skips what git ignores, so a demo build never reddens it (owner's ruling).
+- Measure the typecheck's out-of-memory failure, then fix its cause.
+- Sync this session's rulings into `RULINGS.md`, and fix two stale lines there and in `STATE.md`.
 
-### G. Records and tooling
+Logged, waiting for the owner's word:
 
-- `claim-selftest` reads gitignored demo build output. So a lane that built the demo goes red.
-  Fix it, or record a DEBT.
-- The cadence above becomes a repo rule, with its enforcement or an argument for why it has
-  none. D173 (a rule that can be enforced mechanically is enforced) governs.
-- Sync the orchestrator's scratch rulings into `RULINGS.md` in this folder.
-- Add the `STATE.md` deferred items.
-- The typecheck runs out of memory at Node's default heap on this Mac since the full mirror
-  landed. Measure it, then raise the limit in the Makefile or exclude the demo data from `tsc`.
+- F3: Pricing filters, from the blind review. They are a name search, a price sort, a set and
+  game filter, and price bands. The same screen says "10 held" and "Held 15".
+- F6: one spacing rule for every relation, and a check that fails an off-scale value.
+- F7: `archive` and `wallet` sit low like the lock did.
+- F8: in Inventory, a search for "hand hammer" ranks Jayce cards above the common card Hand Hammer. A Sonnet lane diagnoses the cause and the change that made it, then proposes a fix. D271 (one forgiving matcher everywhere) governs.
+  - The diagnosis: `server/match.py` ranks Hand Hammer first. The walk in `BoxBrowse.tsx` picks its box and landing by the largest pile of live copies across all matches, and never reads that rank. The owner confirmed that in-stock Hand Hammers did not surface until another box was picked.
+  - The owner's ruling: `Rank before pile size (Recommended),Say when the best match is sold (Recommended)`. Lane F8 builds both on `ux/pr4b-F8`.
+  - A second example (owner, same day): a search for "shadow" shows a Zed card before the card named Shadow. Sent to lane F8 to confirm the same cause.
+- F9: an empty section must not show in the Inventory walk. The owner often opens the next section at the end of a capture, and it stays empty. The strip then counts it ("Section 10 of 11"), which breaks the back-to-front count while locating a card. Owner: `be careful about this change`. Default scope: the walk hides it (strip, "of N", ruler). Capture, Manage box and the move targets still show it, so it can be filled, renamed or deleted. It runs as one lane after F8, since both edit `BoxBrowse.tsx`. D264 (a section is an object that moves whole) and D260 (a card counts within its section) govern.
 
-### T. The test pass
+Before PR 4B merges:
 
-- DEBT45: one page that says what each test protects, in plain words.
-- DEBT47: the demo coverage spec allows the TCGplayer image host by name, and the stub goes.
-- Any other test whose premise a ruling changed, found in the same pass.
+- Main is red. The docs audit's `id claims` row fails on main's unclaimed slug
+  `D302`, because PR #476 merged without its claim. The owner: `Fold it into PR 4B`.
+  So PR 4B's merge claims it. Check at merge time that `make merge` claims a slug main already holds.
+- The final head: linting only (Vale retired 2026-09-27), then the PR, green CI, and `make merge`.
 
-### S. Small cleanups
+After PR 4B merges:
 
-- Lane F's `_lookup_key` wrapper in `pipeline/stockimages.py` is redundant since F2 folded
-  whitespace in the shared join key. Remove it.
+- The owner runs the F1 repair on the live store, preview first: `./scripts/repair-born-game.py`,
+  then `--write`.
+- A Sonnet integration review of PR 3 and PR 4 together. Then the screen pass at 1440, 820 and
+  390 in both themes. Then the full `make design-check`.
+- Lane H, the epilogue: an interview on the cyberpunk dark mode, then one lane.
 
-### A. Orders: the walk becomes Inventory's screen (the biggest lane)
+Outside the repo: the owner runs the `claude-settings` prompt from 2026-09-26. It covers the
+stale dev-server enforcement and two parent-guard bugs.
 
-D220 (Orders is Inventory's screen, and the walk is a mode of it) governs. The built screen
-drifted from it. The owner's final direction:
+## Open questions for the owner
 
-1. Inventory's left rail becomes the Orders buyer list, with checkboxes and "Walk all N buyers".
-2. The walk list keeps its style: grouped by section in the solver's order, with "Pick N of M".
-   Sort by box NAME, then section. Today `walkplan.Stop.walk_order` sorts by the hidden box
-   number, so "WB1 R3" can come before "WB1 R1". D259 (a box is shown only by its name)
-   governs.
-3. Every pick row carries Inventory's location detail. That detail is the box, section and
-   card, the section strip, the back-to-front ruler, and the neighbor names. Mark sold works
-   on the row. Reuse Inventory's own components. Never fork them.
-4. A click on a row fills the right pane with the photo and the card facts. Below them goes
-   EVERY on-hand copy, in Inventory's copies list, with the walk's chosen copy first. D212
-   (every copy is fungible) governs.
-5. Lane E fixes the sold-row jump. Lane A must not undo that fix.
-6. On a phone, the buyer shows before the photo.
+- Q1's tier list: an agent is proposing a tier per docs-audit row, for the owner to approve.
+- Q5, Q6 and Q8 from the test-audit plan.
+- Q7 is closed (2026-09-27). The owner turned on the required checks `check` and `revert-guard` on main, with strict off. Read back from the GitHub API.
+- Merge the small PR that fixes main's red?
+- The cadence rule's home waits for the test-audit rulings. The two NOT MECHANIZED rules
+  outside CLAUDE.md's Hard rules block are deferred.
 
-Do a design pass first, and show the owner a mockup.
+## Feedback inbox
 
-### H. Epilogue: cyberpunk dark mode
+Owner: `I will also provide feedback as I'm running through the app, and it either needs to logged into the markdown as lanes to start, or it needs to be sent to a lane currently on it, and/or sent as its own lane once identified by me`.
 
-- Owner: `it'll be the epilogue of PR4`. First an interview and mockups, then one lane.
-- The earlier palette work is shelved on `ux/dark-palette`.
+Each item gets an id and one line. Its route: sent to a running lane, logged for the owner's
+word, or its own lane at once.
 
-## After PR 4 lands in full
+- F1, done: two "Unleashed" sets on Inventory's Sets view. 99 cards in box 5 had no game.
+- F2, done: Sales drew "No photo" where Sets and Pricing drew stock images.
+- F3, logged: the blind Pricing filter review.
+- F4, in D2: Capture's gap below the subheading.
+- F5, in motion: cut the excess words on every screen.
+- F6, logged: one spacing rule.
+- F7, logged: `archive` and `wallet` glyphs.
 
-Owner: `The sonnet review will come after PR4 lands in its entirety`.
+## Rulings log (2026-09-27, second session)
 
-1. A Sonnet integration review of PR 3 and PR 4 together. Its focus is the hand-merged
-   `Inventory.tsx` move and undo.
-2. The screen pass at 1440, 820 and 390, in both themes, with a verdict per screen.
-3. The full `make design-check`.
-4. DEBT45 (no page lists what each test protects) is ready to close once the tests stop moving.
+Grants, process-only:
 
-## PR 5: the decision and debt cleanup
+- Model cap: `Only sonnet unless if I tell you to use opus for a specific agent work (I will say so for that lane) so no Opus for Lane C.`
+- Opus for lane A: `Send an opus agent for A mockups and full plan`.
+- Opus for the blind look: `send an opus agent to blindly just see wht the app looks like now, none of the decisions/work that went into it`.
+- Opus for the test-audit review: `an opus agent reviews the corpus made and plans with me the resolution`.
+- Merge grant: the owner named this session an Orchestrator. It merges PR 4B with `make merge`
+  once CI is green.
+- The final head gets linting only (Vale retired 2026-09-27), not a full `make check`: `Agreed and proceed`.
 
-Owner, 2026-09-27: `just add the decision and debt cleanup as a PR5 item to come after we do a sonnet review which came after pr4`.
+Lane E and A:
 
-It starts only after the Sonnet review above. The owner asked whether a Haiku agent could delete
-solved entries in place. The orchestrator advised against it. Deciding "solved" is a judgment,
-and many entries are amended rather than retired. Also, other records cite each entry by its
-number. The plan:
+- E: `save it in the markdown as an item for PR4B, ironically rpelcaing the current E you have in there since we solved that now`.
+- Hide picked: `The press folds picked rows`.
+- A, Q1: `Three columns, layout R (Recommended)`. Q2: the buyer list scrolls in a sticky rail.
+- A, Q3: `Full detail on every row (Recommended)`. Q4: `The walk, with the card in a sheet (Recommended)`.
+- A, Q5: `i thought we sort formulaically be density of the cards available in a section?` Then `Density first, name breaks ties (Recommended)`.
+- A, Q6: `we don't need details on this screen`. Q7: the PNGs stay outside the repo, because the
+  pre-commit opsec hook refuses images.
+- A1's density, the owner's follow-up: `on A1, if what you're saying is inventory has a different sorting order than the order walk's sorting order, then yes that's what i've been saying?` Still open.
 
-1. A read-only Sonnet agent lists the candidates, one line each: the entry, why it looks solved,
-   and what replaced it.
-2. The owner rules on the list.
-3. A builder condenses each approved decision to a short stub that points at its successor. The
-   id and every citation keep working. An approved debt is deleted, and its number is retired.
-   The debt preamble says "an entry leaves when someone argues it should", and the owner's
-   ruling is that argument.
-4. `make docs-audit` proves that every citation still resolves.
+Lane B2 and C:
 
-## Outside the repo
+- B2, DEBT53: `yes build now`.
+- C, DEBT37: `Send a sonnet agent to see what's left on Debt 37 and how we can fix it`. Then the
+  owner asked why it overshoots at all. The owner proposed, in paraphrase, that a cap works
+  only once the store has read TCGplayer's live count. Then the owner chose the precise rule:
+  `emit --cap` refuses for a card unless the store's live reading is newer than every copy sent
+  since. The two wording gaps go in the same lane.
 
-The owner runs the `claude-settings` prompt that the orchestrator gave in chat on 2026-09-26.
-It covers the stale dev-server enforcement and two parent-guard bugs: an apostrophe inside a
-comment, and the stash clause on an empty stack.
+Lane D and the feedback items:
+
+- D: `Keep Home, move Review`. Lane D2 builds Capture's gap, ReviewQueue's five controls and
+  Codes' filter row. The owner first said `i need to see a visual` and `ill need to see details/plans before confirming`.
+- F1: code fix and repair, own lane. F2: `Yes, including Pokemon sealed`.
+- F3: `ask it what filters would be nice to have / optimal for an end user`.
+- The decision index (2026-09-27): `Derived view + pointer (Recommended)`. The ruling lives in
+  the test audit's TIERS.md. One lane builds it after L2, beside L4.
+- Token budget (2026-09-27): `Prune memory.md now, and then send an audit lane`. The audit lane
+  measures every source loaded into each session and proposes a cut or a move per section. It
+  writes a report under `docs/reviews/`. Nothing changes until the owner rules.
+  The owner ruled on its four questions the same day. The rulings are in that report's last
+  section. Two lanes build them: the edit hook, and one CLAUDE.md lane that also takes the
+  decision index.
+- Auto memory (2026-09-27, process only): `Migrate first, then off`. A lane gives each memory fact
+  with no repo home a real home: a debt, a spec or a decision entry. It also proposes
+  global-rule sentences for the owner. After it merges, `autoMemoryEnabled: false` goes into the project's
+  `.claude/settings.json`. The session scratchpad is the per-session note file.
+- Debt numbers (2026-09-28): `i think there's a straightforward way where they just get assigned numbers upon merge with CI`. A lane teaches the merge-time claim to number debts, as it numbers decisions. The memory lane's five drafted debts then land as slugs.
+- The global-rule lines (2026-09-28, process only): the owner takes G1, G2 and G3 to a claude-settings session, with the two parent guard defects. The brief is in this session's scratchpad.
+- F10 (2026-09-28), the owner's report: `if i type let's say punch first, or body rune (fully) then it shows no searches found, but if i type body run or punch firs then it does show up`.
+- F5 and D276 (2026-09-27): `Keep "Go to" (Recommended)`. The palette keeps its D276 name.
+- F5: `Approved on cutting everything from F5`, `rest are good to cull`, and for Review's line
+  `middle option approved for the cut mismatch+data`.
+
+G, T and PR 5:
+
+- The demo build: `why do we or do we not want the demo walked? isn't the demo supposed to be more or less a sanitized symlink of main that should be pointless to review`.
+- DEBT47: `The sealed browser is only in testing right and we can't change that? while, the real demo has unsealed browser that won't refuse other websites? If that's the case, any test for that portion is just dumb?`
+- The test audit: `Sonnet slices build the summaries of what the tests are, an opus agent reviews the corpus made and plans with me the resolution, and then sonnet builders take that plan and execute upon it.`
+- Test-audit Q3: `Yes, path-gate it (Recommended)`. Q4: `Re-measure, then remove if still 0 (Recommended)`.
+- Test-audit Q1: `it needs a little less of a blunt tool approach than what you're proposing`.
+- Test-audit Q2: `doesn't our parent claude say that once a rule is mechanized we remove its prose or soemthing`.
+- The cadence rule's home: `Wait for the test-audit plan`. The two NOT MECHANIZED rules: `defer what to do on this for now`.
+- PR 5 stubs: `Stub makes sense, but "ONE PARAGRAPH"????`. So each stub is its heading plus one line.
+- PR 5 debts: `delete the six, split debt 27, and tell me what is left on debt 27?`
+- PR 5 into PR 4: `bring everything that was PR5 into PR4, so you can do that debt27 check now`.
+- H: `it'll be the epilogue of PR4`.
+- H, on the first mockups (current, A, B, C, desktop only): `all of the H concepts tend to just pick one color and stick to it, when the power of cyberpunk is its fusion of several loud color schema contrasting and clashing`. So no single-accent concept is the answer.
+- H, same round: `neon noir was the closest of the dynamism though if i had to pick one`, then `none were good tho`. Neon Noir is the starting point, not the answer.
+- H round 2 (owner, same day): `Mockup round 2: fusion (Recommended)`. Three multi-color concepts on Neon Noir's ground, Pricing and Home, desktop only.
+- H round 2 verdict: `pretty underwhelming, neon noir and synthwave are again too mild`. The next step, on the owner's word: a new BLIND agent sees only the LIGHT mode and designs several novel many-color palettes. Colors only, no layout change. Owner: `super spicy, loud, color schema ... not just one color, MANYYY COLORS ... cyberpunk anime esque dark mode as though you're a league of legends pro`.
+- H, the blind colorist's four palettes (Championship, Drift King, Overclock, Lantern District): `This version of H is absolute fire`. The same agent makes four more. Then H leaves PR 4B and becomes its OWN DEFERRED PR. Its palettes, sheet and method notes are committed as that PR's record.
+- The docs-audit tiers (owner, same day): approved, with changes. Every ruling is in `docs/reviews/test-audit-2026-09-27/TIERS.md`, section "The owner's rulings". Line anchors convert and collapse into one row. Rows 20, 48 and 92 are cut. Q8 is yes. Row 17 and the CLAUDE.md decision index are still open.
+- H leaves PR 4B (owner, same day): `abysall bloom might be gold -- love it. commit all the work done for  H and leave it all as something to come back to in its own PR`. The record is on branch `ux/h-record`, in its design-refs folder, h-palettes.
+- Lane R, reap ownership (owner, same day): `Make reap stop only what the caller started ... tag each process reap starts with its owner's id, and let --confirm stop only processes carrying the caller's tag`. Narrowed: `do Blanket for the orchestrator and limited to its own tagged processes for an agent`.
+- The Box number sweep (owner, same day): `In PR 4B, after A3 and F5 (Recommended)`. One Sonnet lane adds a shared browser `boxTitle`. It fixes the screens that show a box number: the Orders copy map, the run scope, the rescue, Capture and Home's status line. A check refuses a new typed `Box ${`. D259 (a box is shown only by its name) governs.
+- Walk density: `Cards to pick at the stop (what's built)`.
+- Test-audit Q1, the tiers: `Three tiers, agent proposes, you approve (Recommended)`. Q2: `Yes (Recommended)`.
+- Start now: `L1, L3, L6, L7`. The owner asked for the other three options explained first.
+- Vale: `Retire it, keep American spelling in docs-audit (Recommended)`. Lane L3 removes Vale.
+  The spelling row learns markdown in lane L2. So the final head no longer runs Vale.
+- Old demo seed: `Cut the old seed guards`. Lane L5. The heartbeat and coordinator: `Retire both (Recommended)`. Lane L10.
+- Q8: `you haven't shown me the changes made to docs audit`. No docs-audit change is made yet. The owner sees the tier list and the merge families before any lane changes it.
+- Search, one method (owner, 2026-09-28, on F11's review): `search should just be one sorta object/method that's called upon and used in uniform across the app`. So Sales matches SKU and set name too. The palette, the shortcut sheet and Capture's box filter move onto `matchQuery` as well. Codes: `Keep substring on codes (Recommended)`, as a field of the one matcher, not beside it. Lane F11b carries it. Its home is a D271 amendment.

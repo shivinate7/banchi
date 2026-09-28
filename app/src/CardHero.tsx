@@ -8,18 +8,28 @@
  * WHAT MOVED, AND WHY IT IS SAFE TO: every function and type below is PURE over its own
  * arguments — `Row`/`InventoryCard`, a `MarketRead`, a listings map — with no closure over
  * `BoxBrowse.tsx`'s own component state (the printing chooser, the review queue, reshoot).
- * `BoxBrowse.tsx` imports them back and its own JSX is UNCHANGED; `app/tests/inventory.spec.ts`
- * is what proves that (D96's "the screens answer to the owner's interview" — this repo's own
- * suite is the interview here).
+ * `BoxBrowse.tsx` imports them back with no change to its own JSX. Lane A2a's own move below
+ * (`CardHeroHead`/`CardPane`) DOES change `BoxBrowse.tsx`'s JSX — the markup now calls a
+ * component instead of writing the tags out — but not what it RENDERS: `app/tests/
+ * inventory.spec.ts` is what proves the rendered screen is unchanged (D96's "the screens
+ * answer to the owner's interview" — this repo's own suite is the interview here).
  *
- * `CardHeroHead` IS NEW, not moved: `BoxBrowse.tsx`'s own hero head also draws the printing-
- * chooser chip and the review-queue chip, both wired to state this file cannot see and both
- * left for `BoxBrowse.tsx` to keep drawing itself. This component draws the rest of that
- * head — name, number line, finish/rarity pills, the state pill — off the same helpers, in
- * the same `.browse-hero-*` classes, so the two screens' headers render identically wherever
- * they overlap. `actions` is an open slot for whatever a caller puts beside the title —
- * `BoxOps`'s `CardOps` menu is Inventory-only editing (retire, move, correct claims) and is
- * never passed in from `#/orders`.
+ * `CardHeroHead` IS THE WHOLE HEAD NOW (lane A2a) — the one `BoxBrowse.tsx` used to draw
+ * inline, moved rather than reimplemented, because the two had drifted (no `place` line, no
+ * printing-chooser or queue chip, and the state pill was drawn unconditionally instead of
+ * BoxBrowse's own "only when it is the exception" rule, UX-221). `place`, `preChips` and
+ * `postChips` are the slots `BoxBrowse.tsx`'s own header needed — the printing-chooser chip
+ * goes in `preChips`, the review-queue chip in `postChips` — both left `undefined` by any
+ * caller that has none, `#/orders` included. `actions` is an open slot for whatever a caller
+ * puts beside the title — `BoxOps`'s `CardOps` menu is Inventory-only editing (retire, move,
+ * correct claims) and is never passed in from `#/orders`.
+ *
+ * `CardPane` WRAPS THE HEAD, THE QUEUED NOTICE AND THE PHOTO BAND — `BoxBrowse.tsx`'s own
+ * `<section className="browse-card">`, moved whole. `CardDetailsSection` stays a SEPARATE
+ * component below it, exactly as it already sits in `BoxBrowse.tsx`'s own JSX (a sibling of
+ * the section, never nested in it) — so a caller that wants the head and the copies without
+ * the Details fold (`#/orders`, later, "we don't need details on this screen") simply does not
+ * render `CardDetailsSection`, and needs no prop to say so.
  *
  * `CardDetailsSection` IS MOVED WHOLE — `BoxBrowse.tsx`'s own `<details className="bn-panel
  * browse-details">` block, unchanged, now owning its own open/closed state instead of reading
@@ -31,7 +41,7 @@ import { useRef, useState, type ReactNode } from 'react'
 
 import { ReadingAge } from './CardLocations'
 import { collectorNumber } from './cardNumber'
-import { readingAgo, stateLabel, stateTone } from './cardState'
+import { IDENTIFIED, readingAgo, stateLabel, stateTone } from './cardState'
 import { Button, Icon, IconButton, Pill } from './kit'
 import { toast } from './kit/toast'
 import { money } from './money'
@@ -300,10 +310,20 @@ export function factGroupsOf(
 export function CardHeroHead({
   card,
   game,
+  place = null,
+  preChips,
+  postChips,
   actions,
 }: {
   readonly card: InventoryCard
   readonly game: string | null
+  /** `positionLabel(card)`, raw — null draws no place line at all. Shown only where the pane
+   *  is one column (`BoxBrowse.css`), same as before the move. */
+  readonly place?: string | null
+  /** Before the finish/rarity pills — `BoxBrowse.tsx`'s own printing-chooser chip. */
+  readonly preChips?: ReactNode
+  /** After the state pill — `BoxBrowse.tsx`'s own review-queue chip. */
+  readonly postChips?: ReactNode
   readonly actions?: ReactNode
 }) {
   const name = nameOf(card)
@@ -321,7 +341,9 @@ export function CardHeroHead({
               </span>
             ))}
         </p>
+        {place === null ? null : <p className="browse-hero-place">{sayPlace(place)}</p>}
         <div className="browse-hero-chips">
+          {preChips}
           {claimList(card.metadata_finish).map((finish) => (
             <Pill key={`f-${finish}`} icon="sparkles">
               {titleCase(finish)}
@@ -330,13 +352,58 @@ export function CardHeroHead({
           {claimList(card.rarity_claim).map((rarity) => (
             <Pill key={`r-${rarity}`}>{titleCase(rarity)}</Pill>
           ))}
-          <Pill tone={stateTone(card.state)} outline={card.state === 'identified'}>
-            {stateLabel(card.state)}
-          </Pill>
+          {/* THE CARD'S STATE ONLY WHEN IT IS THE EXCEPTION (UX-221) — `BoxBrowse.tsx`'s own
+              rule, moved with the rest of the head. The dead copy of this component always
+              drew the pill; that was the divergence this move fixes. */}
+          {card.state === IDENTIFIED ? null : <Pill tone={stateTone(card.state)}>{stateLabel(card.state)}</Pill>}
+          {postChips}
         </div>
       </div>
       {actions}
     </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- the card pane */
+
+/** The head, the queued notice and the photo band — `BoxBrowse.tsx`'s own `<section
+ *  className="browse-card">`, moved whole. `CardDetailsSection` is deliberately NOT part of
+ *  this component (see this file's own header) — a caller renders it separately, or not. */
+export type CardPaneProps = {
+  readonly row: Row
+  readonly game: string | null
+  readonly place?: string | null
+  /** `dimPanel` in `BoxBrowse.tsx`: a stale row held on screen while the next one loads. */
+  readonly dimmed?: boolean
+  readonly preChips?: ReactNode
+  readonly postChips?: ReactNode
+  /** Inventory's own "waiting in the review queue" notice. Null draws nothing. */
+  readonly queued?: ReactNode
+  /** `CardOps`, Inventory-only. Empty on `#/orders`. */
+  readonly actions?: ReactNode
+  readonly photo: Omit<PhotoPanelProps, 'row'>
+  /** The copies list beside the photo — `Inventory.tsx`'s `CopiesPanel`, handed down because
+   *  the caller already knows which card is selected. */
+  readonly detail: ReactNode
+}
+
+export function CardPane({ row, game, place = null, dimmed = false, preChips, postChips, queued, actions, photo, detail }: CardPaneProps) {
+  return (
+    <section
+      className="bn-panel browse-card"
+      aria-busy={dimmed ? 'true' : undefined}
+      data-dimmed={dimmed ? 'true' : undefined}
+      inert={dimmed}
+    >
+      <CardHeroHead card={row.card} game={game} place={place} preChips={preChips} postChips={postChips} actions={actions} />
+      {queued}
+      <div className="browse-band">
+        <div className="browse-shot">
+          <PhotoPanel row={row} {...photo} />
+        </div>
+        <div className="browse-under">{detail}</div>
+      </div>
+    </section>
   )
 }
 
@@ -757,7 +824,7 @@ function ListingCorrection({ card }: { readonly card: InventoryCard }) {
                 </Button>
               )}
               <Button variant="quiet" size="sm" icon="search" onClick={openPanel}>
-                Wrong card?
+                Correct
               </Button>
             </div>
           ) : (

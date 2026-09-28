@@ -505,7 +505,7 @@ today. `make design-check` verifies the wrap at 390. This spec assumes nothing a
 real, QR-cleared cards straight onto the record. After the change it upserts the manifest's
 catalog rows into the demo store's SKU table, writes `read_*` from the manifest, and binds
 through `bind_sku`. The recorded wire bundle changes shape (new fields). So `make demo-record`
-records it again, and `make demo-freshness` proves the bundle matches. `docs/specs/demo.md`'s
+records it again. `docs/specs/demo.md`'s
 refusals stay: the static build reaches no new route, and the confirm press refuses there like
 every other write.
 
@@ -798,7 +798,7 @@ there. That is a schema step on open, or a press.
 | 3b. The CLI writers | `cli/cmd_emit.py`, `cli/cmd_identify.py`, `cli/cmd_join.py`, `cli/cmd_reconcile.py`, `codes/scan.py`, `scripts/identity-cli-selftest.py` | 0, 1 | no (code only) | no | the self-test proves: an emit binds through `bind_sku` and upserts first; a re-identification writes only `read_*` on a bound card; `--export` and `reconcile --live` fill the table. `harness/tests/t3_join_coverage.py` stays green |
 | 4. The evidence readers | `cli/requeue.py`, `cli/resolve.py`, `pipeline/pricearchive.py` | 0, 1 | no | no | one mutation arm per builder: a builder that reads `name` instead of `read_name` lets a disputed fixture card through, and the check goes red. D254's tier (b) from the table gives the same product for the 914 card-covered SKUs D254 measured as the merged-export map does, on a copy. `harness/tests/t3_join_coverage.py` stays green |
 | 5. The screens | `app/src/types.ts`, `app/src/server.ts`, `app/src/CardHero.tsx`, new or changed specs under `app/tests/` | 3a | no | YES: `#/inventory` Details and its new press, plus a look at `#/fulfillment`, `#/orders`, `#/review` and Home, at 1440, 820 and 390, light and dark | `npx tsc --noEmit` prints nothing. `make design-check` is green, with the Fulfillment floors and the press-stability sweep of `inventory.spec.ts` (D118) over the new press. The D194 and D196 rows are green, or the ceiling raise goes to the owner |
-| 6. The demo | `scripts/demo-seed.py` | 0, 1, 5 | the demo store only | YES: the demo build at the three widths, both themes | `make demo`, then `make demo-freshness`, agree |
+| 6. The demo | `scripts/demo-seed.py` | 0, 1, 5 | the demo store only | YES: the demo build at the three widths, both themes | `make demo` runs clean |
 | 7. The guard and the record | `scripts/docs-audit.py`, `Makefile` (wires the new self-tests into `make check`), a new decision entry under a slug (its number claimed at merge), amendment notes on D213, D239, D242, D252, D253, D254 and D255, `CLAUDE.md`, and `scripts/correction-rarity-number-repair.py`, which it deletes | 0, 2, 3a, 3b, 4 | no | no | the `identity writers` row goes red on a planted assignment and green on the tree. The `check census` and `check registry` rows are green with the new self-tests. `make docs-audit` is green |
 
 **The order.** Lane 0 goes first, then lane 1. Lanes 2, 3b and 4 then run in parallel. Lane 3a

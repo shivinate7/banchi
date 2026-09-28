@@ -658,28 +658,46 @@ def run(args, say) -> int:
     # its top, before the store was opened. `pkmnscan prices adopt --write` folds it in, once,
     # with a report of every answer it had to choose between, and retires it.
     #
-    # `book` WAS READ AT THE TOP OF THIS COMMAND TOO, because the threshold it carries had to
-    # be in hand before the ladder walked. Re-reading it here would be a second document, read
-    # a second way, for a file this command is about to write.
+    # `book` WAS ALSO READ AT THE TOP OF THIS COMMAND, because the threshold it carries had to
+    # be in hand before the ladder walked. That copy is read-only from here on and is never
+    # the one written: RE-READ, FRESH, INSIDE THE STORE LOCK (DEBT53), below. The old design
+    # wrote the top-of-command copy straight back, which meant the corpus was read here at
+    # whatever moment `join` happened to reach it — after matching thousands of rows against
+    # the export, with no lock held — and a `PUT /pricing` or a clear landing in that gap was
+    # silently overwritten by a `book.write()` that had never seen it. This is sequential with
+    # the `store.write()` block above, which has already closed by the time this one opens, so
+    # the two locks never nest.
 
     # SEEDED, NEVER PRUNED, AND THE ASYMMETRY IS THE WHOLE POINT OF CENTRALISING. `prune` used
     # to drop unanswered entries this run no longer matched, which is right for a file scoped
     # to one run and catastrophic for one that is not: pruning against box 3's matches would
     # delete box 7's answers. Nothing here can see the other boxes, so nothing here may remove.
-    added = []
-    for sku in sorted(resolved.no_market_data_skus):
-        if sku not in book.answers:
-            book.answers[sku] = corpus.Answer(value=None, channel="unknown", from_run=run_dir.name)
-            added.append(sku)
+    with files.exclusive(files.inventory_dir()):
+        try:
+            book = corpus.Corpus.read()
+        except (
+            decisions.MalformedDecisions,
+            pricing.UnknownRule,
+            pricing.UnknownBasis,
+            pricing.InvalidThreshold,
+        ) as exc:
+            say(f"{corpus.FILENAME} is unusable: {exc}")
+            say("Fix it, or delete it and let this join write a fresh one.")
+            return 1
+        added = []
+        for sku in sorted(resolved.no_market_data_skus):
+            if sku not in book.answers:
+                book.answers[sku] = corpus.Answer(value=None, channel="unknown", from_run=run_dir.name)
+                added.append(sku)
 
-    # `rule` AND `basis` ARE THE CORPUS'S AND ARE NOT REASSIGNED FROM THE RUN. D49 Part One,
-    # unchanged and pointed one level up: the manifest records what THIS join ran with and
-    # `report.txt` prints it, and a record of what happened is not the answer to what should
-    # happen. `--rule` seeds an EMPTY corpus and nothing else, because a document that cannot
-    # answer its own question is not a document.
-    if not book.answers and book.rule == "match" and book.basis == "market":
-        book.rule, book.basis = str(resolved.rule), resolved.basis
-    written = book.write()
+        # `rule` AND `basis` ARE THE CORPUS'S AND ARE NOT REASSIGNED FROM THE RUN. D49 Part One,
+        # unchanged and pointed one level up: the manifest records what THIS join ran with and
+        # `report.txt` prints it, and a record of what happened is not the answer to what should
+        # happen. `--rule` seeds an EMPTY corpus and nothing else, because a document that cannot
+        # answer its own question is not a document.
+        if not book.answers and book.rule == "match" and book.basis == "market":
+            book.rule, book.basis = str(resolved.rule), resolved.basis
+        written = book.write()
     choice = book.scoped_to(
         set(resolved.matches),
         run_name=run_dir.name,

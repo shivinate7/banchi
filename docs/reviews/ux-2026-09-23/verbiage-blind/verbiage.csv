@@ -1,0 +1,197 @@
+screen,element,exact text,word count,verdict,replacement word,reason
+Shell,skip link,Skip to the screen,4,ONE WORD,Skip,"Written long to say where the link lands; a screen reader already announces ""link"" and the destination becomes obvious the instant it is activated."
+Shell,icon button aria-label,Collapse the sidebar,3,ONE WORD,Collapse,Spells out what is being collapsed; the icon sits on the sidebar itself so the target is already visually obvious.
+Shell,button,Go to,2,ONE WORD,Search,"""Go to"" describes motion rather than the action (finding a screen or card); ""Search"" names the function directly."
+Shell,button,Dark mode,2,ONE WORD,Theme,"Names only one direction of a two-way toggle; ""Theme"" covers switching either way without needing ""Light mode"" as a second label."
+Shell,nav link,Cards to pull,3,ONE WORD,Pull,Three words to label one nav row when every other row is a single noun; matching the pattern removes the verb phrase.
+Shell,status text,Server online,2,DELETE,,A green dot next to the text already carries the same status; the words repeat what the color already says.
+Shell,dialog title (Command palette),Go to,2,ONE WORD,Search,Same phrase as the sidebar button it opens from; kept consistent with that verdict.
+Shell,placeholder (Command palette),"A screen, or a card's name",6,ONE WORD,Search,Explains what to type in a field whose icon and context already make that clear; a bare word placeholder is enough.
+Shell,footer hint (Command palette),"to move, to open, and then a letter jumps anywhere",10,DELETE,,"A power-user hint printed on every open of a palette used many times a day; the icons beside it (arrows, enter key, comma) already carry the convention for anyone who has used it twice."
+Shell,dialog title (Shortcuts sheet),Keyboard shortcuts,2,ONE WORD,Shortcuts,"The keyboard icon and the ""?"" that opened it already say this is about keys."
+Shell,placeholder (Shortcuts sheet),Search shortcuts,2,ONE WORD,Search,"The field sits directly under the heading ""Keyboard shortcuts"", so the placeholder does not need to repeat the subject."
+Shell,caption (Shortcuts: Anywhere),Works on every one of your screens.,7,DELETE,,"Restates the section heading ""Anywhere"" in a full sentence directly beneath it."
+Shell,shortcut description,Open this sheet,3,ONE WORD,Opens,"The row is inside the very sheet it describes opening; ""this sheet"" is redundant with what the reader is looking at."
+Shell,shortcut description,"Go to a screen, or find a card",8,ONE WORD,Search,Two clauses for one action; collapses to the same word used for the button and dialog that this key opens.
+Shell,shortcut description,"Step to the screen before or after this one, in workflow order",12,ONE WORD,Navigate,A 12-word explanation of what two arrow keys do; the direction is already shown by the keys themselves in the same row.
+Shell,shortcut description,"The same step, for a keyboard without arrow pairs",9,DELETE,,Explains WHY an alternate shortcut exists rather than what it does; the key combo shown in the row already tells the reader it is an alternate.
+Shell,shortcut description,"Collapse the sidebar to its rail, or open it again",10,ONE WORD,Toggle,Spells out both directions of a single toggle; one word for a two-way action loses nothing a toggle key does not already imply.
+Shell,shortcut description,Reload the screen,3,ONE WORD,Reload,"The key column already shows ""R""; the object being reloaded is the screen the reader is already on."
+Shell,shortcut caveat,where it has a Reload button,6,DELETE,,"An edge-case caveat on a cheat sheet; if the key does nothing on a given screen, nothing happens — no need to pre-explain it."
+Shell,shortcut description,Close whatever is over the screen,6,ONE WORD,Close,"""Whatever is over the screen"" over-explains what Esc conventionally does everywhere."
+Shell,section caption,"Press the comma, then the letter.",6,DELETE,,"The list of "",H Home"", "",C Capture"" etc. directly below already demonstrates the pattern being described."
+Shell,"row caption (x4, repeated)",then type its name,4,DELETE,,"Identical caption repeated verbatim on four separate rows (Cards to pull, Kit, Product history, Runs) — a repeated sentence across a short list is exactly the kind of copy a density sweep would flag."
+Shell,section caveat,Only while Pricing is open.,5,DELETE,,"The rows below are already grouped under a heading literally labelled ""Pricing""; the scoping is redundant with the section itself."
+Shell,section caveat,Most keys work inside a price field.,7,DELETE,,A caveat a user discovers on the first keypress; does not change what to do before then.
+Shell,link,Go there,2,ONE WORD,Open,Generic two-word link verb; one word does the same job.
+Shell,shortcut description,Reload the worklist,3,ONE WORD,Reload,"Key column already shows ""R""; object is clear from the section heading ""Pricing""."
+Shell,shortcut caveat,not on a phone,4,DELETE,,A platform caveat better handled by the key simply not existing on a phone than by printing an exception on a desktop cheat sheet.
+Shell,shortcut description,"Open the product view of the row under the pointer, or the focused row",14,ONE WORD,Open,15 words to describe one key; the pointer-vs-keyboard-focus distinction is implementation detail that does not change what the reader does (press T).
+Shell,shortcut description,Snap the price to Market,5,ONE WORD,Market,"""Snap the price to"" is boilerplate repeated across three rows (Market, Lowest, current); the row already shows key ""M"" beside a price screen."
+Shell,shortcut description,Snap the price to Lowest,5,ONE WORD,Lowest,"Same repeated ""Snap the price to"" boilerplate as the row above it."
+Shell,shortcut description,Snap the price to what it is now,8,ONE WORD,Current,Third repeat of the same boilerplate opening across three consecutive rows.
+Shell,shortcut caveat,when the card is already listed,6,DELETE,,"An edge-case qualifier; the key simply does nothing useful otherwise, no need to pre-state it."
+Shell,shortcut description,Hold this card back instead of pricing it,8,ONE WORD,Hold,"The key row already pairs ""H"" with a pricing screen; ""instead of pricing it"" restates the obvious alternative."
+Shell,shortcut description,Show the photograph of this card,6,ONE WORD,Photo,"""of this card"" is redundant — every row in this list is already about the focused card."
+Shell,shortcut description,"Undo the last answer, hold, or cut-off change",8,ONE WORD,Undo,Lists three things Undo can revert; one clear verb covers all three without enumerating them.
+Shell,shortcut caveat,anywhere on the screen but a text field,8,DELETE,,Implementation detail about where the shortcut is captured; does not change what the reader does.
+Shell,shortcut description,Write this price and drop to the next card,9,ONE WORD,Confirm,"""Write this price and..."" repeats verbatim across three consecutive rows (Enter, Shift+Enter, arrows) — classic repeated-opener bloat."
+Shell,shortcut description,Write this price and go back up one,8,ONE WORD,Back,"Second repeat of the ""Write this price and..."" opener in three rows."
+Shell,shortcut description,Write this price and move,5,ONE WORD,Move,Third repeat of the same opener in as many rows.
+Shell,shortcut description,Put the standing answer back and leave the field,9,ONE WORD,Cancel,A 9-word description of what Esc conventionally does (cancel/revert) in a text field.
+Shell,shortcut description,Hold it because you are bullish,6,ONE WORD,Bullish,"""Hold it because you are..."" is boilerplate shared by the next two rows too; the reason word alone is the only distinguishing content."
+Shell,"shortcut caveat (x4, repeated)",while the hold panel is up,6,DELETE,,"Identical caveat repeated on four consecutive rows in the same small panel — the reader is looking at the hold panel in all four cases, so restating it each time is pure repetition."
+Shell,shortcut description,Hold it because you are keeping it,7,ONE WORD,Keeping,"Same repeated ""Hold it because you are..."" opener as the row above."
+Shell,shortcut description,Hold it for a later batch,6,ONE WORD,Batch,"Same family of repeated ""Hold it..."" openers across three rows."
+Shell,shortcut description,Set the hold,3,ONE WORD,Set,Key row already shows Enter inside a panel titled by context as the hold panel.
+Shell,shortcut description,"Cancel the hold, or close the open panel",8,ONE WORD,Cancel,Two outcomes described for what is functionally one Escape action.
+Shell,link,Show every screen's keys,4,ONE WORD,More,"A standard ""view more"" link; the destination (a fuller shortcut list) does not need spelling out."
+Shell,mobile nav sheet header (redundant with sidebar),Dark mode,2,ONE WORD,Theme,"Same control repeated in the mobile ""More"" sheet; kept consistent with the sidebar verdict."
+Home,heading,Good evening.,2,DELETE,,A time-of-day greeting that carries no operational information; the actionable content is the alert line directly beneath it.
+Home,alert lead-in,Cannot be filled,3,ONE WORD,Unfillable,"Three words to state a verdict that a single adjective carries just as clearly, freeing the sentence to lead with the numbers."
+Home,alert body,135 copies missing across 57 orders.,6,ONE WORD,short,"Rewords to match the ""short"" vocabulary already used on the Orders screen for the same fact, at the cost of the more literal ""missing across"" framing."
+Home,button,Start capturing,2,ONE WORD,Capture,"A button is already an action; ""Start"" is implied by every button on the screen, not just this one."
+Home,section heading,Recent runs,2,ONE WORD,Runs,"The list directly below is sorted newest-first, so ""Recent"" is already shown by order, not needed in words."
+Home,link,All runs,2,ONE WORD,All,"""runs"" is redundant with the section heading right above the link."
+Home,status pill,Not started,2,ONE WORD,Pending,"Two words for a status chip that sits beside single-word chips like ""Written""; matching the pattern shortens it."
+Home,stat caption,520 on hand,3,ONE WORD,stored,"""on hand"" repeats verbatim on this screen, on Inventory, and in the Manage Box sheet; one consistent word replaces the idiom everywhere."
+Home,tile caption,2 copies ready to send,5,ONE WORD,Ready,"""ready to send"" duplicates the tile's own title (""PRICING""); the number plus one word already tells the story."
+Home,tile caption,"216 to pull, 135 missing",5,ONE WORD,Owed,"Two clauses joined by a comma; the Orders screen itself already uses ""owed"" as its one-word summary for the same figures."
+Home,tile caption,no export yet,3,ONE WORD,None,"A three-word negative when the tile title (""SHIPPING"") already supplies the subject."
+Capture,field value,No box yet,3,ONE WORD,None,"The field label ""BOX"" already names the subject; the value only needs to say there isn't one."
+Capture,field helper text,"Pick one, or type a new name",7,DELETE,,The control itself is a combo box that visibly accepts typing or picking from a list; the instruction repeats an affordance the UI already shows.
+Capture,disabled field state,Pick a box first,4,ONE WORD,Locked,The field is visibly disabled/greyed already; one word signals why without spelling out the dependency.
+Capture,button,Capture card,2,ONE WORD,Capture,"The route itself is called Capture; naming the object (""card"") a second time is redundant on a screen that only ever captures cards."
+Capture,section heading,Before you can capture,4,ONE WORD,Setup,"Four words to head a short checklist; ""Setup"" says the same thing the two items below it demonstrate."
+Capture,checklist button,Open the camera,3,ONE WORD,Camera,Appears twice on the same screen (checklist and empty video pane); one word is enough given the camera icon beside it both times.
+Capture,checklist button,Pick a box,3,ONE WORD,Box,"The row already has a box icon; ""Pick a"" is implied by it being a clickable checklist item."
+Capture,button,New section,2,ONE WORD,Section,"""New"" is implied by a plus-style action button; only the object needs stating."
+Capture,empty state,Nothing to undo yet.,4,DELETE,,"An empty list under a heading titled ""RECENT"" already communicates nothing has happened yet; no action is offered here."
+Capture,empty state,Your first capture lands here,5,DELETE,,"A placeholder image box under the heading ""LAST CAPTURE"" already communicates emptiness without needing a sentence."
+Capture,footer status,No box,2,ONE WORD,None,"The word ""box"" is redundant with the box-shaped icon right next to it in the same status strip."
+Capture,status label,Camera off,2,ONE WORD,Off,"The label sits directly on the video pane; ""Camera"" is self-evident from what it labels."
+Capture,button,Clear the setup,3,ONE WORD,Clear,"""the setup"" is redundant — the button sits at the bottom of the one panel (Stack) it clears."
+Capture,field value,Not open,2,ONE WORD,Closed,"Field label ""Camera"" already names the subject; the value just needs the state."
+Capture,field value (x2),No claim,2,ONE WORD,None,Appears for both Rarity and Finish; the field label already names what has no claim.
+Capture,status hint,Trigger is off.,3,DELETE,,"The Rig panel's own ""Trigger: Manual"" row already states this; restating it near the camera view is redundant."
+Review,heading,Is this the right card at all?,7,ONE WORD,Mismatch?,A full question is asked and then answered again by the paragraph below it; one flag word plus the existing detail paragraph is enough.
+Review,subheading,The read name matches no listing,6,DELETE,,"Restates, a third time, exactly what the heading above and the warning pill below already say — the same mismatch stated three ways in a row."
+Review,warning pill,These rows may be another card,6,DELETE,,"Once the heading carries the mismatch flag, this pill adds a fourth restatement of the same fact with no new information."
+Review,body paragraph,"This photograph reads as Green Feather, but the listing it matched is Ivern, Green Father. The number and the name came off the same card and they disagree — one was misread. Check against the photograph before answering.",38,ONE WORD,Mismatch,"Real loss here: this sentence is the only place that tells the operator WHICH two reads disagree (name vs. number) and what to physically check on the card — cutting to one word removes the actual diagnostic, leaving only the two bolded names in context to go on."
+Review,button,Search TCGplayer's list,3,ONE WORD,Search,The list being searched (TCGplayer's) is already named in the row above it.
+Review,disclosure link,This read what the run recorded about this card,9,ONE WORD,Details,Nine words to label a single expandable link; one word invites the same click.
+Review,photo badge,Last in the queue,4,ONE WORD,Last,"""in the queue"" is redundant with the screen itself (Review), which is nothing but a queue."
+Review,photo badge,1:1 under the pointer,4,ONE WORD,Zoomed,The ratio number already states the zoom level; the badge only needs to flag the mode.
+Review,progress line,"0 done, 1 to go",5,ONE WORD,Progress,A count plus a count with two connecting words; a single label with the numbers beside it (as it already is) carries the same meaning.
+Review,runs sheet caption,Only Identify costs money.,4,ONE WORD,Paid,"Real loss: ""Only"" signals every other action here is free, which this cut drops — worth flagging since it is a spend warning."
+Review,runs sheet chip,Every card waiting to be identified,6,ONE WORD,Pending,Six words for a filter chip; the count beside it plus one word says the same thing.
+Review,runs sheet button,Check what is live,4,ONE WORD,Refresh,Same phrase used verbatim on the Pricing screen for the same action; one consistent word replaces it everywhere.
+Review,runs sheet button,Identify cards,2,ONE WORD,Identify,"""cards"" is redundant — this is the only object a card-identification screen ever acts on."
+Pricing,status line,"2 copies ready, 10 held, 784 already at TCGplayer",9,ONE WORD,Status,Real loss: the three-way breakdown (ready / held / already sent) is the only place this exact split appears; a single word forces the reader to open the list to see the same numbers broken out by row.
+Pricing,primary button,Send 2 copies to TCGplayer,5,ONE WORD,Send,"Object and destination are both self-evident: this is the only button that sends, and the screen is called Pricing for TCGplayer."
+Pricing,button,Download the file instead,4,ONE WORD,Download,"""the file instead"" is redundant next to the Send button it is an alternative to."
+Pricing,button,Check what is live,4,ONE WORD,Refresh,Same phrase as Review's runs sheet button; unified to one word used everywhere for this action.
+Pricing,policy line,"New cards list 5.5% over market. Nothing lists under the cut-off, $0.25.",12,ONE WORD,Markup,"Real loss: the exact percentage and cut-off dollar figure are the only place this policy is stated in plain language; a single word pushes the operator to the ""Change"" control to learn the numbers."
+Pricing,advisory line,"Not on this list: 1 in Review, 37 in 1 reading need a rebind.",14,ONE WORD,Excluded,"Real loss: the two distinct reasons (in Review vs. needs a rebind) and their counts disappear, forcing a click into each link to learn why a card is missing."
+Pricing,row warning,Your price is 625% over market,6,ONE WORD,Overpriced,"The percentage already carries the magnitude; the sentence around it restates what ""over market"" alone says."
+Pricing,row caption,3 live on TCGplayer,4,ONE WORD,Listed,"""on TCGplayer"" is redundant — this entire screen is about TCGplayer listings."
+Pricing,row caption,2 can go,3,ONE WORD,Sendable,"""can go"" is a vague two-word idiom; a direct adjective says the same thing without requiring inference."
+Pricing,filter pill,Every run,2,ONE WORD,All,"""run"" is implied by context (this is a per-run filter on a screen with no other kind of grouping shown here)."
+Pricing,button,Load trends,2,ONE WORD,Trends,"""Load"" is implied — every button on this screen performs an action when pressed."
+Pricing,Live tab empty state heading,Nothing read from TCGplayer yet,5,ONE WORD,Empty,TCGplayer is already named in the button directly below; the heading only needs to state the empty condition.
+Pricing,Live tab empty state body,"Read what is live, then type a new price on any listing.",12,DELETE,,Describes a second step (typing a price) before the reader has taken the first one (the single button below); premature instruction for a step that will show its own UI once reached.
+Pricing,Live tab button,Read what is live,4,ONE WORD,Refresh,"Same action, same wording as ""Check what is live"" elsewhere; unified to one consistent word."
+Orders,header stat line,"216 copies owed to 70 buyers — 81 to pick, 89 short and 46 not in the store",18,ONE WORD,Status,Real loss: the three-way split (to pick / short / not in store) is unique to this header; a single word means the operator must scan the whole buyer list to reconstruct the same breakdown.
+Orders,sort tab,Ready to ship first,4,ONE WORD,Ready,"""to ship first"" describes the sort direction, which the list order already demonstrates the instant it is selected."
+Orders,button,Walk all 70 buyers,4,ONE WORD,Walk,"The count is data and the object (""buyers"") is the only thing this screen ever lists; ""all"" is implied by having no filter applied."
+Orders,row warning (repeats per buyer),1 card not in the store,6,ONE WORD,Missing,"Same underlying fact as Fulfillment's ""not in the boxes"" warning; unified wording, and the per-row sentence shrinks to a single flag word repeated at scale across dozens of rows."
+Orders,row warning (repeats per buyer),11 cards need a look,5,ONE WORD,Review,Four words repeated across many rows for a fact the orange color already flags; one word keeps the flag legible at a glance.
+Orders,toggle label,Hide picked,2,ONE WORD,Picked,The toggle's own checked/unchecked state already communicates show vs. hide; the label only needs to name what is being filtered.
+Orders,counter,Pick 1 of 1,4,ONE WORD,Pick,"The two numbers already say everything the word ""of"" is stitching together; the label just needs to name the action."
+Orders,buyer detail line,1 copy still to sell,5,ONE WORD,Remaining,"""still to sell"" is a four-word way of saying what remains; the count beside it already anchors the meaning."
+Orders,screen subheading,"TCGplayer says ""Ready to Ship""",5,DELETE,,"This is a verbatim quote of TCGplayer's own external order status rather than this app's copy; the app's status pill directly above it (""Ready"") already carries the operational meaning, so quoting the marketplace's own words a second time is redundant here."
+Shipping,screen subheading,"TCGplayer's shipping export, sorted into three lanes.",7,DELETE,,"The three lane headers (Envelope, Parcel, Needs a look) directly below already demonstrate the three-way sort; the sentence previews what the next scroll makes obvious."
+Shipping,button,Read another file,3,ONE WORD,Replace,"""another file"" is implied — there is exactly one export loaded, shown right above the button."
+Shipping,helper text,Rubber Stamp columns are blank until filled below.,8,ONE WORD,Blank,"The disclosure link right beneath it (""What this file does not carry"") already exists to hold this explanation in full; the lead-in restates it before the reader even opens the disclosure."
+Shipping,disclosure link,What this file does not carry,6,ONE WORD,Limitations,Six words for a link whose expanded content is the actual explanation; one word is enough to invite the click.
+Shipping,disclosure body,Package Weight is blank on every row. No insurance column either — that's your call in Pirate Ship. This file buys and books nothing.,24,ONE WORD,Manual,"Real loss: three distinct, specific facts (no weight column, no insurance column, nothing purchased automatically) collapse into one adjective — an operator relying on this to know exactly what Pirate Ship will and will not do for them loses the specifics."
+Shipping,button,Fill pick locations,3,ONE WORD,Locations,"""Fill"" is implied by any button; the object alone is enough."
+Shipping,legend line,Certain reads the export's own numbers.,6,ONE WORD,Exact,A legend entry explaining a symbol; a single word paired with the existing checkmark icon carries the meaning.
+Shipping,legend line,Inferred is read from the weight.,6,ONE WORD,Estimated,Paired legend entry to the one above; same treatment for symmetry.
+Shipping,lane subheading,"Cards only, under $50.00",4,ONE WORD,Light,The dollar figure is the only fact that matters for sorting into this lane; the rest is restating the lane's own rule in prose.
+Shipping,lane subheading,"$50.00 or more, or not all cards",7,ONE WORD,Heavy,"Same treatment as the paired Envelope lane above it, for symmetry."
+Shipping,lane subheading,Could not judge — decide by hand,7,ONE WORD,Manual,"The orange ""Needs a look"" lane title already flags this; the subheading restates why in six more words."
+Shipping,empty state,No orders in this lane.,5,DELETE,,"A ""0"" count is already shown in the lane header directly above the empty box; no action is offered here."
+Shipping,row reason (repeats per flagged order),"No usable weight on the row, so what is in it is unknown.",13,ONE WORD,Unweighed,"A 13-word explanation repeated verbatim on every flagged order in this run — the underlying fact never changes between rows, so it is exactly the kind of repeated caption that bloats a list."
+Shipping,row caption,0 of 1 pulled,4,ONE WORD,Pulled,"The counts are the useful part; ""of"" is a connector rather than a word carrying meaning."
+Sales,screen subheading,"Your gross-revenue retrospective — what sold, for how much, by name. Gross only: no fees, no cost, no profit.",19,ONE WORD,Gross,"Real loss: the explicit disclaimer that this is NOT profit (no fees, no cost subtracted) is the one place that prevents the owner from mistaking this number for take-home money — cutting it to one word removes a disclaimer that guards against a real misreading."
+Sales,chart footnote,"So far, nothing is recorded for the period before this one.",11,DELETE,,An empty or absent bar in the chart already shows this visually; the sentence explains a gap the chart itself makes obvious.
+Sales,chart footnote,56 orders were canceled by the marketplace and left out.,10,ONE WORD,Excluded,The count is the useful fact; the rest explains a mechanism (marketplace cancellation) that does not change what the operator does with the total.
+Sales,bar label suffix,so far,2,ONE WORD,Partial,Attached to the current month's bar; one word flags the same incompleteness.
+Sales,shelf panel line,"Priced for 724 of 770 names on hand, 46 not yet.",11,ONE WORD,Priced,"Real loss: the exact coverage ratio and the explicit ""46 not yet"" callout both disappear; a reader can no longer tell how close to fully priced the shelf is without opening a detail view."
+Sales,shelf panel footnote,"History since Aug 21, 2026, read daily.",7,ONE WORD,Daily,"The start date is a minor provenance detail; the cadence (""daily"") is the fact worth keeping in one word."
+Sales,shelf panel footnote,43 names on hand have never been priced.,8,ONE WORD,Unpriced,"The count is the useful part; ""have never been"" is a wordy way of saying the state."
+Sales,shelf panel footnote,287 sealed items are not counted here. Sales of sealed items are known; what is still on the shelf is not.,21,ONE WORD,Sealed,"Real loss: this is the only sentence that clarifies sold sealed product IS tracked while only on-shelf sealed value is the gap — collapsing it risks the owner assuming sealed sales are missing entirely, which is false."
+Sales,section heading,What sold,2,ONE WORD,Sold,"""What"" is a filler word; the ranked list below is self-evidently about what sold."
+Sales,panel heading,What earned it,3,ONE WORD,Breakdown,The rarity-by-rarity list below already shows what earned the total; the heading only needs to name the view.
+Sales,search placeholder,Find what you sold,4,ONE WORD,Search,Four words for a search box whose icon already signals its purpose.
+Sales,card caption,"Last sold Jul 15, 2026",5,ONE WORD,Sold,"The date is the informative part; ""Last"" is implied since only one most-recent date can be shown."
+Sales,card caption,2% of gross,3,ONE WORD,Share,"The percentage is the fact; ""of gross"" restates the section's own heading context."
+Sales,image placeholder,NO PHOTO,2,ONE WORD,None,Two words in a placeholder tile where a single word reads just as fast at a glance.
+Sales,sort tab,A to Z,3,ONE WORD,Alphabetical,A three-token idiom for one sort mode; a direct word names it without the letters-as-example framing.
+Sales,panel heading,On the shelf,3,ONE WORD,Shelf,"""On the"" is filler; the panel's content (value of unsold stock) is clear from ""Shelf"" alone given the numbers beside it."
+Sales,time-range tab,This year,2,ONE WORD,Year,"Sits beside single-word tabs like ""Month"" and ""Quarter""; matching that pattern removes the demonstrative."
+Sales,time-range tab,All time,2,ONE WORD,All,"Same tab row as ""Year"" and ""Quarter""; one word matches the sibling tabs."
+Inventory,toggle button,Collapse all,2,ONE WORD,Collapse,"""all"" is implied — this is the only collapse control on the box list and it always acts on everything shown."
+Inventory,toggle label,In stock only,3,ONE WORD,Stocked,A three-word label for a binary toggle; a single adjective plus the toggle's own on/off state covers it.
+Inventory,helper text,tick shown,2,ONE WORD,All,"Cryptic two-word helper next to a ""select all visible"" control; a plain ""All"" is at least as clear."
+Inventory,detail panel heading,Every copy of this card,5,ONE WORD,Copies,"""of this card"" is redundant — the whole detail panel is already about one selected card."
+Inventory,tray caption,Section 1 of 11,4,ONE WORD,Position,"The two numbers already carry the position; ""of"" is a connector rather than a meaningful word."
+Inventory,tray footnote,3 sold copies hidden,4,ONE WORD,Hidden,"The count is the fact; ""sold copies"" restates the ""In stock only"" toggle that caused the hiding."
+Inventory,link,Wrong card?,2,ONE WORD,Correct,A question inviting a correction flow; the verb alone is a clearer call to action than a question.
+Inventory,field caption (Market/Listed rows),read 13 days ago,4,ONE WORD,Updated,"The number of days is the fact worth keeping; ""read ... ago"" is a wordy freshness phrase repeated on every field that has one."
+Inventory,search aria-label / placeholder,Search cards,2,ONE WORD,Search,"""cards"" is redundant — this is a card-only list with no other object to search for."
+Inventory,icon button aria-label,Manage this box,3,ONE WORD,Manage,"""this box"" is redundant with the gear icon sitting directly on the box's own summary card."
+Inventory,icon button aria-label,Card actions,2,ONE WORD,Actions,"""Card"" is redundant — the menu sits directly on the one selected card's detail panel."
+Inventory,menu item / aria-label,Move to another box,4,ONE WORD,Move,"""to another box"" is the only possible destination for a move action here; implied by the verb alone."
+Inventory,icon button aria-label,Previous card,2,ONE WORD,Previous,"""card"" is redundant — this is a card list with no other object to step through."
+Inventory,icon button aria-label,Next card,2,ONE WORD,Next,"Same redundancy as ""Previous card"" above."
+Inventory,box card stat,520 on hand,3,ONE WORD,stored,"Same recurring ""on hand"" idiom seen on Home and in the Manage Box sheet; unified to one word used everywhere."
+Inventory,detail warning,1 over the ceiling of 7,6,ONE WORD,Overlisted,"Real loss: the exact ceiling number (7) and the amount over it (1) both disappear into one adjective, though the raw numbers are still visible elsewhere on the same panel as ""8 live"" vs ""7 in the boxes""."
+Inventory,detail line,10 sent to TCGplayer,4,ONE WORD,Sent,"""to TCGplayer"" is redundant — the whole screen and app exist to sell through TCGplayer."
+Inventory,Map view button,Edit layout,2,ONE WORD,Layout,"""Edit"" is implied by any button; the object alone invites the same click."
+Inventory,Map view box label,Unnamed box,2,ONE WORD,Untitled,"""box"" is redundant — every card in this view is already a box."
+Inventory,Manage Box: section heading,About this box,3,ONE WORD,Overview,"""this box"" is redundant — the sheet's own title bar already names the box being managed."
+Inventory,Manage Box: stat tile label,On hand,2,ONE WORD,Stored,"Third recurrence of the same ""on hand"" idiom (Home, Inventory list, here); unified word used consistently."
+Inventory,Manage Box: stat caption,read within 13 days,4,ONE WORD,Recent,"The day count is the fact; ""read within ... days"" is a wordy freshness phrase, same pattern as the detail panel's field captions."
+Inventory,Manage Box: row label,Edit sections,2,ONE WORD,Sections,"""Edit"" is implied — every row in this sheet is an action row that opens an editor."
+Inventory,Manage Box: row label,Name sections,2,ONE WORD,Naming,"Same redundant verb as ""Edit sections"" directly above it in the same list."
+Inventory,Manage Box: value caption,none named,2,ONE WORD,Unnamed,Two words where one adjective states the same absence.
+Inventory,Manage Box: row label,Set claims,2,ONE WORD,Claims,"""Set"" is implied — every row here is an action that sets or edits something when pressed."
+Inventory,Manage Box: row label,Move to box,3,ONE WORD,Move,"""to box"" is the only possible destination in an inventory app; implied by the verb."
+Inventory,Manage Box: group caption,whole box,2,ONE WORD,All,"Two words under a heading ""CARDS"" already naming the subject; ""whole box"" just means ""all of them""."
+Inventory,Manage Box: danger row,Release listing hold,3,ONE WORD,Release,"""listing hold"" is redundant — this is the only kind of hold a pricing/listing app tracks."
+Inventory,Manage Box: danger row,Reclaim photographs,2,ONE WORD,Reclaim,"""photographs"" is implied — this row sits in a box detail sheet where photographs are the only reclaimable asset."
+Inventory,Manage Box: danger row,Delete this box...,3,ONE WORD,Delete,"""this box"" is redundant — the entire sheet is already scoped to one box, named in its own title bar."
+Inventory,Manage Box: caption,no undo,2,DELETE,,"The row is already styled in red under a heading labelled ""DANGER"" with a trash icon; irreversibility is already signaled twice over."
+Inventory,Card actions menu item,Correct claims,2,ONE WORD,Correct,"""claims"" is redundant — this menu is already opened from a single card's claims/identity context."
+Inventory,Card actions menu item,Re-read the inventory,3,ONE WORD,Reread,"""the inventory"" is redundant — there is only one inventory this app tracks."
+Inventory,Card actions menu item,Remove this card...,3,ONE WORD,Remove,"""this card"" is redundant — the menu is already scoped to the single selected card."
+Graveyard,screen subheading,Sold and retired cards.,4,DELETE,,"The three tabs directly below (All, Sold, Retired) already state exactly these two categories by name."
+Graveyard,search placeholder,"Find a card, SKU or box",6,ONE WORD,Search,Six words listing three possible search targets; a search icon plus one word covers all three without enumerating them.
+Graveyard,status badge,Pulled out,2,ONE WORD,Removed,"Paired with ""Retired"" as a reason tag; a single word is enough at table-row scale where it repeats down the whole list."
+Graveyard,footer count,Showing 300 of 1303,4,ONE WORD,Shown,"The two numbers carry the fact; ""Showing ... of"" is a connector phrase rather than meaningful content."
+Codes,empty state heading,No codes on file yet,5,ONE WORD,Empty,Five words to state an empty condition that the illustration and the button below already make obvious.
+Codes,empty state body,"Set Game to Pokémon code cards on Capture, then come back and read the box.",15,DELETE,,"A multi-step setup instruction crammed into a permanent empty state; the single button directly below (""Go to capture"") already offers the one actionable next step without narrating the whole path."
+Codes,button,Go to capture,3,ONE WORD,Capture,"""Go to"" is filler on a navigation button; the destination name alone is enough."
+Fulfillment,greeting,Good evening.,2,DELETE,,Same greeting as Home; carries no operational information ahead of the actual task stats below it.
+Fulfillment,hero stat caption,74 copies to pick,4,ONE WORD,Pick,"""copies to"" is filler between the number and the verb; the number already anchors the meaning."
+Fulfillment,hero subcaption,"For 71 orders, listed below with every copy the store holds.",11,DELETE,,"The list immediately beneath this line is exactly ""every copy the store holds"" for those orders — the sentence describes what the next scroll makes visually obvious."
+Fulfillment,warning line,141 more copies are not in the boxes. Ask for help with those.,13,ONE WORD,Unlocated,"Same underlying fact as Orders' ""not in the store"" warning; unified wording, and the ""ask for help"" instruction is implicit once the copies are flagged as unlocated."
+Fulfillment,field label,Type the name of the card,6,ONE WORD,Search,Six words to label a text field when a single word plus the search icon already beside it says the same thing.
+Fulfillment,field placeholder,"For example, Volibear, Relentless Storm",5,DELETE,,"The label directly above (""Type the name of the card"") already says what to type; a worked example is a nicety the Fulfiller does not need to operate the field."
+Fulfillment,section heading,Cards to pick,3,ONE WORD,Queue,"""Cards"" is redundant with the app's only subject matter; ""Queue"" names the list shape more precisely than restating the object."
+Fulfillment,per-card heading,Pick 3 for 2 orders,5,ONE WORD,Pick,"The two counts carry the fact; ""for"" is a connector rather than a word adding meaning."
+Fulfillment,positional description (repeats per card),It sits in front of Carnivorous Snapvine and behind Commander Ledros..,11,ONE WORD,Position,"Real loss: this sentence is the ONLY place that tells a non-expert Fulfiller which two neighboring cards to use as landmarks in the physical box — collapsing it to one word removes the actual finding aid the whole screen exists to provide, so this cut is not recommended in practice even though the rule requires picking one."
+Fulfillment,position counter,Card 11 of 28,4,ONE WORD,Position,"The two numbers already carry the position within the section; ""of"" is a connector."
+Fulfillment,button,Pull this card,3,ONE WORD,Pull,"""this card"" is redundant — the button sits directly beneath the one card being displayed."

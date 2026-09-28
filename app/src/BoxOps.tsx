@@ -29,7 +29,7 @@ import {
   releaseBoxListings,
   updateBox,
 } from './server'
-import { spansOf } from './position'
+import { nonEmptySections, spansOf } from './position'
 import { ReadingAge } from './CardLocations'
 import { readingAgo } from './cardState'
 import { Button, Icon, IconButton, Notice, Pill, Select, SectionPicker, Stat, boxesMostRecentFirst, type IconName } from './kit'
@@ -93,8 +93,8 @@ function oldestReading(listings: Readonly<Record<string, Listing>>): string | nu
 function readingBound(at: string | null): string | null {
   const ago = readingAgo(at)
   if (ago === null) return null
-  if (ago === 'just now') return 'read just now'
-  return `read within ${ago.replace(/ ago$/, '')}`
+  if (ago === 'just now') return 'Recent'
+  return `Recent, ${ago.replace(/ ago$/, '')}`
 }
 
 /** One write at a time: `Store.write()` takes the file lock per call. */
@@ -293,16 +293,25 @@ function reached(record: BoxRecord, from: number): { sections: number[]; cards: 
 export function BoxIdentity({
   record,
   at = null,
+  currentSection = null,
   actions,
 }: {
   record: BoxRecord
   /** Where the selected card sits in this box, 0..1 — the server's own `fraction`. */
   at?: number | null
+  /** The section the walk's selected card stands in — or stood in, sold, retired or moved out
+   *  from under it (D118, D181). F9 (the owner's report, 2026-09-27): an empty section drops
+   *  off this header the same way it drops off the ruler, except this one, which the walk is
+   *  standing on right now. `BoxBrowse.tsx` reads it off `selectedRow.card.place.section`,
+   *  never off `at`'s own fraction — a departed card's `fraction` goes null the moment it
+   *  leaves, but its `place.section` survives on the wire. */
+  currentSection?: number | null
   actions?: ReactNode
 }) {
   const holds = known(record.on_hand)
   const total = denominator(record)
-  const spans = spansOf(trackPlace(record, total), record.sections_detail)
+  const visibleSections = nonEmptySections({ section: currentSection }, record.sections_detail)
+  const spans = spansOf(trackPlace(record, total), visibleSections)
 
   /* THE CENSUS TRIAD (D41), BROUGHT TO THIS PANEL. `CardLocations`' own three figures — copies,
      in the boxes, live on TCGplayer — are `bn-stat` tiles: a big tabular-nums value over a
@@ -346,7 +355,9 @@ export function BoxIdentity({
       </div>
 
       {/* The track is the box: one segment per section, as wide as the cards it holds, with the
-          selected card's marker from the server's own `fraction`. */}
+          selected card's marker from the server's own `fraction`. F9: an empty section is not
+          one of these segments, except the one `currentSection` names — `visibleSections`
+          filtered it out above, so `spans` and its own `aria-label` count already agree. */}
       {spans.length === 0 ? null : (
         <div
           className="boxops-track"
@@ -358,7 +369,12 @@ export function BoxIdentity({
               className="boxops-span"
               key={`${span.start}-${span.end}`}
               style={{ flexGrow: span.end - span.start + 1 }}
-              title={`Section ${i + 1}${record.sections_detail[i]?.name ? `: ${record.sections_detail[i]?.name}` : ''}, cards #${span.start}–#${span.end}`}
+              // `spans` and `visibleSections` are the SAME FILTERED LIST, in the same order
+              // (`spansOf` is a 1:1 map over the array it is handed) — never `record.
+              // sections_detail`, which is unfiltered and would misalign the moment an empty
+              // section hides (F9). `span.section` is the real section number, never `i + 1`,
+              // for the same reason: a hidden section makes position disagree with number.
+              title={`Section ${span.section}${visibleSections[i]?.name ? `: ${visibleSections[i]?.name}` : ''}, cards #${span.start}–#${span.end}`}
             />
           ))}
           {at === null ? null : (
@@ -612,10 +628,10 @@ export function BoxOps({
         {editing === null ? (
           <>
             <section className="boxops-group">
-              <h3 className="bn-label">About this box</h3>
+              <h3 className="bn-label">Overview</h3>
               <dl className="boxops-census">
                 <Census label="Captured" value={record.cards} />
-                <Census label="On hand" value={known(record.on_hand)} />
+                <Census label="Stored" value={known(record.on_hand)} />
                 <Census label="Sold" value={record.sold} />
                 <Census label="Retired" value={record.retired} />
                 <Census label="Moved" value={record.moved} />
@@ -660,7 +676,7 @@ export function BoxOps({
                 <Op icon="pencil" label="Rename" detail={record.name ?? 'unnamed'} busy={busy} onClick={() => startEdit('name')} />
                 <Op
                   icon="divider"
-                  label="Edit sections"
+                  label="Sections"
                   detail={
                     record.sections.length === 0
                       ? 'not declared'
@@ -671,13 +687,13 @@ export function BoxOps({
                 />
                 <Op
                   icon="pencil"
-                  label="Name sections"
+                  label="Naming"
                   detail={
                     record.sections_detail.length === 0
                       ? 'declare sections first'
                       : (() => {
                           const named = record.sections_detail.filter((detail) => detail.name).length
-                          return named === 0 ? 'none named' : `${named} of ${record.sections_detail.length} named`
+                          return named === 0 ? 'Unnamed' : `${named} of ${record.sections_detail.length} named`
                         })()
                   }
                   busy={busy}
@@ -694,14 +710,14 @@ export function BoxOps({
                   {selection.length > 0 ? (
                     <Pill tone="accent">{selection.length} ticked</Pill>
                   ) : (
-                    <span className="boxops-group-note">whole box</span>
+                    <span className="boxops-group-note">All</span>
                   )}
                 </h3>
                 <div className="boxops-ops">
                   {selection.length > 0 || record.cards > 0 ? (
                     <Op
                       icon="pencil"
-                      label="Set claims"
+                      label="Claims"
                       detail={
                         selection.length > 0
                           ? `${selection.length} ticked`
@@ -714,7 +730,7 @@ export function BoxOps({
                   {selection.length > 0 || (record.on_hand ?? 0) > 0 ? (
                     <Op
                       icon="moveTo"
-                      label="Move to box"
+                      label="Move"
                       detail={
                         selection.length > 0
                           ? `${selection.length} ticked`
@@ -1590,7 +1606,7 @@ function ReleaseListings({
       <Op
         icon="flag"
         danger
-        label="Release listing hold"
+        label="Release"
         detail={count(record.listed, 'card', 'cards')}
         said={`Release the listing hold on ${count(record.listed, 'card', 'cards')}…`}
         busy={false}
@@ -1734,7 +1750,7 @@ function ReclaimPhotos({ record, onChanged }: { record: BoxRecord; onChanged: ()
       <Op
         icon="image"
         danger
-        label="Reclaim photographs"
+        label="Reclaim"
         detail={count(record.sold, 'sold card', 'sold cards')}
         said={`Reclaim the photographs of ${count(record.sold, 'sold card', 'sold cards')} in ${record.name ?? UNNAMED_BOX}…`}
         busy={false}
@@ -1859,8 +1875,7 @@ function DeleteBox({
       <Op
         icon="trash"
         danger
-        label="Delete this box…"
-        detail="no undo"
+        label="Delete"
         busy={false}
         expanded={open}
         onClick={() => setOpen((held) => !held)}

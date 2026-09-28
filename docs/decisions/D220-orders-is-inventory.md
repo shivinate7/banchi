@@ -60,3 +60,12 @@ The copies route, `POST /inventory/copies`, now answers `listings` too. It is na
 The measured word count on `#/orders` did not move. The pinned fixture prices no stock key its cards carry. The wiring reaches no new string on that fixture. D194's ratchet stays at its measured figure.
 
 D189 is not adopted here. It puts the market reading in a table. This amendment keeps the per-run live read Inventory already uses. The ask was parity with Inventory's own path. It was not a switch to the newer one.
+
+### Amended 2026-09-27: the pane and the row drifted, and the owner's answers are recorded elsewhere
+
+The built screen did not keep point 3 (full location detail on every pick row). It did not
+keep the walk-only pane point 4 asked to reuse. `docs/reviews/ux-2026-09-23/orders-a/
+PLAN.md` names the drift. D304 records the owner's answers that
+fix it. Full `CardLocations` rows, the hero head with every on-hand copy below it, and a
+density-first sort with box name as the tie-break. The last of these replaces this entry's
+own `walk_order` reading.

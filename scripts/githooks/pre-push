@@ -7,13 +7,9 @@
 # reflog shows five consecutive `update by push`, two of them while sessions were mid-task on
 # branches cut from it.
 #
-# THIS IS THE SUBSTITUTE FOR BRANCH PROTECTION, NOT A BELT-AND-BRACES ADDITION TO IT.
-# GitHub refuses both rulesets and classic branch protection on this repository — free plan,
-# private repo, HTTP 403 "Upgrade to GitHub Pro or make this repository public". Public is
-# forbidden by the repo-wide opsec rule about code cards, so the server-side gate is not
-# available at any price short of Pro, and this hook is what stands in for it. It is weaker in
-# one specific way worth naming rather than glossing: it lives on this machine, so it protects
-# this clone and not the repository. A push from anywhere else is unguarded.
+# GitHub protection is ON (repo made public 2026-09-06). This local hook is a fast first refusal,
+# not the only gate. It lives on this machine, so it protects this clone. A push from anywhere else
+# travels to GitHub, where branch protection refuses it.
 #
 # Git passes the remote name as $1 and its URL as $2, and one
 # `<local ref> <local sha> <remote ref> <remote sha>` line per ref on stdin.

@@ -1,29 +1,16 @@
 {
   "_about": "THE SHRINKING OFFENDER LIST (the owner's ruling on Q3, 2026-09-23; D275). static: file -> rule -> the lane that owes the fix, read by scripts/kit-adoption.mjs. runtime: route path -> assertion -> lane, read by app/tests/scaffold.spec.ts. Both FAIL on a violation not listed here AND on an entry that no longer matches a violation. A lane that fixes one deletes its entry in the same commit. The list ONLY SHRINKS: scripts/kit-adoption.mjs refuses any key in either block that the list at the merge-base with origin/main does not hold, unless the key's rule is not defined at the merge-base (a rule born on the branch; the check prints which rule allowed it and why). Never add an entry to make a new screen pass: render <Page> from ./kit and use the kit's primitives.",
   "static": {
-    "app/src/Codes.tsx": {
-      "R2-filter-row": "library"
-    },
-    "app/src/ReviewQueue.tsx": {
-      "R2-dialog": "review",
-      "R2-search": "review",
-      "R2-class": "review",
-      "R2-date": "review",
-      "R2-money": "review"
-    },
     "app/src/Pricing.tsx": {
       "R2-undo-key": "pricing: the field-scoped complement `useUndoHotkey` cannot reach on its own -- the shared hook yields to an editable target by design, so a price field's own onKey answers U while the cursor sits inside it (the window-level U is still useUndoHotkey, unaffected)"
+    },
+    "app/src/CaptureScreen.tsx": {
+      "R2-box-number": "two sanctioned uses (D153), not a migration debt: the box picker's search-match suffix (the number is drawn only as the answer to a typed number search, never as a box label) and the reallocation-refusal sentence (`app/tests/capture-claims.spec.ts`'s own test requires the number here and forbids the current name -- the sentence is about the number's own reallocation, not a label identifying the drawer)."
     }
   },
   "runtime": {
     "/": {
-      "top": "home"
-    },
-    "/runs": {
-      "top": "review"
-    },
-    "/review": {
-      "top": "review"
+      "top": "home: PERMANENT, argued, owner's ruling 2026-09-27 (\"Keep Home\"). D121 and D287 rule Home's eyebrow-above-heading order on purpose -- the date line draws above the greeting by design (`.home .bn-lede { order: -1 }` in Home.css), so the h1 does not sit `--bn-page-top` below the page's own top edge the way every other screen's does. Closing this by deleting the reorder makes the date read like an afterthought under the headline instead of announcing it (docs/reviews/ux-2026-09-23/PLAN-PR4-PR5.md, section D, 'Leftover screens'). This file has no separate permanent-exemption form, so the argument lives in this lane string instead of a second field."
     }
   }
 }

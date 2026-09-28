@@ -1,4 +1,4 @@
-## D-demo-stock-images — STOCK_IMAGES gets a disk cache, and the demo mirror copies it
+## D302 — STOCK_IMAGES gets a disk cache, and the demo mirror copies it
 
 The owner, 2026-09-27, asked why the demo does not get the pricing thumbnails the live
 server shows. Then: "Do it now."

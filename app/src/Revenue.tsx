@@ -12,6 +12,7 @@ import {
 import { moneyGrouped } from './money'
 import { absoluteDate, monthOf, saleDate, weekOf } from './dates'
 import { useCardCropWhenSeen } from './cardCrop'
+import { matchQuery } from './kit/match'
 import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
 import './Revenue.css'
@@ -71,6 +72,9 @@ function realRarity(raw: string | null): string | null {
 
 type Period = '3m' | '6m' | 'ytd' | 'all' | 'custom'
 
+/* `label` feeds the composed "over <label, lowercased>" sentence below (`periodPhrase`), so
+   it keeps its full words ("this year", "all time") even where the tab itself is shorter
+   (rows 142/143: `PERIOD_TAB_LABEL`, below) — the two are read in different grammars. */
 const PERIODS: readonly { readonly value: Period; readonly label: string }[] = [
   { value: '3m', label: '3 months' },
   { value: '6m', label: '6 months' },
@@ -78,6 +82,14 @@ const PERIODS: readonly { readonly value: Period; readonly label: string }[] = [
   { value: 'all', label: 'All time' },
   { value: 'custom', label: 'Custom' },
 ]
+
+/** F5 verbiage cut (rows 142/143): "This year"/"All time" -> "Year"/"All" on the tab itself,
+ *  matching the single-word "3 months"-shape sibling tabs at rest. `PERIODS` above still
+ *  carries the long form for the "over this year" sentence it also feeds. */
+const PERIOD_TABS = PERIODS.map((p) => ({
+  ...p,
+  label: p.value === 'ytd' ? 'Year' : p.value === 'all' ? 'All' : p.label,
+}))
 
 type SortKey = 'name' | 'copies' | 'gross' | 'last'
 type SortDir = 'asc' | 'desc'
@@ -89,7 +101,7 @@ const DEFAULT_DIR: Record<SortKey, SortDir> = { name: 'asc', copies: 'desc', gro
 const SORT_LABEL: Record<SortKey, string> = { name: 'Name', copies: 'Copies', gross: 'Gross', last: 'Last sold' }
 /** The podium's own segmented labels — the mock's own wording ("A to Z", "Latest") next to
  *  the same four keys the table's own column headers already sort by. One state, two faces. */
-const SORT_SEGMENT_LABEL: Record<SortKey, string> = { name: 'A to Z', copies: 'Copies', gross: 'Gross', last: 'Latest' }
+const SORT_SEGMENT_LABEL: Record<SortKey, string> = { name: 'Alphabetical', copies: 'Copies', gross: 'Gross', last: 'Latest' }
 const SORT_KEYS: readonly SortKey[] = ['gross', 'copies', 'last', 'name']
 
 type Granularity = 'week' | 'month'
@@ -227,6 +239,7 @@ function salesOf(
 /** The condition string carries the finish (CLAUDE.md: "the grade stays on every row"). A
  *  foil printing is one whose condition names it — never a guess off the card's own name. */
 function isFoil(condition: string | null): boolean {
+  // eslint-disable-next-line no-restricted-syntax -- 'foil' is a fixed word, not a typed query.
   return condition !== null && condition.toLowerCase().includes('foil')
 }
 
@@ -392,12 +405,14 @@ function windowsOf(
  *  back". `likeForLike` names a window this function did not choose: the caller has already
  *  cut the prior period down to the SAME number of elapsed days the current one has had, so
  *  the wording says so rather than letting a shorter slice masquerade as the whole thing. */
-function compareLine(current: number, previousRows: readonly Sale[] | null, likeForLike: boolean): string {
+function compareLine(current: number, previousRows: readonly Sale[] | null, likeForLike: boolean): string | null {
   if (previousRows === null) return 'No earlier period to compare it against yet.'
   if (previousRows.length === 0) {
-    return likeForLike
-      ? 'So far, nothing is recorded for the period before this one.'
-      : 'Nothing is recorded for the period before this one.'
+    /* F5 verbiage cut (row 127): the in-progress case is deleted outright — the month strip's
+       own absent bar already shows there is nothing before this one. The closed-period case
+       keeps its sentence, since a closed period drawing a real zero bar is a fact worth
+       stating rather than an obvious gap. */
+    return likeForLike ? null : 'Nothing is recorded for the period before this one.'
   }
   const previous = sum(previousRows)
   // `likeForLike` means THIS window is still forming, not the PRIOR one — the prior window is
@@ -703,15 +718,31 @@ const THUMB_FOCUS = 0.34
  *  photo gets the same crop treatment as if this screen were `CardLocations.tsx` (review
  *  round, item 9b: the podium was drawing the raw, uncropped desk photo — drawer walls and
  *  all — instead of asking for the one rectangle every other screen already asks for). */
-function RowThumb({ sku, name, photos, size }: { readonly sku: string; readonly name: string; readonly photos: Readonly<Record<string, SkuPhotoEntry>>; readonly size: 'sm' | 'md' | 'lg' }) {
+function RowThumb({
+  sku,
+  name,
+  photos,
+  stockPhotos,
+  size,
+}: {
+  readonly sku: string
+  readonly name: string
+  readonly photos: Readonly<Record<string, SkuPhotoEntry>>
+  /** F2: a hotlinked catalogue photo (D301) for a SKU with no own photographed copy —
+   *  the same `image_url` field Sets and Pricing already draw theirs from. `crop` never
+   *  applies to it: the rig's own crop rectangle describes THIS store's photograph, not a
+   *  catalogue image, so it draws through the SAME `CardThumb` with `crop={null}`. */
+  readonly stockPhotos: Readonly<Record<string, string>>
+  readonly size: 'sm' | 'md' | 'lg'
+}) {
   const entry = photos[sku]
   const at = entry === undefined ? null : { box: entry.box, index: entry.index }
   const host = useRef<HTMLSpanElement | null>(null)
   const crop = useCardCropWhenSeen(at, host)
-  const src = entry === undefined ? null : photoUrl(entry.box, entry.index, entry.cid)
+  const src = entry !== undefined ? photoUrl(entry.box, entry.index, entry.cid) : (stockPhotos[sku] ?? null)
   return (
     <span ref={host} style={{ display: 'contents' }}>
-      <CardThumb src={src} alt={name} size={size} crop={crop} focus={THUMB_FOCUS} />
+      <CardThumb src={src} alt={name} size={size} crop={entry === undefined ? null : crop} focus={THUMB_FOCUS} />
     </span>
   )
 }
@@ -814,6 +845,10 @@ export function Revenue() {
   // tracks which SKUs this screen has already requested so a re-render never repeats a call,
   // without making the fetch effect depend on its own answer.
   const [photos, setPhotos] = useState<Readonly<Record<string, SkuPhotoEntry>>>({})
+  // F2 (the owner: "why does the sales page not pull the icons like you're able to do on
+  // sets and pricing?"): a stock (catalogue) photo for a SKU with no own photographed copy
+  // on hand — the SAME resolver Sets and Pricing already draw theirs from, never a second one.
+  const [stockPhotos, setStockPhotos] = useState<Readonly<Record<string, string>>>({})
   const asked = useRef<Set<string>>(new Set())
 
   // UNSOLD STOCK (D236) — same posture as `prices`, own loading/failure state, never touching
@@ -920,8 +955,9 @@ export function Revenue() {
     }
     const rows = Array.from(by.values())
     const byView = rows.filter((row) => (view === 'all' ? true : isSealed(row.kind, row.condition) === (view === 'sealed')))
-    const q = query.trim().toLowerCase()
-    const filtered = q === '' ? byView : byView.filter((row) => row.name.toLowerCase().includes(q))
+    const filtered = byView.filter((row) =>
+      matchQuery(query, { text: [row.name, row.setName], skus: [row.sku] }),
+    )
     return filtered.slice().sort((a, b) => {
       const base = compareProducts(a, b, sortKey)
       return sortDir === 'asc' ? base : -base
@@ -938,7 +974,9 @@ export function Revenue() {
     let alive = true
     getSkuPhotos(skus)
       .then((found) => {
-        if (alive) setPhotos((prev) => ({ ...prev, ...found }))
+        if (!alive) return
+        setPhotos((prev) => ({ ...prev, ...found.photos }))
+        setStockPhotos((prev) => ({ ...prev, ...found.stockPhotos }))
       })
       .catch(() => {
         // A failed thumbnail lookup falls back to the plain tile CardThumb already draws for
@@ -1029,7 +1067,7 @@ export function Revenue() {
      own header — no socket, no run, no write). NEVER the same figure as what already sold. */
     <div className="revenue-shelf">
       <div className="revenue-shelf-head">
-        <p className="bn-eyebrow">On the shelf</p>
+        <p className="bn-eyebrow">Shelf</p>
         <ReloadButton
           onReload={() => setHoldingsRange((r) => r)}
           busy={holdingsLoading}
@@ -1055,7 +1093,7 @@ export function Revenue() {
         <>
           <Money value={Number(latestHoldingsTotal.value)} className="revenue-shelf-figure" />
           <p className="revenue-shelf-note">
-            {`Priced for ${latestHoldingsTotal.priced_names} of ${holdings.on_hand_names} names on hand, ${latestHoldingsTotal.unpriced_names} not yet.`}
+            {`${latestHoldingsTotal.priced_names} of ${holdings.on_hand_names} priced, ${latestHoldingsTotal.unpriced_names} not yet`}
           </p>
           <HoldingsSpark totals={holdings.totals} />
         </>
@@ -1065,14 +1103,10 @@ export function Revenue() {
           <p className="revenue-shelf-note">
             {holdingsHistoryLabel === null
               ? 'No history recorded for these names yet.'
-              : `History since ${holdingsHistoryLabel}, ${holdings.width_days === 1 ? 'read daily' : `read every ${holdings.width_days} days`}.`}
+              : `Since ${holdingsHistoryLabel}, ${holdings.width_days === 1 ? 'daily' : `every ${holdings.width_days} days`}`}
           </p>
-          <p className="revenue-shelf-note">
-            {`${holdings.unmarked.names} names on hand have never been priced.`}
-          </p>
-          <p className="revenue-shelf-note">
-            {`${holdings.sealed_excluded.names} sealed items are not counted here. Sales of sealed items are known; what is still on the shelf is not.`}
-          </p>
+          <p className="revenue-shelf-note">{`${holdings.unmarked.names} unpriced`}</p>
+          <p className="revenue-shelf-note">{`${holdings.sealed_excluded.names} sealed`}</p>
         </>
       )}
     </div>
@@ -1143,11 +1177,11 @@ export function Revenue() {
     <Page
       title="Sales"
       icon="dollar"
-      lede="Your gross-revenue retrospective — what sold, for how much, by name. Gross only: no fees, no cost, no profit."
+      lede="Gross"
       className="revenue"
       actions={
         <div className="revenue-period">
-          <Segmented label="Period" value={period} options={PERIODS} onChange={handlePeriod} />
+          <Segmented label="Period" value={period} options={PERIOD_TABS} onChange={handlePeriod} />
           {period === 'custom' ? (
             <div className="revenue-range">
               <div className="bn-field">
@@ -1191,7 +1225,9 @@ export function Revenue() {
           <p className="revenue-verdict-said">
             {`${orderCount(inPeriod).toLocaleString()} ${orderCount(inPeriod) === 1 ? 'order' : 'orders'}, ${inPeriod.reduce((n, s) => n + s.quantity, 0).toLocaleString()} copies`}
           </p>
-          <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
+          {compareLine(total, inPrevious, partial) === null ? null : (
+            <p className="revenue-verdict-prior">{compareLine(total, inPrevious, partial)}</p>
+          )}
           {dropped === 0 ? null : (
             <p className="revenue-verdict-dropped">
               {`${dropped.toLocaleString()} ${dropped === 1 ? 'line has' : 'lines have'} no usable date and ${dropped === 1 ? 'is' : 'are'} left out of every figure here.`}
@@ -1203,9 +1239,7 @@ export function Revenue() {
               screen never claims the second mechanism has caught anything until it counts
               one. Collapsing the two into one sentence, or hiding either at zero, would say
               more than this store actually knows. */}
-          <p className="revenue-verdict-canceled">
-            {`${canceledOrders.toLocaleString()} ${canceledOrders === 1 ? 'order was' : 'orders were'} canceled by the marketplace and left out.`}
-          </p>
+          <p className="revenue-verdict-canceled">{`${canceledOrders.toLocaleString()} excluded`}</p>
           {/* D281: A NOTE ABOUT ZERO DOES NOT DRAW. "0 lines were marked ... treat it as a
               habit, not a guarantee" reads as a warning about a habit that has never once
               caught anything — at zero, this whole sentence is drawn only when it has
@@ -1244,7 +1278,7 @@ export function Revenue() {
               </span>
               <span className="revenue-month-label">
                 {b.label}
-                {b.inProgress ? <Pill size="sm" tone="accent">so far</Pill> : null}
+                {b.inProgress ? <Pill size="sm" tone="accent">Partial</Pill> : null}
               </span>
             </button>
           ))}
@@ -1266,7 +1300,7 @@ export function Revenue() {
           true of the section under any sort, so it never has to change with the segmented
           control beside it. */}
       <div className="revenue-bar-head">
-        <h2 className="bn-h2">What sold</h2>
+        <h2 className="bn-h2">Sold</h2>
         <Segmented
           label="Singles or sealed"
           value={view}
@@ -1283,7 +1317,7 @@ export function Revenue() {
           }}
         />
         <div className="revenue-search">
-          <SearchField value={query} onChange={setQuery} persona="owner" placeholder="Find what you sold" />
+          <SearchField value={query} onChange={setQuery} persona="owner" placeholder="Search" />
         </div>
       </div>
 
@@ -1295,7 +1329,7 @@ export function Revenue() {
             {podium.map((p, i) => (
               <article className="revenue-tile" key={p.sku}>
                 <div className="revenue-tile-art">
-                  <RowThumb sku={p.sku} name={p.name} photos={photos} size="lg" />
+                  <RowThumb sku={p.sku} name={p.name} photos={photos} stockPhotos={stockPhotos} size="lg" />
                   <span className="revenue-tile-rank">{i + 1}</span>
                 </div>
                 <div className="revenue-tile-body">
@@ -1313,7 +1347,7 @@ export function Revenue() {
                   <MetaLine product={p} />
                   <div className="revenue-tile-money">
                     {p.gross > 0 ? <Money value={p.gross} /> : <span className="revenue-no-price">no price recorded</span>}
-                    {pctLabel(p.gross) === null ? null : <small>{`${pctLabel(p.gross)} of gross`}</small>}
+                    {pctLabel(p.gross) === null ? null : <small>{`${pctLabel(p.gross)} share`}</small>}
                   </div>
                   {/* SHORT BLOCKS, NEVER ONE LONG SENTENCE (text-shape's own 6-word prose
                       floor): copies and the sale date are each their own block. "Last
@@ -1322,7 +1356,7 @@ export function Revenue() {
                       podium tiles land on the same day; `text-shape-allow.json` lists it
                       by route when the fixture ever produces that coincidence. */}
                   <p className="revenue-tile-foot">{copyWord(p.copies)}</p>
-                  <p className="revenue-tile-foot">{`Last sold ${saleDate(p.last)}`}</p>
+                  <p className="revenue-tile-foot">{`Sold ${saleDate(p.last)}`}</p>
                   {p.unpriced === 0 ? null : (
                     <p className="revenue-tile-foot">{`${p.unpriced} with no price`}</p>
                   )}
@@ -1330,7 +1364,7 @@ export function Revenue() {
               </article>
             ))}
             <article className="revenue-tile revenue-mix">
-              <h3 className="bn-h3">What earned it</h3>
+              <h3 className="bn-h3">Breakdown</h3>
               <div
                 className="revenue-mix-split"
                 role="img"
@@ -1365,7 +1399,7 @@ export function Revenue() {
                 {board.map((p, i) => (
                   <li key={p.sku}>
                     <span className="revenue-board-rk">{i + 4}</span>
-                    <RowThumb sku={p.sku} name={p.name} photos={photos} size="sm" />
+                    <RowThumb sku={p.sku} name={p.name} photos={photos} stockPhotos={stockPhotos} size="sm" />
                     <div className="revenue-board-who">
                       <ProductLink sku={p.sku} name={p.name}>
                         <span className="revenue-tile-name" title={p.nameIsSku ? undefined : short(p).full}>

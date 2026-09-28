@@ -496,10 +496,11 @@ export function isDeparted(place?: { located?: boolean; slot?: number | null; la
  * run of unread cards starting there. So a side reads "an unread card" or "3 unread cards",
  * never a bare figure (D116's complaint) and never a name further along (UX-264's).
  *
- * `said` IS A WHOLE SENTENCE WITH BACK AND FRONT IN IT (UX-186). It used to be a clause,
- * "between X and Y", which never said which neighbour stands at the back. Now it reads
- * "It sits in front of X and behind Y.": X is toward the back, Y toward the front, in the
- * owner's own orientation. A departed card's sentence is in the past tense ("It was ..."). */
+ * `said` CARRIES BOTH NEIGHBOURS, BACK THEN FRONT (UX-186). It read "between X and Y", which
+ * never said which neighbour stands at the back, then "It sits in front of X and behind Y."
+ * (X toward the back, Y toward the front). F5 verbiage cut, the owner's ruling on the held row
+ * (2026-09-26): the two names are data and stay, the sentence around them is cut to
+ * "Position: X / Y" — the same "label: A / B" shape Review's own mismatch line takes. */
 export type PlaceParts = {
   prev: PlaceNeighbor | null
   next: PlaceNeighbor | null
@@ -515,19 +516,23 @@ export function neighborWords(side: PlaceNeighbor): string {
   return run === 1 ? 'an unread card' : `${run} unread cards`
 }
 
-export function placeParts(place: Place | undefined, departed = false): PlaceParts | null {
+export function placeParts(place: Place | undefined, _departed = false): PlaceParts | null {
   if (place === undefined || place.located === false) return null
 
   const neighbors = place.neighbors
   if (neighbors === undefined || neighbors === null) return null
 
   const { prev, next } = neighbors
-  const verb = departed ? 'was' : 'sits'
 
+  /* F5 verbiage cut (row 194, the owner's ruling on the held row): the two neighbour names
+     stay, as data — the sentence around them ("It sits in front of ... and behind ...") is
+     cut to "Position: <back> / <front>", the same "label: A / B" shape the Review mismatch
+     line above already took. Dropping the verb also drops the `departed` past-tense question
+     (LOC-09) outright: a bare position never claims a state to get wrong. */
   let said: string
-  if (prev !== null && next !== null) said = `It ${verb} in front of ${neighborWords(prev)} and behind ${neighborWords(next)}.`
-  else if (prev !== null) said = `It ${verb} in front of ${neighborWords(prev)}.`
-  else if (next !== null) said = `It ${verb} behind ${neighborWords(next)}.`
+  if (prev !== null && next !== null) said = `Position: ${neighborWords(prev)} / ${neighborWords(next)}`
+  else if (prev !== null) said = `Position: ${neighborWords(prev)}`
+  else if (next !== null) said = `Position: ${neighborWords(next)}`
   /* The one card whose box holds nothing else. No neighbours is no content, and null lets a
      screen render nothing rather than chrome. */
   else return null
@@ -543,8 +548,8 @@ export function placeParts(place: Place | undefined, departed = false): PlacePar
  * `aria-label`. Kept as its own export rather than inlined at the call sites: it is the shape
  * three screens have imported since 2026-08-13.
  *
- * At the box's ends there is one neighbour and it says which side (`It sits in front of
- * Mantine.` / `It sits behind Thievul.`) rather than pretending a between. */
+ * At the box's ends there is one neighbour and the sentence names only that one (`Position:
+ * Mantine`) rather than pretending a between. */
 export function placeSentence(place: Place | undefined, departed = false): string | null {
   return placeParts(place, departed)?.said ?? null
 }
@@ -3260,17 +3265,33 @@ export async function getHoldingsValue(range: HoldingsRange = 'month'): Promise<
  *  carries a photograph, exactly `photoUrl`'s own `(box, index, cid)` triple. */
 export type SkuPhotoEntry = { box: number; index: number; cid: string | null }
 
-/** `sku -> SkuPhotoEntry`, for exactly the SKUs asked. A SKU with no photographed copy on
- *  hand is simply ABSENT — never a guess (`GET /skus/photos?sku=<s>&sku=<s>`,
- *  D298). `#/revenue`'s own reason: a sold card's own photograph is usually
+/** `getSkuPhotos`'s own answer, two fields so the caller knows which kind of photo it has
+ *  (F2, the owner: "why does the sales page not pull the icons like you're able to do on
+ *  sets and pricing?"). `photos` is unchanged (D298): this store's own photograph, keyed by
+ *  SKU. `stockPhotos` is F2's own addition — a hotlinked catalogue image (D301's same
+ *  posture, Sets and Pricing's own resolver) for a SKU with no on-hand photographed copy, a
+ *  single by number or a SEALED product by name, Pokemon included. A SKU never appears in
+ *  both. */
+export type SkuPhotos = {
+  readonly photos: Readonly<Record<string, SkuPhotoEntry>>
+  readonly stockPhotos: Readonly<Record<string, string>>
+}
+
+/** `sku -> its photo`, for exactly the SKUs asked. A SKU with no photograph of either kind
+ *  is simply ABSENT from both fields — never a guess (`GET /skus/photos?sku=<s>&sku=<s>`,
+ *  D298, amended F2). `#/revenue`'s own reason: a sold card's own photograph is usually
  *  reclaimed on purpose (D89), so a sales row's thumbnail is ANOTHER copy of the same SKU,
- *  never the one that actually sold. A plain read, costs nothing, so this screen calls it
- *  on arrival rather than gating it behind a press. */
-export async function getSkuPhotos(skus: string[]): Promise<Record<string, SkuPhotoEntry>> {
-  if (skus.length === 0) return {}
+ *  never the one that actually sold — and past that, a stock photo off the same catalogue
+ *  Sets and Pricing already read. A plain read, costs nothing, so this screen calls it on
+ *  arrival rather than gating it behind a press. */
+export async function getSkuPhotos(skus: string[]): Promise<SkuPhotos> {
+  if (skus.length === 0) return { photos: {}, stockPhotos: {} }
   const query = skus.map((sku) => `sku=${encodeURIComponent(sku)}`).join('&')
-  const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as { photos: Record<string, SkuPhotoEntry> }
-  return body.photos
+  const body = (await request(`/skus/photos?${query}`, NO_CACHE)) as {
+    photos: Record<string, SkuPhotoEntry>
+    stock_photos: Record<string, string>
+  }
+  return { photos: body.photos, stockPhotos: body.stock_photos }
 }
 
 /** Every on-hand card, grouped by set, one row per distinct card with its quantity — the

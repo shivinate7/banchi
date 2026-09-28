@@ -641,8 +641,8 @@ COMPONENTS = [
                                         "prices go into the corpus keyed by SKU (D86), without "
                                         "which the next emit re-lists at the rule price and "
                                         "undoes the markdown.",
-                               "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86",
-                                               "D100", "D103", "D87", "D106", "D107", "D109",
+                               "governed_by": ["D7", "D8", "D9", "D11", "D49", "D54", "D86", "D87",
+                                               "D100", "D103", "D105", "D106", "D107", "D109",
                                                "D243"],
                                "tested_by": ["T7"]},
             "cmd_emit.py": {"does": "write ONE import CSV, `import.csv`; refuses while a price "
@@ -960,8 +960,8 @@ COMPONENTS = [
                                         "D20", "D21", "D23", "D24", "D25", "D29", "D30", "D35",
                                         "D36", "D41", "D46", "D49", "D54", "D55", "D56", "D58",
                                         "D59", "D63", "D64", "D65", "D67", "D68", "D71", "D76",
-                                        "D87", "D137", "D146", "D162", "D213", "D218", "D253",
-                                        "D259", "D260", "D265", "D277"], "tested_by": ["T3"]},
+                                        "D87", "D137", "D146", "D162", "D196", "D213", "D218",
+                                        "D253", "D259", "D260", "D265", "D277"], "tested_by": ["T3"]},
             # Rung 0 (a human's answer) sits above the ladder and is applied by join.py, so
             # T3 is what covers it — T4 owns the four rungs that infer.
             # D22 because FINISHES and CONDITION_BY_FINISH are no longer written here: they
@@ -1121,7 +1121,7 @@ COMPONENTS = [
                             # and removing it is what created one. D93/D97 because a stop says
                             # how many to take and lists every copy, never `wanted` of them.
                             "governed_by": ["D10", "D21", "D24", "D26", "D36", "D58", "D63", "D93",
-                                            "D97", "D172", "D183", "D212", "D265"],
+                                            "D97", "D172", "D183", "D212", "D220", "D259", "D265"],
                             "tested_by": ["T11"],
                             "note": "IT TOUCHES NO WIRE AND NO BROWSER. `POST /orders/walk-plan` "
                                     "(`server/capture_server.py:do_order_walk_plan`) and "
@@ -1486,8 +1486,8 @@ COMPONENTS = [
                                        "parameter, `None` by default, so no harness test "
                                        "opens a socket. Never raises: a join miss or an "
                                        "unreachable catalogue both answer `None`.",
-                               "governed_by": ["D301", "D8", "D15", "D25", "D35",
-                                               "D49", "D62", "D254", "D-demo-stock-images"],
+                               "governed_by": ["D8", "D15", "D25", "D35", "D49", "D62", "D254",
+                                               "D299", "D301", "D302"],
                                "tested_by": ["T7"]},
             "selection.py": {"does": "WHICH CARDS A PRESS IS OVER — one object, read by the"
                                      "wire and the CLI alike, and the drawer is a TERM in it "
@@ -2260,16 +2260,18 @@ COMPONENTS = [
         "modules": {
             # ---- the commit path. D18's rule is not advice here; this IS the path ----
             "githooks/pre-commit": {
-                "does": "the commit gate: fixtures read-only, no image staged outside "
-                        "captures/, no iCloud Drive conflict copy (`foo 2.py`) staged while "
-                        "the repo still lives there, no printed code-card layout in the "
-                        "staged diff, no symlink whose target leaves the repository (D47 — "
-                        "a tracked absolute link points at itself in the tree it names, and "
-                        "checking it out removes the ignored real directory), then "
-                        "the docs audit — whose exit code it maps, 1 blocking, 2 printing "
-                        "the coupling question, 64 warning loudly that the auditor was "
-                        "invoked with a flag it does not accept. Tracked and reviewable "
-                        "through core.hooksPath rather than living unversioned inside git.",
+                "does": "the commit gate: fixtures read-only, every staged image outside "
+                        "captures/ decoded for a QR and refused on a decode or an unavailable "
+                        "scanner (`PKMNSCAN_QR=off` is the hatch), no iCloud Drive conflict "
+                        "copy (`foo 2.py`) staged while the repo still lives there, no "
+                        "printed code-card layout in the staged diff, no symlink whose target "
+                        "leaves the repository (D47 — a tracked absolute link points at "
+                        "itself in the tree it names, and checking it out removes the "
+                        "ignored real directory), then the docs audit — whose exit code it "
+                        "maps, 1 blocking, 2 printing the coupling question, 64 warning "
+                        "loudly that the auditor was invoked with a flag it does not accept. "
+                        "Tracked and reviewable through core.hooksPath rather than living "
+                        "unversioned inside git.",
                 # D18 binds this file harder than any other in the repo: it is the path
                 # that decides whether a commit proceeds, so "nothing that writes may run
                 # here" is a property to preserve rather than a principle to admire. D11
@@ -2277,8 +2279,8 @@ COMPONENTS = [
                 # after it drifts, which is why an edit has to be stopped and not caught.
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
-                "governed_by": ["D11", "D14", "D16", "D18", "D44", "D47", "D58", "D70", "D92",
-                                "D295"],
+                "governed_by": ["D11", "D14", "D16", "D18", "D24", "D44", "D47", "D58", "D70",
+                                "D92", "D295", "D303"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; a sibling "
                         "hook's arrival is caught by `hook roster` since 2026-09-05. "
@@ -2518,7 +2520,8 @@ COMPONENTS = [
                         "the tree was tested.",
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
-                "governed_by": ["D16", "D18", "D136", "D141", "D196", "D215", "D275", "D284", "D261"],
+                "governed_by": ["D16", "D18", "D136", "D141", "D196", "D215", "D261", "D275",
+                                "D284", "D305"],
                 "note": "THE LIST IS DERIVED AND HAS A READER: `make docs-audit`'s `browser "
                         "scope` row reconciles SCOPE against Playwright's config, Vite's "
                         "config, every code string in app/tests and app/src naming a tracked "
@@ -2595,8 +2598,8 @@ COMPONENTS = [
                 # violating it, so wired into the commit path it would refuse its own commits.
                 # D43 and D53 join with D139: the cases turn on a linked worktree having its own
                 # store, and on the primary checkout being the one the live server is built from.
-                "governed_by": ["D18", "D42", "D43", "D53", "D139", "D151",
-                                "D158", "D176"],
+                "governed_by": ["D18", "D42", "D43", "D53", "D139", "D151", "D158", "D176",
+                                "D303"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -2810,14 +2813,49 @@ COMPONENTS = [
                         "the root, or a relative token that resolves against the process's own "
                         "cwd to an existing FILE under it. It passes over this session's own "
                         "chain and any LINKED WORKTREE nested inside this checkout, and PRINTS "
-                        "both with their reason.",
+                        "both with their reason. SINCE THE 2026-09-27 AMENDMENT, `OURS` (under "
+                        "this checkout) is narrowed a second way by WHOSE it is: "
+                        "`_read_owner_marks` reads `.serve/owners/*.json` (written by "
+                        "`scripts/reap_mark.py`) and walks `_descendants` down from each live "
+                        "root, and `_ownership_verdict` decides whether THIS caller — read from "
+                        "`CLAUDE_CODE_SESSION_ID` — may stop a pid tagged that way. A bare "
+                        "`--confirm` from the top-level session is D127's original sweep, "
+                        "untouched; the same bare `--confirm` from a subagent stops only pids "
+                        "tagged with its OWN session id, and an explicit `pid:`/`port:`/"
+                        "`match:` may still take an UNTAGGED pid but never one tagged to another "
+                        "session, for either caller.",
                 # D127 is the decision. D53 is the process it exists to protect — the main
                 # checkout's supervisor and its children are refused even from inside the main
                 # checkout, which is the one place this file overrules its own rule. D111 is
                 # the neighbouring notion it deliberately shares reasoning with rather than
-                # duplicating. D18 keeps its self-test off the commit path: it signals.
+                # duplicating. D18 keeps its self-test off the commit path: it signals. D175 is
+                # the neighbouring "whose is this" question this file now answers more finely
+                # than D175's own any-session reading. D305 is the
+                # 2026-09-27 amendment itself.
                 "governed_by": ["D169", "D18", "D43",
-                                "D53", "D88", "D111", "D127"],
+                                "D53", "D88", "D111", "D127", "D175",
+                                "D305"],
+            },
+            "reap_mark.py": {
+                "does": "stamps the process a launcher is about to become with the session that "
+                        "started it — `.serve/owners/<pid>.json`, `{pid, owner, label, "
+                        "startedAt}` — so `reap.py` can tell WHOSE a process is, not only "
+                        "whether it is under this checkout. ONE SHELL LINE IS THE WHOLE "
+                        "MECHANISM: a Makefile recipe line is `scripts/reap_mark.py <label>; "
+                        "exec <real command>` (or `; <real command>` where the launcher must "
+                        "stay alive to do cleanup, like design-check's suite-lock), so this "
+                        "script's own `os.getppid()` names the ONE shell that either `exec`s "
+                        "into the real, long-running process — same pid — or stays its direct "
+                        "parent throughout. MEASURED, NOT ASSUMED: the owner's own sketch was "
+                        "an env var read back with `ps -E`/`ps eww` on a pid this session did "
+                        "not start, and that was tried on this machine (macOS 26, Darwin "
+                        "27.0.0) and found to print no environment at all for such a process — "
+                        "so the mark is a FILE, generalising `reap.py:protected_pids`'s own "
+                        "D53 pattern rather than inventing a second one. The owner is "
+                        "`CLAUDE_CODE_SESSION_ID`, read directly rather than re-deriving D175's "
+                        "Bash-wrapper fragment, which only ever answered ANY session. Never "
+                        "installed to `~/.claude/bin` and never imported outside this checkout.",
+                "governed_by": ["D43", "D53", "D127", "D138", "D175", "D305"],
             },
             "cid-selftest.py": {
                 "does": "proves D172's card name and the photograph store filed under it by "
@@ -3301,8 +3339,8 @@ COMPONENTS = [
                         "directory-token subject that must NOT be placed, the caller it must "
                         "pass over, and a real nested worktree. Mutation-tested: twenty-two "
                         "guards removed one at a time, all caught, the naming rule among them.",
-                "governed_by": ["D169", "D18", "D43",
-                                "D53", "D122", "D127", "D157"],
+                "governed_by": ["D18", "D43", "D53", "D122", "D127", "D138", "D157", "D169",
+                                "D305"],
             },
             "silent-write-guard.py": {
                 "does": "the PreToolUse hook on Bash that refuses a git WRITE whose own output "
@@ -3515,44 +3553,6 @@ COMPONENTS = [
                         "out by name rather than padded with an arm that proves nothing.",
                 "governed_by": ["D18", "D42", "D53", "D133", "D139", "D158", "D169",
                                 "D171", "D173"],
-            },
-            "coordinator.py": {
-                "does": "`make coordinator` — the merge queue READ rather than remembered, so "
-                        "a status report is generated instead of composed out of a session's "
-                        "memory and a driver's stdout. main's tip against origin's, every open "
-                        "PR with a verdict PINNED TO ITS HEAD SHA, how many merged in 24h, "
-                        "`id claims` out of the audit, every worktree holding uncommitted work "
-                        "(D135's symlinks excluded), live sessions read from the console app's "
-                        "own records with the start time checked, and any waiter loop or twice-"
-                        "running driver. THE FLOOR IS THE REQUIRED-CHECK SET FROM BRANCH "
-                        "PROTECTION AND NOT A COUNT, which is a measurement: main's tip carries "
-                        "10 runs including `demo.yml`'s main-only pair, while PR #309's head "
-                        "carried 6 with `design-check` gated to one run, so no single number is "
-                        "right. A missing or `skipped` required check is `not ready` and never "
-                        "clean; a null conclusion is `running` and never failed. Any block it "
-                        "cannot read prints UNKNOWN and makes the exit non-zero.",
-                # D42 is the operation it reports on; D43 is why the worktree block exists at
-                # all; D111 is where the liveness oracle and its argument come from; D141 is
-                # the path-gating that makes a count floor unusable.
-                "governed_by": ["D42", "D43", "D111", "D135", "D140", "D141",
-                                "D171"],
-            },
-            "heartbeat.py": {
-                "does": "`make heartbeat` — docs/GATES.md item 24, built. The durable "
-                        "scheduled heartbeat that watches repo state across sessions: open "
-                        "PRs, `id claims`, dirty worktrees and live sessions by calling "
-                        "coordinator.py --json rather than re-reading any of the four (no "
-                        "bandaids — the primitive already existed); whether MAIN'S OWN last "
-                        "push is green, which coordinator.py's block_main never answers "
-                        "(it compares local main against origin/main, never CI); and "
-                        "janitor.py's own preview, --confirm never passed. Writes "
-                        ".serve/heartbeat/latest.json and appends to history.jsonl — the "
-                        "durable state a fresh, context-free run needs to say what is NEW "
-                        "since the last one, which is the 'a PR conflicting with a live "
-                        "session that has not been told' bullet answered by diffing rather "
-                        "than by memory. Read-and-report authority only.",
-                "governed_by": ["D200", "D42", "D111", "D140", "D148",
-                                "D171"],
             },
             "session-teardown.sh": {
                 "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "
@@ -3783,32 +3783,16 @@ COMPONENTS = [
                         "beside it — the license's one condition for reuse.",
                 "governed_by": ["D226"]},
             "ste_measure.py": {
-                "does": "the STE prose check's ONE measurer, read by `scripts/docs-audit.py`'s "
-                        "`ste offenders` row. Runs the vendored linter's four ERROR-severity "
-                        "rules over caller-supplied (path, text) pairs, drops findings a named "
-                        "`EXEMPTIONS` recognizer proves are an artifact of the text's shape (a "
-                        "table cell, a decision citation, the literal \"VS Code\", `via`), and "
-                        "names each remaining one as an OFFENDER: one sentence per rule, keyed "
-                        "by a hash of its folded text (`offender_identity`), so a reflow, a "
-                        "code-span edit or a claim moves nothing. A code span, decision "
-                        "citation or `VS Code` that crosses a line break is read over the "
-                        "joined paragraph (`join_span_breaks`), never line by line. Also "
-                        "reports the per-code "
-                        "counts and errors-per-1,000-plain-words per bucket, printed and never "
-                        "gated. Never touches disk itself.",
+                "does": "the STE prose check's ONE measurer. Its `ste offenders` docs-audit "
+                        "row was CUT 2026-09-27 (test-audit plan, D226/D229/D280 amended): "
+                        "the write-time STE hook already lints new prose, so this module's "
+                        "measuring, exemption and offender-identity machinery has no caller "
+                        "left in `scripts/docs-audit.py`. It stays vendored because "
+                        "`list_key` (a decision entry keyed by its file tail, so a claim "
+                        "moves nothing) is still imported by the `line anchor offenders` "
+                        "row and by `identifier spelling`'s markdown half.",
                 "governed_by": ["D18", "D140", "D218", "D226", "D229",
                                 "D280"]},
-            "ste-offenders.json": {
-                "does": "the shrinking offender list for `make docs-audit`'s `ste offenders` "
-                        "row (D226): `rules` (the vendored linter's ERROR-severity codes) and "
-                        "file -> lane and rule -> `<hash> <label>` entries, one per offending "
-                        "sentence, only the hash compared. A decision entry is keyed by its "
-                        "file tail, so a claim moves nothing. The row fails on an unlisted "
-                        "sentence, a stale entry, and growth over the merge-base, so a new "
-                        "file starts clean. Replaced D229's per-file pinned ratio "
-                        "(D280). Shrunk by hand or by "
-                        "`make offenders-prune`, which only deletes. Never grown by a tool.",
-                "governed_by": ["D226", "D229", "D280"]},
             "line-anchor-offenders.json": {
                 "does": "the shrinking offender list for `make docs-audit`'s `line anchor "
                         "offenders` row (D245): file -> lane and `line-anchor` -> every "
@@ -3821,6 +3805,23 @@ COMPONENTS = [
                         "Shrunk by hand or by `make offenders-prune`, which only deletes. Never "
                         "grown by a tool.",
                 "governed_by": ["D229", "D245", "D280"]},
+            "markdown-spelling-allow.json": {
+                "does": "the shrinking offender list for `make docs-audit`'s `identifier "
+                        "spelling` row, markdown half (owner's ruling, test-audit plan, "
+                        "2026-09-27: \"Shrinking offender list now\"): file -> lane and "
+                        "SPELLING -> every British word that file's PROSE spells, lower-cased, "
+                        "once per occurrence. Fenced code, an inline code span and a "
+                        "single-asterisk italic quote are exempt, `docs/gates/` is excluded "
+                        "outright, and a decision entry's number is folded out of its file key "
+                        "(`ste_measure.py:list_key`) so a claim moves nothing. The row fails "
+                        "on an unlisted word, a stale entry, and growth over the merge-base "
+                        "(`only_shrinks.py`), so a new file starts clean and new prose is "
+                        "American from the moment it is written. Staged mode reads only "
+                        "staged markdown, narrower than every other markdown row here. "
+                        "Seeded 2026-09-27 with the tree's own 724 pre-existing words over "
+                        "224 files. Shrunk by hand or by `make offenders-prune`, which only "
+                        "deletes. Never grown by a tool.",
+                "governed_by": ["D60", "D226", "D280"]},
             "only_shrinks.py": {
                 "does": "THE ONE only-shrinks helper for every shrinking offender list "
                         "(D280). `list_at_merge_base` reads a list "
@@ -3836,24 +3837,21 @@ COMPONENTS = [
                 "governed_by": ["D18", "D280"]},
             "derived_numbers.py": {
                 "does": "a named registry of tree-descriptive numbers: one pure "
-                        "`compute(root) -> int` function per figure, called by both "
-                        "`scripts/docs-audit.py`'s `derived numbers` row (read-only) and "
-                        "`scripts/derived-numbers-pin.py --write` (the writer, D18) — no "
-                        "counting logic is duplicated between them. Also carries "
+                        "`compute(root) -> int` function per figure, and "
                         "`MARKER_RE`/`find_markers()`, the `<!-- derived:<name> -->` marker "
-                        "syntax a number in prose uses to name its own derivation, and the "
-                        "module's own docstring is the argument for the one rule that "
-                        "matters here: a figure recording a past event (a gate run, an "
-                        "incident measurement) may NEVER get an entry, because rewriting "
-                        "one would falsify a record rather than fix rot.",
+                        "syntax a number in prose once used to name its own derivation. "
+                        "`docs-audit.py`'s `derived numbers` row read it; that row is CUT "
+                        "(test-audit plan Q2, 2026-09-28), and no tracked marker names a "
+                        "derivation any more, so this module has no live reader. Kept for "
+                        "`scripts/derived-numbers-pin.py`, which still imports it.",
                 "governed_by": ["D18"]},
             "derived-numbers-pin.py": {
-                "does": "`python3 scripts/derived-numbers-pin.py --write` rewrites every "
+                "does": "`python3 scripts/derived-numbers-pin.py --write` rewrote every "
                         "`<!-- derived:<name> -->`-marked number in the tracked markdown "
-                        "to match `derived_numbers.py:REGISTRY[<name>].compute(ROOT)` — "
-                        "the same call the row itself makes. Contains no counting logic of "
-                        "its own. D18: a generator may write, on no `make` target and no "
-                        "hook; `git diff` is the receipt.",
+                        "to match `derived_numbers.py:REGISTRY[<name>].compute(ROOT)`. No "
+                        "tracked file carries such a marker since `derived numbers` was cut "
+                        "(test-audit plan Q2, 2026-09-28), so this generator has nothing to "
+                        "find and rewrites nothing.",
                 "governed_by": ["D18"]},
             "docs-audit.py": {
                 "does": "D16's layers 1 and 2: every mechanical check, plus the coupling "
@@ -3892,11 +3890,10 @@ COMPONENTS = [
                 # missed, which is what that row exists to make impossible a third time.
                 #
                 # D31 AND D39 JOIN FOR THE ROW BESIDE IT, the same shape one row later. The
-                # `route census` row names the routes whose arrival the published screen
-                # count failed to follow — D39's #/runs, D49's #/pricing, D69's two and
-                # D70's #/codes — because the incident is what the row is for, and a reader
-                # who does not know the count has been wrong seven times reads the check as
-                # pedantry. Illustrations, listed because the superset rule reads a citation
+                # `route census` row (CUT, test-audit plan Q2, 2026-09-28) named the routes
+                # whose arrival the published screen count failed to follow — D39's #/runs,
+                # D49's #/pricing, D69's two and D70's #/codes. The published count is gone
+                # with it. Illustrations, listed because the superset rule reads a citation
                 # literally; the ruling both rows enforce is D16's.
                 #
                 # D27 AND D94 JOIN FOR `storage keys`, and both are load-bearing rather than
@@ -3928,10 +3925,10 @@ COMPONENTS = [
                                 "D88", "D90", "D92", "D94", "D96", "D101", "D102", "D104", "D110",
                                 "D111", "D113", "D119", "D122", "D123", "D127", "D132", "D134",
                                 "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
-                                "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
-                                "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
-                                "D213", "D215", "D218", "D226", "D229", "D245", "D247",
-                                "D280", "D284"],
+                                "D149", "D155", "D159", "D160", "D161", "D169", "D173", "D174",
+                                "D178", "D181", "D182", "D185", "D191", "D192", "D194", "D196",
+                                "D200", "D210", "D213", "D215", "D218", "D226", "D229", "D245",
+                                "D247", "D248", "D280", "D284"],
             },
             "claim-ids.py": {
                 "does": "allocate the numbers this branch's SLUG ids will take, and "
@@ -3992,9 +3989,8 @@ COMPONENTS = [
                 # split `--unclaim` and the fixed `stale_claims` both have to read through; D186
                 # and D188 are the real, landed entries the incident this file's own docstring
                 # narrates is about.
-                "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
-                                "D140", "D151", "D160", "D182", "D185", "D186", "D188",
-                                "D190"],
+                "governed_by": ["D16", "D18", "D42", "D47", "D60", "D72", "D80", "D135", "D140",
+                                "D151", "D160", "D182", "D185", "D186", "D188", "D190", "D295"],
             },
             "catalog-refresh.py": {
                 "does": "build-order step 9, piece 1 (D15): shallow-clone "
@@ -4034,7 +4030,7 @@ COMPONENTS = [
                         "numbered list as shipped; see the D206 "
                         "decision entry for why that reconciliation is left to a session "
                         "arguing for it on purpose.",
-                "governed_by": ["D15", "D18"],
+                "governed_by": ["D15", "D18", "D206"],
             },
             "catalog-image-mirror.py": {
                 "does": "build-order step 9, piece 3: derive the image-mirror manifest from "
@@ -4092,9 +4088,9 @@ COMPONENTS = [
                 # D160, D186 and D188 are the same worked example claim-ids.py's own entry
                 # carries — the fixture's directory-corpus arms build a real D160 shape, and
                 # the incident arm's own prose names the two real, landed entries it replays.
-                "governed_by": ["D1", "D2", "D16", "D18", "D47", "D80", "D135", "D136", "D140",
-                                "D141", "D143", "D148", "D151", "D160", "D185", "D186", "D188",
-                                "D190", "D249"],
+                "governed_by": ["D1", "D2", "D16", "D18", "D47", "D60", "D80", "D135", "D136",
+                                "D140", "D141", "D143", "D148", "D151", "D160", "D185", "D186",
+                                "D188", "D190", "D249", "D295"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -4111,9 +4107,9 @@ COMPONENTS = [
                 # behind an env var that decision names and no code declares yet, because
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
-                "governed_by": ["D15", "D16", "D23", "D39", "D40", "D90", "D96", "D105", "D194",
-                                "D218", "D226", "D229", "D245", "D248", "D271", "D277", "D280",
-                                "D284"],
+                "governed_by": ["D15", "D16", "D23", "D39", "D40", "D90", "D96", "D105", "D123",
+                                "D194", "D200", "D218", "D226", "D229", "D245", "D248", "D271", "D277",
+                                "D280", "D284", "D304"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "
@@ -4139,7 +4135,8 @@ COMPONENTS = [
                         "2026-09-20, is the same shape for a different record: "
                         "`scripts/stop-gate.sh:69` cited in docs/specs/mechanization-"
                         "backlog.md, from before the harness left turn end.",
-                "governed_by": ["D16", "D136", "D141", "D149", "D229", "D248", "D277"],
+                "governed_by": ["D16", "D48", "D136", "D141", "D149", "D180", "D194", "D229",
+                                "D248", "D277", "D284"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
@@ -4248,9 +4245,10 @@ COMPONENTS = [
              "governed_by": ["D11", "D14", "D16", "D24"],
             },
             "decision-context.py": {
-                "does": "D17's PreToolUse hook: reads this file, lifts each governing "
-                        "decision's own bolded lead-in out of docs/DECISIONS.md, and emits "
-                        "additionalContext — never permissionDecision, which would "
+                "does": "D17's PreToolUse hook: reads this file and emits one id-and-title "
+                        "line per governing decision as additionalContext (the owner's "
+                        "2026-09-27 ruling), with `make map` for the full text — never "
+                        "permissionDecision, which would "
                         "auto-approve every Write in the project. Never blocks, never "
                         "writes, exits 0 on its own bugs, silent for files no entry covers. "
                         "Its decision_gists() is reused by status.py, never reimplemented.",
@@ -4321,10 +4319,13 @@ COMPONENTS = [
                         "and was one 174 KB file until the split; `text()` reassembles it in "
                         "`ORDER.json`'s order and hands every checker the same bytes it used "
                         "to get from `docs/DEBTS.md`. `path_for(n)` accepts the bare number "
-                        "or the `DEBT<n>` id form — a debts finding is not a decision, and "
-                        "D140's claim-at-merge scheme does not govern it. Reads and never "
-                        "writes; stdlib only.",
-                "governed_by": ["D16", "D18", "D120", "D149", "D160"],
+                        "or the `DEBT<n>` id form. A debt now joins D140's claim-at-merge "
+                        "scheme too, reusing the decision machinery: a branch writes "
+                        "`## DEBT-<slug>` in its own file and `scripts/claim-ids.py` "
+                        "allocates the number at merge time. `HEADING_RE` reads either "
+                        "spelling a claimed entry may carry (bare or `DEBT`-prefixed). Reads "
+                        "and never writes; stdlib only.",
+                "governed_by": ["D16", "D18", "D120", "D140", "D149", "D160"],
             },
             "readiness-agreement.py": {
                 "does": "Reconciles app/src/readiness.ts's second implementation of "
@@ -4397,28 +4398,34 @@ COMPONENTS = [
                 "governed_by": ["D16", "D18", "D80", "D160"],
             },
             "index-decisions.py": {
-                "does": "Generates CLAUDE.md's decision index from the headings in "
-                        "docs/decisions/. The index is the OTHER half of the conflict a "
-                        "directory does not fix by itself: two branches that no longer "
-                        "collide in the corpus would still collide on a hand-typed index "
-                        "line. Locates the block BY SHAPE — the first fenced block whose "
-                        "non-blank lines all look like index lines — which is the same rule "
-                        "`decision index` finds it by, so re-titling the Map section cannot "
-                        "unhook one program without unhooking the other. Previews by "
-                        "default; `--write` applies.",
-                # D18 is the whole placement: this WRITES, so it is not on the commit path,
-                # and the checking half is docs-audit's `decision index` row, which computes
-                # the same answer and blocks. Two programs on purpose — a generator that also
-                # gated could satisfy itself, which is D16's rule.
-                #
+                "does": "Folds every unregistered docs/decisions/ entry into "
+                        "docs/decisions/ORDER.json, at claim time. FORMERLY ALSO wrote "
+                        "CLAUDE.md's decision index; that half retired 2026-09-27 — "
+                        "`make map ARGS=--decisions` (scripts/map-view.py) renders the same "
+                        "id-and-title list on demand, so there is no second copy for a "
+                        "branch's entry to collide on. Previews by default; `--write` "
+                        "applies.",
+                # D18 is the whole placement: this WRITES, so it is not on the commit path.
                 # D79 and D80 are a worked example in the docstring — the two entries the
                 # three non-decision chunks sit between, which is why the order is the
                 # manifest's rather than a sort. D140 is why this runs at the merge: the
-                # index line and the manifest position are the same class of fact as the
-                # number, unknowable until then. D43 is why it takes a root — a generator
-                # hard-wired to one tree indexes the wrong checkout.
+                # manifest position is the same class of fact as the number, unknowable
+                # until then. D43 is why it takes a root — a generator hard-wired to one
+                # tree indexes the wrong checkout.
                 "governed_by": ["D16", "D18", "D43", "D60", "D79", "D80", "D140",
                                 "D160"],
+            },
+            "make-help.py": {
+                "does": "`make help` — one line per Makefile target, derived from the "
+                        "comment directly above the target's own rule. Replaces a "
+                        "hand-typed ~22 KB `@echo` block that had already drifted from "
+                        "CLAUDE.md's own copy of the same list (token-budget audit, "
+                        "2026-09-27, Q1). The summary is the comment's first sentence; a "
+                        "target with none prints a note asking for one rather than nothing.",
+                # D18: a renderer, writes nothing, gates nothing. D60 is the same "index up
+                # front, body on demand" shape this repo already uses for the decision
+                # corpus — one source, rendered rather than copied.
+                "governed_by": ["D18", "D60"],
             },
             "prose-guard.py": {
                 "does": "D60's two guards over the four docs CLAUDE.md names. `--structure` asserts "
@@ -4430,8 +4437,8 @@ COMPONENTS = [
                         "only guard a rewrite has and the only check here that needs a "
                         "BEFORE. Reads and never writes; stdlib only, so the git hook's "
                         "bare python3 can run the half that gates. docs-audit.py calls the "
-                        "structure half as `decision structure` and the size half as "
-                        "`entry budget`; `--facts` is on no gate, having nothing to "
+                        "structure half as `decision structure`. The size half, `entry "
+                        "budget`, was cut (test-audit plan, 2026-09-27). `--facts` is on no gate, having nothing to "
                         "compare against outside a rewrite.",
                 # D60 is the entry it enforces and D17 the hook it exists to protect. D16
                 # is the temperament twice over: mechanical findings blocking by default,
@@ -4613,15 +4620,15 @@ COMPONENTS = [
                         "`serve scope` audit row fails until this list follows.",
             },
             "guard-scope.py": {
-                "does": "does this branch reach what one of fifteen guard self-tests proves? "
+                "does": "does this branch reach what one of the gated self-tests proves? "
                         "THE SECOND PATH GATE IN THIS REPO, on the owner's word, 2026-09-20. "
                         "`classify --target <name>` exits 0 to run and 3 to skip, and each of "
-                        "the fifteen recipes is its own caller. Unlike `serve-scope.py`'s "
+                        "the gated recipes is its own caller. Unlike `serve-scope.py`'s "
                         "hand-curated `SCOPE` against a separately hand-curated `CARRY`, "
                         "`derive_subjects()` reads each self-test's own source on every call — "
                         "every local-package import and every `Path`-style chain, plus a regex "
                         "for the four shell scripts — so there is no second list to drift. "
-                        "`ROSTER` names which fifteen targets are gated, on `serve-scope.py`'s "
+                        "`ROSTER` names which targets are gated (`make guard-scope ARGS=list` prints them), on `serve-scope.py`'s "
                         "own precedent of naming its one target by hand. It imports the "
                         "globbing and the recipe narrowing from `browser-scope.py`. "
                         "`PKMNSCAN_GUARD_SCOPE=off` runs every target regardless.",
@@ -4686,21 +4693,62 @@ COMPONENTS = [
                         "writes is already verified by a gate that runs on every commit.",
             },
             "offenders-prune.py": {
-                "does": "`make offenders-prune` — delete the STALE entries from the two "
-                        "shrinking offender lists (`ste-offenders.json`, "
-                        "`typed-interpunct-allow.json`), and re-key a listed file that git's "
+                "does": "`make offenders-prune` — delete the STALE entries from the three "
+                        "shrinking offender lists (`typed-interpunct-allow.json`, "
+                        "`line-anchor-offenders.json`, `markdown-spelling-allow.json`), and "
+                        "re-key a listed file that git's "
                         "rename detection (`git diff -M` from the merge-base with origin/main) "
-                        "says moved. It NEVER ADDS an entry, and it refuses to write a plan "
+                        "says moved. A fourth list, `ste-offenders.json`, was CUT 2026-09-27 "
+                        "(test-audit plan, D226/D229/D280 amended). It NEVER ADDS an entry, "
+                        "and it refuses to write a plan "
                         "that holds any identity more often than the list it read. Reads with "
-                        "the rows' own `_offender_list_shape`, `_offender_diff`, "
-                        "`ste_measure.measure` and `_typed_interpunct_found`, imported, so the "
+                        "the rows' own `_offender_list_shape`, `_offender_diff` and "
+                        "`_typed_interpunct_found`, imported, so the "
                         "pruner and the gate cannot disagree about what is stale. Previews; "
                         "`--write` applies. A generator that gates nothing (D18): on no hook, "
                         "and its selftest is not in `make check`, on `map-fix.py`'s precedent. "
                         "It writes a data file under scripts/, as `line-anchors-pin.py` does, "
                         "so it opens no seam in D18's list.",
-                "governed_by": ["D18", "D218", "D226", "D229",
+                "governed_by": ["D18", "D60", "D218", "D226", "D229",
                                 "D280"]},
+            "repair-born-game.py": {
+                "does": "the one-off repair for the F1 defect: a card born with `game IS "
+                        "NULL` although its sku is already bound. `cli/cmd_emit.py`'s two "
+                        "never-seen-position birth sites now pass the game they had already "
+                        "resolved for `bind_sku`, so this is only for cards that were born "
+                        "before that fix. `game_for_sku` reads the bound sku's `product_line` "
+                        "and `rarity` back off `pipeline/games.py`'s registry — the inverse "
+                        "of `pipeline/join.py:Catalog.from_export`'s own partition, never a "
+                        "second table — and refuses a card whose product line the registry "
+                        "does not recognize, or one two games could equally claim. Previews "
+                        "by default: count per derived game, five examples, and every "
+                        "refusal. `--write` applies inside one `Store.write()` transaction, "
+                        "and logs one `game_backfilled` event per repaired card through "
+                        "`Inventory._log` — the same primitive every other card mutation in "
+                        "`store/master.py` uses, so this write leaves the durable trail every "
+                        "other one does. A generator that gates nothing (D18): on no hook.",
+                "governed_by": ["D18", "D21", "D258"],
+                "note": "THE ONE PLACE THIS SCRIPT AND `cli/cmd_emit.py` MUST NOT DISAGREE: "
+                        "the birth-site fix passes the game the PIPELINE already resolved for "
+                        "this run (never a guess), while this script derives one from the "
+                        "STORED sku's own facts after the fact — two different sources of "
+                        "truth for the same field, correct only because both refuse rather "
+                        "than guess when they do not know. `repair-born-game-selftest.py` "
+                        "proves the derivation and the refusal, on a throwaway store, not in "
+                        "`make check` (map-fix.py's precedent for a generator's own selftest).",
+            },
+            "repair-born-game-selftest.py": {
+                "does": "proves `repair-born-game.py` on a throwaway store: a resolvable "
+                        "NULL-game card gets the right game, a card that already has one is "
+                        "never planned or touched, a card whose sku's product line maps to "
+                        "no game is refused and named, a card whose sku this store has never "
+                        "seen is refused and named, a card with no sku is not a candidate at "
+                        "all, the preview writes and logs nothing, and `--write` logs exactly "
+                        "one `game_backfilled` event per repaired card and none on a re-run "
+                        "with nothing left to fix. NOT in `make check`, `map-fix-selftest`'s "
+                        "precedent for a generator's own selftest.",
+                "governed_by": ["D18"],
+            },
             "map-view.py": {
                 "does": "`make map` — docs/map.py rendered for a person, in four views: the "
                         "shape, one package, one module, everything a decision governs, and "
@@ -4770,6 +4818,25 @@ COMPONENTS = [
                 # the mechanization rule this check exists to satisfy for a defect class that
                 # was, until now, only found by hand.
                 "governed_by": ["D18", "D173"]},
+            "hand-search-selftest.py": {
+                "does": "`make hand-search-selftest` — proves app/eslint.config.js's "
+                        "HAND_SEARCH_RULES sees the shape it is for, on fixtures over the "
+                        "real `npx eslint --stdin` (F11c, the reviewer's own finding: the "
+                        "round-one rule matched only `x.toLowerCase().includes(y)` and let "
+                        "`.startsWith`/`.endsWith`/`.indexOf`, `.toLocaleLowerCase()`, and a "
+                        "fold on the ARGUMENT instead of the receiver "
+                        "(`x.includes(y.toLowerCase())`) through silently). Twelve cases: one "
+                        "red and one green per method, two argument-folded reds, an "
+                        "eslint-disable-next-line exemption staying green, and the tests/ "
+                        "exemption block staying green. Not on the guard-scope roster: its "
+                        "real subject is a JS config file no Python import can name, so "
+                        "`derive_subjects` has nothing to read — argued in the script's "
+                        "own header, the same reason css-var-check-selftest and "
+                        "kit-adoption-selftest are also absent from that roster. Ungated in "
+                        "`make check`, alongside those two.",
+                # D271 is the search-matcher rule the eslint guard exists to enforce; D18 is
+                # why the self-test may sit on the commit path at all (it writes nothing).
+                "governed_by": ["D18", "D247", "D271"]},
             "token-literal-check.py": {
                 "does": "`make token-literal-check` — a CSS literal exactly equal to a design "
                         "token's value, in its own property family (2026-09-20 UX review, "
@@ -4834,7 +4901,7 @@ COMPONENTS = [
                         "fixtures and writes nothing (D18). `--routes` prints ROUTES as JSON for "
                         "app/tests/scaffold.spec.ts, so the spec and the check read one table "
                         "with one reader.",
-                "governed_by": ["D18", "D173", "D275", "D280", "D288"]},
+                "governed_by": ["D18", "D173", "D259", "D275", "D280", "D288"]},
             "checks.py": {
                 "does": "`make explain` — what `make check` runs, as a CHECKS literal plus its "
                         "own renderer, one entry per target in the recipe: what it asserts, "
@@ -4844,36 +4911,28 @@ COMPONENTS = [
                         "for the reason every other declarative literal here is read that way.",
                 # THE LONG TAIL IS NOT DECORATION. Every decision a CHECKS entry cites is one
                 # this file's content depends on: D43 is why port-agreement exists at all, D65
-                # and D76 the same for set-hint-agreement, D47 for ignore-check, D60 and D74
-                # for vale. Change one and the entry describing that check goes stale with it,
+                # and D76 the same for set-hint-agreement, D47 for ignore-check, D60 for prose.
+                # Change one and the entry describing that check goes stale with it,
                 # which is exactly what `governed_by` is for — so they are listed rather than
                 # allowlisted away.
-                "governed_by": ["D7", "D16", "D17", "D18", "D25", "D26", "D36", "D42", "D43",
-                                "D44", "D47",
-                                "D48",
-                                "D53", "D54", "D58", "D60", "D62", "D63", "D64", "D65", "D67",
-                                "D68",
-                                "D74", "D76",
-                                "D80", "D82", "D83", "D86", "D87", "D88", "D89", "D92", "D104",
-                                "D111", "D122",
-                                "D123", "D127", "D129", "D133", "D135", "D137", "D138", "D139",
-                                "D140",
-                                "D141", "D146", "D149", "D158", "D159", "D160", "D162", "D166",
-                                "D167",
+                "governed_by": ["D7", "D16", "D17", "D18", "D25", "D26", "D36", "D42", "D43", "D44",
+                                "D47", "D48", "D53", "D54", "D58", "D60", "D62", "D63", "D64",
+                                "D65", "D67", "D68", "D74", "D76", "D80", "D82", "D83", "D86",
+                                "D87", "D88", "D89", "D92", "D104", "D111", "D122", "D123", "D127",
+                                "D129", "D133", "D135", "D137", "D138", "D139", "D140", "D141",
+                                "D146", "D149", "D158", "D159", "D160", "D162", "D166", "D167",
                                 "D171", "D172", "D173", "D176", "D178", "D183", "D189", "D212",
-                                "D213", "D215",
-                                "D219", "D222", "D223", "D224", "D225", "D226", "D227", "D229",
-                                "D233", "D234", "D236", "D237", "D239", "D240", "D242", "D243",
-                                "D247", "D250", "D252", "D253", "D254", "D255",
-                                "D256", "D261", "D268", "D275"],
+                                "D213", "D215", "D219", "D222", "D223", "D224", "D225", "D226",
+                                "D227", "D229", "D233", "D234", "D236", "D237", "D239", "D240",
+                                "D242", "D243", "D247", "D250", "D252", "D253", "D254", "D255",
+                                "D256", "D261", "D268", "D271", "D275"],
                 "note": "IT DECLARES THE SUITE AND DELIBERATELY DOES NOT DRIVE IT, which is "
                         "the whole shape. A registry that drove `make check` could not "
                         "disagree with the recipe — and could silently stop running a check, "
                         "the failure this repo has paid for more than any other. One that "
                         "merely describes it can only lie, and a lie is catchable: `check "
                         "registry` reconciles it against the recipe both ways and in order, "
-                        "`check census` reconciles the published prose in the Makefile and "
-                        "CLAUDE.md against it, and `commit path` asserts D18 MECHANICALLY for "
+                        "and `commit path` asserts D18 MECHANICALLY for "
                         "the first time — nothing that writes may be on the path that decides "
                         "whether a commit proceeds, a rule cited in five Makefile comments and "
                         "two decisions and enforced until now by nobody. IT HAD A LIVE "
@@ -5025,7 +5084,7 @@ COMPONENTS = [
                 # D70 is the QR test the photograph step reuses from demo-photos.py. D61 is
                 # why the shipping export is written fresh rather than read (the store holds
                 # no address at all). D216 is why the recording runs offline.
-                "governed_by": ["D61", "D70", "D193", "D216", "D295", "D-demo-stock-images"],
+                "governed_by": ["D61", "D70", "D193", "D216", "D295", "D302"],
             },
             "demo-histories.py": {
                 "does": "`make demo-histories`: records every demo card's price history, all "
@@ -5060,13 +5119,39 @@ COMPONENTS = [
                         "sweeps every GET the client can build against the parameter space "
                         "the store actually holds, and writes app/demo/bundle.json plus the "
                         "photographs Vite will bundle. Records 200s only — a 404 here means "
-                        "the path is not a read, not that a read failed.",
+                        "the path is not a read, not that a read failed. RESUMABLE (PR 4B "
+                        "lane M): each route's answer lands in a gitignored work area "
+                        "(`.demo-record-work/<key>/`, `WorkArea`) the instant it is taken, "
+                        "keyed by a digest of the store's own content — a killed sweep picks "
+                        "up where it left off instead of starting from zero, and a changed "
+                        "store starts fresh because its key differs.",
                 # D43 is the port and the store, both derived rather than assumed: this
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
-                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D96", "D159",
-                                "D172", "D183", "D213", "D216", "D220", "D227", "D269", "D295",
-                                "D-demo-stock-images"],
+                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D86", "D88",
+                                "D96", "D159", "D172", "D183", "D193", "D213", "D216", "D220",
+                                "D227", "D269", "D295", "D302"],
+            },
+            "demo-record-resume-selftest.py": {
+                "does": "`WorkArea`/`snapshot_key`, the resume cache PR 4B lane M added to "
+                        "`demo-record.py`, proved with a `FakeServer` rather than a real "
+                        "server or store: a route already on disk is never asked for again, "
+                        "a killed-then-resumed sweep's finished bundle is byte-identical to "
+                        "a clean one (which is also why the shipping-batch POST's random "
+                        "id is routed through the same skip check, not reissued on resume), "
+                        "a corrupted route file is never counted as recorded and is "
+                        "re-fetched exactly once, a changed store hashes to a different key "
+                        "and starts over, no work-area file carries a name the scrub "
+                        "replaces (D295), an old key's work area is pruned once a current "
+                        "one exists, and a stateful POST (the batch id "
+                        "`server/shipping_routes.py:_BATCHES` only means anything inside "
+                        "the process that issued it) is cached only once its dependent GET "
+                        "is too, never the POST alone.",
+                # D18: writes nothing but its own throwaway temp directories, spends
+                # nothing (no network, no subprocess, no real store), so it is safe on any
+                # path. Not wired into `make check`, on `demo-record-selftest.py`'s own
+                # precedent — run by hand. D193 is the buyer name the scrub test protects.
+                "governed_by": ["D18", "D86", "D88", "D193", "D295"],
             },
             "demo-record-selftest.py": {
                 "does": "Server's stdout-drain, proved on a bare subprocess rather than by "
@@ -5108,51 +5193,6 @@ COMPONENTS = [
                 # the first time and why its stand-in changed off `/home`.
                 "governed_by": ["D18", "D183", "D295"],
             },
-            "demo-freshness.py": {
-                "does": "whether app/demo/bundle.json still describes the wire it was recorded "
-                        "against, by comparing a digest of app/src/types.ts and "
-                        "app/src/server.ts. On no gate: the bundle is not committed and CI "
-                        "rebuilds it from source on every push, so what is left is a local "
-                        "preview serving a recording that predates the last edit.",
-                # D18: reads two files, writes nothing, so it is safe on a path that decides
-                # anything. D16 is the shape — a mechanical check for a claim that would
-                # otherwise fail silently, because a stale bundle renders BLANK rather than
-                # erroring.
-                "governed_by": ["D16", "D18"],
-            },
-            "demo-determinism.py": {
-                "does": "whether two full `make demo` runs write the same app/demo/bundle.json "
-                        "CONTENT — the one thing demo-freshness.py's wire-shape digest cannot "
-                        "see. Two scratch PKMNSCAN_HOMEs, the bundle diffed as JSON, every moved "
-                        "value checked against a small vocabulary of known request/process-time "
-                        "stamps (an order's own ingest moment, a run directory's real mtime, the "
-                        "recording server's boot id). A pointer that moves for any other reason "
-                        "fails the run — found once, before Inventory.bind_sku took an `at` "
-                        "parameter: 97 bound_at values differed between two runs and "
-                        "demo-freshness was green throughout.",
-                # D18: two full seed-and-record passes write only scratch demo homes and a
-                # scratch bundle copy, both removed before the process exits, so nothing
-                # tracked moves — the same exemption demo-freshness.py already carries, for
-                # the same reason. D16 is the shape: a mechanical check for a claim
-                # (byte-identical rebuild) that fails silently rather than loudly otherwise.
-                # D43 is why each scratch home is its own directory rather than the
-                # checkout's real demo/ — a shared store over two runs is the data-loss shape
-                # that decision names, generalized from "the owner's store" to "either run's".
-                "governed_by": ["D16", "D18", "D43", "D159", "D295", "D301"],
-            },
-            "demo-determinism-selftest.py": {
-                "does": "demo-determinism.py's own ALLOWED_PATTERNS matcher, proved on "
-                        "fixtures rather than by spending two full `make demo` runs. Every "
-                        "real, measured pointer the checked-in patterns are supposed to "
-                        "excuse still matches. Four fabricated pointers that merely CONTAIN "
-                        "an allowed key (`at`, `updated_at`, `batch`) under a route none of "
-                        "the patterns name do NOT match — the exact regression a bare-key "
-                        "matcher (the pre-lane-7 ALLOWED_KEYS) would miss. One end-to-end "
-                        "case through `_diff` itself. Pure functions only, no subprocess, "
-                        "no write — in `make check`, unlike demo-determinism.py itself "
-                        "(D18: that target is a press, run by hand).",
-                "governed_by": ["D16", "D18"],
-            },
             "stockimages-cache-selftest.py": {
                 "does": "proves `pipeline/stockimages.py`'s disk cache offline, both ways: a "
                         "`Market` whose fetcher always raises `Offline` (the same failure "
@@ -5164,7 +5204,7 @@ COMPONENTS = [
                         "writes, which is what makes copying that directory into the demo "
                         "mirror (`demo-mirror.py`'s `SIDE_DIRS`) enough on its own. No "
                         "subprocess, no network, no write outside a `TemporaryDirectory`.",
-                "governed_by": ["D-demo-stock-images"],
+                "governed_by": ["D302"],
             },
             "extract_real_facts.py": {
                 "does": "reads a READ-ONLY COPY of the owner's store (never the owner's own "
@@ -5284,8 +5324,7 @@ COMPONENTS = [
                         "`min-height: 100dvh` and a taller viewport makes a taller document.",
                 # D5 is who the render is for and D13 is what it renders. D18 is why it is
                 # not on the commit path: it writes. D16 is the shape of what was added —
-                # a mechanical check for a claim that would otherwise fail silently, which
-                # is the same reason demo-freshness exists two entries up.
+                # a mechanical check for a claim that would otherwise fail silently.
                 "governed_by": ["D5", "D13", "D16", "D18"],
             },
             "views.txt": {
@@ -5304,15 +5343,16 @@ COMPONENTS = [
                         "(D43) — a tracked file cannot name a port derived from one "
                         "directory's path — and screenshot.sh substitutes a worktree's own "
                         "before rendering.",
-                # D5 is what the list is for: NINE owner screens and the Fulfiller's, which
-                # is the one render where the absence of the nav strip is the point. It said
-                # five while the file listed eight — the lines were added (pricing by D49,
-                # orders and shipping by D69) and the count beside them was not, the same
-                # drift the app/ entry below carries a paragraph about. It went eight to seven
-                # on 2026-09-05 when D24's owner ruled that `#/inventory` keeps the pooled
+                # D5 is what the list is for: the owner's screens and the Fulfiller's, which
+                # is the one render where the absence of the nav strip is the point. It once
+                # said five while the file listed eight — the lines were added (pricing by
+                # D49, orders and shipping by D69) and the count beside them was not, the same
+                # drift the app/ entry below carries a paragraph about. It later went stale
+                # again when D24's owner ruled that `#/inventory` keeps the pooled
                 # photographs on its `Pooled` shelf and loses its render (docs/DEBTS.md
-                # section 14) — and the `route census` row caught this sentence in the same
-                # run that dropped the line, which is the whole reason that row exists. D13 is
+                # section 14). The `route census` row that once caught drift like this is
+                # CUT (test-audit plan Q2, 2026-09-28) — recount from `scripts/views.txt`
+                # and `app/src/App.tsx` instead of trusting a number in this comment. D13 is
                 # why the hash route in each URL is load-bearing rather than decoration —
                 # drop it and a render is named after one view and shows another. D39 added
                 # the `runs` line on 2026-08-29 — the pipeline's own route. This comment said
@@ -5481,9 +5521,9 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D121", "D132", "D134", "D137", "D138",
                                 "D145", "D159", "D164", "D165", "D166", "D168", "D172", "D174",
                                 "D183", "D189", "D191", "D192", "D193", "D196", "D203", "D212",
-                                "D213", "D219", "D225", "D227", "D251", "D252", "D259", "D262",
-                                "D264", "D265", "D268", "D271", "D273", "D298",
-                                "D299", "D301"],
+                                "D213", "D219", "D223", "D225", "D227", "D231", "D251", "D252",
+                                "D258", "D259", "D262", "D264", "D265", "D268", "D271", "D273",
+                                "D298", "D299", "D301"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -5676,7 +5716,7 @@ COMPONENTS = [
                                 "D145", "D147", "D156", "D159", "D163", "D165", "D166", "D168",
                                 "D170", "D172", "D174", "D180", "D188", "D189", "D196", "D212",
                                 "D216", "D219", "D225", "D227", "D236", "D254", "D258", "D273",
-                                "D277", "D291", "D293", "D301", "D-demo-stock-images"],
+                                "D277", "D291", "D293", "D301", "D302"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -5816,8 +5856,9 @@ COMPONENTS = [
         # rest of Gate C is physical. scripts/status.py resolves "do this next" through
         # this field, and without it step 10 printed as claimed by nobody.
         "does": "the web app, REBUILT AS BANCHI in 2026-09: a new shell, a shared kit, two "
-                "themes, and every screen redrawn against it. FOURTEEN routes behind a "
-                "hand-written hash router, THIRTEEN of them the owner's — home, which took the "
+                "themes, and every screen redrawn against it. Every route lives in "
+                "app/src/App.tsx's ROUTES table, behind a hand-written hash router, most of "
+                "them the owner's — home, which took the "
                 "root hash and is where the six-stage spine is drawn; the capture screen that "
                 "Gate B runs on, now at `#/capture`; the runs screen the pipeline lives on; the "
                 "review queue; the pricing worklist; the order screen and the shipping lane "
@@ -5835,12 +5876,10 @@ COMPONENTS = [
                 "src/App.tsx's ROUTES table and never incremented: it has been wrong more "
                 "often than right — it said "
                 "NINE from D70 until 2026-08-31, and #/codes was missing from the list above "
-                "outright. TWO ROWS RECONCILE IT NOW and neither existed when the sentence "
-                "here ended `and nothing reconciles it`: scripts/docs-audit.py's "
-                "`route census` fails a commit where a published count in this file, in "
-                "CLAUDE.md or in README.md disagrees with that table, and its "
-                "`route rosters` row fails one where a spec's hand-typed list of routes "
-                "does. Playwright "
+                "outright. The count is deleted from prose now rather than reconciled "
+                "(`route census` is CUT, test-audit plan Q2, 2026-09-28) — recount from the "
+                "table itself. `route rosters` still fails a commit where a spec's "
+                "hand-typed list of routes disagrees with it. Playwright "
                 "specs assert docs/DESIGN.md's Fulfillment floors, one against the kit's "
                 "pull-confirm and one against the Fulfillment view.",
         "governed_by": ["D3", "D4", "D5", "D6", "D7", "D9", "D10", "D13", "D18"],
@@ -5934,7 +5973,7 @@ COMPONENTS = [
                                    "governed_by": ["D5", "D94", "D102"]},
             "public/manifest.webmanifest": {"does": "the web app manifest, and it does TWO jobs. It began as an icon manifest — `apple-touch-icon` pointed at an SVG, which iOS does not render, so the app had no home-screen icon at all rather than a degraded one. Since D108 it is also what makes Chrome's `Install page as app` produce a real dock app: `display: standalone`, and `launch_handler: focus-existing` so a second press on the dock icon focuses the open window instead of opening another. EVERY URL IN IT IS RELATIVE, and that is a correctness fix rather than a style: Vite rebases the `<link rel=\"manifest\">` address and copies app/public/ VERBATIM, so a site-absolute `/icon-192.png` is right at `/` and 404s under `make demo-static`'s `/pkmnscan/` base — measured against the published demo, icons and start_url both. ITS ICON LIST IS THE macOS APP ICON SET AND NOTHING ELSE (logo.md section 17): three PNGs, all inset to Apple's 824/1024 grid, because Chrome resizes THESE into the installed app's .icns and one full-bleed entry would pad the dock icon at one size and not the next. `favicon.svg` was removed from it for exactly that reason and is still the tab icon by `<link rel=\"icon\">`. Still NO service worker and no offline story; the page is served by `make up` and there is nothing to cache.",
                                             "governed_by": ["D94", "D102", "D108"]},
-            "public/icon-180.png": {"does": "the apple-touch-icon, and the ONE raster that is NOT inset to the macOS grid (logo.md section 17) — iOS applies its own mask to a full-bleed square, so insetting would put the mark in a box inside a box. The DISPLAY cut because 180px is squarely inside the range section 3 locks for 64px and up — taper and holographic foil, not the favicon's small cut. GENERATED by `node scripts/build-mark.mjs --icons`, which needs Playwright and is deliberately behind a flag: committing what it writes needs `--no-verify`, since the pre-commit image guard refuses any .png outside captures/ and has no PKMNSCAN_*=off hatch.",
+            "public/icon-180.png": {"does": "the apple-touch-icon, and the ONE raster that is NOT inset to the macOS grid (logo.md section 17) — iOS applies its own mask to a full-bleed square, so insetting would put the mark in a box inside a box. The DISPLAY cut because 180px is squarely inside the range section 3 locks for 64px and up — taper and holographic foil, not the favicon's small cut. GENERATED by `node scripts/build-mark.mjs --icons`, which needs Playwright and is deliberately behind a flag: the pre-commit image guard now QR-scans any .png staged outside captures/ (`PKMNSCAN_QR=off` is its hatch) rather than refusing on sight, so a generated icon clears it on a clean decode with no override needed.",
                                     "governed_by": ["D94", "D102"]},
             "public/icon-192.png": {"does": "the manifest's smallest icon, INSET to Apple's macOS icon grid like the rest of that set (logo.md section 17) — 155 of 192, which is 80.73% against the grid's 80.47%, the rounding. Same drawing and same generator as icon-180.png; what differs is that it is drawn smaller on a transparent canvas, because section 3 locks the tile and nothing may redraw it.",
                                     "governed_by": ["D94", "D102", "D108"]},
@@ -6186,7 +6225,7 @@ COMPONENTS = [
                                          "in the kit's own panel, never the native OS menu, every "
                                          "facet usable in any order.",
                                  "governed_by": ["D5", "D50", "D118", "D132", "D212", "D218",
-                                                 "D221", "D259"]},
+                                                 "D221", "D259", "D271"]},
             "src/kit/data.css": {"does": "the data primitives' styles. One height for every control "
                                          "in a filter bar (`--bn-control-h`) and one width floor "
                                          "and cap. Mono for machine strings only.",
@@ -6197,7 +6236,7 @@ COMPONENTS = [
                                              "`boxesMostRecentFirst` (this browser's hand, then the "
                                              "newest box by `bid`, then the number). No React, so a "
                                              "spec can import it.",
-                                     "governed_by": ["D132", "D142", "D145"]},
+                                     "governed_by": ["D132", "D142", "D145", "D259"]},
             "src/kit/data.specimens.tsx": {"does": "every data primitive in every state a screen "
                                                    "can put it in, on invented data. The kit page "
                                                    "mounts `DataSpecimens`; `tests/kit-data/` "
@@ -6358,9 +6397,12 @@ COMPONENTS = [
                                     "`#/fulfillment`, and "
                                     "`#/gallery`, which is the KIT now rather than step 6's "
                                     "component page. RECOUNT FROM THE TABLE, NEVER INCREMENT — "
-                                    "`route census` fails a commit where this file, CLAUDE.md or "
-                                    "README.md disagrees with it, and `route rosters` does the "
-                                    "same for a spec's pinned list. "
+                                    "`route census` once failed a commit where this file, "
+                                    "CLAUDE.md or README.md disagreed with it; that row is CUT "
+                                    "(test-audit plan Q2, 2026-09-28), and the counts are "
+                                    "deleted from those files' prose instead. `route rosters` "
+                                    "still fails a commit where a spec's pinned list "
+                                    "disagrees. "
                                     "ONE TABLE DRIVES FIVE THINGS: the sidebar, the phone tab "
                                     "bar, the command palette, the document title and the "
                                     "render. A route carries its group, its icon, its hotkey, "
@@ -6405,8 +6447,8 @@ COMPONENTS = [
                                     "#/boxes WAS the seventh route and D31 deleted it while "
                                     "keeping the screen; the ordinals kept in this file count "
                                     "the order routes were ADDED and not their place in the "
-                                    "table, which is why `route census` checks the counts and "
-                                    "deliberately not these. "
+                                    "table, which is why a route-count check has never read "
+                                    "these ordinals. "
                                     "ONE BRAND, THREE SURFACES (D120, logo.md section 19): "
                                     "`BrandSlot` is rendered by the sidebar, the phone's top "
                                     "bar and the phone's drawer, and nothing here branches on "
@@ -6440,7 +6482,7 @@ COMPONENTS = [
                                       "mistake would happen, and asserts nothing about the "
                                       "rendering. No Playwright spec covers this screen yet.",
                               "governed_by": ["D14", "D20", "D24", "D33", "D56", "D70", "D172",
-                                              "D218", "D259", "D272"]},
+                                              "D218", "D259", "D270", "D271", "D272"]},
             "src/Codes.css": {"does": "the code screen's look. The two lanes are the first "
                                       "numbers drawn, because they are the decision; the "
                                       "duplicate panel takes the one non-hairline border in "
@@ -6540,7 +6582,7 @@ COMPONENTS = [
                                               "D159", "D165", "D168", "D172", "D174", "D180",
                                               "D189", "D192", "D193", "D203", "D207", "D213",
                                               "D219", "D225", "D227", "D236", "D252", "D264",
-                                              "D268", "D273", "D291", "D298", "D299", "D300"]},
+                                              "D268", "D273", "D291", "D298", "D299", "D300", "D301"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -6846,8 +6888,9 @@ COMPONENTS = [
             "governed_by": ["D3", "D10", "D13", "D19", "D20", "D21", "D22", "D23", "D27", "D28",
                             "D34", "D36", "D41", "D52", "D56", "D58", "D65", "D67", "D81", "D92",
                             "D117", "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145",
-                            "D153", "D164", "D170", "D172", "D196", "D218", "D260", "D264", "D286",
-                            "D299"]},
+                            "D153", "D164", "D170", "D172", "D196", "D218", "D259", "D260", "D264",
+                            "D271",
+                            "D286", "D299"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
             # that distinction is carried here in a border style rather than in any logic.
@@ -7085,7 +7128,7 @@ COMPONENTS = [
                         "body between a fixed heading and a fixed press, sized 640px wide "
                         "because that is what the command's own longest line measures.",
                 "governed_by": ["D5", "D9", "D13", "D23", "D24", "D28", "D29", "D32", "D35", "D37",
-                                "D41", "D46", "D50", "D117", "D118", "D162", "D259",
+                                "D41", "D46", "D50", "D117", "D118", "D123", "D162", "D259",
                                 "D291"],
             },
             "src/Inventory.tsx": {
@@ -7249,7 +7292,7 @@ COMPONENTS = [
                         "off the wire.",
                 "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
                                 "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115",
-                                "D132", "D134", "D196", "D218", "D259", "D299",
+                                "D118", "D132", "D134", "D181", "D196", "D218", "D259", "D299",
                                 "D300"],
             },
             "src/BoxOps.css": {
@@ -7311,7 +7354,7 @@ COMPONENTS = [
                         "both are correct for the owner and neither is his.",
                 "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D28", "D31",
                                 "D32", "D57", "D69", "D83", "D93", "D94", "D125", "D172", "D192",
-                                "D193", "D212", "D218", "D259", "D265", "D275"],
+                                "D193", "D196", "D212", "D218", "D259", "D265", "D275"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -7328,7 +7371,7 @@ COMPONENTS = [
                                     "governed_by": ["D5", "D6"]},
             "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
                                     "governed_by": ["D5", "D118"]},
-            "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server, and since 2026-09-06 that is true of its PIXELS too — `SPECIMEN_PHOTO` is a bundled data URI handed to the Fulfiller specimen through `CardLocations`'s `photoSrc` seam, the one call site of that prop in this product. It is what `make screenshot` renders and where `app/tests/pull-confirm.spec.ts` measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that spec measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
+            "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server, and since 2026-09-06 that is true of its PIXELS too — `SPECIMEN_PHOTO` is a bundled data URI handed to the Fulfiller specimen through `CardLocations`'s `photoSrc` seam, the one call site of that prop in this product. It is what `make screenshot` renders and where `app/tests/fulfillment.spec.ts`'s pull-confirm describe block measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that block measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
                                 "governed_by": ["D5", "D6", "D24", "D50", "D58", "D67", "D68",
                                                 "D71", "D93", "D94", "D95", "D102", "D117", "D118",
                                                 "D119", "D300"],
@@ -7389,8 +7432,8 @@ COMPONENTS = [
                                         "string to split: a section name may itself contain ` · ` "
                                         "(D132).",
                                 "governed_by": ["D5", "D10", "D20", "D24", "D30", "D41", "D58",
-                                                "D68", "D118", "D132", "D155", "D194", "D218",
-                                                "D259", "D260", "D299"]},
+                                                "D68", "D118", "D132", "D155", "D181", "D194",
+                                                "D218", "D259", "D260", "D299"]},
             "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
                                             "its fill, graduations, edge labels and crossing pin, the "
                                             "demoted box strip with the caret that replaced the "
@@ -7481,6 +7524,24 @@ COMPONENTS = [
                                          "`ReviewQueue.css`'s `.review-catalog*`/`.review-candidate*` "
                                          "for the picker rows.",
                                  "governed_by": ["D94", "D117", "D118", "D252"]},
+            "src/RailFrame.tsx": {"does": "the rail's own sticky frame, lifted out of "
+                                          "`BoxBrowse.tsx` (lane A2b, "
+                                          "`docs/reviews/ux-2026-09-23/orders-a/PLAN.md`'s "
+                                          "component reuse map: \"Inventory passes its box list "
+                                          "and walk. Orders passes its buyer list.\"). MOVED "
+                                          "WHOLE: the `<div className=\"browse-map\">` wrapper "
+                                          "and D289 rule 2's own measure (\"the rail's top at "
+                                          "rest, and the rail's height is the window less that "
+                                          "top\", UX-227) — pure over the wrapper's own DOM node "
+                                          "and its parent, no closure over `BoxBrowse.tsx`'s "
+                                          "state. `BoxBrowse.css`'s `.browse-map` rule is "
+                                          "untouched and still names the CSS var this file sets "
+                                          "(`--browse-rail-rest`), so the default `className` "
+                                          "keeps `#/inventory` pixel-identical. `ref` is a "
+                                          "normal prop (React 19, no `forwardRef`), because "
+                                          "`BoxBrowse.tsx` still needs the mounted node to "
+                                          "scroll the selected box row into view within it.",
+                                  "governed_by": ["D31", "D96", "D220", "D289"]},
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
                                               "its sold action. D7's fungibility made visible — every "
                                               "unsold copy is offered, and the listed quantity is read "
@@ -8126,8 +8187,9 @@ COMPONENTS = [
                                                "D91", "D93", "D96", "D97", "D103", "D113", "D114",
                                                "D118", "D123", "D132", "D159", "D171", "D181",
                                                "D192", "D193", "D194", "D195", "D196", "D203",
-                                               "D209", "D212", "D218", "D220", "D221", "D274",
-                                               "D285", "D296"]},
+                                               "D209", "D212", "D218", "D220", "D221", "D259",
+                                               "D271", "D274", "D285", "D296",
+                                               "D304"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8135,7 +8197,7 @@ COMPONENTS = [
                                "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69",
                                                "D113", "D114", "D117", "D118", "D123", "D193",
                                                "D195", "D196", "D203", "D212", "D221", "D270",
-                                               "D274"]},
+                                               "D274", "D289", "D304"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -8175,41 +8237,30 @@ COMPONENTS = [
                                                 "a person.",
                                         "governed_by": ["D5", "D61", "D66", "D69", "D73", "D94",
                                                         "D218", "D221", "D292"]},
-            "src/OrdersWalkPane.tsx": {"does": "`docs/specs/order-walk-plan.md` §13, \"Orders "
-                                           "is inventory's screen with orders in the rail\": "
-                                           "replaces `OrdersWalk.tsx` whole, not adapted. There "
-                                           "is no more frozen pass — `useOrderWalk` re-fetches "
-                                           "`POST /orders/walk-plan` LIVE whenever the walked "
-                                           "set (the selected order plus every ticked one) "
-                                           "changes, the same way selecting a box opens it. "
-                                           "`WalkList` draws the plan's boxes and sections in "
-                                           "`BoxBrowse.css`'s own `.browse-list`/`.browse-row` "
-                                           "shape, one row per physical pick (`here: true` "
-                                           "copy); `WalkMainPane` is inventory's own card pane "
-                                           "— `CardLocations` with `preserveOrder`, over a "
-                                           "`SearchGroup` synthesised from the current row's "
-                                           "take, exactly as `Inventory.tsx`'s `loneGroup` and "
-                                           "the old `TakeBlock` built one. `Mark sold` is the "
-                                           "one write, `WalkPullFn`/`WalkUndoFn` restated from "
-                                           "the deleted file, and it records against an owing "
-                                           "order via `pickOrderFor`'s live-tally rule "
-                                           "(unchanged from `OrdersWalk.tsx`). `hideHeader`, "
-                                           "`rowOverride` and `rowAttrs` — added to "
-                                           "`CardLocations.tsx` only for the deleted file's own "
-                                           "one-line collapsed row — are deleted with it; "
-                                           "`preserveOrder` stays, the trap this rebuild's own "
-                                           "brief named first (never re-sort the walk).",
+            "src/OrdersWalkPane.tsx": {"does": "the walk's own hook and list, over "
+                                           "`docs/specs/order-walk-plan.md` §13: "
+                                           "`useOrderWalk` re-fetches `POST /orders/walk-plan` "
+                                           "LIVE whenever the walked set (the selected order "
+                                           "plus every ticked one) changes, the same way "
+                                           "selecting a box opens it, and `WalkList` draws the "
+                                           "plan's boxes and sections, one row per physical "
+                                           "pick (`here: true` copy). THE CARD PANE MOVED OUT "
+                                           "(lane A3, `D304`): "
+                                           "`Orders.tsx:OrderPickPane` composes it from "
+                                           "`CardHero.tsx:CardPane` and "
+                                           "`CardLocations.tsx:CardLocations`, reused whole. "
+                                           "`pickFigureOf`, `RowAction` and `takeBuyers` stay "
+                                           "exported from here because `Orders.tsx` still needs "
+                                           "them: the \"Pick N of M\" figure, and the one press "
+                                           "(Mark sold / Undo) `CardLocations`'s own "
+                                           "`renderAction` slot calls per copy. `WalkCardPane` "
+                                           "and its `orders-card-*` classes are deleted, not "
+                                           "adapted.",
                                    "governed_by": ["D24", "D57", "D58", "D62", "D79", "D93", "D96",
                                                    "D97", "D116", "D118", "D132", "D164", "D171",
-                                                   "D181",
-                                                   "D193", "D209", "D212", "D218", "D220", "D252",
-                                                   "D279"]},
-            "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
-                                           "drain-bar (borrowed from `Inventory.css` by class "
-                                           "name); every other shape this file draws is "
-                                           "`BoxBrowse.css`'s own `.browse-*` classes, imported "
-                                           "by `Orders.tsx` rather than restated here.",
-                                   "governed_by": ["D50", "D94", "D118", "D164"]},
+                                                   "D181", "D193", "D209", "D212", "D218", "D220",
+                                                   "D252", "D263", "D279",
+                                                   "D304"]},
             "src/Shipping.tsx": {"does": "`#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE "
                                          "HUB — `<OrdersHub stage=\'ship\'/>`. The stage itself "
                                          "is src/OrdersShipStage.tsx, which `Orders.tsx` "
@@ -8264,7 +8315,7 @@ COMPONENTS = [
                                 "governed_by": ["D50", "D62", "D69", "D86", "D89", "D103", "D105",
                                                 "D118", "D125", "D159", "D189", "D193", "D194",
                                                 "D201", "D214", "D217", "D219", "D225", "D236",
-                                                "D281", "D285", "D298"]},
+                                                "D281", "D285", "D298", "D301"]},
             "src/Revenue.css": {"does": "the summary band, podium, mix tile, board rows and "
                                         "product table's own layout, `--bn-*` only "
                                         "(D298's Direction B). The month bars "
@@ -8423,8 +8474,8 @@ COMPONENTS = [
                                         "Box 4` cannot be read as three drawers rather than five.",
                                 # D20 is the name and its optionality; D10 ruling 3 is the deleted
                                 # box whose number a run still remembers; D56 is the entry.
-                                "governed_by": ["D145", "D10", "D20", "D48", "D56", "D142",
-                                                "D180"]},
+                                "governed_by": ["D10", "D20", "D48", "D56", "D142", "D145", "D180",
+                                                "D218", "D259"]},
             "src/money.ts": {"does": "A DOLLAR AMOUNT, SAID THE SAME WAY EVERYWHERE — `money` and "
                                      "`roundsToNothing`. Extracted from src/RunsComposer.tsx "
                                      "unchanged on 2026-09-11, when the run panel began "
@@ -8592,7 +8643,8 @@ COMPONENTS = [
                                          "once per box in the cart, capped so they stay chip-sized on a "
                                          "full-width route rather than spanning it.",
                                  "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48",
-                                                 "D50", "D54", "D64", "D76", "D86", "D117", "D218"]},
+                                                 "D50", "D54", "D64", "D76", "D86", "D117", "D123",
+                                                 "D218", "D291"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
@@ -8633,7 +8685,7 @@ COMPONENTS = [
                         "it was written and never had: no facingMode (bug 3), no split(\",\") CSV "
                         "parsing (bug 2). No shared preset, no --fix — D18 keeps anything that "
                         "writes off the path `make check` runs.",
-                "governed_by": ["D13", "D16", "D18", "D27", "D114", "D132", "D142"],
+                "governed_by": ["D13", "D16", "D18", "D27", "D114", "D132", "D142", "D271"],
             },
             "tests/motion.spec.ts": {
                 "does": "the MotionMachine against synthetic frame sequences with an exact "
@@ -8837,6 +8889,25 @@ COMPONENTS = [
                         "minimal one-copy fixture rather than `inventory.spec.ts`'s fixed box, "
                         "so a section count is a parameter. Run by `make design-check`.",
                 "governed_by": ["D118", "D155", "D260"],
+            },
+            "tests/empty-section.spec.ts": {
+                "does": "F9 (the owner's report, 2026-09-27, `docs/reviews/ux-2026-09-23/"
+                        "PLAN-PR4-PR5.md`): a section with no card on hand does not draw in the "
+                        "walk's own strip OR in `BoxOps.tsx:BoxIdentity`'s own box-header track "
+                        "(the review round, 2026-09-27 — that header is the walk's own "
+                        "always-visible box top, never \"Manage box\"), and the caption's "
+                        "denominator is the highest non-empty section number rather than a "
+                        "count of every declared one, so a hidden middle section cannot shrink "
+                        "`N` below a section still drawn. A move target (`BoxOps.tsx`'s \"Move "
+                        "to box\" section picker) still draws the destination's own declared-"
+                        "but-empty section, because that reading never goes through `spansOf`/"
+                        "`nonEmptySections` at all. Selling the only card of a section keeps that "
+                        "section drawn on both instruments while the walk still stands on it "
+                        "(D118, D181) — `nonEmptySections`'s own \"keep current\" exemption, "
+                        "proved live against a dynamic fixture, never a static one. Stubs its own "
+                        "minimal fixtures, the way `section-ruler.spec.ts` does. Run by "
+                        "`make design-check`.",
+                "governed_by": ["D57", "D58", "D118", "D181", "D260", "D264"],
             },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
@@ -9093,7 +9164,7 @@ COMPONENTS = [
                 "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118", "D119",
                                 "D269", "D272"],
                 "note": "IT EXISTS BECAUSE THE SHEET WAS INCOMPLETE AND NOTHING SAID SO, "
-                        "2026-09-05. DEBT5 recorded the departed row as "
+                        "2026-09-05. The departed row was "
                         "absent from the kit; the sold fixture inherited a numeric `slot` from "
                         "the base, so `isDeparted` was false and the shell was rendered "
                         "NOWHERE on a page whose entire purpose is that every shape is looked "
@@ -9183,15 +9254,6 @@ COMPONENTS = [
                         "`?theme=dark` draws the dark theme.",
                 "governed_by": ["D5", "D132"],
             },
-            "tests/pull-confirm.spec.ts": {
-                "does": "three rows of the Fulfillment constraints table against step 6's one "
-                        "component: 44px targets, 20px body, 7:1 contrast, 12px apart. Run by "
-                        "`make design-check`.",
-                "governed_by": ["D5"],
-                "note": "NOT a harness test and not registered in harness/run.py:TESTS. The "
-                        "harness contract in docs/GATES.md is seven Python tests run at turn "
-                        "end; this runs a browser and is invoked on its own.",
-            },
             "tests/shell.ts": {
                 "does": "one call, `sealEveryTest()`, at the top of every spec that mounts the "
                         "app — all seventeen of them. It installs a catch-all on THIS "
@@ -9229,8 +9291,8 @@ COMPONENTS = [
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
                 "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
-                                "D124", "D125", "D134", "D174", "D192", "D276", "D259",
-                                "D273", "D298"]},
+                                "D124", "D125", "D134", "D174", "D192", "D259", "D273", "D276",
+                                "D298", "D301"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "
@@ -9405,9 +9467,10 @@ COMPONENTS = [
                                                      "D50", "D57", "D58", "D63", "D69", "D73",
                                                      "D90", "D91", "D93", "D96", "D103", "D113",
                                                      "D114", "D118", "D123", "D132", "D171", "D181",
-                                                     "D193", "D194", "D196", "D203", "D209",
-                                                     "D212", "D218", "D220", "D221", "D274",
-                                                     "D285", "D296"]},
+                                                     "D193", "D194", "D196", "D203", "D209", "D212",
+                                                     "D218", "D220", "D221", "D263", "D274", "D285",
+                                                     "D289", "D296",
+                                                     "D304"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "
@@ -9429,8 +9492,8 @@ COMPONENTS = [
                                                  "Not a harness test — it starts a browser; "
                                                  "`make design-check` runs it.",
                                          "governed_by": ["D57", "D58", "D113", "D118", "D136",
-                                                         "D164", "D212", "D220",
-                                                         "D252"]},
+                                                         "D164", "D212", "D220", "D252",
+                                                         "D304"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
@@ -9492,8 +9555,8 @@ COMPONENTS = [
                                                       "D62", "D68", "D78", "D79", "D85", "D86",
                                                       "D92", "D98", "D99", "D103", "D115", "D117",
                                                       "D118", "D156", "D168", "D181", "D196",
-                                                      "D208", "D218", "D269", "D273", "D277", "D278",
-                                                      "D301"]},
+                                                      "D208", "D218", "D259", "D269", "D273",
+                                                      "D277", "D278", "D301"]},
             "tests/boxmap.spec.ts": {
                 "does": "the Shelf (`D264`), stubbed: the map draws counts and no money, a "
                         "gap press sends the section, the gap and the aim, U sends the undo, the "
@@ -9513,8 +9576,8 @@ COMPONENTS = [
                         "does not. A dedicated case pins the 390px overflow this build found "
                         "in its own header once a fifth period option existed. Not a harness "
                         "test; `make design-check` runs it.",
-                "governed_by": ["D50", "D62", "D103", "D118", "D159", "D193", "D201", "D214",
-                                "D217", "D225", "D281", "D298"],
+                "governed_by": ["D50", "D62", "D89", "D103", "D118", "D159", "D193", "D201", "D214",
+                                "D217", "D225", "D271", "D281", "D298", "D301"],
             },
             "tests/demo-coverage.spec.ts": {
                 "does": "the BUILT public demo (`dist-demo/`), served on this checkout's own "
@@ -9572,7 +9635,7 @@ COMPONENTS = [
                 "governed_by": ["D1", "D3", "D9", "D13", "D20", "D31", "D32", "D33", "D36", "D39",
                                 "D43", "D48", "D49", "D54", "D56", "D57", "D64", "D65", "D76",
                                 "D78", "D117", "D118", "D136", "D145", "D165", "D166", "D174",
-                                "D180", "D196", "D207", "D210", "D218", "D275", "D291"],
+                                "D180", "D196", "D207", "D210", "D218", "D259", "D275", "D291"],
                 "note": "THE PIPELINE WAS THE LARGEST INSTANCE OF THE ROUTE-IS-NOT-A-FEATURE "
                         "FAILURE AND NOBODY HAD COUNTED IT. The four commands have existed "
                         "since step 4 and have been through a 53-card run and a 544-card run; "
@@ -9630,8 +9693,7 @@ COMPONENTS = [
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
                                 "D136", "D142", "D155", "D159", "D172", "D181", "D192", "D194",
-                                "D196", "D213", "D218", "D259", "D299",
-                                "D300"],
+                                "D196", "D213", "D218", "D259", "D288", "D299", "D300"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

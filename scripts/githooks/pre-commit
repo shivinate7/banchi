@@ -195,70 +195,60 @@ if [ "${PKMNSCAN_LINKS:-}" != "off" ]; then
   done <<< "$(git diff --cached --name-only --diff-filter=ACMR -z | tr '\0' '\n' | while IFS= read -r p; do [ -z "$p" ] && continue; mode="$(git ls-files --stage -- "$p" | awk '{print $1}')"; [ "$mode" = "120000" ] && printf '%s\n' "$p"; done)"
 fi
 
-demo_photo_paths=()
+image_paths=()
 while IFS= read -r path; do
   [ -z "$path" ] && continue
 
   case "$path" in
+    # THE ONE PATH THAT SKIPS THE SCAN, AND WHY IT IS SAFE TO. `captures/` is gitignored
+    # (see the file header above), so a file lands here only through a forced `git add -f`
+    # against the ignore rule — not through the ordinary staging any other route uses. That
+    # is a property of the directory, not a promise about its contents, so it stays the one
+    # exemption rather than reason to widen this list further.
     captures/*|*/captures/*) continue ;;
-    # THE ONE TRACKED PHOTOGRAPH SET, AND IT IS NARROW ON PURPOSE (2026-09-06). The published
-    # demo shows the owner's real card photographs, on their instruction, and CI rebuilds
-    # everything else from source — so these have to be committed or the demo has no pictures.
-    #
-    # WHAT MAKES THE EXCEPTION SAFE IS NOT THIS LINE ALONE. `scripts/demo-photos.py` and
-    # `scripts/demo-extra-real.py` are the only things that write here, and each already runs
-    # `codes/qr.py` over every candidate at FULL resolution before it ever reaches disk — a
-    # positive test on the image itself, rather than a promise about which cards the store
-    # thinks it holds. A code card's whole identity IS its QR (D70), so a clean decode is a
-    # real answer. BUT A CURATOR'S OWN DISCIPLINE IS NOT A GATE: nothing stopped a photograph
-    # staged by any OTHER route — an edit, a hand-run `git add`, a reviewer's own mutation —
-    # from reaching this path uninspected. That is exactly the gap a synthetic, decodable QR
-    # JPEG found here, review round 2026-09-25. THE BLOCK BELOW RE-DECODES EVERY STAGED IMAGE
-    # IN BOTH DIRECTORIES, so the curator's clearance is checked rather than trusted, and a
-    # decode-in-front-of-the-hook photograph is refused just as loudly as a random one.
-    #
-    # The rule below still stands over every other path in the repo, and these two exceptions
-    # are exactly the directories named. Widening either is a decision to argue, not a
-    # convenience to reach for: the reason the blanket rule exists is that a live code is a
-    # bearer instrument and a tracked one cannot be recalled.
-    # `demo-assets/mirror/photos/` is the fourth and newest exception (`D295`,
-    # 2026-09-26): `scripts/demo-mirror.py:prepare_photo` is its only writer, and it runs the
-    # same `demo-photos.py:carries_a_qr` full-resolution check as the other two before a
-    # photograph ever reaches disk. The re-decode below covers it on the curator's own
-    # precedent, not on trust.
-    demo-assets/photos/*|demo-assets/extra/photos/*|demo-assets/mirror/photos/*)
-      demo_photo_paths+=("$path")
-      continue
-      ;;
     *.png|*.jpg|*.jpeg|*.webp|*.heic|*.PNG|*.JPG|*.JPEG)
-      fail "image staged outside captures/ ($path).
-  Code-card photos are bearer instruments and must never reach a tracked path.
-  The exceptions are demo-assets/photos/, demo-assets/extra/photos/ and
-  demo-assets/mirror/photos/, written only by scripts/demo-photos.py,
-  scripts/demo-extra-real.py and scripts/demo-mirror.py, which refuse any photograph a QR
-  decodes out of."
+      image_paths+=("$path")
       ;;
   esac
 done <<< "$staged"
 
-# EVERY STAGED IMAGE IN THE TWO EXEMPT DIRECTORIES IS RE-DECODED, NOT TRUSTED ON THE
-# CURATOR'S SAY-SO. `scripts/qr-clear-check.py` reads the STAGED BLOB (`git show :<path>`),
-# never the working-tree file, and refuses on the first decode it finds, naming the file.
+# EVERY STAGED IMAGE GETS THE QR SCAN, WHEREVER IT LANDS (owner's ruling, 2026-09-27,
+# D303). This used to trust a hand-typed folder list — demo-assets/photos/,
+# demo-assets/extra/photos/ and demo-assets/mirror/photos/ — and re-decode only inside it,
+# refusing every other image outright with NO inspection at all. The outcome this protects
+# was never about which folder a photograph sits in: a live unredeemed code card is a bearer
+# instrument (D70, D24), and the decode is the one thing that actually proves an image is
+# clear of one. A folder list only ever answers "was this meant to hold a photo," never
+# "does this photo carry a code" — a photograph landing anywhere the list did not anticipate
+# skipped the real check by construction, which is the blunt part this replaces. The scan is
+# the real protection, so the scan is what every image gets, not a subset chosen by path.
+#
+# `scripts/qr-clear-check.py` reads the STAGED BLOB (`git show :<path>`), never the
+# working-tree file, and refuses on the first decode it finds, naming the file.
+#
+# A SCANNER THAT CANNOT RUN REFUSES THE COMMIT, where this used to warn and allow. Warning
+# and allowing was fail-open on the one day the rule would have mattered: a missing python3
+# or a broken zxing-cpp install let an unscanned image straight onto a tracked path with the
+# commit reporting nothing wrong. Unavailable is not the same as clear.
+#
 # Bypass:  PKMNSCAN_QR=off git commit ...
-if [ "${#demo_photo_paths[@]}" -gt 0 ] && [ "${PKMNSCAN_QR:-}" != "off" ]; then
+if [ "${#image_paths[@]}" -gt 0 ] && [ "${PKMNSCAN_QR:-}" != "off" ]; then
   if command -v python3 >/dev/null 2>&1; then
-    qr_out="$(python3 scripts/qr-clear-check.py "${demo_photo_paths[@]}" </dev/null 2>&1)"
+    qr_out="$(python3 scripts/qr-clear-check.py "${image_paths[@]}" </dev/null 2>&1)"
     qr_status=$?
     if [ "$qr_status" -ne 0 ]; then
       echo "$qr_out" >&2
-      fail "a staged demo photograph carries a decodable QR, or could not be checked.
-  Code-card photos are bearer instruments and must never reach a tracked path — a live
-  code is a bearer instrument whether the curator's own clearance missed it or the file
-  never went through the curator at all.
+      fail "a staged image carries a decodable QR, or could not be checked.
+  Code-card photos are bearer instruments and must never reach a tracked path, wherever the
+  file lands.
   Bypass once with:  PKMNSCAN_QR=off git commit ..."
     fi
   else
-    echo "WARNING: python3 unavailable — staged demo photographs were NOT re-checked for a QR." >&2
+    fail "python3 is unavailable, so staged image(s) could not be checked for a QR:
+  $(printf '%s\n' "${image_paths[@]}" | tr '\n' ' ')
+  Unavailable is not the same as clear — a scanner that cannot run is not evidence an image
+  is free of a live code.
+  Bypass once with:  PKMNSCAN_QR=off git commit ..."
   fi
 fi
 
@@ -299,11 +289,17 @@ fi
 #
 # Bypass:  PKMNSCAN_DOCS=off git commit ...
 #
+# `--commit` (L12, test-audit-2026-09-27/TIERS.md, owner's ruling on Q1): only TIER 1 rows
+# run here. A Tier 2 row (two artifacts agreeing with each other) or Tier 3 row (a style
+# note) is skipped entirely — never computed, never printed — and blocks or prints only in
+# CI's full run (`python3 scripts/docs-audit.py`, no `--commit`). This is where the hook's
+# own time comes back: `paths` and `identifier spelling` alone measured almost 12s combined.
+#
 # stdin is closed deliberately. Nothing in this block may prompt: `git commit` run from an
 # agent session has no tty, and a hook that waits for input there hangs the session
 # instead of failing it. See cli/__main__.py for the same rule stated for the pipeline.
 if [ "${PKMNSCAN_DOCS:-}" != "off" ] && [ -f scripts/docs-audit.py ] && command -v python3 >/dev/null 2>&1; then
-  audit_out="$(python3 scripts/docs-audit.py --staged </dev/null 2>&1)"
+  audit_out="$(python3 scripts/docs-audit.py --staged --commit </dev/null 2>&1)"
   audit_status=$?
   case "$audit_status" in
     0) ;;

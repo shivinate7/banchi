@@ -239,7 +239,53 @@ test('the Name column sorts, and a second click is the exact reverse of the firs
 test('the search field narrows the product table by name', async ({ page }) => {
   await stub(page, generalOrders())
   await open(page, '?period=all')
-  await page.getByPlaceholder('Find what you sold').fill('pikachu')
+  await page.getByPlaceholder('Search').fill('pikachu')
+  expect(await productNames(page)).toEqual(['Pikachu VMAX'])
+})
+
+/* D271: ONE FORGIVING MATCHER FOR EVERY SEARCH FIELD, ON THE SERVER AND IN THE BROWSER. This
+ * screen's own filter once ran a plain `row.name.toLowerCase().includes(q)`, so it answered
+ * only the exact word order and never the matcher `app/src/kit/match.ts` already gives every
+ * other list. Word order is rule 3 of that matcher: "EVERY TOKEN MUST MATCH, IN ANY ORDER" —
+ * a query is never a substring of the whole name. */
+test('the search field is the shared matcher, not a substring test (D271)', async ({ page }) => {
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  await page.getByPlaceholder('Search').fill('ex charizard')
+  expect(await productNames(page)).toEqual(['Charizard ex'])
+})
+
+/* LANE F11b: this screen's search now also matches the SKU and the set name, not the
+ * product name alone. */
+test('the search field also finds a row by its set name (F11b)', async ({ page }) => {
+  await stub(page, [
+    ...generalOrders().slice(0, 2),
+    orderRow({
+      number: 'ORD-1003',
+      placed_at: '2026-08-05T09:00:00+00:00',
+      status: 'Shipped',
+      lines: [
+        line({
+          sku: '9200002',
+          name: 'Pikachu VMAX',
+          quantity: 2,
+          unit_price: '8.00',
+          set_name: 'Sword & Shield: Vivid Voltage',
+        }),
+      ],
+    }),
+    ...generalOrders().slice(3),
+  ])
+  await open(page, '?period=all')
+  await page.getByPlaceholder('Search').fill('vivid voltage')
+  expect(await productNames(page)).toEqual(['Pikachu VMAX'])
+})
+
+/* F11c: the SKU half of the same fix, on the fixture's own SKU ('9200002', Pikachu VMAX). */
+test('the search field also finds a row by its SKU (F11c)', async ({ page }) => {
+  await stub(page, generalOrders())
+  await open(page, '?period=all')
+  await page.getByPlaceholder('Search').fill('9200002')
   expect(await productNames(page)).toEqual(['Pikachu VMAX'])
 })
 
@@ -271,8 +317,8 @@ test('the current month is marked in progress on the strip', async ({ page }) =>
   await open(page, '?period=all')
   const current = page.locator('.revenue-month-col[data-current="true"]')
   await expect(current).toContainText('Sep 2026')
-  await expect(current).toContainText('so far')
-  await expect(page.locator('.revenue-month-col:has-text("so far")')).toHaveCount(1)
+  await expect(current).toContainText('Partial')
+  await expect(page.locator('.revenue-month-col:has-text("Partial")')).toHaveCount(1)
 })
 
 test('a drill-down opens a product row into the orders behind it, and closes again', async ({ page }) => {
@@ -302,7 +348,7 @@ test('sort, search and the month filter all round-trip through the URL, includin
   await open(page, '?period=all')
 
   await page.getByRole('columnheader', { name: 'Name' }).getByRole('button').click()
-  await page.getByPlaceholder('Find what you sold').fill('char')
+  await page.getByPlaceholder('Search').fill('char')
   await page.locator('.revenue-month-col', { hasText: 'Jul 2026' }).click()
 
   await expect(page).toHaveURL(/[?&]sort=name&dir=asc/)
@@ -312,7 +358,7 @@ test('sort, search and the month filter all round-trip through the URL, includin
   await page.reload()
   await expect(page.locator('main.revenue')).toBeVisible()
   await expect(page.getByRole('columnheader', { name: 'Name' })).toHaveAttribute('aria-sort', 'ascending')
-  await expect(page.getByPlaceholder('Find what you sold')).toHaveValue('char')
+  await expect(page.getByPlaceholder('Search')).toHaveValue('char')
   await expect(page.locator('.revenue-active-filter')).toContainText('Jul 2026 only')
   expect(await productNames(page)).toEqual(['Charizard ex'])
 })
@@ -384,14 +430,14 @@ test('a previous period that sums to exactly zero never renders Infinity% or NaN
   expect(text).toContain('$5.00 more')
 })
 
-test('the like-for-like wording appears when there is nothing to compare against over the same stretch', async ({ page }) => {
+test('the like-for-like case draws no prior-period line at all, when there is nothing to compare against over the same stretch', async ({ page }) => {
   // Every sale is in 2026 — "this year" compared against the same number of days last year
-  // finds nothing there at all, which is a different sentence from finding nothing ever.
+  // finds nothing there at all. F5 verbiage cut (row 127): this in-progress case is now a
+  // deleted sentence, not a shortened one — the month strip's own absent bar already shows
+  // it, so `.revenue-verdict-prior` does not render at all here.
   await stub(page, generalOrders())
   await open(page, '?period=ytd')
-  await expect(page.locator('.revenue-verdict-prior')).toHaveText(
-    'So far, nothing is recorded for the period before this one.',
-  )
+  await expect(page.locator('.revenue-verdict-prior')).toHaveCount(0)
 })
 
 test('no horizontal scroll at 390, with Custom selected — the fifth period option is the widest state', async ({ page }) => {
@@ -448,7 +494,7 @@ test('a line closed as refunded is subtracted from the total, and the count is s
   )
   // The two exclusions are NEVER conflated: no order here carries a Canceled status, so
   // that sentence states zero rather than folding this line's count into it.
-  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('0 orders were canceled by the marketplace and left out.')
+  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('0 excluded')
   expect(await productNames(page)).toEqual(['Charizard ex'])
 })
 
@@ -469,7 +515,7 @@ test('a line closed for a DIFFERENT reason (shipped_elsewhere) is not excluded',
   // (review round, item 6): a note about a habit that has never once caught anything reads
   // as a warning rather than a fact, so it draws only once the count is real.
   await expect(page.locator('.revenue-verdict-refunded')).toHaveCount(0)
-  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('0 orders were canceled by the marketplace and left out.')
+  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('0 excluded')
 })
 
 test('the owner\'s real store has zero not_shipping lines today, and the screen still says so honestly', async ({ page }) => {
@@ -494,7 +540,7 @@ test('the owner\'s real store has zero not_shipping lines today, and the screen 
     }),
   ])
   await open(page, '?period=all')
-  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('1 order was canceled by the marketplace and left out.')
+  await expect(page.locator('.revenue-verdict-canceled')).toHaveText('1 excluded')
   // D281 (review round, item 6): the refund sentence does not draw at zero.
   await expect(page.locator('.revenue-verdict-refunded')).toHaveCount(0)
 })
@@ -678,4 +724,39 @@ test('both themes: the table stays usable and sortable in dark', async ({ page }
   await page.getByRole('columnheader', { name: 'Copies' }).getByRole('button').click()
   await expect(page.getByRole('columnheader', { name: 'Copies' })).toHaveAttribute('aria-sort', 'descending')
   expect(await productNames(page)).toEqual(['Charizard ex', 'Pikachu VMAX', '9199999'])
+})
+
+test('a sold row with no own photo draws the stock photo, not the plain tile (F2)', async ({ page }) => {
+  // The owner: "why does the sales page not pull the icons like you are able to do on sets
+  // and pricing?" `stub`'s own default answers no photo of either kind (D89 usually reclaims
+  // the own one) — this overrides only `stock_photos`, the catalogue photo D301's resolver
+  // answers, off `sku='9100001'`, Charizard ex's own SKU and the top podium tile here.
+  const STOCK_URL = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
+  // THE BROWSER MUST NEVER REACH AN OUTSIDE HOST — `sealEveryTest`'s own `sealOutside`
+  // refuses every request that is not this checkout's two ports, so the fixture's own
+  // `stock_photos` URL is answered from a route stub, exactly like `pricing.spec.ts`'s own
+  // stock-image case.
+  await page.route(STOCK_URL, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>',
+    }),
+  )
+  await stub(page, generalOrders())
+  await page.route(/\/skus\/photos\?/, (route) =>
+    json(route, { photos: {}, stock_photos: { '9100001': STOCK_URL } }),
+  )
+  await open(page)
+  const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
+  await expect(thumb.locator('img')).toHaveAttribute('src', STOCK_URL)
+  await expect(thumb).not.toHaveAttribute('data-missing', 'true')
+})
+
+test('a sold row with no photo of either kind still draws the plain tile', async ({ page }) => {
+  await stub(page, generalOrders())
+  await open(page)
+  const thumb = page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')
+  await expect(thumb).toHaveAttribute('data-missing', 'true')
+  await expect(thumb.locator('img')).toHaveCount(0)
 })

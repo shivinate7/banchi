@@ -26,3 +26,7 @@ The recipe is now the product, then the tooling's proof of itself.
 **`make ci-check` is deliberately not reordered.** It is a different list for a different question — what a machine can prove on a fresh clone — and CI runs it to completion on a runner with nothing else on it, which is the one place group 4's environment sensitivity does not apply.
 
 **This is not a fix for a flaky check and must not be read as one.** D157 fixed the `reap-selftest` collision at its cause. What this fixes is the ordering that let ANY failure in group 4 — a real one as easily as a flake — conceal six checks behind it. A suite that stops at the first failure is correct; a suite that stops at the first failure with its most fragile targets in the middle reports less the worse things get.
+
+### Amended 2026-09-27 — claim-stale and vale both left `make check`
+
+`claim-stale` and `vale` have both left `make check`'s and `make ci-check`'s composition (C1, C2, test-audit lane L3). `make merge` already runs `claim-stale` fresh against `origin/main` (D140). `vale` cannot fail. It printed 1,668 errors nobody read. The global STE gate covers new prose instead. The order argued above is untouched. The twelve tree-only checks still run before the group that spawns processes.

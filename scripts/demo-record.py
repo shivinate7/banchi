@@ -20,6 +20,12 @@ card, every run, every order. Writes are NOT recorded: `app/src/demoServer.ts` a
 those to its own copy of the snapshot, because a demo where pressing the button does
 nothing teaches the opposite of what this product is.
 
+RESUMABLE (PR 4B lane M). A real mirror sweep over hundreds of routes can run for minutes,
+and it used to lose everything if it was killed partway. Each route's answer now lands in
+`WorkArea` — a gitignored cache under `.demo-record-work/<key>/` — the instant it is taken,
+keyed by a digest of the store's own content (`snapshot_key`). A re-run over the SAME store
+skips every route already there; a DIFFERENT store starts over, because its key differs.
+
     PKMNSCAN_HOME=demo ./scripts/demo-record.py
 
 Spawns its own capture server on its own port and stops it again, so it neither needs nor
@@ -44,7 +50,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from demo_scrub import audit, replacements, scrub  # noqa: E402
 
@@ -56,6 +62,9 @@ BUNDLE = REPO_ROOT / "app" / "demo" / "bundle.json"
 PHOTO_OUT = REPO_ROOT / "app" / "public" / "demo" / "photos"
 APP_SERVER_TS = REPO_ROOT / "app" / "src" / "server.ts"
 APP_TYPES_TS = REPO_ROOT / "app" / "src" / "types.ts"
+
+# The resume cache (PR 4B lane M). Outside `home` on purpose — see WorkArea below.
+WORK_ROOT = REPO_ROOT / ".demo-record-work"
 
 
 def free_port() -> int:
@@ -80,6 +89,113 @@ def wire_digest() -> str:
     for path in (APP_TYPES_TS, APP_SERVER_TS):
         digest.update(path.read_bytes())
     return digest.hexdigest()[:16]
+
+
+# ------------------------------------------------------------------ resume, keyed by content
+
+
+def snapshot_key(home: Path) -> str:
+    """A content digest of the store `home` holds right now — never its mtime, and not the
+    same thing as `wire_digest()` above. That one is the CODE contract (`types.ts`,
+    `server.ts`); this one is the DATA a sweep over `home` would actually read.
+
+    `inventory/store.sqlite` is the store of record (D88), and `inventory/prices.json` is
+    the pricing answer beside it, kept in its own file rather than a table (D86 amended) —
+    together they are what CLAUDE.md calls "the store." Hashing bytes rather than mtimes
+    means a `demo-mirror.py` rebuild that recreates `home` byte-for-byte from an unchanged
+    snapshot still resumes; a copy always gets a new mtime even when nothing changed.
+    """
+    digest = hashlib.sha256()
+    for name in ("store.sqlite", "prices.json"):
+        path = home / "inventory" / name
+        if path.is_file():
+            digest.update(b"\0%s\0" % name.encode("utf-8"))
+            digest.update(path.read_bytes())
+    return digest.hexdigest()[:16]
+
+
+class WorkArea:
+    """Where each route's answer lands the instant it is taken, so a killed sweep can
+    resume instead of starting from zero (the owner: "is there anyway u can have it
+    chunking so that way it's not starting from zero each time").
+
+    LIVES OUTSIDE `home`, at a fixed, gitignored location keyed by `snapshot_key(home)`,
+    never by `home`'s own path. `demo-mirror.py`'s `build()` deletes and recreates `home`
+    from its snapshot on EVERY invocation, so a cache placed inside `home` would be wiped by
+    the very rebuild the owner reruns after a kill. A different snapshot hashes to a
+    different key and so reads an empty directory — it starts fresh, with no rule needed
+    to notice the change.
+
+    SCRUBBED BEFORE IT TOUCHES DISK, NEVER AFTER (review finding, PR 4B lane M round 2).
+    `main()` used to scrub only once, over the whole assembled `recorded` dict, right
+    before writing the published bundle — so nothing unscrubbed ever left the ONE process
+    that read the store. This cache is a SECOND, PERSISTENT copy that survives the process
+    exiting, so an order or pick route's raw body (a buyer's name, D193) must never sit
+    here unscrubbed, whether or not the store it came from was already scrubbed upstream
+    (`demo-mirror.py:build()`) — D295's outcome is that nothing unscrubbed sits anywhere.
+    `pairs` is the same `demo_scrub.replacements()` list `main()` already computes.
+    Scrubbing is a plain string replace, so scrubbing an already-scrubbed value again (the
+    whole-dict pass in `main()` still runs, as a second, harmless check) changes nothing —
+    idempotent by construction, which is what keeps a resumed bundle byte-identical.
+    """
+
+    def __init__(self, home: Path, pairs: Sequence[Tuple[str, str]] = ()) -> None:
+        self.key = snapshot_key(home)
+        self.dir = WORK_ROOT / self.key
+        self.pairs = list(pairs)
+
+    def load(self) -> Dict[str, dict]:
+        """Every route this key already holds an answer for.
+
+        A NON-JSON FILE IS NEVER COUNTED AS RECORDED. That is the shape a write leaves only
+        if it was interrupted before its `save()` below completed its rename — so a route
+        left in that state is asked for again, exactly as if it had never been taken.
+        """
+        out: Dict[str, dict] = {}
+        if not self.dir.is_dir():
+            return out
+        for file in sorted(self.dir.glob("*.json")):
+            try:
+                payload = json.loads(file.read_text("utf-8"))
+            except ValueError:
+                continue
+            out[payload["key"]] = payload["entry"]
+        return out
+
+    def save(self, key: str, entry: dict) -> None:
+        """One route's answer, scrubbed, then written to a temporary name and renamed
+        into place.
+
+        THE RENAME IS THE WHOLE ATOMICITY MECHANISM. `load()` above only ever globs the
+        final `.json` name, so a process killed mid-write leaves nothing but an orphan
+        `.tmp` file that no glob matches — the route it was about to finish is simply
+        asked for again.
+        """
+        scrubbed = scrub(entry, self.pairs)
+        self.dir.mkdir(parents=True, exist_ok=True)
+        name = hashlib.sha256(key.encode("utf-8")).hexdigest() + ".json"
+        tmp = self.dir / (name + ".tmp")
+        tmp.write_text(json.dumps({"key": key, "entry": scrubbed}), "utf-8")
+        tmp.rename(self.dir / name)
+
+    def prune_others(self) -> int:
+        """Delete every OTHER key's work area under `WORK_ROOT` — they belong to a
+        snapshot nobody is resuming any more and hold data nobody needs (review finding:
+        an old snapshot's routes, buyer names included, should not just sit there once a
+        run has moved on to a current key). Returns how many were removed.
+
+        Reads the module-level `WORK_ROOT` directly rather than `self.dir.parent`, so a
+        test that points `self.dir` elsewhere (never touching the real cache) cannot
+        accidentally make this prune somewhere it should not.
+        """
+        if not WORK_ROOT.is_dir():
+            return 0
+        pruned = 0
+        for child in WORK_ROOT.iterdir():
+            if child.is_dir() and child.name != self.key:
+                shutil.rmtree(child)
+                pruned += 1
+        return pruned
 
 
 # --------------------------------------------------------------------------- the server
@@ -125,7 +241,7 @@ class Server:
         env = dict(os.environ)
         env["PKMNSCAN_HOME"] = str(self.home)
         env["PKMNSCAN_PORT"] = str(self.port)
-        # THE RECORDER NEVER COMES BACK (D-demo-stock-images). `server/pipeline_routes.py:
+        # THE RECORDER NEVER COMES BACK (D302). `server/pipeline_routes.py:
         # warm_stock_images` fires its background threads and returns at once for a LIVE
         # server on purpose — a real user's first request after a restart must never wait
         # on a disk read. This sweep reads every route exactly once and bakes whatever it
@@ -368,16 +484,32 @@ def facet_combos(facets: dict) -> List[Dict[str, str]]:
     return out
 
 
-def sweep(server: Server, space: Dict[str, List[str]]):
+def sweep(server: Server, space: Dict[str, List[str]], work: "WorkArea"):
     """Every GET the client can build, against every parameter the store holds.
 
     The path list mirrors `request(` in `app/src/server.ts` — the GET half of it. Writes
     are deliberately absent; `demoServer.ts` owns those.
+
+    RESUMABLE (PR 4B lane M). `recorded` starts loaded from `work`, so a route this key
+    already holds an answer for is never asked for again — the loop below is unchanged,
+    only `take` learned to check first. Each new 200 is written to `work` the moment it
+    lands, not batched to the end: that is the whole point of a work area over a bare dict,
+    since a killed process only ever loses the one route it was in the middle of.
     """
-    recorded: Dict[str, dict] = {}
+    recorded: Dict[str, dict] = dict(work.load())
+    stats = {"resumed": len(recorded), "new": 0}
+    if stats["resumed"]:
+        try:
+            where = work.dir.relative_to(REPO_ROOT)
+        except ValueError:
+            where = work.dir  # a self-test's own work area, outside this repo
+        print("resume    %s: %d route(s) already recorded for this store, skipping them"
+              % (where, stats["resumed"]))
     skipped: List[str] = []
 
     def take(path: str) -> None:
+        if path in recorded:
+            return
         status, body = server.get(path)
         if status is None or body is None:
             return
@@ -389,7 +521,10 @@ def sweep(server: Server, space: Dict[str, List[str]]):
         if status != 200:
             skipped.append("%s -> %d" % (path, status))
             return
-        recorded[path] = {"status": status, "body": body}
+        entry = {"status": status, "body": body}
+        recorded[path] = entry
+        work.save(path, entry)
+        stats["new"] += 1
 
     # Whole-store reads. `/inventory` is the big one and the app asks for it on nearly
     # every screen, which is what makes a recording worth having at all.
@@ -461,19 +596,54 @@ def sweep(server: Server, space: Dict[str, List[str]]):
     if not shipping.is_file():
         shipping = REPO_ROOT / "fixtures" / "orders-shipping.csv"
     if shipping.is_file():
-        status, made = server.post(
-            "/shipping/batches", {"content": shipping.read_text(encoding="utf-8")}
-        )
-        if status == 200 and isinstance(made, dict):
-            # RECORDED UNDER THE VERB, because this one read is a POST. There is no
-            # `GET /shipping/batches` at all — the server keeps no list, so the only way to
-            # see a batch is the answer to the request that made it. `demoServer.ts` replays
-            # this for the same POST, which is honest: reading an export is a pure function
-            # of the file, and the demo is a frozen store throughout.
-            recorded["POST /shipping/batches"] = {"status": 200, "body": made}
-            batch = made.get("batch")
-            if batch:
-                take("/shipping/batches/%s" % urllib.parse.quote(str(batch)))
+        # THE UNIT IS THE POST PLUS ITS ONE DEPENDENT GET, NEVER THE POST ALONE (review
+        # round 2). `_new_batch_id()` (`server/shipping_routes.py`) only means anything
+        # inside the SERVER PROCESS that issued it — `_BATCHES` lives in memory there, and
+        # is random by design ("what it cannot do is name one"). A resumed run's server is
+        # a NEW process with an empty table, so a cached POST answer whose dependent GET
+        # never landed points at a batch id nothing can ever look up again — caching the
+        # POST alone would strand that GET forever. So the POST is trusted from the cache
+        # ONLY once its GET is ALSO already cached (or the answer never named one to wait
+        # for at all); short of that, BOTH are reissued against the live server, never the
+        # POST by itself.
+        def _shipping_get_key(body: dict) -> Optional[str]:
+            batch = body.get("batch") if isinstance(body, dict) else None
+            return "/shipping/batches/%s" % urllib.parse.quote(str(batch)) if batch else None
+
+        cached_post = recorded.get("POST /shipping/batches")
+        if cached_post is not None:
+            cached_get_key = _shipping_get_key(cached_post.get("body"))
+            # No batch named at all means there was never a dependent GET to strand.
+            unit_complete = cached_get_key is None or cached_get_key in recorded
+            if not unit_complete:
+                del recorded["POST /shipping/batches"]  # a stranded half; reissue the unit
+                cached_post = None
+
+        if cached_post is not None:
+            made = cached_post["body"]
+        else:
+            status, made = server.post(
+                "/shipping/batches", {"content": shipping.read_text(encoding="utf-8")}
+            )
+            made = made if status == 200 and isinstance(made, dict) else None
+
+        if isinstance(made, dict):
+            get_key = _shipping_get_key(made)
+            if get_key is not None:
+                take(get_key)
+            # THE UNIT IS COMPLETE ONCE ITS GET (IF ANY) HAS ALSO LANDED — persist the
+            # POST now, never earlier than this. RECORDED UNDER THE VERB, because this one
+            # read is a POST. There is no `GET /shipping/batches` at all — the server keeps
+            # no list, so the only way to see a batch is the answer to the request that
+            # made it. `demoServer.ts` replays this for the same POST, which is honest:
+            # reading an export is a pure function of the file, and the demo is a frozen
+            # store throughout.
+            if (get_key is None or get_key in recorded) \
+                    and "POST /shipping/batches" not in recorded:
+                entry = {"status": 200, "body": made}
+                recorded["POST /shipping/batches"] = entry
+                work.save("POST /shipping/batches", entry)
+                stats["new"] += 1
 
     # ---------------------------------------------------------------- price history
     # D62's reading, per SKU: hold `t` over a row on `#/pricing` and this is what appears.
@@ -504,11 +674,12 @@ def sweep(server: Server, space: Dict[str, List[str]]):
         # The run's own pricing table, which `getPricing(run)` reads for one run's page.
         take("/pipeline/runs/%s/pricing" % quoted)
 
-    sweep_coverage(server, space, recorded, take)
-    return recorded, skipped
+    sweep_coverage(server, space, recorded, take, work, stats)
+    return recorded, skipped, stats
 
 
-def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str, dict], take) -> None:
+def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str, dict], take,
+                    work: "WorkArea", stats: Dict[str, int]) -> None:
     """The reads the first sweep never asked for, which left whole screens refusing.
 
     Every one of these was a screen a reviewer could not grade on the published page — the
@@ -562,9 +733,15 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
 
     # ------------------------------------------------------------------ the POST-shaped reads
     def take_post(path: str, payload: dict) -> None:
+        key = post_key(path, payload)
+        if key in recorded:
+            return
         status, body = server.post(path, payload)
         if status == 200 and body is not None:
-            recorded[post_key(path, payload)] = {"status": 200, "body": body}
+            entry = {"status": 200, "body": body}
+            recorded[key] = entry
+            work.save(key, entry)
+            stats["new"] += 1
 
     # Every copy of each SKU, one SKU at a time. The route answers a subset of the store
     # identically to the whole (`do_inventory_copies`), so `demoServer.ts` merges the
@@ -929,9 +1106,16 @@ def main() -> int:
 
     space = parameter_space(home)
     warmed = warm_history_cache(home)
+    pairs = replacements(REPO_ROOT, home)
+    work = WorkArea(home, pairs)
+    pruned = work.prune_others()
+    if pruned:
+        print("resume    pruned %d work area(s) from an earlier snapshot" % pruned)
     port = free_port()
     with Server(home, port, offline=args.offline) as server:
-        recorded, skipped = sweep(server, space)
+        recorded, skipped, stats = sweep(server, space, work)
+    print("progress  recorded %d of %d route(s), skipped %d already recorded"
+          % (stats["new"], len(recorded), stats["resumed"]))
 
     photos = copy_photos(home)
     # A STORE OF CARDS THAT PUBLISHES NO PHOTOGRAPH IS A BROKEN RECORDING, NOT AN EMPTY ONE.
@@ -943,7 +1127,7 @@ def main() -> int:
             "`photo` is a file under %s." % (len(space["cards"]), home)  # type: ignore[arg-type]
         )
 
-    pairs = replacements(REPO_ROOT, home)
+    # `pairs` was already computed above, before the sweep — `WorkArea.save` needs it too.
     BUNDLE.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "wire": wire_digest(),
