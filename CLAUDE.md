@@ -242,7 +242,6 @@ make demo-static    # demo-mirror-install, then a static build to dist-demo/. `d
                     #   `demo-record` above still work; they are just not what this builds
                     #   from any more.
 make demo-preview   # serve dist-demo/ as a static host would.
-make demo-freshness # whether the bundle matches its recording. No gate: CI rebuilds fresh.
 make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   port-agreement + set-hint-agreement + readiness-agreement +
                     #   screen-freshness +
@@ -270,7 +269,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
                     #   subagent-override-selftest + guard-scope-selftest +
                     #   token-literal-check-selftest + kit-adoption-selftest +
-                    #   port-slots-selftest + demo-determinism-selftest +
+                    #   port-slots-selftest +
                     #   match-selftest,
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`

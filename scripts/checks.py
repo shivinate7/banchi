@@ -1401,26 +1401,6 @@ CHECKS = (
                         "D261"),
     },
     {
-        "target": "demo-determinism-selftest",
-        "runs": "python3 scripts/demo-determinism-selftest.py",
-        "asserts": "scripts/demo-determinism.py's own ALLOWED_PATTERNS matcher, on "
-                   "fixtures: every one of the 12 real, measured pointer shapes two "
-                   "`make demo` runs actually move still matches whole; four fabricated "
-                   "pointers that merely contain an allowed key (`at`, `updated_at`, "
-                   "`batch`) under a route none of the patterns name do NOT match, the "
-                   "exact regression a bare-key matcher (the pre-lane-7 ALLOWED_KEYS) "
-                   "would miss; one end-to-end case through `_diff` itself confirms the "
-                   "seam between pointer-building and matching.",
-        "needs": ("python3",),
-        "writes": "",
-        "commit_path": False,
-        "why_off_commit_path": "D18's own reason token-literal-check-selftest carries — "
-                               "not armed in scripts/githooks/pre-commit, `make check` "
-                               "only.",
-        "gates": True,
-        "governed_by": ("D18", "D173"),
-    },
-    {
         "target": "match-selftest",
         "runs": "python3 scripts/match-selftest.py",
         "asserts": "FLT-06/04's one forgiving matcher, server side (UX-173). "

@@ -11,9 +11,9 @@ gets published. Read §13 first for what changed and why.
 search, the graveyard, the price histories and the value bands (§3, §5, §8, §8a).
 
 **STATUS, 2026-09-13: BUILT and LIVE.** `make demo` / `demo-seed` / `demo-record` /
-`demo-static` / `demo-preview` / `demo-freshness` are all real, all re-runnable, and the
-published page (`shivinate7.github.io/banchi`) is rebuilt by `.github/workflows/demo.yml` on
-every push to `main` that touches what it is built from. This file is that argument's home —
+`demo-static` / `demo-preview` are all real and all re-runnable. The published page
+(`shivinate7.github.io/banchi`) is rebuilt by `.github/workflows/demo.yml` on every push to
+`main` that touches what it is built from. This file is that argument's home —
 it existed only as prose inside `CLAUDE.md`'s command reference until this entry, verified
 against the code rather than carried forward from memory. **Re-verified against the tree
 on 2026-09-19** before landing: every mechanism below still holds, and three figures that
@@ -339,18 +339,19 @@ is the same argument this repo makes everywhere else about a guard nobody trusts
 prints what it matched, so a real failure does not require reproducing the build by hand to
 diagnose.
 
-## 10. Freshness has no gate, on purpose
+## 10. The old freshness guard is retired (D295 amended, L5, 2026-09-27)
 
-`make demo-freshness` (`scripts/demo-freshness.py`) compares a digest of `app/src/types.ts` and
-`app/src/server.ts` against what `app/demo/bundle.json` was recorded against. **It is not in
-`make check`.** Nothing derived from the demo is committed — `app/demo/bundle.json` is built
-fresh by CI on every push to `main` that touches the paths `.github/workflows/demo.yml` lists
-(`app/**`, `server/**`, `store/**`, `pipeline/**`, `cli/**`, `identify/**`, `geometry/**`,
-`codes/**`, `fixtures/**`, `demo-assets/**`, every script under `scripts/` whose name starts
-with `demo-` or `demo_`, `Makefile`, the workflow file itself) — so the published copy
-cannot go stale. What `demo-freshness` is
-for is a local one: a `make demo-preview` running against a recording made before your last
-edit, which this command catches without needing a `make check` failure to do it.
+`demo-freshness` (once `demo-freshness.py`) used to compare a digest of
+`app/src/types.ts` and `app/src/server.ts` against what `app/demo/bundle.json` was recorded
+against. It never gated `make check`. Nothing derived from the demo was committed. CI built
+`app/demo/bundle.json` fresh on every push to `main` that touched the paths
+`.github/workflows/demo.yml` lists (`app/**`, `server/**`, `store/**`, `pipeline/**`,
+`cli/**`, `identify/**`, `geometry/**`, `codes/**`, `fixtures/**`, `demo-assets/**`, every
+script under `scripts/` whose name starts with `demo-` or `demo_`, `Makefile`, the workflow
+file itself). So the published copy could not go stale. The published mirror never reads
+`app/demo/bundle.json` at all, so this guard tested only the invented seed's own recorder
+(the test-audit plan's Q5: "cut the old seed guards"). `demo-seed` / `demo-record` / `demo`
+stay, as a generator anyone can run on demand.
 
 ## 11. What republishes, and why nothing is ever queued
 
@@ -392,9 +393,9 @@ owner's own checkout:**
 
 **Measured on the first real run:** 60 photographs, 1.6 MB, 0 QR refusals. 18 real typed
 prices reached the corpus. 26 cards were marked `sold` with a real sale date. This stays
-well under the ~20 MB budget. `make demo-determinism-selftest` and a bare `make demo-seed`
-are unaffected. The diff against the file before this section is purely additive: two new
-functions, roughly 70 lines, plus eight lines wired into `main()`.
+well under the ~20 MB budget. A bare `make demo-seed` is unaffected. The diff against the
+file before this section is purely additive: two new functions, roughly 70 lines, plus
+eight lines wired into `main()`.
 
 **The box carries a neutral name, and so does the section.** Review round 2026-09-25: the
 box was first named after the owner directly, and the owner renamed it. It is `Demo Box`
@@ -471,6 +472,7 @@ recording leaves on purpose.
 
 **What is left open.** `ux/stock-images` is a separate lane. It is meant to put stock image
 URLs on route responses, so a recording can carry them. This section does not depend on it
-landing. `make demo-determinism` still proves the OLD invented seed deterministic, over
-`demo-seed`. It says nothing about the mirror. Proving the mirror deterministic means
-reading the real store twice, and nothing here does that yet.
+landing. The old invented seed's own determinism guard (make demo-determinism) is retired
+(D295 amended, L5, 2026-09-27) — nothing shipped from it, and nothing checks it any more.
+Proving the mirror deterministic means reading the real store twice, and nothing here does
+that yet.

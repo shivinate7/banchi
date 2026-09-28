@@ -83,7 +83,7 @@ mark roster membership per item below as "guard-scope: yes" or "guard-scope: no"
 | 54 | subagent-override-selftest | guard of a guard | no | unmeasured | proved by violating it in a real nested worktree | KEEP, path-gate candidate |
 | 55 | guard-scope-selftest | guard of the path-gate itself | no, self-exempt | 0.54s (measured here) | mutation-tested, a broken classifier and a roster or wiring mismatch both go red | KEEP |
 | 56 | port-slots-selftest | guard of a guard | no | unmeasured | real collision, two worktrees both got port 5218 | KEEP, path-gate candidate |
-| 57 | demo-determinism-selftest | guard of a guard, path-matcher only | no | unmeasured | unmeasured | KEEP |
+| 57 | demo-determinism-selftest | guard of a guard, path-matcher only | no | unmeasured | unmeasured | RETIRED (L5, C4/Q5) |
 | 58 | match-selftest | product plus guard, server-client agreement | no | unmeasured | unmeasured | KEEP |
 | G1 | pre-commit | git hook | not a make target | part of commit time | yes, D92 and docs-audit findings caught before merge | KEEP |
 | G2 | pre-push | git hook | not a make target | part of push time | yes, five consecutive pushes to main in the reflog before it existed | KEEP |
@@ -463,17 +463,27 @@ excluded from `check`. Flag the docstring as a one-line factual error for whoeve
 this up.** `scripts/catalog-index-selftest.py`'s header should say it is not in `make
 check`, matching the Makefile.
 
-### demo-freshness and demo-determinism, "the demo-record selftests"
-`scripts/demo-freshness.py` and `scripts/demo-determinism.py`. Neither carries a
-`-selftest` suffix. Both play that role for `make demo-record`'s output. Neither gates
-`check`. D18 governs this. `demo-freshness`'s own recipe says it is worth one command, not
-worth failing `make check` over. The bundle is not committed, and CI rebuilds it fresh on
-every push. `demo-determinism` compares two full `make demo` runs' recorded content, byte
-for byte. It found a real, measured defect: 97 `bound_at` timestamp values differed
-between runs, before `bind_sku` took an explicit `at` parameter. `demo-freshness` only
-checks the wire shape, not the content, and it stayed green throughout that whole time.
-This is a real example of one check's blind spot being exactly the reason a second check
-exists. **Verdict: KEEP both as-is, correctly excluded from `check`.**
+### demo-freshness and demo-determinism, "the demo-record selftests" — BOTH RETIRED
+`demo-freshness.py` and `demo-determinism.py`. Neither
+carried a `-selftest` suffix. Both played that role for `make demo-record`'s output.
+Neither gated `check`. D18 governs this. `demo-freshness`'s own recipe said it was worth one
+command, not worth failing `make check` over. The bundle was not committed, and CI rebuilt
+it fresh on every push. `demo-determinism` compared two full `make demo` runs' recorded
+content, byte for byte. It found a real, measured defect: 97 `bound_at` timestamp values
+differed between runs, before `bind_sku` took an explicit `at` parameter. `demo-freshness`
+only checked the wire shape, not the content, and it stayed green throughout that whole
+time. This was a real example of one check's blind spot being exactly the reason a second
+check exists. **Verdict at the time: KEEP both as-is, correctly excluded from `check`.**
+
+**SUPERSEDED by the plan's own C4/Q5 synthesis, and corrected on review.** All three named
+in C4 tested only the invented seed's own bundle, `app/demo/bundle.json`. The published
+mirror has never read that bundle since D295. Nothing ships from that seed. L5 first retired
+only the two that gated something: the selftest's `make check` entry, and the demo.yml
+publish step. That first pass kept `demo-freshness`, reading Q5's own wording too narrowly.
+A second pass corrected it. `demo-freshness` reads the same dead bundle the other two do.
+It tests the invented seed exactly as C4 said, gated or not. All three retire together:
+`demo-freshness.py` and `demo-determinism.py` are gone from the tree, and
+`demo-determinism-selftest` is gone from `make check`.
 
 ---
 
@@ -613,8 +623,10 @@ path. `make janitor` is the backstop for whatever it misses. **Verdict: KEEP.**
 - Of those, already correctly path-gated: 24. That is the 22-item ROSTER, plus
   `serve-selftest`, plus `screen-freshness-selftest`. The last one also appears once
   inside the ROSTER table. Do not double-count it when tallying.
-- KEEP as-is, correctly excluded from `check`: 5. That is map-fix-selftest,
-  offenders-prune-selftest, catalog-index-selftest, demo-freshness, and demo-determinism.
+- KEEP as-is, correctly excluded from `check`: 3. That is map-fix-selftest,
+  offenders-prune-selftest, and catalog-index-selftest. `demo-freshness` and
+  `demo-determinism` were counted here at review time. Both are RETIRED (L5, C4/Q5) —
+  see the section above.
 - Path-gate candidate, not yet actioned, offered rather than ruled: 11. That is
   readings-selftest, skus-selftest, identity-store-selftest, identity-binding-selftest,
   identity-readers-selftest, identity-cli-selftest, coordinator-selftest,

@@ -413,9 +413,8 @@ def chunk_bundle(bundle_path: Path, out_dir: Path) -> List[str]:
 
 def merge_chunks(chunk_dir: Path) -> Dict[str, object]:
     """The inverse of `chunk_bundle` — every chunk's `responses` folded into one dict, for
-    the readers that still want a single file (`app/tests/demo-coverage.spec.ts`,
-    `scripts/demo-freshness.py`, `scripts/demo-determinism.py`): none of them need to learn
-    the chunked shape, only `app/src/demoServer.ts` does.
+    the one reader that still wants a single file, `app/tests/demo-coverage.spec.ts`: it
+    does not need to learn the chunked shape, only `app/src/demoServer.ts` does.
     """
     merged: Dict[str, object] = {"responses": {}, "wire": ""}
     for name in sorted(p.name for p in chunk_dir.glob("chunk-*.json")):
@@ -454,9 +453,8 @@ def install() -> None:
     shutil.copytree(chunk_dir, APP_BUNDLE_DIR)
     # RECONSTRUCTED, NEVER THE SOURCE OF TRUTH — `app/src/demoServer.ts` reads the chunks
     # directly (`import.meta.glob`). This single file exists only because
-    # `app/tests/demo-coverage.spec.ts`, `scripts/demo-freshness.py` and
-    # `scripts/demo-determinism.py` already read one path and do not need to learn the
-    # chunked shape too.
+    # `app/tests/demo-coverage.spec.ts` already reads one path and does not need to learn
+    # the chunked shape too.
     APP_BUNDLE.write_text(json.dumps(merge_chunks(chunk_dir)), "utf-8")
     if APP_PHOTOS.exists():
         shutil.rmtree(APP_PHOTOS)
