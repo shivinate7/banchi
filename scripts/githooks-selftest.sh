@@ -228,6 +228,14 @@ expect refuse "move loose+packed main"        git update-ref refs/heads/main sid
 git switch -q main 2>/dev/null
 expect refuse "fast-forward packed main"      git merge --ff-only side
 git switch -q side 2>/dev/null
+# Packed-refs holds an OLDER main than the loose file: deleting the loose one would move main.
+reloose
+PKMNSCAN_MAIN=off git update-ref refs/heads/main side
+expect refuse "delete loose main, packed is older" git update-ref -d refs/heads/main "$(git rev-parse side)"
+# Loose only, nothing packed: a delete stating its value must still stop.
+PKMNSCAN_MAIN=off git update-ref refs/heads/main side
+expect refuse "delete loose-only main stating its value" git update-ref -d refs/heads/main "$(git rev-parse side)"
+git switch -q side 2>/dev/null
 cd "$tmp/work" || exit 1
 
 echo "  -- D139: which branch the primary checkout stands on --"
