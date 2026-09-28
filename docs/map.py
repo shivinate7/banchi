@@ -7392,7 +7392,7 @@ COMPONENTS = [
                                     "governed_by": ["D5", "D6"]},
             "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
                                     "governed_by": ["D5", "D118"]},
-            "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server, and since 2026-09-06 that is true of its PIXELS too — `SPECIMEN_PHOTO` is a bundled data URI handed to the Fulfiller specimen through `CardLocations`'s `photoSrc` seam, the one call site of that prop in this product. It is what `make screenshot` renders and where `app/tests/pull-confirm.spec.ts` measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that spec measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
+            "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server, and since 2026-09-06 that is true of its PIXELS too — `SPECIMEN_PHOTO` is a bundled data URI handed to the Fulfiller specimen through `CardLocations`'s `photoSrc` seam, the one call site of that prop in this product. It is what `make screenshot` renders and where `app/tests/fulfillment.spec.ts`'s pull-confirm describe block measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that block measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
                                 "governed_by": ["D5", "D6", "D24", "D50", "D58", "D67", "D68",
                                                 "D71", "D93", "D94", "D95", "D102", "D117", "D118",
                                                 "D119", "D300"],
@@ -9245,15 +9245,6 @@ COMPONENTS = [
                         "plus a bar with a failed search and a bar handed an unknown pick. "
                         "`?theme=dark` draws the dark theme.",
                 "governed_by": ["D5", "D132"],
-            },
-            "tests/pull-confirm.spec.ts": {
-                "does": "three rows of the Fulfillment constraints table against step 6's one "
-                        "component: 44px targets, 20px body, 7:1 contrast, 12px apart. Run by "
-                        "`make design-check`.",
-                "governed_by": ["D5"],
-                "note": "NOT a harness test and not registered in harness/run.py:TESTS. The "
-                        "harness contract in docs/GATES.md is seven Python tests run at turn "
-                        "end; this runs a browser and is invoked on its own.",
             },
             "tests/shell.ts": {
                 "does": "one call, `sealEveryTest()`, at the top of every spec that mounts the "

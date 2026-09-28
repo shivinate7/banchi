@@ -317,9 +317,9 @@ its last item. It opens above its control when there is no room below, and stays
 phone's tab bar.
 
 **Every primitive is on one page, at `#/gallery`.** It is the kit rather than a component
-sheet now, it is reachable from the command palette (never the nav), `make screenshot`
-renders it, and `app/tests/pull-confirm.spec.ts` measures three of the Fulfillment floors on
-its pull-confirm specimens.
+sheet now, it is reachable from the command palette (never the nav), and `make screenshot`
+renders it. `app/tests/fulfillment.spec.ts`'s pull-confirm describe block measures three of
+the Fulfillment floors on its pull-confirm specimens.
 
 ## Motion, and what a control owes the person pressing it
 
@@ -1085,8 +1085,8 @@ The agent cannot see its own output, so these are Playwright assertions, not pro
 
 **All ten rows run, against the view itself, and every one was re-checked against the tree
 on 2026-09-03.** `app/tests/fulfillment.spec.ts` asserts every row of the table below on the
-Fulfillment view; `app/tests/pull-confirm.spec.ts` keeps three of them on the kit's
-pull-confirm. `make design-check` runs both. Every contrast ratio is computed from the
+Fulfillment view. Its own pull-confirm block keeps three of them on the kit's pull-confirm
+too. `make design-check` runs it. Every contrast ratio is computed from the
 *rendered* colors rather than compared against a number published here, so a token edited in
 `app/src/tokens.css` without being re-argued in this file has to break something — which is
 the only reason the Banchi palette could be swapped underneath this view at all.
@@ -1166,10 +1166,10 @@ That two-step is not the confirm dialog the rule bans; it is a displacement guar
 
 Step 6 locked a palette on 2026-08-12 and built one component against it, on the argument
 that catching a gap on one component is far cheaper than after ten screens. The palette is
-gone and the component is not: `app/src/PullConfirm.tsx` and `app/src/PullConfirm.css` are
-still the Fulfiller's pull button, still the only solid fill he ever sees, and still the
-thing `app/tests/pull-confirm.spec.ts` measures on `#/gallery`. What it is built against
-now:
+gone. The component is not: `app/src/PullConfirm.tsx` and `app/src/PullConfirm.css` are
+still the Fulfiller's pull button and the only solid fill he ever sees.
+`app/tests/fulfillment.spec.ts`'s pull-confirm block still measures it on `#/gallery`. What
+it is built against now:
 
 ```
 fill        --bn-accent-press in light, --bn-accent-hover in dark

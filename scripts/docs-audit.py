@@ -11046,7 +11046,7 @@ def check_design_tokens(report: Report) -> None:
     Checking lets two things disagree in public.
 
     **What a green row means, exactly**: the values agree. It says nothing about whether the
-    palette is any good — contrast is asserted in app/tests/pull-confirm.spec.ts against
+    palette is any good — contrast is asserted in app/tests/fulfillment.spec.ts against
     rendered pixels, and taste is what the interview was for.
     """
     missing = [rel(path) for path in (DESIGN, TOKENS_CSS) if not exists(path)]

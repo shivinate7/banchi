@@ -76,7 +76,7 @@ import { CAPTURE_PORT, DEV_PORT } from '../devPort'
  * every stub a spec registers wins over it.
  *
  * WHICH IS ALSO THE ONE WAY THIS CAN FAIL SILENTLY, so it is checked rather than asked for.
- * `gallery`, `pull-confirm` and `brand` navigate INSIDE a `test.beforeEach` of their own, and
+ * `gallery` and `brand` navigate INSIDE a `test.beforeEach` of their own, and
  * within one suite Playwright runs `beforeEach` hooks in DECLARATION order — so a
  * `sealEveryTest()` written below one of those would install the seal after the navigation it
  * was meant to catch, those requests would reach the real port unrecorded, and the assertion
@@ -353,11 +353,11 @@ async function stubShell(page: Page, cards: number): Promise<void> {
 /* ---------------------------------------------------------------------- the small store */
 
 /** The whole read surface, small and coherent, for the specs that carry no fixtures of their
- *  own — `cursor`, `gallery`, `pull-confirm`, `brand`, `motion-live`.
+ *  own — `cursor`, `gallery`, `brand`, `motion-live`.
  *
  *  WHY THESE SPECS GET ONE AND THE OTHERS DO NOT. A spec with its own fixtures gets the seal
  *  alone, so a gap in it is REPORTED; handing it a shared answer would close the gap and the
- *  report together. These five register no handlers at all and are not about the data — they
+ *  report together. These four register no handlers at all and are not about the data — they
  *  sweep cursors, render the kit sheet, or drive the motion trigger — so what they need is for
  *  every screen to draw its POPULATED controls, the same way, in every checkout.
  *

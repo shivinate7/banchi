@@ -40,7 +40,8 @@ import './Gallery.css'
  * missing-photo sentence.
  *
  * The four pull-confirm specimens keep their `data-specimen` names and their order:
- * app/tests/pull-confirm.spec.ts measures the vertical gaps between exactly those. */
+ * app/tests/fulfillment.spec.ts's pull-confirm describe block measures the vertical gaps
+ * between exactly those (folded from app/tests/pull-confirm.spec.ts, test-audit M1). */
 
 const noop = () => {}
 

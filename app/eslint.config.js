@@ -266,37 +266,6 @@ export default tseslint.config(
     },
   },
   {
-    /* The one exception, named rather than generalised. `parseRgb` in this spec splits
-     * the `rgb(20, 64, 175)` string `getComputedStyle` returns — three numbers between
-     * literal parens, no quoting, no field that can contain a comma, and nothing a CSV
-     * library would parse better. The selector cannot tell that apart from a CSV line,
-     * because syntactically it is not.
-     *
-     * Scoped to the single file, and only the split guard is dropped: `facingMode` and the
-     * two-argument `.then` both still error here. Every guard this block does not name has
-     * to be re-listed below, which is the cost of `no-restricted-syntax` taking one array
-     * per config block rather than merging them — and it is the right cost, because a guard
-     * silently disappearing from an exception block is exactly the kind of hole this file
-     * exists to close. The general form — turning the rule off for `tests/**` — was
-     * declined, since a later spec reading a fixture export is exactly the CSV parsing this
-     * guards.
-     *
-     * This belongs at the call site as an `eslint-disable-next-line` carrying the same
-     * reason, where a reader of that function sees it; it is here because that file was
-     * owned by another session when this landed. Moving it means deleting this block.
-     * Delete it outright if that spec stops parsing colours.
-     */
-    files: ['tests/pull-confirm.spec.ts'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        ...FACING_MODE_RULES,
-        ...TWO_ARG_THEN_RULES,
-        ...LOCAL_STORAGE_RULES,
-      ],
-    },
-  },
-  {
     /* MEASURED FIRST, THEN ADOPTED — and the finding list is why it is `error` and not `warn`.
      *
      * The header above declines shared presets and says how a preset gets adopted here: "by
