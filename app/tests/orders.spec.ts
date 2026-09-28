@@ -939,7 +939,7 @@ test('the Show facet lists a buyer only in its own state, and each count is the 
   /* EACH COUNT IS BUYERS, THE ROWS THE LIST WILL DRAW, never lines. */
   await expect(list.getByRole('option', { name: /^Short/ })).toContainText('1')
   await expect(list.getByRole('option', { name: /^Ready/ })).toContainText('1')
-  await expect(list.getByRole('option', { name: /^Needs a look/ })).toContainText('1')
+  await expect(list.getByRole('option', { name: /^Check/ })).toContainText('1')
   await list.getByRole('option', { name: /^Short/ }).click()
   await closeFilters(page)
 
@@ -2613,10 +2613,10 @@ test('"Walk N" ticks every row, and "Stop" clears them', async ({ page }) => {
   await expect(page.locator('.orders-index-tick input:checked')).toHaveCount(0)
 })
 
-test('the TCGplayer status options are built from the payload, with buyer counts', async ({ page }) => {
+test('the Status options are built from the payload, with buyer counts', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await (await openFilters(page)).getByRole('button', { name: /^TCGplayer status/ }).click()
-  const list = page.getByRole('listbox', { name: 'TCGplayer status' })
+  await (await openFilters(page)).getByRole('button', { name: /^Status/ }).click()
+  const list = page.getByRole('listbox', { name: 'Status' })
   await expect(list.getByRole('option', { name: /^Ready to Ship/ })).toContainText('2')
   await expect(list.getByRole('option', { name: /^Zorbo Pending/ })).toContainText('1')
 })
@@ -2625,20 +2625,20 @@ test('each control narrows; they compose', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
 
   /* STATUS ALONE. */
-  await pickFacet(page, 'TCGplayer status', /^Zorbo Pending/)
+  await pickFacet(page, 'Status', /^Zorbo Pending/)
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Bob')
 
   /* BACK TO ALL, THEN HIDE UNKNOWN CARDS: Carol's line names a card the store never saw. */
   const body = await openFilters(page)
-  await body.getByRole('button', { name: 'Clear TCGplayer status' }).click()
-  await body.getByRole('button', { name: /^Hide unknown cards/ }).click()
+  await body.getByRole('button', { name: 'Clear Status' }).click()
+  await body.getByRole('button', { name: /^Hide unknown/ }).click()
   await closeFilters(page)
   await expect(page.locator('.orders-index-row')).toHaveCount(2)
   await expect(page.locator('.orders-buyers')).not.toContainText('Carol')
 
   /* COMPOSED: Ready to Ship AND hide-unknown leaves only Alice. */
-  await pickFacet(page, 'TCGplayer status', /^Ready to Ship/)
+  await pickFacet(page, 'Status', /^Ready to Ship/)
   await expect(page.locator('.orders-index-row')).toHaveCount(1)
   await expect(page.locator('.orders-index-row')).toContainText('Alice')
 })
@@ -2669,7 +2669,7 @@ test('the sort press re-orders the list at once, Ready first, and the list says 
 test('the filters, the search and the sort survive a reload through the URL', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
 
-  await pickFacet(page, 'TCGplayer status', /^Ready to Ship/)
+  await pickFacet(page, 'Status', /^Ready to Ship/)
   await (await openFilters(page)).getByRole('button', { name: /^Order: Newest first/ }).click()
   await closeFilters(page)
   await expect(page).toHaveURL(/status=Ready\+to\+Ship/)
@@ -3027,7 +3027,7 @@ test('the search matches an order number too', async ({ page }) => {
 
 test('the search composes with the status select — an AND, never a second gate', async ({ page }) => {
   await open(page, { orders: threeBuyerPayload() })
-  await pickFacet(page, 'TCGplayer status', /^Ready to Ship/)
+  await pickFacet(page, 'Status', /^Ready to Ship/)
   await expect(page.locator('.orders-index-row')).toHaveCount(2) // Carol, Alice
 
   await page.locator('.bn-filterbar-search .search-field-input').fill('bob')
@@ -4557,7 +4557,7 @@ test('the Show facet offers "Missing a copy", counts its buyers, and lists only 
 
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
-  const option = list.getByRole('option', { name: /^Missing a copy/ })
+  const option = list.getByRole('option', { name: /^Missing/ })
   await expect(option).toContainText('1')
   await option.click()
   await closeFilters(page)
@@ -4574,5 +4574,34 @@ test('"Missing a copy" is not offered while no buyer owes a missing copy', async
   await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
   const list = page.getByRole('listbox', { name: 'Show' })
   await expect(list.getByRole('option', { name: /^Ready/ })).toBeVisible()
-  await expect(list.getByRole('option', { name: /^Missing a copy/ })).toHaveCount(0)
+  await expect(list.getByRole('option', { name: /^Missing/ })).toHaveCount(0)
+})
+
+/* SEVERAL PICKS IN "SHOW" (owner's ruling 2026-09-28, D270): OR within the facet. "Done" reads the
+ * closed buyers and every other pick the open ones, so Done plus Short is the union of both. */
+test('the Show facet takes several picks: a buyer passes on any, and the URL keeps them all', async ({ page }) => {
+  const alice = seededOrder({ number: 'A0001', buyer: 'Alice', status: 'Ready to Ship', placedAt: '2026-08-01T00:00:00+00:00', reason: 'resolved' })
+  const bob = seededOrder({ number: 'B0002', buyer: 'Bob', status: 'Ready to Ship', placedAt: '2026-08-15T00:00:00+00:00', reason: 'short' })
+  const closed = order({ key: 'TCGplayer:Z0009', number: 'Z0009', buyer: 'Zed', open: false, wanted: 1, recorded: 1, status: 'Shipped', terminal: true })
+  await open(page, { orders: payloadOf([alice.row, bob.row, closed], [alice.resolved, bob.resolved]) })
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+
+  await (await openFilters(page)).getByRole('button', { name: /^Show/ }).click()
+  const list = page.getByRole('listbox', { name: 'Show' })
+  await list.getByRole('option', { name: /^Short/ }).click()
+  await list.getByRole('option', { name: /^Done/ }).click()
+  /* EACH COUNT STAYS ITS OWN ROWS: another pick in the same facet does not change it. */
+  await expect(list.getByRole('option', { name: /^Ready/ })).toContainText('1')
+  await closeFilters(page)
+
+  await expect(page).toHaveURL(/show=short/)
+  await expect(page).toHaveURL(/show=done/)
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
+  await expect(page.locator('.orders-buyers')).toContainText('Bob')
+  await expect(page.locator('.orders-buyers')).toContainText('Zed')
+  await expect(page.locator('.orders-buyers')).not.toContainText('Alice')
+  await expect(page.locator(`${VIEW} .bn-filtercount`)).toContainText('2 of 3 buyers')
+
+  await page.reload()
+  await expect(page.locator('.orders-index-row')).toHaveCount(2)
 })

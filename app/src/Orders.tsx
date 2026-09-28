@@ -889,7 +889,10 @@ const SORT_AT_REST: SortValue<OrderSortKey> = { key: 'placed', dir: 'desc' }
  *  press opens that one. */
 type ShowValue = Status | typeof MISSING_FACET
 const SHOW_ORDER: readonly ShowValue[] = [MISSING_FACET, 'look', 'short', 'ready', 'unresolved', 'done']
-const showLabel = (value: ShowValue): string => (value === MISSING_FACET ? 'Missing a copy' : STATUS_PILL[value].label)
+const NO_SHOWS: readonly ShowValue[] = []
+/** The facet's own short words. The row's pill keeps `STATUS_PILL`'s longer ones. */
+const SHOW_WORDS: Partial<Record<ShowValue, string>> = { [MISSING_FACET]: 'Missing', look: 'Check', unresolved: 'Unresolved' }
+const showLabel = (value: ShowValue): string => SHOW_WORDS[value] ?? STATUS_PILL[value as Status].label
 
 const LANE_TONE: Record<ShippingLane, PillTone> = { envelope: 'ok', parcel: 'default', unjudged: 'warn' }
 const LANE_ICON: Record<ShippingLane, IconName> = { envelope: 'mail', parcel: 'package', unjudged: 'alert' }
@@ -3009,13 +3012,13 @@ function PullStage({
   const feedStatuses = useMemo(() => statusVocabulary(payload?.orders ?? []), [payload])
   const facetShape: readonly FilterFacet[] = useMemo(
     () => [
-      { key: 'show', label: 'Show', multiple: false, options: SHOW_ORDER.map((value) => ({ value, label: showLabel(value) })) },
-      { key: 'status', label: 'TCGplayer status', options: feedStatuses.map((one) => ({ value: one.status, label: one.status })) },
+      { key: 'show', label: 'Show', options: SHOW_ORDER.map((value) => ({ value, label: showLabel(value) })) },
+      { key: 'status', label: 'Status', options: feedStatuses.map((one) => ({ value: one.status, label: one.status })) },
     ],
     [feedStatuses],
   )
   const [picked, setPicked] = useFacetParams(facetShape)
-  const show = (picked.show?.[0] ?? null) as ShowValue | null
+  const shows = (picked.show ?? NO_SHOWS) as readonly ShowValue[]
   const statuses = picked.status ?? []
 
   const inOpenBase = (group: BuyerGroup) => group.open.length > 0 || finished.has(group.key)
@@ -3025,10 +3028,17 @@ function PullStage({
   const passesSearch = (group: BuyerGroup) =>
     matchQuery(query, { text: [group.name, buyerLabel(group), ...group.orders.map((order) => order.number)] })
   const passesHide = (group: BuyerGroup) => passesHideUnknown(group, hideUnknown, answers)
-  const passesShow = (group: BuyerGroup, value: ShowValue | null) =>
-    value === null ||
-    value === 'done' ||
-    (value === MISSING_FACET ? groupMissing(group, answers).copies > 0 : statusByGroup.get(group.key) === value)
+  /* SEVERAL PICKS, ONE FACET (owner's ruling 2026-09-28, D270): a group passes when it matches ANY
+     picked value. "Done" is read against the closed groups, every other value against the open
+     ones, so Done plus another pick is the union of both sets. */
+  const matchesShow = (group: BuyerGroup, value: ShowValue) =>
+    value === 'done'
+      ? inDoneBase(group)
+      : inOpenBase(group) &&
+        (value === MISSING_FACET ? groupMissing(group, answers).copies > 0 : statusByGroup.get(group.key) === value)
+  const inBase = (group: BuyerGroup) =>
+    shows.length === 0 ? inOpenBase(group) : shows.some((value) => (value === 'done' ? inDoneBase(group) : inOpenBase(group)))
+  const passesShow = (group: BuyerGroup) => shows.length === 0 || shows.some((value) => matchesShow(group, value))
 
   /* THE DRAWERS SORT REUSES THE WALK PLANNER'S OWN SOLVE (`D296`), never a second
    *  box-counting pass: one `POST /orders/walk-plan` over every walkable order on the screen,
@@ -3078,9 +3088,9 @@ function PullStage({
     [drawerPlan, drawerCounts],
   )
 
-  const base = allGroups.filter(show === 'done' ? inDoneBase : inOpenBase)
+  const base = allGroups.filter(inBase)
   const freshShownGroups = sortGroups(
-    base.filter((group) => passesFeed(group) && passesSearch(group) && passesHide(group) && passesShow(group, show)),
+    base.filter((group) => passesFeed(group) && passesSearch(group) && passesHide(group) && passesShow(group)),
     sort,
     readyOf,
     sortInputs,
@@ -3104,7 +3114,7 @@ function PullStage({
      freeze still holds against one. Always `false` outside `sort.key === 'drawers'`
      (`drawerPlan` is nulled the moment another key is picked), so this term is inert for
      every other sort. */
-  const basisSig = [sort.key, sort.dir, show ?? '', statuses.join(','), query, hideUnknown, drawerPlan !== null].join('\u0000')
+  const basisSig = [sort.key, sort.dir, shows.join(','), statuses.join(','), query, hideUnknown, drawerPlan !== null].join('\u0000')
   const [takeSig, setTakeSig] = useState<string | null>(null)
   const [take, setTake] = useState<GroupTake>(new Map())
   if (takeSig !== basisSig) {
@@ -3122,8 +3132,7 @@ function PullStage({
         label: showLabel(value),
         count: allGroups.filter(
           (group) =>
-            (value === 'done' ? inDoneBase(group) : inOpenBase(group)) &&
-            passesShow(group, value) &&
+            matchesShow(group, value) &&
             passesFeed(group) &&
             passesSearch(group) &&
             passesHide(group),
@@ -3140,7 +3149,7 @@ function PullStage({
             group.orders.some((order) => (order.status ?? '').trim() === one.status) &&
             passesSearch(group) &&
             passesHide(group) &&
-            passesShow(group, show),
+            passesShow(group),
         ).length,
       })),
     },
@@ -3314,8 +3323,8 @@ function PullStage({
     const group = allGroups.find((one) => one.key === selected)
     if (group === undefined) return // wait for the read this link is about
     doneLinkHandled.current = selected
-    if (group.open.length === 0 && show !== 'done' && !finished.has(group.key)) patchViewQuery({ show: 'done' })
-  }, [selected, allGroups, show, finished])
+    if (group.open.length === 0 && !shows.includes('done') && !finished.has(group.key)) patchViewQuery({ show: [...shows, 'done'] })
+  }, [selected, allGroups, shows, finished])
 
   /* THE ARROWS STEP THE LIST OF BUYERS where there is a list beside the detail. Never with a
    *  modifier (Cmd-arrow is the shell's, D51) and never out of a field.
@@ -3435,7 +3444,7 @@ function PullStage({
       count={{ shown: shownGroups.length, total: base.length, noun: { one: 'buyer', many: 'buyers' } }}
       search={{ query, onChange: setQuery, placeholder: 'Buyer or order', label: 'Search buyers' }}
       sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
-      hide={unknownCount === 0 && !hideUnknown ? undefined : { checked: hideUnknown, onChange: setHideUnknown, label: 'Hide unknown cards', count: unknownCount }}
+      hide={unknownCount === 0 && !hideUnknown ? undefined : { checked: hideUnknown, onChange: setHideUnknown, label: 'Hide unknown', count: unknownCount }}
       beside={storeControls}
     />
   )
@@ -3443,7 +3452,7 @@ function PullStage({
   /* ONE EMPTY STATE, AND NOTHING UNDER IT (UX-234): no buyer panel, no walk, until a row shows. */
   if (shownGroups.length === 0) {
     const searched = query.trim() !== ''
-    const nothingOwed = show === null && statuses.length === 0 && !hideUnknown && base.length === 0
+    const nothingOwed = shows.length === 0 && statuses.length === 0 && !hideUnknown && base.length === 0
     return (
       <div className="orders-stage">
         {filterBar}
@@ -3473,7 +3482,7 @@ function PullStage({
           ) : (
             <EmptyState
               icon="sparkles"
-              title={show === 'done' ? 'Nothing done yet' : 'No buyer in this view'}
+              title={shows.length === 1 && shows[0] === 'done' ? 'Nothing done yet' : 'No buyer in this view'}
               body="Clear the filters to see every open buyer."
               actions={
                 <Button icon="list" onClick={() => setPicked({})}>
@@ -3546,7 +3555,7 @@ function PullStage({
               group={group}
               answers={answers}
               status={statusByGroup.get(group.key) ?? 'done'}
-              missing={show === MISSING_FACET ? groupMissing(group, answers) : null}
+              missing={shows.includes(MISSING_FACET) && groupMissing(group, answers).copies > 0 ? groupMissing(group, answers) : null}
               selected={group.key === selectedKey}
               onSelect={() => select(group.key)}
             />

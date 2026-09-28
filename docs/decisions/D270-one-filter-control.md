@@ -180,3 +180,12 @@ of a header's actions are `IconButton`s or a More menu. `make kit-adoption`'s
 by hand from `SearchField` and a facet control, in place of `FilterBar`
 (`scripts/kit-adoption.mjs`). Current offenders are listed in `scripts/kit-adoption-allow.json`,
 keyed to the lane that owns each screen.
+
+## Amendment, 2026-09-28 — "Show" on Orders takes several picks
+
+**Owner's ruling.** Orders' "Show" facet is multi-choice. A group passes when it matches ANY
+picked value (OR within a facet, AND across facets). "Done" reads the closed groups and every
+other value the open ones, so Done plus another pick shows the union of both sets. Each option
+still counts the rows under the OTHER facets. The picks round-trip in the URL (`?show=a&show=b`).
+Facet and option words are shorter: "Status" for the feed's status, "Missing", "Check",
+"Unresolved" under Show, "Hide unknown". The rows' own pills keep their longer words.
