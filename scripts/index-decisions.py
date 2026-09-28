@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
-"""Generate CLAUDE.md's decision index from `docs/decisions/`.
+"""Register every unregistered `docs/decisions/` entry into `docs/decisions/ORDER.json`.
 
-THE INDEX IS DERIVED AND WAS HAND-MAINTAINED. Every entry appended to the corpus also
-needed a line typed into CLAUDE.md, in the right place, spelled the same way — which is the
-second half of the conflict the split exists to remove, and the half a directory does not
-fix by itself. Two branches adding two files no longer collide in the corpus; without this
-they still collide in the index.
+FORMERLY ALSO WROTE CLAUDE.md'S DECISION INDEX. That half is retired: CLAUDE.md no longer
+hand-carries an index for a corpus this size to drift against. `make map ARGS=--decisions`
+renders the same id-and-title list straight off the corpus's own headings, on demand, so
+there is no second copy left for a branch's entry to collide on or go missing from. This
+file's remaining job is the manifest half, which a rendered view cannot replace: a branch
+still adds only its own entry FILE, and something still has to fold that file into the
+corpus's shared ORDER — this generator, at claim time, is that something.
 
-WRITE-TIME, NEVER CHECK-TIME. D18 draws that line and this file is on the writing side of
-it: it may edit CLAUDE.md and is therefore not on the commit path. The checking side is
-`make docs-audit`'s `decision index` row, which computes what the index should say and
-compares, and blocks. The two are deliberately separate programs — a generator that also
-gated could satisfy itself, which is the exact failure D16 is written against.
+WRITE-TIME, NEVER CHECK-TIME (D18). This file may edit `docs/decisions/ORDER.json` and is
+therefore not on the commit path. The corpus's own non-vacuity floor (`corpus_is_empty` in
+`scripts/docs-audit.py`) is the checking side, and the two stay separate programs — a
+generator that also gated could satisfy itself, which is the exact failure D16 is written
+against.
 
-THE HEADING IS THE SOURCE. Titles come from the `## D<id> — <title>` line inside each entry
-file, never from the filename: a slug is lossy, truncated to 58 characters and sometimes
+THE HEADING IS THE SOURCE. An entry's id and title come from its own `## D<id> — <title>`
+line, never from the filename: a slug is lossy, truncated to 58 characters and sometimes
 disambiguated with a numeric suffix, and it is a convenience for a human running `ls`.
 
 ORDER IS THE MANIFEST'S. `docs/decisions/ORDER.json` records the order the chunks sat in
 when they were one document, because three of them are not entries — Deferred, Someday and
-the v1 bug table sat between D79 and D80 and still do. `decision index` reconciles the index
-against the headings IN ORDER, so this has to emit that order rather than a sort.
+the v1 bug table sat between D79 and D80 and still do.
 """
 
 from __future__ import annotations
@@ -28,21 +29,11 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
-import re
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 
 ROOT = Path(__file__).resolve().parent.parent
-CLAUDE = ROOT / "CLAUDE.md"
-
-_ID = r"(?:[1-9][0-9]{0,2}|-[a-z][a-z0-9]*(?:-[a-z0-9]+)+)"
-HEADING_RE = re.compile(r"^##\s+(D" + _ID + r")\s*[—-]\s*(.+)$")
-# The index line's own shape, and the shape `decision index` locates the block by: an id,
-# then the title. Width 4 plus a space is what the hand-maintained index used, and keeping it
-# means this generator's first run produces no diff on an index that was already correct —
-# which is how it was checked in.
-LINE_RE = re.compile(r"^D" + _ID + r"\s")
 
 
 def corpus(root: Path = ROOT):
@@ -62,15 +53,6 @@ def corpus(root: Path = ROOT):
     module.MANIFEST = module.DIRECTORY / "ORDER.json"
     module.invalidate()
     return module
-
-
-def wanted(root: Path = ROOT) -> List[str]:
-    out: List[str] = []
-    for path in corpus(root).files():
-        match = HEADING_RE.match(path.read_text(encoding="utf-8").split("\n", 1)[0])
-        if match:
-            out.append(f"{match.group(1):<4} {match.group(2).strip()}")
-    return out
 
 
 def normalize(root: Path = ROOT, write: bool = False) -> List[str]:
@@ -93,68 +75,19 @@ def normalize(root: Path = ROOT, write: bool = False) -> List[str]:
     return pending
 
 
-def rewrite_index(root: Path = ROOT, write: bool = False) -> bool:
-    """Regenerate the index block in `root`'s CLAUDE.md. True when it changed."""
-    claude = root / "CLAUDE.md"
-    lines = claude.read_text(encoding="utf-8").split("\n")
-    start, stop = locate(lines)
-    want = wanted(root)
-    if lines[start:stop] == want:
-        return False
-    if write:
-        claude.write_text("\n".join(lines[:start] + want + lines[stop:]), encoding="utf-8")
-    return True
-
-
-def locate(lines: List[str]) -> Tuple[int, int]:
-    """The index block's line range, found BY SHAPE.
-
-    The same rule `decision index` uses: the first fenced block whose non-blank lines all
-    look like index lines. Located by shape rather than by the heading above it, so
-    re-titling the Map section cannot silently unhook either program from the other.
-    """
-    fence = None
-    for n, line in enumerate(lines):
-        if not line.lstrip().startswith("```"):
-            continue
-        if fence is None:
-            fence = n
-            continue
-        body = [b for b in lines[fence + 1:n] if b.strip()]
-        if body and all(LINE_RE.match(b) for b in body):
-            return fence + 1, n
-        fence = None
-    raise SystemExit("no decision index found in CLAUDE.md — refusing to guess where it goes")
-
-
 def main(argv: List[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--write", action="store_true", help="apply (default: preview)")
     args = ap.parse_args(argv)
 
     moved = normalize(ROOT, args.write)
-    if moved:
-        print(f"manifest: {len(moved)} entr{'y' if len(moved) == 1 else 'ies'} "
-              f"{'appended' if args.write else 'would be appended'}: {', '.join(moved)}")
-    lines = CLAUDE.read_text(encoding="utf-8").split("\n")
-    start, stop = locate(lines)
-    have = [b for b in lines[start:stop]]
-    want = wanted()
-    if have == want:
-        print(f"index is current — {len(want)} entries, no change")
+    if not moved:
+        print("manifest is current — nothing unregistered")
         return 0
-    added = [w for w in want if w not in have]
-    gone = [h for h in have if h not in want and h.strip()]
-    print(f"index would change: {len(have)} lines -> {len(want)}")
-    for line in added[:10]:
-        print("  +", line[:100])
-    for line in gone[:10]:
-        print("  -", line[:100])
+    print(f"manifest: {len(moved)} entr{'y' if len(moved) == 1 else 'ies'} "
+          f"{'appended' if args.write else 'would be appended'}: {', '.join(moved)}")
     if not args.write:
         print("\npreview only — pass --write to apply")
-        return 0
-    CLAUDE.write_text("\n".join(lines[:start] + want + lines[stop:]), encoding="utf-8")
-    print(f"wrote {len(want)} index lines into CLAUDE.md")
     return 0
 
 

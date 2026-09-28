@@ -650,32 +650,28 @@ not rendered — not focusable, not reachable by a screen reader).
 
 ## Code cards (dormant feature) — DORMANT as of 2026-09-20
 
-Code cards share the rig, the capture server, and the capture app shell with singles.
-Everything downstream is separate: data model, identification, sales channel, and
-fulfillment (D14's structural half, untouched — see the opening section above).
-
 **DORMANT MEANS THIS: the owner has not run this feature yet, and no session should read it
 as active work unless the owner names it.** `codes/`, the `#/codes` route, harness test T8,
 and the QR decode all stay in the build and keep working. Nothing here is deleted. This is
-the one place that marks the dormancy. Do not repeat the marker elsewhere. Update this date
-if the owner picks the feature back up.
+the one place that marks the dormancy. Update this date if the owner picks the feature back
+up.
 
-**The gating system is retired.** This section used to say the delivery worker "was gated on
-singles Gate B." Gate B passed on 2026-08-22. The gating system retired the day after, and
-nothing here waits behind anything. The worker stays unbuilt because the channel decision
-stays unexecuted, a different reason, argued in `docs/specs/code-cards.md` §6.
+`docs/specs/code-cards.md` is the spec. Architecture, measurements, channel research,
+operating detail, and open questions all live there. Read it before building anything here.
 
-**`docs/specs/code-cards.md` is the spec and supersedes this section's architecture.** Read
-it before building. This section is the short operating summary. The spec carries the
-measurements, the channel research, and the open questions.
+### Hard rules
 
-**`scripts/docs-audit.py`'s `views exposure` advisory is turned OFF as of 2026-09-23**
-(`VIEWS_EXPOSURE_ENABLED = False`), because no session is drawing pooled captures onto a
-screen while this feature is dormant. Turn it back on when code-card work resumes — flip
-the constant to `True`. **`scripts/guard-opsec.sh` stays ARMED, untouched**: it refuses a
-real code-card photo into a commit and protects real money, and dormancy never reaches it.
+- Never guess a code. No decode → the paid vision read, then a human. Never a default.
+- Failure must be loud. A QR that does not decode is a stop.
+- Separate non-`BST` codes on sight — they are the scarce, high-value ones, and the catalog
+  numbers now confirm it rather than merely asserting it.
+- No real code-card photo or code string in any tracked file. Enforced by pre-commit hook.
+  The runtime writing codes into gitignored `inventory/` is the sanctioned path. The guards
+  protect the repository, not the store.
 
-### Things you will get wrong without being told
+Rationale, sales strategy, and open questions: `docs/CODES-DECISIONS.md`.
+
+## Things you will get wrong without being told
 
 - **The QR IS the code, and the primary path makes NO model call and NO network call.**
   `codes/qr.py` decodes locally. Measured at the rig's real 3840x2160 frame size: **140 of
@@ -738,20 +734,18 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   `server/capture_server.py`: `class CaptureServer(ThreadingHTTPServer)`,
   `request_queue_size = 128` (bounds the accept backlog, not the thread count), and
   `CaptureHandler.timeout = 15` (reaps only idle connections). A burst of concurrent clients
-  kills it. Measured at 80 Playwright browsers: 969 threads, 338% CPU, answering nothing.
-  Fixed 2026-09-04: `REQUEST_SLOTS = 4` bounds executing requests with a
+  kills it. `REQUEST_SLOTS = 4` bounds executing requests with a
   `ThreadPoolExecutor(REQUEST_SLOTS)`. It is safe over HTTP/1.1 only because every response
-  sends `Connection: close` (DEBT11 has the mechanism and the measurements — this
-  was sized at 12 originally. The sweep found 4 keeps 82% of peak throughput, and less is
-  strictly better). `make launch-agent` keeps this alive over the owner's real store. Run the
-  full suite ONCE at the end. Never `make up ARGS=--restart`, `make down` or `make up` to fix
-  a wedge — the refusal without `--confirm` is the answer.
+  sends `Connection: close` (DEBT11 has the mechanism and the measurements). `make
+  launch-agent` keeps this alive over the owner's real store. Run the full suite ONCE at the
+  end. Never `make up ARGS=--restart`, `make down` or `make up` to fix a wedge — the refusal
+  without `--confirm` is the answer.
 - **The join key is PER-GAME and normalized on both sides** (`pipeline/games.py`,
   `pipeline/join.py:number_index_key`). Pokemon composes `zfill(3)(number) + "/" +
   printedTotal`. One Piece and Riftbound match the printed identifier verbatim. Both carry
-  denominator-less rows. `zfill` is COMPOSITION only, never matching. A mismatch there once
-  silently zero-joined 950 rows. Never join on Product Name as the key. D35 permits it as a
-  last resort, folded through `name_index_key`, queued for review rather than listed outright.
+  denominator-less rows. `zfill` is COMPOSITION only, never matching. Never join on Product
+  Name as the key. D35 permits it as a last resort, folded through `name_index_key`, queued
+  for review rather than listed outright.
 - **A run directory's slot numbers are not the truth. The photograph is** (D36).
   `cli/resolve.py:realign` re-binds every record to its digest's current slot. It refuses on
   ambiguity and on a box whose number was deleted and reused after the run
@@ -762,12 +756,11 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
 - **EVERY CHECKOUT HAS ITS OWN STORE AND ITS OWN PORTS** (D43). `store/files.py:home()`
   defaults to the checkout the code runs from. Ports derive from the checkout's path
   (`app/devPort.ts`, `server/ports.py`, kept in step by `make port-agreement`). An empty
-  inventory in a worktree is correct — the real one is the main checkout's. A hash of the
-  path put two live worktrees on one port, so a linked checkout now CLAIMS its slot once in
-  `~/.pkmnscan/port-slots.json` (`scripts/port-slots.py`). `make dev`, `server`, `up`,
-  `design-check` and `scripts/launch-config.py` claim first. A test run refuses a reused dev server
-  that does not name this checkout (`app/checkoutIdentity.ts`,
-  D261).
+  inventory in a worktree is correct — the real one is the main checkout's. A linked checkout
+  CLAIMS its own port slot once in `~/.pkmnscan/port-slots.json` (`scripts/port-slots.py`).
+  `make dev`, `server`, `up`, `design-check` and `scripts/launch-config.py` claim first. A
+  test run refuses a reused dev server that does not name this checkout
+  (`app/checkoutIdentity.ts`, D261).
 - **Real CSV libraries only** — PapaParse (JS), `csv` (Python). Never `split(",")`.
 - **Not a Claude artifact.** No `window.storage`, no `facingMode: "environment"`, nothing
   about a card in `localStorage`. **Eleven keys are stored on the device**, each a fact about
@@ -805,16 +798,13 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
 - **A card's number counts the cards in the box, not the slots** (D58). Sell card 17, and the
   next card becomes 17. The STORED index (`/inventory/<box>/<index>`) never moves. A departed
   card renders `pipeline/join.departed_label` (`Box 3 · departed · B3 #96`). D68 added the
-  store key: a bare `Box 3 · departed` once drew two sold copies in one box as one
-  indistinguishable string.
+  store key, so two departed cards in one box are never one indistinguishable string.
 - **A set hint on some cards narrows nothing. How wide to ask is a per-game rule** (D76).
-  Widening may fire only when EVERY card of a game is hinted and every hint resolves.
-  Pokemon's whole category is 32,629,598 B against a 33,554,432 B cap — 97.24%, measured
-  2026-09-12, six set releases of headroom — so a widening is never silent (a `width` block on
-  every fetch). Since D170, a Pokemon run that would widen itself is REFUSED outright
-  (`export_needs_hint` in `pipeline/games.py`), unless the operator named `set_ids` or `scope`
-  explicitly. Not enforced at the shutter (D65). Fix an unhinted card in Manage box → Set
-  claims.
+  Widening may fire only when EVERY card of a game is hinted and every hint resolves. A
+  widening is never silent (a `width` block on every fetch). Since D170, a Pokemon run that
+  would widen itself is REFUSED outright (`export_needs_hint` in `pipeline/games.py`), unless
+  the operator named `set_ids` or `scope` explicitly. Not enforced at the shutter (D65). Fix
+  an unhinted card in Manage box → Set claims.
 - **The catalogue export is a property of the GAME, not the drawer** (D166). A fetch lands in
   `inventory/.exports/<game>/`, deduped store-wide by digest. A covering export fetched inside
   900s is reused with no socket opened. `refresh: true` forces one. A reuse never touches the
@@ -859,9 +849,7 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   count, and say why.
 - **A route is not a feature. Nothing is built until it is reachable from a screen.** Done
   means the route, a client function in `app/src/server.ts`, a control a human would look
-  for, and — where it writes — its receipt and way back. The owner found three fully tested
-  routes with zero client functions on 2026-08-23: box delete, mid-box delete-with-reindex,
-  retroactive claims. `docs/GATES.md` step 7 records the same failure at scale.
+  for, and — where it writes — its receipt and way back.
   **NOT MECHANIZED:** a machine cannot know which screen a human would look for a capability
   on. `OFF_NAV`, the Fulfiller's shell-less screen, and a capability reached only from a sheet
   or modal all break a naive route reconciliation. `make design-check` is the nearest thing
@@ -876,14 +864,13 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   `harness/tests/t3_join_coverage.py` — "a one-directional check passes on that bug."
 - Scope is argued, not gated. New surface area needs a reason and a decision entry, never a
   gate. Mechanized for the arithmetic half: `make docs-audit`'s `repo map` row fails a commit
-  adding a file with no map entry. `decision index` fails one citing a non-existent entry.
+  adding a file with no map entry. `decision ids` fails one citing a non-existent entry.
   Whether the reason is good is a person's judgement.
 - **FIX THE CAUSE, NEVER THE SYMPTOM. CHECK WHETHER THE PRIMITIVE ALREADY EXISTS FIRST.**
   Owner's standing instruction, 2026-09-11. `make map ARGS=<path>` and
   `scripts/decision-context.py` find the existing primitive before you design around its
-  absence. The capture-restore bug that earned this rule was solved by adopting D145's `bid`,
-  already built hours earlier, rather than any of three proposed heuristics. A stopgap fix may
-  still be the right call. Call it a stopgap fix in the commit, with the cause in `docs/debts/`.
+  absence. A stopgap fix may still be the right call. Call it a stopgap fix in the commit,
+  with the cause in `docs/debts/`.
   **NOT MECHANIZED:** a machine cannot read intent — whether the author knew the cause and
   chose the symptom. `make revert-guard` and `make map ARGS=--stale` are nearby, but not this.
 - **A SETTLED DECISION IS AN ARGUMENT, NOT AN AUTHORITY. THINK IN OUTCOMES.** Owner's
@@ -891,14 +878,11 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   ask to solve it the right way, not defer to it naturally."* Cite the entry. Say which
   premise no longer holds and how you know — measure it, or say "unmeasured." Say what it
   protected and what protects that now. Propose the fix and wait for the owner's word. Never
-  quietly work around or repeal it. D48 was the worked example: two of its three grounds had
-  gone false for weeks before anyone looked. D180 closed it on the owner's word.
+  quietly work around or repeal it.
   **NOT MECHANIZED:** a machine cannot tell a rotted premise from a live one. `make map
   ARGS=--stale` catches file drift only, never argument rot.
 - **CHECK WHETHER A TASK IS YOURS BEFORE HANDING IT TO THE OWNER.** Owner's instruction,
-  2026-09-12, earned twice in one session when routes that already existed (a live-export
-  fetch, a reconcile) were called "yours to fetch" and "yours to run." Grep the routes, the
-  command list above, and docs/map.py before asking.
+  2026-09-12. Grep the routes, the command list above, and docs/map.py before asking.
   **NOT MECHANIZED:** a machine cannot read a sentence addressed to a person and decide
   whether this repo can already do it.
 - **Opsec, repo-wide.** A live unredeemed code card is a bearer instrument. No code-card
@@ -924,16 +908,15 @@ Spec, measurements and channel research: `docs/specs/code-cards.md`.
   command it names still carries a heartbeat constant in the file that runs it. A preview
   (`ARGS=<n>` with no `--confirm`) never waits, and is never this clause's business.
 - **A CITATION NAMES A SYMBOL, NEVER A LINE.** A line number rots on the next edit above it.
-  Measured 2026-09-20: of 313 checkable code anchors, 219 point at the wrong line. Write a
-  decision id, a section, or the `module.symbol` form the `paths` row verifies. That form
-  takes no `.py` before the symbol. Mechanized by three `make docs-audit` rows. `line anchors`
-  refuses a line past the file's end, and any anchor into a split-record stub. `line anchor
-  offenders` refuses an anchor that `scripts/line-anchor-offenders.json` does not list. That
-  list only shrinks. A new file starts clean, unless the anchor moved out of another file.
-  `line anchor allowlist` refuses an exemption in `scripts/docs-audit-line-allow.txt` that has
-  stopped being true. The rot rate
-  printed beside them is MEASURED and never gated. A citation pointing at a real line whose
-  content has moved stays invisible, which D149 ruled no check can see.
+  Write a decision id, a section, or the `module.symbol` form the `paths` row verifies. That
+  form takes no `.py` before the symbol. Mechanized by three `make docs-audit` rows. `line
+  anchors` refuses a line past the file's end, and any anchor into a split-record stub. `line
+  anchor offenders` refuses an anchor that `scripts/line-anchor-offenders.json` does not list.
+  That list only shrinks. A new file starts clean, unless the anchor moved out of another
+  file. `line anchor allowlist` refuses an exemption in `scripts/docs-audit-line-allow.txt`
+  that has stopped being true. The rot rate printed beside them is MEASURED and never gated.
+  A citation pointing at a real line whose content has moved stays invisible, which D149
+  ruled no check can see.
 - **A screen answers to the system**: `--bn-*` tokens only, verified at 1440, 820 and 390,
   light and dark. `docs/DESIGN.md` is the record. `make docs-audit`'s `design tokens` row
   locks every name and hex both ways.
@@ -979,40 +962,34 @@ never a code fence. Start with the point. No task restatement.
 
 ### Writing a brief
 
-Three practices, each earned by a lost round on 2026-09-17. Together they cost more time
-that evening than every verification target combined (`docs/specs/verification-cost.md`).
+Three practices settle a brief before it goes out.
 
 - **Name the rendering component, and the state that selects it.** Not "fix the walk
   sentence" but "in `#/orders`, with `hidePicks` false, `OrderLineRow` draws `CopyMapView`,
   and `CopyMapView` renders the walk sentence — change it there." Mechanized: `make orient
   ARGS=app/src/Orders.tsx --name CopyMapView` prints which component draws it and under
   which expression. Run it before the brief is written. Where two components can render the
-  same thing, the brief says which and why. The round this cost: a fix briefed against
-  `CopyMapView`, which `hidePicks` suppresses in exactly the state the owner was looking at.
-  Correct in general, and invisible there.
+  same thing, the brief says which and why.
 - **Never ask an agent to reconstruct a state it has already left.** A "before" image is
   captured before the edit or not at all. Wanting one afterwards is the orchestrator's job,
-  in a separate clean checkout — never the working agent, never in a shared tree. The round
-  this cost: an agent told to produce a "before" screenshot went looking for a way to un-build
-  its own change. It reached for `git stash`, which is shared with every worktree of this
-  clone. `scripts/guard-shell.py`'s `PKMNSCAN_STASH` clause refuses the command. The brief
-  should not have pointed an agent at it.
+  in a separate clean checkout — never the working agent, never in a shared tree.
+  `scripts/guard-shell.py`'s `PKMNSCAN_STASH` clause refuses a bare `git stash` for exactly
+  this reason — it is shared with every worktree of this clone.
   **NOT MECHANIZED:** a machine cannot read a sentence addressed to a person and tell that
   satisfying it requires undoing work.
 - **State a fence by intent, and name the exception.** Not "do not touch `WalkView` or
   `buildWalk`" but "do not change which cards a walk contains or how they are ordered —
   rendering changes inside `WalkView` are in scope." A fence around files is a fence around a
   guess about which files matter. A fence around behaviour survives being wrong about the
-  layout. The round this cost: a fence meant to stop cross-order scope creep also enclosed
-  the component that renders.
+  layout.
   **NOT MECHANIZED:** a machine cannot tell a fence drawn around behaviour from one drawn
   around files, because both are prose in a brief.
 - **Show the screen before saying it looks right.** Render at 1440, 820 and 390, both themes,
   and look at the images.
 - Read `docs/decisions/` before proposing an architecture change
-  (`scripts/decision-context.py` finds the governing entry, and the index is below). Every
-  entry is settled. Reopen one only by citing it and waiting for the owner's word (see the
-  outcomes rule above).
+  (`scripts/decision-context.py` finds the governing entry. `make map ARGS=--decisions`
+  prints the index). Every entry is settled. Reopen one only by citing it and waiting for the
+  owner's word (see the outcomes rule above).
 - **Design work is repo work.** A design living only in chat is not done. Land it in
   `docs/specs/` or a decision entry in the same session, or declare it abandoned.
 - When compacting: keep the fixture schema facts, every `make` command, and the
@@ -1041,316 +1018,13 @@ that evening than every verification target combined (`docs/specs/verification-c
   of that byte count in tokens, before any work. That ratio is an approximation and never a
   measured count.
   `scripts/decision-context.py` names the governing decisions before an edit under a mapped
-  directory. The index below is a table of contents, never a substitute for the entry's own
-  argument.
+  directory. For the conversational path, run `make map ARGS=--decisions`. It renders one line
+  per entry, id and title, straight off each entry's own heading (D60, amended 2026-09-27). No
+  second copy exists to drift from it. It is a table of contents, never a substitute for the
+  entry's own argument.
 
-```
-D1   Two-phase architecture
-D2   Identification is Claude Haiku vision, owned end to end
-D3   Variant resolution ladder
-D4   Review queue is digital-only
-D5   Two personas
-D6   Photo service and pull preview
-D7   Duplicates aggregate by SKU at join time
-D8   Pricing source is the TCGplayer Filtered CSV export itself
-D9   Threshold and floor are both $0.40
-D10  Inventory model
-D11  Listing path is a catalog join, never a from-scratch CSV
-D12  Scope
-D13  Stack
-D14  Two tracks, one rig
-D15  Catalog data is vendored, not fetched
-D16  The docs are checked mechanically; the prose is checked by asking
-D17  The repo describes itself in `docs/map.py`, and the map is audited
-D18  A generator may write. Nothing that writes may gate a commit.
-D19  Motion capture: live fire behind the seam, a trace for tuning, video for neither
-D20  A box is an object, and its capacity is retroactive
-D21  Game is a per-card claim, not a mode
-D22  Taxonomies are hand-authored per game, and audited so they cannot drift
-D23  The rarity claim does three jobs, and one of them pays for the feature
-D24  Code cards are pooled inventory, not located
-D25  The join partitions by game, and `Product Line` becomes a real reader
-D26  A card leaves inventory by a state — `retired` — and a bad photo is replaced in place
-D27  Session state is device-local and may be persisted
-D28  The review answer gets an undo window, and the list stops moving under it
-D29  A homogeneous queue may be answered as a group
-D30  The physical convention for a gap
-D31  One owner-side view of stored cards, and the Fulfiller does not get a vote on it
-D32  The pixel budget is spent on the card, not the desk
-D33  The pipeline is reachable from a screen, and one route can spend
-D34  A listing hold is released against the releasing box's own copies
-D35  A number that cannot be read falls back to the name, and the card still faces a human
-D36  The run says what the model read; the store says which slot it is in
-D37  A queued question can be closed without answering it, and the card is left alone
-D38  The photograph is sized by the rows beside it, and the box and the runs get the third column
-D39  The pipeline gets a route, and the selection is handed to it
-D40  The screen is three columns: the box, the card, and where its copies are
-D41  The address is a rank, not a list, and the separator is deleted rather than replaced
-D42  main moves by pull request, and the guard is local because the server-side one is not for sale
-D43  the port follows the store, because the store was already per-checkout
-D44  an iCloud conflict copy is refused at the commit and never deleted on a guess
-D45  The copies list is a way back into the walk, and the filter yields to the jump
-D46  A card the pipeline could not place is offered the catalog, and a human may point at a row
-D47  A tracked symlink is a path baked into the tree, and a checkout will spend a directory to place one
-D48  A send is a cart of boxes; a run is still one box
-D49  The pricing answer is one file, and a card can be held back on purpose
-D50  An interactive element's feedback is the product's, not each stylesheet's
-D51  Cmd-arrow steps the strip in the order it is drawn, and it is the one modifier the shell takes
-D52  The photo URL names a photograph, because a slot's occupant changes under it
-D53  One link, always live, and the restart discipline becomes machinery
-D54  A re-emit adds; it never subtracts
-D55  A set code the model glued on is removed by shape, and only after the key has missed
-D56  A run names the drawer it was over, and the name is joined at read time
-D57  The sale is one press, and the button becomes the way back
-D58  A card's number counts the cards in the box, not the slots
-D59  The live cap is a per-SKU quantity, and a count of one run's positions was answering for it
-D60  The @-loaded docs are dense American technical English, and an entry cites rather than restates
-D61  The shipping lane is three lanes, and the third answer is "I cannot tell"
-D62  The price history is reachable, and it is drawn beside the hold rather than beside the location
-D63  The order ledger is two maps, and the sync writes only one of them
-D64  The Filtered Export is fetched, and completeness is a delta rather than a claim
-D65  The export is asked for, and the box's own claims are the scope
-D66  The order screen comes before the transport, and the shipping lane needs neither
-D67  The number a screen draws is composed once, and the set code D55 strips for the key is stripped for the eye
-D68  A departed card's label names the record, because two of them in one box were the same string
-D69  The order screen and the shipping lane get a route each, and the transport was measured before it was written
-D70  The QR is the whole identification, the product is a claim, and the card is destroyed
-D71  A card with no slot is ranked like every other, and it is the figure that goes
-D72  A renumbered entry takes its citations with it, and the branch's own history is what says one moved
-D73  The boot header says the code changed, nothing says the data did, and only one of those is a citation error
-D74  A document is checked as a document, and every markdown file is linted rather than the four a session loads
-D75  A detector that cannot say "wrong" is asked a second question, and the crop is refused rather than trusted, and the shape correction reaches both crop paths
-D76  A hint is evidence about its own card, and how wide to ask is a per-game rule
-D77  The pipeline's rows can be the wrong card, so the export is reachable from every entry — asked for, never offered unasked
-D78  A run's reason for adding nothing is a heading, the rows under it sink, and a hold sinks on the reopening
-D79  The reading goes on every row, because the operator answered D62's own measurement
-D80  A section with no reader is deleted or given one, the build order stops pretending to be a sequence, and the map gets a view a person can use
-D81  The presence gate is a distance from this session's own baseline, and the stillness thresholds are multiples of what this session measures
-D82  Ruff is adopted on the slice this session measured, not on what it enables by default
-D83  A card leaves a box through a third door: moved, not sold or retired
-D84  A settle is a count over a window, the stall clock is cleared by a settle, and the presence floor is sized to a hand
-D85  The corner is settled by geometry, and a variable nothing sets is not a fallback
-D86  The pricing answer is one file for the store, and the worklist spans runs
-D87  The reconcile is store-wide, and what it writes is `live`
-D88  The store of record is SQLite, and a write is one transaction
-D89  A sold card's photograph is reclaimed on purpose, and the record keeps its digest
-D90  The envelope is the unit of the write, and an order drives the walk as a mode of the inventory screen
-D91  The window is the range, the status is the filter, and the operator picks it from what the wire returned
-D92  A bare `#` is the count, the key carries a sigil, and the check is what keeps them apart
-D93  The copies panel is the picker, and a full line refuses the take
-D94  Banchi is the product's name, and `--bn-*` is the vocabulary every screen speaks
-D95  The shell is a rail, a palette and a reference sheet, and the Fulfiller's crash has no door out
-D96  The screens answer to the owner's interview, and main's history is not the authority
-D97  The copy map ranks and never picks, and a line says what remains
-D98  The cheap-card figure is the control, the floor choice is retired, and a run may still differ from the store
-D99  The cut-off is a figure the operator sets, and one press writes one spreadsheet
-D100 Nothing is deleted to lower a price, the quantity is not a variable, and the age is a proxy that says so
-D101 A claim a screen names is a claim a screen can fix, and the derived tuple outran its decoder
-D102 The mark is an illustration with its own palette, and the spec is its store of record
-D103 Staleness is a filter and not a gate, the record holds every live row, and the file that leaves the machine stays narrow
-D104 The live export is fetched, and the second standing instruction is a second constant
-D105 The markdown lives where prices are decided, and one file may not have two unguarded writers
-D106 The push and the publish are two presses, and the second one is the only thing here a buyer can see
-D107 The rule only ever marks down; the operator may point either way
-D108 The dock app is the page Chrome already renders, and the manifest is what makes it one
-D109 A price is a fact about a listing, and the store remembers listings it never photographed
-D110 A hover is an alpha, because the same paint over three grounds is three different hovers
-D111 Cleanup is a sweep, not a step in the merge, and liveness is read rather than guessed
-D112 The labels are tracked, the images are not, and an unmoved measurement is asserted rather than re-derived
-D113 A line closes three ways, and only one of them claims a copy went
-D114 The status requirement is answered by a remembered tick, not by an echo of the preview
-D115 The reading is what the export said, and what has sold since is counted beside it
-D116 A card nobody has named is not a landmark, and the distance is what keeps the skip honest
-D117 The thumb floor is the kit's, the measurement is the hit area, and a phone-width spec is what reads it
-D118 A press changes what is on the screen, never where the rest of it is
-D119 The copy the walk stands on is a row like every other, and the receipt lands where the sale was pressed
-D120 The shell speaks one brand at every width, and the phone bar is a rail
-D121 The front page says what is owed, and the library is drawn as the work that made it
-D122 The suite takes a machine-wide lock, because the CPU is the one thing a checkout cannot have its own of
-D123 Above the desk a screen asks its column, and browser zoom is not the lever it looks like
-D124 The faces are vendored, and the suite's allow-list is two ports
-D125 The photograph is cropped to the card, the focus is derived from the reading, and a reading that cannot be believed is a refusal
-D126 The demo inflates its own history, and the present is left alone
-D127 A session may stop what it started, and the checkout is what decides which that is
-D128 The key listener is attached before the paint, because a press answers to what is on the screen and not to the render before it
-D129 The verdict's line is fixed by the first Playwright that counts it right, and the rig's Node is not the thing that moves
-D130 A feeder that never rests gets a second trigger, and the beat is measured not typed
-D131 The ratchet gets an escape, a settle is one quiet frame of three, and the beat is the backstop
-D132 Sold is folded away by default, the address leads with the name, the rail is ordered by the hand, and a section can be named
-D133 A branch is judged by what it lands, and a file put back the way main had it is refused unless the branch says so
-D134 A departed record is buried, not kept; the box goes; and the graveyard is where the departed are read
-D135 Codex reads the same rules a Claude Code session does, through three symlinks and one reconciled hook roster
-D136 The suite is sharded and never widened, a sleep is a wait and not an assertion, and a tree that passed is not tested twice
-D137 The catalog is Near Mint by rule, because it was only ever Near Mint by accident of the file
-D138 One process serves the product, Vite compiles and never serves, and the build is the server's job
-D139 Which branch the primary checkout stands on is a fact about the live rig, and a warning is the ceiling
-D140 The number is claimed at the merge, because what main has taken is not knowable before it
-D141 The browser matrix runs when the change reaches what a browser draws, and the path list has a reader
-D142 The setup outlives the browser, the box list is ordered by the hand, and one value stays on the old clock
-D143 The claim reads the checked-out tree, so which tree that is must be established before anything reads it
-D144 A card that will not settle is photographed off the quietest frame it manages, and there is one trigger again
-D145 A box has an index nobody sees, because the number on the drawer is a label and a label may be reused
-D146 Two agreeing signals release the rarity claim, and the same comparison run backwards is a review reason
-D147 The claim is spent on the oldest copies, because a card captured tonight was in no file sent last week
-D148 The wait is about the claim commit, and an answer it has not got is never a pass
-D149 A section number that resolves is not a citation that is right, and no check can read what a sentence is about
-D150 A reading taken after a sale is that sale's own result, and it ages the claim
-D151 The merge is run by a checkout, so the checkout is asked whether it is current, and main is read for a slug the moment it moves
-D152 Every row in the collapsed rail draws one glyph on one spine, and a rule that lists the children it knows about will miss one
-D153 The restore asks which drawer, not which number, and the picker stops drawing a number nobody reads
-D154 The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
-D155 The section is the ruler and the box is the margin note, and the bracket between them is deleted
-D156 Every copy TCGplayer does not hold is one worklist, and a run stays open until the last of them has gone
-D157 The fixture carries a per-run name, because the process table is the one thing a run cannot have its own of
-D158 The refusal goes where the damage is, so the primary checkout's server will not run a branch's code, and the checkout itself is left alone
-D159 The band is copies rather than SKUs, the drawer is the first answer, and nothing on hand is dropped
-D160 An entry is a file, because two branches appending to one file collide every single time
-D161 `make check` proves the product first and its own guards last, because a failure stops the rest
-D162 The name decides a disputed number, and both readings reach the screen
-D163 The cache is keyed by the digest, so the digest is what the press computes first
-D164 The undo stack is the sitting, not the drawer, and the counter counts the sitting
-D165 A run is bound to the drawer's true index, and the run the number stranded is repaired once by hand
-D166 The catalogue export is a property of the game, and the box never chose its scope
-D167 A queue entry is re-resolved where it stands, and the answer reaches the price without a second press
-D168 A typed price is cleared by a press, never by an expiry, and the set it may clear is the set the corpus dates
-D169 The blanket sweep asks the question the verdict answers, and a nested worktree is another checkout
-D170 A widening is safe only while the category fits, and Pokemon's does not
-D171 A refusal that reaches nobody did not happen, and a status line the session wrote is not a reading
-D172 A card's name is the first photograph of it, frozen at issue
-D173 A rule that can be enforced mechanically is enforced mechanically, and a rule with no reader is advice
-D174 A press claims the cards it is about to buy, and the claim is written in the transaction that decides what they are
-D175 Ownership is read the way liveness is, and a process a session no longer owns is offered rather than reaped
-D176 The primary checkout syncs itself, both parts, because the thing D42 was protecting is not the thing this moves
-D177 The corpus answers for listings no camera here ever saw, so a prune is a list the operator presses and never a rule a join runs
-D178 A document may name what it would create, and the marking expires by itself
-D179 Shell commands are refused by resolving what they would do, not by matching what they say, and each clause carries its own escape hatch
-D180 A press names the cards it is over, and the drawer is one of the names
-D181 The order is taken once, and a sale may not retake it
-D182 An unclaimed slug is not required in the shared index it will replace itself out of
-D183 A number a person reads is never a key a machine uses, so the photograph is stored under the card's name and the address is derived
-D184 A gain step is the baseline times one number, a card is not, and the machine re-baselines only on that proof
-D185 A row declares how many subjects it had, an empty one is pinned by name with a reason, and eleven published claims get the reader they were already cited as having
-D186 A per-card price is divided by the cards actually submitted, and a reading is chosen on a metric the reading can move
-D187 A claim checks whether the slug is already claimed, not only whether the number is free
-D188 A join reads the store directly when there is no run directory to replay
-D189 The market reading is a table, and the walk that fills it is a press
-D190 The remedy `stale_claims` names is a real command, and `stale_claims` learns to see the directory it moved into
-D191 `Store.history()` gets a box-scoped sibling
-D192 The inventory route reads one box, and `rows.py` stops re-walking what it already loaded
-D193 The ledger holds the buyer's name, because a hand walks drawers per person
-D194 The visible word count on every owner screen may only go down, and the ceiling is a measurement rather than a guess
-D195 Same-role buttons stacked in one sector share a width, and a Playwright sweep finds them rather than reading a declared class
-D196 No user-visible string may name a decision, a repository path, or a pipeline-internal noun
-D197 A page is anchored to the shell's own inset, and only its width may vary by screen
-D198 Home's Review tile reads the same total `#/review` draws, never `review` alone
-D199 `_phase` reads `joined` as sufficient evidence identification happened
-D200 The repo-state heartbeat is a thin caller of what already exists, and it remembers across runs in a file
-D201 A route change lands at the top, and a same-path query change does not
-D202 Home's "cannot be filled" figure counts only orders that read `open`
-D203 The two-year backlog is stood down by one press over a cutoff the operator sees, never by a rule that runs on every fetch
-D204 The phone drawer's nav scrolls in the space above its foot, for any row count, and the CSS says so explicitly rather than relying on it
-D205 The phone tab bar has one height, and every layout that leaves room for it reads the same name
-D206 Build-order step 9's first two pieces landed; the mirror stays dry-run
-D207 The foot learns from every request, and five timers become one hook
-D208 Pricing states its verdict once, and the worklist discloses progressively
-D209 The buyer list leads with Ready to Ship, and a re-sort is a press
-D210 `pkmnscan rescue` is reached from a press, and its report is never shown verbatim
-D211 The Rig panel folds once the setup is already known, and stays open until it is
-D212 Every copy is fungible, so no order claims one, and the write is the only refusal left
-D213 The set is a stored fact, and the hint was never one
-D214 A gross-revenue retrospective is its own route, and it never claims to be profit
-D215 Both: the worker count is raised, and the spec allow-list is built
-D216 The price history's honest agent stopped answering, and D64's escape hatch already fit it
-D217 Sales becomes a tool: sort, filter, cross-filter, drill down and deep-link, over the same rows D214 already drew
-D218 A typed dot is a defect wherever it is typed, and the reader is the mechanism this time, not the sweep
-D219 The archive key carries the range, and the archive never deletes
-D220 Orders is inventory's screen with orders in the rail, and the walk is a mode of it
-D221 Money stays mono, and the rule is amended to match
-D222 The press paces itself on a measurement, and names a throttle
-D223 Sold value goes first, and sealed product is a named gap
-D224 The preview costs nothing, and the press commits as it goes
-D225 Sales stops counting a refund as revenue, and a shortfall against today's market is not a loss
-D226 A prose ratchet gets a reader, and bytes are not the ruler
-D227 A route, not a lens, and never one line for two kinds of observation
-D228 The claim is spent only on a merge that can happen, and the loser of a race backs itself out
-D229 The prose ratchet is pinned per file, because a repo-wide number is one every merge takes from somebody
-D230 The sweep's own resume window is six days, not one hour
-D231 The subject list widens to the order ledger, and sealed product joins it
-D232 The lossless half of the cleanup needs no word, and the schedule is the backstop for the events that miss
-D233 A card row that refuses retries the ledger's own row
-D234 The archive reads the store's own composed number, and the glued-code repair reaches it too
-D235 The heartbeat is refused a pipe, and the wait learns the other half of its own question
-D236 Unsold stock is valued by SKU off the archive, one range at a time, and sealed stock is a counted gap
-D237 What the archive's 16 refusals could have caught, and what could not
-D238 The archive's own refusals reach a human, with a photo
-D239 Four stored-data checks, built whole, from D237
-D240 Measured, not shipped: the join trusts a number that resolves, and the owner asked why
-D241 Recorded, not built: ask the catalogue earlier than the archive does
-D242 Two copies, one SKU, two numbers: settled by name agreement, never by mere existence
-D243 Every posted price is recorded, and the row is never touched again
-D244 The posted-price view is wanted, and it is shelved until there is a history to draw
-D245 A citation names a symbol, not a line, and a line-number row sees only the half that shrank
-D246 `commit path writes` reads the code, not `checks.py`'s own sentence about itself
-D247 Fifteen guard self-tests are path-gated, and no target was found dead
-D248 The harness leaves turn end, and code cards fold into one rules file
-D249 Recognition by the complement, never by the expected pattern
-D250 Unsold stock reaches `#/revenue`, and D236's wire is spent exactly as written
-D251 The name tolerance stays at 0.80, and the answers cannot fit a number above it
-D252 A wrong answer gets a correct route, and the SKU it leaves is over-listed by exactly what it gave up
-D253 A card lists off name AND number agreeing, never off the number alone
-D254 A product is resolved from its SKU, never from a card's own read fields
-D255 One SKU, two stored names: the sibling check D242 cannot see
-D256 A literal that duplicates a token is caught by family, and the ratchet is pinned per file
-D257 a worktree's node_modules is provisioned, not reported
-D258 Identity follows the SKU
-D259 A box is shown only by its name, and a box with no name gets a stored default name
-D260 A card's number counts within its section, card 1 is at the far back, and the ruler marks the card
-D261 A checkout claims its port slot once, and a reused server must name its checkout
-D262 A join follows a moved card by its own link, checked by its name
-D263 A sort press re-sorts at once, a sold row folds on the next load, and box lists lead with the most recent
-D264 A section is an object that moves whole, and the box map is a view inside Inventory
-D265 A card's place in its box is an order key apart from its stored index
-D266 The phone drawer has no fixed foot, and its items join the one scrolling list
-D267 Every dollar figure takes the mono face, and a check that reads the rendered page enforces it
-D268 A copied tree never gets the live port, and only a `.git` directory keeps 8000
-D269 The machine's words go behind "What the server said"
-D270 One filter bar, everywhere a list is filtered
-D271 Every search field uses one forgiving matcher, on the server and in the browser
-D272 One page width, one top gap, and a scaffold every screen inherits
-D273 Banchi sends the listing file itself, one press makes it live, and the checks after it run by themselves
-D274 Orders and Shipping are two sidebar rows with no tabs, and the walk gets the full height
-D275 Every screen inherits the page scaffold, and a shrinking list holds the exceptions
-D276 The palette is "Go to", it lists every screen and finds cards, and the rail starts at 640
-D277 Pricing shows every row with the rows that need the owner on top, one slim bar holds Send, and the value list moves to Inventory
-D278 One product view, two frames, and the trap it had is fixed first
-D279 Cards to pull asks for a count of a card, and shows where every copy is
-D280 The typed-dot count and the prose ratio become lists of offenders, and no count is pinned
-D281 A decision's argument is not screen copy, and a note about zero does not draw
-D282 Sales leads with a summary band and the best sellers, and a line with no price gets its price from TCGplayer
-D283 The send press's review record: each round's findings, and the fix for each
-D284 Three checks replace one ceiling, and none of them is a pinned number
-D285 A screen's filter, sort, search and hide state lives in the URL
-D286 Capture always asks on a fresh device, and Home's tile is the thing that lied
-D287 Home keeps its shape, the "Behind that" line stops repeating the spine, and the spine drops to five stages
-D288 A common, repeated action is an icon with a required label, and a press that spends money or cannot be undone keeps its words
-D289 The walk list is the rail's main part, and 720 is a desk
-D290 the photo reserve shrinks below the rail breakpoint
-D291 the fold's plan, D196 done, the build not yet
-D292 The lane order stays, a phone opens every lane folded, and the rule is said once
-D293 Inventory gets a second view, grouped by set, and a tap is the ordinary walk
-D294 Every card carries its own order key, a fraction that starts at its index
-D295 The public demo is the owner's real store, scrubbed
-D296 Four more ways to rank the buyer list, and the Ready to Ship lead is a grouping
-D297 Pricing is one list with the rows that need the owner on top, a slim bar, a Live tab, and the drawer folded into the product view
-D298 Sales rows are per printing, and a line with no price says so
-D299 A box has no lid and no capacity, and every sealed box becomes an ordinary box
-D300 A picked section fills like a sub-box, and the store chooses the key
-D301 A stock photo is the main view on Sets and Pricing, hotlinked, never mirrored
-```
-
-D116-D118: D117 exists and slots between them — a third branch's number, resolved on merge.
-Renumber your own, never another's. D90-D93 are main's. D96 and D99 carry the reasoning for
-adopting some and deferring others (D99 sits where it does because main took D90 first).
+  Renumber your own id, never another's. D116-D118 is the one collision a slug id produced,
+  claimed after the fact (D140).
 
 - `docs/GATES.md` — a stub and an index. The records are one file each under `docs/gates/`,
   in three kinds: `contract/` (T1-T9 and T11), `gate-runs/` (Gate A, B, C), `steps/` (the build

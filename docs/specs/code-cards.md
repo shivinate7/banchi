@@ -3,6 +3,12 @@
 **Status: the decode path and the ledger are BUILT. The channel decision is RECORDED and
 unexecuted. Read section 8 before treating any number here as settled.**
 
+**While dormant** (CLAUDE.md), `scripts/docs-audit.py`'s `views exposure` advisory stays OFF
+(`VIEWS_EXPOSURE_ENABLED = False`), because no session draws pooled captures onto a screen.
+Flip the constant to `True` when code-card work resumes. `scripts/guard-opsec.sh` stays
+ARMED regardless — it refuses a real code-card photo or code string into a commit whether
+this feature is dormant or not.
+
 The codes track, from the operator putting a stack of code cards on the feeder to the money
 arriving. It supersedes `code-card-fork/CLAUDE.md`'s architecture section and amends
 `docs/CODES-DECISIONS.md` C2, C4 and C5, each of which is named where it is overturned.
@@ -78,6 +84,10 @@ of 3840x2160 the shipped ladder reads **140 of 140 physically-possible frames wi
 mis-reads at 87 ms each**, and refuses the rest. Three cases are unrecoverable by ablation
 against eleven transforms: a QR under about 40 px, a 3.5 px defocus, and glare that clips the
 symbol to white.
+
+**The decoder is pinned, and the pin is load-bearing.** `codes/qr.py` uses `zxing-cpp==2.3.0`.
+Plain `pip install zxing-cpp` fails on this repo's Python 3.9. Install from
+`requirements.txt`, never freehand.
 
 **C2's OCR half is not built and should not be.** C2 specified a SKU crop taken off the QR as
 a fiducial, then Tesseract with an `A-Z0-9` whitelist. Three findings retire it:
@@ -309,6 +319,8 @@ the channel decision is unexecuted, and section 8 names the experiment that woul
 - **The key is the code**, not the position. C3 asked for this and C8's first build used the
   position; under D24 the card is destroyed, so the position is a filing reference and the
   code is the identity. This is what makes dedupe and reservation possible at all.
+- **Codes are fungible pool inventory, not located items** (D24). No box, no section, no
+  position — the code string is the primary key. Do not reuse the singles schema.
 - **`inventory/codes.jsonl`, gitignored.** A ledger of unredeemed codes is a file of bearer
   instruments. The runtime writing into a gitignored file is the sanctioned path; the commit
   guards protect the repository, not the store.
