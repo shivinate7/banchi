@@ -2626,15 +2626,26 @@ def _unsent_ledger(
     held_out, live_out = run_resolve._copies_out(inventory, readings, by_sku=by_sku)
     committed = run_resolve._committed_keys(inventory, held_out, by_sku=by_sku)
     unsent: Dict[str, List[str]] = {}
+    # `by_sku` already holds every SKU-bearing card's state, so the per-key `cards.get` below is
+    # kept only for a card `by_sku` cannot describe (no SKU, or no such card).
+    by_key = {row.key: (owner, row.state) for owner, rows in by_sku.items() for row in rows}
     for sku, keys in positions.items():
         free: List[str] = []
         for key in keys:
-            card = inventory.cards.get(key)
-            if card is None or card.state in master.TERMINAL_STATES:
+            hit = by_key.get(key)
+            if hit is not None:
+                card_sku, state = hit
+                card_sku = card_sku if card_sku else None
+            else:
+                card = inventory.cards.get(key)
+                if card is None:
+                    continue
+                card_sku, state = (str(card.sku) if card.sku else None), card.state
+            if state in master.TERMINAL_STATES:
                 continue
             # A RECORD RE-IDENTIFIED SINCE THE JOIN IS NOT THIS SKU'S COPY ANY MORE — the
             # review answer or a later emit stamped it with the card it actually is.
-            if card.sku and str(card.sku) != sku:
+            if card_sku and card_sku != sku:
                 continue
             if key in committed:
                 continue
