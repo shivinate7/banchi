@@ -502,8 +502,8 @@ test('the shutter clears the phone tab bar on first paint, with a real safe-area
        sits inside the nearest ancestor that clips, with no text past its own box, or if it is
        icon-only (its words kept for a screen reader). */
     const open = page.locator('.capture-frame-note .bn-btn:visible')
-    await expect(open, `${capture} at ${height}px drew no "Open the camera" press in the frame`).toBeVisible()
-    await expect(open).toHaveAccessibleName('Open the camera')
+    await expect(open, `${capture} at ${height}px drew no "Camera" press in the frame`).toBeVisible()
+    await expect(open).toHaveAccessibleName('Camera')
     const clip = await open.evaluate((el) => {
       /* Icon-only: the kit's IconButton (`.bn-icon-btn`) or an `iconOnly` Button (`.bn-btn-icon`). */
       if (el.classList.contains('bn-icon-btn') || el.classList.contains('bn-btn-icon')) return null
@@ -520,7 +520,7 @@ test('the shutter clears the phone tab bar on first paint, with a real safe-area
       }
       return out.length === 0 ? null : out.join(', ')
     })
-    expect(clip, `at ${height}px with a 34px safe-area inset: the "Open the camera" label is clipped`).toBeNull()
+    expect(clip, `at ${height}px with a 34px safe-area inset: the "Camera" label is clipped`).toBeNull()
   }
 })
 

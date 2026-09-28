@@ -435,7 +435,7 @@ async function open(
      Camera field draws it where `V` just put the operator. All three call `camera.retry`, so
      the choice is about which control this file drives rather than about which one works —
      and the field is the one the keypress above opened. */
-  await page.getByLabel('Rig').getByRole('button', { name: 'Open the camera' }).click()
+  await page.getByLabel('Rig').getByRole('button', { name: 'Camera' }).click()
   await page.locator('.capture-opt').filter({ hasText: /Canvas Cam Link/ }).click()
   await page.keyboard.press('Escape')
   /* THE SHUTTER, BY ITS NAME. It was `.pull-confirm` — a class borrowed from another screen's
@@ -447,10 +447,10 @@ async function open(
   return wire
 }
 
-/** The capture button. `Capture card` is its whole accessible name — the `C` keycap is
+/** The capture button. `Capture` is its whole accessible name — the `C` keycap is
  *  `aria-hidden`, and in motion mode there is no keycap at all. */
 function shutter(page: Page) {
-  return page.getByRole('button', { name: 'Capture card', exact: true })
+  return page.getByRole('button', { name: 'Capture', exact: true })
 }
 
 /** N captures, awaited one at a time. The shutter is held while a capture is in flight, so
@@ -543,7 +543,7 @@ test('the stack is the whole sitting, newest first, and reaches the 13th row', a
   await expect(page.locator('.capture-undo-depth')).toHaveText('23 recent')
 })
 
-/* UN-15: A DIVIDER'S OWN UNDO. `S`/"New section" appends a divider (`openSection`), and `U`
+/* UN-15: A DIVIDER'S OWN UNDO. `S`/"Section" appends a divider (`openSection`), and `U`
  * takes that one divider back out through `closeSection`, "while no card is behind it"
  * (undo.md 11.1). Never through `updateBox({ sections })`: that route reads card counts, and
  * a box's `sections` are order keys. */
@@ -551,9 +551,9 @@ test('U undoes a divider while no card is behind it', async ({ page }) => {
   const wire = await open(page)
   await shoot(page, 2)
 
-  await page.getByRole('button', { name: 'New section' }).click()
+  await page.getByRole('button', { name: 'Section' }).click()
   await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
-    'New section',
+    'Section',
   )
 
   await page.keyboard.press('u')
@@ -583,9 +583,9 @@ test('U after S on a box with a sold card takes out only that divider (F2)', asy
   }
   const wire = await open(page, { boxes: [DIVIDED, BOX4], nextIndex: { '3': 7 } })
 
-  await page.getByRole('button', { name: 'New section' }).click()
+  await page.getByRole('button', { name: 'Section' }).click()
   await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
-    'New section',
+    'Section',
   )
   await page.keyboard.press('u')
 
@@ -600,9 +600,9 @@ test('U after S on a box with a sold card takes out only that divider (F2)', asy
 test('a stale U after an editor save is refused, said, and not retried', async ({ page }) => {
   const wire = await open(page)
   await shoot(page, 2)
-  await page.getByRole('button', { name: 'New section' }).click()
+  await page.getByRole('button', { name: 'Section' }).click()
   await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
-    'New section',
+    'Section',
   )
   wire.layouts['3'] = [...(wire.layouts['3'] ?? []), 9]
 
@@ -623,7 +623,7 @@ test('a capture behind the divider is built on it, and U reaches the capture ins
 }) => {
   const wire = await open(page)
   await shoot(page, 2)
-  await page.getByRole('button', { name: 'New section' }).click()
+  await page.getByRole('button', { name: 'Section' }).click()
   // The third card, into the same box the divider was opened in — the fixture's own
   // allocator is already at 3, and `shoot`'s helper assumes a fresh box starting at 1.
   await shootInto(page, 3, 3, 1)
@@ -1455,7 +1455,7 @@ test('S fires on the very next line after Resume — no wait in between', async 
   // (`updateBox({ sections })`), a different call entirely. The receipt on screen is what a
   // fresh divider actually proves, the same reader `capture-claims.spec.ts` uses for it.
   await expect(page.locator('.capture-refused, .capture-note-ok').last()).toContainText(
-    'New section',
+    'Section',
   )
 })
 
