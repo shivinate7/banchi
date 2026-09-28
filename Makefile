@@ -189,7 +189,6 @@ help:
 	@echo "  make guard-shell-selftest  the eight-clause shell guard, proved by committing its"
 	@echo "                    mistakes in a throwaway repo: a destroyed file, a write into"
 	@echo "                    another checkout, a nested symlink, a pattern that is not a process."
-	@echo "  make coordinator-selftest  the merge-queue verdict rules. No network."
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
 	@echo "  make browser-scope-selftest  the browser-matrix classifier's spec map, on"
 	@echo "                    fixtures and on the real tree (D-browser-spec-allow-list)."
@@ -251,12 +250,6 @@ help:
 	@echo "  make janitor-install  copy the sweep to ~/.claude/bin so every repo's hooks can reach it."
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
-	@echo "  make coordinator  the merge queue, READ rather than remembered: main, every open"
-	@echo "                    PR with a SHA-pinned verdict, the worktrees, the live sessions."
-	@echo "                    Reaches the network, so it never gates a commit."
-	@echo "  make heartbeat    docs/GATES.md item 24: calls coordinator.py plus whether main's"
-	@echo "                    own last push is green and janitor's preview. Never a daemon,"
-	@echo "                    never --confirm. Writes .serve/heartbeat/, never gates a commit."
 	@echo "  make check        harness + docs-audit + claim-stale + revert-guard +"
 	@echo "                    port-agreement + set-hint-agreement + readiness-agreement +"
 	@echo "                    screen-freshness +"
@@ -279,7 +272,7 @@ help:
 	@echo "                    identity-cli-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
-	@echo "                    coordinator-selftest + suite-lock-selftest +"
+	@echo "                    suite-lock-selftest +"
 	@echo "                    browser-scope-selftest +"
 	@echo "                    serve-selftest + sync-selftest + verdict-selftest +"
 	@echo "                    js-breakpoints-selftest + subagent-override-selftest +"
@@ -693,7 +686,6 @@ check:
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
 	@$(MAKE) --no-print-directory guard-shell-selftest
-	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory browser-scope-selftest
 	@$(MAKE) --no-print-directory serve-selftest
@@ -760,7 +752,6 @@ ci-check:
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
 	@$(MAKE) --no-print-directory guard-shell-selftest
-	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory browser-scope-selftest
 	@$(MAKE) --no-print-directory serve-selftest
@@ -1552,42 +1543,6 @@ guard-shell-selftest:
 	fi
 
 .PHONY: guard-shell-selftest
-
-# THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other half of 2026-09-12: a session relayed
-# `#300 GREEN — merging` for several turns while nothing merged, because the line came from a
-# driver's stdout and two copies of that driver were racing behind a `pgrep` waiter that matched
-# its own command line. Every figure here is read from the repository or from GitHub at the
-# moment you run it, and a PR's verdict is pinned to its HEAD SHA.
-#
-# NOT IN `check`, and `lan-check` above is the precedent: it reaches the network, and `check`
-# answers from the tree alone — a row that fails on a train is a row people learn to ignore.
-# Its VERDICT RULES do gate, through `make coordinator-selftest`, which needs no network; that
-# is the same split `verdict-selftest` makes.
-#
-# Exit 1 means a block could not be read, which is the point: an incomplete report must not be
-# relayable as the state of the queue.
-coordinator:
-	@python3 scripts/coordinator.py $(ARGS)
-
-# The verdict rules, against synthetic check-run payloads. No network, so this is in `check`.
-# Every case is a payload a reader looking at conclusions alone would call clean: one required
-# check of two all passing, a required check that reported `skipped`, a null conclusion that
-# must read as `running` and never as failed.
-coordinator-selftest:
-	@python3 scripts/coordinator.py --selftest
-
-.PHONY: coordinator coordinator-selftest
-
-# docs/GATES.md item 24, D-heartbeat-is-a-caller. A thin caller of coordinator.py --json (open
-# PRs, id claims, dirty worktrees, live sessions) plus the two bullets that leaves unanswered —
-# whether main's own last push is green, and janitor.py's own preview with --confirm never
-# passed. Writes .serve/heartbeat/latest.json and appends history.jsonl, which is the memory a
-# fresh, context-free run needs. NEVER A DAEMON: one run, one exit — the cadence is whatever
-# scheduled task calls this, never a loop in here. Read-and-report authority only.
-heartbeat:
-	@python3 scripts/heartbeat.py $(ARGS)
-
-.PHONY: heartbeat
 
 # THE SWEEP, WHERE EVERY REPO CAN REACH IT. `~/.claude/settings.json` hooks apply to every
 # session in every project, but the command they name has to exist without this checkout in

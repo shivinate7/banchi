@@ -263,7 +263,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   identity-cli-selftest +
                     #   janitor-selftest +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
-                    #   coordinator-selftest + suite-lock-selftest +
+                    #   suite-lock-selftest +
                     #   browser-scope-selftest + serve-selftest +
                     #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
                     #   subagent-override-selftest + guard-scope-selftest +

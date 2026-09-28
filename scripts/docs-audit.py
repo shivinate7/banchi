@@ -14388,6 +14388,8 @@ RECORDED_DELETIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
     ("D144", "the beat-locked cadence trigger, its module and its period pin",
      ("cadenceTrigger", "CadenceMachine", "DEFAULT_CADENCE", "periodPin", "pinPeriod",
       "cadence.ts")),
+    ("D200", "scripts/coordinator.py and scripts/heartbeat.py and their make targets",
+     ("coordinator.py", "heartbeat.py", "make coordinator", "make heartbeat")),
 )
 
 
