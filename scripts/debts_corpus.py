@@ -6,11 +6,19 @@ finding; `docs/DEBTS.md` is a stub that points at it and is read by nothing. Thi
 the seam: every reader that used to open that path calls `text()` instead and gets the same
 bytes, exactly as `scripts/decisions_corpus.py` already does for `docs/DECISIONS.md` (D160).
 
-IDS ARE `§<n>`, PLAIN NUMBERS WITH THE SIGIL THIS REPO ALREADY USED IN PROSE. There is no
-claim-at-merge scheme here — a debts finding is not a decision, and the numbering in
-`docs/debts/ORDER.json` is the historical numbering the file already carried. A new finding
-gets the next free number by hand, the way the original file's entries always were, and
-`§15` stays a deliberate gap forever (it left 2026-09-07, D120's own close).
+IDS ARE `§<n>` INSIDE THE CORPUS AND `DEBT<n>` EVERYWHERE ELSE (`docs/DEBTS.md`'s own "cite
+by id" rule). A NUMBER IS NOW CLAIMED AT THE MERGE, REUSING THE DECISION MACHINERY (D140):
+a branch writing a new finding gives it a slug heading, `## DEBT-<slug>`, in its own file
+`docs/debts/DEBT-<slug>.md`, and cites it as `DEBT-<slug>`. `scripts/claim-ids.py` allocates
+the next free debt number at merge time exactly as it does for a decision slug, renames the
+file to `<n>-<tail>.md` (no letter — every real entry already sorts this way) and rewrites
+every citation to `DEBT<n>`. `HEADING_RE` below reads either spelling a CLAIMED entry may
+carry — the ~50 real entries head themselves bare (`## 11`), and one claimed through this
+scheme heads itself `## DEBT<n>` — so no existing file moves. `docs/debts/ORDER.json` is the
+historical numbering the file already carried, now extended by `settle_corpus` the same way
+`docs/decisions/ORDER.json` is. `§15` stays a deliberate gap forever (it left 2026-09-07,
+D120's own close) — a claimed number is `max + 1` against what `docs/debts/` holds, never the
+lowest free one, so a gap is never resurrected onto an entry it was never about.
 
 ORDER IS THE MANIFEST'S, NOT THE FILESYSTEM'S — a zero-padded filename already sorts
 correctly, but the manifest is still the one source `verify()`/`text()` trust, the same
@@ -29,7 +37,11 @@ DIRECTORY = ROOT / "docs" / "debts"
 MANIFEST = DIRECTORY / "ORDER.json"
 STUB = ROOT / "docs" / "DEBTS.md"
 
-HEADING_RE = re.compile(r"^##\s+([0-9]+)\b")
+# OPTIONAL `DEBT`: a real entry heads itself bare (`## 11`), and one claimed through
+# `scripts/claim-ids.py`'s scheme heads itself `## DEBT<n>` (its heading matches its
+# citation, same as a decision's) — see that file's own comment above `DEBT_HEADING`. Either
+# way the captured group is the bare number, so `path_for`/`idents` need no change.
+HEADING_RE = re.compile(r"^##\s+(?:DEBT)?([0-9]+)\b")
 
 _cache: Dict[str, object] = {}
 
