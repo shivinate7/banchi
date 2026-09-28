@@ -546,6 +546,8 @@ what `docs/DESIGN.md` refuses in as many words.
   error state itself.
 - **No "Open the camera first" line** under Capture. The disabled button carries the reason
   as its accessible description only (`aria-describedby`, screen-reader text).
+- **Closed Rarity row: bars only.** The picked names are screen-reader text in the row's
+  accessible name; the open picker lists every rarity by name, unchanged.
 
 ## 6. trigger-seam
 

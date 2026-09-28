@@ -5168,15 +5168,10 @@ export function CaptureScreen() {
                     <span className="capture-val is-default">{NO_CLAIM_LABEL}</span>
                   ) : (
                     <span className="capture-val">
-                      {/* THE NAMED LIST IS ITS OWN ELLIPSIS BOX (`.capture-val-name`, the same
-                          primitive the camera row's own value already leans on) — never a bare
-                          flex child of `.capture-val`. Two names plus the bits beside them can
-                          outrun a narrow Stack column, and a flex row clips an overflowing FIRST
-                          child from the left with no ellipsis mark: a two-pixel sliver of
-                          "Common" read as a stray tick before the CSS-drawn "· Uncommon". Wrapping
-                          the names lets THIS box shrink and truncate properly; `.capture-bits`
-                          stays a `flex: none` sibling, so the count marks are never the thing cut. */}
-                      <span className="capture-val-name">
+                      {/* OWNER, 2026-09-28: the closed row shows the segment bars alone. The
+                          names stay in the row's accessible name (screen-reader text); the OPEN
+                          picker still lists every rarity by name. */}
+                      <span className="bn-sr">
                         {rarityParts === null
                           ? rarityCountText
                           : rarityParts.map((name) => (
