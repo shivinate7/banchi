@@ -582,7 +582,8 @@
 - Deferred (orchestrator): the emit exit-code split. After a full send, `emit --listed-only`
   exits 0 over one run and 1 over several, and the route answers the same for both. It is
   older than b-pricing, and b-pricing's send matrix records it. It is its own item after PR
-  2. DEBT35 records it (emit exits differently on one run and several runs).
+  2. A debts finding recorded it (emit exits differently on one run and several
+  runs), closed 2026-09-25, and retired 2026-09-27.
 - Demo box name (owner, 2026-09-25, verbatim): "Demo Box". No "owner" wording about these
   cards appears anywhere on the public page.
 
@@ -670,7 +671,8 @@ On expiry: "Yes, until it's built on (Recommended)".
   option, verbatim): "Screen shows $5.16 (Recommended)". Pricing shows the typed price in
   the field, with a short "No market price" mark, and never "Needs a price". Home counts
   that copy as ready. The screen follows what the send already lists. The send, the files
-  it writes and the stored prices do not change. DEBT42 records the gap and its close.
+  it writes and the stored prices do not change. A debts finding recorded the gap
+  and its close, and is retired 2026-09-27.
 - Release after a hold (owner, 2026-09-26, the owner's chosen option, verbatim): "Bring back
   $5.16 (Recommended)". A release puts back the answer the hold replaced, value and
   channel. So the card goes out on the next send, as the toast says. The hold keeps that

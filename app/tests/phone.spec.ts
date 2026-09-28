@@ -50,9 +50,22 @@ const auditSource = (mode: Mode) => `(() => {
      behind it, so a sweep of the whole document while the drawer is open reports the tab bar,
      the brand and every stage card as unpressable — which is true, and is the modal working.
      The first run of this file said exactly that, in five confident lines. */
+  /* THE LAST MATCH, NOT THE FIRST (found 2026-09-27, the ReviewQueue R2-dialog lane): a layer
+     opened INSIDE another (D291's own runs-composer-over-the-runs-sheet case, and kit-frame-2's
+     own rule that a nested layer paints on top even opened in the same commit) is a SECOND
+     match for this selector, portalled after the first and so LATER in document.body's own
+     children. querySelector took the FIRST match regardless -- the outer, now-covered layer --
+     so a sweep over two nested layers audited the one a thumb cannot reach at all and never the
+     one on top. This went unseen for as long as ReviewQueue.tsx's own re-check sheet happened
+     to sit in the DOM from first paint (a hand-rolled aside, hidden attribute, never removed,
+     always first): that accidental decoy was always querySelector's own first match, so this
+     file's over never actually pointed at a REAL nested pair until that sheet moved onto the
+     kit's Sheet component (which mounts nothing until open) and stopped supplying one. The last
+     match is the one most recently portalled, which is the one on top by construction of every
+     layer this product opens. */
   const over = document.querySelector('.bn-scrim') === null
     ? document
-    : document.querySelector('.bn-cmdk, .bn-drawer, .bn-sheet, .bn-dialog') ?? document
+    : [...document.querySelectorAll('.bn-cmdk, .bn-drawer, .bn-sheet, .bn-dialog')].pop() ?? document
   /* THE SHELL'S OWN FIXED CHROME IS NOT AN OBSTRUCTION. Content scrolls UNDER the top bar and
      the tab bar by design: .bn-shell-main pads its foot by the tab bar's height plus the safe
      area precisely so anything can be scrolled clear of them. A sticky bar INSIDE the scroller is

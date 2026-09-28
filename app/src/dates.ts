@@ -83,6 +83,16 @@ export function dayMonth(at: Date | string | number | null | undefined): string 
 }
 const DAY_MONTH = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'long' })
 
+/** `Aug 24`, or `—` where there is no date. Short month, numeric day, no year — for a stamp a
+ *  screen already knows is within the current run of things (Review's own "since" line on a
+ *  queued card). `weekOf` already built this exact formatter for its own two-date range;
+ *  this is the one-date form of it, so a screen with a single stamp is not left to reach for
+ *  `toLocaleDateString` on its own (R2-date). */
+export function monthDay(at: Date | string | number | null | undefined): string {
+  const when = toDate(at)
+  return when === null ? '—' : MONTH_DAY.format(when)
+}
+
 /** THE OLD SALE-DATE SHAPE, `Sep 09, 2026`, kept only so `Revenue.tsx` and `ProductHistory.tsx`
  *  draw what they drew until their own lanes move them to `absoluteDate`. Do not call it from
  *  new code: the zero-padded day is one of the seven formats the review counted.

@@ -223,13 +223,14 @@ already has exactly that finding shape at docs-audit.py:2530 — never as a wron
 _DETECT_CLAIMS / `detector standing` row
 
 **What it catches.** A pinned figure standing beside a false claim, which `sole reader`'s own
-docstring already rules is worse than no pin. DEBT6
-(`docs/debts/006-measured-against-one-rig-or-not-at-all-closed-2026-09-09.md:50`) says "The 59
-declined frames are named by box and filename in the score file." Verified false: harness/results/detect.json
-carries `overall.declined: 59` and `per_box` integers, and `grep -c jpg
-harness/results/detect.json` returns 0. So the eye pass §6 itself calls the ONLY thing that can
-settle a false ACCEPT — the dangerous direction — cannot be started from the file §6 names,
-while `detector standing` pins five numbers next to it and prints ok.
+docstring already rules is worse than no pin. DEBT6's lighting argument is retired (closed
+2026-09-09, argument in the repo's history, commit b61ffa32), and DEBT6 itself said "The 59
+declined frames are named by box and filename in the score file." Verified false:
+harness/results/detect.json carries `overall.declined: 59` and `per_box` integers, and
+`grep -c jpg harness/results/detect.json` returns 0. So the eye pass that entry called for
+cannot start from the file it named. That eye pass is the ONLY thing that can settle a false
+ACCEPT, the dangerous direction. `detector standing` pins five numbers next to it anyway, and
+prints ok.
 
 **Evidence it happened.** Read both: score-detect.py:286 writes `sum(1 for p in small if
 p.detail < images.MIN_CROP_DETAIL)`; detect.json's keys are boxes_scanned, constants,

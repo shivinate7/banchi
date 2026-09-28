@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -188,7 +188,6 @@ help:
 	@echo "  make guard-shell-selftest  the eight-clause shell guard, proved by committing its"
 	@echo "                    mistakes in a throwaway repo: a destroyed file, a write into"
 	@echo "                    another checkout, a nested symlink, a pattern that is not a process."
-	@echo "  make coordinator-selftest  the merge-queue verdict rules. No network."
 	@echo "  make suite-lock-selftest  one browser fleet at a time, proved by violating it."
 	@echo "  make browser-scope-selftest  the browser-matrix classifier's spec map, on"
 	@echo "                    fixtures and on the real tree (D-browser-spec-allow-list)."
@@ -234,8 +233,6 @@ help:
 	@echo "  make kit-adoption  every route renders <Page> from the kit, and no screen hand-rolls"
 	@echo "                    a kit primitive (D-page-scaffold). A shrinking allow list."
 	@echo "  make kit-adoption-selftest  that checker, on in-memory fixtures in both directions."
-	@echo "  make demo-determinism-selftest  scripts/demo-determinism.py's own path-matcher,"
-	@echo "                    on fixtures — no subprocess, no \`make demo\`."
 	@echo "  make match-selftest  the one forgiving matcher, server side (FLT-06/04, UX-173):"
 	@echo "                    server/match.py against match.cases.json, then _match_rank and"
 	@echo "                    do_search end to end against a throwaway store."
@@ -251,12 +248,6 @@ help:
 	@echo "  make janitor-install  copy the sweep to ~/.claude/bin so every repo's hooks can reach it."
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
-	@echo "  make coordinator  the merge queue, READ rather than remembered: main, every open"
-	@echo "                    PR with a SHA-pinned verdict, the worktrees, the live sessions."
-	@echo "                    Reaches the network, so it never gates a commit."
-	@echo "  make heartbeat    docs/GATES.md item 24: calls coordinator.py plus whether main's"
-	@echo "                    own last push is green and janitor's preview. Never a daemon,"
-	@echo "                    never --confirm. Writes .serve/heartbeat/, never gates a commit."
 	@echo "  make check        harness + docs-audit + revert-guard +"
 	@echo "                    port-agreement + set-hint-agreement + readiness-agreement +"
 	@echo "                    screen-freshness +"
@@ -279,13 +270,13 @@ help:
 	@echo "                    identity-cli-selftest +"
 	@echo "                    janitor-selftest + reap-selftest + silent-write-selftest +"
 	@echo "                    guard-shell-selftest +"
-	@echo "                    coordinator-selftest + suite-lock-selftest +"
+	@echo "                    suite-lock-selftest +"
 	@echo "                    browser-scope-selftest +"
 	@echo "                    serve-selftest + sync-selftest + verdict-selftest +"
 	@echo "                    js-breakpoints-selftest + subagent-override-selftest +"
 	@echo "                    guard-scope-selftest + token-literal-check-selftest +"
 	@echo "                    kit-adoption-selftest + port-slots-selftest +"
-	@echo "                    demo-determinism-selftest + match-selftest"
+	@echo "                    match-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -327,8 +318,6 @@ help:
 	@echo "  make demo-static  demo-mirror-install, then a static build to dist-demo/."
 	@echo "                    DEMO_BASE=<path> is where it will be served from."
 	@echo "  make demo-preview serve dist-demo/ exactly as a static host would."
-	@echo "  make demo-freshness  whether the bundle still matches the wire it recorded."
-	@echo "  make demo-determinism  whether two \`make demo\` runs write the same bundle content."
 	@echo "  make lint         eslint over app/, ruff over the Python packages (D82)."
 	@echo "  make typecheck    tsc --noEmit over app/"
 	@echo
@@ -691,7 +680,6 @@ check:
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
 	@$(MAKE) --no-print-directory guard-shell-selftest
-	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory browser-scope-selftest
 	@$(MAKE) --no-print-directory serve-selftest
@@ -703,7 +691,6 @@ check:
 	@$(MAKE) --no-print-directory token-literal-check-selftest
 	@$(MAKE) --no-print-directory kit-adoption-selftest
 	@$(MAKE) --no-print-directory port-slots-selftest
-	@$(MAKE) --no-print-directory demo-determinism-selftest
 	@$(MAKE) --no-print-directory match-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
@@ -757,7 +744,6 @@ ci-check:
 	@$(MAKE) --no-print-directory reap-selftest
 	@$(MAKE) --no-print-directory silent-write-selftest
 	@$(MAKE) --no-print-directory guard-shell-selftest
-	@$(MAKE) --no-print-directory coordinator-selftest
 	@$(MAKE) --no-print-directory suite-lock-selftest
 	@$(MAKE) --no-print-directory browser-scope-selftest
 	@$(MAKE) --no-print-directory serve-selftest
@@ -769,7 +755,6 @@ ci-check:
 	@$(MAKE) --no-print-directory token-literal-check-selftest
 	@$(MAKE) --no-print-directory kit-adoption-selftest
 	@$(MAKE) --no-print-directory port-slots-selftest
-	@$(MAKE) --no-print-directory demo-determinism-selftest
 	@$(MAKE) --no-print-directory match-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -909,12 +894,6 @@ port-slots-selftest:
 	else \
 		echo "port-slots-selftest: SKIPPED — this branch does not touch the port-slot claim or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
 	fi
-
-# identity-follows-sku.md, lane 7: scripts/demo-determinism.py's own ALLOWED_PATTERNS
-# matcher, proved on fixtures rather than by spending two full `make demo` runs. Pure
-# functions, no subprocess, no write — unlike `demo-determinism` itself (D18).
-demo-determinism-selftest:
-	@python3 scripts/demo-determinism-selftest.py
 
 # FLT-06/04, UX-173: the one forgiving matcher, server side. `server/match.py` against every
 # row of app/src/kit/match.cases.json (the filtering lane's own case table, so the server and
@@ -1558,42 +1537,6 @@ guard-shell-selftest:
 
 .PHONY: guard-shell-selftest
 
-# THE MERGE QUEUE, READ RATHER THAN REMEMBERED. The other half of 2026-09-12: a session relayed
-# `#300 GREEN — merging` for several turns while nothing merged, because the line came from a
-# driver's stdout and two copies of that driver were racing behind a `pgrep` waiter that matched
-# its own command line. Every figure here is read from the repository or from GitHub at the
-# moment you run it, and a PR's verdict is pinned to its HEAD SHA.
-#
-# NOT IN `check`, and `lan-check` above is the precedent: it reaches the network, and `check`
-# answers from the tree alone — a row that fails on a train is a row people learn to ignore.
-# Its VERDICT RULES do gate, through `make coordinator-selftest`, which needs no network; that
-# is the same split `verdict-selftest` makes.
-#
-# Exit 1 means a block could not be read, which is the point: an incomplete report must not be
-# relayable as the state of the queue.
-coordinator:
-	@python3 scripts/coordinator.py $(ARGS)
-
-# The verdict rules, against synthetic check-run payloads. No network, so this is in `check`.
-# Every case is a payload a reader looking at conclusions alone would call clean: one required
-# check of two all passing, a required check that reported `skipped`, a null conclusion that
-# must read as `running` and never as failed.
-coordinator-selftest:
-	@python3 scripts/coordinator.py --selftest
-
-.PHONY: coordinator coordinator-selftest
-
-# docs/GATES.md item 24, D-heartbeat-is-a-caller. A thin caller of coordinator.py --json (open
-# PRs, id claims, dirty worktrees, live sessions) plus the two bullets that leaves unanswered —
-# whether main's own last push is green, and janitor.py's own preview with --confirm never
-# passed. Writes .serve/heartbeat/latest.json and appends history.jsonl, which is the memory a
-# fresh, context-free run needs. NEVER A DAEMON: one run, one exit — the cadence is whatever
-# scheduled task calls this, never a loop in here. Read-and-report authority only.
-heartbeat:
-	@python3 scripts/heartbeat.py $(ARGS)
-
-.PHONY: heartbeat
-
 # THE SWEEP, WHERE EVERY REPO CAN REACH IT. `~/.claude/settings.json` hooks apply to every
 # session in every project, but the command they name has to exist without this checkout in
 # sight — so the two files are COPIED, exactly as `make hooks` copies the git hooks out of the
@@ -1890,12 +1833,8 @@ typecheck:
 # next rename and wrong in exactly the way this comment describes — override it there.
 DEMO_HOME ?= demo
 # Extra flags for `scripts/demo-record.py`, past what `demo-record` already passes. Empty by
-# default (an ordinary `make demo` keeps its real network — the same "best effort" reads
-# every other price-history route already makes, D216). `make demo-determinism` sets this to
-# `--offline`, the SAME flag `demo-mirror.py:record` already runs the real mirror's own
-# recorder with (D295) — see its own comment for why: two recordings of a server with a
-# live-network stock-image warmer race each other (D301), which the real mirror build never
-# hits because it is already offline and this check was not.
+# default — an ordinary `make demo` keeps its real network, the same "best effort" reads
+# every other price-history route already makes (D216).
 DEMO_RECORD_ARGS ?=
 DEMO_REPO := $(shell n=$$(basename -s .git "$$(git config --get remote.origin.url 2>/dev/null)" 2>/dev/null); [ -n "$$n" ] && echo "$$n" || echo banchi)
 DEMO_BASE ?= /$(DEMO_REPO)/
@@ -1996,18 +1935,12 @@ demo-preview:
 	$(NPM_GUARD)
 	@cd app && DEMO_BASE=$(DEMO_BASE) npx vite preview --outDir ../dist-demo --port 4173 --strictPort
 
-# Whether app/demo/bundle.json still describes the wire it was recorded against. On no gate
-# at all: the bundle is not committed and CI rebuilds it from source on every push, so the
-# only staleness left is a local preview serving a recording that predates your last edit.
-# Worth one command; not worth failing `make check` over.
-demo-freshness:
-	@$(PYTHON) scripts/demo-freshness.py
-
-# Whether `make demo` writes the same bundle twice. `demo-freshness` above proves the WIRE
-# SHAPE still matches; this proves the recorded CONTENT is reproducible — the one thing the
-# committed wire hash cannot see (review round, identity-follows-sku.md lane 6: 97 `bound_at`
-# values differed between two runs before `bind_sku` took an `at` parameter, and
-# `demo-freshness` was green throughout). Two full `make demo` runs into scratch homes; not
-# in `make check` for the same reason `demo-freshness` is not (D18).
-demo-determinism:
-	@$(PYTHON) scripts/demo-determinism.py
+# `demo-freshness`, which compared app/demo/bundle.json against the wire it was recorded
+# against, and `demo-determinism`, which compared two `make demo` runs' recorded CONTENT
+# byte for byte, are BOTH RETIRED (D295 amended, L5, 2026-09-27, the test-audit plan's Q5 —
+# "cut the old seed guards"). Neither ever gated a commit or a publish. Both proved only the
+# invented seed's own bundle, which the published demo has not built from since D295 — the
+# published mirror never goes near `app/demo/bundle.json`. `demo-determinism` found a real
+# defect once — 97 `bound_at` values differed between two runs before `bind_sku` took an
+# `at` parameter, invisible to `demo-freshness` — recorded here so the finding is not lost
+# with the targets.

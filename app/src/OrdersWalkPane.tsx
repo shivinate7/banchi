@@ -170,10 +170,10 @@ function rowsOf(plan: WalkPlan | null): WalkRow[] {
  *  this stop's box and section. */
 function stopTitle(stop: WalkPlanStop, place: Place): SectionTitleParts {
   if (stop.pooled) return { head: `Pooled: ${stop.game_display ?? 'cards'}`, count: null }
-  const box = stop.box_name ?? (stop.box === null ? 'Box' : `Box ${stop.box}`)
+  const box = stop.box_name ?? ''
   if (stop.section === null) return { head: box, count: null }
   const named = stop.section_name ? `Section ${stop.section}: ${stop.section_name}` : `Section ${stop.section}`
-  return { head: `${box}, ${named}`, count: sectionCountWords(sectionCountOf(place)) }
+  return { head: box ? `${box}, ${named}` : named, count: sectionCountWords(sectionCountOf(place)) }
 }
 
 export type WalkSection = { readonly key: string; readonly title: string; readonly parts: SectionTitleParts; readonly rows: readonly WalkRow[] }

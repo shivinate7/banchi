@@ -9,7 +9,13 @@
    short-token columns, spread over 1536px, is mostly gap. 1280px of content is a FLOOR rather
    than a preference: `.codes-stats` is six `1fr` tiles carrying a --bn-fs-4xl figure, and
    narrowing the page further breaks the hero to fix the ledger. */
-.codes { display: flex; flex-direction: column; gap: var(--bn-5); --bn-page-max: var(--bn-page-w-rows); }
+/* NO `gap` HERE (found by app/tests/scaffold.spec.ts's `headGap` assertion, F4's own bug
+   pattern, 2026-09-27): this flex column's only two children are the kit's own header and
+   `.bn-page-body`, so a `gap: var(--bn-5)` (20px) here doubled with the header's own
+   `margin-bottom` below (4px), for 24px measured against the 4px this screen actually asks
+   for. Deleted; the header's own tightened margin is now the whole gap, matching every other
+   screen's rule (its own margin-bottom, never a second one stacked on it). */
+.codes { display: flex; flex-direction: column; --bn-page-max: var(--bn-page-w-rows); }
 .codes .bn-head { margin-bottom: var(--bn-1); }
 
 /* ---- failure ------------------------------------------------------------- */
@@ -370,39 +376,9 @@
   .codes-search { width: 100%; margin: 0; }
 }
 
-.codes-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--bn-3);
-  flex-wrap: wrap;
-  padding: var(--bn-3) var(--bn-5);
-  border-bottom: 1px solid var(--bn-line);
-}
-@media (max-width: 767px) { .codes-toolbar { padding: var(--bn-3) var(--bn-4); } }
-.codes-toolbar-sep { width: 1px; height: 20px; background: var(--bn-line-strong); }
-@media (max-width: 639px) { .codes-toolbar-sep { display: none; } }
-.codes-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.codes-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: var(--bn-r-full);
-  font-size: var(--bn-fs-sm);
-  font-weight: 600;
-  color: var(--bn-ink-2);
-  background: var(--bn-surface-2);
-  transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease), transform var(--bn-t-fast) var(--bn-ease);
-}
-.codes-chip:hover { background: var(--bn-line-strong); color: var(--bn-ink); }
-.codes-chip:active { transform: scale(0.97); }
-.codes-chip[aria-pressed='true'] { background: var(--bn-accent-tint); color: var(--bn-accent); }
-.codes-chip-n { font-weight: 500; opacity: 0.65; font-variant-numeric: tabular-nums; }
-.codes-chip-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--bn-ink-4); flex: none; }
-.codes-chip.is-premium .codes-chip-dot { background: var(--bn-accent); }
-.codes-chip.is-unclaimed .codes-chip-dot { background: var(--bn-warn); }
-.codes-chip[aria-pressed='true'] .codes-chip-dot { box-shadow: 0 0 0 1px var(--bn-accent-tint); }
+/* .codes-toolbar and .codes-chip* are gone (R2-filter-row, 2026-09-27): the State and Lane
+   facets, and the search field that used to sit above them in `.codes-ledger-head`, are now
+   one `<FilterBar>` (`.codes-filterbar`, styled by the kit's own filters.css). */
 
 .codes-table-wrap { overflow-x: auto; }
 .codes-table { min-width: 0; }
@@ -560,7 +536,6 @@
    `kit.css`, where the floor now sits after every base rule it lifts; the descendant rule below
    is left as belt-and-braces rather than as the only cover. */
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
-  .codes-chip { height: var(--bn-control-h-sm); padding: 0 14px; }
   .codes-code-btn { min-height: var(--bn-control-h-sm); margin: 0 0 0 -8px; }
   .codes-dup-link { min-height: var(--bn-control-h-sm); padding: 0 4px; }
   .codes-photo-link, .codes-td-photo .codes-photo-link { min-width: var(--bn-control-h-sm); min-height: var(--bn-control-h-sm); }

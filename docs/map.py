@@ -3516,44 +3516,6 @@ COMPONENTS = [
                 "governed_by": ["D18", "D42", "D53", "D133", "D139", "D158", "D169",
                                 "D171", "D173"],
             },
-            "coordinator.py": {
-                "does": "`make coordinator` — the merge queue READ rather than remembered, so "
-                        "a status report is generated instead of composed out of a session's "
-                        "memory and a driver's stdout. main's tip against origin's, every open "
-                        "PR with a verdict PINNED TO ITS HEAD SHA, how many merged in 24h, "
-                        "`id claims` out of the audit, every worktree holding uncommitted work "
-                        "(D135's symlinks excluded), live sessions read from the console app's "
-                        "own records with the start time checked, and any waiter loop or twice-"
-                        "running driver. THE FLOOR IS THE REQUIRED-CHECK SET FROM BRANCH "
-                        "PROTECTION AND NOT A COUNT, which is a measurement: main's tip carries "
-                        "10 runs including `demo.yml`'s main-only pair, while PR #309's head "
-                        "carried 6 with `design-check` gated to one run, so no single number is "
-                        "right. A missing or `skipped` required check is `not ready` and never "
-                        "clean; a null conclusion is `running` and never failed. Any block it "
-                        "cannot read prints UNKNOWN and makes the exit non-zero.",
-                # D42 is the operation it reports on; D43 is why the worktree block exists at
-                # all; D111 is where the liveness oracle and its argument come from; D141 is
-                # the path-gating that makes a count floor unusable.
-                "governed_by": ["D42", "D43", "D111", "D135", "D140", "D141",
-                                "D171"],
-            },
-            "heartbeat.py": {
-                "does": "`make heartbeat` — docs/GATES.md item 24, built. The durable "
-                        "scheduled heartbeat that watches repo state across sessions: open "
-                        "PRs, `id claims`, dirty worktrees and live sessions by calling "
-                        "coordinator.py --json rather than re-reading any of the four (no "
-                        "bandaids — the primitive already existed); whether MAIN'S OWN last "
-                        "push is green, which coordinator.py's block_main never answers "
-                        "(it compares local main against origin/main, never CI); and "
-                        "janitor.py's own preview, --confirm never passed. Writes "
-                        ".serve/heartbeat/latest.json and appends to history.jsonl — the "
-                        "durable state a fresh, context-free run needs to say what is NEW "
-                        "since the last one, which is the 'a PR conflicting with a live "
-                        "session that has not been told' bullet answered by diffing rather "
-                        "than by memory. Read-and-report authority only.",
-                "governed_by": ["D200", "D42", "D111", "D140", "D148",
-                                "D171"],
-            },
             "session-teardown.sh": {
                 "does": "the SessionEnd / WorktreeRemove hook. Stops what a leaving session "
                         "started in a linked worktree and nothing else — the main checkout's "
@@ -3929,8 +3891,8 @@ COMPONENTS = [
                                 "D111", "D113", "D119", "D122", "D123", "D127", "D132", "D134",
                                 "D135", "D136", "D138", "D140", "D141", "D142", "D143", "D144",
                                 "D149", "D155", "D159", "D160", "D161", "D173", "D174", "D178",
-                                "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D210",
-                                "D213", "D215", "D218", "D226", "D229", "D245", "D247",
+                                "D181", "D182", "D185", "D191", "D192", "D194", "D196", "D200",
+                                "D210", "D213", "D215", "D218", "D226", "D229", "D245", "D247",
                                 "D280", "D284"],
             },
             "claim-ids.py": {
@@ -4111,9 +4073,9 @@ COMPONENTS = [
                 # behind an env var that decision names and no code declares yet, because
                 # D23 ships that clause in its own step so the prompt fingerprint moves
                 # once, deliberately, with a re-measured T1.
-                "governed_by": ["D15", "D16", "D23", "D39", "D40", "D90", "D96", "D105", "D194",
-                                "D218", "D226", "D229", "D245", "D248", "D271", "D277", "D280",
-                                "D284"],
+                "governed_by": ["D15", "D16", "D23", "D39", "D40", "D90", "D96", "D105", "D123",
+                                "D194", "D200", "D218", "D226", "D229", "D245", "D248", "D271", "D277",
+                                "D280", "D284"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "
@@ -4139,7 +4101,8 @@ COMPONENTS = [
                         "2026-09-20, is the same shape for a different record: "
                         "`scripts/stop-gate.sh:69` cited in docs/specs/mechanization-"
                         "backlog.md, from before the harness left turn end.",
-                "governed_by": ["D16", "D136", "D141", "D149", "D229", "D248", "D277"],
+                "governed_by": ["D16", "D48", "D136", "D141", "D149", "D180", "D194", "D229",
+                                "D248", "D277", "D284"],
             },
 
             # ---- the hooks. Every one advisory by construction except the Stop gate ----
@@ -5172,51 +5135,6 @@ COMPONENTS = [
                 # the first time and why its stand-in changed off `/home`.
                 "governed_by": ["D18", "D183", "D295"],
             },
-            "demo-freshness.py": {
-                "does": "whether app/demo/bundle.json still describes the wire it was recorded "
-                        "against, by comparing a digest of app/src/types.ts and "
-                        "app/src/server.ts. On no gate: the bundle is not committed and CI "
-                        "rebuilds it from source on every push, so what is left is a local "
-                        "preview serving a recording that predates the last edit.",
-                # D18: reads two files, writes nothing, so it is safe on a path that decides
-                # anything. D16 is the shape — a mechanical check for a claim that would
-                # otherwise fail silently, because a stale bundle renders BLANK rather than
-                # erroring.
-                "governed_by": ["D16", "D18"],
-            },
-            "demo-determinism.py": {
-                "does": "whether two full `make demo` runs write the same app/demo/bundle.json "
-                        "CONTENT — the one thing demo-freshness.py's wire-shape digest cannot "
-                        "see. Two scratch PKMNSCAN_HOMEs, the bundle diffed as JSON, every moved "
-                        "value checked against a small vocabulary of known request/process-time "
-                        "stamps (an order's own ingest moment, a run directory's real mtime, the "
-                        "recording server's boot id). A pointer that moves for any other reason "
-                        "fails the run — found once, before Inventory.bind_sku took an `at` "
-                        "parameter: 97 bound_at values differed between two runs and "
-                        "demo-freshness was green throughout.",
-                # D18: two full seed-and-record passes write only scratch demo homes and a
-                # scratch bundle copy, both removed before the process exits, so nothing
-                # tracked moves — the same exemption demo-freshness.py already carries, for
-                # the same reason. D16 is the shape: a mechanical check for a claim
-                # (byte-identical rebuild) that fails silently rather than loudly otherwise.
-                # D43 is why each scratch home is its own directory rather than the
-                # checkout's real demo/ — a shared store over two runs is the data-loss shape
-                # that decision names, generalized from "the owner's store" to "either run's".
-                "governed_by": ["D16", "D18", "D43", "D159", "D295", "D301"],
-            },
-            "demo-determinism-selftest.py": {
-                "does": "demo-determinism.py's own ALLOWED_PATTERNS matcher, proved on "
-                        "fixtures rather than by spending two full `make demo` runs. Every "
-                        "real, measured pointer the checked-in patterns are supposed to "
-                        "excuse still matches. Four fabricated pointers that merely CONTAIN "
-                        "an allowed key (`at`, `updated_at`, `batch`) under a route none of "
-                        "the patterns name do NOT match — the exact regression a bare-key "
-                        "matcher (the pre-lane-7 ALLOWED_KEYS) would miss. One end-to-end "
-                        "case through `_diff` itself. Pure functions only, no subprocess, "
-                        "no write — in `make check`, unlike demo-determinism.py itself "
-                        "(D18: that target is a press, run by hand).",
-                "governed_by": ["D16", "D18"],
-            },
             "stockimages-cache-selftest.py": {
                 "does": "proves `pipeline/stockimages.py`'s disk cache offline, both ways: a "
                         "`Market` whose fetcher always raises `Offline` (the same failure "
@@ -5348,8 +5266,7 @@ COMPONENTS = [
                         "`min-height: 100dvh` and a taller viewport makes a taller document.",
                 # D5 is who the render is for and D13 is what it renders. D18 is why it is
                 # not on the commit path: it writes. D16 is the shape of what was added —
-                # a mechanical check for a claim that would otherwise fail silently, which
-                # is the same reason demo-freshness exists two entries up.
+                # a mechanical check for a claim that would otherwise fail silently.
                 "governed_by": ["D5", "D13", "D16", "D18"],
             },
             "views.txt": {
@@ -6504,7 +6421,7 @@ COMPONENTS = [
                                       "mistake would happen, and asserts nothing about the "
                                       "rendering. No Playwright spec covers this screen yet.",
                               "governed_by": ["D14", "D20", "D24", "D33", "D56", "D70", "D172",
-                                              "D218", "D259", "D272"]},
+                                              "D218", "D259", "D270", "D272"]},
             "src/Codes.css": {"does": "the code screen's look. The two lanes are the first "
                                       "numbers drawn, because they are the decision; the "
                                       "duplicate panel takes the one non-hairline border in "
@@ -7392,7 +7309,7 @@ COMPONENTS = [
                                     "governed_by": ["D5", "D6"]},
             "src/PullConfirm.css": {"does": "its three states, and why the key hint is absent by default",
                                     "governed_by": ["D5", "D118"]},
-            "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server, and since 2026-09-06 that is true of its PIXELS too — `SPECIMEN_PHOTO` is a bundled data URI handed to the Fulfiller specimen through `CardLocations`'s `photoSrc` seam, the one call site of that prop in this product. It is what `make screenshot` renders and where `app/tests/pull-confirm.spec.ts` measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that spec measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
+            "src/Gallery.tsx": {"does": "`#/gallery`: THE KIT, on one page — every primitive Banchi is built from, every button variant and size, the whole icon set out of `ICON_NAMES`, and the shared components in both personas, so the tokens are LOOKED AT rather than only written. Nothing on it is wired to a server, and since 2026-09-06 that is true of its PIXELS too — `SPECIMEN_PHOTO` is a bundled data URI handed to the Fulfiller specimen through `CardLocations`'s `photoSrc` seam, the one call site of that prop in this product. It is what `make screenshot` renders and where `app/tests/fulfillment.spec.ts`'s pull-confirm describe block measures three of docs/DESIGN.md's Fulfillment floors — the four pull-confirm specimens keep their `data-specimen` names and their order because that block measures the gaps between exactly those. Reachable from the command palette only (App.tsx's `aside` group), which is why it is a route and not a nav item.",
                                 "governed_by": ["D5", "D6", "D24", "D50", "D58", "D67", "D68",
                                                 "D71", "D93", "D94", "D95", "D102", "D117", "D118",
                                                 "D119", "D300"],
@@ -9174,7 +9091,7 @@ COMPONENTS = [
                 "governed_by": ["D6", "D24", "D58", "D68", "D71", "D93", "D118", "D119",
                                 "D269", "D272"],
                 "note": "IT EXISTS BECAUSE THE SHEET WAS INCOMPLETE AND NOTHING SAID SO, "
-                        "2026-09-05. DEBT5 recorded the departed row as "
+                        "2026-09-05. The departed row was "
                         "absent from the kit; the sold fixture inherited a numeric `slot` from "
                         "the base, so `isDeparted` was false and the shell was rendered "
                         "NOWHERE on a page whose entire purpose is that every shape is looked "
@@ -9264,15 +9181,6 @@ COMPONENTS = [
                         "`?theme=dark` draws the dark theme.",
                 "governed_by": ["D5", "D132"],
             },
-            "tests/pull-confirm.spec.ts": {
-                "does": "three rows of the Fulfillment constraints table against step 6's one "
-                        "component: 44px targets, 20px body, 7:1 contrast, 12px apart. Run by "
-                        "`make design-check`.",
-                "governed_by": ["D5"],
-                "note": "NOT a harness test and not registered in harness/run.py:TESTS. The "
-                        "harness contract in docs/GATES.md is seven Python tests run at turn "
-                        "end; this runs a browser and is invoked on its own.",
-            },
             "tests/shell.ts": {
                 "does": "one call, `sealEveryTest()`, at the top of every spec that mounts the "
                         "app — all seventeen of them. It installs a catch-all on THIS "
@@ -9310,8 +9218,8 @@ COMPONENTS = [
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
                 "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
-                                "D124", "D125", "D134", "D174", "D192", "D276", "D259",
-                                "D273", "D298"]},
+                                "D124", "D125", "D134", "D174", "D192", "D259", "D273", "D276",
+                                "D298", "D301"]},
             "tests/fontsReady.ts": {
                 "does": "one helper, `settleFonts`, awaited after every `page.goto` in the seven "
                         "specs that measure type — it said FOUR until 2026-09-06, and the "

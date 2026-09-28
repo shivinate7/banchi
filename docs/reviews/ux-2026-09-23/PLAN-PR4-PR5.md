@@ -54,18 +54,18 @@ PASS, with `cd app && npx tsc --noEmit` at the merge.
 
 | Lane | Branch | What | State |
 |---|---|---|---|
-| B3 | `ux/pr4b-B3` | A refused markdown apply writes nothing | Round 3: the outer file rename sat outside the error guard, and a failure there kept the price with no file. Fixing, then a re-review. |
+| B3 | `ux/pr4b-B3` | A refused markdown apply writes nothing | MERGED (49e12373) after four rounds. The listing file lands last, and a failed rename restores the old price. A Ctrl-C window is named in DEBT48. |
 | F5 | `ux/pr4b-F5` | Cut the excess words. Numbers and names stay. Review's mismatch line becomes "Mismatch: photo reading / matched listing". | Building. Then a review. |
-| D2 | `ux/pr4b-D2` | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | Building. Then a review. |
-| P5 | `ux/pr4b-P5` | Stub D48 and D194 to one line each. Delete DEBT5, 6, 18, 28, 35, 42. Split DEBT27, or delete it if D279 removed its call. | Review PASS. DEBT27 keeps its open half (the Fulfiller's screen still loads the whole store). DEBT6 is kept in part, because a docs-audit row reads five figures from it. Rebasing onto `ux/pr4b` after a plan-file conflict, then merge. |
+| D2 | `ux/pr4b-D2` | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | MERGED (752d638b). The phone overlay sweep now takes the last-mounted layer. That is wrong when a sheet and its dialog mount in one commit ("Check first"). A follow-up picks the highest z-index. |
+| P5 | `ux/pr4b-P5` | Stub D48 and D194 to one line each. Delete debts 5, 6, 18, 28, 35 and 42. Split DEBT27, or delete it if D279 removed its call. | MERGED (afc2ca83). DEBT27 keeps its open half. DEBT6 is kept in part, because a docs-audit row reads five figures from it. |
 | A3 | `ux/pr4b-A3` | The Orders pane becomes `CardPane`, with no Details fold | Building. Then a review. |
-| A6 | `ux/pr4b-A6` | No `Box <n>` fallback in the walk | Built. Review running. |
+| A6 | `ux/pr4b-A6` | No `Box <n>` fallback in the walk | MERGED (633aff52). |
 | L1 | `ux/pr4b-L1` | Cut T7's idle waits | Building. Then a review. |
-| L3 | `ux/pr4b-L3` | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | Built. Review running. |
-| L5 | `ux/pr4b-L5` | Cut the old demo seed guards, keep the generator | Built (kept `demo-freshness`, a judgement call). Review running. |
-| L6 | `ux/pr4b-L6` | DEBT47 closed, pull-confirm folded into fulfillment | Building. Then a review. |
+| L3 | `ux/pr4b-L3` | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | Review FAIL: 4 of 7 items done. A Sonnet builder finishes C2, P1, F5 and the decision amendments. |
+| L5 | `ux/pr4b-L5` | Cut the old demo seed guards, keep the generator | MERGED (7481619a). `demo-freshness` retired too, because C4 names it. |
+| L6 | `ux/pr4b-L6` | DEBT47 closed, pull-confirm folded into fulfillment | MERGED (29c32166). |
 | L7 | `ux/pr4b-L7` | Measure the slow CI shard, then one route sweep | MERGED (ed07efd9), after one FAIL: the folded floors now report every failure in one run. Shard 2 is slow from `icon-button.spec.ts` re-rendering the gallery per test. |
-| L10 | `ux/pr4b-L10` | Heartbeat and coordinator retired | Review FAIL: docs-audit red (map entries and dead target names left). Fixing, then a re-review. |
+| L10 | `ux/pr4b-L10` | Heartbeat and coordinator retired | Two FAILs fixed (docs-audit, the shell guard's advice). Re-review running. |
 | Q1 tiers | merged | A proposed tier for each docs-audit row: `docs/reviews/test-audit-2026-09-27/TIERS.md`. 65 Tier 1, 22 Tier 2, 13 Tier 3, 9 CUT, 7 unsure. | Waiting for the owner, together with Q8's merge families (PLAN.md item M3). No docs-audit lane starts before that. |
 
 ## Still to come
@@ -97,6 +97,11 @@ Logged, waiting for the owner's word:
   game filter, and price bands. The same screen says "10 held" and "Held 15".
 - F6: one spacing rule for every relation, and a check that fails an off-scale value.
 - F7: `archive` and `wallet` sit low like the lock did.
+- F8: in Inventory, a search for "hand hammer" ranks Jayce cards above the common card Hand Hammer. A Sonnet lane diagnoses the cause and the change that made it, then proposes a fix. D271 (one forgiving matcher everywhere) governs.
+  - The diagnosis: `server/match.py` ranks Hand Hammer first. The walk in `BoxBrowse.tsx` picks its box and landing by the largest pile of live copies across all matches, and never reads that rank. The owner confirmed that in-stock Hand Hammers did not surface until another box was picked.
+  - The owner's ruling: `Rank before pile size (Recommended),Say when the best match is sold (Recommended)`. Lane F8 builds both on `ux/pr4b-F8`.
+  - A second example (owner, same day): a search for "shadow" shows a Zed card before the card named Shadow. Sent to lane F8 to confirm the same cause.
+- F9: an empty section must not show in the Inventory walk. The owner often opens the next section at the end of a capture, and it stays empty. The strip then counts it ("Section 10 of 11"), which breaks the back-to-front count while locating a card. Owner: `be careful about this change`. Default scope: the walk hides it (strip, "of N", ruler). Capture, Manage box and the move targets still show it, so it can be filled, renamed or deleted. It runs as one lane after F8, since both edit `BoxBrowse.tsx`. D264 (a section is an object that moves whole) and D260 (a card counts within its section) govern.
 
 Before PR 4B merges:
 
@@ -194,6 +199,12 @@ G, T and PR 5:
 - PR 5 debts: `delete the six, split debt 27, and tell me what is left on debt 27?`
 - PR 5 into PR 4: `bring everything that was PR5 into PR4, so you can do that debt27 check now`.
 - H: `it'll be the epilogue of PR4`.
+- H, on the first mockups (current, A, B, C, desktop only): `all of the H concepts tend to just pick one color and stick to it, when the power of cyberpunk is its fusion of several loud color schema contrasting and clashing`. So no single-accent concept is the answer.
+- H, same round: `neon noir was the closest of the dynamism though if i had to pick one`, then `none were good tho`. Neon Noir is the starting point, not the answer.
+- H round 2 (owner, same day): `Mockup round 2: fusion (Recommended)`. Three multi-color concepts on Neon Noir's ground, Pricing and Home, desktop only.
+- H round 2 verdict: `pretty underwhelming, neon noir and synthwave are again too mild`. The next step, on the owner's word: a new BLIND agent sees only the LIGHT mode and designs several novel many-color palettes. Colors only, no layout change. Owner: `super spicy, loud, color schema ... not just one color, MANYYY COLORS ... cyberpunk anime esque dark mode as though you're a league of legends pro`.
+- H, the blind colorist's four palettes (Championship, Drift King, Overclock, Lantern District): `This version of H is absolute fire`. The same agent makes four more. Then H leaves PR 4B and becomes its OWN DEFERRED PR. Its palettes, sheet and method notes are committed as that PR's record.
+- The Box number sweep (owner, same day): `In PR 4B, after A3 and F5 (Recommended)`. One Sonnet lane adds a shared browser `boxTitle`. It fixes the screens that show a box number: the Orders copy map, the run scope, the rescue, Capture and Home's status line. A check refuses a new typed `Box ${`. D259 (a box is shown only by its name) governs.
 - Walk density: `Cards to pick at the stop (what's built)`.
 - Test-audit Q1, the tiers: `Three tiers, agent proposes, you approve (Recommended)`. Q2: `Yes (Recommended)`.
 - Start now: `L1, L3, L6, L7`. The owner asked for the other three options explained first.

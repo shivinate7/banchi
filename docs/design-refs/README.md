@@ -42,7 +42,7 @@ both, per the rule above.
 - **`locked.html` draws the pull-confirm label at 18px** (`.btn`, `font-size: 18px`). The
   Fulfillment constraints table puts a 20px floor on every text node in that view, and a
   button label is a text node. The component is built at 20px and
-  `app/tests/pull-confirm.spec.ts` asserts it.
+  `app/tests/fulfillment.spec.ts`'s pull-confirm block asserts it.
 - **`locked.html` draws a `↵` key chip on all three pull-confirm states.** "Every choice
   shows its key" is an owner-side rule — the doc says the Fulfiller's screens are touch and
   show none, and the pull-confirm is his. The component takes `keyHint` as optional and

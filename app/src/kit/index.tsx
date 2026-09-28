@@ -1144,7 +1144,7 @@ export function applyTheme(theme: Theme): void {
 /* ---- the page scaffold and the overlays ----------------------------------------------------
    Every screen imports these from here and never from the files behind them, so one import line
    is how a new screen inherits every other screen's frame (D272). */
-export { Page, PageRouteContext, usePageRoute, Verdict, Toolbar, StatusSlot, Loading, Section } from './Page'
+export { Page, PageRouteContext, usePageRoute, Verdict, Toolbar, StatusSlot, Loading, Skeleton, Section } from './Page'
 export type { PageProps, PageRoute } from './Page'
 export { Sheet, Modal, Popover, ConfirmSheet, SheetHost, useFocusTrap, useReturnFocus, useOverlayLayer, overlayOpen, useInOverlay } from './overlay'
 export type { OverlayLayerOptions } from './overlay'

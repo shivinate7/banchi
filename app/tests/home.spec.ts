@@ -402,7 +402,7 @@ test('every card needs a price: Home says price it, and counts no copy as ready'
   await expect(page.locator('.home-standing')).not.toContainText('before it can be sent')
 })
 
-/* DEBT42, THE OWNER'S RULING ("Screen shows $5.16"): a typed price on the `price` channel is
+/* THE OWNER'S RULING ("Screen shows $5.16"): a typed price on the `price` channel is
  * what the send lists at, even after the card's market went blank. So Home counts that copy as
  * ready and names no card that needs a price. The server's roster already agrees: it owes only
  * the first send. */

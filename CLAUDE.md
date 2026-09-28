@@ -245,7 +245,6 @@ make demo-static    # demo-mirror-install, then a static build to dist-demo/. `d
                     #   `demo-record` above still work; they are just not what this builds
                     #   from any more.
 make demo-preview   # serve dist-demo/ as a static host would.
-make demo-freshness # whether the bundle matches its recording. No gate: CI rebuilds fresh.
 make check          # harness + docs-audit + revert-guard +
                     #   port-agreement + set-hint-agreement + readiness-agreement +
                     #   screen-freshness +
@@ -268,12 +267,12 @@ make check          # harness + docs-audit + revert-guard +
                     #   identity-cli-selftest +
                     #   janitor-selftest +
                     #   reap-selftest + silent-write-selftest + guard-shell-selftest +
-                    #   coordinator-selftest + suite-lock-selftest +
+                    #   suite-lock-selftest +
                     #   browser-scope-selftest + serve-selftest +
                     #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
                     #   subagent-override-selftest + guard-scope-selftest +
                     #   token-literal-check-selftest + kit-adoption-selftest +
-                    #   port-slots-selftest + demo-determinism-selftest +
+                    #   port-slots-selftest +
                     #   match-selftest,
                     #   IN THIS ORDER (D161): product
                     #   first, guard selftests last. `make docs-audit`'s `check census`
@@ -551,7 +550,7 @@ both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
 157<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
-283<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
+282<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.
 
 **Both themes are real.** `:root[data-theme='dark']` redefines every surface, applied before

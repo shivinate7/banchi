@@ -11046,7 +11046,7 @@ def check_design_tokens(report: Report) -> None:
     Checking lets two things disagree in public.
 
     **What a green row means, exactly**: the values agree. It says nothing about whether the
-    palette is any good — contrast is asserted in app/tests/pull-confirm.spec.ts against
+    palette is any good — contrast is asserted in app/tests/fulfillment.spec.ts against
     rendered pixels, and taste is what the interview was for.
     """
     missing = [rel(path) for path in (DESIGN, TOKENS_CSS) if not exists(path)]
@@ -14388,6 +14388,8 @@ RECORDED_DELETIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
     ("D144", "the beat-locked cadence trigger, its module and its period pin",
      ("cadenceTrigger", "CadenceMachine", "DEFAULT_CADENCE", "periodPin", "pinPeriod",
       "cadence.ts")),
+    ("D200", "scripts/coordinator.py and scripts/heartbeat.py and their make targets",
+     ("coordinator.py", "heartbeat.py", "make coordinator", "make heartbeat")),
 )
 
 

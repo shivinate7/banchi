@@ -1083,28 +1083,6 @@ CHECKS = (
         "governed_by": ("D18", "D43", "D127", "D171", "D173"),
     },
     {
-        "target": "coordinator-selftest",
-        "runs": "python3 scripts/coordinator.py --selftest",
-        "asserts": "scripts/coordinator.py's verdict rules, against synthetic check-run "
-                   "payloads. Every case is a payload that a reader looking at conclusions "
-                   "ALONE would call clean, and the assertion is that this one does not: one "
-                   "required check of two with everything reported passing, a required check "
-                   "that reported `skipped`, a commit with no runs at all. The two mirrors are "
-                   "cases as well — a null conclusion is `running` and never `failed`, and an "
-                   "OPTIONAL check may be skipped without spoiling a green. It also asserts "
-                   "the report's own floor: a block that could not be read makes the exit "
-                   "non-zero, so an incomplete report cannot be relayed as the state of the "
-                   "queue.",
-        "needs": ("python3",),
-        "writes": "",
-        "commit_path": False,
-        "why_off_commit_path": "D16 — it is a self-test rather than a doc check, and it belongs "
-                               "beside the other selftests at the end of `check` rather than "
-                               "on the hook. Nothing here writes, so D18 is not the reason.",
-        "gates": True,
-        "governed_by": ("D42", "D141"),
-    },
-    {
         "target": "suite-lock-selftest",
         "runs": "python3 scripts/suite-lock.py selftest",
         "asserts": "scripts/suite-lock.py, by violating it: a holder, a second run refused, a "
@@ -1353,26 +1331,6 @@ CHECKS = (
         "gates": True,
         "governed_by": ("D18", "D43", "D268",
                         "D261"),
-    },
-    {
-        "target": "demo-determinism-selftest",
-        "runs": "python3 scripts/demo-determinism-selftest.py",
-        "asserts": "scripts/demo-determinism.py's own ALLOWED_PATTERNS matcher, on "
-                   "fixtures: every one of the 12 real, measured pointer shapes two "
-                   "`make demo` runs actually move still matches whole; four fabricated "
-                   "pointers that merely contain an allowed key (`at`, `updated_at`, "
-                   "`batch`) under a route none of the patterns name do NOT match, the "
-                   "exact regression a bare-key matcher (the pre-lane-7 ALLOWED_KEYS) "
-                   "would miss; one end-to-end case through `_diff` itself confirms the "
-                   "seam between pointer-building and matching.",
-        "needs": ("python3",),
-        "writes": "",
-        "commit_path": False,
-        "why_off_commit_path": "D18's own reason token-literal-check-selftest carries — "
-                               "not armed in scripts/githooks/pre-commit, `make check` "
-                               "only.",
-        "gates": True,
-        "governed_by": ("D18", "D173"),
     },
     {
         "target": "match-selftest",
