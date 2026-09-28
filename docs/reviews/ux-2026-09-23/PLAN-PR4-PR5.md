@@ -60,8 +60,13 @@ Each item gets an id, `F<n>`, and one line here. The line names its route:
   It also found that "10 held" and "Held 15" disagree on one screen.
 - F4 (to lane D's plan): an odd gap on Capture's top, below the subheading. It was recorded
   nowhere. Capture's old top-gap exception left the allow-list earlier, so the gap may follow.
-- F5 (own lane, running): a blind Sonnet agent lists every multi-word string on every screen.
-  Each gets DELETE or ONE WORD, with no option to keep a phrase (the owner's rule).
+- F5 (done, waiting for the owner's word): a blind Sonnet agent listed every multi-word string on
+  every screen. Each got DELETE or ONE WORD, with no option to keep a phrase (the owner's rule).
+  196 strings: 165 ONE WORD, 31 DELETE. The list is `verbiage-blind/verbiage.csv` in this folder.
+  Three cuts lose the only place a fact lives: Review's mismatch paragraph, Sales' "not profit"
+  line, and Sales' sealed footnote.
+- F7 (from lane D1's review, logged): `archive` and `wallet` share the lock's heavy-body-low
+  drawing. Only the lock got the optical re-centering.
 - F6 (logged): the owner asked whether one spacing mandate covers every kind of spacing. The
   scale exists (`--bn-1` to `--bn-10` on a 4px base, plus the page width and top gap, D272).
   `make token-literal-check` catches only a literal equal to a token. About 327 raw px margins,
@@ -198,6 +203,15 @@ drifted from it. The owner's final direction:
 6. On a phone, the buyer shows before the photo.
 
 Do a design pass first, and show the owner a mockup.
+
+### A's owner answers (2026-09-27, second session)
+
+- Q1, the desk: `Three columns, layout R (Recommended)`.
+- Q3, the rows: `Full detail on every row (Recommended)`.
+- Q4, the phone: `The walk, with the card in a sheet (Recommended)`.
+- Q2: the buyer list scrolls in a sticky rail, as Inventory does.
+- Q5, Q6 and Q7 are still open. The owner asked for Q5 to be explained.
+- Lane A's own plan: `orders-a/PLAN.md` in this folder, on branch `ux/pr4b-A-design`.
 
 ### H. Epilogue: cyberpunk dark mode
 
