@@ -25,15 +25,18 @@ PR 5's work now lives inside PR 4B. Owner: `bring everything that was PR5 into P
 |---|---|---|
 | S | Removed the redundant `_lookup_key` in `pipeline/stockimages.py` | Review PASS |
 | D1 | Re-centered the lock glyph, and removed Pricing's 1px nudge | Review PASS |
-| E | An Orders sale no longer jumps the screen, and Hide picked folds on its own press | Review PASS, UN-6 red then green |
+| E | An Orders sale no longer jumps the screen, and Hide picked folds on its own press | Review PASS |
 | M | The demo recorder resumes, and scrubs each route before it caches it | Re-review PASS after a FAIL |
 | B2 | DEBT48: every writer of `prices.json` takes the store lock, with four revision checks inside it | Re-review PASS after a FAIL |
-| F1 | Cards born by join or emit now keep their game, plus a one-off repair script with a logged event | Review PASS |
+| F1 | Cards born by join or emit keep their game, plus a one-off repair script with a logged event | Review PASS |
 | F2 | Sales falls back to the stock photo, Pokemon sealed included | Re-review PASS after a FAIL |
+| C | `emit --cap` refuses a card with a pending copy, DEBT37 closed, D7 amended and names DEBT24 | Re-review PASS after a FAIL |
 | A0 | The decision slug `D-orders-walk-rejoins-inventory`, amending D220 and D274, and spec §16 | Orchestrator check, key fixed |
-| A1 | The walk draws stops densest first, and the box name in natural order breaks a tie | Review PASS |
+| A1 | The walk draws stops densest first (cards to pick), and the box name breaks a tie | Review PASS |
 | A2a | `CardPane` and one hero head, moved out of `BoxBrowse.tsx` | Review PASS, 0-pixel diff |
+| A2b | `RailFrame`, moved out of `BoxBrowse.tsx` | Review PASS, 0-pixel diff |
 | A2c | `CardLocations` gains `head={false}`, and `layoutsOf` moved to a shared home | Review PASS |
+| L11 | `match-selftest` joins the path gate | Review PASS |
 
 Records and studies, also merged:
 
@@ -41,28 +44,35 @@ Records and studies, also merged:
 - The test audit: four Sonnet slices and the Opus plan in `docs/reviews/test-audit-2026-09-27/`.
 - F5's verbiage list: `verbiage-blind/verbiage.csv`.
 - Lane H's blind review: `cyberpunk-blind.md`.
-- DEBT37's study, and the cap rule that replaced "Take the larger".
 
 Earlier PRs, done: PR 3B, the demo mirror (#467 to #477), and PR 4A (#466).
 
-## In motion
+## In motion (state at the 2026-09-27 compaction)
 
-| Lane | What | State |
-|---|---|---|
-| C | `emit --cap` refuses a card with a pending copy. DEBT37's two wording gaps. | Fix for its review FAIL built, waiting for re-review |
-| B3 | A refused markdown apply must write nothing, not a file and a posting that the screen then hides | Building |
-| F5 | Cut every multi-word string the list names. Numbers and names stay. | Building |
-| D2 | Capture's 28px gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, and Codes' filter row | Building |
-| P5 | Stub D48 and D194 to one line each. Delete DEBT5, 6, 18, 28, 35 and 42. Split DEBT27, or delete it if D279 removed its call. | Building |
-| A2b | `RailFrame` moved out of `BoxBrowse.tsx` | Building |
-| A6 | No `Box <n>` fallback in the walk. The server names every stop's box. | Running the proof it first skipped |
+Each lane builds on its own branch `ux/pr4b-<lane>` and merges into `ux/pr4b` after one review
+PASS, with `cd app && npx tsc --noEmit` at the merge.
+
+| Lane | Branch | What | State |
+|---|---|---|---|
+| B3 | `ux/pr4b-B3` | A refused markdown apply writes nothing | Fixing its review FAIL: the corpus write must be the last durable step. Then a re-review. |
+| F5 | `ux/pr4b-F5` | Cut the excess words. Numbers and names stay. Review's mismatch line becomes "Mismatch: photo reading / matched listing". | Building. Then a review. |
+| D2 | `ux/pr4b-D2` | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | Building. Then a review. |
+| P5 | `ux/pr4b-P5` | Stub D48 and D194 to one line each. Delete DEBT5, 6, 18, 28, 35, 42. Split DEBT27, or delete it if D279 removed its call. | Building. Then a review. |
+| A3 | `ux/pr4b-A3` | The Orders pane becomes `CardPane`, with no Details fold | Building. Then a review. |
+| A6 | `ux/pr4b-A6` | No `Box <n>` fallback in the walk | Running the proof it first skipped. Then a review. |
+| L1 | `ux/pr4b-L1` | Cut T7's idle waits | Building. Then a review. |
+| L3 | `ux/pr4b-L3` | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | Removing two `make vale` lines from the test-audit plan on the owner's word, then commit. Then a review. |
+| L5 | `ux/pr4b-L5` | Cut the old demo seed guards, keep the generator | Building. Then a review. |
+| L6 | `ux/pr4b-L6` | DEBT47 closed, pull-confirm folded into fulfillment | Building. Then a review. |
+| L7 | `ux/pr4b-L7` | Measure the slow CI shard, then one route sweep | Building. Then a review. |
+| L10 | `ux/pr4b-L10` | Heartbeat and coordinator retired | Built. Review running. |
+| Q1 tiers | `ux/pr4b-Q1tiers` | A proposed tier for each docs-audit row, `TIERS.md` | Building. The owner sees it with Q8's merge families before any docs-audit lane starts. |
 
 ## Still to come
 
 Lane A, in order, each after the lanes it needs:
 
-- A3: the Orders pane becomes `CardPane`, and `WalkCardPane` is deleted. It needs A2a (done) and A2b.
-- A4: walk rows carry their copies as `CardLocations` rows, on top of lane E. It needs A2c (done).
+- A4: walk rows carry their copies as `CardLocations` rows. It starts after A3 merges (both edit `OrdersWalkPane.tsx`).
 - A5: layout R, with the buyer list in `RailFrame` and the phone order. It needs A3 and A4.
 
 The test audit's lanes (plan: `docs/reviews/test-audit-2026-09-27/PLAN.md`):
@@ -72,13 +82,12 @@ The test audit's lanes (plan: `docs/reviews/test-audit-2026-09-27/PLAN.md`):
   fulfillment. L7 runs six route walkers as one sweep. These need no ruling and wait for the
   owner's word to start.
 - L2 makes the per-commit docs audit read only changed files. It waits on Q1.
-- L11 gates `match-selftest` by path. The owner said yes.
 - L4, L5, L8, L9, L10 and L12 wait on their questions or on other lanes. L9 is DEBT45's form:
   `make explain` reads each test's own header every run.
 
 Lane G, folded in with the audit:
 
-- `claim-selftest` skips what git ignores, so a demo build never reddens it.
+- `claim-selftest` skips what git ignores, so a demo build never reddens it (owner's ruling).
 - Measure the typecheck's out-of-memory failure, then fix its cause.
 - Sync this session's rulings into `RULINGS.md`, and fix two stale lines there and in `STATE.md`.
 
