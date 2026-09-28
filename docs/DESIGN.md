@@ -468,6 +468,11 @@ CONTAINER       widths measured against a COLUMN rather than the window, so they
 
 COLUMN-BLIND    a sheet allowed to ask the VIEWPORT a question at or above 1024, with why.
   Fulfillment.css   `persona: 'fulfiller'` draws no shell (D5), so the viewport IS its column
+  CaptureScreen.css  1280-1359: the live capture stage (D19, D32), not a scrollable
+                     column — the rule trades padding so the four stacked cards fit the fold
+                     at 800px of HEIGHT, an input-modality question (the rig's own frame) the
+                     docstring's own "100dvh stage" exception names, and no `--bn-shell-main`
+                     column width changes what it is deciding
 ```
 
 **Above 1024, prefer a cap or a container to a viewport width.** Every screen but the

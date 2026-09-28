@@ -8622,7 +8622,8 @@ COMPONENTS = [
                                          "once per box in the cart, capped so they stay chip-sized on a "
                                          "full-width route rather than spanning it.",
                                  "governed_by": ["D28", "D31", "D32", "D33", "D38", "D40", "D48",
-                                                 "D50", "D54", "D64", "D76", "D86", "D117", "D218"]},
+                                                 "D50", "D54", "D64", "D76", "D86", "D117", "D218",
+                                                 "D291"]},
             "src/reasons.ts": {
                 "does": "the review queue's fourteen reason codes and their human labels, in one "
                         "file because TWO screens read them since 2026-08-25 — #/review works "
