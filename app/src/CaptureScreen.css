@@ -1412,6 +1412,17 @@
      rule carried, doubling the header's own `margin-bottom` again on phone (8px + 12px = 20px
      measured). Deleted; the phone stage clamp() below is re-measured for the 12px this frees. */
   .capture.bn-page { padding: var(--bn-page-top) var(--bn-4) var(--bn-4); }
+  /* BESIDE (owner, 2026-09-28, picked from a mockup): the portrait panel hugs its frame and the
+     last capture sits in the same row, so each shot is checked without a scroll. The panel's
+     height is the budget the stage rule below documents; its width is DERIVED from that height
+     like every wider layout (`--cap-stage-w` is computed where it is declared, so it is
+     redeclared here). The last capture takes the rest of the row and the same height, so the
+     row never grows past the budget that pins the shutter above the tab bar. */
+  .capture.bn-page {
+    --cap-stage-h: clamp(168px, calc(100dvh - 412px - var(--bn-tabbar-h)), 560px);
+    /* 101px and 26px, not 104 and 34: the phone head, foot and padding are tighter, and the viewfinder pads 12px a side (rules below). */
+    --cap-stage-w: calc((var(--cap-stage-h) - 101px) * 9 / 16 + 26px);
+  }
   /* The lamp and the box sentence are drawn again inside the stage, 20px lower; the h1 and
      the odometer both show here now (Page's own header, R1, UX-048) — the old
      `.capture-head-text { display: none }` this replaced hid the title text entirely, which
@@ -1420,7 +1431,17 @@
   .capture-odo .bn-stat { min-width: 0; }
   .capture-odo .bn-stat-value { font-size: var(--bn-fs-xl); }
   .capture-odo-rule { height: 22px; }
-  .capture-shell { display: flex; flex-direction: column; gap: var(--bn-3); }
+  .capture-shell {
+    display: grid;
+    grid-template-columns: var(--cap-stage-w) minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: none;
+    gap: var(--bn-3);
+  }
+  /* Everything but the two frames is one full-width row, in the same order as before. */
+  .capture-shell > * { grid-area: auto; grid-column: 1 / -1; }
+  .capture-shell > .capture-stage { grid-column: 1; }
+  .capture-shell > .capture-last { grid-column: 2; }
   /* Sized by what is left above the tab bar, not by a ratio: top bar 52 + page pad 16 + head
      38 + gap 12 above it, and gap 12 + run card head 92 + shutter 52 + THE TAB BAR + 12 of
      air below it.
@@ -1480,9 +1501,9 @@
        tighter — `app/tests/phone.spec.ts`'s shutter case is still green with it left alone, and
        this constant has been re-measured five times already; spending more of its cushion is a
        separate, deliberate move, not a side effect of the gap fix. */
-    height: clamp(168px, calc(100dvh - 412px - var(--bn-tabbar-h)), 560px);
+    height: var(--cap-stage-h);
     max-height: none;
-    align-self: stretch;
+    align-self: start;
   }
   /* The halt is scrolled to when it lands (CaptureScreen.tsx); this keeps it clear of the
      52px top bar when it does. */
@@ -1495,20 +1516,25 @@
      of stretching. Measured at 279-290px against its 358px siblings before this. */
   .capture-card-run { order: 2; align-self: stretch; }
   .capture-film { order: 3; }
-  .capture-last { order: 4; height: auto; max-height: none; align-self: stretch; grid-template-rows: auto auto; }
-  .capture-last-viewport { container-type: normal; }
+  /* Same row and same height as the stage; the photo is sized by the viewport's own container
+     query (base rule), and the receipt under it scrolls inside the panel rather than pushing
+     the row taller. */
+  .capture-last { order: 1; height: var(--cap-stage-h); max-height: none; align-self: start; }
+  .capture-last-viewport { overflow-y: auto; }
   .capture-card-stack { order: 5; }
   .capture-card-rig { order: 6; align-self: stretch; }
-  .capture-frame-last { width: min(100%, 300px); }
-  /* Before the first capture the panel holds one sentence; a 9:16 frame around it is a
-     screen of dashed nothing between the run and its claims. */
-  .capture-last[data-has-last='false'] .capture-frame-last {
-    width: 100%;
-    aspect-ratio: auto;
-    min-height: 200px;
-    max-height: 32dvh;
-  }
   .capture-stage-head { padding: var(--bn-2) var(--bn-3) 0; min-height: 40px; }
+  /* The panel is ~150-190px wide now: its rows must shrink to it, or their min-content widens
+     the grid track and pushes the centred frame under the panel's clipped edge. The foot keeps
+     the box name (ellipsis) and the Tuning control as an icon; "next card" is in the run card
+     and the odometer beside it. */
+  .capture-stage { grid-template-columns: minmax(0, 1fr); }
+  .capture-foot-next, .capture-tuning-word { display: none; }
+  /* One row of lamps in 134px: the feed lamp keeps its word, the trigger-mode lamp keeps its
+     icon (its word stays in the accessibility tree; font-size 0 hides it, not display). */
+  .capture-lamps { flex-wrap: nowrap; }
+  .capture-lamp-mode { font-size: 0; gap: 0; padding: 0 7px; }
+  .capture-tuning > summary { min-width: 40px; justify-content: center; }
   .capture-viewfinder { padding: var(--bn-2) var(--bn-3) var(--bn-3); }
   .capture-stage-foot { padding: 0 var(--bn-3); }
   .capture-meter-label { display: none; }
