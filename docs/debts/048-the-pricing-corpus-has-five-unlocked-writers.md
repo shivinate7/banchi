@@ -58,27 +58,50 @@ refusal. No `import.csv`. No posting. But the corpus write ran BEFORE the crash.
 already landed. The markdown price sat in the corpus with nothing behind it. The next `emit`
 would have sold at a price never sent to TCGplayer, and never recorded as a posting.
 
-The fix reorders the two writes and adds one rename. `import.csv` now goes to a temp name
-first. The corpus write is the LAST step that can still fail. `corpus.Corpus.write()` uses
-`store/files.py:write_atomic`. That already cleans up its own temp file on its own exception.
-So a failed corpus write never leaves `prices.json` half-written. `os.replace` moves the temp
-CSV into place only once the corpus write has succeeded — one filesystem, the same directory.
-A try/except around both writes catches any exception. It deletes the temp CSV if the attempt
-left one behind, prints a refusal sentence, and returns 1. `cli/__main__.py:main` catches only
-`RunError`, `FileNotFoundError` and `KeyboardInterrupt`. Without this catch, an exception here
-would reach `do_markdown_apply`'s subprocess output as a raw traceback.
+The fix (as first built) reordered the two writes and added one rename. `import.csv` went to
+a temp name first. The corpus write was the LAST step that could still fail.
+`corpus.Corpus.write()` uses `store/files.py:write_atomic`. That already cleans up its own
+temp file on its own exception. So a failed corpus write never left `prices.json`
+half-written. `os.replace` moved the temp CSV into place only once the corpus write had
+succeeded. One filesystem, the same directory. It was reasoned about as a step that would not
+fail. A try/except around both writes caught any exception. It deleted the temp CSV if the
+attempt left one behind, printed a refusal sentence, and returned 1. `cli/__main__.py:main`
+catches only `RunError`, `FileNotFoundError` and `KeyboardInterrupt`. Without this catch, an
+exception past this point would have reached `do_markdown_apply`'s subprocess output as a raw
+traceback.
+
+**Round 3: the rename CAN fail, and it sat outside the catch.** Round 2's own `os.replace`
+call was written straight after the try/except closed, on the reasoning quoted above. Lane
+B3's re-review made it fail, in a throwaway clone. All five of these happened at once. The
+corpus kept the markdown price — `book.write()` had already run, inside the try, before the
+rename. No `import.csv` existed. No posting was recorded. The operator saw a raw traceback
+instead of `REFUSED`. The temp file stayed on disk. This is the exact defect round 2 closed,
+moved one step later. A wrap around the two writes was never enough. The step AFTER the wrap
+could still leave the corpus changed with nothing behind it.
+
+The fix changes the ORDER, not only the catch. `import.csv` now lands at its final name —
+temp write, then `os.replace` — BEFORE the corpus is touched at all. Both sit inside one
+try/except. If the corpus write then raises, the file it just landed is unlinked first. That
+undoes what landed, before the refusal, so the invariant holds. No failure may leave the
+corpus changed while no file exists. No failure may leave a file with nothing recorded behind
+it. A `landed` flag tracks whether the rename has happened, so the except clause knows
+whether there is a file to undo. The comment that once called `os.replace` a step "not
+expected to fail" is gone. The whole point of round 3 is that a syscall must never be assumed
+safe.
 
 **The one window this does not close.** The posting is recorded
-(`writable.postings.record`) only after the corpus write and the rename both succeed. But
-that call only appends to a list in memory. `Store().write()` flushes it with
-`db.append_postings` at its own `COMMIT`, on the way out of the `with` block — after this
-command's own code has already returned. A crash or a disk failure exactly there leaves the
-corpus and `import.csv` consistent with each other, and only the posting row missing.
+(`writable.postings.record`) only after the file has landed and the corpus write has
+succeeded. But that call only appends to a list in memory. `Store().write()` flushes it with
+`db.append_postings` at its own `COMMIT`, on the way out of the `with` block. That is after
+this command's own code has already returned. A crash or a disk failure exactly there leaves
+the corpus and `import.csv` consistent with each other, and only the posting row missing.
 Closing it needs one transaction across two stores, `store.sqlite` and
-`inventory/prices.json`. Round 2 does not build that. Named in a code comment at the posting
-call in `cli/cmd_reprice.py:_apply`, and here.
+`inventory/prices.json`. Round 3 does not build that. Every other failure point in the write
+— the temp write, the rename, the corpus write — now undoes what it landed before refusing.
+This one gap is what stays open. Named in a code comment at the posting call in
+`cli/cmd_reprice.py:_apply`, and here.
 
-**The check.** Four harness cases in `harness/tests/t7_store_and_seams.py`
+**The check.** Five harness cases in `harness/tests/t7_store_and_seams.py`
 (`check_undo_until_built_on`), named `T7-RACE (DEBT48)`.
 
 Two patch a real `Corpus.read()`. Each sleeps for exactly as long as its own call now holds
@@ -104,11 +127,19 @@ apply, no revision race involved. It asserts the apply exits 1, never raises out
 file is left under `import.csv`'s own name, no `import.csv`, an unchanged corpus, and no
 posting row.
 
-Proven RED against a `.bak` copy of the pre-fix files, never `git checkout`. All three round-1
-cases failed on the code as it stood before each fix. The extended assertions also failed
-against lane B2's own fix, before lane B3's. The fourth case failed against round 2's own
-first pass — the write-order defect it exists to catch. Proven GREEN against the fix. `make
-harness` passes, all ten tests.
+The fifth case proves round 3. It patches `os.replace` to raise, SELECTIVELY: only when the
+source path is the CSV's own temp name. A blanket patch also fails `Corpus.write()`'s own
+internal `os.replace` (`write_atomic`'s rename). Round 2's own order runs that call INSIDE
+its try. A blanket patch is "caught" there, and never reaches the CSV rename at all — a false
+green over the defect this case exists to catch. It asserts exit 1, no raised exception, a
+`REFUSED` sentence with no `Traceback`, no temp file, no `import.csv`, an unchanged corpus,
+and no posting row.
+
+Proven RED against a `.bak` copy of the pre-fix files, never `git checkout`. All three
+round-1 cases failed before each fix. The extended assertions also failed against lane B2's
+own fix, before lane B3's. The fourth case failed against round 2's own first pass. The fifth
+case failed against round 2 itself — the exact five symptoms lane B3's re-review reported,
+gone once round 3 landed. Proven GREEN against round 3. `make harness` passes, all ten tests.
 
 **The finding, as it was recorded.** Lane B2
 (`docs/reviews/ux-2026-09-23/PLAN-PR4-PR5.md`) named one race. `do_pricing_restore` read the

@@ -922,18 +922,32 @@ def _apply(args, say) -> int:
                     "try again.")
                 return 1
 
-        # `import.csv` GOES TO A TEMPORARY NAME FIRST, AND THE CORPUS WRITE IS THE LAST STEP
-        # THAT MAY STILL FAIL (round 2, found by re-review). `tcgcsv.write_csv` and
-        # `corpus.Corpus.write()` are both real disk writes, and either can raise — a full
-        # disk, a permissions change, a caller proving exactly this case. Written straight to
-        # `target`, an exception from the corpus write left `import.csv` real on disk with
-        # nothing behind it: a file this command sent for money, over a price the corpus never
-        # held. Written to `temp_target` instead, that same exception leaves nothing under
-        # `import.csv`'s own name. `os.replace` (one filesystem, the same directory) is the
-        # one step after the corpus write that is not expected to fail.
+        # `import.csv` GOES TO A TEMPORARY NAME, THEN LANDS AT ITS FINAL NAME, BEFORE THE
+        # CORPUS IS TOUCHED AT ALL (round 3, found by re-review of round 2). Round 2 wrote the
+        # temp CSV, then the corpus, then renamed the temp CSV into place LAST, on the
+        # reasoning that `os.replace` on one filesystem "is not expected to fail". Re-review
+        # made it fail: the corpus write had ALREADY LANDED by then, so a failed rename left
+        # the corpus holding the markdown price with no file behind it — the exact defect this
+        # whole fix exists to close, just moved one step later. `os.replace` can fail (ENOSPC,
+        # a permissions change, a caller proving the case), and nothing here may assume a
+        # syscall cannot.
+        #
+        # So the order is now: write the temp CSV, RENAME IT INTO PLACE, and only THEN touch
+        # the corpus. If the corpus write raises, `import.csv` is already real — so this
+        # branch UNDOES it, unlinking the file it just landed, before refusing. That keeps the
+        # invariant this whole fix is for: no failure may leave the corpus changed while no
+        # file exists, and no failure may leave a file on disk with nothing recorded behind
+        # it. Every exception here is caught, the sentence is REFUSED, and the exit is 1 —
+        # `cli/__main__.py:main` catches only `RunError`, `FileNotFoundError` and
+        # `KeyboardInterrupt`, so an uncaught exception past this point would otherwise put a
+        # raw Python traceback in front of the operator, through `do_markdown_apply`'s
+        # subprocess output.
         temp_target = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+        landed = False
         try:
             tcgcsv.write_csv(temp_target, tcgcsv.CANONICAL_HEADER, rows)
+            os.replace(temp_target, target)
+            landed = True
 
             # THE ANSWER GOES IN THE CORPUS, KEYED BY SKU (D86). Without this the next `emit`
             # over another copy of the same card re-lists it at the rule price and quietly
@@ -955,21 +969,21 @@ def _apply(args, say) -> int:
             corpus.stamp_answers(before, book, stamp)
             book.write()
         except Exception as exc:
-            # A CLEAN REFUSAL, NEVER A RAW TRACEBACK — this runs as a subprocess of `POST
-            # /pipeline/markdowns/<stamp>/apply` (D105), and an uncaught exception here would
-            # put a Python stack trace in front of the operator instead of a sentence. Delete
-            # whatever the temp write left behind. No corpus write happened, or it would not
-            # have raised, and `write_atomic` never leaves `prices.json` half-written on its
-            # own exception. No posting was recorded — that call is below this block, reached
-            # only once both writes above have already succeeded.
+            # UNDO WHATEVER LANDED, IN THE ORDER IT LANDED. `write_atomic` (what
+            # `Corpus.write()` uses) never leaves `prices.json` half-written on its own
+            # exception, so there is never a partial corpus write to undo here — only a
+            # temp file that never got renamed, or a real `import.csv` that got renamed into
+            # place before the corpus write raised. No posting was recorded either way: that
+            # call is below this block, reached only once the file AND the corpus have both
+            # succeeded.
             if temp_target.exists():
                 temp_target.unlink()
+            if landed and target.exists():
+                target.unlink()
             say("")
             say(f"REFUSED — could not write the markdown: {exc}. Nothing is written: no "
                 "import.csv, no corpus answer, no posting. Fix the problem and try again.")
             return 1
-
-        os.replace(temp_target, target)
 
         # THIS IS THE ROUND THE OWNER ASKED ABOUT — a SKU marked down a second, third or
         # fourth time. `edit.was` is the price this markdown replaces, already in hand from

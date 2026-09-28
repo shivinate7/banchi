@@ -7187,6 +7187,112 @@ def check_undo_until_built_on(checks: Checks) -> None:
             conn.close()
         checks.ok(not exc_postings, "and no posting row lands")
 
+    # ------------------------------------------------ T7-RACE (DEBT48): reprice apply's own
+    # write, round 3 — a failure landing the file, AFTER the corpus already held the price
+    # Round 2 (above) moved `import.csv`'s own write to a temp name, but still renamed it
+    # into place LAST, after the corpus write, on the reasoning that `os.replace` on one
+    # filesystem "is not expected to fail". Re-review made it fail: the corpus write had
+    # ALREADY LANDED by the time the rename raised, so the operator saw a raw crash AND the
+    # corpus held the markdown price with no file behind it — the same defect round 2 closed,
+    # moved one step later.
+    #
+    # Round 3: the rename now runs BEFORE the corpus write, and a corpus-write exception
+    # unlinks the file it just landed. A rename failure itself is caught the same way write_csv
+    # failing already was: no corpus touched, temp file cleaned up, a clean refusal.
+    with isolated_home() as home:
+        cards = [(3, 1, "Dunsparce", "120", "normal")]
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(run_dir.directory))
+
+        source = tcgcsv.read_export(FIXTURE_EXPORT)
+        row = dict(source.by_sku()[DUNSPARCE_SKU])
+        row[tcgcsv.LIVE_QUANTITY_COLUMN] = "2"
+        row[tcgcsv.PRICE_COLUMN] = "2.0000"
+        export = home / "live-b3exc2.csv"
+        tcgcsv.write_csv(export, source.header, [row])
+
+        command(checks, "reprice", "list", str(export), "--days", "7", "--percent", "10", "--write")
+        replace_directory = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[-1]
+        tcgcsv.write_csv(
+            replace_directory / cmd_reprice.WORKLIST,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.50"}],
+        )
+        before_corpus_r3 = dict(corpus.Corpus.read().answers)
+
+        real_os_replace = os.replace
+
+        # SELECTIVE ON PURPOSE: `Corpus.write()` ALSO calls `os.replace`, through
+        # `store/files.py:write_atomic`, to land `prices.json` itself. A blanket patch fails
+        # that call too, and — in round 2's own order (corpus write, THEN the CSV rename) —
+        # the corpus's OWN replace sits inside round 2's try/except, so a blanket patch is
+        # "caught" there and never reaches the CSV rename at all: a false green that proves
+        # nothing about the defect this case exists to catch. Matching only the CSV's own
+        # temp name reproduces the reviewer's exact call.
+        def raising_replace(src, dst):
+            if Path(src).name.startswith(f".{cmd_reprice.IMPORT}."):
+                raise OSError("T7-RACE (DEBT48): simulated rename failure")
+            return real_os_replace(src, dst)
+
+        from cli import __main__ as cli_entry
+
+        os.replace = raising_replace
+        raised_r3 = None
+        code4 = None
+        try:
+            with quiet() as said_buf4:
+                try:
+                    code4 = cli_entry.main(
+                        [
+                            "reprice", "apply", str(replace_directory / cmd_reprice.WORKLIST),
+                            "--write",
+                        ]
+                    )
+                except Exception as exc:  # round 2's own crash this case proves against
+                    raised_r3 = exc
+            said4 = said_buf4.getvalue()
+        finally:
+            os.replace = real_os_replace
+
+        checks.ok(
+            raised_r3 is None,
+            "T7-RACE (DEBT48): a failure landing import.csv, after the corpus write, still "
+            "refuses cleanly, never a raw crash", repr(raised_r3),
+        )
+        checks.equal(
+            code4, 1,
+            "and exits non-zero, which `do_markdown_apply` reads as nothing written",
+        )
+        checks.ok(
+            said4 is not None and "REFUSED" in said4 and "Traceback" not in said4,
+            "and prints a clean refusal sentence, never a raw traceback", said4,
+        )
+        replace_temp = (replace_directory / cmd_reprice.IMPORT).with_name(
+            f".{cmd_reprice.IMPORT}.{os.getpid()}.tmp"
+        )
+        checks.ok(not replace_temp.exists(), "and leaves no temp file behind")
+        checks.ok(
+            not (replace_directory / cmd_reprice.IMPORT).is_file(),
+            "and writes no import.csv",
+        )
+        checks.equal(
+            dict(corpus.Corpus.read().answers), before_corpus_r3,
+            "and the corpus is unchanged — round 2 would have failed this: `os.replace` "
+            "raised AFTER `book.write()` had already landed the markdown price",
+        )
+        conn = db.connect(files.inventory_dir())
+        try:
+            replace_postings = [
+                entry for entry in db.postings_for_sku(conn, DUNSPARCE_SKU)
+                if entry["source"] == "reprice"
+            ]
+        finally:
+            conn.close()
+        checks.ok(not replace_postings, "and no posting row lands")
+
     # ------------------------------------------------ UN-14: a move, until either box changes
     with isolated_home():
         for _ in range(2):
