@@ -559,6 +559,21 @@ class QuietHandler(capture_server.CaptureHandler):
         pass
 
 
+def _spawn_server(httpd) -> threading.Thread:
+    """Start `httpd.serve_forever` on a daemon thread with a short poll, and return it.
+
+    Every throwaway server in this file used the 0.5s default `poll_interval`. `shutdown()`
+    only sets a flag — the `serve_forever` loop notices it on its NEXT poll tick, so each of
+    the two dozen servers here idled up to half a second on teardown for zero coverage. That
+    idle time was 30s of T7's own 99.9s wall clock, measured before this helper existed
+    (S1, docs/reviews/test-audit-2026-09-27/PLAN.md). One helper, one short poll, so a
+    `shutdown()` call anywhere in this file is answered almost at once.
+    """
+    thread = threading.Thread(target=httpd.serve_forever, args=(0.02,), daemon=True)
+    thread.start()
+    return thread
+
+
 # EVERY CAPTURE THIS FILE MAKES CARRIES BYTES OF ITS OWN, AND SINCE D172 THAT IS THE STORE'S
 # REQUIREMENT RATHER THAN A CASE'S PREFERENCE. A card is NAMED by the sha256 of its photograph
 # and `cards_cid` holds that name UNIQUE, so two captures of one blob are two rows carrying one
@@ -9348,8 +9363,7 @@ def check_inventory_filter_facets(checks: Checks) -> None:
         # --- the wire itself: `?set=` (blank) means the unclassified bucket, not "unset" --
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             status, raw, _ = request(port, "GET", "/boxes?game=riftbound&set=")
             checks.equal(status, 200, "GET /boxes?game=riftbound&set= answers 200")
@@ -9622,8 +9636,7 @@ def check_box_routes_and_search(checks: Checks) -> None:
         # would arrive.
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             for wire_query in ("/search?q=%00", "/search?q=a%00b"):
                 status, body, _ = request(port, "GET", wire_query)
@@ -11755,8 +11768,7 @@ def check_concurrency(checks: Checks) -> None:
         capture_server.captures_root().mkdir(parents=True, exist_ok=True)
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             for count in (2, 4):
                 results: list = []
@@ -12004,8 +12016,7 @@ def check_origin_gate(checks: Checks) -> None:
 
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             # --- a mutating verb from an origin this server does not know ---------------
             # THE BODY IS HELD RATHER THAN INLINED, because the assertion below is about the
@@ -12284,8 +12295,7 @@ def check_photo_cache(checks: Checks) -> None:
             )
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             status, body, headers = request(port, "GET", "/photo/3/1")
             first = headers.get("ETag")
@@ -12400,8 +12410,7 @@ def check_app_serve(checks: Checks) -> None:
         with isolated_home():
             httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
             port = httpd.server_address[1]
-            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-            thread.start()
+            thread = _spawn_server(httpd)
             try:
                 status, body, headers = request(port, "GET", "/")
                 checks.equal(status, 200, "`GET /` answers with the app")
@@ -18955,8 +18964,7 @@ def check_readings_writer_after_live_export(checks: Checks) -> None:
                 self.wfile.write(body)
 
     portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
-    portal_thread = threading.Thread(target=portal.serve_forever, daemon=True)
-    portal_thread.start()
+    portal_thread = _spawn_server(portal)
 
     os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
         f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
@@ -20427,8 +20435,7 @@ def send_portal():
     previous = {name: os.environ.get(name) for name in keys}
     portal = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Portal)
     portal.daemon_threads = True
-    thread = threading.Thread(target=portal.serve_forever, daemon=True)
-    thread.start()
+    thread = _spawn_server(portal)
     os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
         f"http://127.0.0.1:{portal.server_address[1]}/admin/pricing/downloadexportcsv"
     )
@@ -22054,8 +22061,7 @@ def check_send_review_r4(checks: Checks) -> None:
         (directory / "import.csv").write_text("x\n", encoding="utf-8")
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             file_status, _, _ = request(port, "GET", f"/pipeline/sends/{stamp}/file?name=import.csv")
             back_status, back_body, _ = request(
@@ -22622,8 +22628,7 @@ def check_send_review_r7(checks: Checks) -> None:
         named = {"sku": ARTICUNO_SKU, "price": "30.00", "was": "25.99"}
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             status, body, _ = request(
                 port, "POST", "/pipeline/send",
@@ -23568,8 +23573,7 @@ def check_unsent_copies_worklist(checks: Checks) -> None:
     with isolated_home():
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             run_dir, _ = seam_run(checks, [(3, i, "Articuno", "161", None) for i in range(1, 8)])
             book = corpus.Corpus.read()
@@ -24085,8 +24089,7 @@ def check_pricing_route(checks: Checks) -> None:
     with isolated_home():
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             bare = runs.create("unjoined")
             bare.set(capture_dir="/tmp/nowhere")
@@ -25039,8 +25042,7 @@ def check_connection_close(checks: Checks) -> None:
             )
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         held: list = []
         try:
             # ------------------------------------------------ leg 1: the header, every path
@@ -27076,8 +27078,7 @@ def check_pipeline_routes(checks: Checks) -> None:
 
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             # ---------------------------------------------------------- the money gate
             status, body, _ = request(
@@ -27113,8 +27114,7 @@ def check_pipeline_routes(checks: Checks) -> None:
             with isolated_home():
                 bare_server = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
                 bare_port = bare_server.server_address[1]
-                bare_thread = threading.Thread(target=bare_server.serve_forever, daemon=True)
-                bare_thread.start()
+                bare_thread = _spawn_server(bare_server)
                 try:
                     status, body, _ = request(
                         bare_port, "POST", "/pipeline/identify", payload={"confirm": True}
@@ -28360,8 +28360,7 @@ def check_open_section(checks: Checks) -> None:
 
         httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
         port = httpd.server_address[1]
-        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-        thread.start()
+        thread = _spawn_server(httpd)
         try:
             status, body, _ = request(port, "POST", "/boxes/6/sections", payload={})
             checks.equal(
@@ -28573,8 +28572,7 @@ def check_export_fetch(checks: Checks) -> None:
     Portal.do_POST = _do_POST
 
     portal = http.server.HTTPServer(("127.0.0.1", 0), Portal)
-    portal_thread = threading.Thread(target=portal.serve_forever, daemon=True)
-    portal_thread.start()
+    portal_thread = _spawn_server(portal)
 
     cookie = "TCGAuthTicket_Production=t7-not-a-real-session"
     os.environ["PKMNSCAN_TCG_EXPORT_URL"] = (
@@ -28633,8 +28631,7 @@ def check_export_fetch(checks: Checks) -> None:
         with isolated_home() as home:
             httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
             port = httpd.server_address[1]
-            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-            thread.start()
+            thread = _spawn_server(httpd)
             try:
                 # THE FIXTURE COOKIE IS WHAT THIS BLOCK READS, ASSERTED BEFORE ANYTHING
                 # FETCHES. Everything below sends a Cookie header to a stub and then reads
@@ -34884,7 +34881,7 @@ def check_price_history(checks: Checks) -> None:
             self.wfile.write(body)
 
     agent_server = http.server.HTTPServer(("127.0.0.1", 0), Agent)
-    threading.Thread(target=agent_server.serve_forever, daemon=True).start()
+    _spawn_server(agent_server)
     agent_url = f"http://127.0.0.1:{agent_server.server_address[1]}/"
 
     checks.equal(
@@ -35998,8 +35995,7 @@ def check_request_slots(checks: Checks) -> None:
     gate = threading.Event()
     httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
     port = httpd.server_address[1]
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
+    thread = _spawn_server(httpd)
     capture_server.do_status = instrumented(gate, state)
     try:
         # EVERY THREAD ALIVE BEFORE THE LOAD, so the ones the SERVER makes can be told from the
@@ -36065,8 +36061,7 @@ def check_request_slots(checks: Checks) -> None:
         max_workers=asking, thread_name_prefix="t7-wide"
     )
     httpd._pool = wide  # noqa: SLF001 — the transport is the confound this leg removes
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
+    thread = _spawn_server(httpd)
     capture_server.do_status = instrumented(gate, state)
     # THE WAIT FOR A SLOT, SHORTENED FOR THIS LEG, AND IT IS WHAT MAKES THE READING DETERMINISTIC
     # RATHER THAN TIMED. The first draft of this leg slept half a second after the bound was met
@@ -36182,8 +36177,7 @@ def check_request_slots(checks: Checks) -> None:
         max_workers=asking, thread_name_prefix="t7-wide"
     )
     httpd._pool = wide  # noqa: SLF001 — as leg 2: the pool must not be what refuses
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
+    thread = _spawn_server(httpd)
     capture_server.do_status = instrumented(gate, state)
     # THE TIMEOUT, SHORTENED FOR THE LENGTH OF THIS LEG ONLY. `_dispatch` reads
     # `files.LOCK_TIMEOUT_SECONDS` at call time, so the module attribute is the seam; nothing
