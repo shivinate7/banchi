@@ -1853,6 +1853,35 @@ def agent_installed(root: Path = REPO_ROOT) -> bool:
     return agent_plist_path(root).is_file()
 
 
+def agent_payload(root: Path, label: str) -> dict:
+    """The launch agent's plist as a dict. One home, so the self-test reads what is written."""
+    state = state_dir(root)
+    return {
+        "Label": label,
+        "ProgramArguments": [python_executable(root), str(Path(__file__).resolve()), "run"],
+        "WorkingDirectory": str(root),
+        "RunAtLoad": True,
+        # {SuccessfulExit: false} AND NOT `true`, WHICH IS WHAT LETS `make down` WIN. A process
+        # terminated by a signal is an UNSUCCESSFUL exit to launchd, so `KeepAlive: true` would
+        # restart the very thing `make down` had just stopped, forever. With this, the SIGTERM
+        # handler's clean `sys.exit(0)` is what tells launchd to leave it alone — and a genuine
+        # crash still comes back.
+        "KeepAlive": {"SuccessfulExit": False},
+        "ThrottleInterval": 10,
+        # OWNER RULING 2026-09-28: an unset ProcessType is treated as background and its CPU is
+        # throttled (`man launchd.plist`). Interactive is what a server the owner waits on is.
+        "ProcessType": "Interactive",
+        "StandardOutPath": str(state / SUPERVISOR_LOG),
+        "StandardErrorPath": str(state / SUPERVISOR_LOG),
+        # THE CLASSIC FAILURE OF THIS EXACT PLIST. launchd gives an agent a minimal PATH that
+        # does not include Homebrew or nvm, so `npm` is simply not found and the app half never
+        # starts while the capture server looks fine. Baking the generating shell's PATH is the
+        # fix; its limit is honest and named in the decision entry — if npm comes from nvm, a
+        # `nvm install` moves it and this needs regenerating.
+        "EnvironmentVariables": {"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+    }
+
+
 def do_launch_agent(args: argparse.Namespace) -> int:
     """Start at login, so the bookmark is always live.
 
@@ -1892,29 +1921,8 @@ def do_launch_agent(args: argparse.Namespace) -> int:
         print("  checkout instead. `make up` works here and does not persist.")
         return 1
 
-    state = state_dir(root)
-    state.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "Label": label,
-        "ProgramArguments": [python_executable(root), str(Path(__file__).resolve()), "run"],
-        "WorkingDirectory": str(root),
-        "RunAtLoad": True,
-        # {SuccessfulExit: false} AND NOT `true`, WHICH IS WHAT LETS `make down` WIN. A process
-        # terminated by a signal is an UNSUCCESSFUL exit to launchd, so `KeepAlive: true` would
-        # restart the very thing `make down` had just stopped, forever. With this, the SIGTERM
-        # handler's clean `sys.exit(0)` is what tells launchd to leave it alone — and a genuine
-        # crash still comes back.
-        "KeepAlive": {"SuccessfulExit": False},
-        "ThrottleInterval": 10,
-        "StandardOutPath": str(state / SUPERVISOR_LOG),
-        "StandardErrorPath": str(state / SUPERVISOR_LOG),
-        # THE CLASSIC FAILURE OF THIS EXACT PLIST. launchd gives an agent a minimal PATH that
-        # does not include Homebrew or nvm, so `npm` is simply not found and the app half never
-        # starts while the capture server looks fine. Baking the generating shell's PATH is the
-        # fix; its limit is honest and named in the decision entry — if npm comes from nvm, a
-        # `nvm install` moves it and this needs regenerating.
-        "EnvironmentVariables": {"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
-    }
+    state_dir(root).mkdir(parents=True, exist_ok=True)
+    payload = agent_payload(root, label)
     plist.parent.mkdir(parents=True, exist_ok=True)
     with open(plist, "wb") as handle:
         plistlib.dump(payload, handle)

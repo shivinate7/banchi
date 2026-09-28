@@ -402,6 +402,9 @@ def check_port_split() -> None:
 def main() -> int:
     print("supervisor self-test — the build job, against a throwaway tree (D138)")
     check_port_split()
+    # OWNER RULING 2026-09-28: the launch agent is Interactive, else launchd throttles its CPU.
+    plist = serve_module.agent_payload(serve_module.REPO_ROOT, "x")
+    check(plist.get("ProcessType") == "Interactive", "the launch agent plist is ProcessType Interactive")
     with tempfile.TemporaryDirectory() as tmp:
         where = Path(tmp)
         tree = build_tree(where)
