@@ -56,7 +56,7 @@ PASS, with `cd app && npx tsc --noEmit` at the merge.
 |---|---|---|---|
 | B3 | `ux/pr4b-B3` | A refused markdown apply writes nothing | MERGED (49e12373) after four rounds. The listing file lands last, and a failed rename restores the old price. A Ctrl-C window is named in DEBT48. |
 | F5 | `ux/pr4b-F5` | Cut the excess words. Numbers and names stay. Review's mismatch line becomes "Mismatch: photo reading / matched listing". | Building. Then a review. |
-| D2 | `ux/pr4b-D2` | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | Building. Then a review. |
+| D2 | `ux/pr4b-D2` | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | MERGED (752d638b). The phone overlay sweep now takes the last-mounted layer. That is wrong when a sheet and its dialog mount in one commit ("Check first"). A follow-up picks the highest z-index. |
 | P5 | `ux/pr4b-P5` | Stub D48 and D194 to one line each. Delete debts 5, 6, 18, 28, 35 and 42. Split DEBT27, or delete it if D279 removed its call. | MERGED (afc2ca83). DEBT27 keeps its open half. DEBT6 is kept in part, because a docs-audit row reads five figures from it. |
 | A3 | `ux/pr4b-A3` | The Orders pane becomes `CardPane`, with no Details fold | Building. Then a review. |
 | A6 | `ux/pr4b-A6` | No `Box <n>` fallback in the walk | MERGED (633aff52). |
