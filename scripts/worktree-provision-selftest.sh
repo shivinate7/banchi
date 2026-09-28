@@ -295,7 +295,7 @@ cat > "$tmp/bin/npm" <<'NPM'
 #!/usr/bin/env bash
 if [ "$1" = "--prefix" ] && [ "$3" = "ci" ]; then
   target="$2"
-  sleep 4
+  sleep 1
   mkdir -p "$target/node_modules"
   echo stub > "$target/node_modules/left-pad.js"
   printf 'ran\n' >> "${STUB_LOG:?}"
