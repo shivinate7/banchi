@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, ReactNode } from 'react'
 
 import { PositionLabel } from './PositionLabel'
-import { storeKeyText } from './storeKey'
 import type {
   BoxRecord,
   CardSummary,
@@ -297,6 +296,8 @@ type UndoTarget = {
    *  undo or a remove that finds no section here patches nothing, and the next `GET /boxes`
    *  is what settles it, same as always. */
   sectionDiv: string | null
+  /** The box's stored name, for a tile or a note when there is no rendered label (D259). */
+  boxName: string | null
 }
 
 /** What to call a position on screen — the server's own rendered label, or the record's own
@@ -315,7 +316,7 @@ type UndoTarget = {
  *  `undoNote.position` — draws a bare key whole, because it peels one off a label only when
  *  there are position parts in front of it. */
 function positionText(target: UndoTarget): string {
-  return target.label ?? storeKeyText(target.box, target.index)
+  return target.label ?? boxTitle(target.boxName, target.box)
 }
 
 const BOX_DIGITS = /^[0-9]+$/
@@ -945,14 +946,12 @@ function Track({
  *  a `… · departed · B3 #31` tail and print `#31` — a bare sigil over a key by the other door.
  *  No undo target carries a departed label today, because a card captured this session has not
  *  left the box; the guard costs a character class and does not depend on that staying true. */
-function undoFigure(target: UndoTarget): string {
-  if (target.label !== null) {
-    /* The card number the label names, off the one label reader (`position.ts:placePartsOf`),
-       which reads the server's comma form and the old dotted one alike. */
-    const card = placePartsOf(target.label)?.card ?? null
-    if (card !== null) return `#${card}`
-  }
-  return storeKeyText(target.box, target.index)
+function undoFigure(target: UndoTarget): string | null {
+  /* The card number the label names, off the one label reader (`position.ts:placePartsOf`),
+     which reads the server's comma form and the old dotted one alike. No label, no figure:
+     a store key is never drawn (D259) — the tile names the box instead. */
+  const card = placePartsOf(target.label)?.card ?? null
+  return card === null ? null : `#${card}`
 }
 
 /** `Radiant Rare` → `Radiant` + a de-emphasised ` Rare`. The bare `Rare` keeps its whole
@@ -2657,6 +2656,10 @@ export function CaptureScreen() {
    * device writes into the drawer this one is shooting, the head is now this hand's card, the
    * server refuses it, and the note says which position is undoable. A loud wrong answer in
    * place of a quiet deletion of a card this operator never took. */
+  const boxNameOf = useCallback(
+    (number: number) => boxRecords.find((record) => record.box === number)?.name ?? null,
+    [boxRecords],
+  )
   const undoStack = useMemo<UndoTarget[]>(() => {
     if (sitting.length === 0) {
       if (box === null) return []
@@ -2668,7 +2671,7 @@ export function CaptureScreen() {
       // is no `cid` to address its photograph by. `photoSrc` draws it off the slot.
       return serverNewest < 1
         ? []
-        : [{ box, index: serverNewest, label: null, cid: null, captureId: null, sectionDiv: null }]
+        : [{ box, index: serverNewest, label: null, cid: null, captureId: null, sectionDiv: null, boxName: boxNameOf(box) }]
     }
 
     /* THE WHOLE SITTING, NEWEST FIRST — UN-1, the owner's own example: from capture 36, the
@@ -2680,13 +2683,14 @@ export function CaptureScreen() {
       .map((shot) => ({
         box: shot.card.box,
         index: shot.card.index,
-        label: shot.card.label,
+        label: shot.card.label === '' ? null : shot.card.label,
         // The capture response's own name for the photograph it just wrote (D172).
         cid: shot.card.cid ?? null,
         captureId: shot.card.capture_id,
         sectionDiv: shot.card.section_div ?? null,
+        boxName: boxNameOf(shot.card.box),
       }))
-  }, [box, nextForBox, sitting])
+  }, [box, boxNameOf, nextForBox, sitting])
 
   /* WHETHER THE STRIP NAMES A DRAWER ON EVERY ROW — it does the moment what is IN VIEW spans
    * more than one, and then on every row rather than only the rows that differ from the Box
@@ -3192,8 +3196,8 @@ export function CaptureScreen() {
             // sitting's own copies have to say the same thing or the next press aims at a
             // position that moved out from under it. The rendered label is retired with it —
             // `pipeline/join.py:Position.label` composed it against the OLD index and this
-            // screen still never composes a second one (D67) — so it falls back to the bare
-            // store key, `positionText`'s own fallback for exactly this case.
+            // screen still never composes a second one (D67) — so it falls back to the box's
+            // name, `positionText`'s own fallback for exactly this case (D259).
             .map((shot) =>
               shot.card.box === target.box && shot.card.index > target.index
                 ? {
@@ -3202,7 +3206,7 @@ export function CaptureScreen() {
                       ...shot.card,
                       index: shot.card.index - 1,
                       key: `${shot.card.box}/${shot.card.index - 1}`,
-                      label: storeKeyText(shot.card.box, shot.card.index - 1),
+                      label: '',
                     },
                   }
                 : shot,
@@ -4853,16 +4857,12 @@ export function CaptureScreen() {
                           line grows UPWARD over the photograph and moves no layout at all
                           (D118). The cell's height is the thumbnail's `aspect-ratio`, which
                           this cannot reach.
-                          `Box 3` AND NOT `B3`: the figure beside it is a COUNT out of a
-                          rendered label, and `B3 #40` would be the key spelling wearing a
-                          count — the one confusion D92 exists to end. A word is not a sigil.
-                          The accessible name needed nothing: `positionText` is the server's own
-                          `Box 3 · Section 1 · Card 40`, which has always named the drawer. This
-                          is the visible half catching up with what a screen reader was already
-                          being told. */}
+                          THE BOX'S NAME, never its number or a store key (D259, owner 2026-09-28):
+                          `boxTitle` over the record's stored name, and the card's own number
+                          from the rendered label. A tile with no label names its box alone. */}
                       <span className="capture-undo-pos">
-                        {spansDrawers ? (
-                          <span className="capture-undo-drawer">Box {target.box}</span>
+                        {spansDrawers || undoFigure(target) === null ? (
+                          <span className="capture-undo-drawer">{boxTitle(target.boxName, target.box)}</span>
                         ) : null}
                         {undoFigure(target)}
                       </span>

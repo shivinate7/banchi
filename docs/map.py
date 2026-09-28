@@ -8756,7 +8756,7 @@ COMPONENTS = [
                         "it, and a walk refused partway reporting how far it got in the "
                         "server's own words. Run by `make design-check`.",
                 "governed_by": ["D10", "D41", "D58", "D67", "D101", "D117", "D118", "D136", "D153",
-                                "D164", "D196", "D211", "D218"],
+                                "D164", "D196", "D211", "D218", "D259"],
                 "note": "THE ONLY SPEC THAT CAPTURES, and it is the opposite of "
                         "capture-claims.spec.ts's rule rather than an exception to it: "
                         "`POST /capture` and `DELETE /inventory/...` are both intercepted, so "

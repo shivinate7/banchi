@@ -551,6 +551,10 @@ what `docs/DESIGN.md` refuses in as many words.
 - **Clear (RIG) asks first.** The sentence under the button is gone. Pressing Clear opens the
   kit's `ConfirmSheet` with that sentence and a "Clear" button; Esc cancels, Enter confirms,
   only confirm clears (toast Undo stays). Clear has no key binding, so `SHORTCUTS` is unchanged.
+- **Recent tile follows D259.** The caption names the box through `boxTitle` (on every tile
+  once the strip spans drawers) and the card's number from the rendered label. A tile with
+  no label (a reload, or a card that slid after a remove) shows the box name alone. No
+  `B<n> #<n>` key is drawn or spoken.
 
 ## 6. trigger-seam
 
