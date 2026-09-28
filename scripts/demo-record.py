@@ -241,7 +241,7 @@ class Server:
         env = dict(os.environ)
         env["PKMNSCAN_HOME"] = str(self.home)
         env["PKMNSCAN_PORT"] = str(self.port)
-        # THE RECORDER NEVER COMES BACK (D-demo-stock-images). `server/pipeline_routes.py:
+        # THE RECORDER NEVER COMES BACK (D302). `server/pipeline_routes.py:
         # warm_stock_images` fires its background threads and returns at once for a LIVE
         # server on purpose — a real user's first request after a restart must never wait
         # on a disk read. This sweep reads every route exactly once and bakes whatever it

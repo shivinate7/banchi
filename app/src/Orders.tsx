@@ -2549,7 +2549,7 @@ function isReadyToShip(row: OrderRow): boolean {
   return (row.status ?? '').trim().toLowerCase() === 'ready to ship'
 }
 
-/** THE PICK PANE (`docs/decisions/D-orders-walk-rejoins-inventory.md`, lane A3): Inventory's own
+/** THE PICK PANE (D304, lane A3): Inventory's own
  *  `CardHero.tsx:CardPane`, reused whole rather than forked (`WalkCardPane` is deleted, not
  *  adapted). The hero head carries the "Pick N of M" pill in its chip slot; below the photo goes
  *  every on-hand copy of the card, `CardHero.tsx`'s sibling `CardLocations.tsx:CardLocations`,
@@ -3679,7 +3679,7 @@ function PullStage({
           Skip to the walk
         </button>
         <div className="orders-layout">
-          {/* LAYOUT R (`docs/decisions/D-orders-walk-rejoins-inventory.md`, Q1/Q2): Inventory's
+          {/* LAYOUT R (D304, Q1/Q2): Inventory's
               own `RailFrame`, sticky and fit to the window, its own scroll — never the page's.
               `#/inventory`'s box list is the only other caller. */}
           <RailFrame className="orders-buyers" role="navigation" aria-label="Buyers">

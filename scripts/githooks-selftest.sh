@@ -480,7 +480,7 @@ case "$both_out" in
   *) ok "a slug on a ref that is NOT main — silent" ;;
 esac
 
-echo "  -- every staged image gets the QR scan, wherever it lands (D-every-image-is-scanned) --"
+echo "  -- every staged image gets the QR scan, wherever it lands (D303) --"
 # THE FOLDER LIST IS GONE. Before this, only demo-assets/photos/, demo-assets/extra/photos/
 # and demo-assets/mirror/photos/ were re-decoded by scripts/qr-clear-check.py; every other
 # image was refused outright with NO inspection at all. These cases prove the replacement:

@@ -1,4 +1,4 @@
-## DEBT-code-side-mechanization-left-open — code-side mechanization left open after PR #379 / PR #380
+## DEBT48 — code-side mechanization left open after PR #379 / PR #380
 
 `docs-audit` mechanizes claims written in markdown. Two rounds — PR #379, PR #380,
 2026-09-17 — extended that to claims written in code. Four new `docs-audit` rows landed.

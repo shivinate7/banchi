@@ -1137,7 +1137,7 @@ test('UN-6 — a sale changes nothing but its own row, at 390 (D118, the Opus re
   })
 
   /* AT 390, THE LIST AND THE CARD PANE ARE TWO STOPS, not one screen: `.orders-walk-press`
-     opens the row in a sheet (Q4, `docs/decisions/D-orders-walk-rejoins-inventory.md`) — a
+     opens the row in a sheet (Q4, D304) — a
      phone never draws the pane inline. Desktop draws both at once, which is why the older
      case here never had to do this. THE SHEET MOUNTS ON THE NEXT TICK (`useLeave`'s own
      `useEffect`, kit/index.tsx), so `.browse-card` is awaited rather than read the instant
@@ -2494,7 +2494,7 @@ test('the buyer list is not a scroll box of its own, and no hint sits on its row
 })
 
 /* THE LIST AND THE WALK ARE ON THE PAGE AT 1440, 820 AND 720 (UX-169, UX-194) — LAYOUT R
- * (`docs/decisions/D-orders-walk-rejoins-inventory.md`, Q1). 1440 is the three-column desk
+ * (D304, Q1). 1440 is the three-column desk
  * (buyers | walk | card). 820 and 720 sit inside Orders' own 560-999 mid range (the app shell's
  * own rail collapses to 64px there, D289 rule 3's "720 is a desk" is about a DIFFERENT
  * breakpoint, `#/inventory`'s own 640, and never widens Orders' 1000px one) — Inventory's own
@@ -3443,7 +3443,7 @@ test('a short card says "Pick 1" and "2 short", never a wrong "of 3"', async ({ 
 
   /* THE 390 HALF OF THIS CASE IS REMOVED, NOT ADAPTED (lane A3): it proved the walk-mode
    *  "thin" card row (`.orders-card-thin-meta` and siblings), which `WalkCardPane` drew and
-   *  which is deleted with it (`docs/decisions/D-orders-walk-rejoins-inventory.md`). The
+   *  which is deleted with it (D304). The
    *  pane's own phone shape is lane A5's (Q4: the card in a sheet), which gets its own case. */
 })
 
@@ -4407,7 +4407,7 @@ test('at 390, choosing a buyer enters walk mode, and Back leaves', async ({ page
   /* THE "FIRST ROW IN THE TOP QUARTER" ASSERTION IS REMOVED, NOT ADAPTED (lane A3): it proved
    *  `WalkCardPane`'s own thin phone row (`.orders-card-thin`), which collapsed the pane to one
    *  line so the walk list started near the top. That collapse is deleted with the pane it
-   *  belonged to (`docs/decisions/D-orders-walk-rejoins-inventory.md`). The full pane now
+   *  belonged to (D304). The full pane now
    *  stands above the walk list at this width, until lane A5 gives it its own narrow shape
    *  (Q4: the card in a sheet). */
   await expect(page.locator('.orders-walk-press').first()).toBeVisible()

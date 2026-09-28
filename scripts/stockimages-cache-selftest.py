@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""D-demo-stock-images: `StockImages` answers Riftbound offline from a pre-warmed disk
+"""D302: `StockImages` answers Riftbound offline from a pre-warmed disk
 cache, and answers `None` with no cache at all — never a network call either way (`Market`
 here is given no `fetcher`, so a miss that were to reach the network raises, which this test
 would surface as a crash rather than a silent pass).

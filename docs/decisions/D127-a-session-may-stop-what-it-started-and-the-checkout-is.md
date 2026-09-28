@@ -174,7 +174,7 @@ incidents reproduced rather than asserted about. **Mutation-tested: thirteen gua
 Two sessions can now stand in one checkout. An agent's own wandering session proved it: it lost
 its worktree, carried on inside another session's, and ran a blanket `--confirm` there. That
 sweep did exactly what this entry describes, correctly, and still stopped a process it should
-not have — the owning session's own pre-push check. `D-reap-stops-only-its-own` reads
+not have — the owning session's own pre-push check. `D305` reads
 `OURS` a second way, by WHO started it, not only by WHERE. This entry's own full-checkout sweep
 survives unchanged for the top-level session driving a call by hand. A subagent's own blanket
 sweep is narrowed to its own tag. Read that entry before touching ownership here.

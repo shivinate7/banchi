@@ -6837,7 +6837,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
                     raise
         raise AssertionError(f"corpus_moved kept refusing {sku} after {attempts} attempts")
 
-    # ------------------------------------------------ T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): the restore lost-update race
+    # ------------------------------------------------ T7-RACE (DEBT53): the restore lost-update race
     # `do_pricing_restore`, `PUT /pricing`, `POST /pricing/clear` and both CLI writers
     # (`cli/cmd_join.py`, `cli/cmd_reprice.py`) now share ONE lock, `store/files.py:exclusive`,
     # around their whole read-modify-write. Before this fix, none of them took it, so a
@@ -6889,14 +6889,14 @@ def check_undo_until_built_on(checks: Checks) -> None:
         final = corpus.Corpus.read().answers
         checks.ok(
             "7501" in final and final["7501"].value == "3.25",
-            "T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): PUT /pricing's edit survives a concurrent restore",
+            "T7-RACE (DEBT53): PUT /pricing's edit survives a concurrent restore",
         )
         checks.ok(
             "7500" in final and final["7500"].value == "1.00",
             "and the restore's own answer still lands",
         )
 
-    # ------------------------------------------------ T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): the same race, over a real join
+    # ------------------------------------------------ T7-RACE (DEBT53): the same race, over a real join
     # The identical hazard, over `cli/cmd_join.py`'s own writer (D105's second unguarded
     # writer). `join` reads the corpus TWICE: once at the top, read-only, for the threshold
     # that shapes matching; once again, fresh, right before the write this lane put under the
@@ -6968,10 +6968,10 @@ def check_undo_until_built_on(checks: Checks) -> None:
         final = corpus.Corpus.read().answers
         checks.ok(
             "8888" in final and final["8888"].value == "4.50",
-            "T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): PUT /pricing's edit survives a concurrent join",
+            "T7-RACE (DEBT53): PUT /pricing's edit survives a concurrent join",
         )
 
-    # ------------------------------------------------ T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): reprice apply's own
+    # ------------------------------------------------ T7-RACE (DEBT53): reprice apply's own
     # revision check, read again inside the lock
     # `cli/cmd_reprice.py:_apply`'s `--corpus-revision` guard used to run once, before the
     # import CSV was built and before the `Store().write()` block for the sale posting — both
@@ -7046,7 +7046,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         )
         checks.equal(
             code, 1,
-            "T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): reprice apply refuses when the revision moves during the run, "
+            "T7-RACE (DEBT53): reprice apply refuses when the revision moves during the run, "
             "not only when it has already moved at the start",
         )
         checks.ok(
@@ -7057,13 +7057,13 @@ def check_undo_until_built_on(checks: Checks) -> None:
             DUNSPARCE_SKU not in corpus.Corpus.read().answers,
             "and the markdown's own answer is never written on top of the stale premise",
         )
-        # LANE B3 (DEBT-pricing-corpus-five-unlocked-writers's own nesting risk, closed): the corpus check and the corpus write,
+        # LANE B3 (DEBT53's own nesting risk, closed): the corpus check and the corpus write,
         # the posting, and `import.csv` now share ONE `Store().write()` hold. A refusal inside
         # it runs before any of the three exists, never after two of them are already on disk.
         target = directory / cmd_reprice.IMPORT
         checks.ok(
             not target.is_file(),
-            "T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): and import.csv is never written on that same stale premise",
+            "T7-RACE (DEBT53): and import.csv is never written on that same stale premise",
         )
         conn = db.connect(files.inventory_dir())
         try:
@@ -7091,7 +7091,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
             )
         said2 = said_buf2.getvalue()
         checks.equal(
-            code2, 0, "T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): the ordinary apply, with no race, succeeds",
+            code2, 0, "T7-RACE (DEBT53): the ordinary apply, with no race, succeeds",
         )
         checks.ok(
             "wrote" in said2 and str(target) in said2,
@@ -7112,7 +7112,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
             conn.close()
         checks.ok(landed_postings, "and writes the posting row")
 
-    # ------------------------------------------------ T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): reprice apply's own
+    # ------------------------------------------------ T7-RACE (DEBT53): reprice apply's own
     # write, split the other way — a failure between the temp CSV and the corpus write
     # Round 1 (above) closed the revision race. Re-review found round 1's OWN write order
     # unsafe: `import.csv` went to its final name FIRST, then the corpus, both inside the
@@ -7150,7 +7150,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         real_write_csv = tcgcsv.write_csv
 
         def raising_write_csv(path, header, rows):
-            raise OSError("T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): simulated write failure")
+            raise OSError("T7-RACE (DEBT53): simulated write failure")
 
         from cli import __main__ as cli_entry
 
@@ -7174,7 +7174,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         checks.ok(
             raised is None,
-            "T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): a write failure between the temp CSV and the corpus write "
+            "T7-RACE (DEBT53): a write failure between the temp CSV and the corpus write "
             "refuses cleanly, never a raw crash", repr(raised),
         )
         checks.equal(
@@ -7207,7 +7207,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
             conn.close()
         checks.ok(not exc_postings, "and no posting row lands")
 
-    # ------------------------------------------------ T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): reprice apply's own
+    # ------------------------------------------------ T7-RACE (DEBT53): reprice apply's own
     # write, round 3 — a failure landing the file, AFTER the corpus already held the price
     # Round 2 (above) moved `import.csv`'s own write to a temp name, but still renamed it
     # into place LAST, after the corpus write, on the reasoning that `os.replace` on one
@@ -7254,7 +7254,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         # temp name reproduces the reviewer's exact call.
         def raising_replace(src, dst):
             if Path(src).name.startswith(f".{cmd_reprice.IMPORT}."):
-                raise OSError("T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): simulated rename failure")
+                raise OSError("T7-RACE (DEBT53): simulated rename failure")
             return real_os_replace(src, dst)
 
         from cli import __main__ as cli_entry
@@ -7279,7 +7279,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         checks.ok(
             raised_r3 is None,
-            "T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): a failure landing import.csv, after the corpus write, still "
+            "T7-RACE (DEBT53): a failure landing import.csv, after the corpus write, still "
             "refuses cleanly, never a raw crash", repr(raised_r3),
         )
         checks.equal(
@@ -7313,7 +7313,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
             conn.close()
         checks.ok(not replace_postings, "and no posting row lands")
 
-    # ------------------------------------------------ T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): reprice apply's own
+    # ------------------------------------------------ T7-RACE (DEBT53): reprice apply's own
     # write, round 4 — undo by restoring the corpus, never by deleting a file
     # Round 3 renamed the CSV into place FIRST, so a later corpus-write failure could "undo"
     # by unlinking `target`. Re-review found two holes. (a) `target` is a fixed name — a
@@ -7357,7 +7357,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         )
         with quiet():
             first_code = cli_entry.main(["reprice", "apply", str(worklist_path), "--write"])
-        checks.equal(first_code, 0, "T7-RACE (DEBT-pricing-corpus-five-unlocked-writers) round 4: the first, real apply succeeds")
+        checks.equal(first_code, 0, "T7-RACE (DEBT53) round 4: the first, real apply succeeds")
         earlier_bytes = earlier_target.read_bytes()
         earlier_corpus = dict(corpus.Corpus.read().answers)
 
@@ -7374,7 +7374,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         def raising_replace_r4(src, dst):
             if Path(src).name.startswith(f".{cmd_reprice.IMPORT}."):
-                raise OSError("T7-RACE (DEBT-pricing-corpus-five-unlocked-writers) round 4: simulated rename failure")
+                raise OSError("T7-RACE (DEBT53) round 4: simulated rename failure")
             return real_os_replace(src, dst)
 
         os.replace = raising_replace_r4
@@ -7394,7 +7394,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         checks.ok(
             raised1 is None,
-            "T7-RACE (DEBT-pricing-corpus-five-unlocked-writers) round 4, case 1: a final-replace failure, over an EARLIER "
+            "T7-RACE (DEBT53) round 4, case 1: a final-replace failure, over an EARLIER "
             "real import.csv, still refuses cleanly", repr(raised1),
         )
         checks.equal(code_r4a, 1, "and exits non-zero")
@@ -7425,7 +7425,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
         real_corpus_write = corpus.Corpus.write
 
         def raising_corpus_write(self, path=None):
-            raise OSError("T7-RACE (DEBT-pricing-corpus-five-unlocked-writers) round 4: simulated corpus write failure")
+            raise OSError("T7-RACE (DEBT53) round 4: simulated corpus write failure")
 
         corpus.Corpus.write = raising_corpus_write
         raised2 = None
@@ -7444,7 +7444,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         checks.ok(
             raised2 is None,
-            "T7-RACE (DEBT-pricing-corpus-five-unlocked-writers) round 4, case 2: a corpus-write failure, before the replace "
+            "T7-RACE (DEBT53) round 4, case 2: a corpus-write failure, before the replace "
             "is attempted, still refuses cleanly", repr(raised2),
         )
         checks.equal(code_r4b, 1, "and exits non-zero")
@@ -7473,7 +7473,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         def raising_unlink_r4(self, *a, **kw):
             if self.name.startswith(f".{cmd_reprice.IMPORT}."):
-                raise OSError("T7-RACE (DEBT-pricing-corpus-five-unlocked-writers) round 4: simulated unlink failure")
+                raise OSError("T7-RACE (DEBT53) round 4: simulated unlink failure")
             return real_unlink(self, *a, **kw)
 
         os.replace = raising_replace_r4
@@ -7495,7 +7495,7 @@ def check_undo_until_built_on(checks: Checks) -> None:
 
         checks.ok(
             raised3 is None,
-            "T7-RACE (DEBT-pricing-corpus-five-unlocked-writers) round 4, case 3: the replace AND the cleanup unlink both "
+            "T7-RACE (DEBT53) round 4, case 3: the replace AND the cleanup unlink both "
             "fail, still no raw crash", repr(raised3),
         )
         checks.equal(code_r4c, 1, "and exits non-zero")

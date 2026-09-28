@@ -1,4 +1,4 @@
-## DEBT-git-and-gh-cli-traps — git and gh CLI traps hit from this checkout
+## DEBT50 — git and gh CLI traps hit from this checkout
 
 Drafted from the 2026-09-27 memory migration. Each trap below was hit for real, on this
 machine, in this checkout, and cost a session real time before it was named.

@@ -213,7 +213,7 @@ while IFS= read -r path; do
 done <<< "$staged"
 
 # EVERY STAGED IMAGE GETS THE QR SCAN, WHEREVER IT LANDS (owner's ruling, 2026-09-27,
-# D-every-image-is-scanned). This used to trust a hand-typed folder list — demo-assets/photos/,
+# D303). This used to trust a hand-typed folder list — demo-assets/photos/,
 # demo-assets/extra/photos/ and demo-assets/mirror/photos/ — and re-decode only inside it,
 # refusing every other image outright with NO inspection at all. The outcome this protects
 # was never about which folder a photograph sits in: a live unredeemed code card is a bearer

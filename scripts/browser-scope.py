@@ -124,7 +124,7 @@ SCOPE = (
     {
         "path": "scripts/reap_mark.py",
         "why": "Named in the `design-check` recipe: it stamps the suite's own process with "
-               "this session's id before `suite-lock.py` starts it (D-reap-stops-only-its-own). "
+               "this session's id before `suite-lock.py` starts it (D305). "
                "A bug here does not change what the browser draws, but it runs before the "
                "suite does, on the same recipe line, so a change to it changes what runs.",
     },

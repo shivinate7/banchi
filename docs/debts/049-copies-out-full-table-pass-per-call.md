@@ -1,4 +1,4 @@
-## DEBT-copies-out-full-table-pass-per-call — `_copies_out` and `_committed_keys` cost a full-table pass per call
+## DEBT49 — `_copies_out` and `_committed_keys` cost a full-table pass per call
 
 `cli/resolve.py:_copies_out` walks every listing — 492 on the owner's store. It runs
 `positions_for_sku` plus `copies_not_sold`, per SKU. `store/rows.py:Rows.where` is a pass

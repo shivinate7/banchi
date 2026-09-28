@@ -1,4 +1,4 @@
-## DEBT-guard-or-probe-wrong-green — A guard or probe can pass for the wrong reason
+## DEBT51 — A guard or probe can pass for the wrong reason
 
 Drafted from the 2026-09-27 memory migration. A catalog of shapes. Each produced a
 confident wrong "green" in this repo. Kept together because the failure mode repeats, across

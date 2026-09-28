@@ -130,4 +130,4 @@ Q3's full location detail on every pick row needs Inventory's own width. Layout 
 walk its own column and puts the buyer list back in Inventory's rail frame. The buyer list
 now scrolls on its own again, sticky, inside that rail. This reverses HOR-33 above, which
 ruled one page scroll for the buyer list, the walk and the page together.
-D-orders-walk-rejoins-inventory records the owner's answers in full, on 2026-09-27.
+D304 records the owner's answers in full, on 2026-09-27.

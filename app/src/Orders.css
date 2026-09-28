@@ -9,7 +9,7 @@
 .orders-store-controls { display: inline-flex; align-items: center; gap: var(--bn-2); }
 
 /* ---- the layout: buyers, the walk, the card — LAYOUT R (UX-169, UX-194, D274, amended by
-   `docs/decisions/D-orders-walk-rejoins-inventory.md`, lane A5).
+   D304, lane A5).
    THE WALK GETS THE HEIGHT: its column carries the page's own scroll (UX-201). The buyer rail is
    the one thing that scrolls on its own (Q2, amending D274's HOR-33) — `RailFrame`, the same
    sticky, fit-to-window frame `#/inventory`'s box list uses (D289 rule 2). The card pane is
@@ -141,7 +141,7 @@
    The verdict hides there too: while one buyer is walked, the store's total is not what the hand
    needs.
 
-   THE CARD PANE'S OWN NARROW SHAPE IS LANE A5'S — `docs/decisions/D-orders-walk-rejoins-inventory.md`,
+   THE CARD PANE'S OWN NARROW SHAPE IS LANE A5'S — D304,
    Q4: the walk with the card in a sheet on a phone. Under 560px of column `Orders.tsx` never
    mounts `.orders-cardcol` at all (a JS width read, `narrow` — a portal cannot be placed by a
    container query), so this block's own `'card' 'walk'` areas below draw nothing into `card`
@@ -378,7 +378,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-walk-empty { padding: var(--bn-3); font-size: var(--bn-fs-md); }
 
 /* ---- every here-copy, under its own row (A4, point 3) --------------------------------
-   `docs/decisions/D-orders-walk-rejoins-inventory.md`. `CardLocations` is reused whole, head
+   D304. `CardLocations` is reused whole, head
    off — this block is only the seam `mock.css` already measured: its own `copies` container
    (so a narrow walk column gets the same reflow `#/inventory`'s rail does, never the width
    `.orders-walk` happens to have at the desk), a tighter row gap than the pane's own list, and
@@ -389,7 +389,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .walk-pick-where .card-locations-identity-box { white-space: nowrap; }
 
 /* ---- the card pane: `CardHero.tsx:CardPane` and `CardLocations.tsx:CardLocations`, reused
-   whole (`docs/decisions/D-orders-walk-rejoins-inventory.md`, lane A3) ---------------------
+   whole (D304, lane A3) ---------------------
    Their own CSS lives in `CardHero.css` and `CardLocations.css`. This screen adds nothing of
    its own beyond `.walk-pick-where` above: no `.orders-card-*` class draws any more. */
 

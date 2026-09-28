@@ -1,4 +1,4 @@
-## D-reap-stops-only-its-own — A checkout can hold two sessions, so the reaper stops one of them
+## D305 — A checkout can hold two sessions, so the reaper stops one of them
 
 **Built 2026-09-27, after an incident D43 did not anticipate.** An agent's own worktree
 vanished mid-session. It carried on inside another session's worktree. The two trees look

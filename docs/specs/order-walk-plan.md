@@ -1167,7 +1167,7 @@ that. It only says the choice is free.
 ## 16. The walk rejoins Inventory's own components — the owner's answers, 2026-09-27
 
 `docs/reviews/ux-2026-09-23/orders-a/PLAN.md` names where the built screen (§13, §14, §15)
-drifted from D220 and D274. `D-orders-walk-rejoins-inventory` is the decision record. This
+drifted from D220 and D274. `D304` is the decision record. This
 section points there for the design and adds the one argument that belongs in this spec: the
 sort key.
 

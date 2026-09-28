@@ -327,7 +327,7 @@ test('only the newest pull in the walk offers Undo — the older one reads Sold'
   const wire = await open(page)
 
   /* `.card-locations-row` is `CardLocations.tsx`'s own copy row, reused whole
-   * (`docs/decisions/D-orders-walk-rejoins-inventory.md`, lane A3) — the old `.orders-card-copy`
+   * (D304, lane A3) — the old `.orders-card-copy`
    * pane forked its own rows, and that fork is deleted. */
   const rows = page.locator('.browse-card .card-locations-row')
   /* THE SLOT HOLDS EVERY STATE (D118): the Mark sold icon, the Undo icon and the Sold pill all
@@ -437,7 +437,7 @@ test('the walk\'s card pane carries no listing-correction control — Inventory 
 test('a walk row fills the pane with the hero head, the photo, and every on-hand copy — the chosen one first, no Details fold', async ({
   page,
 }) => {
-  /* PLAN.md's point 4 test, answered by `docs/decisions/D-orders-walk-rejoins-inventory.md`'s
+  /* PLAN.md's point 4 test, answered by D304's
    * Q6 (the owner: "we don't need details on this screen") rather than PLAN.md's own
    * recommendation — the whole Details fold is never drawn here. `twoCopyPlan()` puts two
    * on-hand copies on the current row's take, both `here: true`, `3/21` first. */
@@ -566,7 +566,7 @@ test('every walk row draws its own here-copies, and Mark sold on one sends that 
   })
 
   // EVERY WALK ROW'S OWN LOCATION DETAIL: box, section and card, neighbours and the ruler,
-  // reused whole from `CardLocations` (`docs/decisions/D-orders-walk-rejoins-inventory.md`).
+  // reused whole from `CardLocations` (D304).
   const walkRows = page.locator('.orders-walk-list .card-locations-row')
   await expect(walkRows).toHaveCount(2)
   for (const row of [walkRows.nth(0), walkRows.nth(1)]) {

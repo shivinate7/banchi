@@ -1,4 +1,4 @@
-## D-orders-walk-rejoins-inventory — The Orders walk reuses Inventory's own rows, and the rail keeps its own scroll
+## D304 — The Orders walk reuses Inventory's own rows, and the rail keeps its own scroll
 
 The owner's answers, 2026-09-27, to the questions `docs/reviews/ux-2026-09-23/orders-a/
 PLAN.md` raised. That file carries the argument: the drift findings against D220 (Orders is

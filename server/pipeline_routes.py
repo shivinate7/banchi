@@ -198,7 +198,7 @@ def warm_stock_images() -> None:
     it having run.
 
     `PKMNSCAN_STOCK_IMAGES_SYNC` JOINS THE THREADS THIS STARTS, BEFORE RETURNING —
-    `scripts/demo-record.py` sets it (D-demo-stock-images). Nowhere else does: a LIVE
+    `scripts/demo-record.py` sets it (D302). Nowhere else does: a LIVE
     server must never make the first request after a restart wait on a disk read, however
     fast, which is the whole reason `warm()` is fire-and-forget. The demo recorder is a
     ONE-SHOT process that reads each route exactly once and never comes back — a cold
@@ -5416,7 +5416,7 @@ def do_pricing_corpus_write(payload: dict) -> dict:
     # THE STALE-WRITE REFUSAL. Absent means "did not read one", which is the terminal user
     # editing the file and PUTting it back, and it is allowed — the guard is for a client that
     # DID read a revision and is now behind, which is the only case that can silently destroy
-    # somebody else's write. CHECKED AGAIN BELOW, INSIDE THE LOCK (DEBT-pricing-corpus-five-unlocked-writers): a check made here,
+    # somebody else's write. CHECKED AGAIN BELOW, INSIDE THE LOCK (DEBT53): a check made here,
     # before this call waits for another writer's lock, reads a revision that is about to go
     # stale the moment it waits — the check would pass, the wait would happen, and the write
     # would still land on top of whatever the lock-holder just wrote.
@@ -5452,7 +5452,7 @@ def do_pricing_corpus_write(payload: dict) -> dict:
     # replaces it — the same posture `do_pipeline_worklist` takes. Every answer then reads as
     # new and is stamped, which is the honest answer when there is no `before` to compare
     # against.
-    # THE STORE LOCK, THE ONE PRIMITIVE, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT-pricing-corpus-five-unlocked-writers). `book`
+    # THE STORE LOCK, THE ONE PRIMITIVE, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT53). `book`
     # above is a document this call already parsed from whatever was on disk a moment ago; the
     # "before" read that decides what gets stamped, and the write that replaces the file, must
     # happen as one unit or a concurrent writer's edit — `POST /pricing/clear`, `POST
@@ -5603,7 +5603,7 @@ def do_pricing_clear(payload: dict) -> dict:
     scope = _clear_scope(payload)
     window = _clear_window(payload)
 
-    # THE STORE LOCK, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT-pricing-corpus-five-unlocked-writers): the corpus read that
+    # THE STORE LOCK, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT53): the corpus read that
     # decides what is clearable, the write that removes it, and the clears file that records
     # the undo, as one unit — the same primitive `PUT /pricing` and `POST /pricing/restore`
     # now take, never a second lock. `_clear_revision_guard` runs INSIDE it, checked against
@@ -5696,7 +5696,7 @@ def do_pricing_restore(payload: dict) -> dict:
     """
     answers = payload.get("answers")
     stored = None
-    # THE STORE LOCK, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT-pricing-corpus-five-unlocked-writers): resolving which clear is
+    # THE STORE LOCK, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT53): resolving which clear is
     # meant, the corpus read, the per-SKU decision, the write, and the drop, as one unit — the
     # same primitive `PUT /pricing` and `POST /pricing/clear` now take, never a second lock.
     # `_clear_revision_guard` runs INSIDE it, for the same reason `do_pricing_clear` moved it
@@ -6055,7 +6055,7 @@ def market_cache_dir() -> Path:
 # write, so a fetch any of them made answers all the others with no network call.
 #
 # `PKMNSCAN_STOCK_IMAGES_SYNC` ALSO RAISES THE TTL TO `CATALOG_TTL_SECONDS`, a second
-# finding this same decision entry records (D-demo-stock-images). `StockImages`'s default
+# finding this same decision entry records (D302). `StockImages`'s default
 # `TCGCSV_TTL_SECONDS` is one hour — right for a live server, where a stale answer costs one
 # more tcgcsv request. `_fetch_tcgcsv`'s
 # own disk read TREATS AN HOUR-OLD ENTRY AS A MISS, exactly like a cold one, and schedules a

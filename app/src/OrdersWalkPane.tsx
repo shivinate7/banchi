@@ -11,7 +11,7 @@
  * copy of the solver's reach, because the press and its undo act on one physical copy; the list
  * folds them by take. `here` is the solver's own flag and this file does not recompute it.
  *
- * THE CARD PANE MOVED OUT (`docs/decisions/D-orders-walk-rejoins-inventory.md`, lane A3): what
+ * THE CARD PANE MOVED OUT (D304, lane A3): what
  * used to be `WalkCardPane` here is now `Orders.tsx`'s own use of `CardHero.tsx:CardPane` and
  * `CardLocations.tsx:CardLocations`, reused whole rather than forked — the walk-only pane and
  * its `orders-card-*` classes are deleted, not adapted. `pickFigureOf` and `RowAction` are
@@ -758,7 +758,7 @@ export function WalkList({
                       {/* A4: EVERY here-COPY, AS INVENTORY DRAWS IT (the owner's Q3, "full
                        * detail on every row") — box, section and card, the neighbours, the
                        * strip and the ruler, and Mark sold, reused whole from `CardLocations`
-                       * rather than forked (`docs/decisions/D-orders-walk-rejoins-inventory.md`).
+                       * rather than forked (D304).
                        * `head={false}` draws the rows alone: the heading, the stats and the SKU
                        * line already sit above, in this same button. FINDING #16 (the Opus
                        * review round) is answered by THIS, not by a row-level Undo of its own

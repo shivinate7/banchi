@@ -83,14 +83,14 @@ original bytes — byte-identical, not merely fact-preserving.
 ## Index
 
 ```
-DEBT1  The reverse direction: five checks walk docs→code and never back
-DEBT2  The map's reach
-DEBT3  The claim chain
-DEBT4  Criteria and evidence: nine ways a row goes quiet
-DEBT6  ~~Measured against one rig, or not at all~~ — CLOSED 2026-09-09, on the owner's word
-DEBT7  The preview crops the card, and the one check that looks at a photo cannot see it
-DEBT8  Recorded and correctly unfixed
-DEBT9  The sigil check matches text, so a renamed local walks past it
+DEBT1 The reverse direction: five checks walk docs→code and never back
+DEBT2 The map's reach
+DEBT3 The claim chain
+DEBT4 Criteria and evidence: nine ways a row goes quiet
+DEBT6 ~~Measured against one rig, or not at all~~ — CLOSED 2026-09-09, on the owner's word
+DEBT7 The preview crops the card, and the one check that looks at a photo cannot see it
+DEBT8 Recorded and correctly unfixed
+DEBT9 The sigil check matches text, so a renamed local walks past it
 DEBT10 An order arriving mid-pass is walked but never counted, and a tab outlives its sitting
 DEBT11 The capture server bounds concurrent requests, not threads, and a Playwright fleet is what finds out
 DEBT12 Ten decision entries are over budget on purpose, and the budget was the thing that had drifted
@@ -124,5 +124,10 @@ DEBT44 pokemontcg.io is deprecated (ends 2027-03-01), and `pipeline/stockimages.
 DEBT45 no page lists what each test protects, so the owner cannot confirm the tests are current
 DEBT46 a search with a typo finds nothing, and no near match is offered
 DEBT47 ~~the demo's network guard blocks the stock images the demo now loads on purpose~~ — CLOSED 2026-09-27, fixed as recommended
-DEBT-pricing-corpus-five-unlocked-writers ~~the pricing corpus has five unlocked writers~~ — CLOSED 2026-09-27, fixed as recommended
+DEBT48 code-side mechanization left open after PR #379 / PR #380
+DEBT49 `_copies_out` and `_committed_keys` cost a full-table pass per call
+DEBT50 git and gh CLI traps hit from this checkout
+DEBT51 A guard or probe can pass for the wrong reason
+DEBT52 Claude Code multi-agent and worktree session traps
+DEBT53 ~~the pricing corpus has five unlocked writers~~ — CLOSED 2026-09-27, fixed as recommended
 ```

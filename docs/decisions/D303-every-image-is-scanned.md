@@ -1,4 +1,4 @@
-## D-every-image-is-scanned — Every staged image gets the QR scan, and a missing scanner refuses
+## D303 — Every staged image gets the QR scan, and a missing scanner refuses
 
 The owner's ruling, 2026-09-27: every image gets the QR scan.
 

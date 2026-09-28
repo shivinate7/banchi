@@ -74,7 +74,7 @@ make up             # the server, detached — one process (D138). ARGS=--restar
 make reap           # stop what THIS session started, and nothing else (D127). Previews with
                     #   no argument. ARGS="--confirm", "port:N --confirm", "match:X --confirm"
                     #   or "pid:N --confirm" target one process, only if it is ours.
-                    #   NARROWED 2026-09-27 (D-reap-stops-only-its-own): a subagent's bare
+                    #   NARROWED 2026-09-27 (D305): a subagent's bare
                     #   --confirm stops only pids tagged with ITS OWN session id; the
                     #   orchestrator's bare --confirm is unchanged.
 make janitor-install # copy the sweep and reap to the user's home Claude bin directory.

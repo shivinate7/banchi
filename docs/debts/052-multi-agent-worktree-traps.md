@@ -1,4 +1,4 @@
-## DEBT-multi-agent-worktree-traps — Claude Code multi-agent and worktree session traps
+## DEBT52 — Claude Code multi-agent and worktree session traps
 
 Drafted from the 2026-09-27 memory migration. Working in this checkout, with multiple
 concurrent sessions and worktrees, hit each trap below for real.

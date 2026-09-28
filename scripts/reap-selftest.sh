@@ -717,7 +717,7 @@ fi
 
 # --------------------------------------------------------------- ownership: whose, not only where
 echo
-echo "  -- ownership: two sessions can stand in one checkout (D-reap-stops-only-its-own) --"
+echo "  -- ownership: two sessions can stand in one checkout (D305) --"
 
 # THE 2026-09-27 INCIDENT ITSELF: a wandering session's checkout is another session's, and a
 # bare blanket sweep must not clear what it finds there merely because none of it is tagged yet.

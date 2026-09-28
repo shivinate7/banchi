@@ -258,7 +258,7 @@ class StockImages:
         # `(game, set_name)` pair, all sharing this one `_market`, so two pairs warmed at
         # once could corrupt each other's read of it (a `RuntimeError` from a dict mutated
         # mid-iteration, uncaught by the `except` below because it is neither
-        # `PriceHistoryError` nor `KeyError`) — found by `D-demo-stock-images`'s own build:
+        # `PriceHistoryError` nor `KeyError`) — found by `D302`'s own build:
         # every pair warmed at once left EVERY entry `None` forever, because a `_warm_one`
         # that raises never reaches its own `finally`-shaped cleanup and the pair stays
         # `_pending` (never retried). Background work only, never the request thread `warm`
@@ -276,7 +276,7 @@ class StockImages:
                 category_id = self._market.category_id(product_line)
                 group_id = self._market.group_id(category_id, set_name)
                 # SAME SLUG `pipeline/pricehistory.py:Market.products` ALREADY USES for
-                # this exact URL (D-demo-stock-images) — the archive sweep's own disk
+                # this exact URL (D302) — the archive sweep's own disk
                 # cache (`cli/cmd_pricearchive.py`) already answers this on the owner's
                 # Mac, so this reads that primitive rather than warming a second, private
                 # copy of it.

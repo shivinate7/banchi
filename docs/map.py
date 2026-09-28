@@ -1487,7 +1487,7 @@ COMPONENTS = [
                                        "opens a socket. Never raises: a join miss or an "
                                        "unreachable catalogue both answer `None`.",
                                "governed_by": ["D8", "D15", "D25", "D35", "D49", "D62", "D254",
-                                               "D299", "D301", "D-demo-stock-images"],
+                                               "D299", "D301", "D302"],
                                "tested_by": ["T7"]},
             "selection.py": {"does": "WHICH CARDS A PRESS IS OVER — one object, read by the"
                                      "wire and the CLI alike, and the drawer is a TERM in it "
@@ -2280,7 +2280,7 @@ COMPONENTS = [
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
                 "governed_by": ["D11", "D14", "D16", "D18", "D24", "D44", "D47", "D58", "D70",
-                                "D92", "D295", "D-every-image-is-scanned"],
+                                "D92", "D295", "D303"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; a sibling "
                         "hook's arrival is caught by `hook roster` since 2026-09-05. "
@@ -2521,7 +2521,7 @@ COMPONENTS = [
                 # D136 is the gate this composes with, D18 is why it writes nothing, D16 is
                 # why the list has a reader before it has a filter.
                 "governed_by": ["D16", "D18", "D136", "D141", "D196", "D215", "D261", "D275",
-                                "D284", "D-reap-stops-only-its-own"],
+                                "D284", "D305"],
                 "note": "THE LIST IS DERIVED AND HAS A READER: `make docs-audit`'s `browser "
                         "scope` row reconciles SCOPE against Playwright's config, Vite's "
                         "config, every code string in app/tests and app/src naming a tracked "
@@ -2599,7 +2599,7 @@ COMPONENTS = [
                 # D43 and D53 join with D139: the cases turn on a linked worktree having its own
                 # store, and on the primary checkout being the one the live server is built from.
                 "governed_by": ["D18", "D42", "D43", "D53", "D139", "D151", "D158", "D176",
-                                "D-every-image-is-scanned"],
+                                "D303"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -2830,11 +2830,11 @@ COMPONENTS = [
                 # the neighbouring notion it deliberately shares reasoning with rather than
                 # duplicating. D18 keeps its self-test off the commit path: it signals. D175 is
                 # the neighbouring "whose is this" question this file now answers more finely
-                # than D175's own any-session reading. D-reap-stops-only-its-own is the
+                # than D175's own any-session reading. D305 is the
                 # 2026-09-27 amendment itself.
                 "governed_by": ["D169", "D18", "D43",
                                 "D53", "D88", "D111", "D127", "D175",
-                                "D-reap-stops-only-its-own"],
+                                "D305"],
             },
             "reap_mark.py": {
                 "does": "stamps the process a launcher is about to become with the session that "
@@ -2855,7 +2855,7 @@ COMPONENTS = [
                         "`CLAUDE_CODE_SESSION_ID`, read directly rather than re-deriving D175's "
                         "Bash-wrapper fragment, which only ever answered ANY session. Never "
                         "installed to `~/.claude/bin` and never imported outside this checkout.",
-                "governed_by": ["D43", "D53", "D127", "D138", "D175", "D-reap-stops-only-its-own"],
+                "governed_by": ["D43", "D53", "D127", "D138", "D175", "D305"],
             },
             "cid-selftest.py": {
                 "does": "proves D172's card name and the photograph store filed under it by "
@@ -3340,7 +3340,7 @@ COMPONENTS = [
                         "pass over, and a real nested worktree. Mutation-tested: twenty-two "
                         "guards removed one at a time, all caught, the naming rule among them.",
                 "governed_by": ["D18", "D43", "D53", "D122", "D127", "D138", "D157", "D169",
-                                "D-reap-stops-only-its-own"],
+                                "D305"],
             },
             "silent-write-guard.py": {
                 "does": "the PreToolUse hook on Bash that refuses a git WRITE whose own output "
@@ -4109,7 +4109,7 @@ COMPONENTS = [
                 # once, deliberately, with a re-measured T1.
                 "governed_by": ["D15", "D16", "D23", "D39", "D40", "D90", "D96", "D105", "D123",
                                 "D194", "D200", "D218", "D226", "D229", "D245", "D248", "D271", "D277",
-                                "D280", "D284", "D-orders-walk-rejoins-inventory"],
+                                "D280", "D284", "D304"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "
@@ -5084,7 +5084,7 @@ COMPONENTS = [
                 # D70 is the QR test the photograph step reuses from demo-photos.py. D61 is
                 # why the shipping export is written fresh rather than read (the store holds
                 # no address at all). D216 is why the recording runs offline.
-                "governed_by": ["D61", "D70", "D193", "D216", "D295", "D-demo-stock-images"],
+                "governed_by": ["D61", "D70", "D193", "D216", "D295", "D302"],
             },
             "demo-histories.py": {
                 "does": "`make demo-histories`: records every demo card's price history, all "
@@ -5130,7 +5130,7 @@ COMPONENTS = [
                 # the main checkout is the owner's live process over their real inventory.
                 "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D86", "D88",
                                 "D96", "D159", "D172", "D183", "D193", "D213", "D216", "D220",
-                                "D227", "D269", "D295", "D-demo-stock-images"],
+                                "D227", "D269", "D295", "D302"],
             },
             "demo-record-resume-selftest.py": {
                 "does": "`WorkArea`/`snapshot_key`, the resume cache PR 4B lane M added to "
@@ -5204,7 +5204,7 @@ COMPONENTS = [
                         "writes, which is what makes copying that directory into the demo "
                         "mirror (`demo-mirror.py`'s `SIDE_DIRS`) enough on its own. No "
                         "subprocess, no network, no write outside a `TemporaryDirectory`.",
-                "governed_by": ["D-demo-stock-images"],
+                "governed_by": ["D302"],
             },
             "extract_real_facts.py": {
                 "does": "reads a READ-ONLY COPY of the owner's store (never the owner's own "
@@ -5716,7 +5716,7 @@ COMPONENTS = [
                                 "D145", "D147", "D156", "D159", "D163", "D165", "D166", "D168",
                                 "D170", "D172", "D174", "D180", "D188", "D189", "D196", "D212",
                                 "D216", "D219", "D225", "D227", "D236", "D254", "D258", "D273",
-                                "D277", "D291", "D293", "D301", "D-demo-stock-images"],
+                                "D277", "D291", "D293", "D301", "D302"],
                 "tested_by": ["T7"],
             },
             "shipping_routes.py": {
@@ -8189,7 +8189,7 @@ COMPONENTS = [
                                                "D192", "D193", "D194", "D195", "D196", "D203",
                                                "D209", "D212", "D218", "D220", "D221", "D259",
                                                "D271", "D274", "D285", "D296",
-                                               "D-orders-walk-rejoins-inventory"]},
+                                               "D304"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8197,7 +8197,7 @@ COMPONENTS = [
                                "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69",
                                                "D113", "D114", "D117", "D118", "D123", "D193",
                                                "D195", "D196", "D203", "D212", "D221", "D270",
-                                               "D274", "D289", "D-orders-walk-rejoins-inventory"]},
+                                               "D274", "D289", "D304"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -8245,7 +8245,7 @@ COMPONENTS = [
                                            "selecting a box opens it, and `WalkList` draws the "
                                            "plan's boxes and sections, one row per physical "
                                            "pick (`here: true` copy). THE CARD PANE MOVED OUT "
-                                           "(lane A3, `D-orders-walk-rejoins-inventory`): "
+                                           "(lane A3, `D304`): "
                                            "`Orders.tsx:OrderPickPane` composes it from "
                                            "`CardHero.tsx:CardPane` and "
                                            "`CardLocations.tsx:CardLocations`, reused whole. "
@@ -8260,7 +8260,7 @@ COMPONENTS = [
                                                    "D97", "D116", "D118", "D132", "D164", "D171",
                                                    "D181", "D193", "D209", "D212", "D218", "D220",
                                                    "D252", "D263", "D279",
-                                                   "D-orders-walk-rejoins-inventory"]},
+                                                   "D304"]},
             "src/Shipping.tsx": {"does": "`#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE "
                                          "HUB — `<OrdersHub stage=\'ship\'/>`. The stage itself "
                                          "is src/OrdersShipStage.tsx, which `Orders.tsx` "
@@ -9470,7 +9470,7 @@ COMPONENTS = [
                                                      "D193", "D194", "D196", "D203", "D209", "D212",
                                                      "D218", "D220", "D221", "D263", "D274", "D285",
                                                      "D289", "D296",
-                                                     "D-orders-walk-rejoins-inventory"]},
+                                                     "D304"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "
@@ -9493,7 +9493,7 @@ COMPONENTS = [
                                                  "`make design-check` runs it.",
                                          "governed_by": ["D57", "D58", "D113", "D118", "D136",
                                                          "D164", "D212", "D220", "D252",
-                                                         "D-orders-walk-rejoins-inventory"]},
+                                                         "D304"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "

@@ -27,11 +27,11 @@ PR 5's work now lives inside PR 4B. Owner: `bring everything that was PR5 into P
 | D1 | Re-centered the lock glyph, and removed Pricing's 1px nudge | Review PASS |
 | E | An Orders sale no longer jumps the screen, and Hide picked folds on its own press | Review PASS |
 | M | The demo recorder resumes, and scrubs each route before it caches it | Re-review PASS after a FAIL |
-| B2 | DEBT-pricing-corpus-five-unlocked-writers: every writer of `prices.json` takes the store lock, with four revision checks inside it | Re-review PASS after a FAIL |
+| B2 | DEBT53: every writer of `prices.json` takes the store lock, with four revision checks inside it | Re-review PASS after a FAIL |
 | F1 | Cards born by join or emit keep their game, plus a one-off repair script with a logged event | Review PASS |
 | F2 | Sales falls back to the stock photo, Pokemon sealed included | Re-review PASS after a FAIL |
 | C | `emit --cap` refuses a card with a pending copy, DEBT37 closed, D7 amended and names DEBT24 | Re-review PASS after a FAIL |
-| A0 | The decision slug `D-orders-walk-rejoins-inventory`, amending D220 and D274, and spec §16 | Orchestrator check, key fixed |
+| A0 | The decision slug `D304`, amending D220 and D274, and spec §16 | Orchestrator check, key fixed |
 | A1 | The walk draws stops densest first (cards to pick), and the box name breaks a tie | Review PASS |
 | A2a | `CardPane` and one hero head, moved out of `BoxBrowse.tsx` | Review PASS, 0-pixel diff |
 | A2b | `RailFrame`, moved out of `BoxBrowse.tsx` | Review PASS, 0-pixel diff |
@@ -124,7 +124,7 @@ Logged, waiting for the owner's word:
 Before PR 4B merges:
 
 - Main is red. The docs audit's `id claims` row fails on main's unclaimed slug
-  `D-demo-stock-images`, because PR #476 merged without its claim. The owner: `Fold it into PR 4B`.
+  `D302`, because PR #476 merged without its claim. The owner: `Fold it into PR 4B`.
   So PR 4B's merge claims it. Check at merge time that `make merge` claims a slug main already holds.
 - The final head: linting only (Vale retired 2026-09-27), then the PR, green CI, and `make merge`.
 
@@ -188,7 +188,7 @@ Lane E and A:
 
 Lane B2 and C:
 
-- B2, DEBT-pricing-corpus-five-unlocked-writers: `yes build now`.
+- B2, DEBT53: `yes build now`.
 - C, DEBT37: `Send a sonnet agent to see what's left on Debt 37 and how we can fix it`. Then the
   owner asked why it overshoots at all. The owner proposed, in paraphrase, that a cap works
   only once the store has read TCGplayer's live count. Then the owner chose the precise rule:

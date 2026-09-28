@@ -69,7 +69,7 @@ SIDE_DIRS = (".exports", ".live")
 # `cli/cmd_pricearchive.py`'s own cache directory, `inventory/.market-cache` — the freshest,
 # most complete tcgcsv cache on the owner's Mac, since the archive sweep runs often. Copied
 # to `.cache/market` at the HOME ROOT (`server/pipeline_routes.py:market_cache_dir()`,
-# D-demo-stock-images), which is where `STOCK_IMAGES`' own `Market` looks — the same
+# D302), which is where `STOCK_IMAGES`' own `Market` looks — the same
 # directory `scripts/demo-record.py:warm_history_cache` already treats as the demo home's
 # one Market cache, for price histories.
 # Copying it is what lets the offline recorder answer Riftbound/One Piece `image_url` at

@@ -3246,7 +3246,7 @@ def check_id_claims(report: Report) -> None:
 # slug entirely and writes the number itself — a `docs/decisions/D<n>-*.md` or
 # `docs/debts/<n>-*.md` file with a real number in its own name, D140's exact violation
 # ("never allocate a numbered record on a branch. Write a slug. Claim the number at merge.").
-# That is how `DEBT-pricing-corpus-five-unlocked-writers` collided: lane B2 added
+# That is how `DEBT53` collided: lane B2 added
 # `docs/debts/048-...md` straight, and `scripts/claim-ids.py` independently planned the
 # SAME number for a pending slug.
 #
