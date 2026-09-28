@@ -5,8 +5,8 @@
 RED FIRST: every case here failed before `scripts/catalog-index.py` and `pipeline/catalog.py`
 existed — there was no index to build and no reader to open one. Run against a small,
 synthetic two-set vendor tree under a temp directory, never against the real 26 MB snapshot,
-so this is fast enough to run on every `make check` — build-order-step-9's own guard rather
-than a re-assertion that the owner's real catalog looks a particular way.
+so this is fast and proves build-order-step-9's own piece 2, rather than a re-assertion that
+the owner's real catalog looks a particular way.
 
 Cases:
   - a clean build joins cards to sets BY FILENAME and composes the same join_key
@@ -17,7 +17,7 @@ Cases:
   - the composed join_key matches `number_index_key` applied by hand, so the two paths this
     entry's decision argues can never drift are asserted to agree rather than assumed to
 
-Never in the git hook (D18 — it writes a temp tree). In `make check` via `catalog-index-selftest`.
+Never in the git hook (D18 — it writes a temp tree). Not wired into `make check` (D206).
 """
 
 from __future__ import annotations

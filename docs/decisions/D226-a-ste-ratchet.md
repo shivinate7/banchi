@@ -1,8 +1,6 @@
 ## D226 — A prose ratchet gets a reader, and bytes are not the ruler
 
-The owner believed this repo already mechanized prose concision. It did not. `make vale`
-carries two style rules. It gates nothing (D74, D18). `entry budget` counts characters. That
-is a size proxy, not a prose-tightness ruler.
+The owner believed this repo already mechanized prose concision. It did not. Vale carried two style rules and gated nothing (D74, D18; Vale retired 2026-09-27). `entry budget` counts characters. That is a size proxy, not a prose-tightness ruler.
 
 ### The two problems, kept separate
 
@@ -208,10 +206,7 @@ total. This is an argued gap, not a hidden one.
 
 ### Scope
 
-This entry does not change `make vale`. It does not change `ENTRY_BUDGET`'s value or its
-row's behavior. Both stay exactly as they are. Nothing here rewrites the prose backlog by
-hand. A pull request that lowered the count by editing entries would hide whether the
-mechanism works.
+This entry does not change Vale's behavior (Vale is retired 2026-09-27). It does not change `ENTRY_BUDGET`'s value or its row's behavior. Both stayed as they were. Nothing here rewrites the prose backlog by hand. A pull request that lowered the count by editing entries would hide whether the mechanism works.
 
 ### Governed by
 

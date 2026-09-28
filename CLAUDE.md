@@ -120,8 +120,8 @@ make offenders-prune # a generator that only DELETES (D18). It removes the stale
                     #   git's rename detection says moved. It never adds an entry. It reads
                     #   with the rows' own functions. Previews. ARGS=--write applies. On no
                     #   hook. `make offenders-prune-selftest` proves it, NOT in `make check`.
-make harness        # all TEN verification tests (T1-T9 and T11); the Stop hook runs it at
-                    #   turn end. RECOUNT from harness/run.py's TESTS list. THERE IS NO T10:
+make harness        # all TEN verification tests (T1-T9 and T11). RECOUNT from harness/run.py's
+                    #   TESTS list. THERE IS NO T10:
                     #   that id belongs to the shelved IMB encoder (DEBT26), and this repo
                     #   renumbers its own ids and never another branch's.
 make up             # THE server, detached — ONE PROCESS (D138). Serves app/dist/ and the API
@@ -247,7 +247,7 @@ make check          # harness + docs-audit + claim-stale + revert-guard +
                     #   screen-freshness-selftest + sigil-check +
                     #   css-var-check + css-var-check-selftest + token-literal-check +
                     #   kit-adoption + ignore-check +
-                    #   lint + vale + typecheck + audit-self-test +
+                    #   lint + typecheck + audit-self-test +
                     #   mutate-anchors +
                     #   githooks-selftest + merge-selftest + revert-selftest +
                     #   claim-selftest + decisions-selftest + debts-selftest +
@@ -310,7 +310,7 @@ make kit-adoption-selftest  # that checker, on in-memory fixtures in both direct
 make port-slots-selftest  # two throwaway trees forced into one port slot, a real Vite and a
                     #   real Playwright in each. A run in one tree refuses the other's server.
                     #   After a claim, each tree holds its own slot. Writes under `mktemp -d`.
-make ci-check       # `check` minus `vale`, the slice a fresh clone can prove.
+make ci-check       # subset of check for a fresh clone.
 make catalog-refresh  # STEP 9 PIECE 1 (D15): re-clone pokemon-tcg-data, refresh
                     #   vendor/pokemon-tcg-data/. Writes. Never gates. ARGS=--dry-run.
 make catalog-index  # STEP 9 PIECE 2: build catalog.sqlite. Cards join to sets BY FILENAME,

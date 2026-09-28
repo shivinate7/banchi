@@ -12,8 +12,8 @@ in five other places:
 1. **Idle time.** T7 spends about 30% of its run while its test servers stop.
 2. **Whole-tree rescans on every commit.** Three docs-audit rows read the whole tree even when
    the commit touches one file. They are about 26 of the 29 to 34 seconds a commit waits.
-3. **Standing noise.** `make vale` prints 1,668 errors that nobody acts on. Every commit prints
-   30 advisory questions that nobody answers.
+3. **Standing noise.** Vale printed 1,668 errors that nobody acted on. Every commit printed
+   30 advisory questions that nobody answered. Vale is retired 2026-09-27 (L3).
 4. **Guards over things nobody runs.** The old invented demo seed no longer ships (D295). The
    heartbeat last ran on 2026-09-16.
 5. **Process rows that block honest commits.** About 60 of the 109 docs-audit rows protect prose
@@ -124,7 +124,7 @@ owner sees, what reaches TCGplayer, or what reaches a buyer.
 
 | # | Item | Protects | Argument | Decision it amends, quoted |
 |---|---|---|---|---|
-| C1 | `vale` out of `make check` and `ci-check` | process | It cannot fail. It costs 4.9s. It prints 1,668 errors nobody reads. The global STE gate covers new prose. `make vale` stays on demand. | D161 lists it among "every check that reads the code and says something about it." |
+| C1 | `vale` out of `make check` and `ci-check` | process | It cannot fail. It costs 4.9s. It prints 1,668 errors nobody reads. The global STE gate covers new prose, retired 2026-09-27. | D161 lists it among "every check that reads the code and says something about it." |
 | C2 | `claim-stale` out of `make check` and `ci-check` | process | 10.2s. `make merge` already runs `claim-ids.py --stale` (`scripts/merge-pr.py`). D140's title: the number is claimed at the merge. | D161, the same list. |
 | C3 | `entry budget` advisory row | process | 28 standing questions on every run. Nobody acts on them. A guard that goes red when nothing is wrong is spent. | D60: "`entry budget` is **advisory**, printing and allowing." |
 | C4 | `demo-determinism-selftest`, the demo.yml determinism step, `demo-freshness` | process | They test the invented seed. Nothing ships from it now. On Q5. | D295: "`make demo-determinism` still tests the OLD invented seed's determinism, not the mirror's." |
@@ -202,7 +202,7 @@ Each group gives one argument. Every member keeps its current place.
 
 | # | A defect that could slip through | What still catches it |
 |---|---|---|
-| C1 vale | A new spelling or style error in markdown | The global STE gate on every Write and Edit. `make vale` on demand. |
+| C1 vale | A new spelling or style error in markdown | The global STE gate on every Write and Edit. Vale, retired 2026-09-27. |
 | C2 claim-stale | A branch learns late that main took its number | `make merge` runs the same check. The `id claims` row. |
 | C3 entry budget | A decision entry grows long | No automatic check. It printed 28 questions and nobody acted on one, so nothing is lost. |
 | C4 demo seed guards | The invented seed stops being deterministic | No check. Nothing ships from it (D295). The mirror is committed, so it cannot drift between builds. |

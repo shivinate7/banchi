@@ -53,7 +53,6 @@ NEEDS = {
     "lsof": "lsof, which macOS ships. It is how a pid's working directory and a port's "
             "holders are read; absent, reap-selftest's port cases cannot be posed at all.",
     "sh": "any POSIX sh.",
-    "vale": "the vale binary — `brew install vale`. Absent, the target reports and exits 0.",
     "ruff": "ruff, installed by `make venv` from requirements.txt (D82). RUFF_GUARD fails "
             "loudly rather than letting the target no-op.",
 }
@@ -375,26 +374,6 @@ CHECKS = (
         "why_off_commit_path": "It runs node, and the git hook runs a bare python3.",
         "gates": True,
         "governed_by": ("D18", "D82"),
-    },
-    {
-        "target": "vale",
-        "runs": "git ls-files '*.md' | xargs vale --no-exit",
-        "asserts": "Prose style over every TRACKED markdown file (D74). IT NEVER GATES, twice "
-                   "over: `--no-exit` swallows its findings' status, and a missing binary "
-                   "reports and exits 0 so `make check` still runs on a machine without it.",
-        "needs": ("vale",),
-        "writes": "",
-        "commit_path": False,
-        "why_off_commit_path": "vale is a third-party Go binary, and the pre-commit hook runs a "
-                               "bare python3 (D18). A commit gate needing software PRESENT "
-                               "would make the three opsec rules depend on it too.",
-        "why_off_ci": "the binary is not on the GitHub runner, and it never gated anyway — "
-                      "`--no-exit` swallows its status. `make ci-check` is what a fresh clone "
-                      "can PROVE, so a target that proves nothing there is left out rather "
-                      "than run for the shape of it. The one declared difference between the "
-                      "two recipes, and `check registry` refuses a second without a sentence.",
-        "gates": False,
-        "governed_by": ("D18", "D60", "D74"),
     },
     {
         "target": "typecheck",
@@ -1490,7 +1469,7 @@ def table() -> str:
         )
     lines += [
         "",
-        "  gates   a finding here fails `make check`. `vale` deliberately does not.",
+        "  gates   a finding here fails `make check`.",
         "  commit  scripts/githooks/pre-commit runs it, so it decides whether a commit",
         "          proceeds. D18: nothing that WRITES may ever be in this column.",
         "",

@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -84,7 +84,6 @@ help:
 	@echo "                    (D-text-shape-checks). Never a gate. ARGS=\"--route '#/x'\"."
 	@echo "  make orient       which component renders the thing, and what selects it."
 	@echo "                    ARGS=<file.tsx> [--name <Component>]. Derived, never stored."
-	@echo "  make vale         prose style over every tracked .md. Needs vale; never gates."
 	@echo "  make audit-history  which docs-audit checks ever fired. Diagnostic; never gates."
 	@echo "  make audit-self-test  the checker checks itself. In \`check\`, never in the git hook."
 	@echo "  make githooks-selftest  main's guard, proved in a throwaway repo. Never in the git hook."
@@ -247,7 +246,7 @@ help:
 	@echo "                    MAIN TREE ONLY. ARGS=--remove takes it away."
 	@echo "  make reap         stop what THIS session started, and nothing else. Previews;"
 	@echo "                    ARGS=--confirm presses. ARGS=\"port:5484 --confirm\" for one port."
-	@echo "  make ci-check     what a fresh clone can prove: everything in check but vale."
+	@echo "  make ci-check     subset of check for a fresh clone without vale."
 	@echo "  make janitor-install  copy the sweep to ~/.claude/bin so every repo's hooks can reach it."
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
@@ -263,7 +262,7 @@ help:
 	@echo "                    screen-freshness-selftest + sigil-check +"
 	@echo "                    css-var-check + css-var-check-selftest + token-literal-check +"
 	@echo "                    kit-adoption + ignore-check +"
-	@echo "                    lint + vale + typecheck + audit-self-test +"
+	@echo "                    lint + typecheck + audit-self-test +"
 	@echo "                    mutate-anchors +"
 	@echo "                    githooks-selftest + merge-selftest + revert-selftest +"
 	@echo "                    claim-selftest + decisions-selftest + debts-selftest +"
@@ -663,7 +662,6 @@ check:
 	@$(MAKE) --no-print-directory kit-adoption
 	@$(MAKE) --no-print-directory ignore-check
 	@$(MAKE) --no-print-directory lint
-	@$(MAKE) --no-print-directory vale
 	@$(MAKE) --no-print-directory typecheck
 	@$(MAKE) --no-print-directory audit-self-test
 	@$(MAKE) --no-print-directory mutate-anchors
@@ -1832,47 +1830,6 @@ design-check-quiet:
 #
 # No `--fix`, here or in the npm script, for either language. `check` below runs this
 # target, and D18 keeps anything that writes off the path that decides whether work is done.
-# Vale, the prose linter, over EVERY tracked markdown file.
-#
-# NOT on the commit path and it must not go there. scripts/githooks/pre-commit runs a bare
-# python3 with nothing installed (D18), and vale is a third-party Go binary — a commit gate
-# that needs software present would make the three opsec rules depend on it too. `make check`
-# is invoked by a person, which is where port-agreement and the audit's self-test already sit.
-#
-# It answers the STYLE half of D60 and none of the size half; `entry budget` in
-# scripts/docs-audit.py is what knows an entry costs tokens to load.
-#
-# IT RAN OVER FOUR FILES UNTIL 2026-08-30 AND .vale.ini ALWAYS SAID `[*.md]`. The target was
-# the narrow half of that disagreement, so docs/specs/ and docs/design-refs/ were never linted
-# at all: 35 AmericanSpelling errors had accumulated there, none of them reachable by any check
-# in this repo. D60's rule is written about the four docs a session loads, and that is an
-# argument about which prose must be DENSE — never an argument for leaving the rest unspelled.
-# The file list is `git ls-files` so a new document is linted the day it is committed rather
-# than the day somebody remembers to add it here.
-#
-# A missing binary reports and does not fail, so `make check` still runs on a machine
-# without it — the same shape NPM_GUARD takes, minus the exit.
-#
-# ONE RECIPE LINE, DELIBERATELY. Split across two — a guard line ending `exit 0`, then a
-# bare `git ls-files | xargs vale` — the guard's `exit 0` only ends ITS OWN shell; each `@`
-# line is a separate invocation, and make advances to the next line on any zero exit, guard
-# or not. So the message printed, the target reported nothing wrong, and `xargs` ran anyway
-# with no `vale` to run — `xargs: vale: No such file or directory`, exit 127, `make check`
-# failing on the one row this comment says cannot fail it. Measured, not hypothetical: that
-# is the exact output a binary-less machine produced. One `if` keeps the run inside the
-# branch that only exists once the guard has already passed.
-vale:
-	@echo "NOT A GATE: prose style is reported and never blocks (D18). --no-exit swallows"
-	@echo "  the status, and a missing binary reports and exits 0 — so this slot in"
-	@echo "  \`make check\` cannot fail, and a reader of a green run should not count it"
-	@echo "  among the ones that can. \`make docs-audit\`'s \`check registry\` row pairs this"
-	@echo "  line against the entry's \`gates: False\` in both directions."
-	@if command -v vale >/dev/null; then \
-		git ls-files '*.md' | xargs vale --no-exit; \
-	else \
-		echo "vale is not installed — prose style unchecked."; \
-		echo "  Fix: brew install vale"; \
-	fi
 
 lint:
 	$(NPM_GUARD)

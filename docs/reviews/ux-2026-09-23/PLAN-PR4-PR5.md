@@ -15,7 +15,7 @@ PR 5's work now lives inside PR 4B. Owner: `bring everything that was PR5 into P
   grant and the model cap. This session's grants are in the log below.
 - Cadence (owner, 2026-09-26): each lane gets one review, and a re-review only after a FAIL. A
   reviewer never re-runs a suite that the builder ran green at the same head. A lane merge gets
-  only `cd app && npx tsc --noEmit`. The final head gets `make vale` only, then the PR, green CI,
+  only `cd app && npx tsc --noEmit`. The final head gets linting only (Vale retired 2026-09-27), then the PR, green CI,
   and the merge. CI is the only browser gate before main.
 - A test that asserts a superseded rule goes to the owner. Nobody rewrites it silently.
 
@@ -93,7 +93,7 @@ Before PR 4B merges:
 
 - Main is red. The docs audit's `id claims` row fails on main's unclaimed slug
   `D-demo-stock-images`. A small records PR claims it.
-- The final head: `make vale`, then the PR, green CI, and `make merge`.
+- The final head: linting only (Vale retired 2026-09-27), then the PR, green CI, and `make merge`.
 
 After PR 4B merges:
 
@@ -144,7 +144,7 @@ Grants, process-only:
 - Opus for the test-audit review: `an opus agent reviews the corpus made and plans with me the resolution`.
 - Merge grant: the owner named this session an Orchestrator. It merges PR 4B with `make merge`
   once CI is green.
-- The final head gets `make vale` only, not a full `make check`: `Agreed and proceed`.
+- The final head gets linting only (Vale retired 2026-09-27), not a full `make check`: `Agreed and proceed`.
 
 Lane E and A:
 
