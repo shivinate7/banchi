@@ -1174,6 +1174,7 @@ _FRAGMENT_RE = re.compile(
 )
 
 
+@lru_cache(maxsize=None)
 def _is_served_port(number: int) -> bool:
     """A bare `:N` that names a port this repo serves, read from `server/ports.py` (the constants
     the code emits, never a copy). Unreadable means no port is exempt: the row fails loud."""
@@ -1226,7 +1227,7 @@ def comment_units(path: Path, text: str) -> List[Tuple[int, Optional[str]]]:
                             spans.append(body[0].value)
             for const in spans:
                 for row in range(const.lineno, (const.end_lineno or const.lineno) + 1):
-                    found[row] = found.get(row, "") + " " + text.splitlines()[row - 1]
+                    found[row] = found.get(row, "") + " " + lines[row - 1]
     else:
         pattern = r"/\*.*?\*/" if path.suffix == ".css" else r"/\*.*?\*/|(?<!:)//[^\n]*"
         for m in re.finditer(pattern, text, re.S):
@@ -1276,7 +1277,13 @@ def line_anchor_hits(docs: Sequence[Path], code: Sequence[Path] = ()) -> List[Tu
         units = list(enumerate(read(doc).splitlines(), start=1))
         hits += anchor_hits_in_units(units, doc, tops)
     for path in code:
-        hits += anchor_hits_in_units(comment_units(path, read(path)), path, tops)
+        text = read(path)
+        # A file whose raw text holds none of the three shapes has no hit in its comments
+        # either; skipping it keeps the row cheap, because tokenizing 440 files is not.
+        if not (_LINE_ANCHOR_RE.search(text) or _BARE_FILE_ANCHOR_RE.search(text)
+                or _FRAGMENT_RE.search(text)):
+            continue
+        hits += anchor_hits_in_units(comment_units(path, text), path, tops)
     return hits
 
 
