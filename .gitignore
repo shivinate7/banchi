@@ -161,6 +161,15 @@ dist-demo
 # ignore-check: bare on purpose, see the note at the top of this file
 demo-mirror
 
+# `scripts/demo-record.py`'s own resume cache (PR 4B lane M): one route's answer per file,
+# keyed by a digest of the store it was recorded from, so a killed sweep can pick up where
+# it left off instead of starting from zero. Lives OUTSIDE `home` (`demo`, above) on purpose
+# — `demo-mirror.py`'s `build()` recreates `home` from its snapshot on every run, so a cache
+# inside it would be wiped by the very rebuild the owner reruns after a kill. Holds only
+# what the recorder already answers with (route bodies), never the store itself.
+# ignore-check: bare on purpose, see the note at the top of this file
+.demo-record-work
+
 # A worker's own throwaway snapshot and build home, never committed: the same real-data
 # hazard `demo-mirror` above names, one directory over.
 # ignore-check: bare on purpose, see the note at the top of this file

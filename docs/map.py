@@ -5060,13 +5060,34 @@ COMPONENTS = [
                         "sweeps every GET the client can build against the parameter space "
                         "the store actually holds, and writes app/demo/bundle.json plus the "
                         "photographs Vite will bundle. Records 200s only — a 404 here means "
-                        "the path is not a read, not that a read failed.",
+                        "the path is not a read, not that a read failed. RESUMABLE (PR 4B "
+                        "lane M): each route's answer lands in a gitignored work area "
+                        "(`.demo-record-work/<key>/`, `WorkArea`) the instant it is taken, "
+                        "keyed by a digest of the store's own content — a killed sweep picks "
+                        "up where it left off instead of starting from zero, and a changed "
+                        "store starts fresh because its key differs.",
                 # D43 is the port and the store, both derived rather than assumed: this
                 # spawns its own server precisely so it never touches `make up`, which on
                 # the main checkout is the owner's live process over their real inventory.
-                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D96", "D159",
-                                "D172", "D183", "D213", "D216", "D220", "D227", "D269", "D295",
-                                "D-demo-stock-images"],
+                "governed_by": ["D13", "D43", "D52", "D61", "D62", "D70", "D76", "D86", "D88",
+                                "D96", "D159", "D172", "D183", "D213", "D216", "D220", "D227",
+                                "D269", "D295", "D-demo-stock-images"],
+            },
+            "demo-record-resume-selftest.py": {
+                "does": "`WorkArea`/`snapshot_key`, the resume cache PR 4B lane M added to "
+                        "`demo-record.py`, proved with a `FakeServer` rather than a real "
+                        "server or store: a route already on disk is never asked for again, "
+                        "a killed-then-resumed sweep's finished bundle is byte-identical to "
+                        "a clean one (which is also why the shipping-batch POST's random "
+                        "id is routed through the same skip check, not reissued on resume), "
+                        "a corrupted route file is never counted as recorded and is "
+                        "re-fetched exactly once, and a changed store hashes to a different "
+                        "key and starts over.",
+                # D18: writes nothing but its own throwaway temp directories, spends
+                # nothing (no network, no subprocess, no real store), so it is safe on any
+                # path. Not wired into `make check`, on `demo-record-selftest.py`'s own
+                # precedent — run by hand.
+                "governed_by": ["D18", "D86", "D88"],
             },
             "demo-record-selftest.py": {
                 "does": "Server's stdout-drain, proved on a bare subprocess rather than by "
