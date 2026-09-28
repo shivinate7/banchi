@@ -18,8 +18,9 @@ share one lock, `store/files.py:exclusive`, around their whole read-modify-write
 twice, through `store/session.py:Store.write()`, for the SKU table and the queues. `flock` is
 not re-entrant. A second acquisition from the same process, on a fresh handle, blocks until
 the first releases. Both existing acquisitions close before the corpus lock opens. Nothing
-nests. `cli/cmd_reprice.py` has the same shape: one `Store().write()` block for the posting,
-closed, then the corpus lock.
+nests. `cli/cmd_reprice.py` USED TO have the same shape: one `Store().write()` block for the
+posting, closed, then the corpus lock. See "the fourth guard's own nesting risk, closed"
+below — lane B2's re-review found it, and lane B3 closed it the same round.
 
 **Four revision guards, all moved inside the lock.** `_clear_revision_guard` (used by
 `do_pricing_clear` and `do_pricing_restore`), the same shape inline in
@@ -29,13 +30,25 @@ for another writer's lock. Then it wrote. It was checking a revision already sta
 its wait ended. The check passed. The wait happened. The write still landed on top of
 whatever the lock's holder had just written.
 
-The fourth guard, in `cmd_reprice.py`, was found by lane B2's strict review. The first three
-were already fixed and closed by then. CSV building and a `Store().write()` block for the sale
-posting both sit between its early check and the corpus lock. That is the same shape as the
-other three. The guard keeps its early check, for the fast, ordinary-case refusal before any
-byte is built. It gained a second, fresh check too, right before the write. That second check
-is the one that counts. It cannot undo the CSV or the posting, both already on disk by then.
-Its refusal names that, rather than falsely claiming nothing was written.
+**The fourth guard's own nesting risk, closed.** Lane B2's strict review found the fourth
+guard, in `cmd_reprice.py`. The first three were already fixed and closed by then. CSV
+building and a `Store().write()` block for the sale posting both sat between its early check
+and the corpus lock. Lane B2's own fix gave it a second, fresh check too, right before the
+corpus write. But by then `import.csv` and the posting were already on disk. The CSV build and
+the `Store().write()` block both ran before that second check. A revision that moved in that
+gap made the second check refuse the corpus answer alone. The file and the posting stayed,
+already sent to a corpus that had refused them.
+
+Lane B2's own re-review, the same round, named the cause. `cmd_reprice.py`'s
+`files.exclusive(files.inventory_dir())`, taken for the corpus half, is `Store().write()`'s
+OWN lock, taken a second time. `flock` is not re-entrant across two open file descriptions,
+even in one process — the same fact the nesting-risk paragraph above already states for
+`cmd_join.py`. The two happened not to deadlock, only because the first `Store().write()`
+closed, and released the flock, before the second opened it again.
+
+Lane B3 closed it. One `Store().write()` hold now covers everything. Inside it, in order: the
+fresh revision check, the corpus write, the posting, `import.csv` last. A refusal now writes
+none of the three. `git log` on `cli/cmd_reprice.py` has both rounds.
 
 **The check.** Three harness cases in `harness/tests/t7_store_and_seams.py`
 (`check_undo_until_built_on`), named `T7-RACE (DEBT48)`.
@@ -52,9 +65,15 @@ concurrent corpus edit. On every call after, it answers the real, moved revision
 the command refuses once the second check runs, where the first alone would have let it
 through.
 
+Lane B3 extended this case. After the refusal, no `import.csv` exists. No posting row landed.
+The corpus holds exactly the concurrent edit. None of the three is left half-written, which is
+what the old nesting once allowed. A separate run, with no race, checks the ordinary case: all
+three land.
+
 Proven RED against a `.bak` copy of the pre-fix files, never `git checkout`. All three cases
-failed on the code as it stood before each fix. Proven GREEN against the fix. `make harness`
-passes, all ten tests.
+failed on the code as it stood before each fix. The extended assertions also failed against
+lane B2's own fix, before lane B3's. Proven GREEN against the fix. `make harness` passes, all
+ten tests.
 
 **The finding, as it was recorded.** Lane B2
 (`docs/reviews/ux-2026-09-23/PLAN-PR4-PR5.md`) named one race. `do_pricing_restore` read the

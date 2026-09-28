@@ -893,14 +893,57 @@ def _apply(args, say) -> int:
         seen.add(sku)
 
     target = path.parent / IMPORT
-    tcgcsv.write_csv(target, tcgcsv.CANONICAL_HEADER, rows)
 
-    # THIS IS THE ROUND THE OWNER ASKED ABOUT — a SKU marked down a second, third or fourth
-    # time. `edit.was` is the price this markdown replaces, already in hand from the
-    # worklist's own manifest read, so `replaced` is never a guess or a second store lookup
-    # (D243). `run` names the markdown by its own folder stamp, since a
-    # reprice apply has no run directory of its own.
+    # ONE LOCK, HELD ONCE, AND THE REVISION IS REFUSED BEFORE ANYTHING IS WRITTEN (fixes
+    # the defect DEBT48's own fix left behind). `Store().write()` already takes
+    # `files.exclusive(files.inventory_dir())` inside itself (`store/session.py:Store.write`)
+    # — the SAME flock this command used to take a SECOND time, over the same directory, for
+    # the corpus half. `flock` is not re-entrant across two open file descriptions even in one
+    # process, so the old code — a `Store().write()` block for the posting, THEN a fresh
+    # `files.exclusive(files.inventory_dir())` for the corpus check-and-write — was one hold
+    # nested inside a lookalike of itself. It happened not to deadlock only because the first
+    # `with` closed (releasing the flock) before the second opened it again. That gap is
+    # exactly where `import.csv` and the posting were already on disk before the ONE check
+    # that matters could still refuse the corpus answer — the defect this fixes.
+    #
+    # So there is now one hold, and everything moves inside it: the fresh revision check,
+    # the corpus write, the posting, and `import.csv` last. A refusal here writes NONE of the
+    # three. THIS IS THE CHECK THAT COUNTS (DEBT48): the one above only saves the work of
+    # building a file this command may still refuse to write; this one is taken immediately
+    # before the write, so nothing after it can move the file first.
     with Store().write() as writable:
+        if offered_revision:
+            current = corpus.revision()
+            if current and offered_revision != current:
+                say("")
+                say("REFUSED — the pricing file changed since this was read: another tab, "
+                    "another command, or an edit on disk. Nothing is written. Re-read and "
+                    "try again.")
+                return 1
+
+        # THE ANSWER GOES IN THE CORPUS, KEYED BY SKU (D86). Without this the next `emit`
+        # over another copy of the same card re-lists it at the rule price and quietly
+        # undoes the markdown — the marked-down price is the store's price for that SKU from
+        # now on, not a property of this file. `at` is what the ratchet reads next time: a
+        # SKU answered inside the window is refused as `priced_recently` unless `--again`.
+        #
+        # THE STAMP GOES THROUGH `corpus.stamp_answers` RATHER THAN BEING SET HERE, so that
+        # this command and `PUT /pricing` date an answer by one rule. Setting `at` inline was
+        # the only place in the repo that ever wrote it, which is why `priced_recently` meant
+        # "marked down recently" while D100 claimed it meant "priced recently, by any hand".
+        before = corpus.Corpus.read()
+        book = corpus.Corpus.read()
+        stamp = master.now()
+        for edit in application.edits:
+            book.answers[edit.sku] = corpus.Answer(value=str(edit.now))
+        corpus.stamp_answers(before, book, stamp)
+        book.write()
+
+        # THIS IS THE ROUND THE OWNER ASKED ABOUT — a SKU marked down a second, third or
+        # fourth time. `edit.was` is the price this markdown replaces, already in hand from
+        # the worklist's own manifest read, so `replaced` is never a guess or a second store
+        # lookup (D243). `run` names the markdown by its own folder stamp, since a reprice
+        # apply has no run directory of its own.
         for edit in application.edits:
             writable.postings.record(
                 sku=edit.sku,
@@ -910,48 +953,10 @@ def _apply(args, say) -> int:
                 replaced=tcgcsv.format_price(edit.was) if edit.was is not None else None,
             )
 
-    # THE ANSWER GOES IN THE CORPUS, KEYED BY SKU (D86). Without this the next `emit` over
-    # another copy of the same card re-lists it at the rule price and quietly undoes the
-    # markdown — the marked-down price is the store's price for that SKU from now on, not a
-    # property of this file. `at` is what the ratchet reads next time: a SKU answered inside
-    # the window is refused as `priced_recently` unless `--again`.
-    #
-    # THE STAMP GOES THROUGH `corpus.stamp_answers` RATHER THAN BEING SET HERE, so that this
-    # command and `PUT /pricing` date an answer by one rule. Setting `at` inline was the only
-    # place in the repo that ever wrote it, which is why `priced_recently` meant "marked down
-    # recently" while D100 claimed it meant "priced recently, by any hand".
-    # THE STORE LOCK, AROUND THE WHOLE READ-MODIFY-WRITE (DEBT48): the same primitive
-    # `store/session.py:Store.write()` already takes, reused here rather than a second lock,
-    # because this command reads `inventory/prices.json` and writes it back without one — this
-    # runs as a subprocess of `POST /pipeline/markdowns/<stamp>/apply` (D105), so a request to
-    # `PUT /pricing` landing between the two reads below used to be silently overwritten.
-    with files.exclusive(files.inventory_dir()):
-        # THE REVISION CHECK, AGAIN, NOW INSIDE THE LOCK — the one that counts. The check
-        # above ran before the CSV was built and before the `Store().write()` block for the
-        # posting, both of which take real time, and a caller that waited through either of
-        # those was checking a revision that could have gone stale on the wait. This one is
-        # fresh: nothing after it can move the file before this call's own write lands.
-        #
-        # THE WORDING DIFFERS FROM THE CHECK ABOVE ON PURPOSE. By this point `import.csv` and
-        # the sale posting are already on disk — refusing here cannot undo either, and saying
-        # "nothing is written" would be false. Only the corpus answer, the part this specific
-        # check protects, is still refused.
-        if offered_revision:
-            current = corpus.revision()
-            if current and offered_revision != current:
-                say("")
-                say("REFUSED — the pricing file changed again while this command ran. "
-                    f"{target} and the sale record for it are already written; only the "
-                    "corpus answer is refused, so the next emit would price this SKU at the "
-                    "rule price instead of this markdown. Re-read and re-apply to fix that.")
-                return 1
-        before = corpus.Corpus.read()
-        book = corpus.Corpus.read()
-        stamp = master.now()
-        for edit in application.edits:
-            book.answers[edit.sku] = corpus.Answer(value=str(edit.now))
-        corpus.stamp_answers(before, book, stamp)
-        book.write()
+        # LAST, so a refusal above — or an exception from the corpus write or the posting —
+        # never leaves `import.csv` on disk with nothing backing it in the corpus or the
+        # posting ledger.
+        tcgcsv.write_csv(target, tcgcsv.CANONICAL_HEADER, rows)
 
     lines = [
         f"markdown applied {stamp}",

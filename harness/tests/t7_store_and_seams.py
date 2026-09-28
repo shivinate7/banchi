@@ -7035,13 +7035,62 @@ def check_undo_until_built_on(checks: Checks) -> None:
             "not only when it has already moved at the start",
         )
         checks.ok(
-            "REFUSED" in said and "pricing file changed again" in said,
-            "and names why, distinctly from the early check's own message", said,
+            "REFUSED" in said and "pricing file changed" in said,
+            "and names why", said,
         )
         checks.ok(
             DUNSPARCE_SKU not in corpus.Corpus.read().answers,
             "and the markdown's own answer is never written on top of the stale premise",
         )
+        # LANE B3 (DEBT48's own nesting risk, closed): the corpus check and the corpus write,
+        # the posting, and `import.csv` now share ONE `Store().write()` hold. A refusal inside
+        # it runs before any of the three exists, never after two of them are already on disk.
+        target = directory / cmd_reprice.IMPORT
+        checks.ok(
+            not target.is_file(),
+            "T7-RACE (DEBT48): and import.csv is never written on that same stale premise",
+        )
+        conn = db.connect(files.inventory_dir())
+        try:
+            stale_postings = [
+                entry for entry in db.postings_for_sku(conn, DUNSPARCE_SKU)
+                if entry["source"] == "reprice"
+            ]
+        finally:
+            conn.close()
+        checks.ok(
+            not stale_postings,
+            "and no reprice posting row lands on that same stale premise (`emit` already "
+            "posted this SKU at the rule price, and that row is not this check's business)",
+        )
+
+        # THE ORDINARY CASE, RIGHT AFTER, WITH NO RACE: the same worklist, the real revision.
+        # All three land, because the fix is one hold and not a smaller check.
+        fresh_revision = corpus.revision()
+        with quiet() as said_buf2:
+            code2 = cli_entry.main(
+                [
+                    "reprice", "apply", str(directory / cmd_reprice.WORKLIST), "--write",
+                    "--corpus-revision", fresh_revision,
+                ]
+            )
+        checks.equal(
+            code2, 0, "T7-RACE (DEBT48): the ordinary apply, with no race, succeeds",
+        )
+        checks.ok(target.is_file(), "and writes import.csv")
+        checks.equal(
+            corpus.Corpus.read().answers[DUNSPARCE_SKU].value, "1.50",
+            "and writes the corpus answer",
+        )
+        conn = db.connect(files.inventory_dir())
+        try:
+            landed_postings = [
+                entry for entry in db.postings_for_sku(conn, DUNSPARCE_SKU)
+                if entry["source"] == "reprice"
+            ]
+        finally:
+            conn.close()
+        checks.ok(landed_postings, "and writes the posting row")
 
     # ------------------------------------------------ UN-14: a move, until either box changes
     with isolated_home():
