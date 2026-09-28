@@ -87,8 +87,15 @@ iterate against. `demo-static` no longer builds from them. It now depends on
 
 **Left open, not blocking.** A parallel lane, `ux/stock-images`, is meant to put stock
 image URLs on route responses, so a recorded bundle carries them. This entry does not
-depend on it. `make demo-determinism` still tests the OLD invented seed's determinism,
-not the mirror's. The mirror has no matching check yet, because rebuilding it twice
+depend on it. The mirror has no determinism check, because rebuilding it twice
 means reading the real store twice. Whether the real ledger's open-order count ever
 exceeds `WALK_PLAN_ORDERS` on a future rebuild is unmeasured. If it does, the recorder
 refuses loudly rather than guessing.
+
+**Amended (L5, 2026-09-27).** The test-audit plan's Q5, the owner's ruling: "Cut the old
+seed guards." `demo-seed`/`demo-record`/`demo` stay, a generator anyone can run on demand.
+Their determinism guards — `demo-determinism-selftest` (ran in `make check`) and
+`demo-determinism` (ran on every demo publish, `.github/workflows/demo.yml`) — are retired.
+Both proved only the INVENTED seed's own determinism, never the mirror's, and this entry
+already said nothing ships from that seed. `demo-freshness` is untouched: it is not gated
+in `check` or `demo.yml` either, so it was never one of the guards this ruling names.

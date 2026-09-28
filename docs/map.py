@@ -5184,39 +5184,6 @@ COMPONENTS = [
                 # erroring.
                 "governed_by": ["D16", "D18"],
             },
-            "demo-determinism.py": {
-                "does": "whether two full `make demo` runs write the same app/demo/bundle.json "
-                        "CONTENT — the one thing demo-freshness.py's wire-shape digest cannot "
-                        "see. Two scratch PKMNSCAN_HOMEs, the bundle diffed as JSON, every moved "
-                        "value checked against a small vocabulary of known request/process-time "
-                        "stamps (an order's own ingest moment, a run directory's real mtime, the "
-                        "recording server's boot id). A pointer that moves for any other reason "
-                        "fails the run — found once, before Inventory.bind_sku took an `at` "
-                        "parameter: 97 bound_at values differed between two runs and "
-                        "demo-freshness was green throughout.",
-                # D18: two full seed-and-record passes write only scratch demo homes and a
-                # scratch bundle copy, both removed before the process exits, so nothing
-                # tracked moves — the same exemption demo-freshness.py already carries, for
-                # the same reason. D16 is the shape: a mechanical check for a claim
-                # (byte-identical rebuild) that fails silently rather than loudly otherwise.
-                # D43 is why each scratch home is its own directory rather than the
-                # checkout's real demo/ — a shared store over two runs is the data-loss shape
-                # that decision names, generalized from "the owner's store" to "either run's".
-                "governed_by": ["D16", "D18", "D43", "D159", "D295", "D301"],
-            },
-            "demo-determinism-selftest.py": {
-                "does": "demo-determinism.py's own ALLOWED_PATTERNS matcher, proved on "
-                        "fixtures rather than by spending two full `make demo` runs. Every "
-                        "real, measured pointer the checked-in patterns are supposed to "
-                        "excuse still matches. Four fabricated pointers that merely CONTAIN "
-                        "an allowed key (`at`, `updated_at`, `batch`) under a route none of "
-                        "the patterns name do NOT match — the exact regression a bare-key "
-                        "matcher (the pre-lane-7 ALLOWED_KEYS) would miss. One end-to-end "
-                        "case through `_diff` itself. Pure functions only, no subprocess, "
-                        "no write — in `make check`, unlike demo-determinism.py itself "
-                        "(D18: that target is a press, run by hand).",
-                "governed_by": ["D16", "D18"],
-            },
             "stockimages-cache-selftest.py": {
                 "does": "proves `pipeline/stockimages.py`'s disk cache offline, both ways: a "
                         "`Market` whose fetcher always raises `Offline` (the same failure "

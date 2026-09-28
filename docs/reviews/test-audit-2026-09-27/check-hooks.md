@@ -464,16 +464,21 @@ this up.** `scripts/catalog-index-selftest.py`'s header should say it is not in 
 check`, matching the Makefile.
 
 ### demo-freshness and demo-determinism, "the demo-record selftests"
-`scripts/demo-freshness.py` and `scripts/demo-determinism.py`. Neither carries a
-`-selftest` suffix. Both play that role for `make demo-record`'s output. Neither gates
-`check`. D18 governs this. `demo-freshness`'s own recipe says it is worth one command, not
-worth failing `make check` over. The bundle is not committed, and CI rebuilds it fresh on
-every push. `demo-determinism` compares two full `make demo` runs' recorded content, byte
-for byte. It found a real, measured defect: 97 `bound_at` timestamp values differed
-between runs, before `bind_sku` took an explicit `at` parameter. `demo-freshness` only
-checks the wire shape, not the content, and it stayed green throughout that whole time.
-This is a real example of one check's blind spot being exactly the reason a second check
-exists. **Verdict: KEEP both as-is, correctly excluded from `check`.**
+`scripts/demo-freshness.py` and the now-retired `demo-determinism.py`. Neither
+carried a `-selftest` suffix. Both played that role for `make demo-record`'s output.
+Neither gated `check`. D18 governs this. `demo-freshness`'s own recipe says it is worth one
+command, not worth failing `make check` over. The bundle is not committed, and CI rebuilds
+it fresh on every push. `demo-determinism` compared two full `make demo` runs' recorded
+content, byte for byte. It found a real, measured defect: 97 `bound_at` timestamp values
+differed between runs, before `bind_sku` took an explicit `at` parameter. `demo-freshness`
+only checks the wire shape, not the content, and it stayed green throughout that whole
+time. This is a real example of one check's blind spot being exactly the reason a second
+check exists. **Verdict here: KEEP both as-is, correctly excluded from `check`.**
+
+**SUPERSEDED by the plan's own C4/Q5 synthesis.** Both guards tested only the invented
+seed. Nothing ships from that seed (D295). L5 retired both: the selftest's own `make check`
+gate, and the demo.yml publish step. `demo-freshness` stayed. It was never gated in either
+place this ruling names.
 
 ---
 

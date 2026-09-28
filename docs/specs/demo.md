@@ -392,9 +392,9 @@ owner's own checkout:**
 
 **Measured on the first real run:** 60 photographs, 1.6 MB, 0 QR refusals. 18 real typed
 prices reached the corpus. 26 cards were marked `sold` with a real sale date. This stays
-well under the ~20 MB budget. `make demo-determinism-selftest` and a bare `make demo-seed`
-are unaffected. The diff against the file before this section is purely additive: two new
-functions, roughly 70 lines, plus eight lines wired into `main()`.
+well under the ~20 MB budget. A bare `make demo-seed` is unaffected. The diff against the
+file before this section is purely additive: two new functions, roughly 70 lines, plus
+eight lines wired into `main()`.
 
 **The box carries a neutral name, and so does the section.** Review round 2026-09-25: the
 box was first named after the owner directly, and the owner renamed it. It is `Demo Box`
@@ -471,6 +471,7 @@ recording leaves on purpose.
 
 **What is left open.** `ux/stock-images` is a separate lane. It is meant to put stock image
 URLs on route responses, so a recording can carry them. This section does not depend on it
-landing. `make demo-determinism` still proves the OLD invented seed deterministic, over
-`demo-seed`. It says nothing about the mirror. Proving the mirror deterministic means
-reading the real store twice, and nothing here does that yet.
+landing. The old invented seed's own determinism guard (make demo-determinism) is retired
+(D295 amended, L5, 2026-09-27) — nothing shipped from it, and nothing checks it any more.
+Proving the mirror deterministic means reading the real store twice, and nothing here does
+that yet.

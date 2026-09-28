@@ -105,8 +105,9 @@ and are never rewritten to match a later tree.
 
 Governs `store/master.py` (`IDENTITY_FIELDS`, `IDENTITY_WRITERS`, `Inventory.hold_sku`),
 `scripts/docs-audit.py` (the `identity writers` row), `scripts/demo-seed.py`,
-`cli/cmd_cards.py`, `cli/archive_review.py`, `scripts/demo-determinism.py`,
-`.github/workflows/demo.yml`, and `scripts/checks.py`. Cites D213, D239, D242, D252, D253,
+`cli/cmd_cards.py`, `cli/archive_review.py`,
+`.github/workflows/demo.yml`, and `scripts/checks.py`. `demo-determinism.py` was one
+of these callers and is retired (D295 amended, L5, 2026-09-27). Cites D213, D239, D242, D252, D253,
 D254 and D255 — each amended, as above. Cites D172 (the first photograph is the name), D173
 (a rule that can be enforced is enforced), D18 (a generator may write, and nothing that writes
 may gate a commit), and D140 (a number is claimed at merge, never guessed on a branch).

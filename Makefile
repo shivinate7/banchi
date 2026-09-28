@@ -4,7 +4,7 @@
 # the project would be built on top of — `make check` green means every check ran.
 
 .DEFAULT_GOAL := help
-.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview demo-freshness demo-determinism catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest demo-determinism-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
+.PHONY: help status map explain harness check cid-selftest pricearchive-selftest archive-review-selftest holdings-selftest identity-checks-selftest price-postings-selftest product-history-selftest sku-number-contradictions-selftest cid-audit ignore-check docs-audit map-fix map-fix-selftest orient serve-scope serve-scope-selftest guard-scope guard-scope-selftest vale audit-self-test verdict-selftest githooks-selftest merge merge-selftest revert-guard revert-selftest claim-ids claim-stale claim-selftest decisions-selftest debts-selftest gates-selftest port-agreement set-hint-agreement readiness-agreement mutate-anchors mutate-guards screen-freshness screen-freshness-selftest sigil-check suite-lock-selftest browser-scope-selftest js-breakpoints-selftest subagent-override-selftest janitor-agent icloud-sweep audit-history dev server screenshot design-check design-check-quiet lint typecheck venv launch-config worktree-setup worktree-provision-selftest hooks up down launch-agent demo demo-photos demo-mirror demo-mirror-install demo-mirror-rebuild demo-histories demo-seed demo-record demo-static demo-preview demo-freshness catalog-refresh catalog-index catalog-index-selftest catalog-mirror css-var-check css-var-check-selftest token-literal-check token-literal-check-selftest kit-adoption kit-adoption-selftest text-density port-slots-selftest offenders-prune offenders-prune-selftest match-selftest
 
 # Prefer the venv if it exists, so `make harness` works without anyone remembering to
 # activate anything. Falls back to system python3, which still runs T2-T5 — T1 needs the
@@ -235,8 +235,6 @@ help:
 	@echo "  make kit-adoption  every route renders <Page> from the kit, and no screen hand-rolls"
 	@echo "                    a kit primitive (D-page-scaffold). A shrinking allow list."
 	@echo "  make kit-adoption-selftest  that checker, on in-memory fixtures in both directions."
-	@echo "  make demo-determinism-selftest  scripts/demo-determinism.py's own path-matcher,"
-	@echo "                    on fixtures — no subprocess, no \`make demo\`."
 	@echo "  make match-selftest  the one forgiving matcher, server side (FLT-06/04, UX-173):"
 	@echo "                    server/match.py against match.cases.json, then _match_rank and"
 	@echo "                    do_search end to end against a throwaway store."
@@ -285,7 +283,7 @@ help:
 	@echo "                    js-breakpoints-selftest + subagent-override-selftest +"
 	@echo "                    guard-scope-selftest + token-literal-check-selftest +"
 	@echo "                    kit-adoption-selftest + port-slots-selftest +"
-	@echo "                    demo-determinism-selftest + match-selftest"
+	@echo "                    match-selftest"
 	@echo
 	@echo "  ./pkmnscan identify <capture-dir>                 submit, wait, collect. COSTS MONEY."
 	@echo "  ./pkmnscan join     <run-dir> --export <csv>      resolve against the export. Free."
@@ -328,7 +326,6 @@ help:
 	@echo "                    DEMO_BASE=<path> is where it will be served from."
 	@echo "  make demo-preview serve dist-demo/ exactly as a static host would."
 	@echo "  make demo-freshness  whether the bundle still matches the wire it recorded."
-	@echo "  make demo-determinism  whether two \`make demo\` runs write the same bundle content."
 	@echo "  make lint         eslint over app/, ruff over the Python packages (D82)."
 	@echo "  make typecheck    tsc --noEmit over app/"
 	@echo
@@ -705,7 +702,6 @@ check:
 	@$(MAKE) --no-print-directory token-literal-check-selftest
 	@$(MAKE) --no-print-directory kit-adoption-selftest
 	@$(MAKE) --no-print-directory port-slots-selftest
-	@$(MAKE) --no-print-directory demo-determinism-selftest
 	@$(MAKE) --no-print-directory match-selftest
 
 # WHAT A MACHINE CAN PROVE ON A FRESH CLONE, WHICH IS NOT EVERYTHING `make check` PROVES.
@@ -772,7 +768,6 @@ ci-check:
 	@$(MAKE) --no-print-directory token-literal-check-selftest
 	@$(MAKE) --no-print-directory kit-adoption-selftest
 	@$(MAKE) --no-print-directory port-slots-selftest
-	@$(MAKE) --no-print-directory demo-determinism-selftest
 	@$(MAKE) --no-print-directory match-selftest
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -908,12 +903,6 @@ kit-adoption-selftest:
 port-slots-selftest:
 	$(NPM_GUARD)
 	@python3 scripts/port-slots.py selftest
-
-# identity-follows-sku.md, lane 7: scripts/demo-determinism.py's own ALLOWED_PATTERNS
-# matcher, proved on fixtures rather than by spending two full `make demo` runs. Pure
-# functions, no subprocess, no write — unlike `demo-determinism` itself (D18).
-demo-determinism-selftest:
-	@python3 scripts/demo-determinism-selftest.py
 
 # FLT-06/04, UX-173: the one forgiving matcher, server side. `server/match.py` against every
 # row of app/src/kit/match.cases.json (the filtering lane's own case table, so the server and
@@ -1922,12 +1911,8 @@ typecheck:
 # next rename and wrong in exactly the way this comment describes — override it there.
 DEMO_HOME ?= demo
 # Extra flags for `scripts/demo-record.py`, past what `demo-record` already passes. Empty by
-# default (an ordinary `make demo` keeps its real network — the same "best effort" reads
-# every other price-history route already makes, D216). `make demo-determinism` sets this to
-# `--offline`, the SAME flag `demo-mirror.py:record` already runs the real mirror's own
-# recorder with (D295) — see its own comment for why: two recordings of a server with a
-# live-network stock-image warmer race each other (D301), which the real mirror build never
-# hits because it is already offline and this check was not.
+# default — an ordinary `make demo` keeps its real network, the same "best effort" reads
+# every other price-history route already makes (D216).
 DEMO_RECORD_ARGS ?=
 DEMO_REPO := $(shell n=$$(basename -s .git "$$(git config --get remote.origin.url 2>/dev/null)" 2>/dev/null); [ -n "$$n" ] && echo "$$n" || echo banchi)
 DEMO_BASE ?= /$(DEMO_REPO)/
@@ -2035,11 +2020,9 @@ demo-preview:
 demo-freshness:
 	@$(PYTHON) scripts/demo-freshness.py
 
-# Whether `make demo` writes the same bundle twice. `demo-freshness` above proves the WIRE
-# SHAPE still matches; this proves the recorded CONTENT is reproducible — the one thing the
-# committed wire hash cannot see (review round, identity-follows-sku.md lane 6: 97 `bound_at`
-# values differed between two runs before `bind_sku` took an `at` parameter, and
-# `demo-freshness` was green throughout). Two full `make demo` runs into scratch homes; not
-# in `make check` for the same reason `demo-freshness` is not (D18).
-demo-determinism:
-	@$(PYTHON) scripts/demo-determinism.py
+# `demo-determinism`, which compared two `make demo` runs' recorded CONTENT byte for byte,
+# is RETIRED (D295 amended, L5, 2026-09-27, the test-audit plan's Q5 — "cut the old seed
+# guards"). It proved only the invented seed's own determinism, and nothing ships from that
+# seed. It found a real defect once — 97 `bound_at` values differed between two runs before
+# `bind_sku` took an `at` parameter, invisible to `demo-freshness` above — recorded here so
+# the finding is not lost with the target.
