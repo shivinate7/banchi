@@ -480,15 +480,21 @@ def _apply_guard(guard, matches_by_sku, inventory):
         held[sku] = sendguard.on_hand(inventory.copies_on_hand(sku), inventory.cards, keys)
         rooms[sku] = sendguard.room(live.get(sku, 0), held[sku])
         for match in matches:
-            # THE GUARD'S READING IS A LIVE READING, SO `--cap` COUNTS IT (D7: "at most N
-            # copies LIVE"). The cap is spent against `copies_out`, which read the store and
-            # the join's export. A guard file that shows more live copies than either raised no
-            # bound, so `--cap 1` over one live copy sent one more. `SkuMatch.guard_live` takes
-            # the larger of the readings, and DEBT37 says what that
-            # costs. It is its own field, so `_would` still measures the send without the guard.
-            match.guard_live = live.get(sku, 0)
+            # THE GUARD'S READING NO LONGER FEEDS THE CAP (D7, the owner's ruling of
+            # 2026-09-27). It used to raise `SkuMatch.guard_live`, so `--cap` counted it as a
+            # floor on `copies_out` — a second reading the cap could be spent against, and
+            # DEBT37 is what that cost: a copy the store's own reading and the guard's both
+            # counted was maxed rather than summed, so it could overshoot the cap by the
+            # pending count. `--cap` now refuses a pending card outright
+            # (`SkuMatch._cap_pending`) instead. THIS TRIM IS THE ONE JOB THE GUARD KEEPS: an
+            # on-hand ceiling, `sendguard.room`, applied to `asked` exactly as before.
             if match.asked is None or match.asked > rooms[sku]:
                 match.asked = rooms[sku]
+                # WORDING GAP 1 (DEBT37): a zero the GUARD wrote is not a zero the operator
+                # typed, and `nothing_to_add` needs to tell them apart rather than reading
+                # every zero as "this send asked for none of this card".
+                if rooms[sku] == 0:
+                    match.guard_trimmed = True
     return {"name": name, "live": live, "held": held, "rooms": rooms}
 
 
@@ -670,10 +676,15 @@ def _zero_rows_single(resolved, priced, changes, args, say):
 
 
 def _would(match, typed) -> int:
-    """What one match adds with the operator's own figure applied and no guard. The room
-    WITHOUT the guard's reading: under `--cap` that reading closes the cap too, and measured
-    with it the guard's trim read as nothing to trim (the lane-end review of send-fixes)."""
-    room = match.unguarded_room
+    """What one match adds with the operator's own figure applied and no guard.
+
+    `match.room` NO LONGER READS THE GUARD AT ALL (D7, the owner's ruling of 2026-09-27), so
+    it already is the room without the guard's reading — there is no second, guarded room to
+    tell it apart from any more. `typed` and not `match.asked` because `_apply_guard` has
+    already trimmed `asked` by the time this runs, and re-reading it here would measure the
+    guard's own trim against itself, the defect this function exists to avoid (the lane-end
+    review of send-fixes)."""
+    room = match.room
     asked = typed.get(match.sku)
     return room if asked is None else max(0, min(asked, room))
 
@@ -827,14 +838,19 @@ def _adds_nothing(sku, match, trimmed_out) -> str:
     return match.nothing_to_add or "nothing to add"
 
 
-def _say_empty(left_out, cut_back, needs_price, live_names, say) -> int:
+def _say_empty(left_out, cut_back, needs_price, live_names, capped, say) -> int:
     """AN EMPTY SEND, SAID THE SAME WAY ON BOTH PATHS (R6-5, R6-9). Every card it left out is
     named with its own reason, then one JSON line the send route reads, then one headline
     worded from the reasons the send actually had. A card with no price was named above.
 
     EACH CARD HAS EXACTLY ONE REASON (R7 F4). A card with no price that TCGplayer also holds
     counts as needing a price and is not in `live_names`, which is this line's own list: the
-    route reads the names from here, never from the guard's trims."""
+    route reads the names from here, never from the guard's trims.
+
+    `capped` IS A COUNT, NOT A NAME LIST (DEBT37's wording gap 2). Unlike a guard trim, a
+    capped card's own line already carries every figure a name would add nothing to — "3
+    copies sent since the live reading" or "4 live, at the cap of 4" — so the headline only
+    needs how many, the way `needs_price` and `under_cut_off` are counts too."""
     import json
 
     for sku, why in left_out:
@@ -846,10 +862,11 @@ def _say_empty(left_out, cut_back, needs_price, live_names, say) -> int:
             "under_cut_off": len(cut_back),
             "live": len(live_names),
             "live_names": list(live_names),
+            "capped": capped,
         }},
         sort_keys=True,
     ))
-    say(merge.empty_send_sentence(needs_price, len(cut_back), len(live_names)))
+    say(merge.empty_send_sentence(needs_price, len(cut_back), len(live_names), capped))
     return 1
 
 
@@ -1325,7 +1342,8 @@ def run(args, say) -> int:
             live_names = [
                 resolved.matches[sku].name for sku, why in left_out if why == merge.LIVE_ALREADY
             ]
-            return _say_empty(left_out, cut_back, len(no_price), live_names, say)
+            capped = sum(1 for sku, _why in left_out if resolved.matches[sku].capped)
+            return _say_empty(left_out, cut_back, len(no_price), live_names, capped, say)
         # A PRICED CARD `--listed-only` LEAVES UNDER THE CUT-OFF IS NAMED (R6-6).
         _say_under_cut(cut_back, say)
 
@@ -1955,7 +1973,11 @@ def run_merged(args, say) -> int:
                 for sku, why in left_out
                 if why == merge.LIVE_ALREADY
             ]
-            return _say_empty(left_out, cut_back, needs_price, live_names, say)
+            capped = sum(
+                1 for sku, _why in left_out
+                if merged_plan.matches.get(sku) is not None and merged_plan.matches[sku].capped
+            )
+            return _say_empty(left_out, cut_back, needs_price, live_names, capped, say)
         say(merge.NOTHING_NEW)
         for sku, why in left_out:
             say(f"  {sku} — {why}")

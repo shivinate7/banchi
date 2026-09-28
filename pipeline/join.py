@@ -2156,12 +2156,13 @@ class SkuMatch:
     # `live` reading and the export's, by `store/master.py:Listing.live_reading` (D87,
     # amended). `None` for a store-less match, where the row alone answers — `live_before`.
     live_out: Optional[int] = None
-    # THE LIVE COPIES THE SEND'S OWN GUARD FILE SHOWS (`emit --live-guard`), or `None` with no
-    # guard. A live reading like `live_out`, so `--cap` counts it (D7: "at most N copies LIVE"):
-    # `copies_out` and `live_now` take the larger. KEPT APART FROM `held_out` so the figure the
-    # send would have added WITHOUT the guard (`unguarded_room`) can still be measured, and a
-    # card the guard closes is named as the guard's trim, never as "asked for none" (R6-3).
-    guard_live: Optional[int] = None
+    # WHETHER THE LIVE GUARD (`emit --live-guard`) LOWERED `asked` ALL THE WAY TO 0, on this
+    # match rather than on the operator's own typed figure (DEBT37's wording gap 1). `asked`
+    # cannot carry both facts at once, so this is the second field: `nothing_to_add` reads it
+    # to tell "the guard left no room" from "the operator asked for none of this card", which
+    # is a different sentence from a different cause. Set only in `cli/cmd_emit.py:_apply_guard`,
+    # and only where the guard is the reason `asked` reads 0.
+    guard_trimmed: bool = False
 
     @property
     def condition(self) -> str:
@@ -2221,13 +2222,20 @@ class SkuMatch:
 
     @property
     def live_now(self) -> int:
-        """The live figure the cap was computed against: the newer of the store's reading
-        and this row's, or the row's alone where no store was consulted. What every
-        SENTENCE about live quantity reads, so "4 live, at the cap of 4" can never be
-        printed off a reading the store has since superseded — D59's own rule about a
-        count under a false sentence."""
-        seen = self.live_before if self.live_out is None else self.live_out
-        return seen if self.guard_live is None else max(seen, self.guard_live)
+        """The live figure the cap is computed against: the store's own reading where one
+        was consulted, or the row's alone where no store was.
+
+        NO LONGER MAXED AGAINST THE LIVE GUARD (D7, the owner's ruling of 2026-09-27,
+        replacing the 2026-09-25 "take the larger" amendment). The guard's own reading fed
+        this figure so `--cap` would count a live copy the store had not yet read — and could
+        then overshoot the cap by the pending count, because a copy the guard and the store
+        both counted was summed nowhere but could still be counted twice across the two
+        readings (DEBT37). `_cap_pending` below is the replacement: `--cap` now refuses a
+        card outright while a copy is unreconciled, rather than picking between two readings
+        that can each be wrong. What every SENTENCE about live quantity reads, so "4 live, at
+        the cap of 4" can never be printed off a reading the store has since superseded —
+        D59's own rule about a count under a false sentence."""
+        return self.live_before if self.live_out is None else self.live_out
 
     @property
     def copies_out(self) -> int:
@@ -2241,14 +2249,40 @@ class SkuMatch:
         outrank a newer store observation: with the store newer and lower, `_copies_out`
         answered 2 and the `max` put the file's 4 back, so a stale export closed the cap
         against a reading the store took after it. `held_out` is the arbitrated figure and
-        it answers alone. THE GUARD'S OWN READING, WHERE THE SEND HAS ONE, IS A FLOOR ON IT
-        (`guard_live`)."""
-        out = self._unguarded_out
-        return out if self.guard_live is None else max(out, self.guard_live)
+        it answers alone.
+
+        NO LONGER MAXED AGAINST THE LIVE GUARD, for `live_now`'s own reason above: two
+        readings of one fact are two chances to be wrong, and `_cap_pending` replaces both
+        with a refusal."""
+        return self.live_before if self.held_out is None else self.held_out
 
     @property
-    def _unguarded_out(self) -> int:
-        return self.live_before if self.held_out is None else self.held_out
+    def _cap_pending(self) -> bool:
+        """Under `--cap`, whether a copy sent since the store's own live reading was taken has
+        not shown up in it yet (the owner's ruling, 2026-09-27, replacing D7's 2026-09-25
+        "take the larger" amendment).
+
+        `copies_out` and `live_now` disagreeing IS a pending copy: `nothing_to_add`'s own
+        `pending = copies_out - live_now` is the same arithmetic, computed once here so
+        `_room` can refuse on it rather than spend a cap against either half. `False` with no
+        cap — an uncapped send never reads `copies_out` at all (D7's rewrite), so a pending
+        copy cannot block it, only the cap it would otherwise be spent against."""
+        return self.live_cap is not None and self.copies_out > self.live_now
+
+    @property
+    def capped(self) -> bool:
+        """Whether this card's `nothing_to_add` reason is ABOUT THE CAP — pending reconcile,
+        or the ordinary at/over-cap sentences — rather than being held back, a typed zero, a
+        guard trim, or having left no copy to send at all. What `empty_send_sentence` counts
+        apart from `live` (DEBT37's wording gap 2): a card the cap closed never had TCGplayer
+        confirmed to hold every copy, which is what `live` says."""
+        return (
+            bool(self.copies)
+            and bool(self.uncommitted_positions)
+            and self.asked != 0
+            and self.live_cap is not None
+            and self.add_to_quantity == 0
+        )
 
     @property
     def add_to_quantity(self) -> int:
@@ -2285,15 +2319,15 @@ class SkuMatch:
     def room(self) -> int:
         """What could go before this send's own quantity is applied: every copy TCGplayer does
         not already hold, under the ceiling when one was asked for. `add_to_quantity` is this
-        bounded by `asked`, and the report reads both to say *asked 5, 3 can go*."""
-        return self._room(self.copies_out)
+        bounded by `asked`, and the report reads both to say *asked 5, 3 can go*.
 
-    @property
-    def unguarded_room(self) -> int:
-        """`room` with the guard's reading left out: what the send would add with no guard. What
-        `cli/cmd_emit.py:_would` measures a trim against, so a card the guard closes under a cap
-        is still named as the guard's trim."""
-        return self._room(self._unguarded_out)
+        REFUSES OUTRIGHT WHILE A CAP IS PENDING (`_cap_pending`), rather than spending the cap
+        against either of two candidate readings. `unguarded_room` was this method's own
+        pre-2026-09-27 sibling, computed against a reading with the guard left out; there is
+        no second reading to leave out any more, so there is no second method."""
+        if self._cap_pending:
+            return 0
+        return self._room(self.copies_out)
 
     def _room(self, out: int) -> int:
         if self.live_cap is None:
@@ -2324,10 +2358,20 @@ class SkuMatch:
         # zero typed for this card is why nothing goes, and it is not a hold, so the way
         # back is the field and not the corpus.
         if self.asked == 0:
+            # DEBT37's WORDING GAP 1: a zero here can be the OPERATOR'S, or it can be the live
+            # guard's own room closing to nothing (`cli/cmd_emit.py:_apply_guard`) — two
+            # different causes that `asked` cannot carry apart on its own. `guard_trimmed`
+            # is the second field that lets this method tell them apart, rather than reading
+            # every zero as a typed hold the operator never asked for.
+            #
+            # SAME WORDS AS THE VISIBLE TRIM (D196, on review): this is the one case that
+            # trim naming misses (the cap had already made `would` read zero, so
+            # `sendguard.trims()` never saw a trim to name), but the FACT is identical —
+            # TCGplayer already holds every copy on hand — so it reads exactly like the
+            # ordinary trim rather than naming the guard, a mechanism no screen exposes.
+            if self.guard_trimmed:
+                return "TCGplayer already holds every copy on hand"
             return "this send asked for none of this card"
-        # `live_now`, never `live_before`: the sentence names the reading the cap was
-        # computed from, which is the newer of the store's and the export's (D87, amended).
-        pending = self.copies_out - self.live_now
         # EVERY SENTENCE BELOW NAMES A CAP, SO NONE OF THEM MAY BE REACHED WITHOUT ONE (D7, rewritten).
         # With no cap `add_to_quantity` is `len(uncommitted_positions)`, so reaching this line
         # at all means that list is empty — which the branch above already answered. The guard
@@ -2336,30 +2380,30 @@ class SkuMatch:
         # docstring exists to prevent.
         if self.live_cap is None:
             return "every copy in this run is already listed or has left the box"
-        if pending <= 0:
-            if self.copies_out > self.live_cap:
-                return f"{self.live_now} live, over the {self.live_cap} this send asked for"
-            return f"{self.live_now} live, at the cap of {self.live_cap}"
-        # THE OVERRUN IS THE ANSWER WHEN THERE IS ONE, and `min` was hiding exactly that
-        # (D7, amended 2026-09-08). A cap is a ceiling on copies LIVE, so the reason this SKU
-        # adds nothing is that `copies_out` already meets or exceeds the figure asked for —
-        # and `min(copies_out, live_cap)` clamped the very number that explains it, printing
-        # "2 of the 2 this SKU may have out" where the true state was seven out against a cap
-        # of two. The original argument was that "6 of the 4 is not a sentence"; that is a
-        # reason to WORD the overrun, not to suppress it. Under a standing cap the two were
-        # rarely far apart and this read fine for months — with the cap asked for per send,
-        # an overrun is the ordinary case and the operator cannot act on a hidden figure.
-        if self.copies_out > self.live_cap:
+        # THE OWNER'S RULING, 2026-09-27, REPLACING THE 2026-09-25 "TAKE THE LARGER" AMENDMENT:
+        # `--cap` is refused for this card outright while a copy sent since is still pending —
+        # no copy is silently maxed or summed across two readings any more (DEBT37). `pending`
+        # is `nothing_to_add`'s own name for the same gap `_cap_pending` tests.
+        #
+        # THE REMEDY IS WORDED AS THE SCREEN'S OWN ACTION (D196, on review). `pkmnscan
+        # reconcile --live` is the CLI door to it; `#/pricing`'s Live tab has its own door,
+        # the "Read what is live" press (`app/src/Pricing.tsx:readAgain`, over
+        # `reconcileLive`). Naming the CLI flag on a wire field a screen renders would put a
+        # pipeline-internal noun in front of an operator who never sees a flag.
+        pending = self.copies_out - self.live_now
+        if pending > 0:
             return (
-                f"{self.copies_out} already out against the {self.live_cap} this send asked "
-                f"for — {self.live_now} live and {pending} on an import this pipeline has "
-                f"not seen land"
+                f"{pending} cop{'y' if pending == 1 else 'ies'} sent and not yet seen live — "
+                f"read what is live, then send again"
             )
-        return (
-            f"{self.live_now} live and {pending} on an import this pipeline has not "
-            f"seen land — {self.copies_out} of the {self.live_cap} "
-            f"this SKU may have out"
-        )
+        # ONCE RECONCILED, THE STORE'S ONE READING IS THE TRUE COUNT, AND THE CAP READS IT
+        # ALONE. `min` was hiding exactly this figure (D7, amended 2026-09-08): a cap is a
+        # ceiling on copies LIVE, so the reason this SKU adds nothing is that `copies_out`
+        # already meets or exceeds the cap, and clamping it printed "2 of the 2 this SKU may
+        # have out" where the true state was seven out against a cap of two.
+        if self.copies_out > self.live_cap:
+            return f"{self.live_now} live, over the {self.live_cap} this send asked for"
+        return f"{self.live_now} live, at the cap of {self.live_cap}"
 
     @property
     def backstock(self) -> int:

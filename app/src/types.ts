@@ -2564,6 +2564,11 @@ export type EmptySend = {
   under_cut_off: number
   live: number
   live_names: string[]
+  /** Cards `--cap` closed — pending a reconcile, or genuinely at the send's own ceiling —
+   *  apart from `live`: a capped card was never confirmed live, which is what `live` says
+   *  (DEBT37's wording gap 2). Optional so a fixture built before this field existed still
+   *  types; `emptySendTitle` reads it as 0 when absent. */
+  capped?: number
 }
 
 /** WHY A RUN OWES, AS A CODE. The same list as `server/pipeline_routes.py:OWE_CODES`, one

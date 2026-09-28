@@ -836,14 +836,20 @@ def _empty_reasons(empty: dict, trimmed: list, step: str) -> "PipelineRefusal":
     price = int(empty.get("needs_price") or 0)
     cut = int(empty.get("under_cut_off") or 0)
     live = int(empty.get("live") or 0)
+    capped = int(empty.get("capped") or 0)
     code = "needs_price" if price else "under_cut_off"
     # THE NAMES ARE EMIT'S OWN, off its `send_empty` line (R7 F4), so the count and the names are
     # one list and a card is never both "needs a price" and "already live".
     gone = [str(name) for name in empty.get("live_names") or []]
     # THE REASONS, FOR THE SEND CARD'S TITLE (R6-2). The server's sentence is the detail behind
     # "What the server said" (D269), so the title is worded on the screen from these figures.
-    data = {"empty": {"needs_price": price, "under_cut_off": cut, "live": live, "live_names": gone}}
-    if price and not (cut or live):
+    data = {
+        "empty": {
+            "needs_price": price, "under_cut_off": cut, "live": live, "live_names": gone,
+            "capped": capped,
+        }
+    }
+    if price and not (cut or live or capped):
         return PipelineRefusal(
             HTTPStatus.CONFLICT,
             code,
@@ -851,7 +857,7 @@ def _empty_reasons(empty: dict, trimmed: list, step: str) -> "PipelineRefusal":
             f"on each, then send.",
             data,
         )
-    if cut and not (price or live):
+    if cut and not (price or live or capped):
         return PipelineRefusal(
             HTTPStatus.CONFLICT,
             code,
@@ -870,6 +876,14 @@ def _empty_reasons(empty: dict, trimmed: list, step: str) -> "PipelineRefusal":
     if live:
         names = f" ({', '.join(gone[:5])}{f' and {len(gone) - 5} more' if len(gone) > 5 else ''})" if gone else ""
         said.append(f"TCGplayer already had every copy of {live} card{'s' if live != 1 else ''}{names}.")
+    if capped:
+        # DEBT37'S WORDING GAP 2: a card `--cap` closed had no clause here at all, silently
+        # dropped from a title that named every OTHER reason. Never folded into `live` above —
+        # a capped card may be pending a reconcile rather than confirmed live.
+        said.append(
+            f"{capped} card{'s' if capped != 1 else ''} "
+            f"{'are' if capped != 1 else 'is'} held at this send's cap."
+        )
     return PipelineRefusal(HTTPStatus.CONFLICT, code, " ".join(said), data)
 
 
