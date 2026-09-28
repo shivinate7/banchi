@@ -51,6 +51,8 @@ Each item gets an id, `F<n>`, and one line here. The line names its route:
   cards has no photos. Owner: `why does this 99 card set of unleashed even exist?`
 - F2 (logged, diagnosis running): Sales draws "No photo" where Sets and Pricing draw stock card
   images.
+- F3 (own lane, running): a blind Sonnet agent reviews the demo's Pricing screen and proposes
+  filters. Owner: `ask it what filters would be nice to have / optimal for an end user`.
 
 ## PR 3B: the demo data follow-up (DONE, 2026-09-27)
 
