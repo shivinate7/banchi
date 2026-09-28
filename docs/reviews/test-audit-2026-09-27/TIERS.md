@@ -224,6 +224,10 @@ The tier model and every row not named below stand as proposed. The owner's word
 - **Row 49, `build order mirror`:** a later lane makes the build order one source. Then the row
   goes.
 - **Q8, merge 16 rows into 4:** `Yes, as L8 (Recommended)`.
+- **Markdown spelling (lane L2's measurement, 727 British spellings in 226 files):** `Shrinking
+  offender list now`. The `identifier spelling` check reaches markdown now. Today's words are
+  listed per file, and the list may only shrink, on D280's pattern. New prose uses American
+  spelling from now on. A follow-up to L2 builds it after L2 merges.
 - **Row 17 and CLAUDE.md's decision index:** `Derived view + pointer (Recommended)`. A lane
   adds `make map ARGS=--decisions`, which prints the index from each entry's own heading. The
   copy in CLAUDE.md becomes one line that names the command, and row 17 is cut. The parent
