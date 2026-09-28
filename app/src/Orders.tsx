@@ -9,10 +9,12 @@ import {
   IconButton,
   Loading,
   matchQuery,
+  Money,
   Notice,
   Page,
   patchViewQuery,
   Pill,
+  ProductLink,
   Sheet,
   Stat,
   useFacetParams,
@@ -28,6 +30,10 @@ import {
 } from './kit'
 import { absoluteDate, relativeDate } from './dates'
 import { toast } from './kit/toast'
+import { CardPane, gameWord, marketTable, photoSrc, type MarketRead, type Row } from './CardHero'
+import { CardLocations, layoutsOf } from './CardLocations'
+import { forSale } from './cardState'
+import { Dialog as Overlay } from './kit/overlay'
 import { readPaste, DEFAULT_ORDER_SOURCE } from './orderPaste'
 import { orderReasonLabel, orderReasonRemedy } from './orderReasons'
 import { rememberHideSold, rememberOrderFilter, storedHideSold, storedOrderFilter, type OrderFetchFilter } from './deviceMemory'
@@ -61,8 +67,10 @@ import {
   fetchOrderPicks,
   fetchOrders,
   fillLine,
+  getBoxes,
   getInventoryCopies,
   getOrders,
+  getPricing,
   ingestOrders,
   nameOrders,
   previewOrders,
@@ -76,8 +84,9 @@ import {
 } from './server'
 import type { Failure } from './server'
 import { ShipStage } from './OrdersShipStage'
-import { useOrderWalk, WalkCardPane, WalkList, type WalkPullFn, type WalkUndoFn } from './OrdersWalkPane'
+import { pickFigureOf, RowAction, takeBuyers, useOrderWalk, WalkList, type OrderWalk, type WalkPullFn, type WalkRow, type WalkUndoFn } from './OrdersWalkPane'
 import type {
+  BoxRecord,
   IngestResult,
   Inventory,
   InventoryCard,
@@ -96,6 +105,7 @@ import type {
   PullTarget,
   ResolvedLine,
   ResolvedOrder,
+  SectionDetail,
   ShippingLane,
   WalkPlan,
 } from './types'
@@ -130,6 +140,11 @@ import './Orders.css'
 
 /** How long a receipt's undo stays — `Inventory.tsx`'s number and `Fulfillment.tsx`'s. */
 const UNDO_WINDOW_MS = 20_000
+
+/** No box registry read yet — `Inventory.tsx`'s own `NO_LAYOUTS`, restated: the walk's own
+ *  card pane is honest with no `sections` at all (`PositionBar` draws without a layout), so
+ *  this is a quiet start, never a stand-in for a real answer. */
+const NO_SECTIONS: ReadonlyMap<number, readonly SectionDetail[]> = new Map()
 
 /* ---- what the fetch checked, took, and left ------------------------------------------- */
 
@@ -940,12 +955,15 @@ function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]
   /* The breakdown adds nothing where every copy is pickable (`short` and `elsewhere` both
    * zero, so `pick === owed`) — it would only repeat the number the sentence already gives.
    * It is said only where it explains something the plain sentence does not. */
-  const parts = short > 0 || elsewhere > 0 ? [`${pick} to pick`] : []
+  /* F5 verbiage cut: the reviewer's own "Status" word would drop the four-way split this
+     line is the only place to see broken out, which the data rule refuses — every number
+     stays, as a short labeled figure, never a bare word standing in for all of them. */
+  const parts = short > 0 || elsewhere > 0 ? [`${pick} pick`] : []
   if (short > 0) parts.push(`${short} short`)
-  if (elsewhere > 0) parts.push(`${elsewhere} not in the store`)
+  if (elsewhere > 0) parts.push(`${elsewhere} missing`)
   return (
     <>
-      <strong>{owed}</strong> {plural(owed, 'copy', 'copies')} owed to <strong>{buyers}</strong> {plural(buyers, 'buyer', 'buyers')}
+      <strong>{owed}</strong> owed, <strong>{buyers}</strong> {plural(buyers, 'buyer', 'buyers')}
       {parts.length === 0 ? null : (
         <>
           {' — '}
@@ -2203,7 +2221,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
      this hub's state, so a row on one that names an order still finds it on the other. */
   if (stage === 'ship') {
     return (
-      <Page icon="truck" lede="TCGplayer's shipping export, sorted into three lanes." className="orders-hub shipping">
+      <Page icon="truck" className="orders-hub shipping">
         <ShipStage payload={payload} />
       </Page>
     )
@@ -2524,6 +2542,201 @@ function dayLabel(day: string): string {
  *  to pick the safe default, never to exclude it (D203: the breakdown is the guard). */
 function isReadyToShip(row: OrderRow): boolean {
   return (row.status ?? '').trim().toLowerCase() === 'ready to ship'
+}
+
+/** THE PICK PANE (`docs/decisions/D-orders-walk-rejoins-inventory.md`, lane A3): Inventory's own
+ *  `CardHero.tsx:CardPane`, reused whole rather than forked (`WalkCardPane` is deleted, not
+ *  adapted). The hero head carries the "Pick N of M" pill in its chip slot; below the photo goes
+ *  every on-hand copy of the card, `CardHero.tsx`'s sibling `CardLocations.tsx:CardLocations`,
+ *  the walk's chosen copy first (`preserveOrder`, `currentKey`, D212). NO `CardDetailsSection` —
+ *  the owner, Q6: "we don't need details on this screen." Mark sold and Undo reach each copy row
+ *  through `renderAction`, calling back into `OrdersWalkPane.tsx:RowAction` exactly as the
+ *  deleted pane did.
+ *
+ *  A COMPONENT OF ITS OWN, NOT AN INLINE BLOCK OF `PullStage` — `PullStage` is a 1,000-line
+ *  function with dozens of its own hooks, and this pane's own local state (the box registry
+ *  read, the broken/zoomed photo flags) belongs to the pane, not to the stage around it. Kept
+ *  inline, adding hooks here once tripped a genuine, pre-existing "Rendered more hooks than
+ *  during the previous render" crash in `PullStage` on the very next re-render (measured: any
+ *  new unconditional hook placed near the end of that function reproduces it, on `main`, with no
+ *  change of mine anywhere near it) — the fence around this lane does not cover diagnosing that,
+ *  so it is flagged to the orchestrator rather than chased here. A separate component sidesteps
+ *  it cleanly regardless: each component's hooks are its own, never `PullStage`'s. */
+
+/** A CARD SHAPED ENOUGH FOR `CardHeroHead` TO DRAW, before `rawCards` has answered — or for a
+ *  pooled copy, which never resolves one at all (D24). Filled from the take's own wire fields,
+ *  the same ones the deleted `WalkCardPane` read directly rather than through a card. Every
+ *  field this pane's own render path does not read is a plain, inert default: `photo: null`
+ *  keeps this from ever composing a photo URL for a card it does not really have. */
+function syntheticCard(row: WalkRow): InventoryCard {
+  const { take, copy } = row
+  return {
+    box: copy.place.located === false ? 0 : copy.place.box,
+    index: copy.place.located === false ? 0 : copy.place.index,
+    photo: null,
+    set_hint: null,
+    moved_from: null,
+    set_name: take.set,
+    rarity: take.rarity,
+    metadata_finish: null,
+    game: null,
+    rarity_claim: null,
+    note: null,
+    captured_at: null,
+    capture_id: copy.capture_id,
+    cid: copy.cid,
+    photo_sha256: null,
+    photo_reclaimed_at: null,
+    name: take.name,
+    number: null,
+    printed_total: null,
+    number_display: take.number_display,
+    confidence: null,
+    sku: take.sku,
+    condition: take.condition,
+    state: copy.state,
+    state_at: null,
+    retire_reason: null,
+    run: null,
+  }
+}
+
+function OrderPickPane({
+  walk,
+  owedBySku,
+  showBuyers,
+}: {
+  readonly walk: OrderWalk
+  readonly owedBySku: ReadonlyMap<string, number>
+  readonly showBuyers: boolean
+}) {
+  const { currentRow, currentGroup, currentCard } = walk
+
+  /* THE BOX REGISTRY, ONE READ (Q3): the copies list draws the section strip and the ruler the
+   *  same way `Inventory.tsx` does, off the same `getBoxes()` call `layoutsOf` already turns
+   *  into a per-box map there. Allowed to fail without anybody hearing, same as `BoxBrowse.tsx`'s
+   *  own read — the pane draws its copies honestly with no `sections` at all. */
+  const [boxRecords, setBoxRecords] = useState<readonly BoxRecord[]>([])
+  useEffect(() => {
+    let live = true
+    getBoxes()
+      .then((summary) => {
+        if (live) setBoxRecords(Array.isArray(summary.boxes) ? summary.boxes : [])
+      })
+      .catch(() => {
+        // Deliberately nothing: see the comment above.
+      })
+    return () => {
+      live = false
+    }
+  }, [])
+  const sections = useMemo(() => (boxRecords.length === 0 ? NO_SECTIONS : layoutsOf(boxRecords)), [boxRecords])
+
+  const [broken, setBroken] = useState(false)
+  const [zoomed, setZoomed] = useState(false)
+  useEffect(() => {
+    setBroken(false)
+    setZoomed(false)
+  }, [currentRow?.copy.key])
+
+  /* THE MARKET READING, ONE READ PER RUN (the owner's pick, 2026-09-24: B, one quiet line under
+   *  the card, `CardHero.tsx`'s own header names the same ruling). Kept on the pane through this
+   *  rebuild — Q6 dropped the Details fold, not this line, which the owner asked for by name and
+   *  which `orders.spec.ts` still proves. A failed read is a quiet dash. */
+  const [priced, setPriced] = useState<Record<string, MarketRead>>({})
+  const asked = useRef<Set<string>>(new Set())
+  const pricedRun = currentCard?.run ?? null
+  useEffect(() => {
+    if (pricedRun === null || asked.current.has(pricedRun)) return
+    asked.current.add(pricedRun)
+    let live = true
+    getPricing(pricedRun)
+      .then((payload) => {
+        if (live) setPriced((held) => ({ ...held, [pricedRun]: marketTable(payload) }))
+      })
+      .catch(() => {
+        if (live) setPriced((held) => ({ ...held, [pricedRun]: { kind: 'absent', why: 'could not be read' } }))
+      })
+    return () => {
+      live = false
+    }
+  }, [pricedRun])
+
+  if (currentRow === null || currentGroup === null) return null
+
+  const figure = pickFigureOf(currentRow.take, owedBySku)
+  /* THE HEAD RESOLVES FROM `take` UNTIL `rawCards` DOES — `currentCard` is null only
+   *  transiently, on a fresh plan (`useOrderWalk`'s own comment), and `Orders.tsx`'s own read
+   *  is what fills it in. `syntheticCard` fills a `CardHeroHead` with what the wire already
+   *  told the walk (name, number, set, condition, sku) rather than showing a loading shape for
+   *  a fact the screen already has most of — the same fallback the deleted `WalkCardPane` drew
+   *  before this read answered. NEVER A PHOTOGRAPH ON THIS FALLBACK: a pooled copy's card is a
+   *  live code (D24, opsec), and an unresolved one has none to show yet either — both read
+   *  `photo: null`, which `PhotoPanel` draws as its own honest placeholder. */
+  const row: Row = { key: currentRow.copy.key, card: currentCard ?? syntheticCard(currentRow) }
+  const place = currentRow.copy.place.label
+  const { take } = currentRow
+  const read = currentCard?.run == null ? undefined : priced[currentCard.run]
+  const rawMarket = read?.kind === 'table' && currentCard !== null ? read.rows[`${currentCard.box}/${currentCard.index}`] : null
+  const market = rawMarket === null || rawMarket === undefined || Number.isNaN(Number(rawMarket)) ? null : Number(rawMarket)
+  const liveNow = take.listed === undefined ? null : forSale(take.listed.live, take.sold_here ?? 0)
+  return (
+    <>
+      <CardPane
+        row={row}
+        game={gameWord(row.card)}
+        place={place}
+        preChips={
+          <span className="orders-pick-chip">
+            <Pill tone="accent">
+              Pick {currentRow.take.wanted}
+              {figure.short > 0 ? null : ` of ${figure.of}`}
+            </Pill>
+            {figure.short > 0 ? (
+              <>
+                {' '}
+                <Pill tone="warn">{figure.short} short</Pill>
+              </>
+            ) : null}
+          </span>
+        }
+        postChips={showBuyers ? <Pill>For {takeBuyers(currentRow.take)}</Pill> : undefined}
+        photo={{
+          label: place,
+          absent: broken,
+          onAbsent: () => setBroken(true),
+          nonce: null,
+          onZoom: () => setZoomed(true),
+          reshoot: null,
+        }}
+        detail={
+          <>
+            <p className="orders-card-market">
+              <ProductLink sku={take.sku} name={take.name ?? undefined}>
+                {market === null ? '—' : <Money value={market} />} market, {liveNow === null ? '—' : liveNow} live
+              </ProductLink>
+            </p>
+            <CardLocations
+              group={currentGroup}
+              persona="owner"
+              onSell={walk.onSell}
+              busyKey={walk.busyCopy}
+              soldKeys={walk.soldKeys}
+              sections={sections}
+              currentKey={currentRow.copy.key}
+              preserveOrder
+              renderAction={(copy) => <RowAction walk={walk} copy={copy} />}
+            />
+          </>
+        }
+      />
+      {!zoomed ? null : (
+        <Overlay kind="lightbox" label="The photograph, full size" onClose={() => setZoomed(false)}>
+          <img src={photoSrc(row, null)} alt={`The card photographed at ${place === null ? row.key : sayPlace(place)}`} />
+        </Overlay>
+      )}
+    </>
+  )
 }
 
 function PullStage({
@@ -3275,7 +3488,7 @@ function PullStage({
           setWalkTicked(allTicked ? new Set() : new Set(tickableKeys))
         }}
       >
-        {allTicked ? 'Stop walking all' : `Walk all ${tickableKeys.size} buyers`}
+        {allTicked ? 'Stop' : `Walk ${tickableKeys.size}`}
       </Button>
     )
   const readyFirst = sortedReadyFirst(shownGroups, readyOf)
@@ -3284,7 +3497,7 @@ function PullStage({
     <>
       {walkAll === null && !readyFirst ? null : (
         <div className="orders-buyers-head">
-          {readyFirst ? <span className="orders-buyers-note">Ready to ship first</span> : <span />}
+          {readyFirst ? <span className="orders-buyers-note">Ready</span> : <span />}
           {walkAll}
         </div>
       )}
@@ -3382,7 +3595,7 @@ function PullStage({
             )}
             <span className="bn-spacer" />
             <HideToggle checked={hideSold} onChange={setHideSold} count={walk.soldKeys.size}>
-              Hide picked
+              Picked
             </HideToggle>
           </div>
           <WalkList walk={walk} hideSold={hideSold} collapsed={sectionsCollapsed} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} />
@@ -3395,6 +3608,7 @@ function PullStage({
      and what is next (UX-194). CSS decides which of the two is drawn (a container query), never
      a width read here. */
   const nextRow = walk.rows.find((row) => !walk.soldKeys.has(row.copy.key)) ?? null
+
   const chipWords = [
     walkedGroups.length > 1 ? `${walkedGroups.length} buyers` : selectedGroup === null ? 'Choose a buyer' : buyerLabel(selectedGroup),
     `${cardsToPull} ${plural(cardsToPull, 'card', 'cards')} to pick`,
@@ -3435,7 +3649,7 @@ function PullStage({
           {/* DOM order is the desk's visual order (buyers, walk, card), so Tab reads as the eye does. */}
           {walkColumn}
           <div className="orders-cardcol">
-            <WalkCardPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} />
+            <OrderPickPane walk={walk} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} />
           </div>
         </div>
       </div>
@@ -3552,8 +3766,8 @@ function figuresOf(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
  *  ("N cards need a look"), naming no single one of them wrongly. */
 function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): string {
   const words: Partial<Record<OrderLineReason, string>> = {
-    sku_unseen: 'not in the store',
-    sku_unknown: 'not in the store',
+    sku_unseen: 'missing',
+    sku_unknown: 'missing',
     no_copies_on_hand: 'short',
     short: 'short',
     not_a_single: 'sealed',
@@ -3571,9 +3785,9 @@ function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
   const only = entries.length === 1 ? entries[0] : undefined
   if (only !== undefined) {
     const [word, count] = only
-    return word === 'short' ? `${count} short` : `${count} ${plural(count, 'card', 'cards')} ${word}`
+    return word === 'short' || word === 'missing' ? `${count} ${word}` : `${count} ${plural(count, 'card', 'cards')} ${word}`
   }
-  return `${total} ${plural(total, 'card', 'cards')} need a look`
+  return `${total} review`
 }
 
 /** The one status a buyer shows, in words. */
@@ -3738,15 +3952,10 @@ function OrderDetail({
           placed {placed}
         </time>
       )}
-      <span className="orders-feed-word">
-        {order.status === null ? (
-          sourceName(order.source)
-        ) : (
-          <>
-            {sourceName(order.source)} says <q>{order.status}</q>
-          </>
-        )}
-      </span>
+      {/* F5 verbiage cut: the marketplace's own status quote restated the status pill above
+          it a second time (row 111) — this now just names the marketplace, as the null-status
+          case already did. */}
+      <span className="orders-feed-word">{sourceName(order.source)}</span>
     </span>
   )
 
@@ -3832,7 +4041,7 @@ function OrderDetail({
             <>All {order.wanted} sold</>
           ) : (
             <>
-              <b>{order.wanted - order.recorded}</b> {order.wanted - order.recorded === 1 ? 'copy' : 'copies'} still to sell
+              <b>{order.wanted - order.recorded}</b> remaining
               {order.recorded === 0 ? null : <i>{order.recorded} already sold</i>}
             </>
           )}

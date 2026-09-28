@@ -165,8 +165,13 @@ export function sentencePartsOf(place: Place, persona: Persona = 'owner'): Sente
      fall back to the box-wide reading only if the server ever omits either, which it does not
      on this path (slot is not null here). */
   const total = sectionCardTotal(place)
-  if (card !== null && total !== null) return { main: `Card ${card} of ${total}`, detail: null }
-  return { main: `Card ${slot} of ${box_total}`, detail: null }
+  /* F5 verbiage cut (row 195): the Fulfiller's own "Card N of M" -> "Position N of M", the
+     same word row 148 gave PositionBar's own section caption — one word for "where this is",
+     on both screens that ever say it in words rather than in a bare `#`. */
+  if (card !== null && total !== null) {
+    return { main: persona === 'fulfiller' ? `Position ${card} of ${total}` : `Card ${card} of ${total}`, detail: null }
+  }
+  return { main: persona === 'fulfiller' ? `Position ${slot} of ${box_total}` : `Card ${slot} of ${box_total}`, detail: null }
 }
 
 /** The joined form, for the accessible name only (D41 kept the dot there on purpose). Never

@@ -43,7 +43,7 @@ export function stageOf(row: RunSummary): Stage {
   }
   switch (row.phase) {
     case 'ready':
-      return { label: 'Not started', tone: 'default', filled: 0, live: false, step: 0 }
+      return { label: 'Pending', tone: 'default', filled: 0, live: false, step: 0 }
     case 'identify':
       return { label: 'Not read', tone: 'warn', filled: 0, live: false, step: 0 }
     case 'join':

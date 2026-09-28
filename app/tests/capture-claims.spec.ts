@@ -368,7 +368,7 @@ test('re-tapping the last claimed cell clears the claim, and stores nothing', as
      label now, which is the same words in the register the rest of the screen was rebuilt in.
      What is asserted is unchanged — the row says it, rather than leaving the row blank. */
   await page.keyboard.press('Escape')
-  await expect(finishRow(page)).toContainText('No claim')
+  await expect(finishRow(page)).toContainText('None')
 })
 
 test('a session written before the claim was a set reads back as ONE member, not as nothing', async ({
@@ -419,7 +419,7 @@ test('narrowing a two-member claim down to one CLEARS it rather than promoting i
   await page.getByRole('button', { name: 'Common', exact: true }).click()
   await page.keyboard.press('Escape')
 
-  await expect(finishRow(page)).toContainText('No claim')
+  await expect(finishRow(page)).toContainText('None')
   expect((await storedSetup(page))?.finish).toEqual([])
 })
 
@@ -673,7 +673,7 @@ test('S puts a divider in front of the next card, and sends no index', async ({ 
   /* The receipt names the section the SERVER rendered and the card it starts at — read off
      `sections_detail`, never off `sections.length`, which is the section arithmetic D10
      keeps out of the app. */
-  await expect(page.locator('.capture-section p')).toContainText('New section')
+  await expect(page.locator('.capture-section p')).toContainText('Section')
   /* THE DOT IS CSS NOW, NOT TYPED TEXT (D218) — `.capture-list-part + .capture-list-part::before`
      draws it, so the two facts' own text runs together with no separator character. */
   await expect(page.locator('.capture-section .capture-inline-label')).toHaveText(
@@ -1147,7 +1147,7 @@ test('a restored box that has been deleted since is let go of', async ({ page })
   /* THE STAGE FOOT AND NOT `.capture-box-val`, which is the RESTING row and does not exist
      while a field is open — and this check opens the box field on purpose. The foot is drawn
      in both states and is the screen's standing answer to "which drawer is this". */
-  await expect(page.locator('.capture-foot-box-name')).toHaveText('No box')
+  await expect(page.locator('.capture-foot-box-name')).toHaveText('None')
 
   /* IT SAYS WHY: the box is not in the store any more. */
   const note = page.locator('.capture-refused').filter({ hasText: /not in the store any more/ })
@@ -1163,7 +1163,7 @@ test('a restored box that is gone is let go of, and says so without naming a dra
 }) => {
   await open(page, { box: 99 }, GAMES, HAND_BOXES, { probe: false })
 
-  await expect(page.locator('.capture-foot-box-name')).toHaveText('No box')
+  await expect(page.locator('.capture-foot-box-name')).toHaveText('None')
   await expect(page.locator('.capture-refused').filter({ hasText: /not in the store/ })).toBeVisible()
   await expect(page.getByLabel(/box.s name or number/i)).toBeFocused()
 })
@@ -1196,7 +1196,7 @@ test('a restored box whose number now belongs to another drawer is let go of', a
      store says box 3 is id 23 today, so the drawer they left is gone and this is not it. */
   await open(page, { box: 3, bid: 40 }, GAMES, HAND_BOXES, { probe: false })
 
-  await expect(page.locator('.capture-foot-box-name')).toHaveText('No box')
+  await expect(page.locator('.capture-foot-box-name')).toHaveText('None')
 
   /* IT SAYS SO AS A FACT, because it holds one — D145 forbids an id softening what it knows.
      AND IT SAYS IT BY NUMBER, which is the one sentence on this screen that has to: the number
@@ -1269,7 +1269,7 @@ test('a box remembered before ids existed is let go of, and says it cannot tell'
      cost is one press, once, because the very next pick records an id. */
   await open(page, { box: 1 }, GAMES, HAND_BOXES, { probe: false })
 
-  await expect(page.locator('.capture-foot-box-name')).toHaveText('No box')
+  await expect(page.locator('.capture-foot-box-name')).toHaveText('None')
 
   /* AND IT DOES NOT CLAIM THE DRAWER CHANGED, which would be a fact it does not hold. It names
      the box the operator would recognise, because that box probably IS theirs. */
@@ -1362,13 +1362,13 @@ test('clearing the setup empties every claim, forgets the key, and can be undone
      screen before this case pressed anything. */
   await open(page, { box: 3, bid: 23, setHint: 'MEG', finish: ['normal'] }, GAMES, HAND_BOXES)
 
-  const clear = page.getByRole('button', { name: 'Clear the setup' })
+  const clear = page.getByRole('button', { name: 'Clear' })
   await expect(clear).toBeEnabled()
   await clear.click()
 
-  await expect(page.locator('.capture-box-val')).toContainText('No box yet')
+  await expect(page.locator('.capture-box-val')).toContainText('None')
   await expect(page.locator('.capture-row').filter({ hasText: /Set hint/ })).toContainText('None')
-  await expect(finishRow(page)).toContainText('No claim')
+  await expect(finishRow(page)).toContainText('None')
 
   /* THE GAME GOES TO THE REGISTRY'S DEFAULT, not to null. A null game draws the blocked
      reason for a registry that has not ARRIVED — "Waiting for the game list from the server"
@@ -1402,7 +1402,7 @@ test('the clear is disabled while there is nothing to clear, rather than absent'
   /* DISABLED, NOT HIDDEN (D118). A control that appears and disappears with the state it acts
      on moves the rail's height under the operator's hand — and this one sits at the foot of
      the column, so everything above it would move too. */
-  const clear = page.getByRole('button', { name: 'Clear the setup' })
+  const clear = page.getByRole('button', { name: 'Clear' })
   await expect(clear).toBeVisible()
   await expect(clear).toBeDisabled()
 })
@@ -1602,7 +1602,7 @@ test('no typed middle dot or bullet reaches the capture screen', async ({ page }
 
   // The section receipt (`capture-inline-label`: "Section N" + "from card N").
   await page.keyboard.press('s')
-  await expect(page.locator('.capture-section p')).toContainText('New section')
+  await expect(page.locator('.capture-section p')).toContainText('Section')
 
   // The Rarity claim, two members (the joined-list case), FIRST — narrowing the Finish claim
   // afterwards would clear a mid-selection state the union has not caught up to yet.
@@ -1651,7 +1651,7 @@ test('no typed middle dot or bullet reaches the capture screen', async ({ page }
  * ------------------------------------------------------------------------------------------ */
 
 function shutter(page: Page) {
-  return page.getByRole('button', { name: 'Capture card', exact: true })
+  return page.getByRole('button', { name: 'Capture', exact: true })
 }
 
 test('the shutter keeps one fixed position whatever field opens above it (D118)', async ({

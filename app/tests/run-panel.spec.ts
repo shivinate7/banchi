@@ -678,7 +678,7 @@ test('the panel is open on arrival, with all four commands named and reachable',
      person arrives, and the press that reaches them is on the screen rather than behind
      anything. That is `CLAUDE.md`'s route-is-not-a-feature test, and it is what the fold
      assertion was ever standing in for. */
-  await expect(page.locator('.runs-lede')).toContainText('Only Identify costs money.')
+  await expect(page.locator('.runs-lede')).toContainText('Paid')
 
   const identify = page.locator('.runs-actions').getByRole('button', { name: /^Identify/ })
   await expect(identify).toBeVisible()
@@ -742,7 +742,7 @@ test('the four steps are named before any run exists', async ({ page }) => {
   await open(page, { runs: [] })
 
   await expect(page.locator('.run-empty')).toContainText('No runs yet')
-  await expect(page.locator('.runs-lede')).toContainText('Only Identify costs money.')
+  await expect(page.locator('.runs-lede')).toContainText('Paid')
   const empty = page.locator('.runs-detail-empty')
   await expect(empty).toContainText('Identify a box first')
   await expect(empty).toContainText('Matching and pricing do not')
@@ -1633,7 +1633,7 @@ test('no DRAWER is picked for the operator, and the default start is a state rat
      control that spends still does not exist until that has answered, which is asserted in its
      own case above. */
   await openComposer(page)
-  await expect(page.locator('.runs-composer-note')).toContainText('Every card waiting to be identified')
+  await expect(page.locator('.runs-composer-note')).toContainText('Pending')
   const next = page.getByRole('button', { name: /^Next: photos$/ })
   await expect(next).toBeEnabled()
 

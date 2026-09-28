@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Decode every STAGED image under the demo's two tracked photo directories.
+"""Decode every STAGED image the caller names, wherever it is staged.
 
-THE ONE CHECK THAT LOOKS AT THE IMAGE, run at commit time. `scripts/demo-photos.py` and
-`scripts/demo-extra-real.py` already run this exact decode before either one ever writes a
-photograph — but that only proves the CURATOR is honest. It says nothing about a photograph
-staged by any other path: an edit made outside either curator, a reviewer's own `git add`, a
-mutation applied by hand. The commit is the one place every route into `demo-assets/photos/`
-and `demo-assets/extra/photos/` converges, so this is where a bearer instrument is stopped
-regardless of how it got staged.
+THE ONE CHECK THAT LOOKS AT THE IMAGE, run at commit time. `scripts/githooks/pre-commit`
+passes it every staged image outside `captures/` — not only the demo's tracked photo
+directories, which is what this once scanned before the owner's ruling of 2026-09-27 removed
+the folder-exception list. `scripts/demo-photos.py` and `scripts/demo-extra-real.py` already
+run this exact decode before either one ever writes a photograph into `demo-assets/`, but
+that only proves the CURATOR is honest. It says nothing about a photograph staged by any
+other path: an edit made outside either curator, a reviewer's own `git add`, a mutation
+applied by hand. The commit is the one place every route into a tracked path converges, so
+this is where a bearer instrument is stopped regardless of how it got staged or which folder
+it lands in.
 
 Reads the STAGED BLOB (`git show :<path>`), never the working-tree file — a partially staged
 edit must be judged by what would actually be committed, not by whatever sits on disk.

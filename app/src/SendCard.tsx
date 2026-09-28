@@ -704,14 +704,13 @@ export function SendCard({
           disabled={busy}
           onClick={() => setDownloadOpen((open) => !open)}
         >
-          {/* THE SAME PRESS, SHORTER ON A PHONE (UX-007): both quiet doors fit on the line under
-              the send, so the bar stays two lines high. */}
-          <span className="send-long">Download the file instead</span>
-          <span className="send-short">Download file</span>
+          {/* F5 verbiage cut: one word fits both the phone and the desk, so the
+              UX-007 long/short split (once "Download the file instead" / "Download file")
+              is gone with it. */}
+          Download
         </Button>
         <Button variant="quiet" icon="refresh" className="send-door" busy={live.checking} disabled={live.checking} onClick={() => void live.checkNow()}>
-          <span className="send-long">Check what is live</span>
-          <span className="send-short">Check live</span>
+          Refresh
         </Button>
       </div>
 

@@ -347,7 +347,7 @@ function HistoryFoot({
         <i aria-hidden="true" />
         {/* `on_hand` is nullable BECAUSE a box could not be counted. A sum with a null in it is
             not a sum, so the clause degrades and the sentence does not. */}
-        <b>{onHand.toLocaleString()}</b> on hand
+        <b>{onHand.toLocaleString()}</b> stored
         {boxes === null ? null : <> in <b>{boxes}</b> {boxes === 1 ? 'box' : 'boxes'}</>}
         {everSold === null || everSold === 0 ? null : (
           <>
@@ -630,7 +630,7 @@ export function Home() {
           : openOrders === 0
             ? 'no open orders'
             : toPull
-              ? `${toPull} to pull${unfindable ? `, ${unfindable} missing` : ''}`
+              ? `${toPull} owed${unfindable ? `, ${unfindable} missing` : ''}`
               : `every copy pulled${unfindable ? `, ${unfindable} missing` : ''}`,
       tone: toPull ? 'warn' : openOrders === 0 ? 'ok' : undefined,
     },
@@ -640,7 +640,7 @@ export function Home() {
       label: 'Shipping',
       figure: batch ? String(batch.shipments) : '—',
       quiet: !batch,
-      note: batch ? `${batch.name}: ${batch.shipments} ${batch.shipments === 1 ? 'shipment' : 'shipments'} in lanes` : 'no export yet',
+      note: batch ? `${batch.name}: ${batch.shipments} ${batch.shipments === 1 ? 'shipment' : 'shipments'} in lanes` : 'None',
     },
   ]
 
@@ -743,7 +743,7 @@ export function Home() {
             kbd=",C"
             onClick={() => (window.location.hash = '#/capture')}
           >
-            {status.state === 'ready' && status.value.cards === 0 ? 'Photograph the first box' : 'Start capturing'}
+            {status.state === 'ready' && status.value.cards === 0 ? 'Photograph the first box' : 'Capture'}
           </Button>
         </div>
         <HistoryFoot status={status.state === 'ready' ? status.value : null} boxes={boxCount} sold={sold} shelf={shelf.state === 'ready' ? shelf.value : null} live={say?.running ?? false} />
@@ -804,11 +804,11 @@ export function Home() {
                         {name}
                       </span>
                       <span className="home-box-meta">
-                        <span>{held.toLocaleString()} on hand</span>
+                        <span>{held.toLocaleString()} stored</span>
                         <span>{box.sold} sold</span>
                       </span>
                     </span>
-                    <span className="home-box-bar" title={`${pct}% on hand`}>
+                    <span className="home-box-bar" title={`${pct}% stored`}>
                       <span style={{ width: `${pct}%` }} />
                     </span>
                   </a>
@@ -821,10 +821,10 @@ export function Home() {
         <div className="bn-panel home-panel">
           <div className="bn-panel-head">
             <span className="bn-section-title">
-              <Icon name="history" size={16} /> Recent runs
+              <Icon name="history" size={16} /> Runs
             </span>
             <a className="home-more" href="#/runs">
-              All runs <Icon name="arrowRight" size={14} />
+              All <Icon name="arrowRight" size={14} />
             </a>
           </div>
           <div className="home-runs">

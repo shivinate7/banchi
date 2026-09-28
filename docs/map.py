@@ -2260,16 +2260,18 @@ COMPONENTS = [
         "modules": {
             # ---- the commit path. D18's rule is not advice here; this IS the path ----
             "githooks/pre-commit": {
-                "does": "the commit gate: fixtures read-only, no image staged outside "
-                        "captures/, no iCloud Drive conflict copy (`foo 2.py`) staged while "
-                        "the repo still lives there, no printed code-card layout in the "
-                        "staged diff, no symlink whose target leaves the repository (D47 — "
-                        "a tracked absolute link points at itself in the tree it names, and "
-                        "checking it out removes the ignored real directory), then "
-                        "the docs audit — whose exit code it maps, 1 blocking, 2 printing "
-                        "the coupling question, 64 warning loudly that the auditor was "
-                        "invoked with a flag it does not accept. Tracked and reviewable "
-                        "through core.hooksPath rather than living unversioned inside git.",
+                "does": "the commit gate: fixtures read-only, every staged image outside "
+                        "captures/ decoded for a QR and refused on a decode or an unavailable "
+                        "scanner (`PKMNSCAN_QR=off` is the hatch), no iCloud Drive conflict "
+                        "copy (`foo 2.py`) staged while the repo still lives there, no "
+                        "printed code-card layout in the staged diff, no symlink whose target "
+                        "leaves the repository (D47 — a tracked absolute link points at "
+                        "itself in the tree it names, and checking it out removes the "
+                        "ignored real directory), then the docs audit — whose exit code it "
+                        "maps, 1 blocking, 2 printing the coupling question, 64 warning "
+                        "loudly that the auditor was invoked with a flag it does not accept. "
+                        "Tracked and reviewable through core.hooksPath rather than living "
+                        "unversioned inside git.",
                 # D18 binds this file harder than any other in the repo: it is the path
                 # that decides whether a commit proceeds, so "nothing that writes may run
                 # here" is a property to preserve rather than a principle to admire. D11
@@ -2277,8 +2279,8 @@ COMPONENTS = [
                 # after it drifts, which is why an edit has to be stopped and not caught.
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
-                "governed_by": ["D11", "D14", "D16", "D18", "D44", "D47", "D58", "D70", "D92",
-                                "D295"],
+                "governed_by": ["D11", "D14", "D16", "D18", "D24", "D44", "D47", "D58", "D70",
+                                "D92", "D295", "D-every-image-is-scanned"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; a sibling "
                         "hook's arrival is caught by `hook roster` since 2026-09-05. "
@@ -2596,8 +2598,8 @@ COMPONENTS = [
                 # violating it, so wired into the commit path it would refuse its own commits.
                 # D43 and D53 join with D139: the cases turn on a linked worktree having its own
                 # store, and on the primary checkout being the one the live server is built from.
-                "governed_by": ["D18", "D42", "D43", "D53", "D139", "D151",
-                                "D158", "D176"],
+                "governed_by": ["D18", "D42", "D43", "D53", "D139", "D151", "D158", "D176",
+                                "D-every-image-is-scanned"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -3990,9 +3992,8 @@ COMPONENTS = [
                 # split `--unclaim` and the fixed `stale_claims` both have to read through; D186
                 # and D188 are the real, landed entries the incident this file's own docstring
                 # narrates is about.
-                "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
-                                "D140", "D151", "D160", "D182", "D185", "D186", "D188",
-                                "D190"],
+                "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135", "D140", "D151",
+                                "D160", "D182", "D185", "D186", "D188", "D190", "D295"],
             },
             "catalog-refresh.py": {
                 "does": "build-order step 9, piece 1 (D15): shallow-clone "
@@ -4092,7 +4093,7 @@ COMPONENTS = [
                 # the incident arm's own prose names the two real, landed entries it replays.
                 "governed_by": ["D1", "D2", "D16", "D18", "D47", "D80", "D135", "D136", "D140",
                                 "D141", "D143", "D148", "D151", "D160", "D185", "D186", "D188",
-                                "D190", "D249"],
+                                "D190", "D249", "D295"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -4111,7 +4112,7 @@ COMPONENTS = [
                 # once, deliberately, with a re-measured T1.
                 "governed_by": ["D15", "D16", "D23", "D39", "D40", "D90", "D96", "D105", "D123",
                                 "D194", "D200", "D218", "D226", "D229", "D245", "D248", "D271", "D277",
-                                "D280", "D284"],
+                                "D280", "D284", "D-orders-walk-rejoins-inventory"],
             },
             "docs-audit-allow-game-coverage.txt": {
                 "does": "`game key rarity` pairs the `game coverage` row may not ask "
@@ -5951,7 +5952,7 @@ COMPONENTS = [
                                    "governed_by": ["D5", "D94", "D102"]},
             "public/manifest.webmanifest": {"does": "the web app manifest, and it does TWO jobs. It began as an icon manifest — `apple-touch-icon` pointed at an SVG, which iOS does not render, so the app had no home-screen icon at all rather than a degraded one. Since D108 it is also what makes Chrome's `Install page as app` produce a real dock app: `display: standalone`, and `launch_handler: focus-existing` so a second press on the dock icon focuses the open window instead of opening another. EVERY URL IN IT IS RELATIVE, and that is a correctness fix rather than a style: Vite rebases the `<link rel=\"manifest\">` address and copies app/public/ VERBATIM, so a site-absolute `/icon-192.png` is right at `/` and 404s under `make demo-static`'s `/pkmnscan/` base — measured against the published demo, icons and start_url both. ITS ICON LIST IS THE macOS APP ICON SET AND NOTHING ELSE (logo.md section 17): three PNGs, all inset to Apple's 824/1024 grid, because Chrome resizes THESE into the installed app's .icns and one full-bleed entry would pad the dock icon at one size and not the next. `favicon.svg` was removed from it for exactly that reason and is still the tab icon by `<link rel=\"icon\">`. Still NO service worker and no offline story; the page is served by `make up` and there is nothing to cache.",
                                             "governed_by": ["D94", "D102", "D108"]},
-            "public/icon-180.png": {"does": "the apple-touch-icon, and the ONE raster that is NOT inset to the macOS grid (logo.md section 17) — iOS applies its own mask to a full-bleed square, so insetting would put the mark in a box inside a box. The DISPLAY cut because 180px is squarely inside the range section 3 locks for 64px and up — taper and holographic foil, not the favicon's small cut. GENERATED by `node scripts/build-mark.mjs --icons`, which needs Playwright and is deliberately behind a flag: committing what it writes needs `--no-verify`, since the pre-commit image guard refuses any .png outside captures/ and has no PKMNSCAN_*=off hatch.",
+            "public/icon-180.png": {"does": "the apple-touch-icon, and the ONE raster that is NOT inset to the macOS grid (logo.md section 17) — iOS applies its own mask to a full-bleed square, so insetting would put the mark in a box inside a box. The DISPLAY cut because 180px is squarely inside the range section 3 locks for 64px and up — taper and holographic foil, not the favicon's small cut. GENERATED by `node scripts/build-mark.mjs --icons`, which needs Playwright and is deliberately behind a flag: the pre-commit image guard now QR-scans any .png staged outside captures/ (`PKMNSCAN_QR=off` is its hatch) rather than refusing on sight, so a generated icon clears it on a clean decode with no override needed.",
                                     "governed_by": ["D94", "D102"]},
             "public/icon-192.png": {"does": "the manifest's smallest icon, INSET to Apple's macOS icon grid like the rest of that set (logo.md section 17) — 155 of 192, which is 80.73% against the grid's 80.47%, the rounding. Same drawing and same generator as icon-180.png; what differs is that it is drawn smaller on a transparent canvas, because section 3 locks the tile and nothing may redraw it.",
                                     "governed_by": ["D94", "D102", "D108"]},
@@ -7328,7 +7329,7 @@ COMPONENTS = [
                         "both are correct for the owner and neither is his.",
                 "governed_by": ["D5", "D6", "D7", "D10", "D13", "D21", "D24", "D26", "D28", "D31",
                                 "D32", "D57", "D69", "D83", "D93", "D94", "D125", "D172", "D192",
-                                "D193", "D212", "D218", "D259", "D265", "D275"],
+                                "D193", "D196", "D212", "D218", "D259", "D265", "D275"],
             },
             "src/Fulfillment.css": {
                 "does": "the generous 24-64 end of the one system, two densities. Every floor "
@@ -8162,7 +8163,7 @@ COMPONENTS = [
                                                "D118", "D123", "D132", "D159", "D171", "D181",
                                                "D192", "D193", "D194", "D195", "D196", "D203",
                                                "D209", "D212", "D218", "D220", "D221", "D274",
-                                               "D285", "D296"]},
+                                               "D285", "D296", "D-orders-walk-rejoins-inventory"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8170,7 +8171,7 @@ COMPONENTS = [
                                "governed_by": ["D5", "D24", "D40", "D41", "D50", "D63", "D69",
                                                "D113", "D114", "D117", "D118", "D123", "D193",
                                                "D195", "D196", "D203", "D212", "D221", "D270",
-                                               "D274"]},
+                                               "D274", "D-orders-walk-rejoins-inventory"]},
             "src/OrdersHubStore.ts": {"does": "THE HUB'S MEMORY ACROSS A STAGE SWITCH. "
                                               "`#/orders` and `#/shipping` are one screen with "
                                               "two stages, and the shell keys its view on the "
@@ -8210,40 +8211,30 @@ COMPONENTS = [
                                                 "a person.",
                                         "governed_by": ["D5", "D61", "D66", "D69", "D73", "D94",
                                                         "D218", "D221", "D292"]},
-            "src/OrdersWalkPane.tsx": {"does": "`docs/specs/order-walk-plan.md` §13, \"Orders "
-                                           "is inventory's screen with orders in the rail\": "
-                                           "replaces `OrdersWalk.tsx` whole, not adapted. There "
-                                           "is no more frozen pass — `useOrderWalk` re-fetches "
-                                           "`POST /orders/walk-plan` LIVE whenever the walked "
-                                           "set (the selected order plus every ticked one) "
-                                           "changes, the same way selecting a box opens it. "
-                                           "`WalkList` draws the plan's boxes and sections in "
-                                           "`BoxBrowse.css`'s own `.browse-list`/`.browse-row` "
-                                           "shape, one row per physical pick (`here: true` "
-                                           "copy); `WalkMainPane` is inventory's own card pane "
-                                           "— `CardLocations` with `preserveOrder`, over a "
-                                           "`SearchGroup` synthesised from the current row's "
-                                           "take, exactly as `Inventory.tsx`'s `loneGroup` and "
-                                           "the old `TakeBlock` built one. `Mark sold` is the "
-                                           "one write, `WalkPullFn`/`WalkUndoFn` restated from "
-                                           "the deleted file, and it records against an owing "
-                                           "order via `pickOrderFor`'s live-tally rule "
-                                           "(unchanged from `OrdersWalk.tsx`). `hideHeader`, "
-                                           "`rowOverride` and `rowAttrs` — added to "
-                                           "`CardLocations.tsx` only for the deleted file's own "
-                                           "one-line collapsed row — are deleted with it; "
-                                           "`preserveOrder` stays, the trap this rebuild's own "
-                                           "brief named first (never re-sort the walk).",
+            "src/OrdersWalkPane.tsx": {"does": "the walk's own hook and list, over "
+                                           "`docs/specs/order-walk-plan.md` §13: "
+                                           "`useOrderWalk` re-fetches `POST /orders/walk-plan` "
+                                           "LIVE whenever the walked set (the selected order "
+                                           "plus every ticked one) changes, the same way "
+                                           "selecting a box opens it, and `WalkList` draws the "
+                                           "plan's boxes and sections, one row per physical "
+                                           "pick (`here: true` copy). THE CARD PANE MOVED OUT "
+                                           "(lane A3, `D-orders-walk-rejoins-inventory`): "
+                                           "`Orders.tsx:OrderPickPane` composes it from "
+                                           "`CardHero.tsx:CardPane` and "
+                                           "`CardLocations.tsx:CardLocations`, reused whole. "
+                                           "`pickFigureOf`, `RowAction` and `takeBuyers` stay "
+                                           "exported from here because `Orders.tsx` still needs "
+                                           "them: the \"Pick N of M\" figure, and the one press "
+                                           "(Mark sold / Undo) `CardLocations`'s own "
+                                           "`renderAction` slot calls per copy. `WalkCardPane` "
+                                           "and its `orders-card-*` classes are deleted, not "
+                                           "adapted.",
                                    "governed_by": ["D24", "D57", "D58", "D62", "D79", "D93", "D96",
                                                    "D97", "D116", "D118", "D132", "D164", "D171",
                                                    "D181", "D193", "D209", "D212", "D218", "D220",
-                                                   "D252", "D263", "D279"]},
-            "src/OrdersWalkPane.css": {"does": "the lead photograph and the `Sold` receipt "
-                                           "drain-bar (borrowed from `Inventory.css` by class "
-                                           "name); every other shape this file draws is "
-                                           "`BoxBrowse.css`'s own `.browse-*` classes, imported "
-                                           "by `Orders.tsx` rather than restated here.",
-                                   "governed_by": ["D50", "D94", "D118", "D164"]},
+                                                   "D252", "D263", "D279",
+                                                   "D-orders-walk-rejoins-inventory"]},
             "src/Shipping.tsx": {"does": "`#/shipping`: NINE LINES THAT POINT THE ROUTE AT THE "
                                          "HUB — `<OrdersHub stage=\'ship\'/>`. The stage itself "
                                          "is src/OrdersShipStage.tsx, which `Orders.tsx` "
@@ -9432,7 +9423,7 @@ COMPONENTS = [
                                                      "D114", "D118", "D123", "D132", "D171", "D181",
                                                      "D193", "D194", "D196", "D203", "D209", "D212",
                                                      "D218", "D220", "D221", "D263", "D274", "D285",
-                                                     "D296"]},
+                                                     "D296", "D-orders-walk-rejoins-inventory"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "
@@ -9454,8 +9445,8 @@ COMPONENTS = [
                                                  "Not a harness test — it starts a browser; "
                                                  "`make design-check` runs it.",
                                          "governed_by": ["D57", "D58", "D113", "D118", "D136",
-                                                         "D164", "D212", "D220",
-                                                         "D252"]},
+                                                         "D164", "D212", "D220", "D252",
+                                                         "D-orders-walk-rejoins-inventory"]},
             "tests/shipping.spec.ts": {"does": "the shipping screen in a browser, and its "
                                                "strongest cases are ABSENCES: no buyer name, "
                                                "address, city or postcode appears anywhere on "
@@ -9655,8 +9646,7 @@ COMPONENTS = [
                                 "D63", "D67", "D68", "D71", "D83", "D89", "D92", "D101", "D115",
                                 "D116", "D117", "D118", "D119", "D124", "D125", "D132", "D134",
                                 "D136", "D142", "D155", "D159", "D172", "D181", "D192", "D194",
-                                "D196", "D213", "D218", "D259", "D299",
-                                "D300"],
+                                "D196", "D213", "D218", "D259", "D288", "D299", "D300"],
                 "note": "THE CHECK `CLAUDE.md`'s ROUTE-IS-NOT-A-FEATURE RULE SAYS DOES NOT "
                         "EXIST. That rule was written on 2026-08-23 after three routes shipped "
                         "with full T7 coverage and no client function and no control — green "

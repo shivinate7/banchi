@@ -1146,7 +1146,7 @@ function Action({
         <IconButton
           size="xl"
           icon="moveTo"
-          label="Move to another box"
+          label="Move"
           disabled={busyKey !== null}
           onClick={() => onMove(copy)}
         />

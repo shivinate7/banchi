@@ -129,7 +129,7 @@ test('a terminal order never inflates the "cannot be filled" figure, and the cou
 
   // The genuine shortfall alone: 2 copies, 1 order. Never 7 copies — the terminal
   // order's 5 must never reach this sentence. (UX-051/TXT-26: one word, "missing", once.)
-  expect(text).toMatch(/\b2 copies missing across\b/)
+  expect(text).toMatch(/\b2 short across\b/)
   expect(text).not.toMatch(/\b7 copies\b/)
   expect(text).toMatch(/\b1 order\b/)
   expect(text).not.toMatch(/\b2 orders\b/)
@@ -186,7 +186,7 @@ for (const [label, ledger, facet] of [
     await expect(page.locator('main.home')).toBeVisible()
 
     const standingRow = page.locator('a.home-standing-row')
-    await expect(standingRow).toContainText('Cannot be filled')
+    await expect(standingRow).toContainText('Unfillable')
     await expect(standingRow).toHaveAttribute('href', `#/orders?show=${facet}`)
     await standingRow.click()
 
@@ -234,9 +234,9 @@ test('"Cannot be filled" counts only the orders that miss a copy, and the list i
   await expect(page.locator('main.home')).toBeVisible()
 
   const standingRow = page.locator('a.home-standing-row')
-  await expect(standingRow).toContainText('Cannot be filled')
+  await expect(standingRow).toContainText('Unfillable')
   const said = (await standingRow.innerText()).replace(/\s+/g, ' ')
-  expect(said).toContain('6 copies missing across 3 orders')
+  expect(said).toContain('6 short across 3 orders')
   await expect(standingRow).toHaveAttribute('href', '#/orders?show=missing')
   await standingRow.click()
 
@@ -269,7 +269,7 @@ test('no dot is typed on the box list or the hero deck (D218)', async ({ page })
   await expect(page.locator('main.home')).toBeVisible()
 
   const meta = page.locator('.home-box-meta').first()
-  await expect(meta).toContainText('on hand')
+  await expect(meta).toContainText('stored')
   const typedDot = /[·•]/
   await expect(page.locator('.bn-view')).not.toContainText(typedDot)
 })

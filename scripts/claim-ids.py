@@ -116,9 +116,9 @@ def say(*lines: str) -> None:
         print(line)
 
 
-def git(*args: str, cwd: Optional[str] = None) -> str:
+def git(*args: str, cwd: Optional[str] = None, input_bytes: Optional[bytes] = None) -> str:
     try:
-        done = subprocess.run(["git"] + list(args), cwd=cwd or str(ROOT),
+        done = subprocess.run(["git"] + list(args), cwd=cwd or str(ROOT), input=input_bytes,
                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)
     except OSError:
         return ""
@@ -129,8 +129,36 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def ignored_paths(root: Path, paths: Sequence[Path]) -> Set[Path]:
+    """Every path in `paths` that git ignores, asked in ONE call rather than one per file.
+
+    `SKIP` prunes a fixed, hand-typed list of directory NAMES, which is a performance floor
+    rather than a correctness claim — it has no way to know about a directory `.gitignore`
+    names but nobody thought to type here. `demo`, `app/demo` and `app/public/demo` are
+    gitignored (D295, docs/specs/demo.md) and none of them were in `SKIP`, so a branch that
+    had built the demo locally handed `text_files()` two 24-133 MB JSON bundles it had no
+    business reading — gitignored build output, never a source a citation could live in.
+
+    `git check-ignore --no-index` is asked rather than `git ls-files`, because `--no-index`
+    answers from `.gitignore` alone and does not care whether the path has ever been staged —
+    a freshly generated file that is gitignored answers the same as one nobody has touched in
+    years. FAILS OPEN: no git, or `root` outside a checkout, answers with no ignored paths at
+    all, because a text file this cannot classify is a text file the walk already knew how to
+    read before this existed.
+    """
+    if not paths:
+        return set()
+    rels = [str(p.relative_to(root)) for p in paths]
+    out = git("check-ignore", "--no-index", "-z", "--stdin", cwd=str(root),
+              input_bytes=("\0".join(rels) + "\0").encode("utf-8"))
+    if not out:
+        return set()
+    return {root / rel for rel in out.split("\0") if rel}
+
+
 def text_files(root: Path) -> List[Path]:
-    """Every tracked-looking text file under `root`, excluding the trees SKIP names.
+    """Every tracked-looking text file under `root`, excluding the trees SKIP names and
+    whatever git ignores.
 
     A DOTTED DIRECTORY IS NOT SKIPPED FOR BEING DOTTED. `SKIP` names the trees to prune, the
     same way `docs-audit.py`'s own `SKIP_DIRS` does — by name, never by a leading dot — and
@@ -142,6 +170,12 @@ def text_files(root: Path) -> List[Path]:
     coverage this walk must be a superset of — proved in `scripts/claim-selftest.py`. `.git`,
     `.venv`, `venv` and `.serve` stay excluded because they are named in `SKIP`, not because
     they start with a dot.
+
+    `SKIP` IS A PERFORMANCE FLOOR, NOT A CORRECTNESS CLAIM, and `ignored_paths` is the
+    correctness half. `demo`, `app/demo` and `app/public/demo` are gitignored build output
+    (D295) that nobody had typed into `SKIP`, so a branch that had built the demo locally
+    handed every caller of this walk two 24-133 MB JSON bundles to read for citations they
+    could never hold — the owner's ruling, 2026-09-27: this walk skips what git ignores.
     """
     out: List[Path] = []
     for base, dirs, names in os.walk(root):
@@ -160,7 +194,8 @@ def text_files(root: Path) -> List[Path]:
             # `make hooks` copies into the common git dir, and text like any other here.
             if path.parent.as_posix().endswith(HOOK_DIR) and not path.suffix:
                 out.append(path)
-    return out
+    ignored = ignored_paths(root, out)
+    return [p for p in out if p not in ignored]
 
 
 # --------------------------------------------------------------------- what main has taken
