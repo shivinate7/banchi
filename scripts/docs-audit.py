@@ -58,6 +58,7 @@ from __future__ import annotations
 import argparse
 import ast
 import contextlib
+import importlib.util
 import csv
 import io
 import json
@@ -1156,7 +1157,7 @@ def check_allowlist(report: Report, allowed: Dict[str, str]) -> None:
 #      (`_FRAGMENT_RE`), which is how a spec writes "`store/db.py` ... at line 1279" in the older, refused form.
 # NOT ANCHORS, and proved so by `--self-test`: a time (`10:30`), a ratio (`3:1`), a slice
 # (`x[:5]`), a format spec (`{:5d}`), `host:port` (a word before the colon), and a port a
-# paragraph names bare (`_PORTS`, the ports this repo serves). A CSS pseudo-selector is not a
+# paragraph names bare (`_is_served_port`, read from `server/ports.py`). A CSS pseudo-selector is not a
 # digit run. Code scope is by file type: `#` comments in .py, `//` and block comments in
 # .ts/.tsx/.js/.mjs, block comments alone in .css. THERE IS NO EXEMPTION LIST. A record that must
 # quote a line writes it in words ("line 182, column 81"). The fix for a refusal is a symbol
@@ -1171,7 +1172,21 @@ _FILE_TOKEN_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]*\." + _ANCHOR_EXTS + r
 _FRAGMENT_RE = re.compile(
     r"(?<![\w:/.)\]\[{-])(?<!\d):(?P<start>[0-9]+)(?:-(?P<end>[0-9]+))?(?![\w:])"
 )
-_PORTS = frozenset({80, 443, 3000, 5173, 8000, 8080})
+
+
+def _is_served_port(number: int) -> bool:
+    """A bare `:N` that names a port this repo serves, read from `server/ports.py` (the constants
+    the code emits, never a copy). Unreadable means no port is exempt: the row fails loud."""
+    try:
+        spec = importlib.util.spec_from_file_location("_ports_for_audit", ROOT / "server" / "ports.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return number in (mod.CAPTURE_BASE_PORT, mod.DEV_BASE_PORT) or any(
+            low <= number < low + mod.SLOTS for low in (mod.CAPTURE_LOW, mod.DEV_LOW)
+        )
+    except Exception:
+        return False
+
 _CODE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".mjs", ".css")
 
 
@@ -1180,8 +1195,9 @@ def code_files() -> List[Path]:
 
 
 def comment_units(path: Path, text: str) -> List[Tuple[int, Optional[str]]]:
-    """`(line number, comment text or None)` per line of a code file. `None` is a line with no
-    comment, which ends a paragraph. Scope by file type, comment text only."""
+    """`(line number, comment or docstring text or None)` per line of a code file. `None` is a line
+    with none, which ends a paragraph. Scope by file type: comments, plus Python docstrings, plus
+    every string in `docs/map.py`."""
     lines = text.splitlines()
     found: Dict[int, str] = {}
     if path.suffix == ".py":
@@ -1191,6 +1207,26 @@ def comment_units(path: Path, text: str) -> List[Tuple[int, Optional[str]]]:
                     found[tok.start[0]] = tok.string
         except (tokenize.TokenError, IndentationError, SyntaxError):
             pass
+        # DOCSTRINGS ARE PROSE: every module, class and function docstring, line by line. In
+        # `docs/map.py` (the repo as data) every string constant is prose, so all are read.
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            tree = None
+        if tree is not None:
+            spans: List[ast.Constant] = []
+            if path.name == "map.py" and path.parent.name == "docs":
+                spans = [n for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+            else:
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                        body = node.body
+                        if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
+                                and isinstance(body[0].value.value, str)):
+                            spans.append(body[0].value)
+            for const in spans:
+                for row in range(const.lineno, (const.end_lineno or const.lineno) + 1):
+                    found[row] = found.get(row, "") + " " + text.splitlines()[row - 1]
     else:
         pattern = r"/\*.*?\*/" if path.suffix == ".css" else r"/\*.*?\*/|(?<!:)//[^\n]*"
         for m in re.finditer(pattern, text, re.S):
@@ -1225,7 +1261,7 @@ def anchor_hits_in_units(
             cited = True
         if cited:
             for m in _FRAGMENT_RE.finditer(clean):
-                if int(m.group("start")) not in _PORTS:
+                if not _is_served_port(int(m.group("start"))):
                     hits.append((doc, number, m.group(0)))
     return hits
 
@@ -3714,7 +3750,7 @@ def unscoped_walk_sites(paths: Sequence[Path]) -> List[Tuple[str, int, str, str]
     shape `_payload_keys` and `mechanism_refs` are tested in already.
 
     WHAT THIS CANNOT SEE, and it says so rather than pretending completeness:
-    `store/rows.py:177`'s degradation — a `where()`/`select()` call that LOOKS scoped but
+    `store/rows.Rows`'s `__len__` degradation — a `where()`/`select()` call that LOOKS scoped but
     answers from a Python-side list because an earlier call in the same request already
     materialised everything — is invisible here. This function reads one file at a time
     with no notion of a request's call order, so it cannot tell a `where()` that hits the
@@ -3778,7 +3814,7 @@ def check_unscoped_walk(report: Report) -> None:
     entry nothing will ever delete, which is why `UNSCOPED_WALK_EXPECTED`'s floor never
     reaches zero.
 
-    WHAT IT CANNOT SEE: `store/rows.py:177`'s runtime degradation (a call that reads
+    WHAT IT CANNOT SEE: `store/rows.Rows`'s `__len__` runtime degradation (a call that reads
     scoped in the source and answers unscoped at runtime because an earlier call in the
     same request already loaded everything) — see `unscoped_walk_sites`'s own docstring,
     which item 2 is what actually removes. This row reads Python source shapes, never
@@ -4396,7 +4432,7 @@ def check_server_concurrency(report: Report) -> None:
     stale on it.
 
     The bare integers are safe from both anchors for the reason the comment below records:
-    CLAUDE.md:1121's "sized this at 12" and "80 Playwright browsers, 969 threads" are
+    CLAUDE.md's "sized this at 12" and "80 Playwright browsers, 969 threads" are
     measurements, and an ATTRIBUTED anchor can neither be satisfied nor tripped by a loose
     number.
     """
@@ -12851,7 +12887,7 @@ def check_doc_hygiene(report: Report, docs: List[Path]) -> None:
           contents, this project's own heading parsers, and the status line that governs a
           file all assume one title.
 
-      a line citation past the end of its file  `ReviewQueue.css:47` outliving the line it
+      a line citation past the end of its file  a `ReviewQueue.css` line number outliving the line it
           named. The `paths` row proves the FILE resolves and stops there, so the number is
           unchecked; this catches only the provable half, where the file is shorter than the
           number. A citation pointing at the wrong line of a long-enough file is invisible
@@ -16211,7 +16247,7 @@ def check_shell_substitution(report: Report) -> None:
     inside double quotes is command substitution, so a message that names a command EXECUTES
     it. `bash -n` is silent — the line is valid shell, it simply does something else.
 
-    **It is kept for one measured incident.** `scripts/reap-selftest.sh:216` carried
+    **It is kept for one measured incident.** `scripts/reap-selftest.sh` carried
     `bad "refused without naming `` `make down` ``, ..."` on a failure path. On the primary
     checkout `make down` stops the capture server `make launch-agent` keeps alive over the
     owner's real store, so a FAILING assertion in the test suite would have taken the owner's
@@ -17486,6 +17522,8 @@ def self_test() -> int:
             ("a.ts", "const x = 1 // see `app/src/Runs.css:319`\n", ".ts // comment is refused"),
             ("a.tsx", "/* see Runs.css:319\n   more */\n", ".tsx block comment is refused"),
             ("a.css", "/* see `app/src/Runs.tsx:319` */\n", ".css block comment is refused"),
+            ("a.py", 'def f():\n    """see `cli/resolve.py:669` here"""\n', ".py docstring path:N is refused"),
+            ("a.py", '"""module doc:\n`cli/resolve.py` holds it, at `:669`\n"""\n', ".py module docstring bare :N is refused"),
         ):
             code = Path(tmp) / name
             code.write_text(planted, encoding="utf-8")
@@ -17497,12 +17535,24 @@ def self_test() -> int:
             ("a.py", "# meets at 10:30, a 3:1 ratio, host:8000\n", ".py comment time, ratio, host:port are clean"),
             ("a.css", "a:hover { color: red } /* clean */\n.b::before { content: 'x' }\n", ".css pseudo-selectors are clean"),
             ("a.ts", "const u = 'http://x.com:8080/a' // clean\n", ".ts URL with a port is clean"),
+            ("a.py", "# `cli/resolve.py` serves :8000 and a worktree's :5201\n", "the ports server/ports.py emits are clean"),
         ):
             code = Path(tmp) / name
             code.write_text(planted, encoding="utf-8")
             report = Report()
             check_line_anchors(report, [], [code])
             ok(not report.checks[0].findings, label, str(report.checks[0].findings))
+        (Path(tmp) / "docs").mkdir()
+        mapfile = Path(tmp) / "docs" / "map.py"
+        for planted, want, label in (
+            ('X = {"why": "see `cli/resolve.py:669`"}\n', 1, "a docs/map.py prose string path:N is refused"),
+            ('X = {"why": "`cli/resolve.py` opens at :669"}\n', 1, "a docs/map.py prose string bare :N is refused"),
+            ('X = {"why": "the main tree keeps :8000"}\n', 0, "a docs/map.py port is clean"),
+        ):
+            mapfile.write_text(planted, encoding="utf-8")
+            report = Report()
+            check_line_anchors(report, [], [mapfile])
+            ok(len(report.checks[0].findings) == want, label, str(report.checks[0].findings))
     report = Report()
     check_line_anchors(report, markdown_files())
     ok(not report.checks[0].findings and report.checks[0].scanned > 0,

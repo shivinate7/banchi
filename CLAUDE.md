@@ -605,9 +605,10 @@ Rationale, sales strategy, and open questions: `docs/CODES-DECISIONS.md`.
   form takes no `.py` before the symbol. A method is "`module.Class`'s `method`". A CSS rule is
   its selector. Mechanized by one `make docs-audit` row, `line anchors`, at commit. It refuses
   `path:N`, `file.ext:N` and a bare `:N` after a cited file, in every markdown file and in
-  code comments, with no list of exceptions. A time, a ratio, `host:port` and a slice are not
-  anchors. A dated record that must quote a line writes it in words, as in "line 182, column
-  81". A citation of a symbol that has moved stays invisible, which D149 ruled no check can see.
+  code comments, docstrings and `docs/map.py`'s prose, with no list of exceptions. A time, a
+  ratio, `host:port`, a slice and a port `server/ports.py` emits are not anchors. A bare `:N`
+  with no file in its paragraph cannot be told from other text, so it is not read. A dated record that must quote a line writes it in words, as in
+  "line 182, column 81". A citation of a symbol that has moved stays invisible, which D149 ruled no check can see.
 - **A screen answers to the system**: `--bn-*` tokens only, verified at 1440, 820 and 390,
   light and dark. `docs/DESIGN.md` is the record. `make docs-audit`'s `design tokens` row
   locks every name and hex both ways.
