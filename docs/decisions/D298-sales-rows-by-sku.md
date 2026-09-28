@@ -50,8 +50,21 @@ photograph of the copy that actually sold. `GET /skus/photos?sku=<s>&sku=<s>`
 (`do_skus_photos`, `server/capture_server.py`) answers the first on-hand, still-photographed
 copy of each named SKU. It reuses the same `photo_for` predicate `do_search`'s `_copy_row`
 already applies, no second copy of that rule. A SKU with nothing on hand, or nothing
-photographed, is simply absent from the answer. The row falls back to a plain tile, never a
-guessed or stand-in image. `getSkuPhotos` (`app/src/server.ts`) is the one client caller. A
+photographed, is simply absent from the answer.
+
+**Amended (F2, 2026-09-27).** The owner asked why Sales does not pull icons the way Sets
+and Pricing do. The row falls back through a middle step before the plain tile. First the
+owner's own photo. Then a stock photo off the same StockImages resolver Sets and Pricing
+already use (D301). Then the plain tile.
+
+`do_skus_photos` takes `images` the same way `do_pipeline_sets`/`do_pipeline_worklist` do.
+It answers the two kinds in separate wire fields, `photos` and `stock_photos`, so the client
+never confuses one for the other. This includes Pokemon sealed product, which resolves
+through tcgcsv rather than the vendored tree — see D301's own amendment. A join miss on
+every rung leaves the SKU absent from both fields, and the plain tile draws. It is still
+never a guessed or stand-in image.
+
+`getSkuPhotos` (`app/src/server.ts`) is the one client caller. A
 plain read, costs nothing, called on arrival — unlike `getSoldPrices`/`getHoldingsValue`
 beside it, which stay presses (D225, D236). A thumbnail is not a number a reader could
 mistake for live market data.

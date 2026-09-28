@@ -36,8 +36,17 @@ blocking for the fetch. `warm` is the one scheduling primitive: `server/capture_
 calls it once at server start with every `(game, set_name)` pair the store holds, and
 `_tcgcsv_lookup` calls it again, inertly, on every read past the key's own TTL — the SAME
 mechanism serves the start-up prime and the periodic refresh, so there is no second, polling
-thread to keep in step with it. Pokemon is never scheduled here: its own path reads local disk
-in well under a millisecond and was never the slow one this exists for.
+thread to keep in step with it. A Pokemon CARD is never resolved here: its number reads local
+disk in well under a millisecond and was never the slow one this exists for. A Pokemon SEALED
+PRODUCT (F2, below) is a different question the vendored tree cannot answer at all, and IS
+scheduled through this same cache.
+
+SEALED PRODUCT (F2, 2026-09-27): a Sales row can carry no card number at all — a booster box,
+an ETB. `url_for_product` answers that question by PRODUCT NAME instead of number, off the
+SAME cached tcgcsv group `url_for` already fetched (`_ImageIndex.by_name`, built in the same
+walk as `by_number`), and it takes `product_line` text directly rather than a `game` key —
+`games.game_for_product_line` is the one join the caller (`do_skus_photos`, which reads a
+`SkuRow` and has no `game` field) needs to reach it.
 """
 
 from __future__ import annotations
@@ -47,7 +56,7 @@ import re
 import threading
 import time
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
 
 from pipeline import games as game_registry
 from pipeline import join
@@ -183,6 +192,22 @@ class _PokemonImages:
         return self._names_by_id.get(set_id)
 
 
+class _ImageIndex(NamedTuple):
+    """One tcgcsv group's products, indexed the two ways a row can ask for a photo.
+
+    `by_number` is a single card's key, as `_fetch_tcgcsv` always built. `by_name` is F2's
+    own addition (the owner: *"why does the sales page not pull the icons"*, for a SEALED
+    product — a booster box, an ETB — which carries no card number at all. Both come off the
+    SAME payload walk, so a sealed product's image never costs a second fetch beyond a
+    single already-cached group's own products list. `join.name_index_key`, the fold
+    `pipeline/pricehistory.py:ProductIndex.by_name` already uses for the same ambiguity a
+    blank-number row raises (D35's shape) — reused rather than re-typed.
+    """
+
+    by_number: Dict[str, str]
+    by_name: Dict[str, str]
+
+
 class StockImages:
     """One server process's resolver, ONE INSTANCE FOR THE PROCESS'S LIFE.
 
@@ -203,13 +228,13 @@ class StockImages:
         self._market = market if market is not None else Market(cache_dir=None)
         self._pokemon = pokemon if pokemon is not None else _PokemonImages()
         self._ttl = ttl
-        # `(game, set_name) -> (fetched_at, {number_index_key: imageUrl})`. Keyed on the
+        # `(game, set_name) -> (fetched_at, _ImageIndex)`. Keyed on the
         # STORE's own pair rather than on `(categoryId, groupId)`: resolving those two hops
         # is itself part of the slow walk, so a cache keyed past them would still make the
         # request thread do that part synchronously. `_lock` guards this dict and `_pending`
         # together — both are read and written from request threads AND from the background
         # workers `warm` starts.
-        self._cache: Dict[Tuple[str, str], Tuple[float, Dict[str, str]]] = {}
+        self._cache: Dict[Tuple[str, str], Tuple[float, _ImageIndex]] = {}
         self._pending: Set[Tuple[str, str]] = set()
         self._lock = threading.Lock()
         # `Market` (`pipeline/pricehistory.py`) documents no thread safety of its own —
@@ -224,10 +249,10 @@ class StockImages:
         # itself never blocks — serializing it here costs nothing `url_for` can feel.
         self._market_lock = threading.Lock()
 
-    def _fetch_tcgcsv(self, game: str, set_name: str) -> Dict[str, str]:
+    def _fetch_tcgcsv(self, game: str, set_name: str) -> _ImageIndex:
         """The blocking walk: category, group, products. Called ONLY from a background
-        thread (`_warm_one`) — never from `url_for` or `_tcgcsv_lookup`, which is the whole
-        point of this split.
+        thread (`_warm_one`) — never from `url_for`, `url_for_product`, `_tcgcsv_lookup` or
+        `_tcgcsv_name_lookup`, which is the whole point of this split.
         """
         try:
             with self._market_lock:
@@ -245,19 +270,28 @@ class StockImages:
                     self._ttl,
                 )
         except (PriceHistoryError, KeyError):
-            return {}
-        index: Dict[str, str] = {}
+            return _ImageIndex(by_number={}, by_name={})
+        by_number: Dict[str, str] = {}
+        by_name: Dict[str, str] = {}
         for product in payload.get("results") or ():
             url = product.get("imageUrl")
+            if not url:
+                continue
             number = extended(product, EXTENDED_NUMBER)
-            if url and number:
+            if number:
                 # `setdefault`: the first product a group lists for a number wins. A SECOND
                 # product sharing a number would be two physical cards this resolver cannot
                 # tell apart from a `(set, number)` pair alone — the same ambiguity
                 # `ProductIndex.find` refuses on, here just kept rather than raised, because
                 # a photo miss costs a blank tile and not a wrong listing.
-                index.setdefault(join.number_index_key(number), str(url))
-        return index
+                by_number.setdefault(join.number_index_key(number), str(url))
+            name = product.get("name")
+            if name:
+                # A SEALED PRODUCT (F2, no `Number` cell) resolves here instead — the same
+                # `setdefault`-first-wins posture, and the same reason: two products sharing
+                # a name in one group is an ambiguity a blank tile survives.
+                by_name.setdefault(join.name_index_key(str(name)), str(url))
+        return _ImageIndex(by_number=by_number, by_name=by_name)
 
     def _warm_one(self, game: str, set_name: str) -> None:
         """One background fetch, and the only place `_cache`/`_pending` are written.
@@ -266,7 +300,7 @@ class StockImages:
         a pair stuck `_pending` forever is a pair `warm()` never schedules again (D-demo-
         stock-images: this is what turned one race into a PERMANENT cold cache).
         """
-        index: Dict[str, str] = {}
+        index = _ImageIndex(by_number={}, by_name={})
         try:
             index = self._fetch_tcgcsv(game, set_name)
         finally:
@@ -288,13 +322,19 @@ class StockImages:
         production caller (`serve`) never does, and a harness test does, which is what
         makes the warm deterministic there without a sleep.
 
-        NEVER SCHEDULES POKEMON: that path reads local disk in `_PokemonImages`, already
-        well under the budget this whole module exists to protect.
+        SCHEDULES POKEMON NOW TOO (F2, amending the premise below): a Pokemon CARD's number
+        still reads local disk in `_PokemonImages` and never reaches this cache, but a
+        Pokemon SEALED product (no number) has no vendored source at all and answers only
+        through `url_for_product`'s tcgcsv walk — see `docs/decisions/D301-stock-images.md`.
+        `server/pipeline_routes.py:warm_stock_images`'s startup pairs come from `inventory.
+        cards` alone (D299: sealed product is never captured, so it is never in that table),
+        so this only widens what the REACTIVE path (`_tcgcsv_lookup`/`_tcgcsv_name_lookup`
+        below, on a miss) may schedule — startup warming is unchanged in practice.
         """
         started: List[threading.Thread] = []
         now = time.time()
         for game, set_name in pairs:
-            if not game or not set_name or game == POKEMON_KEY:
+            if not game or not set_name:
                 continue
             key = (game, set_name)
             with self._lock:
@@ -319,7 +359,17 @@ class StockImages:
         self.warm([(game, set_name)])
         if entry is None:
             return None
-        return entry[1].get(join.number_index_key(number))
+        return entry[1].by_number.get(join.number_index_key(number))
+
+    def _tcgcsv_name_lookup(self, game: str, set_name: str, product_name: str) -> Optional[str]:
+        """`_tcgcsv_lookup`'s twin for a SEALED product: same cache entry, same
+        cold/stale/fresh posture, `by_name` instead of `by_number`."""
+        with self._lock:
+            entry = self._cache.get((game, set_name))
+        self.warm([(game, set_name)])
+        if entry is None:
+            return None
+        return entry[1].by_name.get(join.name_index_key(product_name))
 
     def url_for(self, game: str, set_name: str, number: str) -> Optional[str]:
         """The image for one card, or `None` on a join miss, a cold cache, or an
@@ -334,6 +384,34 @@ class StockImages:
         if game == POKEMON_KEY:
             return self._pokemon.url_for(set_name, number)
         return self._tcgcsv_lookup(game, set_name, number)
+
+    def url_for_product(
+        self, product_line: str, set_name: str, product_name: str
+    ) -> Optional[str]:
+        """The image for a SEALED product (F2, no card number) — a booster box, an ETB.
+
+        `#/revenue`'s own gap, the owner's report: *"why does the sales page not pull the
+        icons like you're able to do on sets and pricing?"* Sales asks `GET /skus/photos`
+        with a SKU only, which carries `product_line` (a tcgcsv-style cell, `pipeline/skus.
+        py`) and `set_name` — never a `game` key. `games.game_for_product_line` is the one
+        reverse lookup that turns that text back into a registry key.
+
+        POKEMON SEALED RESOLVES THROUGH TCGCSV TOO, unlike a Pokemon CARD. `url_for` sends
+        `game == POKEMON_KEY` to the vendored tree, which is singles-only — there is no
+        sealed row in `vendor/pokemon-tcg-data/` for a booster box to match. So this method
+        never branches on `POKEMON_KEY` at all; every catalogued game, Pokemon included,
+        answers through `_tcgcsv_name_lookup`.
+
+        `None` on an unregistered product line, a join miss, a cold cache, or an
+        unreachable catalogue — never a guess, and never blocks on a network call, same as
+        `url_for`.
+        """
+        if not product_line or not set_name or not product_name:
+            return None
+        game = game_registry.game_for_product_line(product_line)
+        if game is None:
+            return None
+        return self._tcgcsv_name_lookup(game, set_name, product_name)
 
     def display_name(self, game: str, set_name: str) -> Optional[str]:
         """The catalogue's own clean name for a set, when this resolver can name one.

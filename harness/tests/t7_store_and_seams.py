@@ -38787,6 +38787,204 @@ def check_stock_images(checks: Checks) -> None:
     )
 
 
+def check_sales_stock_photo_fallback(checks: Checks) -> None:
+    """F2, the owner's report: *"why does the sales page not pull the icons like you're
+    able to do on sets and pricing?"* `#/revenue`'s `GET /skus/photos` gains a stock-photo
+    fallback for a SKU with no own photographed copy on hand (D89 usually reclaimed it),
+    off the SAME `StockImages` resolver Sets and Pricing already use — never a second
+    resolver.
+
+    THREE PARTS. `games.game_for_product_line` — the reverse lookup a Sales row's SKU needs,
+    since it carries `product_line` text and no `game` key. `StockImages.url_for_product` —
+    a SEALED product (no card number) resolving by name, Pokemon included, off the same
+    cached tcgcsv group `url_for` already fetches. And `do_skus_photos` itself, end to end:
+    the own photo wins, a single's SKU falls back through `url_for`, a sealed SKU falls
+    back through `url_for_product`, and a genuine miss stays absent from both fields.
+    """
+    checks.note("")
+    checks.note("SALES STOCK-PHOTO FALLBACK — game_for_product_line, url_for_product, GET /skus/photos (F2)")
+
+    checks.equal(
+        games.game_for_product_line("Pokemon"),
+        "pokemon",
+        "the real singles/sealed catalog wins over pokemon_code, which shares the same text",
+    )
+    checks.equal(
+        games.game_for_product_line("One Piece Card Game"), "one_piece", "a clean match",
+    )
+    checks.equal(
+        games.game_for_product_line("Nothing Registered Claims This"),
+        None,
+        "an unregistered product line is None, never a guess",
+    )
+    checks.equal(games.game_for_product_line(""), None, "a blank cell is None")
+
+    def make_fetcher():
+        def fetcher(url: str):
+            if url.endswith("/categories"):
+                return {"results": [
+                    {"name": "Pokemon", "categoryId": 3},
+                    {"name": "Riftbound League of Legends Trading Card Game", "categoryId": 89},
+                ]}
+            if url.endswith("/3/groups"):
+                return {"results": [{"name": "Scarlet & Violet", "groupId": 501}]}
+            if url.endswith("/3/501/products"):
+                return {"results": [
+                    {"imageUrl": "https://img/etb.jpg", "name": "Scarlet & Violet Elite Trainer Box"},
+                ]}
+            if url.endswith("/89/groups"):
+                return {"results": [{"name": "Vendetta", "groupId": 24698}]}
+            if url.endswith("/89/24698/products"):
+                return {"results": [
+                    {
+                        "imageUrl": "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+                        "extendedData": [{"name": "Number", "value": "SP3/006"}],
+                    },
+                    {"imageUrl": "https://img/rift-booster.jpg", "name": "Vendetta Booster Box"},
+                ]}
+            raise AssertionError(f"unexpected fetch: {url}")
+        return fetcher
+
+    images = stockimages.StockImages(market=pricehistory.Market(cache_dir=None, fetcher=make_fetcher()))
+    for pair in (("pokemon", "Scarlet & Violet"), ("riftbound", "Vendetta")):
+        for thread in images.warm([pair]):
+            thread.join(timeout=5)
+
+    checks.equal(
+        images.url_for_product("Pokemon", "Scarlet & Violet", "Scarlet & Violet Elite Trainer Box"),
+        "https://img/etb.jpg",
+        "POKEMON SEALED resolves through tcgcsv — the vendored tree carries no sealed row "
+        "at all, unlike a Pokemon CARD's own number",
+    )
+    checks.equal(
+        images.url_for_product(
+            "Riftbound League of Legends Trading Card Game", "Vendetta", "Vendetta Booster Box"
+        ),
+        "https://img/rift-booster.jpg",
+        "a non-Pokemon sealed product resolves by name off the SAME cached group its "
+        "singles already warmed",
+    )
+    checks.equal(
+        images.url_for_product("Pokemon", "Scarlet & Violet", "No Such Product"),
+        None,
+        "a sealed-product NAME miss is None, never a guess",
+    )
+
+    with isolated_home():
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(1, name="skus-photos box")
+
+        # OWN PHOTO WINS — a real on-hand, photographed card, over anything the SKU table
+        # or the resolver could otherwise answer.
+        capture_server.do_capture(capture_payload(1, capture_id="own-photo"))
+        with Store().write() as snapshot:
+            card = snapshot.inventory.get(master.position_key(1, 1))
+            card.sku = "own-photo-sku"
+
+        # A SINGLE with no own photo on hand at all — the SKU table's own `number` cell
+        # routes through `url_for`, exactly as `#/pricing` and Sets already do.
+        with Store().write() as snapshot:
+            snapshot.skus.entries["single-sku"] = SkuRow(
+                product_line="Riftbound League of Legends Trading Card Game",
+                set_name="Vendetta",
+                product_name="Ahri, Inquisitive",
+                number="SP3/006",
+                rarity="Rare",
+                condition="Near Mint",
+                grade=None,
+                printing=None,
+                first_seen=1_700_000_000,
+                last_seen=1_700_000_000,
+                source="t7-fixture",
+                raw={},
+            )
+            # A SEALED SKU, no number at all — routes through `url_for_product` by name.
+            snapshot.skus.entries["sealed-sku"] = SkuRow(
+                product_line="Pokemon",
+                set_name="Scarlet & Violet",
+                product_name="Scarlet & Violet Elite Trainer Box",
+                number="",
+                rarity="",
+                condition="",
+                grade=None,
+                printing=None,
+                first_seen=1_700_000_000,
+                last_seen=1_700_000_000,
+                source="t7-fixture",
+                raw={},
+            )
+            # A SKU no `skus` row and no on-hand copy names at all — a genuine miss.
+            # (nothing to write — "miss-sku" is simply never seeded)
+            # A SKU whose row exists but whose product line no game claims — also a miss.
+            snapshot.skus.entries["unregistered-sku"] = SkuRow(
+                product_line="Not A Real Product Line",
+                set_name="Anywhere",
+                product_name="Anything",
+                number="1",
+                rarity="",
+                condition="",
+                grade=None,
+                printing=None,
+                first_seen=1_700_000_000,
+                last_seen=1_700_000_000,
+                source="t7-fixture",
+                raw={},
+            )
+
+        bare = answers(
+            checks,
+            lambda: capture_server.do_skus_photos(
+                ["own-photo-sku", "single-sku", "sealed-sku", "miss-sku", "unregistered-sku"]
+            ),
+            "no resolver handed in, the route still answers",
+        )
+        if bare is not None:
+            checks.equal(
+                bare["stock_photos"], {},
+                "no resolver, no stock photos — and no socket, the route's own bare posture",
+            )
+            checks.ok(
+                "own-photo-sku" in bare["photos"],
+                "the own photo still answers with no resolver at all",
+            )
+
+        threaded = answers(
+            checks,
+            lambda: capture_server.do_skus_photos(
+                ["own-photo-sku", "single-sku", "sealed-sku", "miss-sku", "unregistered-sku"],
+                images=images,
+            ),
+            "a resolver handed in, the route answers",
+        )
+        if threaded is not None:
+            checks.ok(
+                "own-photo-sku" in threaded["photos"] and "own-photo-sku" not in threaded["stock_photos"],
+                "OWN PHOTO WINS — it never falls through to the resolver even though one "
+                "is handed in",
+            )
+            checks.equal(
+                threaded["stock_photos"].get("single-sku"),
+                "https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg",
+                "a SINGLE with no own photo falls back through url_for, by number",
+            )
+            checks.equal(
+                threaded["stock_photos"].get("sealed-sku"),
+                "https://img/etb.jpg",
+                "a SEALED SKU (no number) falls back through url_for_product, by name — "
+                "Pokemon included",
+            )
+            checks.ok(
+                "miss-sku" not in threaded["photos"] and "miss-sku" not in threaded["stock_photos"],
+                "a SKU with no on-hand copy and no skus-table row is absent from both "
+                "fields, never a guess",
+            )
+            checks.ok(
+                "unregistered-sku" not in threaded["photos"]
+                and "unregistered-sku" not in threaded["stock_photos"],
+                "a SKU whose product line no game claims is absent from both fields too",
+            )
+
+
 def run() -> Result:
     checks = Checks()
     check_pipeline_routes(checks)
@@ -38938,6 +39136,7 @@ def run() -> Result:
     check_undo_until_built_on(checks)
     check_pipeline_sets(checks)
     check_stock_images(checks)
+    check_sales_stock_photo_fallback(checks)
     # The box map's cases live in a sibling file (D264). Imported here, not at the top,
     # because that file imports its fixtures from this one.
     from harness.tests import t7_box_map

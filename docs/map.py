@@ -1486,8 +1486,8 @@ COMPONENTS = [
                                        "parameter, `None` by default, so no harness test "
                                        "opens a socket. Never raises: a join miss or an "
                                        "unreachable catalogue both answer `None`.",
-                               "governed_by": ["D301", "D8", "D15", "D25", "D35",
-                                               "D49", "D62", "D254", "D-demo-stock-images"],
+                               "governed_by": ["D8", "D15", "D25", "D35", "D49", "D62", "D254",
+                                               "D299", "D301", "D-demo-stock-images"],
                                "tested_by": ["T7"]},
             "selection.py": {"does": "WHICH CARDS A PRESS IS OVER — one object, read by the"
                                      "wire and the CLI alike, and the drawer is a TERM in it "
@@ -5481,9 +5481,9 @@ COMPONENTS = [
                                 "D114", "D115", "D116", "D121", "D132", "D134", "D137", "D138",
                                 "D145", "D159", "D164", "D165", "D166", "D168", "D172", "D174",
                                 "D183", "D189", "D191", "D192", "D193", "D196", "D203", "D212",
-                                "D213", "D219", "D225", "D227", "D251", "D252", "D259", "D262",
-                                "D264", "D265", "D268", "D271", "D273", "D298",
-                                "D299", "D301"],
+                                "D213", "D219", "D223", "D225", "D227", "D231", "D251", "D252",
+                                "D258", "D259", "D262", "D264", "D265", "D268", "D271", "D273",
+                                "D298", "D299", "D301"],
                 "tested_by": ["T7"],
             },
             "tcg_import.py": {"does": "THE OUTBOUND WRITE to the seller admin, and the only "
@@ -6540,7 +6540,7 @@ COMPONENTS = [
                                               "D159", "D165", "D168", "D172", "D174", "D180",
                                               "D189", "D192", "D193", "D203", "D207", "D213",
                                               "D219", "D225", "D227", "D236", "D252", "D264",
-                                              "D268", "D273", "D291", "D298", "D299", "D300"]},
+                                              "D268", "D273", "D291", "D298", "D299", "D300", "D301"]},
             "src/usePoll.ts": {"does": "ONE POLLING PRIMITIVE, WHERE FIVE HAND-ROLLED TIMERS "
                                        "USED TO STAND (D207). `RunPanel.tsx` (the run "
                                        "list and, separately, an open run's own detail), "
@@ -8264,7 +8264,7 @@ COMPONENTS = [
                                 "governed_by": ["D50", "D62", "D69", "D86", "D89", "D103", "D105",
                                                 "D118", "D125", "D159", "D189", "D193", "D194",
                                                 "D201", "D214", "D217", "D219", "D225", "D236",
-                                                "D281", "D285", "D298"]},
+                                                "D281", "D285", "D298", "D301"]},
             "src/Revenue.css": {"does": "the summary band, podium, mix tile, board rows and "
                                         "product table's own layout, `--bn-*` only "
                                         "(D298's Direction B). The month bars "

@@ -840,6 +840,37 @@ def get(key: str) -> Dict[str, object]:
     raise UnknownGame(f"{key!r} is not a registered game; known: {', '.join(keys())}")
 
 
+def game_for_product_line(product_line: str) -> Optional[str]:
+    """The catalogued game whose `product_line` cell matches this text, or `None`.
+
+    THE REVERSE OF `get(key)["product_line"]`, for a caller that starts from a stored
+    `Product Line` cell — a SKU row, an export row — rather than from a capture-time game
+    claim (`pipeline/stockimages.py:StockImages`'s stock-photo lookup for a Sales row, which
+    carries `product_line` and no game). Folded through `pipeline.join.normalize_set`
+    (imported locally: `pipeline/join.py` imports this module, so a top-level import here
+    would be circular) — the SAME fold `pipeline/pricehistory.py:catalogued_row` already
+    used inline; that function now calls this instead of repeating it.
+
+    FIRST REGISTRY MATCH WINS on a shared `product_line` (`pokemon` and `pokemon_code` both
+    name `"Pokemon"`). `pokemon` is authored first and is the real singles/sealed catalog;
+    `pokemon_code`'s own feature is dormant (`CLAUDE.md`) and sells nothing under this text
+    today. `None` on no match, or on an uncatalogued game's `product_line` (`misc`'s is
+    `None` by construction) — never a guess.
+    """
+    from pipeline import join  # local: avoids the circular import, see docstring above
+
+    text = str(product_line or "").strip()
+    if not text:
+        return None
+    folded = join.normalize_set(text)
+    for entry in GAMES:
+        if entry["catalogued"] and entry["product_line"] and join.normalize_set(
+            str(entry["product_line"])
+        ) == folded:
+            return str(entry["key"])
+    return None
+
+
 def is_catalogued(key: str) -> bool:
     """Whether this game has a TCGplayer catalog to join against at all.
 
