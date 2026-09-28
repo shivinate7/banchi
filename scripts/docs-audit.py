@@ -18807,6 +18807,13 @@ def self_test() -> int:
         )
         here["_INDEX_PATHS"] = None
         found_files = {rel(p) for p in markdown_files()}
+        ok(
+            any(entry.startswith("docs/gates/") for entry in found_files),
+            "and docs/gates/ is NOT excluded from `markdown_files()` itself — the exclusion "
+            "above is `_spelling_markdown_files`'s own filter, applied after this call, never "
+            "this function's",
+            f"{sorted(e for e in found_files if e.startswith('docs/'))[:5]}",
+        )
     finally:
         here["_INDEX_PATHS"] = saved_index
         _STAGED_PATHS.clear()

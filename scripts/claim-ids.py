@@ -739,7 +739,7 @@ def report_stale(stale: Sequence[Stale], ref: str) -> None:
 def duplicate_numbers(root: Path) -> List[Tuple[str, int]]:
     """`(token, how many headings carry it)` for every id this tree declares more than once."""
     out: List[Tuple[str, int]] = []
-    for kind, path, pattern, shape in KINDS:
+    for kind, _path, pattern, shape in KINDS:
         text = kind_text(kind, root)
         counts: Dict[int, int] = {}
         for found in pattern.findall(text):

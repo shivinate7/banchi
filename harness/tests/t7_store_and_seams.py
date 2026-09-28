@@ -7089,8 +7089,13 @@ def check_undo_until_built_on(checks: Checks) -> None:
                     "--corpus-revision", fresh_revision,
                 ]
             )
+        said2 = said_buf2.getvalue()
         checks.equal(
             code2, 0, "T7-RACE (DEBT-pricing-corpus-five-unlocked-writers): the ordinary apply, with no race, succeeds",
+        )
+        checks.ok(
+            "wrote" in said2 and str(target) in said2,
+            "and says it wrote import.csv, not only a silent exit 0", said2,
         )
         checks.ok(target.is_file(), "and writes import.csv")
         checks.equal(
@@ -10091,6 +10096,7 @@ def check_box_routes_and_search(checks: Checks) -> None:
         finally:
             httpd.shutdown()
             httpd.server_close()
+            thread.join(timeout=5)
 
         found = capture_server.do_search("eiscue")["groups"]
         if checks.equal(
@@ -12806,6 +12812,7 @@ def check_photo_cache(checks: Checks) -> None:
         finally:
             httpd.shutdown()
             httpd.server_close()
+            thread.join(timeout=5)
 
 
 def check_app_serve(checks: Checks) -> None:
@@ -13096,6 +13103,7 @@ def check_app_serve(checks: Checks) -> None:
             finally:
                 httpd.shutdown()
                 httpd.server_close()
+                thread.join(timeout=5)
     capture_server.APP_DIST = original
 
 
@@ -20892,6 +20900,7 @@ def send_portal():
     finally:
         portal.shutdown()
         portal.server_close()
+        thread.join(5)
         envfile.ENV_FILE, from_file, envfile._loaded = env_before
         envfile._from_file.clear()
         envfile._from_file.update(from_file)
@@ -25551,6 +25560,7 @@ def check_connection_close(checks: Checks) -> None:
                     conn.close()
             httpd.shutdown()
             httpd.server_close()
+            thread.join(timeout=5)
 
 
 def check_crop_preview(checks: Checks) -> None:
@@ -36671,6 +36681,7 @@ def check_request_slots(checks: Checks) -> None:
         gate.set()
         httpd.shutdown()
         httpd.server_close()
+        thread.join(timeout=5)
         wide.shutdown(wait=False)
 
     checks.equal(

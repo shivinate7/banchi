@@ -73,7 +73,7 @@ def game_for_sku(product_line: str, rarity: str) -> Optional[str]:
     between them.
     """
     candidates = [
-        key for key in games_module.keys()
+        key for key in games_module.keys()  # noqa: SIM118 — a module's own `keys()`, not a dict's
         if games_module.get(key)["product_line"] == product_line
     ]
     if not candidates:

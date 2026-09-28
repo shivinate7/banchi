@@ -619,10 +619,8 @@ def main() -> int:
         finally:
             ignored_fixture.unlink(missing_ok=True)
             if made_demo_dir:
-                try:
+                with contextlib.suppress(OSError):
                     demo_dir.rmdir()
-                except OSError:
-                    pass
 
         print("\n  -- one slug is not allowed to be eaten by another --")
         # One fixture slug is a PREFIX of the other. An unbounded substitution
