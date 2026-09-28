@@ -1,5 +1,11 @@
 import type { IconName } from './kit'
-import { boxTitle } from './kit/data'
+/* THE PURE MODULE, NOT `./kit/data` (the barrel): `harness/tests/t7_store_and_seams.py`
+ * bundles this file alone with plain esbuild, no CSS loader, to read Home's status line
+ * without a browser. `kit/data.tsx` pulls in the whole kit (icons, overlays, `SearchField`'s
+ * own `./kit` re-import), which esbuild's bare bundle cannot resolve; `kit/dataRules.ts` is
+ * the React-free half `boxTitle` lives in for exactly this reason ("No React, so a spec can
+ * import it" — see its own header). */
+import { boxTitle } from './kit/dataRules'
 import { MISSING_FACET, missingCopies } from './orderBuyers'
 import type {
   EmptySend,
