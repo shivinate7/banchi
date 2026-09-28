@@ -100,6 +100,7 @@ Logged, waiting for the owner's word:
 - F8: in Inventory, a search for "hand hammer" ranks Jayce cards above the common card Hand Hammer. A Sonnet lane diagnoses the cause and the change that made it, then proposes a fix. D271 (one forgiving matcher everywhere) governs.
   - The diagnosis: `server/match.py` ranks Hand Hammer first. The walk in `BoxBrowse.tsx` picks its box and landing by the largest pile of live copies across all matches, and never reads that rank. The owner confirmed that in-stock Hand Hammers did not surface until another box was picked.
   - The owner's ruling: `Rank before pile size (Recommended),Say when the best match is sold (Recommended)`. Lane F8 builds both on `ux/pr4b-F8`.
+- F9: an empty section must not show in the Inventory walk. The owner often opens the next section at the end of a capture, and it stays empty. The strip then counts it ("Section 10 of 11"), which breaks the back-to-front count while locating a card. Owner: `be careful about this change`. Default scope: the walk hides it (strip, "of N", ruler). Capture, Manage box and the move targets still show it, so it can be filled, renamed or deleted. It runs as one lane after F8, since both edit `BoxBrowse.tsx`. D264 (a section is an object that moves whole) and D260 (a card counts within its section) govern.
 
 Before PR 4B merges:
 
