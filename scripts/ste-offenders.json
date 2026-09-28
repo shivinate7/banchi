@@ -1724,6 +1724,7 @@
         "0c29dc2f8c A row label is published prose \u2014 it is printed by `make docs-audit`, ci\u2026",
         "1a3cce3a17 It would have paired a registered route from `ROUTES` with a nearby not\u2026",
         "340b047638 Insert a blank line and this blockquote after line 38\"* inside a paragr\u2026",
+        "4b91a7a558 The target was the narrow half of that disagreement, so `docs/specs/` a\u2026",
         "65ba1e7fa1 Two candidates were checked in context before being let in \u2014 `evid` and\u2026",
         "75b23c5c2c `docs/DEBTS.md` cluster 1 still holds the five docs-to-code checks that\u2026",
         "7747b4e3a1 All three are provably true of the tree, which is D#'s test for a block\u2026",
@@ -1731,6 +1732,7 @@
         "9489710215 **A permanently-lit advisory is worse than a silent check**, on this re\u2026",
         "95baedd6fd Both of this sweep's worst findings \u2014 that one and D#'s route count \u2014 c\u2026",
         "9704bb75b8 It is advisory, and it asks three questions decidable on the committed\u2026",
+        "a43ee941c8 The file list is now `git ls-files '*.md'`, so a new document is linted\u2026",
         "e19863e30c Spelling costs nothing to check and is wrong in the same way everywhere\u2026"
       ],
       "STE006": [

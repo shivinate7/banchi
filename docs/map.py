@@ -4613,15 +4613,15 @@ COMPONENTS = [
                         "`serve scope` audit row fails until this list follows.",
             },
             "guard-scope.py": {
-                "does": "does this branch reach what one of fifteen guard self-tests proves? "
+                "does": "does this branch reach what one of the gated self-tests proves? "
                         "THE SECOND PATH GATE IN THIS REPO, on the owner's word, 2026-09-20. "
                         "`classify --target <name>` exits 0 to run and 3 to skip, and each of "
-                        "the fifteen recipes is its own caller. Unlike `serve-scope.py`'s "
+                        "the gated recipes is its own caller. Unlike `serve-scope.py`'s "
                         "hand-curated `SCOPE` against a separately hand-curated `CARRY`, "
                         "`derive_subjects()` reads each self-test's own source on every call — "
                         "every local-package import and every `Path`-style chain, plus a regex "
                         "for the four shell scripts — so there is no second list to drift. "
-                        "`ROSTER` names which fifteen targets are gated, on `serve-scope.py`'s "
+                        "`ROSTER` names which targets are gated (`make guard-scope ARGS=list` prints them), on `serve-scope.py`'s "
                         "own precedent of naming its one target by hand. It imports the "
                         "globbing and the recipe narrowing from `browser-scope.py`. "
                         "`PKMNSCAN_GUARD_SCOPE=off` runs every target regardless.",
@@ -7545,6 +7545,24 @@ COMPONENTS = [
                                          "`ReviewQueue.css`'s `.review-catalog*`/`.review-candidate*` "
                                          "for the picker rows.",
                                  "governed_by": ["D94", "D117", "D118", "D252"]},
+            "src/RailFrame.tsx": {"does": "the rail's own sticky frame, lifted out of "
+                                          "`BoxBrowse.tsx` (lane A2b, "
+                                          "`docs/reviews/ux-2026-09-23/orders-a/PLAN.md`'s "
+                                          "component reuse map: \"Inventory passes its box list "
+                                          "and walk. Orders passes its buyer list.\"). MOVED "
+                                          "WHOLE: the `<div className=\"browse-map\">` wrapper "
+                                          "and D289 rule 2's own measure (\"the rail's top at "
+                                          "rest, and the rail's height is the window less that "
+                                          "top\", UX-227) — pure over the wrapper's own DOM node "
+                                          "and its parent, no closure over `BoxBrowse.tsx`'s "
+                                          "state. `BoxBrowse.css`'s `.browse-map` rule is "
+                                          "untouched and still names the CSS var this file sets "
+                                          "(`--browse-rail-rest`), so the default `className` "
+                                          "keeps `#/inventory` pixel-identical. `ref` is a "
+                                          "normal prop (React 19, no `forwardRef`), because "
+                                          "`BoxBrowse.tsx` still needs the mounted node to "
+                                          "scroll the selected box row into view within it.",
+                                  "governed_by": ["D31", "D96", "D220", "D289"]},
             "src/CardLocations.tsx": {"does": "one SKU group: every copy, its position, its bar and "
                                               "its sold action. D7's fungibility made visible — every "
                                               "unsold copy is offered, and the listed quantity is read "

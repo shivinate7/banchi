@@ -69,7 +69,7 @@ make serve-scope    # what `make serve-selftest` reads, and whether this branch 
                     #   checkout with a STUB app/, so no screen change can reach it.
                     #   `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every skip.
 make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
-                    #   measurement). What each of twenty-two guard self-tests reads. A
+                    #   measurement). What each of twenty-five guard and product self-tests reads. A
                     #   sixteenth, `pricearchive-selftest`, joined 2026-09-23 on the
                     #   owner's word: "once it's done, it only needs to be tested when
                     #   touched." Six more joined the same day, once that sixteenth's own
@@ -81,7 +81,12 @@ make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
                     #   `sku-number-contradictions-selftest` — each proves a module with a
                     #   real caller today (`archive sweep --write`, `#/revenue`'s
                     #   unsold-stock panel, `cards checks`, `emit`/`reprice apply`,
-                    #   `#/product`, `cards contradictions`).
+                    #   `#/product`, `cards contradictions`). `match-selftest` joined
+                    #   2026-09-27 on the owner's word (owner ruling Q3, test-audit plan): "Yes,
+                    #   path-gate it." It is a product test, deterministic over what it imports.
+                    #   `browser-scope-selftest` and `port-slots-selftest` joined the same day
+                    #   (test-audit plan P1): same shape as the rest of the roster, so no new
+                    #   word was needed.
                     #   ARGS=list [--target <name>], or
                     #   ARGS="classify --target <name> --base <rev>".
                     #   D247 is the argument. A guard
@@ -241,7 +246,7 @@ make demo-static    # demo-mirror-install, then a static build to dist-demo/. `d
                     #   from any more.
 make demo-preview   # serve dist-demo/ as a static host would.
 make demo-freshness # whether the bundle matches its recording. No gate: CI rebuilds fresh.
-make check          # harness + docs-audit + claim-stale + revert-guard +
+make check          # harness + docs-audit + revert-guard +
                     #   port-agreement + set-hint-agreement + readiness-agreement +
                     #   screen-freshness +
                     #   screen-freshness-selftest + sigil-check +
@@ -544,7 +549,7 @@ hand-typed hash list.
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
-156<!-- derived:app_src_file_count --> files under `app/src`: none read the
+157<!-- derived:app_src_file_count --> files under `app/src`: none read the
 25<!-- derived:tokens_css_legacy_alias_count --> old names, against
 283<!-- derived:bn_ink_var_uses --> uses of `var(--bn-ink)` alone. Kept by design. A new
 rule may not read one.

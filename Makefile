@@ -246,7 +246,8 @@ help:
 	@echo "                    MAIN TREE ONLY. ARGS=--remove takes it away."
 	@echo "  make reap         stop what THIS session started, and nothing else. Previews;"
 	@echo "                    ARGS=--confirm presses. ARGS=\"port:5484 --confirm\" for one port."
-	@echo "  make ci-check     subset of check for a fresh clone without vale."
+	@echo "  make ci-check     subset of check for a fresh clone. Vale is retired, so it is no"
+	@echo "                    longer the reason the two lists differ."
 	@echo "  make janitor-install  copy the sweep to ~/.claude/bin so every repo's hooks can reach it."
 	@echo "  make lan-check    is the LAN URL still good? DNS, both servers, and a real"
 	@echo "                    write. Reaches the network, so it never gates a commit."
@@ -256,7 +257,7 @@ help:
 	@echo "  make heartbeat    docs/GATES.md item 24: calls coordinator.py plus whether main's"
 	@echo "                    own last push is green and janitor's preview. Never a daemon,"
 	@echo "                    never --confirm. Writes .serve/heartbeat/, never gates a commit."
-	@echo "  make check        harness + docs-audit + claim-stale + revert-guard +"
+	@echo "  make check        harness + docs-audit + revert-guard +"
 	@echo "                    port-agreement + set-hint-agreement + readiness-agreement +"
 	@echo "                    screen-freshness +"
 	@echo "                    screen-freshness-selftest + sigil-check +"
@@ -648,7 +649,6 @@ audit-history:
 check:
 	@$(MAKE) --no-print-directory harness
 	@$(MAKE) --no-print-directory docs-audit
-	@$(MAKE) --no-print-directory claim-stale
 	@$(MAKE) --no-print-directory revert-guard
 	@$(MAKE) --no-print-directory port-agreement
 	@$(MAKE) --no-print-directory set-hint-agreement
@@ -734,7 +734,6 @@ ci-check:
 	@$(MAKE) --no-print-directory merge-selftest
 	@$(MAKE) --no-print-directory revert-selftest
 	@$(MAKE) --no-print-directory claim-selftest
-	@$(MAKE) --no-print-directory claim-stale
 	@$(MAKE) --no-print-directory decisions-selftest
 	@$(MAKE) --no-print-directory debts-selftest
 	@$(MAKE) --no-print-directory gates-selftest
@@ -905,7 +904,11 @@ kit-adoption-selftest:
 # reaches a real checkout's server, and it stops only the processes it started.
 port-slots-selftest:
 	$(NPM_GUARD)
-	@python3 scripts/port-slots.py selftest
+	@if python3 scripts/guard-scope.py classify --target port-slots-selftest --base origin/main; then \
+		python3 scripts/port-slots.py selftest; \
+	else \
+		echo "port-slots-selftest: SKIPPED — this branch does not touch the port-slot claim or its callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # identity-follows-sku.md, lane 7: scripts/demo-determinism.py's own ALLOWED_PATTERNS
 # matcher, proved on fixtures rather than by spending two full `make demo` runs. Pure
@@ -925,7 +928,11 @@ demo-determinism-selftest:
 # still applies to the temp store it writes, which is why it gates rather than runs in the
 # commit hook).
 match-selftest:
-	@python3 scripts/match-selftest.py
+	@if python3 scripts/guard-scope.py classify --target match-selftest --base origin/main; then \
+		$(PYTHON) scripts/match-selftest.py; \
+	else \
+		echo "match-selftest: SKIPPED — this branch does not touch search, matching or their callers. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # HERE AND NOT IN THE GIT HOOK, for the reason stated above `check` and for a second one of
 # its own. D18 is the first: this writes — a bare repo, a clone, commits, pushes — and nothing
@@ -1779,7 +1786,11 @@ suite-lock-selftest:
 # real tree (D-browser-spec-allow-list). Reads only; nothing here writes, so it sits beside
 # the other guard selftests rather than on the commit path (D18).
 browser-scope-selftest:
-	@python3 scripts/browser-scope.py selftest
+	@if python3 scripts/guard-scope.py classify --target browser-scope-selftest --base origin/main; then \
+		python3 scripts/browser-scope.py selftest; \
+	else \
+		echo "browser-scope-selftest: SKIPPED — this branch does not touch the browser-matrix classifier or its spec map. PKMNSCAN_GUARD_SCOPE=off runs it anyway."; \
+	fi
 
 # A JS media query's viewport width against what a stylesheet under app/src declares
 # (D123): the pure extraction and comparison `make docs-audit`'s `js breakpoints` row

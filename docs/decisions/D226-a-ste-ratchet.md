@@ -1,6 +1,8 @@
 ## D226 — A prose ratchet gets a reader, and bytes are not the ruler
 
-The owner believed this repo already mechanized prose concision. It did not. Vale carried two style rules and gated nothing (D74, D18; Vale retired 2026-09-27). `entry budget` counts characters. That is a size proxy, not a prose-tightness ruler.
+The owner believed this repo already mechanized prose concision. It did not. Vale
+carries two style rules. It gates nothing (D74, D18). `entry budget` counts characters. That
+is a size proxy, not a prose-tightness ruler.
 
 ### The two problems, kept separate
 
@@ -206,7 +208,10 @@ total. This is an argued gap, not a hidden one.
 
 ### Scope
 
-This entry does not change Vale's behavior (Vale is retired 2026-09-27). It does not change `ENTRY_BUDGET`'s value or its row's behavior. Both stayed as they were. Nothing here rewrites the prose backlog by hand. A pull request that lowered the count by editing entries would hide whether the mechanism works.
+This entry does not change Vale. It does not change `ENTRY_BUDGET`'s value or its
+row's behavior. Both stay exactly as they are. Nothing here rewrites the prose backlog by
+hand. A pull request that lowered the count by editing entries would hide whether the
+mechanism works.
 
 ### Governed by
 
@@ -225,5 +230,14 @@ D173 names the mechanism: `make docs-audit`'s `ste ratchet` row.
 ### Superseded in part 2026-09-24 — `D280`
 
 **The ratchet is gone. The reader stays.** The vendored linter, the four error rules, the four exemption classes and the survey floor stay as this entry settled them. The pin is retired, and D229's per-file shape with it. The row is now `ste offenders`. It fails on each offending sentence that `scripts/ste-offenders.json` does not list. It also fails on a stale entry, and on growth over the list at the merge-base. The ratio is still measured and printed, and gates nothing.
+
+### Amended 2026-09-27 — Vale retired
+
+Vale was retired 2026-09-27 (L3, owner's ruling: "Retire it, keep American spelling in
+docs-audit"). Every reference above describes Vale as it stood when this entry was
+written. Vale no longer runs. `docs-audit`'s `identifier spelling` row reads
+code today, as it always has. It does not yet read markdown prose for spelling — that half
+is lane L2's work, which waits on the owner. Until L2 lands, markdown prose has no spelling
+reader at all.
 
 ---

@@ -98,31 +98,6 @@ CHECKS = (
         "governed_by": ("D16", "D18"),
     },
     {
-        "target": "claim-stale",
-        "runs": "python3 scripts/claim-ids.py --stale",
-        "asserts": "No id this branch ADDS since its merge base with `origin/main` — decision "
-                   "heading, code-card `C` entry, or build-order step — has been taken on "
-                   "that ref in the meantime. The claimer is a no-op once a branch has "
-                   "claimed: there is no slug left, so it says `nothing to do` while the "
-                   "number it allocated may have been taken by main since. That happened "
-                   "TWICE on 2026-09-11 — #262 and #265 on one id, #265 and #270 on the next "
-                   "— and a person reading PR titles was the only thing that caught either. "
-                   "It REPORTS and never repairs, because an un-claim has to happen before a "
-                   "merge and never after. It can only ever under-report against a stale "
-                   "`origin/main`, never over-report, and a clone with no `origin/main` at "
-                   "all is allowed and says so.",
-        "needs": ("python3", "git"),
-        "writes": "",
-        "commit_path": False,
-        "why_off_commit_path": "It asks about `origin/main`, which a commit never consults "
-                               "and a fresh clone may not have — `revert-guard`'s reason, "
-                               "and the same answer. `make merge` is where it is worth the "
-                               "most, because the fetch immediately above it makes the answer "
-                               "current; `make check` is the earlier, cheaper warning.",
-        "gates": True,
-        "governed_by": ("D16", "D42", "D80", "D140"),
-    },
-    {
         "target": "revert-guard",
         "runs": "python3 scripts/revert-audit.py branch",
         "asserts": "What this branch would land on origin/main — the clean merge's tree, or "

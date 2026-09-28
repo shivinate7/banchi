@@ -2,7 +2,7 @@
 
 **Prose checking is scoped to what a file is, not to how much of it a session reads.** Ruled 2026-08-30, after a sweep of `docs/` found two defect classes that no row of `make docs-audit` was structurally able to see.
 
-**Vale ran over four files while `.vale.ini` always said `[*.md]` — retired 2026-09-27.** The disagreement was that `docs/specs/` and `docs/design-refs/` were never linted: **35 `AmericanSpelling` errors** accumulated, unreachable by checks. Prose linting now uses `git ls-files '*.md'`.
+**Vale ran over four files while `.vale.ini` always said `[*.md]`.** The target was the narrow half of that disagreement, so `docs/specs/` and `docs/design-refs/` had never been linted: **35 `AmericanSpelling` errors** had accumulated there, none reachable by any check in this repo. The file list is now `git ls-files '*.md'`, so a new document is linted the day it is committed rather than the day somebody remembers to add it to a target.
 
 **D60's scope is an argument about density, never a license to leave prose unspelled.** That entry rules on the four docs because they were `@`-loaded and cost tokens on every turn. Spelling costs nothing to check and is wrong in the same way everywhere, so the two scopes were never the same scope and the target had silently conflated them.
 
@@ -12,7 +12,7 @@
 
 **`raw color` became `raw color` on the owner's instruction, and the rename stopped at the row.** A row label is published prose — it is printed by `make docs-audit`, cited in `docs/DEBTS.md`, and named in the comments the `numbering in code` row polices — so a label spelled against the rule this entry sets was the rule contradicting itself in its own report. The label, `check_raw_color`, `_RAW_COLOR_RE`, the row's summary and its self-test messages all moved together.
 
-**It stopped there deliberately.** `color` appears about 120 times across 29 source files, in comments and identifiers. Widening the spelling rule to source would split the spelling inside single files and nobody has argued for it. This is not that widening: it is one published label brought into line with the report it appears in. `COLOUR`, the token-kind discriminator at `scripts/docs-audit.py`, is untouched — it is compared with `==` and never reaches a message, so it is not prose.
+**It stopped there deliberately.** `color` appears about 120 times across 29 source files, in comments and identifiers, and `.vale.ini` already records that widening the spelling rule to source *"would split the spelling inside single files and is a decision nobody has argued"*. This is not that widening: it is one published label brought into line with the report it appears in. `COLOUR`, the token-kind discriminator at `scripts/docs-audit.py`, is untouched — it is compared with `==` and never reaches a message, so it is not prose.
 
 ### `doc hygiene`, and what it is for
 
@@ -38,6 +38,10 @@
 
 ### Amended 2026-09-27 — Vale retired
 
-Vale was retired 2026-09-27 (L3). Its AmericanSpelling rule moves to docs-audit, not gated at commit.
+Vale was retired 2026-09-27 (L3, owner's ruling: "Retire it, keep American spelling in
+docs-audit"). `docs-audit`'s `identifier spelling` row reads code today, as it always has.
+It does not yet read markdown prose for spelling — that half is lane L2's work, which waits
+on the owner. Until L2 lands, markdown prose has no spelling reader at all: Vale's old
+advisory watch over `.md` files is gone and nothing has replaced it.
 
 ---
