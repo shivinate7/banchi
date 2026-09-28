@@ -27,7 +27,7 @@ PR 5's work now lives inside PR 4B. Owner: `bring everything that was PR5 into P
 | D1 | Re-centered the lock glyph, and removed Pricing's 1px nudge | Review PASS |
 | E | An Orders sale no longer jumps the screen, and Hide picked folds on its own press | Review PASS |
 | M | The demo recorder resumes, and scrubs each route before it caches it | Re-review PASS after a FAIL |
-| B2 | DEBT48: every writer of `prices.json` takes the store lock, with four revision checks inside it | Re-review PASS after a FAIL |
+| B2 | DEBT-pricing-corpus-five-unlocked-writers: every writer of `prices.json` takes the store lock, with four revision checks inside it | Re-review PASS after a FAIL |
 | F1 | Cards born by join or emit keep their game, plus a one-off repair script with a logged event | Review PASS |
 | F2 | Sales falls back to the stock photo, Pokemon sealed included | Re-review PASS after a FAIL |
 | C | `emit --cap` refuses a card with a pending copy, DEBT37 closed, D7 amended and names DEBT24 | Re-review PASS after a FAIL |
@@ -190,7 +190,7 @@ Lane E and A:
 
 Lane B2 and C:
 
-- B2, DEBT48: `yes build now`.
+- B2, DEBT-pricing-corpus-five-unlocked-writers: `yes build now`.
 - C, DEBT37: `Send a sonnet agent to see what's left on Debt 37 and how we can fix it`. Then the
   owner asked why it overshoots at all. The owner proposed, in paraphrase, that a cap works
   only once the store has read TCGplayer's live count. Then the owner chose the precise rule:

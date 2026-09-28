@@ -1,4 +1,4 @@
-## 48 — ~~the pricing corpus has five unlocked writers~~ — CLOSED 2026-09-27, fixed as recommended
+## DEBT-pricing-corpus-five-unlocked-writers — ~~the pricing corpus has five unlocked writers~~ — CLOSED 2026-09-27, fixed as recommended
 
 **Closed by the fix this entry recommended.** All five writers of `inventory/prices.json` now
 share one lock, `store/files.py:exclusive`, around their whole read-modify-write:
@@ -128,7 +128,7 @@ starts by hand. To close it, catch `BaseException` round the final rename and it
 then raise again.
 
 **The check.** Eight harness cases in `harness/tests/t7_store_and_seams.py`
-(`check_undo_until_built_on`), named `T7-RACE (DEBT48)`.
+(`check_undo_until_built_on`), named `T7-RACE (DEBT-pricing-corpus-five-unlocked-writers)`.
 
 Two patch a real `Corpus.read()`. Each sleeps for exactly as long as its own call now holds
 the lock. Both run on real threads, against the real flock, never a stubbed lock. One forces a
