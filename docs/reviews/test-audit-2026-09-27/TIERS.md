@@ -224,8 +224,13 @@ The tier model and every row not named below stand as proposed. The owner's word
 - **Row 49, `build order mirror`:** a later lane makes the build order one source. Then the row
   goes.
 - **Q8, merge 16 rows into 4:** `Yes, as L8 (Recommended)`.
-- **Still open, row 17 and CLAUDE.md's decision index:** the owner asked whether sessions lose
-  the index on demand if it leaves CLAUDE.md. No command prints the whole index today.
+- **Row 17 and CLAUDE.md's decision index:** `Derived view + pointer (Recommended)`. A lane
+  adds `make map ARGS=--decisions`, which prints the index from each entry's own heading. The
+  copy in CLAUDE.md becomes one line that names the command, and row 17 is cut. The parent
+  rule it follows: never load a long document whole, and read a rendered view instead.
+  The owner then declined keeping the 288 entries that govern code (it saves about 1.2 KB of
+  26 KB). The same lane amends D60's conversational-path paragraph, whose premise (60 lines,
+  3,929 bytes) measured 301 lines and 26,420 bytes on 2026-09-27.
 
 ## Next
 

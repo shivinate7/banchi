@@ -47,7 +47,7 @@ Records and studies, also merged:
 
 Earlier PRs, done: PR 3B, the demo mirror (#467 to #477), and PR 4A (#466).
 
-## In motion (state at the 2026-09-27 compaction)
+## In motion (state at the third 2026-09-27 compaction, ux/pr4b at c8562273)
 
 Each lane builds on its own branch `ux/pr4b-<lane>` and merges into `ux/pr4b` after one review
 PASS, with `cd app && npx tsc --noEmit` at the merge.
@@ -55,17 +55,24 @@ PASS, with `cd app && npx tsc --noEmit` at the merge.
 | Lane | Branch | What | State |
 |---|---|---|---|
 | B3 | `ux/pr4b-B3` | A refused markdown apply writes nothing | MERGED (49e12373) after four rounds. The listing file lands last, and a failed rename restores the old price. A Ctrl-C window is named in DEBT48. |
-| F5 | `ux/pr4b-F5` | Cut the excess words. Numbers and names stay. Review's mismatch line becomes "Mismatch: photo reading / matched listing". | Building. Then a review. |
-| D2 | `ux/pr4b-D2` | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | MERGED (752d638b). The phone overlay sweep now takes the last-mounted layer. That is wrong when a sheet and its dialog mount in one commit ("Check first"). A follow-up picks the highest z-index. |
+| F5 | `ux/pr4b-F5` | Cut the excess words. Numbers and names stay. Review's mismatch line becomes "Mismatch: photo reading / matched listing". | Review FAIL on D276. The owner kept "Go to". Back with the builder, then a re-review. |
+| D2 | `ux/pr4b-D2` | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | MERGED (752d638b, plus the z-index follow-up). The phone sweep audits the topmost overlay. |
 | P5 | `ux/pr4b-P5` | Stub D48 and D194 to one line each. Delete debts 5, 6, 18, 28, 35 and 42. Split DEBT27, or delete it if D279 removed its call. | MERGED (afc2ca83). DEBT27 keeps its open half. DEBT6 is kept in part, because a docs-audit row reads five figures from it. |
-| A3 | `ux/pr4b-A3` | The Orders pane becomes `CardPane`, with no Details fold | Building. Then a review. |
+| A3 | `ux/pr4b-A3` | The Orders pane becomes `CardPane`, with no Details fold | MERGED (c8562273). The pick pane is Inventory's `CardPane`. |
 | A6 | `ux/pr4b-A6` | No `Box <n>` fallback in the walk | MERGED (633aff52). |
-| L1 | `ux/pr4b-L1` | Cut T7's idle waits | Building. Then a review. |
-| L3 | `ux/pr4b-L3` | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | Review FAIL: 4 of 7 items done. A Sonnet builder finishes C2, P1, F5 and the decision amendments. |
+| L1 | `ux/pr4b-L1` | Cut T7's idle waits | MERGED. T7 median 130s to 72s, measured by the reviewer. |
+| L3 | `ux/pr4b-L3` | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | MERGED (31355eea) after two FAILs. `make check` is 56 checks. |
 | L5 | `ux/pr4b-L5` | Cut the old demo seed guards, keep the generator | MERGED (7481619a). `demo-freshness` retired too, because C4 names it. |
 | L6 | `ux/pr4b-L6` | DEBT47 closed, pull-confirm folded into fulfillment | MERGED (29c32166). |
 | L7 | `ux/pr4b-L7` | Measure the slow CI shard, then one route sweep | MERGED (ed07efd9), after one FAIL: the folded floors now report every failure in one run. Shard 2 is slow from `icon-button.spec.ts` re-rendering the gallery per test. |
-| L10 | `ux/pr4b-L10` | Heartbeat and coordinator retired | Two FAILs fixed (docs-audit, the shell guard's advice). Re-review running. |
+| L10 | `ux/pr4b-L10` | Heartbeat and coordinator retired | MERGED (4c58fbfb). The orchestrator fixed the last stale spec line. |
+| F8 | `ux/pr4b-F8` | Inventory search leads with the best-ranked match, and says when it is sold | MERGED (bc66af69). |
+| G | `ux/pr4b-G` | Every staged image gets the QR scan, fail closed. `claim-selftest` skips ignored files. The tsc out-of-memory cause | Merged (73037a92). The tsc premise no longer held. |
+| L2 | `ux/pr4b-L2` | Cut `ste offenders`. Identifier spelling reads staged files only and learns markdown. S3, S4 | Building. Then a review. Then L4, L8, L12. |
+| R | `ux/pr4b-R` | `make reap` stops only processes tagged with the caller's id | Building. Then a review. |
+| F9 | `ux/pr4b-F9` | Empty sections leave the Inventory walk | Reported at 04661648. In review. It also hides a sold-out section: the wire cannot tell it from an empty one. |
+| A4 | `ux/pr4b-A4` | Walk rows carry `CardLocations` rows | Building. Then a review. Then A5. |
+| H | `ux/h-record` | Eight many-color palettes, the sheet and the method | Its own deferred PR. The screenshots join after G merges. |
 | Q1 tiers | merged | A proposed tier for each docs-audit row: `docs/reviews/test-audit-2026-09-27/TIERS.md`. 65 Tier 1, 22 Tier 2, 13 Tier 3, 9 CUT, 7 unsure. | Waiting for the owner, together with Q8's merge families (PLAN.md item M3). No docs-audit lane starts before that. |
 
 ## Still to come
@@ -183,6 +190,16 @@ Lane D and the feedback items:
   Codes' filter row. The owner first said `i need to see a visual` and `ill need to see details/plans before confirming`.
 - F1: code fix and repair, own lane. F2: `Yes, including Pokemon sealed`.
 - F3: `ask it what filters would be nice to have / optimal for an end user`.
+- The decision index (2026-09-27): `Derived view + pointer (Recommended)`. The ruling lives in
+  the test audit's TIERS.md. One lane builds it after L2, beside L4.
+- Token budget (2026-09-27): `Prune memory.md now, and then send an audit lane`. The audit lane
+  measures every source loaded into each session and proposes a cut or a move per section. It
+  writes a report under `docs/reviews/`. Nothing changes until the owner rules.
+- Auto memory (2026-09-27, process only): `Migrate first, then off`. A lane gives each memory fact
+  with no repo home a real home: a debt, a spec or a decision entry. It also proposes
+  global-rule sentences for the owner. After it merges, `autoMemoryEnabled: false` goes into the project's
+  `.claude/settings.json`. The session scratchpad is the per-session note file.
+- F5 and D276 (2026-09-27): `Keep "Go to" (Recommended)`. The palette keeps its D276 name.
 - F5: `Approved on cutting everything from F5`, `rest are good to cull`, and for Review's line
   `middle option approved for the cut mismatch+data`.
 
@@ -206,6 +223,7 @@ G, T and PR 5:
 - H, the blind colorist's four palettes (Championship, Drift King, Overclock, Lantern District): `This version of H is absolute fire`. The same agent makes four more. Then H leaves PR 4B and becomes its OWN DEFERRED PR. Its palettes, sheet and method notes are committed as that PR's record.
 - The docs-audit tiers (owner, same day): approved, with changes. Every ruling is in `docs/reviews/test-audit-2026-09-27/TIERS.md`, section "The owner's rulings". Line anchors convert and collapse into one row. Rows 20, 48 and 92 are cut. Q8 is yes. Row 17 and the CLAUDE.md decision index are still open.
 - H leaves PR 4B (owner, same day): `abysall bloom might be gold -- love it. commit all the work done for  H and leave it all as something to come back to in its own PR`. The record is on branch `ux/h-record`, in its design-refs folder, h-palettes.
+- Lane R, reap ownership (owner, same day): `Make reap stop only what the caller started ... tag each process reap starts with its owner's id, and let --confirm stop only processes carrying the caller's tag`. Narrowed: `do Blanket for the orchestrator and limited to its own tagged processes for an agent`.
 - The Box number sweep (owner, same day): `In PR 4B, after A3 and F5 (Recommended)`. One Sonnet lane adds a shared browser `boxTitle`. It fixes the screens that show a box number: the Orders copy map, the run scope, the rescue, Capture and Home's status line. A check refuses a new typed `Box ${`. D259 (a box is shown only by its name) governs.
 - Walk density: `Cards to pick at the stop (what's built)`.
 - Test-audit Q1, the tiers: `Three tiers, agent proposes, you approve (Recommended)`. Q2: `Yes (Recommended)`.
