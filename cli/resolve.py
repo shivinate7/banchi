@@ -666,7 +666,7 @@ def _live_by_sku(
 
 class _SkuCardRow(NamedTuple):
     """The handful of a card's indexed columns `_copies_out` and `_committed_keys` need,
-    read without building a `Card` object at all (`Rows.select`, `store/rows.py:231-250`).
+    read without building a `Card` object at all (`Rows.select`).
 
     `run` is carried even though `_copies_out`/`_committed_keys` themselves do not read it,
     because `server/pipeline_routes.py:_unsent_ledger` shares this same dict for its own
@@ -692,12 +692,12 @@ def _cards_by_sku(inventory: master.Inventory) -> Dict[str, List[_SkuCardRow]]:
     `Rows.select()`. `_copies_out` used to call `positions_for_sku`/`copies_not_sold`/
     `sales_before` — each a `Rows.where(sku=sku)` — 2 to 3 times per listing; measured at
     0.9s over 492 listings (D156). The SQL half of each call was already an indexed lookup
-    (`cards_sku`, `store/db.py:135`) and always has been — the cost is `Rows.where`'s own
-    closing filter (`store/rows.py:213-229`), which re-scans the ENTIRE `_loaded` cache on
+    (`cards_sku`, in `store/db.py`) and always has been — the cost is `Rows.where`'s own
+    closing filter (`store/rows.Rows`'s `where`), which re-scans the ENTIRE `_loaded` cache on
     every call regardless of whether the SQL half found the row via the index, and `_loaded`
     grows with every SKU this loop has already visited. One `select()` with no filter
     touches the underlying table exactly once and — unlike `where()` — never writes into
-    `_loaded` at all (`store/rows.py:231-250` builds no `Card` objects), so its own cost is
+    `_loaded` at all (`Rows.select` builds no `Card` objects), so its own cost is
     a single SQL scan plus one Python pass over the result, O(cards), done once rather than
     once per listing.
 

@@ -782,7 +782,7 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
 
 
 def owns_a_walkable_body(entry: dict) -> bool:
-    """`app/src/Orders.tsx:840`'s `ownsAWalkableBody`: `open`, or `terminal` and still owed
+    """`app/src/Orders.tsx`'s `ownsAWalkableBody`: `open`, or `terminal` and still owed
     a copy — restated over the wire's own order dict rather than `OrderRow`."""
     if entry.get("open"):
         return True
@@ -805,7 +805,7 @@ def buyer_key_of(entry: dict) -> str:
 def default_view_walkable_orders(listed: Sequence[dict]) -> List[str]:
     """The exact set `Orders.tsx`'s "Walk all N buyers" ticks on a FRESH page load: every
     walkable order (`owns_a_walkable_body`) belonging to a buyer group that holds at least
-    one truly OPEN order (`inOpenBase`, `app/src/Orders.tsx:2771`, with `finished` empty —
+    one truly OPEN order (`inOpenBase`, `app/src/Orders.tsx`, with `finished` empty —
     true on a fresh load, never true once a buyer has been marked done this session). A
     group whose every order is terminal-but-owing never shows in the default "open" tab and
     is never ticked, even though each of its orders individually passes

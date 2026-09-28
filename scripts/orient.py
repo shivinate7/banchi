@@ -7,11 +7,11 @@ because nothing downstream believes it.
 
 WHAT IT IS FOR, and the defect that earned it. On 2026-09-17 a fix to `#/orders` was briefed
 against `CopyMapView`. The screen the owner looks at renders `WalkGroups`. The three lines
-that decide this are 1,000 apart in a 4,605-line file:
+that decide this are 1,000 apart in a 4,605-line file (`Orders.tsx`, by line number):
 
-    Orders.tsx:3705   BuyerDetail passes  hidePicks={hasWalk}
-    Orders.tsx:4018   {hidePicks || single || map.stops.length === 0 ? null : <CopyMapView …>}
-    Orders.tsx:3716   <WalkGroups …> renders instead
+    line 3705   BuyerDetail passes  hidePicks={hasWalk}
+    line 4018   {hidePicks || single || map.stops.length === 0 ? null : <CopyMapView …>}
+    line 3716   <WalkGroups …> renders instead
 
 The work was correct and invisible, and it cost a whole agent round. Nobody reads that
 distance reliably, and a split would not fix it: an agent with `WalkGroups` in its own file

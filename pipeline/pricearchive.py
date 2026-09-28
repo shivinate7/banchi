@@ -520,7 +520,7 @@ def revenue_by_sku(ledger) -> Dict[str, Decimal]:
 
     THIS IS THE ONLY THING A SEALED-PRODUCT SKU IS EVER WORTH TO THIS MODULE. Sealed
     product is never captured (`pipeline/games.py`'s own line for it) and so has no row in
-    `cards` and never will — `store/orders.py:982` says the same of a sealed Holiday
+    `cards` and never will — `store/orders.py` says the same of a sealed Holiday
     Calendar's fulfilment record. A sealed SKU's revenue is computed here anyway, because
     `rank_by_revenue` is handed EVERY key this function can answer for, not only the ones
     `rows_from_store`'s own subject set happens to contain — the gap between the two is

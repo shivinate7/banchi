@@ -834,7 +834,7 @@ class Kept(NamedTuple):
 def reapable_branches(root: str, held: Set[str]) -> Tuple[List[str], List[Kept]]:
     """(branches that are provably redundant, branches that are kept and why).
 
-    THE TEST IS ANCESTRY, NOT `git branch -d`, AND merge-pr.py:494 IS WHERE THAT WAS ARGUED.
+    THE TEST IS ANCESTRY, NOT `git branch -d`, AND merge-pr.py IS WHERE THAT WAS ARGUED.
     `-d` refuses a branch that is behind its own upstream — "not yet merged to
     refs/remotes/origin/<branch>" — and a branch whose remote was deleted by the merge reads
     exactly that way. Every one of the 37 branches this was written for was in that state. The
