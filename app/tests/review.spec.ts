@@ -794,7 +794,9 @@ test('the search box does not answer the card when a digit is typed into it', as
   page,
 }) => {
   const sent = await open(page, NO_ROWS)
-  const box = page.locator('.review-catalog-input')
+  /* `.search-field-input`, not `.review-catalog-input`: the catalog's own search box moved
+     onto the kit's `SearchField` (R2-search, 2026-09-27), which owns its own input class. */
+  const box = page.locator('.review-catalog .search-field-input')
   await box.click()
   await box.fill('1')
 
