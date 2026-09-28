@@ -36,7 +36,40 @@ PR 5's work now lives inside PR 4B. Owner: `bring everything that was PR5 into P
 | A2a | `CardPane` and one hero head, moved out of `BoxBrowse.tsx` | Review PASS, 0-pixel diff |
 | A2b | `RailFrame`, moved out of `BoxBrowse.tsx` | Review PASS, 0-pixel diff |
 | A2c | `CardLocations` gains `head={false}`, and `layoutsOf` moved to a shared home | Review PASS |
+| A3 | The Orders pane becomes `CardPane`, with no Details fold | Merged (c8562273) |
+| A4 | Every Orders walk row carries its copies as `CardLocations` rows | Merged (1736fc8e) |
+| A5 | Orders takes Inventory's three-column skeleton, a phone sheet for the card | Merged (952fbd34) |
+| A6 | No `Box <n>` fallback in the walk | Merged (633aff52) |
+| B3 | A refused markdown apply writes nothing | Merged (49e12373) after four rounds |
+| D2 | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | Merged (752d638b, plus the z-index follow-up) |
+| F5 | Cut the excess words on every screen. The palette keeps "Go to" | Merged (ee17847c), plus T7's own fix (5918d8ab) |
+| F8 | Inventory search leads with the best-ranked match, and says when it is sold | Merged (bc66af69) |
+| F9 | An empty section leaves the Inventory walk's ruler and box header | Merged (66992bce) |
+| F9b | Four stale tests follow F5's approved copy and the server's box contract | Merged (6aea8d15) |
+| F10 | The box rail counts matches while a printing waits to be picked | Merged (8e2476e8) |
+| F11 | Every search field uses the one matcher (D271 amended), F11b folded in | Merged (1eaa5939) |
+| F11c | The hand-search lint catches every folded comparison, with a self-test | Merged (ad379c57) |
+| G | Every staged image gets the QR scan, fail closed. `claim-selftest` skips ignored files. The tsc premise no longer held | Merged (73037a92) |
+| L1 | Cut T7's idle waits | Merged. T7 median 130s to 72s, measured by the reviewer |
+| L2 | docs-audit reads the commit, not the tree. Markdown spelling joins a shrinking list | Merged (6b8e3f2d, plus the spelling fix 0481a743) |
+| L3 | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | Merged (31355eea) after two FAILs |
+| L4 | Breakpoint questions answered. `RunPanel` asks its own sheet (container runs) | Merged (7e33c5ac) |
+| L5 | Cut the old demo seed guards, keep the generator | Merged (7481619a) |
+| L6 | DEBT47 closed, pull-confirm folded into fulfillment | Merged (29c32166) |
+| L7 | Measure the slow CI shard, then one route sweep | Merged (ed07efd9), after one FAIL |
+| L8 | docs-audit merges 16 rows into families, 107 to 93 (M3, Q8) | Merged (db207f3c) |
+| L10 | Heartbeat and coordinator retired | Merged (4c58fbfb) |
 | L11 | `match-selftest` joins the path gate | Review PASS |
+| P5 | Stub D48 and D194 to one line each. Delete debts 5, 6, 18, 28, 35 and 42 | Merged (afc2ca83) |
+| R | `make reap` stops only processes tagged with the caller's id | Merged (215dd646) |
+| T-claude | `CLAUDE.md` cut from 112 KB to 58 KB. The decision index is a rendered view (D60 amended) | Merged (286d4add) |
+| T-hook | `decision-context.py`'s entry says it prints id and title only | Merged (4a2e81bd) |
+| debt-claim | Debt slugs are claimed at merge, like decisions. Five debts filed | Merged (9b304772) |
+| Box sweep | Every screen names a box through `boxTitle` (D259) | Merged (008a7ccc) |
+| memory migration | 71 memory entries judged, each fact given a repo home | Merged (daaccd8d) |
+| auto memory off | `autoMemoryEnabled: false`, once the migration landed | Merged (f642a5b5) |
+| token-audit report | The token-budget audit report, record only | Merged (b74f9e79) |
+| rulings | Two test-audit rulings recorded. Old docs-audit row names in comments follow L8 | 262f3351 |
 
 Records and studies, also merged:
 
@@ -47,34 +80,13 @@ Records and studies, also merged:
 
 Earlier PRs, done: PR 3B, the demo mirror (#467 to #477), and PR 4A (#466).
 
-## In motion (state at the third 2026-09-27 compaction, ux/pr4b at c8562273)
+## In motion (state at 262f3351)
 
-Each lane builds on its own branch `ux/pr4b-<lane>` and merges into `ux/pr4b` after one review
-PASS, with `cd app && npx tsc --noEmit` at the merge.
+One lane remains open in PR 4B.
 
 | Lane | Branch | What | State |
 |---|---|---|---|
-| B3 | `ux/pr4b-B3` | A refused markdown apply writes nothing | MERGED (49e12373) after four rounds. The listing file lands last, and a failed rename restores the old price. A Ctrl-C window is named in DEBT48. |
-| F5 | `ux/pr4b-F5` | Cut the excess words. Numbers and names stay. Review's mismatch line becomes "Mismatch: photo reading / matched listing". | Review FAIL on D276. The owner kept "Go to". Back with the builder, then a re-review. |
-| D2 | `ux/pr4b-D2` | Capture's gap with a head-to-body check, Review onto the kit's top gap, ReviewQueue's five controls, Codes' filter row | MERGED (752d638b, plus the z-index follow-up). The phone sweep audits the topmost overlay. |
-| P5 | `ux/pr4b-P5` | Stub D48 and D194 to one line each. Delete debts 5, 6, 18, 28, 35 and 42. Split DEBT27, or delete it if D279 removed its call. | MERGED (afc2ca83). DEBT27 keeps its open half. DEBT6 is kept in part, because a docs-audit row reads five figures from it. |
-| A3 | `ux/pr4b-A3` | The Orders pane becomes `CardPane`, with no Details fold | MERGED (c8562273). The pick pane is Inventory's `CardPane`. |
-| A6 | `ux/pr4b-A6` | No `Box <n>` fallback in the walk | MERGED (633aff52). |
-| L1 | `ux/pr4b-L1` | Cut T7's idle waits | MERGED. T7 median 130s to 72s, measured by the reviewer. |
-| L3 | `ux/pr4b-L3` | `claim-stale` out of `make check`, two more gated self-tests, stale lines, and Vale retired | MERGED (31355eea) after two FAILs. `make check` is 56 checks. |
-| L5 | `ux/pr4b-L5` | Cut the old demo seed guards, keep the generator | MERGED (7481619a). `demo-freshness` retired too, because C4 names it. |
-| L6 | `ux/pr4b-L6` | DEBT47 closed, pull-confirm folded into fulfillment | MERGED (29c32166). |
-| L7 | `ux/pr4b-L7` | Measure the slow CI shard, then one route sweep | MERGED (ed07efd9), after one FAIL: the folded floors now report every failure in one run. Shard 2 is slow from `icon-button.spec.ts` re-rendering the gallery per test. |
-| L10 | `ux/pr4b-L10` | Heartbeat and coordinator retired | MERGED (4c58fbfb). The orchestrator fixed the last stale spec line. |
-| F8 | `ux/pr4b-F8` | Inventory search leads with the best-ranked match, and says when it is sold | MERGED (bc66af69). |
-| G | `ux/pr4b-G` | Every staged image gets the QR scan, fail closed. `claim-selftest` skips ignored files. The tsc out-of-memory cause | Merged (73037a92). The tsc premise no longer held. |
-| L2 | `ux/pr4b-L2` | Cut `ste offenders`. Identifier spelling reads staged files only and learns markdown. S3, S4 | Building. Then a review. Then L4, L8, L12. |
-| R | `ux/pr4b-R` | `make reap` stops only processes tagged with the caller's id | Merged (215dd646). The owner runs `make janitor-install` once after PR 4B merges. |
-| F9 | `ux/pr4b-F9` | Empty sections leave the Inventory walk | Merged (66992bce). |
-| F10 | `ux/pr4b-F10` | Search: a complete word ("punch first", "body rune") finds nothing, and a partial word finds the card | Diagnosing. Then a review. |
-| A4 | `ux/pr4b-A4` | Walk rows carry `CardLocations` rows | Merged (1736fc8e). A5 builds next. |
-| H | `ux/h-record` | Eight many-color palettes, the sheet and the method | Its own deferred PR. The screenshots join after G merges. |
-| Q1 tiers | merged | A proposed tier for each docs-audit row: `docs/reviews/test-audit-2026-09-27/TIERS.md`. 65 Tier 1, 22 Tier 2, 13 Tier 3, 9 CUT, 7 unsure. | Waiting for the owner, together with Q8's merge families (PLAN.md item M3). No docs-audit lane starts before that. |
+| L12 | `ux/pr4b-L12` | The docs-audit tiers: `docs/reviews/test-audit-2026-09-27/TIERS.md`'s Tier 1-3 rulings, and Q8's merge families | Building. Merges into `ux/pr4b` after one review PASS, with `cd app && npx tsc --noEmit` at the merge. |
 
 ## Still to come
 
