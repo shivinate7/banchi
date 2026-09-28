@@ -2206,7 +2206,7 @@ export function OrdersHub({ stage }: { readonly stage: Stage }) {
      this hub's state, so a row on one that names an order still finds it on the other. */
   if (stage === 'ship') {
     return (
-      <Page icon="truck" lede="TCGplayer's shipping export, sorted into three lanes." className="orders-hub shipping">
+      <Page icon="truck" className="orders-hub shipping">
         <ShipStage payload={payload} />
       </Page>
     )

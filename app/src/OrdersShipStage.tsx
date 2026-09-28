@@ -75,10 +75,13 @@ const LANE_SAYS: Record<ShippingLane, ReactNode> = {
 
 /* The column head's helper line: short enough to stay whole beside the count at every width the
    three columns get. The long form above is for the guide tiles, where there is room for it. */
+/* F5 verbiage cut: the $50 threshold each of these restated is kept in full, in the guide
+   tile's own longer sentence (`LANE_SAYS`, above) — this column head is the short form and
+   loses nothing the screen no longer says. */
 const LANE_HEAD: Record<ShippingLane, ReactNode> = {
-  envelope: <>Cards only, under {THRESHOLD}</>,
-  parcel: <>{THRESHOLD} or more, or not all cards</>,
-  unjudged: 'Could not judge — decide by hand',
+  envelope: 'Light',
+  parcel: 'Heavy',
+  unjudged: 'Manual',
 }
 
 /* The reason, in a sentence, and the three abstentions do not share one — each names a
@@ -88,7 +91,7 @@ const REASON_SAYS: Record<ShippingReason, string> = {
   value_at_threshold: 'Worth $50 or more, so tracking is required.',
   non_card_signal: 'Heavier per item than cards run, so something in it is not a card.',
   cards_only: 'Cards only, and under $50.',
-  no_weight_data: 'No usable weight on the row, so what is in it is unknown.',
+  no_weight_data: 'Unweighed',
   no_value_data: 'No value on the row, so the threshold cannot be asked.',
   sub_single_weight: 'Lighter per item than one card, so the weight model does not apply here.',
 }
@@ -438,7 +441,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
             body={`${batch.name} was read and accepted. It is simply empty — read the file for a day that has orders.`}
             actions={
               <>
-                {picker('Read another file', 'upload', 'primary')}
+                {picker('Replace', 'upload', 'primary')}
                 {/* ICON-MAP.md "Shipping": stays WORDS, alone in an empty state. `danger-solid`
                     (not the quieter `danger` the loaded state used before its own button
                     became an IconButton): the kit's R2-icon-only-button rule only leaves a
@@ -481,7 +484,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
             </span>
           </div>
           <div className="shipping-file-actions">
-            {picker('Read another file', 'upload')}
+            {picker('Replace', 'upload')}
             {/* ICON-MAP.md "Shipping": Forget converts (UX-108's risk note applies to the
                 empty-state Button below, not this one — this drops the read batch from
                 memory only, and reading the file again brings it straight back). */}
@@ -518,17 +521,14 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                   This line keeps only what the button cannot say — the stamp state. */}
               <p className="shipping-ship-note">
                 {stamps === null
-                  ? 'Rubber Stamp columns are blank until filled below.'
+                  ? 'Blank'
                   : `${stamps.stamped} of ${batch.parcel_count} carry a pick location, ${stamps.unstamped} do not — all three corners or none.`}
               </p>
               <details className="shipping-caveats">
                 <summary>
-                  <Icon name="info" size={14} /> What this file does not carry
+                  <Icon name="info" size={14} /> Limitations
                 </summary>
-                <p>
-                  Package Weight is blank on every row. No insurance column either — that&apos;s your call in Pirate
-                  Ship. This file buys and books nothing.
-                </p>
+                <p>Manual</p>
               </details>
             </div>
             <div className="shipping-file-actions">
@@ -542,7 +542,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                 busy={busy === 'stamps'}
                 disabled={busy !== null}
               >
-                {stamps === null ? 'Fill pick locations' : 'Refill pick locations'}
+                {stamps === null ? 'Locations' : 'Refill'}
               </Button>
               <a
                 className="bn-btn bn-btn-primary shipping-file shipping-download"
@@ -563,8 +563,12 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
       {/* THE WORD, SAID ONCE (TXT-03), rather than on up to 292 cards. The icon on each row
           still carries it, in its tooltip and its accessible name. */}
       <p className="shipping-quality-legend">
-        <Icon name="check" size={11} /> Certain reads the export&apos;s own numbers.{' '}
-        <Icon name="circle" size={11} /> Inferred is read from the weight.
+        {/* F5 verbiage cut (rows 118/119): "Certain"/"Inferred", not the reviewer's own
+            "Exact"/"Estimated", to match the exact words `qualityOf` already gives each row's
+            own icon as its accessible name a few lines below — a legend that named its icons
+            differently from the icons themselves would be its own new defect. */}
+        <Icon name="check" size={11} /> Certain{' '}
+        <Icon name="circle" size={11} /> Inferred
       </p>
 
       <div className="shipping-lanes" role="group" aria-label="The three lanes">
@@ -600,9 +604,7 @@ export function ShipStage({ payload }: { readonly payload: OrdersPayload | null 
                   away" was the exact repeated-sentence shape TXT-01 exists to catch — restating
                   a figure the chip already shows, three times over. */}
               <div id={`shipping-lane-${lane}`}>
-                {!on ? null : rows.length === 0 ? (
-                  <p className="shipping-lane-empty">No orders in this lane.</p>
-                ) : (
+                {!on ? null : rows.length === 0 ? null : (
                   <ol className="shipping-list">
                     {rows.map((row, at) => {
                     const quality = qualityOf(row)
