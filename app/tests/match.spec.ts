@@ -72,3 +72,14 @@ test('cover stays fast on 60 repeated tokens (memo regression)', () => {
   expect(matched.length).toBe(0)
   expect(filterTook, `filterByQuery over 5 rows took ${filterTook}ms`).toBeLessThan(150)
 })
+
+/* LANE F11b, rule 8: `raw` is a plain, case-folded substring, with none of rule 7's word
+ * rules. A code-card code such as `PROMO1234XY` is one unbroken alphanumeric run, so its
+ * middle digits are never a "word" of their own — rule 7's digit test only finds the START
+ * of a digit-only word, and `234` here starts nothing. `raw` still finds it. */
+test('raw finds a digit run in the middle of a code (Codes, F11b)', () => {
+  const fields: MatchFields = { raw: ['PROMO1234XY'] }
+  expect(matchQuery('234', fields)).toBe(true)
+  // The same digit run through `text` instead of `raw` does not match (rule 7's own limit).
+  expect(matchQuery('234', { text: ['PROMO1234XY'] })).toBe(false)
+})

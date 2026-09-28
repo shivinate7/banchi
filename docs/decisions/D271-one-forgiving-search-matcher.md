@@ -50,6 +50,19 @@ cards. The browser's fold lives behind the kit-data lane's `useSearch`, and ever
 uses it. A shared table of cases proves both sides agree. It runs in `make harness` for the
 server and in a browser spec for the client.
 
+**EVERY SEARCH FIELD IN THE BROWSER USES `matchQuery`/`filterByQuery`, WITH NO NAMED EXCEPTION (lane F11b, 2026-09-28).** The palette's ranking, the shortcut sheet, and Capture's box picker
+still hand-rolled their own match before this lane. Each now calls the shared matcher. Ranking
+stays local where a screen must order results, not only filter them. The palette's `rankMatch`
+still gives an exact or prefix hit a higher tier than a plain match. `matchQuery` decides
+whether a row matches at all.
+
+`MatchFields` carries an eighth field, `raw` (rule 8 in `kit/match.ts`'s own header): a plain,
+case-folded substring, with none of rule 7's word rules. A code-card code, or a key cap like
+`⌘K`, is not read in words. A digit run in the middle of one, such as `234` inside `PROMO1234`,
+must still match. Rule 7's digit test only matches the start of a word, so it cannot do this.
+Codes, the shortcut sheet's key caps, and Capture's box number all use `raw` for this reason.
+`server/match.py` does not carry it. No server caller matches a code or a key cap today.
+
 ### What is still open
 
 - **Typos and a near match.** FLT-05 asked for the closest name on a miss. Not ruled. A
@@ -780,3 +793,43 @@ and "typos and a near match" is confirmed as the one remaining open item.
 a real algorithm choice (an edit-distance threshold, a "did you mean" surface, whether a
 near match returns rows or only a suggestion) that the matcher's own "one matcher, both
 sides" rule does not settle by itself. Left as a disclosed, unruled gap.
+
+**LANE F11b, THE OWNER'S RULING, 2026-09-28: one matcher, called the same way everywhere.** Lane F11 moved Sales' by-name search onto `matchQuery`. It left the SKU and set
+name unsearched. This lane finished the sweep.
+
+- **Sales.** The query in `Revenue.tsx` now also matches `row.skus` and the set name. Both
+  fields already existed on `matchQuery`. No new field.
+- **Codes.** The owner's word: "keep substring on codes." The old
+  `code.toLowerCase().includes(needle)` found a digit run in the middle of a code. Rule 7's
+  digit test cannot do this. It only matches the start of a word. Added `raw`, a plain
+  substring field with no word rules. Moved `code` onto it.
+- **The palette (`rankMatch`, `App.tsx`).** Kept its own tiers for order. Exact, then
+  prefix, both stay literal string tests. Below those, `matchQuery` decides whether the
+  label matches at all, then whether the group, hint or keywords do.
+- **The shortcut sheet (`rowMatches`, `App.tsx`).** A key cap such as `⌘K` is a symbol the
+  fold strips. Moved onto `matchQuery`. The group title and the row's own sentence are
+  `text`. The row's key caps are `raw`. This is also how a digit-only cap (`1`) is found on
+  its own. Rule 7's word-start rule would miss it.
+- **Capture's box picker (`boxMatchesAll`, `CaptureScreen.tsx`).** Kept both behaviors. A
+  box number matches as a plain substring, through `raw`. A box name matches as words,
+  through `text`. Rule 5 excludes a box number from `matchQuery`'s own `boxes` field on
+  purpose. This screen's own exception to that rule stays local and explicit, through
+  `raw`, instead of bent into the shared field.
+- **Graveyard.** Found still hand-rolled: the same defect this entry's own evidence section
+  named at FLT-06 in 2026-09-23, never closed. Moved onto `matchQuery`, over `text`,
+  `numbers` and `skus`.
+
+**Grep swept for every other hand-rolled match.** Two literal-string checks survive. Neither
+is a typed query: `Revenue.tsx`'s `condition.includes('foil')`, and `kit/data.tsx`'s
+finish-in-condition check. Both carry an inline comment saying so. `setHint.ts` and
+`pipeline/setnames.py` resolve a stored set hint against the catalog. That is a classifier
+for capture, never a screen's typed search. `server/capture_server.py`'s own
+`_match_rank`/`_fts_query` are the server's decisive step and the FTS5 candidate step, named
+out of scope by this lane's own fence. Every other screen with a search field (Inventory,
+Orders, Fulfillment, Cards to pull, Product history, Review's catalog lookup) already calls
+the server's `do_search`, or `matchQuery` through `useSearch`.
+
+**Enforcement (D173).** `app/eslint.config.js` bans `x.toLowerCase().includes(y)` under
+`src/`, with `no-restricted-syntax`. It is scoped away from `tests/`, where the same shape
+asserts a stored key rather than a typed query. Proved red on Graveyard's own old code,
+restored with a `.bak` copy, then green.

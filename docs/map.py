@@ -6876,6 +6876,7 @@ COMPONENTS = [
                             "D34", "D36", "D41", "D52", "D56", "D58", "D65", "D67", "D81", "D92",
                             "D117", "D118", "D121", "D128", "D130", "D131", "D132", "D142", "D145",
                             "D153", "D164", "D170", "D172", "D196", "D218", "D259", "D260", "D264",
+                            "D271",
                             "D286", "D299"]},
             # D3 earns its place on a stylesheet: the no-claim finish chip is drawn dashed
             # because rung 1 distinguishes "no metadata recorded" from a recorded claim, and
@@ -8671,7 +8672,7 @@ COMPONENTS = [
                         "it was written and never had: no facingMode (bug 3), no split(\",\") CSV "
                         "parsing (bug 2). No shared preset, no --fix — D18 keeps anything that "
                         "writes off the path `make check` runs.",
-                "governed_by": ["D13", "D16", "D18", "D27", "D114", "D132", "D142"],
+                "governed_by": ["D13", "D16", "D18", "D27", "D114", "D132", "D142", "D271"],
             },
             "tests/motion.spec.ts": {
                 "does": "the MotionMachine against synthetic frame sequences with an exact "
@@ -9563,7 +9564,7 @@ COMPONENTS = [
                         "in its own header once a fifth period option existed. Not a harness "
                         "test; `make design-check` runs it.",
                 "governed_by": ["D50", "D62", "D89", "D103", "D118", "D159", "D193", "D201", "D214",
-                                "D217", "D225", "D281", "D298", "D301"],
+                                "D217", "D225", "D271", "D281", "D298", "D301"],
             },
             "tests/demo-coverage.spec.ts": {
                 "does": "the BUILT public demo (`dist-demo/`), served on this checkout's own "

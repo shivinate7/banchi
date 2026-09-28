@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 import { cropStyle, IconButton, type Crop } from './index'
 import { STATUS_TONES, UNNAMED_BOX, type StatusKind } from './dataRules'
+import { matchQuery } from './match'
 import { hasSheet, openSheet, sheetHref } from './sheets'
 import { useOverlayLayer } from './overlay'
 import { moneyGrouped, moneySigned } from '../money'
@@ -333,6 +334,7 @@ export function CardLine({
   if (set) facts.push({ key: 'set', node: <span className="bn-cardline-set">{set}</span> })
   if (number) facts.push({ key: 'number', node: <span className="bn-cardline-number">{number}</span> })
   if (condition) facts.push({ key: 'condition', node: <span className="bn-cardline-finish">{condition}</span> })
+  // eslint-disable-next-line no-restricted-syntax -- comparing two stored facts, not a typed query.
   if (finish && !(condition ?? '').toLowerCase().includes(finish.toLowerCase())) {
     facts.push({ key: 'finish', node: <span className="bn-cardline-finish">{finish}</span> })
   }
@@ -613,11 +615,10 @@ function PickPanel<T extends string>({
   const [narrow, setNarrow] = useState('')
   const searchable = options.length >= NARROW_FROM
 
-  const shown = useMemo(() => {
-    const needle = narrow.trim().toLowerCase()
-    if (needle === '') return options
-    return options.filter((option) => optionText(option).toLowerCase().includes(needle))
-  }, [options, narrow])
+  const shown = useMemo(
+    () => options.filter((option) => matchQuery(narrow, { text: [optionText(option)] })),
+    [options, narrow],
+  )
 
   const firstSelected = shown.findIndex((option) => selected.has(option.value))
   const [active, setActive] = useState(firstSelected === -1 ? 0 : firstSelected)

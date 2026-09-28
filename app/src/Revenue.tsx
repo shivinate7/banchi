@@ -12,6 +12,7 @@ import {
 import { moneyGrouped } from './money'
 import { absoluteDate, monthOf, saleDate, weekOf } from './dates'
 import { useCardCropWhenSeen } from './cardCrop'
+import { matchQuery } from './kit/match'
 import { SearchField } from './SearchField'
 import { ReadingAge } from './CardLocations'
 import './Revenue.css'
@@ -238,6 +239,7 @@ function salesOf(
 /** The condition string carries the finish (CLAUDE.md: "the grade stays on every row"). A
  *  foil printing is one whose condition names it — never a guess off the card's own name. */
 function isFoil(condition: string | null): boolean {
+  // eslint-disable-next-line no-restricted-syntax -- 'foil' is a fixed word, not a typed query.
   return condition !== null && condition.toLowerCase().includes('foil')
 }
 
@@ -953,8 +955,9 @@ export function Revenue() {
     }
     const rows = Array.from(by.values())
     const byView = rows.filter((row) => (view === 'all' ? true : isSealed(row.kind, row.condition) === (view === 'sealed')))
-    const q = query.trim().toLowerCase()
-    const filtered = q === '' ? byView : byView.filter((row) => row.name.toLowerCase().includes(q))
+    const filtered = byView.filter((row) =>
+      matchQuery(query, { text: [row.name, row.setName], skus: [row.sku] }),
+    )
     return filtered.slice().sort((a, b) => {
       const base = compareProducts(a, b, sortKey)
       return sortDir === 'asc' ? base : -base

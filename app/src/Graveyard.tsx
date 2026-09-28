@@ -6,6 +6,7 @@ import { Button, EmptyState, Notice, Page, Pill, ReloadButton, Segmented, type P
 import { readingAgo, readingExact, stateLabel, stateTone } from './cardState'
 import { reasonWord } from './Inventory'
 import { SearchField } from './SearchField'
+import { matchQuery } from './kit/match'
 import './Graveyard.css'
 
 /* GRAVEYARD — D134's whole reason for existing.
@@ -123,15 +124,13 @@ export function Graveyard() {
 
   const visible = useMemo(() => {
     if (rows === null) return []
-    const needle = query.trim().toLowerCase()
     return rows.filter((row) => {
       if (filter !== 'all' && row.how !== filter) return false
-      if (needle === '') return true
-      const haystack = [row.name, row.number, row.sku, row.box_name, row.order]
-        .filter((v): v is string => v !== null)
-        .join(' ')
-        .toLowerCase()
-      return haystack.includes(needle)
+      return matchQuery(query, {
+        text: [row.name, row.box_name, row.order],
+        numbers: [row.number],
+        skus: [row.sku],
+      })
     })
   }, [rows, filter, query])
 

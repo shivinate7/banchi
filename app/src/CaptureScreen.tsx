@@ -56,6 +56,7 @@ import { captureBoxLabel } from './runScope'
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
 import { Button, Icon, IconButton, Kbd, Notice, Page, Pill, Stat } from './kit'
+import { matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
 import type { IconName, PillTone } from './kit'
@@ -1925,17 +1926,13 @@ export function CaptureScreen() {
   
   const boxQuery = boxEntry.trim()
 
-  /* SUBSTRING OVER THE NUMBER AND THE NAME, and the two are not two modes. `9` keeps 9, 19,
-   * 95 and 99 exactly as it always did; `com` keeps every box whose name carries it; `box 3`
-   * keeps "common box 3". Case-folded on the name side only, because nobody narrows with a
-   * shift key and a box number has no case to fold. */
+  /* THE SHARED MATCHER (D271). `9` keeps 9, 19, 95 and 99 through the `raw` field (rule 8,
+   * a plain substring — a box number is not read in words). `com` keeps every box whose
+   * name carries it, and `box 3` keeps "common box 3", both through `text` (rule 7). */
   const boxMatchesAll = useMemo(() => {
     if (boxQuery === '') return boxOptions
-    const folded = boxQuery.toLowerCase()
-    return boxOptions.filter(
-      (option) =>
-        String(option.box).includes(boxQuery) ||
-        (option.name ?? '').toLowerCase().includes(folded),
+    return boxOptions.filter((option) =>
+      matchQuery(boxQuery, { text: [option.name], raw: [String(option.box)] }),
     )
   }, [boxOptions, boxQuery])
 

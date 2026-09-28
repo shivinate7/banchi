@@ -4,6 +4,7 @@ import { isEditableTarget } from './keys'
 import { rememberRail, storedRail, storedTheme } from './deviceMemory'
 import { getStatus, onServerBoot, onServerReachable } from './server'
 import { useSearch } from './useSearch'
+import { matchQuery } from './kit/match'
 import { usePoll } from './usePoll'
 import { Button, Icon, IconButton, Kbd, Lockup, Modal, Page, PageRouteContext, Sheet, SheetHost,
   applyTheme, openSheet, overlayOpen, readTheme, type IconName, type Theme } from './kit'
@@ -662,8 +663,8 @@ function rankMatch(c: Command, q: string): number | null {
   const label = c.label.toLowerCase()
   if (label === q) return 0
   if (label.startsWith(q)) return 1
-  if (label.includes(q)) return 2
-  if (`${c.group} ${c.hint ?? ''} ${c.keywords ?? ''}`.toLowerCase().includes(q)) return 3
+  if (matchQuery(q, { text: [c.label] })) return 2
+  if (matchQuery(q, { text: [c.group, c.hint, c.keywords] })) return 3
   return null
 }
 
@@ -926,11 +927,11 @@ function Caps({ row }: { row: Binding }) {
 
 /** A row survives a query if the query hits its own text or its group's title — a group
  *  title match keeps every row in it, so typing "capture" shows the whole Capture group
- *  rather than only the one row that happens to say the word. */
+ *  rather than only the one row that happens to say the word. A key cap (`⌘K`) is a symbol
+ *  the fold strips, so it is matched through `raw` (match.ts rule 8), which is also what
+ *  finds a digit-only cap such as `1` on its own. */
 function rowMatches(group: KeyGroup, row: Binding, q: string): boolean {
-  if (group.title.toLowerCase().includes(q)) return true
-  if (row.does.toLowerCase().includes(q)) return true
-  return row.keys.some((k) => k.toLowerCase().includes(q))
+  return matchQuery(q, { text: [group.title, row.does], raw: row.keys })
 }
 
 function KeysSheet({ open, onClose, path }: { open: boolean; onClose: () => void; path: string }) {
