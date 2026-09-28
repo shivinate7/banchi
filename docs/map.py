@@ -7231,7 +7231,7 @@ COMPONENTS = [
                         "off the wire.",
                 "governed_by": ["D5", "D10", "D13", "D20", "D21", "D22", "D26", "D27", "D31", "D33",
                                 "D34", "D36", "D38", "D41", "D58", "D70", "D83", "D89", "D115",
-                                "D132", "D134", "D196", "D218", "D259", "D299",
+                                "D118", "D132", "D134", "D181", "D196", "D218", "D259", "D299",
                                 "D300"],
             },
             "src/BoxOps.css": {
@@ -7371,8 +7371,8 @@ COMPONENTS = [
                                         "string to split: a section name may itself contain ` · ` "
                                         "(D132).",
                                 "governed_by": ["D5", "D10", "D20", "D24", "D30", "D41", "D58",
-                                                "D68", "D118", "D132", "D155", "D194", "D218",
-                                                "D259", "D260", "D299"]},
+                                                "D68", "D118", "D132", "D155", "D181", "D194",
+                                                "D218", "D259", "D260", "D299"]},
             "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
                                             "its fill, graduations, edge labels and crossing pin, the "
                                             "demoted box strip with the caret that replaced the "
@@ -8826,6 +8826,25 @@ COMPONENTS = [
                         "minimal one-copy fixture rather than `inventory.spec.ts`'s fixed box, "
                         "so a section count is a parameter. Run by `make design-check`.",
                 "governed_by": ["D118", "D155", "D260"],
+            },
+            "tests/empty-section.spec.ts": {
+                "does": "F9 (the owner's report, 2026-09-27, `docs/reviews/ux-2026-09-23/"
+                        "PLAN-PR4-PR5.md`): a section with no card on hand does not draw in the "
+                        "walk's own strip OR in `BoxOps.tsx:BoxIdentity`'s own box-header track "
+                        "(the review round, 2026-09-27 — that header is the walk's own "
+                        "always-visible box top, never \"Manage box\"), and the caption's "
+                        "denominator is the highest non-empty section number rather than a "
+                        "count of every declared one, so a hidden middle section cannot shrink "
+                        "`N` below a section still drawn. A move target (`BoxOps.tsx`'s \"Move "
+                        "to box\" section picker) still draws the destination's own declared-"
+                        "but-empty section, because that reading never goes through `spansOf`/"
+                        "`nonEmptySections` at all. Selling the only card of a section keeps that "
+                        "section drawn on both instruments while the walk still stands on it "
+                        "(D118, D181) — `nonEmptySections`'s own \"keep current\" exemption, "
+                        "proved live against a dynamic fixture, never a static one. Stubs its own "
+                        "minimal fixtures, the way `section-ruler.spec.ts` does. Run by "
+                        "`make design-check`.",
+                "governed_by": ["D57", "D58", "D118", "D181", "D260", "D264"],
             },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
