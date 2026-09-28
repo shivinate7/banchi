@@ -7293,6 +7293,197 @@ def check_undo_until_built_on(checks: Checks) -> None:
             conn.close()
         checks.ok(not replace_postings, "and no posting row lands")
 
+    # ------------------------------------------------ T7-RACE (DEBT48): reprice apply's own
+    # write, round 4 — undo by restoring the corpus, never by deleting a file
+    # Round 3 renamed the CSV into place FIRST, so a later corpus-write failure could "undo"
+    # by unlinking `target`. Re-review found two holes. (a) `target` is a fixed name — a
+    # SECOND apply over the same markdown lands its rename on the FIRST apply's real
+    # `import.csv`, and unlinking to undo then destroys that earlier, real file. (b) the
+    # cleanup unlinks had no guard of their own, so an unlink that itself raised propagated a
+    # raw traceback past `cli/__main__.py:main`.
+    #
+    # Round 4: `os.replace(temp, target)` is the LAST step. If it fails, the corpus (already
+    # written by then) is undone by writing its OWN PRE-IMAGE back — never by touching
+    # `target`, which this branch never renamed into. Every cleanup step is its own try.
+    with isolated_home() as home:
+        cards = [(3, 1, "Dunsparce", "120", "normal")]
+        run_dir, _ = seam_run(checks, cards)
+        book0 = corpus.Corpus()
+        book0.sub_threshold = "floor"
+        book0.write()
+        command(checks, "emit", str(run_dir.directory))
+
+        source = tcgcsv.read_export(FIXTURE_EXPORT)
+        row = dict(source.by_sku()[DUNSPARCE_SKU])
+        row[tcgcsv.LIVE_QUANTITY_COLUMN] = "2"
+        row[tcgcsv.PRICE_COLUMN] = "2.0000"
+        export = home / "live-b3r4.csv"
+        tcgcsv.write_csv(export, source.header, [row])
+
+        command(checks, "reprice", "list", str(export), "--days", "7", "--percent", "10", "--write")
+        r4_directory = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[-1]
+        worklist_path = r4_directory / cmd_reprice.WORKLIST
+        earlier_target = r4_directory / cmd_reprice.IMPORT
+
+        from cli import __main__ as cli_entry
+
+        # THE FIRST, REAL APPLY — an earlier `import.csv` this whole case is built to
+        # protect. Nothing here refuses a second apply over the same markdown (found by
+        # re-review), so this file is exactly what a real second press would find.
+        tcgcsv.write_csv(
+            worklist_path,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.50"}],
+        )
+        with quiet():
+            first_code = cli_entry.main(["reprice", "apply", str(worklist_path), "--write"])
+        checks.equal(first_code, 0, "T7-RACE (DEBT48) round 4: the first, real apply succeeds")
+        earlier_bytes = earlier_target.read_bytes()
+        earlier_corpus = dict(corpus.Corpus.read().answers)
+
+        # CASE 1: THE FINAL REPLACE RAISES. A second apply, a different price, over the SAME
+        # markdown — `os.replace` fails on its way to `target`, selectively, the same way
+        # round 3's own case isolated the CSV's own temp name from `Corpus.write()`'s
+        # internal rename.
+        tcgcsv.write_csv(
+            worklist_path,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.25"}],
+        )
+        real_os_replace = os.replace
+
+        def raising_replace_r4(src, dst):
+            if Path(src).name.startswith(f".{cmd_reprice.IMPORT}."):
+                raise OSError("T7-RACE (DEBT48) round 4: simulated rename failure")
+            return real_os_replace(src, dst)
+
+        os.replace = raising_replace_r4
+        raised1 = None
+        code_r4a = None
+        try:
+            with quiet() as said_buf_r4a:
+                try:
+                    code_r4a = cli_entry.main(
+                        ["reprice", "apply", str(worklist_path), "--write"]
+                    )
+                except Exception as exc:
+                    raised1 = exc
+            said_r4a = said_buf_r4a.getvalue()
+        finally:
+            os.replace = real_os_replace
+
+        checks.ok(
+            raised1 is None,
+            "T7-RACE (DEBT48) round 4, case 1: a final-replace failure, over an EARLIER "
+            "real import.csv, still refuses cleanly", repr(raised1),
+        )
+        checks.equal(code_r4a, 1, "and exits non-zero")
+        checks.ok(
+            said_r4a is not None and "REFUSED" in said_r4a and "Traceback" not in said_r4a,
+            "and prints a clean refusal, never a raw traceback", said_r4a,
+        )
+        temp_r4a = earlier_target.with_name(f".{cmd_reprice.IMPORT}.{os.getpid()}.tmp")
+        checks.ok(not temp_r4a.exists(), "and leaves no temp file behind")
+        checks.equal(
+            earlier_target.read_bytes(), earlier_bytes,
+            "and the EARLIER import.csv is byte-identical — round 3's own undo would have "
+            "unlinked whatever sat at this name, real or not",
+        )
+        checks.equal(
+            dict(corpus.Corpus.read().answers), earlier_corpus,
+            "and the corpus is back to the first apply's own price, not the second's",
+        )
+
+        # CASE 2: THE CORPUS WRITE ITSELF RAISES, BEFORE THE REPLACE IS EVEN ATTEMPTED. The
+        # earlier `import.csv` was never touched by this attempt at all — no rename ran — so
+        # it must still be exactly the bytes the first apply wrote.
+        tcgcsv.write_csv(
+            worklist_path,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.10"}],
+        )
+        real_corpus_write = corpus.Corpus.write
+
+        def raising_corpus_write(self, path=None):
+            raise OSError("T7-RACE (DEBT48) round 4: simulated corpus write failure")
+
+        corpus.Corpus.write = raising_corpus_write
+        raised2 = None
+        code_r4b = None
+        try:
+            with quiet() as said_buf_r4b:
+                try:
+                    code_r4b = cli_entry.main(
+                        ["reprice", "apply", str(worklist_path), "--write"]
+                    )
+                except Exception as exc:
+                    raised2 = exc
+            said_r4b = said_buf_r4b.getvalue()
+        finally:
+            corpus.Corpus.write = real_corpus_write
+
+        checks.ok(
+            raised2 is None,
+            "T7-RACE (DEBT48) round 4, case 2: a corpus-write failure, before the replace "
+            "is attempted, still refuses cleanly", repr(raised2),
+        )
+        checks.equal(code_r4b, 1, "and exits non-zero")
+        checks.ok(
+            said_r4b is not None and "REFUSED" in said_r4b and "Traceback" not in said_r4b,
+            "and prints a clean refusal, never a raw traceback", said_r4b,
+        )
+        checks.equal(
+            earlier_target.read_bytes(), earlier_bytes,
+            "and the prior import.csv is byte-identical — the rename was never reached",
+        )
+        checks.equal(
+            dict(corpus.Corpus.read().answers), earlier_corpus,
+            "and the corpus is unchanged",
+        )
+
+        # CASE 3: THE FINAL REPLACE RAISES, AND THE CLEANUP UNLINK ALSO RAISES. Both the
+        # rename and the temp-file cleanup that follows a failed rename fail. Still no raw
+        # crash: each cleanup step is its own try (found by re-review's own case (b)).
+        tcgcsv.write_csv(
+            worklist_path,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.05"}],
+        )
+        real_unlink = Path.unlink
+
+        def raising_unlink_r4(self, *a, **kw):
+            if self.name.startswith(f".{cmd_reprice.IMPORT}."):
+                raise OSError("T7-RACE (DEBT48) round 4: simulated unlink failure")
+            return real_unlink(self, *a, **kw)
+
+        os.replace = raising_replace_r4
+        Path.unlink = raising_unlink_r4
+        raised3 = None
+        code_r4c = None
+        try:
+            with quiet() as said_buf_r4c:
+                try:
+                    code_r4c = cli_entry.main(
+                        ["reprice", "apply", str(worklist_path), "--write"]
+                    )
+                except Exception as exc:
+                    raised3 = exc
+            said_r4c = said_buf_r4c.getvalue()
+        finally:
+            os.replace = real_os_replace
+            Path.unlink = real_unlink
+
+        checks.ok(
+            raised3 is None,
+            "T7-RACE (DEBT48) round 4, case 3: the replace AND the cleanup unlink both "
+            "fail, still no raw crash", repr(raised3),
+        )
+        checks.equal(code_r4c, 1, "and exits non-zero")
+        checks.ok(
+            said_r4c is not None and "REFUSED" in said_r4c and "Traceback" not in said_r4c,
+            "and prints a clean refusal sentence, never a raw traceback", said_r4c,
+        )
+
     # ------------------------------------------------ UN-14: a move, until either box changes
     with isolated_home():
         for _ in range(2):

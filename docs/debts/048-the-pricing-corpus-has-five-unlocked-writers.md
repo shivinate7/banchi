@@ -79,29 +79,48 @@ instead of `REFUSED`. The temp file stayed on disk. This is the exact defect rou
 moved one step later. A wrap around the two writes was never enough. The step AFTER the wrap
 could still leave the corpus changed with nothing behind it.
 
-The fix changes the ORDER, not only the catch. `import.csv` now lands at its final name —
-temp write, then `os.replace` — BEFORE the corpus is touched at all. Both sit inside one
-try/except. If the corpus write then raises, the file it just landed is unlinked first. That
-undoes what landed, before the refusal, so the invariant holds. No failure may leave the
-corpus changed while no file exists. No failure may leave a file with nothing recorded behind
-it. A `landed` flag tracks whether the rename has happened, so the except clause knows
-whether there is a file to undo. The comment that once called `os.replace` a step "not
-expected to fail" is gone. The whole point of round 3 is that a syscall must never be assumed
-safe.
+The fix (as built for round 3) changed the ORDER, not only the catch. `import.csv` landed at
+its final name — temp write, then `os.replace` — BEFORE the corpus was touched at all. Both
+sat inside one try/except. If the corpus write then raised, the file it had just landed was
+unlinked first, undoing what landed before the refusal. The comment that once called
+`os.replace` a step "not expected to fail" was removed.
+
+**Round 4: undoing by DELETING is itself unsafe.** Lane B3's own re-review found two holes in
+round 3, both confirmed by repro in a throwaway clone.
+
+(a) `target` — `import.csv` — is the markdown directory's FIXED name. Nothing refuses a
+SECOND apply over the same markdown. Round 3's rename landed on top of whatever was already
+there. A later corpus-write failure then unlinked `target` to "undo". That deleted not the
+file this press had just landed, but an EARLIER apply's real, already-sent file. A rename
+destroys the difference between the two the instant it lands. The `REFUSED` sentence still
+said nothing was written. An earlier, real file was gone.
+
+(b) The cleanup unlinks carried no guard of their own. An unlink that itself raised (a
+permissions change mid-cleanup) propagated the original exception raw. It reached the
+operator as a traceback, past `cli/__main__.py:main`, with `import.csv` still on disk and the
+corpus already changed.
+
+The fix stops undoing by deletion. `os.replace(temp, target)` is now the LAST step, the one
+deliberate overwrite this command makes. Order: write the temp CSV, keep the corpus's
+PRE-IMAGE (`before`, read under the same lock), write the corpus, THEN rename the temp CSV
+into `target`. If that final rename fails, the corpus is already written by then. It is undone
+by writing the PRE-IMAGE BACK, never by touching `target`. This branch never renamed into
+`target`, so it never owns it. The pre-image write and the temp-file cleanup are each their
+own try. One failing never hides or blocks the other, and neither ever raises raw. If the
+pre-image write ALSO fails, the refusal does not falsely say "nothing changed". It names the
+state out loud: which SKU and price the corpus now holds, and that no file landed.
 
 **The one window this does not close.** The posting is recorded
-(`writable.postings.record`) only after the file has landed and the corpus write has
-succeeded. But that call only appends to a list in memory. `Store().write()` flushes it with
+(`writable.postings.record`) only after the corpus write and the rename have both succeeded.
+But that call only appends to a list in memory. `Store().write()` flushes it with
 `db.append_postings` at its own `COMMIT`, on the way out of the `with` block. That is after
 this command's own code has already returned. A crash or a disk failure exactly there leaves
 the corpus and `import.csv` consistent with each other, and only the posting row missing.
 Closing it needs one transaction across two stores, `store.sqlite` and
-`inventory/prices.json`. Round 3 does not build that. Every other failure point in the write
-— the temp write, the rename, the corpus write — now undoes what it landed before refusing.
-This one gap is what stays open. Named in a code comment at the posting call in
-`cli/cmd_reprice.py:_apply`, and here.
+`inventory/prices.json`. Round 4 does not build that. This one gap is what stays open. Named
+in a code comment at the posting call in `cli/cmd_reprice.py:_apply`, and here.
 
-**The check.** Five harness cases in `harness/tests/t7_store_and_seams.py`
+**The check.** Eight harness cases in `harness/tests/t7_store_and_seams.py`
 (`check_undo_until_built_on`), named `T7-RACE (DEBT48)`.
 
 Two patch a real `Corpus.read()`. Each sleeps for exactly as long as its own call now holds
@@ -135,11 +154,26 @@ green over the defect this case exists to catch. It asserts exit 1, no raised ex
 `REFUSED` sentence with no `Traceback`, no temp file, no `import.csv`, an unchanged corpus,
 and no posting row.
 
+The sixth, seventh and eighth cases prove round 4. All three run a first, REAL apply first.
+So `target` holds an earlier, genuine `import.csv` — the exact shape a second apply meets in
+practice. Round 3's own fifth case never tested this shape. The sixth patches `os.replace`
+to raise on the CSV's own temp name, same as the fifth. But this time it is a SECOND apply
+over the same markdown. It asserts the earlier `import.csv` is byte-identical afterward, and
+the corpus is back to the FIRST apply's own price. The seventh patches `Corpus.write` to
+raise before the rename is even attempted. It asserts the same earlier file, untouched,
+because the rename was never reached. The eighth combines the sixth's failure with a patched
+`Path.unlink` that also raises on the temp file's own name. It proves the double failure
+still exits 1, with a `REFUSED` sentence, and never a raw traceback.
+
 Proven RED against a `.bak` copy of the pre-fix files, never `git checkout`. All three
 round-1 cases failed before each fix. The extended assertions also failed against lane B2's
 own fix, before lane B3's. The fourth case failed against round 2's own first pass. The fifth
-case failed against round 2 itself — the exact five symptoms lane B3's re-review reported,
-gone once round 3 landed. Proven GREEN against round 3. `make harness` passes, all ten tests.
+case failed against round 2 itself. It reproduced the exact five symptoms lane B3's re-review
+reported, gone once round 3 landed. The sixth case, run against round 3, printed no FAIL
+line. It crashed the test outright. Round 3's own undo had deleted the earlier, real
+`import.csv` its assertion then tried to read back. That is round 3's defect (a), reproduced
+by the file simply not existing any more. Proven GREEN against round 4. `make harness`
+passes, all ten tests.
 
 **The finding, as it was recorded.** Lane B2
 (`docs/reviews/ux-2026-09-23/PLAN-PR4-PR5.md`) named one race. `do_pricing_restore` read the
