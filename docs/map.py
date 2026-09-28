@@ -4361,28 +4361,34 @@ COMPONENTS = [
                 "governed_by": ["D16", "D18", "D80", "D160"],
             },
             "index-decisions.py": {
-                "does": "Generates CLAUDE.md's decision index from the headings in "
-                        "docs/decisions/. The index is the OTHER half of the conflict a "
-                        "directory does not fix by itself: two branches that no longer "
-                        "collide in the corpus would still collide on a hand-typed index "
-                        "line. Locates the block BY SHAPE — the first fenced block whose "
-                        "non-blank lines all look like index lines — which is the same rule "
-                        "`decision index` finds it by, so re-titling the Map section cannot "
-                        "unhook one program without unhooking the other. Previews by "
-                        "default; `--write` applies.",
-                # D18 is the whole placement: this WRITES, so it is not on the commit path,
-                # and the checking half is docs-audit's `decision index` row, which computes
-                # the same answer and blocks. Two programs on purpose — a generator that also
-                # gated could satisfy itself, which is D16's rule.
-                #
+                "does": "Folds every unregistered docs/decisions/ entry into "
+                        "docs/decisions/ORDER.json, at claim time. FORMERLY ALSO wrote "
+                        "CLAUDE.md's decision index; that half retired 2026-09-27 — "
+                        "`make map ARGS=--decisions` (scripts/map-view.py) renders the same "
+                        "id-and-title list on demand, so there is no second copy for a "
+                        "branch's entry to collide on. Previews by default; `--write` "
+                        "applies.",
+                # D18 is the whole placement: this WRITES, so it is not on the commit path.
                 # D79 and D80 are a worked example in the docstring — the two entries the
                 # three non-decision chunks sit between, which is why the order is the
                 # manifest's rather than a sort. D140 is why this runs at the merge: the
-                # index line and the manifest position are the same class of fact as the
-                # number, unknowable until then. D43 is why it takes a root — a generator
-                # hard-wired to one tree indexes the wrong checkout.
+                # manifest position is the same class of fact as the number, unknowable
+                # until then. D43 is why it takes a root — a generator hard-wired to one
+                # tree indexes the wrong checkout.
                 "governed_by": ["D16", "D18", "D43", "D60", "D79", "D80", "D140",
                                 "D160"],
+            },
+            "make-help.py": {
+                "does": "`make help` — one line per Makefile target, derived from the "
+                        "comment directly above the target's own rule. Replaces a "
+                        "hand-typed ~22 KB `@echo` block that had already drifted from "
+                        "CLAUDE.md's own copy of the same list (token-budget audit, "
+                        "2026-09-27, Q1). The summary is the comment's first sentence; a "
+                        "target with none prints a note asking for one rather than nothing.",
+                # D18: a renderer, writes nothing, gates nothing. D60 is the same "index up
+                # front, body on demand" shape this repo already uses for the decision
+                # corpus — one source, rendered rather than copied.
+                "governed_by": ["D18", "D60"],
             },
             "prose-guard.py": {
                 "does": "D60's two guards over the four docs CLAUDE.md names. `--structure` asserts "

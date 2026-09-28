@@ -51,416 +51,159 @@ evidence and are never rewritten to match a later tree.
 
 ```
 make hooks          # arm the git hooks from scripts/githooks/. Once per clone.
-make worktree-setup # in a fresh worktree, FIRST: venv, T1's cache, this checkout's own
-                    #   Browser-pane port (D43).
+make worktree-setup # in a fresh worktree: venv, T1's cache, this checkout's own port (D43).
 make status         # where you are: next step, T1 score, branch.
-make map            # docs/map.py RENDERED (D80). ARGS=<package|path|D<n>|--stale>.
-                    #   ARGS="D<n> --full" prints that ENTRY in full, verbatim. The
-                    #   default view also names the entry's path. The filenames are
-                    #   zero-padded (D42 is `D042-...md`), so a glob typed from a
-                    #   citation matches nothing and says nothing.
-make serve-scope    # what `make serve-selftest` reads, and whether this branch touches it.
-                    #   ARGS=list, or ARGS="classify --base <rev>". Derived from the
-                    #   self-test's own CARRY, reconciled by `make docs-audit`'s `serve scope`
-                    #   row BOTH WAYS. Fails open: no merge-base, an unreadable diff and an
-                    #   EMPTY diff all run the test.
-                    #   `make serve-selftest` WAS THE ONLY PATH-GATED TARGET, 2026-09-17 to
-                    #   2026-09-20. It is 70.1s of `make check`'s own total and copies the
-                    #   checkout with a STUB app/, so no screen change can reach it.
-                    #   `PKMNSCAN_SERVE_SCOPE=off` runs it regardless, printed in every skip.
-make guard-scope    # THE SECOND PATH GATE (owner's word, 2026-09-20, on a fresh
-                    #   measurement). What each of twenty-five guard and product self-tests reads. A
-                    #   sixteenth, `pricearchive-selftest`, joined 2026-09-23 on the
-                    #   owner's word: "once it's done, it only needs to be tested when
-                    #   touched." Six more joined the same day, once that sixteenth's own
-                    #   wiring showed each of their own "not wired — pricearchive-selftest's
-                    #   own precedent" notes had gone stale too:
-                    #   `archive-review-selftest`, `holdings-selftest`,
-                    #   `identity-checks-selftest`, `price-postings-selftest`,
-                    #   `product-history-selftest` and
-                    #   `sku-number-contradictions-selftest` — each proves a module with a
-                    #   real caller today (`archive sweep --write`, `#/revenue`'s
-                    #   unsold-stock panel, `cards checks`, `emit`/`reprice apply`,
-                    #   `#/product`, `cards contradictions`). `match-selftest` joined
-                    #   2026-09-27 on the owner's word (owner ruling Q3, test-audit plan): "Yes,
-                    #   path-gate it." It is a product test, deterministic over what it imports.
-                    #   `browser-scope-selftest` and `port-slots-selftest` joined the same day
-                    #   (test-audit plan P1): same shape as the rest of the roster, so no new
-                    #   word was needed.
-                    #   ARGS=list [--target <name>], or
-                    #   ARGS="classify --target <name> --base <rev>".
-                    #   D247 is the argument. A guard
-                    #   self-test proves a MECHANISM, never the product. It cannot go stale
-                    #   between two moments: the guard script it proves changing, or its own
-                    #   fixture changing. THE SUBJECT LIST IS DERIVED FROM EACH SELF-TEST'S
-                    #   OWN SOURCE, never typed beside it — `scripts/guard-scope.py:
-                    #   derive_subjects` reads local-package imports and `Path`-style chains
-                    #   straight out of the test file. Only WHICH targets are gated
-                    #   is a hand-typed roster, on `serve-scope.py`'s own precedent. Fails
-                    #   open exactly like `serve-scope`: no merge-base, an unreadable diff,
-                    #   an EMPTY diff, an unscoped target, and any exception all run the
-                    #   test. `PKMNSCAN_GUARD_SCOPE=off` runs every gated self-test
-                    #   regardless, printed in every skip. Reconciled BOTH WAYS by
-                    #   `make docs-audit`'s `guard scope` row: every roster target is wired
-                    #   into the Makefile and every wired recipe names a roster target.
-                    #   A THIRD GATE MECHANISM needs the owner's word again — a new roster
-                    #   entry under this same gate does not; no target here was found dead
-                    #   weight; this is a placement change, not a pruning.
-make orient         # ARGS=<file.tsx> [--name <C>]: every component, its line span, which
-                    #   component DRAWS it, and the expression that decides whether it is
-                    #   drawn. A renderer — writes nothing, gates nothing, derived every run.
-                    #   READ IT BEFORE BRIEFING A SCREEN CHANGE.
-make map-fix        # THE ONE GENERATOR INTO A DOC (D18, amended). Adds the decision ids a
-                    #   file cites to its `governed_by` in docs/map.py — the answer
-                    #   `make docs-audit`'s `repo map` row already computes, imported from that
-                    #   row rather than reimplemented. IT GATES NOTHING and is on no hook. Run it
-                    #   when the row refuses you; the row is still what says you are right.
-                    #   Previews.
-                    #   ARGS=--write applies. It only ever ADDS. `make map-fix-selftest`
-                    #   proves it, deliberately NOT in `make check`.
-make offenders-prune # a generator that only DELETES (D18). It removes the stale entries from
-                    #   the three offender lists (`scripts/ste-offenders.json`,
-                    #   `scripts/typed-interpunct-allow.json`,
-                    #   `scripts/line-anchor-offenders.json`). It re-keys a listed file that
-                    #   git's rename detection says moved. It never adds an entry. It reads
-                    #   with the rows' own functions. Previews. ARGS=--write applies. On no
-                    #   hook. `make offenders-prune-selftest` proves it, NOT in `make check`.
-make harness        # all TEN verification tests (T1-T9 and T11). RECOUNT from harness/run.py's
-                    #   TESTS list. THERE IS NO T10:
-                    #   that id belongs to the shelved IMB encoder (DEBT26), and this repo
-                    #   renumbers its own ids and never another branch's.
-make up             # THE server, detached — ONE PROCESS (D138). Serves app/dist/ and the API
-                    #   on one port. Reloads Python on edit. Rebuilds the app on edit (build
-                    #   ~1.2s; the old bundle answers throughout; a failed build changes
-                    #   nothing). `npm ci` runs itself when the lock file's content moves.
-                    #   Prints ONE link. `make down` stops it. ARGS=--restart bounces it.
-                    #   Refuses alongside `make server` (EADDRINUSE, deliberate, D43).
-                    #   `make dev` alongside is fine (D138 freed :5173).
-                    #   WILL NOT SERVE A PRIMARY CHECKOUT OFF MAIN (D158, D53).
-                    #   `PKMNSCAN_SERVE_MAIN=off` overrides, printed in every refusal.
-                    #   Silent on any branch in a LINKED WORKTREE (D43).
-make reap           # stop what THIS session started, and nothing else. Previews with no
-                    #   argument or --confirm. ARGS="--confirm" stops every process this
-                    #   checkout started. ARGS="port:5484 --confirm", "match:vite --confirm"
-                    #   or "pid:12345 --confirm" target one process, only if it is ours.
-                    #   RESOLVES the real targets with pgrep and lsof, read-only, and judges
-                    #   each pid by whether it lives under this checkout (D127) — never a
-                    #   text match on the command, which is how `pkill -f` once killed the
-                    #   owner's live main-tree server from a worktree. --hook is the armed
-                    #   PreToolUse guard on Bash that refuses a kill outside this checkout.
-                    #   `make reap-selftest` proves it by violating it, in `check`, never
-                    #   in the hook (D18).
-make janitor-install # copy janitor.py, session-teardown.sh and reap.py to the user's home
-                    #   Claude bin directory, outside this repo, so every clone's hooks can
-                    #   reach them, not only this one. Writes those three files there and
-                    #   prints the SessionEnd, WorktreeRemove and
-                    #   PreToolUse hook lines to add to ~/.claude/settings.json by hand — it
-                    #   does not write that file itself. `make status` compares the
-                    #   installed copies against this repo's and says when either is stale.
-make merge          # merge a PR and move main onto it (D42). ARGS=<n> previews. ARGS="<n>
-                    #   --confirm" merges, ALWAYS a real GitHub merge, never --admin. Fetches
-                    #   origin/main first, then claim-stale (D140) so the id allocation reads
-                    #   current state. `make merge` carries a needed rebase and force-push on
-                    #   a branch nobody else holds (owner ruling, 2026-09-18). A session may
-                    #   run this only when the owner has named it an Orchestrator, per turn,
-                    #   never inherited or assumed. `make merge-selftest` proves the wrapper
-                    #   in a throwaway repo and worktree, in `check`, never in the git hook.
-make janitor        # what a finished session left behind. PREVIEWS both tiers, presses
-                    #   nothing. ARGS=--confirm reaps tier 2: worktrees, loose processes and
-                    #   branches. Runs from no hook and no schedule.
-make janitor-agent  # that sweep DAILY and unattended, as a launch agent, with
-                    #   `.serve/janitor.log` as its receipt. MAIN TREE ONLY — a plist naming a
-                    #   worktree outlives the worktree. ARGS=--remove. The backstop for the two
-                    #   events that already run the cheap half and are both known to miss.
-                    #   `janitor.py --branches` is the one part of tier 2 that destroys
-                    #   nothing, so the session-end hook runs it with no word: a branch reaches
-                    #   it only when main already carries every commit on it.
-make launch-agent   # start at login. MAIN TREE ONLY: its plist would outlive a worktree.
-                    #   ARGS=--remove. The Dock app is a CLIENT of this, via Chrome's
-                    #   "Install page as app" (D108), never a second copy. No `make` target
-                    #   for it.
-make dev            # Vite with hot reload. :5173 main tree, own port in a worktree. Blocks.
-                    #   Runs BESIDE `make up` (D138). `make server` is still refused.
-make server         # Python capture server alone. :8000 main tree, own port in a worktree.
-                    #   Blocks.
-make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev`. Can fail
-                    #   for a missing element, not only an empty file. Renders the tree it
-                    #   runs from (D43). Reads server/ports.py:dev_port for its own :5173.
-make design-check   # DESIGN.md's Fulfillment floors, in a browser. TAKES A MACHINE-WIDE LOCK
-                    #   FIRST (D122). It is the one thing D43 could not split per checkout,
-                    #   because the CPU is shared. Refuses rather than queues (exit 75) and
-                    #   names the holder. ARGS=--wait queues and says so every 30s.
-                    #   `PKMNSCAN_SUITE_LOCK=off` overrides. NOT in `make harness` or
-                    #   `make check` (DEBT16).
-                    #   `PW_ARGS=<flags>` reaches Playwright. `ARGS` never does (D136). CI runs
-                    #   6 shards of 2 workers each, widened on the owner's word, 2026-09-19.
-                    #   D136 is amended: DEBT8's 2-vCPU premise went false when the repo went
-                    #   public, 2026-09-11. A 20-dispatch proof is D136's own reader.
-                    #   Backgrounds itself. Read `.serve/design-check.json` ONCE when the run
-                    #   lands. It says `"running"` until it finishes, so a stale `running`
-                    #   after exit means the run died. No file at all means it never reached
-                    #   Playwright. A run with zero tests says `"empty"`, never `"pass"`, and
-                    #   a `--list` run writes nothing. Never poll it. Never pipe it through `tail` (both
-                    #   documented traps in `docs/debts/`). Guarded twice: `make docs-audit`'s
-                    #   `verdict file` row, and `make verdict-selftest` (D129, floor 1.58.0).
-                    #   No browser, no dev server: in `check` and `ci-check`, no lock.
-                    #   ON CI, GATED TO WHAT A BROWSER DRAWS (D141) by scripts/browser-scope.py,
-                    #   audited by `make docs-audit`'s `browser scope` row both directions.
-                    #   `server/` is deliberately out of scope (sealEveryTest). WHICH SPECS
-                    #   LOAD is a second, narrower question: `browser-scope.py specs`
-                    #   (D215), a derived allow-list over `app/tests/*`.
-                    #   It fails open to every spec. `make docs-audit`'s `spec map` row checks
-                    #   both ways. A partial spec run never writes D136's pass record.
-make design-check-quiet  # same run, no progress stream, same lock.
-make suite-lock-selftest # the lock, proved by violating it, including a holder killed -9.
-                    #   In `check`.
-make browser-scope-selftest # the browser-matrix classifier's spec map, on fixtures and the
-                    #   real tree (D215). In `check`.
-make text-density   # the owner's third D194 replacement (`D284`): an
-                    #   ON-DEMAND density pass, never a gate (D18: it writes one receipt,
-                    #   `.serve/text-density.json`). Runs `text-shape.spec.ts` in a report
-                    #   mode (`TEXT_DENSITY=1`), so it reads the SAME seeded screens as the
-                    #   gates, at 1440 and 390, with no dev server or store needed. Prints a
-                    #   CUT TABLE: per route, the largest prose blocks with word counts, then
-                    #   what repeats and what runs long. ARGS="--route '#/pricing' --top 8".
-                    #   NOT in `make check` or `make design-check`. The skill
-                    #   `.claude/skills/text-density/SKILL.md` says how to read the table.
-make demo           # seed a demo store and record the wire, a fixture bundle.
-                    #   `docs/specs/demo.md` IS THE ARGUMENT FOR THIS WHOLE FAMILY — why it
-                    #   is not a fork, what is real and what is invented, why VITE_DEMO is
-                    #   build-time, what the published page refuses, and why no secret can
-                    #   reach it. READ IT BEFORE CHANGING ANY demo-* TARGET.
+make map            # docs/map.py rendered (D80). ARGS=<package|path|D<n>|--stale|--decisions>.
+                    #   ARGS="D<n> --full" prints that entry in full, verbatim.
+make explain        # what `make check` runs, and what each row is worth. ARGS=<target>.
+make serve-scope    # the first path gate: what `make serve-selftest` reads. ARGS=list, or
+                    #   ARGS="classify --base <rev>". PKMNSCAN_SERVE_SCOPE=off runs it anyway.
+make guard-scope    # the second path gate: what each gated self-test reads (D247).
+                    #   ARGS=list [--target <name>], or ARGS="classify --target <name> --base <rev>".
+                    #   PKMNSCAN_GUARD_SCOPE=off runs every gated self-test anyway.
+make orient         # ARGS=<file.tsx> [--name <C>]: which component draws it, and why.
+                    #   Run before briefing a screen change.
+make map-fix        # the one generator into a doc (D18): adds a file's cited decision ids to
+                    #   docs/map.py. Previews. ARGS=--write applies. Gates nothing.
+make offenders-prune # a generator that only deletes stale offender-list entries (D18).
+                    #   Previews. ARGS=--write applies. Gates nothing.
+make harness        # all TEN verification tests (T1-T9 and T11). No T10 (DEBT26).
+make up             # the server, detached — one process (D138). ARGS=--restart bounces it.
+                    #   `make down` stops it. Refuses on a primary checkout off main (D158).
+make reap           # stop what THIS session started, and nothing else (D127). Previews with
+                    #   no argument. ARGS="--confirm", "port:N --confirm", "match:X --confirm"
+                    #   or "pid:N --confirm" target one process, only if it is ours.
+make janitor-install # copy the sweep and reap to the user's home Claude bin directory.
+make merge          # merge a PR and move main onto it (D42). ARGS=<n> previews.
+                    #   ARGS="<n> --confirm" merges. Owner must name the session an
+                    #   Orchestrator first, per turn.
+make janitor        # what a finished session left behind. Previews. ARGS=--confirm reaps
+                    #   worktrees, loose processes and branches.
+make janitor-agent  # that sweep daily, unattended (main tree only). ARGS=--remove.
+make launch-agent   # start the server at login (main tree only). ARGS=--remove.
+make dev            # Vite with hot reload. Runs beside `make up` (D138).
+make server         # Python capture server alone. Blocks.
+make screenshot     # renders scripts/views.txt to captures/ui/. Needs `make dev`.
+make design-check   # DESIGN.md's Fulfillment floors, in a browser. Takes a machine-wide lock
+                    #   (D122); refuses rather than queues. ARGS=--wait queues instead.
+                    #   PW_ARGS=<flags> reaches Playwright; ARGS never does (D136).
+                    #   Read `.serve/design-check.json` once when the run lands; never poll it,
+                    #   never pipe it through `tail`. Not in `make harness` or `make check`.
+make design-check-quiet  # the same run, no progress stream, same lock.
+make suite-lock-selftest # the design-check lock, proved by violating it. In `make check`.
+make browser-scope-selftest # the CI browser-matrix classifier's spec map. In `make check`.
+make text-density   # an on-demand cut table of screen prose (D284), never a gate.
+                    #   ARGS="--route '#/pricing' --top 8". Not in `make check`.
+make demo           # seed a demo store and record the wire into a fixture bundle.
+                    #   Read `docs/specs/demo.md` before changing any demo-* target.
 make demo-seed      # the store alone. Deterministic. Refuses with PKMNSCAN_HOME unset.
 make demo-record    # the bundle alone, on its own throwaway server and port.
-make demo-mirror SOURCE=<checkout>  # THE PUBLISHED DEMO'S REAL SOURCE as of `D295`
-                    #   (2026-09-26). Owner's Mac only. Snapshots a real store, scrubs every
-                    #   name to `Jane Doe N` and every address to `123 Demo Way`, crops
-                    #   QR-cleared photos under a 512 MB cap, records offline, asserts the
-                    #   scrub, commits only `demo-assets/mirror/`. The store never leaves
-                    #   this Mac. `make demo-mirror-rebuild` re-runs it from the existing
-                    #   gitignored snapshot, no SOURCE and no re-read of the real store.
-make demo-mirror-install  # CI's own step: the committed `demo-assets/mirror/`, copied into
-                    #   app/demo/ and app/public/demo/photos/. Reads no store, no network.
-make demo-static    # demo-mirror-install, then a static build to dist-demo/. `demo-seed` and
-                    #   `demo-record` above still work; they are just not what this builds
-                    #   from any more.
+make demo-mirror SOURCE=<checkout>  # the published demo's real source (D295, owner's Mac
+                    #   only): scrubs names and addresses, crops QR-cleared photos, commits
+                    #   only `demo-assets/mirror/`. `make demo-mirror-rebuild` re-runs it from
+                    #   the existing snapshot, no SOURCE.
+make demo-mirror-install  # CI's own step: installs the committed scrub. No store, no network.
+make demo-static    # demo-mirror-install, then a static build to dist-demo/.
 make demo-preview   # serve dist-demo/ as a static host would.
-make check          # harness + docs-audit + revert-guard +
-                    #   port-agreement + set-hint-agreement + readiness-agreement +
-                    #   screen-freshness +
-                    #   screen-freshness-selftest + sigil-check +
-                    #   css-var-check + css-var-check-selftest + token-literal-check +
-                    #   kit-adoption + ignore-check +
-                    #   lint + typecheck + audit-self-test +
-                    #   mutate-anchors +
-                    #   githooks-selftest + merge-selftest + revert-selftest +
-                    #   claim-selftest + decisions-selftest + debts-selftest +
-                    #   gates-selftest + submission-selftest +
-                    #   cid-selftest + pricearchive-selftest +
-                    #   archive-review-selftest + holdings-selftest +
-                    #   identity-checks-selftest + price-postings-selftest +
-                    #   product-history-selftest +
-                    #   sku-number-contradictions-selftest + readings-selftest +
-                    #   skus-selftest + identity-store-selftest +
-                    #   identity-binding-selftest +
-                    #   identity-readers-selftest +
-                    #   identity-cli-selftest +
-                    #   janitor-selftest +
-                    #   reap-selftest + silent-write-selftest + guard-shell-selftest +
-                    #   suite-lock-selftest +
-                    #   browser-scope-selftest + serve-selftest +
-                    #   sync-selftest + verdict-selftest + js-breakpoints-selftest +
-                    #   subagent-override-selftest + guard-scope-selftest +
-                    #   token-literal-check-selftest + kit-adoption-selftest +
-                    #   port-slots-selftest +
-                    #   match-selftest,
-                    #   IN THIS ORDER (D161): product
-                    #   first, guard selftests last. `make docs-audit`'s `check census`
-                    #   row reconciles this against the `check:` recipe both ways.
-make css-var-check  # a `var(--x)` with no fallback where `--x` is defined nowhere — the
-                    #   whole declaration drops silently, with no warning. A definition is a
-                    #   `.css` declaration or a TS/TSX runtime set (`style={{ '--x': ... }}`,
-                    #   a bracket computed key, `.setProperty('--x', ...)`).
-                    #   `PKMNSCAN_CSS_VARS=off` skips it, printed in the refusal.
-make css-var-check-selftest  # that checker, on fixtures in both directions: a genuinely
-                    #   undefined `var()`, one with a fallback, one defined only from TSX.
-make token-literal-check  # a CSS literal exactly equal to a design token's value, in its
-                    #   own property family (D256) — `font-size: 22px`
-                    #   where `--bn-fs-2xl: 22px` means the two can silently diverge. Reads
-                    #   tokens.css itself every run, matched by property family (spacing,
-                    #   radius, font-size, line-height, letter-spacing, duration), not value
-                    #   alone. RATCHETED PER FILE in scripts/token-literal-check.json —
-                    #   main already carries many, so the gate is a ceiling, never zero.
-                    #   `scripts/token-literal-allow.json` excuses a named one-off; a stale
-                    #   entry fails. `PKMNSCAN_TOKEN_LITERALS=off` skips it, printed in the
-                    #   refusal.
-make token-literal-check-selftest  # that checker, on fixtures in both directions: a literal
-                    #   equal to a token fails, the same value as var() or a var() fallback
-                    #   passes, the same value under a different family's property passes, a
-                    #   raised/lowered/unseen per-file count and a stale allow-list entry are
-                    #   each proved.
-make kit-adoption   # every ROUTES view renders <Page> from the kit, and no screen hand-rolls
-                    #   a kit primitive: a dialog role, a search input, a <select>, a kit
-                    #   class, a date format, a money format (D275). TypeScript
-                    #   AST. `scripts/kit-adoption-allow.json` is a SHRINKING offender list,
-                    #   file -> rule -> lane: an unlisted violation fails, a stale entry fails,
-                    #   and a key that the list at the merge-base with origin/main does not
-                    #   hold fails, unless its rule is not defined at the merge-base (a rule
-                    #   born on the branch). The output names each such rule and why. A
-                    #   removed or renamed rule refuses all growth. With no merge-base it
-                    #   fails open and says so.
-make kit-adoption-selftest  # that checker, on in-memory fixtures in both directions. Writes
-                    #   nothing (D18).
-make port-slots-selftest  # two throwaway trees forced into one port slot, a real Vite and a
-                    #   real Playwright in each. A run in one tree refuses the other's server.
-                    #   After a claim, each tree holds its own slot. Writes under `mktemp -d`.
+make check          # harness + docs-audit + revert-guard + port-agreement + set-hint-agreement +
+                    #   readiness-agreement + screen-freshness + screen-freshness-selftest +
+                    #   sigil-check + css-var-check + css-var-check-selftest + token-literal-check +
+                    #   kit-adoption + ignore-check + lint + typecheck + audit-self-test +
+                    #   mutate-anchors + githooks-selftest + merge-selftest + revert-selftest +
+                    #   claim-selftest + decisions-selftest + debts-selftest + gates-selftest +
+                    #   submission-selftest + cid-selftest + pricearchive-selftest +
+                    #   archive-review-selftest + holdings-selftest + identity-checks-selftest +
+                    #   price-postings-selftest + product-history-selftest + sku-number-contradictions-selftest +
+                    #   readings-selftest + skus-selftest + identity-store-selftest +
+                    #   identity-binding-selftest + identity-readers-selftest +
+                    #   identity-cli-selftest + janitor-selftest + reap-selftest +
+                    #   silent-write-selftest + guard-shell-selftest + suite-lock-selftest +
+                    #   browser-scope-selftest + serve-selftest + sync-selftest +
+                    #   verdict-selftest + js-breakpoints-selftest + subagent-override-selftest +
+                    #   guard-scope-selftest + token-literal-check-selftest + kit-adoption-selftest +
+                    #   port-slots-selftest + match-selftest,
+                    #   IN THIS ORDER (D161): product first, guard self-tests
+                    #   last. `make explain` prints the full recipe; `make
+                    #   docs-audit`'s `check census` row reconciles this line
+                    #   against it, both ways.
+make css-var-check  # a `var(--x)` with no fallback where `--x` is defined nowhere.
+                    #   PKMNSCAN_CSS_VARS=off skips it.
+make css-var-check-selftest  # that checker, on fixtures in both directions.
+make token-literal-check  # a CSS literal equal to a design token's value, in its own
+                    #   property family (D256). Ratcheted per file. PKMNSCAN_TOKEN_LITERALS=off
+                    #   skips it.
+make token-literal-check-selftest  # that checker, on fixtures in both directions.
+make kit-adoption   # every ROUTES view renders <Page> and hand-rolls no kit primitive (D275).
+                    #   scripts/kit-adoption-allow.json is a shrinking offender list.
+make kit-adoption-selftest  # that checker, on in-memory fixtures. Writes nothing (D18).
+make port-slots-selftest  # two throwaway trees forced into one port slot, proved both ways.
 make ci-check       # subset of check for a fresh clone.
-make catalog-refresh  # STEP 9 PIECE 1 (D15): re-clone pokemon-tcg-data, refresh
-                    #   vendor/pokemon-tcg-data/. Writes. Never gates. ARGS=--dry-run.
-make catalog-index  # STEP 9 PIECE 2: build catalog.sqlite. Cards join to sets BY FILENAME,
-                    #   because printedTotal lives only in sets/en.json. Generator, gitignored.
-make catalog-index-selftest  # that builder, over a throwaway two-set fixture. Fast. NOT
-                    #   wired into `make check`'s list as shipped, deliberately.
-make catalog-mirror # STEP 9 PIECE 3, DRY RUN ONLY as shipped. ARGS=--dry-run HEAD-samples.
-                    #   Measured 2026-09-13: 20,444 files, ~14.2 GB extrapolated. Writes
-                    #   nothing under PKMNSCAN_IMAGE_MIRROR (default harness/images/). The
-                    #   bare form has never run on this checkout.
-./pkmnscan scan     <capture-dir>   # CODE CARDS ONLY: read QRs into the ledger. Free.
-./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. COSTS MONEY. --dry-run
-                                   #   first. Records the drawer's `bid` (D165). Selection-based
-                                   #   (D180, supersedes D48): `--state captured`, `--box 3,5`,
-                                   #   `--keys`, narrowed by `--game`, `--section` or `--since`.
-./pkmnscan rescue   <run-dir>       # a STRANDED run's cards, re-addressed to where they are
-                                   #   now. D36's digest mechanism, per-box restriction lifted.
-                                   #   Free, previews. `--write` creates a new rescue run and
-                                   #   never edits the input run. Refuses a run that is not
-                                   #   stranded, an ambiguous digest, or cards spread across
-                                   #   two drawers.
+make catalog-refresh  # re-clone pokemon-tcg-data, refresh vendor/pokemon-tcg-data/ (D15).
+                    #   Writes. Never gates. ARGS=--dry-run.
+make catalog-index  # build catalog.sqlite. Generator, gitignored.
+make catalog-index-selftest  # that builder, over a throwaway fixture. Not in `make check`.
+make catalog-mirror # dry run only as shipped. ARGS=--dry-run samples over HTTP HEAD.
+./pkmnscan scan     <capture-dir>   # code cards only: read QRs into the ledger. Free.
+./pkmnscan identify <capture-dir>   # submit, wait, collect, cache. Costs money. --dry-run
+                                   #   first. Selection-based (D180): --state captured,
+                                   #   --box 3,5, --keys, narrowed by --game/--section/--since.
+./pkmnscan rescue   <run-dir>       # a stranded run's cards, re-addressed by digest (D36).
+                                   #   Free, previews. --write creates a new rescue run.
 ./pkmnscan join     <run-dir>       # resolve against the export. Free, re-runnable. --dry-run.
 ./pkmnscan emit     <run-dir> [<run-dir> ...]
-                                   # write ONE import.csv (D99), across runs and games.
-                                   #   NO STANDING CAP (D7, rewritten). Every unsent copy goes
-                                   #   out unless a send bounds it.
-                                   #   --cap N            hold this SKU to at most N copies LIVE.
-                                   #                      REFUSES a card outright while a copy
-                                   #                      sent since is still pending (D7,
-                                   #                      amended 2026-09-27) — run
-                                   #                      reconcile --live first
-                                   #   --quantity SKU=N   SEND exactly N copies this press (D7,
-                                   #                      amended). 0 sends none without a hold
+                                   # write ONE import.csv (D99), across runs and games. No
+                                   #   standing cap (D7) — every unsent copy goes out unless a
+                                   #   send bounds it.
+                                   #   --cap N            hold this SKU to at most N copies LIVE
+                                   #                      (refuses if a sent copy is still
+                                   #                      pending, D7 amended — reconcile --live
+                                   #                      first)
+                                   #   --quantity SKU=N   send exactly N copies this press
                                    #   --listed-only      above-threshold rows only
                                    #   --split-threshold  import-listed.csv / import-subthreshold.csv
                                    #   --split-games      one file per game
-                                   #   --live-guard FILE  trim each row so TCGplayer never
-                                   #                      holds more copies than are here
-                                   #   --reprice-live F   with --live-guard: a PRICE-ONLY row
-                                   #                      (Add to Quantity 0) for each live
-                                   #                      card that adds no copy and whose
-                                   #                      price the screen NAMED in F. A
-                                   #                      price F does not name never rides.
-                                   #                      A listing row that moves live
-                                   #                      copies to its price refuses unless
-                                   #                      F names that move (round 7).
-                                   #                      A listing file
-                                   #                      may mix both (the owner's ruling,
-                                   #                      2026-09-24). The send press passes
-                                   #                      both flags.
+                                   #   --live-guard FILE  trim rows so TCGplayer never holds
+                                   #                      more copies than are here
+                                   #   --reprice-live F   with --live-guard: a price-only row
+                                   #                      for each live card whose price F names
 ./pkmnscan cards    name             # a card's stable name and photograph location (D172).
-                                   #   Free, read-only. Never calls `db.connect`, which would
-                                   #   perform the migration it previews.
 ./pkmnscan cards    audit [--verbose]
-                                   # does every card's name still resolve to its photograph?
-                                   #   Free, re-runnable. Three verdicts: pass, fail, not known.
-                                   #   Not known covers a missing column, a NULL name, or
-                                   #   nothing to check — never a silent pass over zero rows.
-                                   #   A re-shoot is excused only by its `reshot` event's own
-                                   #   recorded digest. `make cid-audit` runs this. Deliberately
-                                   #   NOT in `make check`.
+                                   # does every name still resolve to its photograph? Free,
+                                   #   re-runnable. Three verdicts: pass, fail, not known.
+                                   #   `make cid-audit` runs this. Not in `make check`.
 ./pkmnscan cards    photos [--write] [--limit N]
-                                   # move the corpus off legacy `(box, index)` addresses onto
-                                   #   the card's own name. Previews by default. Hash source,
-                                   #   refuse on mismatch, hard link, re-hash destination, THEN
-                                   #   unlink source. The bytes exist under a name at every
-                                   #   instant.
+                                   # move the corpus off legacy (box, index) addresses onto
+                                   #   the card's own name. Previews by default.
 ./pkmnscan cards    identity [--write]
-                                   # THE MIGRATION'S OWN CLASSIFIER, AND THE MERGED
-                                   #   `contradictions`/`sku-names` REPORT (identity-follows-
-                                   #   sku.md §5.5, §7). Every card's class (T1-T6,
-                                   #   sku_unknown), the store's own audit, and the name/
-                                   #   number contradiction halves. Previews by default;
-                                   #   `--write` performs the one-time migration — held
-                                   #   cards (T4s, T5) never change identity, only
-                                   #   `identity_source`, and a held, identified card gets a
-                                   #   `listing_disputed` review entry.
-./pkmnscan cards    contradictions / sku-names
-                                   # RETIRED into `cards identity` (owner's ruling, "Merge
-                                   #   them"). Each prints one line naming it and exits.
-./pkmnscan cards    variants
-                                   # RETIRED into `cards identity --write`, which fills
-                                   #   `set`/`rarity` from the SKU table through `bind_sku`.
-                                   #   It prints one line, writes nothing, and exits 2.
+                                   # the migration's own classifier, and the merged
+                                   #   contradictions/sku-names report. Previews by default;
+                                   #   --write performs the one-time migration.
+./pkmnscan cards    contradictions / sku-names / variants
+                                   # retired into `cards identity` / `cards identity --write`.
+                                   #   Each prints one line and exits.
 ./pkmnscan prices   adopt [--write] # fold every run's legacy decisions.json into the corpus.
-                                   #   Previews. Newest-wins. Names the holds it replaces.
-./pkmnscan prices   show [--held]   # what the corpus holds. `--held` is the cross-run view.
-./pkmnscan readings adopt [--write] # THE MARKET READING IS A TABLE, NOT A LIVE RECOMPUTE
-                                   #   (D189). Previews. `--write` is a FULL REPLACE of both
-                                   #   tables.
+./pkmnscan prices   show [--held]   # what the corpus holds. --held is the cross-run view.
+./pkmnscan readings adopt [--write] # the market reading is a table, not a live recompute
+                                   #   (D189). --write is a full replace of both tables.
 ./pkmnscan readings show           # what the table holds, and which files it last credited.
-./pkmnscan skus     adopt [--write] # THE STORE-OWNED SKU TABLE (identity-follows-sku.md
-                                   #   §3.2, lane 0). Folds every cached export
-                                   #   (.exports/<game>/*.csv, .live/*.csv) in, keyed on the
-                                   #   TCGplayer Id. Previews. NEVER A FULL REPLACE — unlike
-                                   #   `readings adopt`, this table never deletes a row.
-                                   #   Newest file wins by its OWN NAME, never its mtime. A
-                                   #   changed fact writes the new row and logs one
-                                   #   `sku_facts_changed` event with the old facts.
-./pkmnscan archive  sweep [--write] # THE PRICE-HISTORY ARCHIVE (D219).
-                                   #   The source's 357-day window slides. This press reads
-                                   #   every range for every sku this store has sold or holds,
-                                   #   sold value first (D223), and
-                                   #   keeps a copy past that ceiling. PREVIEWS WITH NO NETWORK
-                                   #   CALL (D224): subject count, what the
-                                   #   archive already holds, what is fresh enough to skip.
-                                   #   `--write` commits in small chunks as it reads, never
-                                   #   once at the end, so an interrupt loses at most one
-                                   #   chunk. A resumed pass never re-reads a sku it already
-                                   #   holds fresh from this same pass. UNLIKE `readings
-                                   #   adopt`, `--write` NEVER clears a row a pass did not
-                                   #   mention. A bucket that ages out of the source is never
-                                   #   deleted here. The press paces itself on a MEASURED
-                                   #   interval and backs off once on a throttle
-                                   #   (D222), naming it correctly rather
-                                   #   than as an authorization problem. No timer runs this.
-                                   #   It is a press.
-./pkmnscan archive  show [--sku ID] # what the archive holds, and which ranges were last
-                                   #   swept. `--sku` also prints one sku's own buckets.
+./pkmnscan skus     adopt [--write] # the store-owned SKU table. Previews. Never a full
+                                   #   replace — newest file wins by its own name.
+./pkmnscan archive  sweep [--write] # the price-history archive (D219). Previews with no
+                                   #   network call (D224). --write commits in small chunks.
+./pkmnscan archive  show [--sku ID] # what the archive holds, and which ranges were last swept.
 ./pkmnscan queue    refresh [--export <file.csv>] [--write]
-                                   # re-resolve EVERY open queue entry, store-wide, not only
-                                   #   entries whose box holds a live run. Runs the same ladder
-                                   #   a join runs. An answered entry is never re-queued or
-                                   #   dropped.
+                                   # re-resolve every open queue entry, store-wide.
 ./pkmnscan reconcile <run-dir> <staged-export.csv>   # one import, one Export From Staged
 ./pkmnscan reconcile --live <my-pricing.csv> [--write]
-                                   # THE WHOLE STORE against one live export (D87). Previews.
-                                   #   Reports both directions. Writes `live`, a reading, and
-                                   #   clears `sold_here`'s counter where it adopts a reading
-                                   #   taken after those sales (D115). Records SKUs TCGplayer
-                                   #   holds that this store never sent (D109). Moves
-                                   #   quantities. Marks no card sold.
+                                   # the whole store against one live export (D87). Previews.
 ./pkmnscan reprice  list <my-pricing.csv> [--days N] [--percent P] [--write]
                                    # which live listings are not selling, with a proposed
-                                   #   re-price (D100). Free, previews. `--write` writes a
-                                   #   worklist to inventory/markdowns/<stamp>/, uploaded
-                                   #   nowhere. --above-market P, --limit N, --again overrides
-                                   #   the ratchet.
+                                   #   re-price (D100). Free, previews.
 ./pkmnscan reprice  apply <worklist.csv> [--corpus-revision <digest>] [--write]
-                                   # the edited worklist back. `--write` produces import.csv.
-                                   #   NOTHING IS DELETED to lower a price. `Add to Quantity`
-                                   #   is always 0 in this file. `--corpus-revision` refuses
-                                   #   the whole file if prices.json moved since it was read.
-                                   #   Reachable on `#/pricing` as a modal (D105) and as a lens
-                                   #   at `#/pricing?markdown=<stamp>` (D103).
+                                   # the edited worklist back. --write produces import.csv.
+                                   #   Reachable on `#/pricing` as a modal (D105).
 ```
+
 
 ## The front end
 

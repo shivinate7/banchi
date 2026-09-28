@@ -1843,27 +1843,31 @@ def check_make_targets(report: Report, docs: List[Path]) -> None:
                     )
 
     # The reverse direction. `make help` is the front door, and a target missing from it
-    # is invisible to anyone who did not read the Makefile.
-    help_body = ""
-    in_help = False
-    for line in text.splitlines():
-        if line.startswith("help:"):
-            in_help = True
-            continue
-        if in_help:
-            if line and not line[0].isspace():
-                break
-            help_body += line + "\n"
-    for name in sorted(targets):
-        if name == "help":
-            continue
-        if f"make {name}" not in help_body:
-            findings.append(
-                Finding(
-                    "Makefile",
-                    f"target `{name}` exists but `make help` never mentions it.",
+    # is invisible to anyone who did not read the Makefile. `help:`'s own recipe is one
+    # line calling scripts/make-help.py (2026-09-27, token-budget audit Q1), so the render
+    # is what this reads now, not the recipe's own (now empty) body — importing the sibling
+    # rather than reimplementing its comment-association logic a second time.
+    help_module = _sibling("make-help.py")
+    if help_module is None:
+        findings.append(Finding("scripts/make-help.py", "does not import — cannot check "
+                                 "`make help`'s own coverage of every target."))
+    else:
+        try:
+            help_body = help_module.render(text)
+        except Exception as exc:  # noqa: BLE001 - a broken renderer must not take this row down
+            help_body = ""
+            findings.append(Finding("scripts/make-help.py",
+                                     f"render() raised: {exc}"))
+        for name in sorted(targets):
+            if name == "help":
+                continue
+            if f"make {name}" not in help_body:
+                findings.append(
+                    Finding(
+                        "Makefile",
+                        f"target `{name}` exists but `make help` never mentions it.",
+                    )
                 )
-            )
 
     unphony, unruled = phony_gaps(text)
     for name in sorted(unphony):
@@ -1884,6 +1888,106 @@ def check_make_targets(report: Report, docs: List[Path]) -> None:
         )
     report.add("make targets", MECHANICAL, findings,
                f"{referenced} references, {len(targets)} targets", scanned=referenced)
+
+
+# --------------------------------------------------------------- commands roster
+
+COMMANDS_INTERNAL = ROOT / "scripts" / "commands-internal.json"
+
+_COMMANDS_BLOCK_RE = re.compile(r"## Commands\n\n```\n(.*?)\n```", re.S)
+_COMMANDS_NAME_RE = re.compile(r"^make ([a-zA-Z0-9_-]+)", re.M)
+
+
+def _commands_named(text: str) -> Set[str]:
+    """Every `make <name>` CLAUDE.md's Commands section documents as its own bullet."""
+    match = _COMMANDS_BLOCK_RE.search(text)
+    if not match:
+        return set()
+    return set(_COMMANDS_NAME_RE.findall(match.group(1)))
+
+
+def _commands_roster_findings(
+    targets: Set[str], named: Set[str], check_members: Set[str], allow: Dict[str, str]
+) -> List[Finding]:
+    """The comparison itself, pure so `--self-test` can drive it without a filesystem."""
+    findings: List[Finding] = []
+    documented = named | check_members
+    for name in sorted(targets - documented - set(allow)):
+        findings.append(Finding(
+            "Makefile",
+            f"target `{name}` is named neither as a `make {name}` bullet in CLAUDE.md's "
+            f"Commands section, inside `make check`'s own recipe, nor in "
+            f"{rel(COMMANDS_INTERNAL)}. Document it, wire it into `make check`, or add it "
+            f"to the allow-list with a reason.",
+        ))
+    for name in sorted(allow):
+        if name not in targets:
+            findings.append(Finding(rel(COMMANDS_INTERNAL),
+                                     f"lists `{name}`, which is not a real Makefile target."))
+        elif name in documented:
+            findings.append(Finding(rel(COMMANDS_INTERNAL),
+                                     f"lists `{name}`, which CLAUDE.md already documents. "
+                                     f"Stale entry — the list only shrinks."))
+    for name in sorted(named - targets):
+        findings.append(Finding("CLAUDE.md",
+                                 f"documents `make {name}`, which is not a real Makefile "
+                                 f"target."))
+    return findings
+
+
+def check_commands_roster(report: Report) -> None:
+    """CLAUDE.md's Commands section against the real Makefile targets, both ways.
+
+    On `check census`'s own precedent (token-budget audit, 2026-09-27, Q1): two published
+    lists reconciled against a real recipe, not against each other. CLAUDE.md's Commands
+    section was cut to name plus one short line plus flags, on the owner's ruling, and a
+    shrunk section is exactly the shape that goes silently stale — a target renamed or
+    retired leaves a dead bullet, and a target ADDED leaves nothing telling a reader it
+    exists.
+
+    A TARGET IS "DOCUMENTED" THREE WAYS, not one. Its own `make <name>` bullet in the
+    Commands section. Named inside `make check`'s own recipe (read from the Makefile, via
+    `_check_recipe()` — the same authority `check census` already trusts, never a second
+    copy of it) — a target `make check` runs is findable from `make explain`, so a bullet
+    here would only restate what running `check` already shows. Or named in
+    `scripts/commands-internal.json`, a SHRINKING allow-list, file -> reason, for a target
+    that is neither: a one-off dev tool, a generator, or a self-test with no caller outside
+    its own guard. This mirrors `serve scope`/`guard scope`'s roster shape rather than
+    inventing a fourth one.
+
+    BOTH WAYS: a real target reaching none of the three fails, naming what it is missing
+    from. An allow-list entry for a target that is now documented, or that no longer
+    exists, fails too — the list only shrinks. A CLAUDE.md bullet for a target that is not
+    real fails (this is also `make targets`'s business; reporting it here as well costs
+    nothing over two small sets).
+    """
+    makefile = ROOT / "Makefile"
+    claude = ROOT / "CLAUDE.md"
+    if not exists(makefile) or not exists(claude):
+        report.add("commands roster", MECHANICAL,
+                   [Finding("Makefile", "cannot read the Makefile or CLAUDE.md.")])
+        return
+
+    targets = set(_MAKE_RULE_RE.findall(read(makefile))) - {"help"}
+    named = _commands_named(read(claude))
+    check_members = set(_check_recipe() or []) & targets
+
+    findings: List[Finding] = []
+    allow: Dict[str, str] = {}
+    if exists(COMMANDS_INTERNAL):
+        try:
+            allow = json.loads(read(COMMANDS_INTERNAL))
+        except Exception as exc:  # noqa: BLE001 - a broken allow-list must not hide every finding
+            findings.append(Finding(rel(COMMANDS_INTERNAL), f"does not parse as JSON: {exc}"))
+    else:
+        findings.append(Finding(rel(COMMANDS_INTERNAL), "does not exist."))
+
+    findings += _commands_roster_findings(targets, named, check_members, allow)
+
+    report.add("commands roster", MECHANICAL, findings,
+               f"{len(targets)} targets, {len(named)} bulleted, {len(check_members)} via "
+               f"`make check`, {len(allow)} allow-listed",
+               scanned=len(targets))
 
 
 # ----------------------------------------------------------- ./pkmnscan subcommands
@@ -21293,6 +21397,37 @@ def self_test() -> int:
     for label in ("column count", "threshold agreement", "dist path agreement", "import filename agreement", "duplicated measurements"):
         ok(not by_label[label], f"the real tree has zero findings on `{label}`", str(by_label[label]))
 
+    print("\ncommands roster: three ways to be documented, and the allow-list only shrinks")
+    _targets = {"up", "down", "reap", "venv"}
+    _msgs = lambda findings: [f.message for f in findings]  # noqa: E731 - short-lived local
+    ok(_commands_roster_findings(_targets, {"up", "down"}, {"reap"}, {"venv": "why"}) == [],
+       "a bullet, a `make check` member and an allow-list entry all count as documented")
+    _missing = _commands_roster_findings(_targets, {"up"}, set(), {})
+    ok(any("down" in m and "reap" in m for m in _msgs(_missing)) is False
+       and len(_missing) == 3,
+       "a target reaching none of the three ways is refused, one finding per target",
+       str(_missing))
+    _stale = _commands_roster_findings(_targets, {"up", "down", "reap", "venv"}, set(),
+                                        {"up": "used to be internal"})
+    ok(any("Stale" in m for m in _msgs(_stale)),
+       "an allow-list entry for a target CLAUDE.md now bullets is stale",
+       str(_msgs(_stale)))
+    _ghost = _commands_roster_findings(_targets, {"up", "down", "reap", "venv"}, set(),
+                                        {"no-such-target": "why"})
+    ok(any("not a real Makefile target" in m for m in _msgs(_ghost)),
+       "an allow-list entry naming a target that does not exist is refused",
+       str(_msgs(_ghost)))
+    ok(_commands_named("## Commands\n\n```\nmake up   # one line\nmake down # another\n```\n")
+       == {"up", "down"},
+       "the Commands block's bullet names are read out of its fenced list")
+
+    print("\ncommands roster: end to end, unpatched: the real tree agrees with itself")
+    report = Report()
+    check_commands_roster(report)
+    by_label = {row.check: row.findings for row in report.checks}
+    ok(not by_label["commands roster"], "the real tree has zero findings on `commands roster`",
+       str(by_label["commands roster"]))
+
     print("\ncommit path: the AST reads the code, MUTATION-TESTED against the real files, "
           "via .bak copies")
     # This is `commit path` going red on the exact defect it exists to guard: `writes` was
@@ -21462,6 +21597,7 @@ def audit(staged_only: bool) -> Report:
     check_line_anchor_offenders(report)
     check_derived_numbers(report, docs)
     check_make_targets(report, docs)
+    check_commands_roster(report)
     check_pkmnscan_commands(report, docs, all_docs)
     check_harness_tests(report, docs, allowed)
     check_pass_criteria(report)
