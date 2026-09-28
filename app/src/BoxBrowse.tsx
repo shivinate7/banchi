@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 
 import { isEditableTarget } from './keys'
-import { placePartsOf, sayPlace, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
+import { placePartsOf, sectionCountOf, sectionCountWords, sectionTitleText, type SectionTitleParts } from './position'
 import { SectionTitle } from './SectionTitle'
 import type {
   BoxRecord,
@@ -39,19 +39,16 @@ import { BoxIdentity, BoxOps, ClaimEditor, type ClaimPatch } from './BoxOps'
 import { reasonLabel } from './reasons'
 import {
   CardDetailsSection,
-  claimList,
+  CardPane,
   gameLabel,
   gameWord,
   marketTable,
   nameOf,
-  numberCell,
-  PhotoPanel,
   photoSrc,
-  titleCase,
   type MarketRead,
   type Row,
 } from './CardHero'
-import { IDENTIFIED, stateLabel, stateTone } from './cardState'
+import { stateLabel } from './cardState'
 import { storeKeyText } from './storeKey'
 import { useSearch } from './useSearch'
 import { Button, Chip, EmptyState, FilterBar, HideToggle, Icon, IconButton, Loading, Money, Notice, Pill, boxesMostRecentFirst, countFacets, filterRows, type SortValue } from './kit'
@@ -536,8 +533,15 @@ function pooledText(card: InventoryCard, key: string): string {
 
 /* `nameOf`, `numberCell`, `titleCase`, `claimList`, `gameLabel`, `gameWord`, `MarketRead`,
  * `marketTable` and `factGroupsOf`/`CardDetailsSection` moved to `CardHero.tsx` so `#/orders`'
- * walk pane can share them (`docs/specs/order-walk-plan.md` §13) — imported below, this file's
- * own JSX unchanged. */
+ * walk pane can share them (`docs/specs/order-walk-plan.md` §13).
+ *
+ * LANE A2a MOVES THE HERO HEAD AND THE CARD PANE FRAME TOO: the `<div className="browse-hero-
+ * head">`/`<section className="browse-card">` this file used to draw inline are now
+ * `CardHero.tsx`'s own `CardHeroHead`/`CardPane`, called below with the same values this file
+ * always held (`game`, `selectedLabel`, `searchGroups`, `open`, `panelDetail`, ...). The
+ * RENDERED OUTPUT IS UNCHANGED — `app/tests/inventory.spec.ts` is what proves that — only the
+ * JSX that builds it moved house, so `#/orders` can build the same pane later without forking
+ * it (`docs/reviews/ux-2026-09-23/orders-a/PLAN.md`, "The component reuse map"). */
 
 /** The open question about one position, or null — the entry and which queue it is in. */
 function openQuestion(
@@ -2515,11 +2519,11 @@ export function BoxBrowse({
                 </div>
               ) : (
                 <>
-                  {/* NO `key` ON THIS SECTION (2026-09-19, the owner's "fix the product"
+                  {/* NO `key` ON THIS PANE (2026-09-19, the owner's "fix the product"
                       ruling). It carried `key={selectedRow.key}` from the rebuild (D94-D99)
                       so `.browse-card`'s `bn-page-in` entrance replayed on every card. The
                       copies column — `{detail}`, which is `Inventory.tsx`'s `CopiesPanel` —
-                      is INSIDE this section, so that key tore it down and built it again on
+                      is INSIDE this pane, so that key tore it down and built it again on
                       every change of selection. A rebuilt `CopiesPanel` has no search answer
                       and no memory of one, so it drew its skeleton for a debounce plus a
                       fetch: the copies list went from six rows to none and back, under the
@@ -2530,74 +2534,55 @@ export function BoxBrowse({
                       this key is why it had never once run. The entrance now plays when the panel appears,
                       which is what an entrance is for. `CardOps` below keeps its own key:
                       that one resets a MENU, not a fetch. */}
-                  <section
-                    className="bn-panel browse-card"
-                    aria-busy={dimPanel ? 'true' : undefined}
-                    data-dimmed={dimPanel ? 'true' : undefined}
+                  <CardPane
+                    row={panelRow}
+                    game={game}
+                    place={selectedLabel}
                     /* REVIEW, PR #407: `pointer-events: none` (BoxBrowse.css) blocks the
                      * mouse alone. Tab still reached `CardOps`' "Card actions" button and
                      * Enter opened its menu on `held.current` — the previous box's card,
                      * under the new box's header, live — which is the a4f3594b regression
-                     * again, by keyboard. `inert` removes the whole subtree from the tab
-                     * order AND refuses activation, so neither path reaches a stale
-                     * control while `dimPanel` is true. */
-                    inert={dimPanel}
-                  >
-                    <div className="browse-hero-head">
-                      <div className="browse-hero-text">
-                        <h2 className={nameOf(panelRow.card) === null ? 'browse-hero-name is-unnamed' : 'browse-hero-name'}>
-                          {nameOf(panelRow.card) ?? 'Not identified yet'}
-                        </h2>
-                        <p className="browse-hero-sub">
-                          {[numberCell(panelRow.card) === 'none' ? null : numberCell(panelRow.card), panelRow.card.set_hint, game]
-                            .filter((part): part is string => typeof part === 'string' && part !== '')
-                            .map((part, i) => (
-                              <span key={`${part}-${i}`} className={i === 0 && numberCell(panelRow.card) !== 'none' ? 'browse-hero-number' : undefined}>
-                                {part}
-                              </span>
-                            ))}
-                        </p>
-                        {/* WHERE IT IS, BESIDE THE NAME, IN A ONE-COLUMN PANE (UX-187). At 390 and
-                            720 the copy row that says it sits under the photograph, below the
-                            fold. Drawn only where the pane is one column (BoxBrowse.css), so the
-                            wide pane does not say it twice. */}
-                        {positionLabel(panelRow.card) === null ? null : (
-                          <p className="browse-hero-place">{sayPlace(positionLabel(panelRow.card) ?? '')}</p>
-                        )}
-                        <div className="browse-hero-chips">
-                          {/* No `chooserActive` check needed here: while the chooser shows,
-                              `panelRow` is null and this whole branch does not render, so
-                              nothing here can bypass it. This chip is reachable only once a
-                              printing is picked (or the search always had one), and it is
-                              what gets an operator back to the chooser after the walk has
-                              carried them away from it. */}
-                          {searchGroups !== null && searchGroups.length > 1 ? (
-                            <Chip icon="layers" onClick={() => setChosenVariant(null)}>
-                              <span className="bn-facts">
-                                <span>{searchGroups.length} printings</span> <span>change</span>
-                              </span>
-                            </Chip>
-                          ) : null}
-                          {claimList(panelRow.card.metadata_finish).map((finish) => (
-                            <Pill key={`f-${finish}`} icon="sparkles">
-                              {titleCase(finish)}
-                            </Pill>
-                          ))}
-                          {claimList(panelRow.card.rarity_claim).map((rarity) => (
-                            <Pill key={`r-${rarity}`}>{titleCase(rarity)}</Pill>
-                          ))}
-                          {/* THE CARD'S STATE ONLY WHEN IT IS THE EXCEPTION (UX-221). */}
-                          {panelRow.card.state === IDENTIFIED ? null : (
-                            <Pill tone={stateTone(panelRow.card.state)}>{stateLabel(panelRow.card.state)}</Pill>
-                          )}
-                          {open === null ? null : (
-                            <a className="bn-pill bn-pill-warn browse-queuechip" href="#/review">
-                              <Icon name="clock" size={12} />
-                              In the {open.queue} queue
-                            </a>
-                          )}
+                     * again, by keyboard. `inert` (`CardPane`'s own `dimmed`) removes the whole
+                     * subtree from the tab order AND refuses activation, so neither path
+                     * reaches a stale control while `dimPanel` is true. */
+                    dimmed={dimPanel}
+                    preChips={
+                      /* No `chooserActive` check needed here: while the chooser shows,
+                          `panelRow` is null and this whole branch does not render, so
+                          nothing here can bypass it. This chip is reachable only once a
+                          printing is picked (or the search always had one), and it is
+                          what gets an operator back to the chooser after the walk has
+                          carried them away from it. */
+                      searchGroups !== null && searchGroups.length > 1 ? (
+                        <Chip icon="layers" onClick={() => setChosenVariant(null)}>
+                          <span className="bn-facts">
+                            <span>{searchGroups.length} printings</span> <span>change</span>
+                          </span>
+                        </Chip>
+                      ) : undefined
+                    }
+                    postChips={
+                      open === null ? undefined : (
+                        <a className="bn-pill bn-pill-warn browse-queuechip" href="#/review">
+                          <Icon name="clock" size={12} />
+                          In the {open.queue} queue
+                        </a>
+                      )
+                    }
+                    queued={
+                      open === null ? null : (
+                        <div className="browse-queued">
+                          <Notice tone="warn" title={`Waiting in the ${open.queue} queue — ${reasonLabel(open.entry.reason)}.`} code={`${open.entry.reason}, ${open.queue}, ${open.entry.candidates.length} candidates`}>
+                            {waitingFor(open.entry.first_seen)}.{' '}
+                            {open.entry.candidates.length > 0
+                              ? `${open.entry.candidates.length} candidate row${open.entry.candidates.length === 1 ? '' : 's'} on Review.`
+                              : 'No candidate rows — cannot be answered as it stands. Re-shoot it, or stand it down on Review.'}{' '}
+                            <a href="#/review">Open the review queue</a>
+                          </Notice>
                         </div>
-                      </div>
+                      )
+                    }
+                    actions={
                       <CardOps
                         key={panelRow.key}
                         row={panelRow}
@@ -2615,46 +2600,28 @@ export function BoxBrowse({
                           />
                         }
                       />
-                    </div>
-
-                    {open === null ? null : (
-                      <div className="browse-queued">
-                        <Notice tone="warn" title={`Waiting in the ${open.queue} queue — ${reasonLabel(open.entry.reason)}.`} code={`${open.entry.reason}, ${open.queue}, ${open.entry.candidates.length} candidates`}>
-                          {waitingFor(open.entry.first_seen)}.{' '}
-                          {open.entry.candidates.length > 0
-                            ? `${open.entry.candidates.length} candidate row${open.entry.candidates.length === 1 ? '' : 's'} on Review.`
-                            : 'No candidate rows — cannot be answered as it stands. Re-shoot it, or stand it down on Review.'}{' '}
-                          <a href="#/review">Open the review queue</a>
-                        </Notice>
-                      </div>
-                    )}
-
-                    <div className="browse-band">
-                      <div className="browse-shot">
-                        <PhotoPanel
+                    }
+                    photo={{
+                      label: selectedLabel,
+                      absent: photoAbsent === panelRow.key,
+                      onAbsent: () => setPhotoAbsent(panelRow.key),
+                      nonce: reshot[panelRow.key] ?? null,
+                      onZoom: () => setZoomed(true),
+                      reshoot: (
+                        <ReshootControl
                           row={panelRow}
-                          label={selectedLabel}
-                          absent={photoAbsent === panelRow.key}
-                          onAbsent={() => setPhotoAbsent(panelRow.key)}
-                          nonce={reshot[panelRow.key] ?? null}
-                          onZoom={() => setZoomed(true)}
-                          reshoot={
-                            <ReshootControl
-                              row={panelRow}
-                              busy={reshootBusy === panelRow.key}
-                              failure={
-                                reshootFailure !== null && reshootFailure.key === panelRow.key
-                                  ? reshootFailure.failure
-                                  : null
-                              }
-                              onPick={(file) => beginReshoot(panelRow, file)}
-                            />
+                          busy={reshootBusy === panelRow.key}
+                          failure={
+                            reshootFailure !== null && reshootFailure.key === panelRow.key
+                              ? reshootFailure.failure
+                              : null
                           }
+                          onPick={(file) => beginReshoot(panelRow, file)}
                         />
-                      </div>
-                      <div className="browse-under">{panelDetail}</div>
-                    </div>
-                  </section>
+                      ),
+                    }}
+                    detail={panelDetail}
+                  />
 
                   <CardDetailsSection
                     card={panelRow.card}
