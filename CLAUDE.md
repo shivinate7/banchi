@@ -283,7 +283,7 @@ make check          # harness + docs-audit + revert-guard +
                     #   port-slots-selftest +
                     #   match-selftest,
                     #   IN THIS ORDER (D161): product
-                    #   first, guard selftests last. `make docs-audit`'s `check census`
+                    #   first, guard selftests last. `make docs-audit`'s `check registry`
                     #   row reconciles this against the `check:` recipe both ways.
 make css-var-check  # a `var(--x)` with no fallback where `--x` is defined nowhere — the
                     #   whole declaration drops silently, with no warning. A definition is a
@@ -552,7 +552,7 @@ hand-typed hash list.
 
 `app/src/tokens.css` is the only file in `app/` that may name a color, with one exception.
 `app/src/kit/markPalettes.ts` holds the six locked marks' hexes (D102, `docs/specs/logo.md`
-§9). It is generated, never hand-edited, reconciled by `make docs-audit`'s `logo parity` row
+§9). It is generated, never hand-edited, reconciled by `make docs-audit`'s `logo` row
 both ways. Every token is `--bn-*`. **Write new CSS with `--bn-*`.**
 
 **The legacy aliases at the foot of tokens.css are dead.** Measured across all
