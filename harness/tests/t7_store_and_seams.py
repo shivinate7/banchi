@@ -7092,6 +7092,101 @@ def check_undo_until_built_on(checks: Checks) -> None:
             conn.close()
         checks.ok(landed_postings, "and writes the posting row")
 
+    # ------------------------------------------------ T7-RACE (DEBT48): reprice apply's own
+    # write, split the other way — a failure between the temp CSV and the corpus write
+    # Round 1 (above) closed the revision race. Re-review found round 1's OWN write order
+    # unsafe: `import.csv` went to its final name FIRST, then the corpus, both inside the
+    # one hold. A caller that patched `write_csv` to raise during an ordinary apply got a
+    # raw crash — no clean refusal, no import.csv, no posting — but the corpus already held
+    # the markdown price. The next `emit` would sell at a price never sent or recorded.
+    #
+    # Round 2: `import.csv` now goes to a temp name first, the corpus write is the last step
+    # that may still fail, and the rename happens only once it has. A failure there is
+    # caught and refused in a sentence, never a raw traceback.
+    with isolated_home() as home:
+        cards = [(3, 1, "Dunsparce", "120", "normal")]
+        run_dir, _ = seam_run(checks, cards)
+        book = corpus.Corpus()
+        book.sub_threshold = "floor"
+        book.write()
+        command(checks, "emit", str(run_dir.directory))
+
+        source = tcgcsv.read_export(FIXTURE_EXPORT)
+        row = dict(source.by_sku()[DUNSPARCE_SKU])
+        row[tcgcsv.LIVE_QUANTITY_COLUMN] = "2"
+        row[tcgcsv.PRICE_COLUMN] = "2.0000"
+        export = home / "live-b3exc.csv"
+        tcgcsv.write_csv(export, source.header, [row])
+
+        command(checks, "reprice", "list", str(export), "--days", "7", "--percent", "10", "--write")
+        exc_directory = sorted((files.inventory_dir() / cmd_reprice.DIRNAME).iterdir())[-1]
+        tcgcsv.write_csv(
+            exc_directory / cmd_reprice.WORKLIST,
+            (tcgcsv.SKU_COLUMN, tcgcsv.PRICE_COLUMN),
+            [{tcgcsv.SKU_COLUMN: DUNSPARCE_SKU, tcgcsv.PRICE_COLUMN: "1.50"}],
+        )
+        before_corpus = dict(corpus.Corpus.read().answers)
+
+        real_write_csv = tcgcsv.write_csv
+
+        def raising_write_csv(path, header, rows):
+            raise OSError("T7-RACE (DEBT48): simulated write failure")
+
+        from cli import __main__ as cli_entry
+
+        tcgcsv.write_csv = raising_write_csv
+        raised = None
+        code3 = None
+        try:
+            with quiet() as said_buf3:
+                try:
+                    code3 = cli_entry.main(
+                        [
+                            "reprice", "apply", str(exc_directory / cmd_reprice.WORKLIST),
+                            "--write",
+                        ]
+                    )
+                except Exception as exc:  # the pre-fix crash this case proves against
+                    raised = exc
+            said3 = said_buf3.getvalue()
+        finally:
+            tcgcsv.write_csv = real_write_csv
+
+        checks.ok(
+            raised is None,
+            "T7-RACE (DEBT48): a write failure between the temp CSV and the corpus write "
+            "refuses cleanly, never a raw crash", repr(raised),
+        )
+        checks.equal(
+            code3, 1,
+            "and exits non-zero, which `do_markdown_apply` reads as nothing written",
+        )
+        checks.ok(
+            said3 is not None and "REFUSED" in said3 and "Traceback" not in said3,
+            "and prints a clean refusal sentence, never a raw traceback", said3,
+        )
+        temp_target = (exc_directory / cmd_reprice.IMPORT).with_name(
+            f".{cmd_reprice.IMPORT}.{os.getpid()}.tmp"
+        )
+        checks.ok(not temp_target.exists(), "and leaves no temp file behind")
+        checks.ok(
+            not (exc_directory / cmd_reprice.IMPORT).is_file(),
+            "and writes no import.csv",
+        )
+        checks.equal(
+            dict(corpus.Corpus.read().answers), before_corpus,
+            "and the corpus is unchanged",
+        )
+        conn = db.connect(files.inventory_dir())
+        try:
+            exc_postings = [
+                entry for entry in db.postings_for_sku(conn, DUNSPARCE_SKU)
+                if entry["source"] == "reprice"
+            ]
+        finally:
+            conn.close()
+        checks.ok(not exc_postings, "and no posting row lands")
+
     # ------------------------------------------------ UN-14: a move, until either box changes
     with isolated_home():
         for _ in range(2):

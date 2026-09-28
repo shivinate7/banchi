@@ -50,7 +50,35 @@ Lane B3 closed it. One `Store().write()` hold now covers everything. Inside it, 
 fresh revision check, the corpus write, the posting, `import.csv` last. A refusal now writes
 none of the three. `git log` on `cli/cmd_reprice.py` has both rounds.
 
-**The check.** Three harness cases in `harness/tests/t7_store_and_seams.py`
+**Round 2: the exception path, split the other way.** Lane B3's own review found a second
+defect in the same block, on its first pass. Inside the one hold, `import.csv` went straight
+to its final name, THEN the corpus. Picture a crash between the two — a full disk, or a caller
+proving the case by patching `write_csv` to raise. The result was a raw traceback. No clean
+refusal. No `import.csv`. No posting. But the corpus write ran BEFORE the crash. It had
+already landed. The markdown price sat in the corpus with nothing behind it. The next `emit`
+would have sold at a price never sent to TCGplayer, and never recorded as a posting.
+
+The fix reorders the two writes and adds one rename. `import.csv` now goes to a temp name
+first. The corpus write is the LAST step that can still fail. `corpus.Corpus.write()` uses
+`store/files.py:write_atomic`. That already cleans up its own temp file on its own exception.
+So a failed corpus write never leaves `prices.json` half-written. `os.replace` moves the temp
+CSV into place only once the corpus write has succeeded — one filesystem, the same directory.
+A try/except around both writes catches any exception. It deletes the temp CSV if the attempt
+left one behind, prints a refusal sentence, and returns 1. `cli/__main__.py:main` catches only
+`RunError`, `FileNotFoundError` and `KeyboardInterrupt`. Without this catch, an exception here
+would reach `do_markdown_apply`'s subprocess output as a raw traceback.
+
+**The one window this does not close.** The posting is recorded
+(`writable.postings.record`) only after the corpus write and the rename both succeed. But
+that call only appends to a list in memory. `Store().write()` flushes it with
+`db.append_postings` at its own `COMMIT`, on the way out of the `with` block — after this
+command's own code has already returned. A crash or a disk failure exactly there leaves the
+corpus and `import.csv` consistent with each other, and only the posting row missing.
+Closing it needs one transaction across two stores, `store.sqlite` and
+`inventory/prices.json`. Round 2 does not build that. Named in a code comment at the posting
+call in `cli/cmd_reprice.py:_apply`, and here.
+
+**The check.** Four harness cases in `harness/tests/t7_store_and_seams.py`
 (`check_undo_until_built_on`), named `T7-RACE (DEBT48)`.
 
 Two patch a real `Corpus.read()`. Each sleeps for exactly as long as its own call now holds
@@ -70,10 +98,17 @@ The corpus holds exactly the concurrent edit. None of the three is left half-wri
 what the old nesting once allowed. A separate run, with no race, checks the ordinary case: all
 three land.
 
-Proven RED against a `.bak` copy of the pre-fix files, never `git checkout`. All three cases
-failed on the code as it stood before each fix. The extended assertions also failed against
-lane B2's own fix, before lane B3's. Proven GREEN against the fix. `make harness` passes, all
-ten tests.
+The fourth case proves round 2. It patches `tcgcsv.write_csv` to raise during an ordinary
+apply, no revision race involved. It asserts the apply exits 1, never raises out of
+`cli.__main__.main` itself, and prints a refusal with no `Traceback` in it. It asserts no temp
+file is left under `import.csv`'s own name, no `import.csv`, an unchanged corpus, and no
+posting row.
+
+Proven RED against a `.bak` copy of the pre-fix files, never `git checkout`. All three round-1
+cases failed on the code as it stood before each fix. The extended assertions also failed
+against lane B2's own fix, before lane B3's. The fourth case failed against round 2's own
+first pass — the write-order defect it exists to catch. Proven GREEN against the fix. `make
+harness` passes, all ten tests.
 
 **The finding, as it was recorded.** Lane B2
 (`docs/reviews/ux-2026-09-23/PLAN-PR4-PR5.md`) named one race. `do_pricing_restore` read the

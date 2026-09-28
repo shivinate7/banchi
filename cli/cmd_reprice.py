@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -921,29 +922,69 @@ def _apply(args, say) -> int:
                     "try again.")
                 return 1
 
-        # THE ANSWER GOES IN THE CORPUS, KEYED BY SKU (D86). Without this the next `emit`
-        # over another copy of the same card re-lists it at the rule price and quietly
-        # undoes the markdown — the marked-down price is the store's price for that SKU from
-        # now on, not a property of this file. `at` is what the ratchet reads next time: a
-        # SKU answered inside the window is refused as `priced_recently` unless `--again`.
-        #
-        # THE STAMP GOES THROUGH `corpus.stamp_answers` RATHER THAN BEING SET HERE, so that
-        # this command and `PUT /pricing` date an answer by one rule. Setting `at` inline was
-        # the only place in the repo that ever wrote it, which is why `priced_recently` meant
-        # "marked down recently" while D100 claimed it meant "priced recently, by any hand".
-        before = corpus.Corpus.read()
-        book = corpus.Corpus.read()
-        stamp = master.now()
-        for edit in application.edits:
-            book.answers[edit.sku] = corpus.Answer(value=str(edit.now))
-        corpus.stamp_answers(before, book, stamp)
-        book.write()
+        # `import.csv` GOES TO A TEMPORARY NAME FIRST, AND THE CORPUS WRITE IS THE LAST STEP
+        # THAT MAY STILL FAIL (round 2, found by re-review). `tcgcsv.write_csv` and
+        # `corpus.Corpus.write()` are both real disk writes, and either can raise — a full
+        # disk, a permissions change, a caller proving exactly this case. Written straight to
+        # `target`, an exception from the corpus write left `import.csv` real on disk with
+        # nothing behind it: a file this command sent for money, over a price the corpus never
+        # held. Written to `temp_target` instead, that same exception leaves nothing under
+        # `import.csv`'s own name. `os.replace` (one filesystem, the same directory) is the
+        # one step after the corpus write that is not expected to fail.
+        temp_target = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+        try:
+            tcgcsv.write_csv(temp_target, tcgcsv.CANONICAL_HEADER, rows)
+
+            # THE ANSWER GOES IN THE CORPUS, KEYED BY SKU (D86). Without this the next `emit`
+            # over another copy of the same card re-lists it at the rule price and quietly
+            # undoes the markdown — the marked-down price is the store's price for that SKU
+            # from now on, not a property of this file. `at` is what the ratchet reads next
+            # time: a SKU answered inside the window is refused as `priced_recently` unless
+            # `--again`.
+            #
+            # THE STAMP GOES THROUGH `corpus.stamp_answers` RATHER THAN BEING SET HERE, so
+            # that this command and `PUT /pricing` date an answer by one rule. Setting `at`
+            # inline was the only place in the repo that ever wrote it, which is why
+            # `priced_recently` meant "marked down recently" while D100 claimed it meant
+            # "priced recently, by any hand".
+            before = corpus.Corpus.read()
+            book = corpus.Corpus.read()
+            stamp = master.now()
+            for edit in application.edits:
+                book.answers[edit.sku] = corpus.Answer(value=str(edit.now))
+            corpus.stamp_answers(before, book, stamp)
+            book.write()
+        except Exception as exc:
+            # A CLEAN REFUSAL, NEVER A RAW TRACEBACK — this runs as a subprocess of `POST
+            # /pipeline/markdowns/<stamp>/apply` (D105), and an uncaught exception here would
+            # put a Python stack trace in front of the operator instead of a sentence. Delete
+            # whatever the temp write left behind. No corpus write happened, or it would not
+            # have raised, and `write_atomic` never leaves `prices.json` half-written on its
+            # own exception. No posting was recorded — that call is below this block, reached
+            # only once both writes above have already succeeded.
+            if temp_target.exists():
+                temp_target.unlink()
+            say("")
+            say(f"REFUSED — could not write the markdown: {exc}. Nothing is written: no "
+                "import.csv, no corpus answer, no posting. Fix the problem and try again.")
+            return 1
+
+        os.replace(temp_target, target)
 
         # THIS IS THE ROUND THE OWNER ASKED ABOUT — a SKU marked down a second, third or
         # fourth time. `edit.was` is the price this markdown replaces, already in hand from
         # the worklist's own manifest read, so `replaced` is never a guess or a second store
         # lookup (D243). `run` names the markdown by its own folder stamp, since a reprice
         # apply has no run directory of its own.
+        #
+        # RECORDED LAST, AND IT IS THE ONE WINDOW THIS FIX DOES NOT CLOSE. The corpus and
+        # `import.csv` are both real by this line. `record()` only appends to a list;
+        # `Store().write()` flushes it with `db.append_postings` at its own `COMMIT`, on the
+        # way out of this `with` block. A crash or a disk failure between here and that
+        # `COMMIT` leaves the corpus and `import.csv` consistent WITH EACH OTHER, and only the
+        # posting row missing — never the reverse, and never a file or a price with nothing
+        # behind it. Closing this last window needs one transaction across two stores
+        # (`store.sqlite` and `inventory/prices.json`), which is not built here (DEBT48).
         for edit in application.edits:
             writable.postings.record(
                 sku=edit.sku,
@@ -952,11 +993,6 @@ def _apply(args, say) -> int:
                 run=path.parent.name,
                 replaced=tcgcsv.format_price(edit.was) if edit.was is not None else None,
             )
-
-        # LAST, so a refusal above — or an exception from the corpus write or the posting —
-        # never leaves `import.csv` on disk with nothing backing it in the corpus or the
-        # posting ledger.
-        tcgcsv.write_csv(target, tcgcsv.CANONICAL_HEADER, rows)
 
     lines = [
         f"markdown applied {stamp}",
