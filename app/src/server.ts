@@ -330,8 +330,7 @@ export function describeFailure(err: unknown): Failure {
     kind: 'refusal',
     code: 'client_bug',
     message:
-      `The app failed before the capture server could answer: ${detail}. That is a bug in ` +
-      'the app rather than a refusal — check the browser console.',
+      'The app hit a problem before it could ask the server. Reload the page, and if it repeats, restart the app on the Mac.',
   }
 }
 
@@ -692,8 +691,8 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   if (base === FALLBACK_BASE) {
     throw new ServerError(
       'no_server_address',
-      'This copy of the app was built without the address of its capture server, so it ' +
-        'will not guess one. Nothing was sent. Build it again with `make up`.',
+      'This copy of the app does not know where its server is, so it sent nothing. ' +
+        'Start the app again from the Mac.',
       0,
     )
   }
@@ -736,18 +735,15 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
       noteReachable(true)
       throw new ServerError(
         'origin_blocked',
-        `The capture server at ${base} is running, but it will not accept changes from ` +
-          `${pageOrigin()}. Nothing was saved. Restarting the server will not help — the ` +
-          'address this page was opened at has to be one it allows. On the Mac, set ' +
-          'PKMNSCAN_LAN_NAME in .env to this address\u2019s host name and start it again.',
+        'The server is running, but it will not accept changes from this address. Nothing was saved. ' +
+          'Open the app at the address the Mac shows.',
         0,
       )
     }
     noteReachable(false)
     throw new ServerError(
       'unreachable',
-      `No answer from the capture server at ${base}. It may not be running — ` +
-        'start it with `make server`, then try again.',
+      'The server did not answer. It may not be running, so start it on the Mac, then try again.',
       0,
     )
   }
@@ -761,8 +757,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
      * this is precisely the lost-response case the retry guard exists for. */
     throw new ServerError(
       'unreachable',
-      `The connection to the capture server dropped while reading its answer to ${path}. ` +
-        'Retry the request.',
+      'The connection dropped before the server finished answering. Try again.',
       response.status,
     )
   }
@@ -777,7 +772,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
      * rather than inventing an explanation for a response nobody in this repo wrote. */
     throw new ServerError(
       'http_error',
-      `${response.status} ${response.statusText} from ${url}.`,
+      'Something between this page and the server refused the request. Try again, and if it repeats, restart the app on the Mac.',
       response.status,
     )
   }
@@ -788,8 +783,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
      * empty object that a screen renders as blanks. */
     throw new ServerError(
       'bad_response',
-      `The capture server answered ${response.status} for ${path} with a body that is not ` +
-        'JSON. This is a bug — check the server log.',
+      'The server answered with something the app cannot read. Try again, and if it repeats, restart the app on the Mac.',
       response.status,
     )
   }

@@ -672,8 +672,7 @@ def _run_sync(argv: Sequence[str], timeout: int) -> Tuple[int, str]:
         raise PipelineRefusal(
             HTTPStatus.GATEWAY_TIMEOUT,
             "step_timed_out",
-            f"`{' '.join(argv[1:3])}` did not finish within {timeout}s. Nothing here writes "
-            f"partially — re-run it, or run it in a terminal to watch.",
+            "That step did not finish in time. Nothing is written half way, so run it again.",
         ) from None
     except FileNotFoundError:
         raise PipelineRefusal(
@@ -1136,9 +1135,8 @@ def do_pipeline_submission_release(receipt: str, payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
             "confirm_required",
-            "Releasing a claim re-opens its cards to another press. If its holder is still "
-            "submitting, that press is the second invoice this claim exists to prevent. Send "
-            "`confirm: true`, and show the operator whether the holder is alive first.",
+            "Releasing a claim opens its cards to another run, and if the first is still going the cards "
+            "could be bought twice. Confirm it, and check that the first run has stopped.",
         )
     if not isinstance(receipt, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", receipt or ""):
         raise PipelineRefusal(
@@ -1150,8 +1148,7 @@ def do_pipeline_submission_release(receipt: str, payload: dict) -> dict:
             raise PipelineRefusal(
                 HTTPStatus.NOT_FOUND,
                 "no_such_claim",
-                f"There is no claim {receipt}. Read /pipeline/submissions for the ones there "
-                f"are — a claim released earlier is gone from that list by design.",
+                f"There is no claim {receipt}. It may have been released already.",
             )
         was_live = claim.live
         cards = len(claim.keys)
@@ -1540,8 +1537,7 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.SERVICE_UNAVAILABLE,
             "imaging_unavailable",
-            f"The crop preview needs Pillow, numpy and geometry in the SERVER's "
-            f"interpreter — run `make venv` and restart `make server`. ({exc})",
+            "The crop preview needs image tools that this copy of the app was set up without. Set the app up again on the Mac.",
         ) from exc
 
     captures = [c for c in _selection_captures(selection) if c.has_position]
@@ -1720,11 +1716,11 @@ def _spawn(send: Send, captures) -> dict:
                 # Batch job killed halfway is paid for and not collected.
                 start_new_session=True,
             )
-    except OSError as exc:
+    except OSError:
         raise PipelineRefusal(
             HTTPStatus.INTERNAL_SERVER_ERROR,
             "spawn_failed",
-            f"Could not start `pkmnscan identify` for {send.selection.sentence()}: {exc}",
+            f"Could not start the identify run for {send.selection.sentence()}. Try again, and if it repeats, restart the app on the Mac.",
         ) from None
     # THE HANDLE FIRST, THE MARKER SECOND. `_live_pid` reads the handle for a run this server
     # owns, so a poll landing between the two still reads the run as live; the reverse order
@@ -1785,8 +1781,7 @@ def do_pipeline_identify(payload: dict) -> Tuple[HTTPStatus, dict]:
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
             "confirm_required",
-            "This is the step that spends money. Send `confirm: true` — and show the "
-            "operator /pipeline/preflight's card count and estimate before you do.",
+            "This step spends money, so it needs your confirmation. Check the card count and estimate first.",
         )
     send = _resolve_send(payload)
     captures = _selection_captures(send.selection)
@@ -1833,7 +1828,7 @@ def _open_run(name: str) -> Path:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_such_run",
-            f"There is no run {name}. Read /pipeline/runs for the ones there are.",
+            f"There is no run called {name}. Pick one from the list of runs.",
         )
     return directory
 
@@ -2205,17 +2200,16 @@ def do_pipeline_pricing(name: str) -> dict:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "pricing_not_written",
-            f"Run {name} has no {run_files.PRICING} — `join` is what writes it, and every "
-            f"run made before it predates the file. Join this run and it will appear.",
+            f"Run {name} has no prices file yet. Match the run again and it will appear.",
         )
 
     try:
         pricing = json.loads(table.read_text("utf-8"))
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError):
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "pricing_unreadable",
-            f"{run_files.PRICING} could not be read: {exc}. Re-join this run to rewrite it.",
+            "The prices file for this run could not be read. Match the run again to rewrite it.",
         ) from None
     # THE LABELS, RE-RENDERED BEFORE ANYTHING LEAVES (D58). In place on the document just
     # parsed, which nothing else holds — the file on disk is untouched, exactly as D58 left
@@ -3725,11 +3719,11 @@ def do_pipeline_holdings_value(range_: str) -> dict:
         )
     try:
         snapshot = Store().read()
-    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+    except (files.StoreError, OSError, ValueError, TypeError):
         raise PipelineRefusal(
             HTTPStatus.SERVICE_UNAVAILABLE,
             "store_unreadable",
-            f"The store could not be read, so nothing can be valued: {exc}",
+            "The store could not be read, so nothing can be valued. Try again, and if it repeats, restart the app on the Mac.",
         ) from None
 
     report = holdings.build_holdings_report(
@@ -3811,11 +3805,11 @@ def do_pipeline_value() -> dict:
     """
     try:
         inventory = Store().read().inventory
-    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+    except (files.StoreError, OSError, ValueError, TypeError):
         raise PipelineRefusal(
             HTTPStatus.SERVICE_UNAVAILABLE,
             "store_unreadable",
-            f"The store could not be read, so nothing can be valued: {exc}",
+            "The store could not be read, so nothing can be valued. Try again, and if it repeats, restart the app on the Mac.",
         ) from None
 
     found, sources = _readings()
@@ -3904,11 +3898,11 @@ def do_pipeline_value_page(
         )
     try:
         inventory = Store().read().inventory
-    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+    except (files.StoreError, OSError, ValueError, TypeError):
         raise PipelineRefusal(
             HTTPStatus.SERVICE_UNAVAILABLE,
             "store_unreadable",
-            f"The store could not be read, so nothing can be valued: {exc}",
+            "The store could not be read, so nothing can be valued. Try again, and if it repeats, restart the app on the Mac.",
         ) from None
 
     found, sources = _readings()
@@ -4073,11 +4067,11 @@ def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict
     """
     try:
         snapshot = Store().read()
-    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+    except (files.StoreError, OSError, ValueError, TypeError):
         raise PipelineRefusal(
             HTTPStatus.SERVICE_UNAVAILABLE,
             "store_unreadable",
-            f"The store could not be read, so nothing can be grouped: {exc}",
+            "The store could not be read, so nothing can be grouped. Try again, and if it repeats, restart the app on the Mac.",
         ) from None
     inventory = snapshot.inventory
 
@@ -4379,7 +4373,7 @@ def _open_markdown(stamp: str) -> Path:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_such_markdown",
-            f"No markdown called {stamp}. `reprice list --write` is what makes one.",
+            f"There is no markdown called {stamp}. Start a new one from Pricing.",
         )
     return _markdowns_dir() / stamp
 
@@ -4614,14 +4608,14 @@ def do_live_export() -> dict:
 
     try:
         export = tcgcsv.read_export(path)
-    except (tcgcsv.MalformedCsv, OSError) as exc:
+    except (tcgcsv.MalformedCsv, OSError):
         # A REFUSAL TEARS DOWN WHAT IT BUILT — `do_pipeline_export`'s rule again. A directory
         # accumulating one dead file per mis-timed press stops explaining itself.
         path.unlink(missing_ok=True)
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY,
             "tcg_unexpected_response",
-            f"TCGplayer answered with something that is not an export: {exc}. Nothing was kept.",
+            "TCGplayer answered with something that is not an export. Nothing was kept. Try again.",
         ) from None
 
     live_rows = 0
@@ -4782,7 +4776,7 @@ def do_markdown_apply(stamp: str, payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_worklist",
-            f"Markdown {stamp} has no worklist to apply. Send one as `worklist`.",
+            f"Markdown {stamp} has no edited price sheet to apply. Edit the sheet first.",
         )
     argv = [str(PKMNSCAN), "reprice", "apply", str(worklist)]
     # THE STALE-WRITE GUARD, TRAVELLING TO THE SUBPROCESS. Absent means "did not read one",
@@ -4905,17 +4899,16 @@ def _survey(directory: Path) -> Dict[str, dict]:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "survey_not_written",
-            f"Markdown {directory.name} has no {cmd_reprice.SURVEY}. It was written before "
-            f"the lens existed — re-run `reprice list --write` over the same export.",
+            f"Markdown {directory.name} was made before this view existed. Start a new markdown from the same export.",
         )
     try:
         payload = json.loads(path.read_text("utf-8"))
         rows = payload["skus"]
-    except (OSError, ValueError, KeyError) as exc:
+    except (OSError, ValueError, KeyError):
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "survey_unreadable",
-            f"{cmd_reprice.SURVEY} could not be read: {exc}. Re-run `reprice list --write`.",
+            "The price survey for this markdown could not be read. Start a new markdown from the same export.",
         ) from None
     # PROJECTED SO BOTH DOCUMENTS ANSWER `_history_for_entry` IN ONE SHAPE. A run's
     # `pricing.json` entry nests the export's own figures under `snap`; a survey row carries
@@ -5077,8 +5070,7 @@ def do_markdown_file(stamp: str, filename: str) -> Tuple[bytes, str]:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_such_file",
-            f"Markdown {stamp} has no file called {filename}. `reprice apply --write` is "
-            f"what writes {cmd_reprice.IMPORT}.",
+            f"Markdown {stamp} does not have that file yet. Finish its price step first.",
         )
     target = directory / filename
     kind = "text/csv" if target.suffix == ".csv" else "text/plain; charset=utf-8"
@@ -5112,15 +5104,13 @@ def do_markdown_push(stamp: str, payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "no_import_file",
-            f"Markdown {stamp} has no {cmd_reprice.IMPORT} to push. Answer step 3 first — "
-            f"`reprice apply --write` is what writes it.",
+            f"Markdown {stamp} has nothing to push yet. Answer its price step first.",
         )
     if not bool(payload.get("confirm")):
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
             "confirm_required",
-            "A push to TCGplayer is not a preview. Send `confirm` once the operator has "
-            "pressed it; nothing was sent.",
+            "A push to TCGplayer needs your confirmation. Nothing was sent.",
         )
     rows = tcg_import.rows_from_csv(target.read_text(encoding="utf-8"))
     try:
@@ -5148,23 +5138,21 @@ def do_markdown_publish(stamp: str, payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "nothing_staged",
-            f"Markdown {stamp} has not been pushed to TCGplayer, so there is no staged upload "
-            f"to publish. Push it first; nothing was sent.",
+            f"Markdown {stamp} has not been sent to TCGplayer yet, so there is no upload to publish. "
+            "Send it first. Nothing was sent.",
         )
     if record.get("published_at"):
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "already_published",
-            f"That upload was already moved to live at {record['published_at']}. Publishing it "
-            f"again would be a second move of rows TCGplayer no longer holds staged; nothing "
-            f"was sent.",
+            f"That upload already went live at {record['published_at']}. Publishing it again would move rows "
+            "TCGplayer no longer holds as waiting. Nothing was sent.",
         )
     if not bool(payload.get("confirm")):
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
             "confirm_required",
-            "Moving prices to live is not a preview. Send `confirm` once the operator has "
-            "pressed it; nothing was sent.",
+            "Moving prices live needs your confirmation. Nothing was sent.",
         )
     try:
         answer = tcg_import.move_to_live(str(record["upload_id"]))
@@ -5195,23 +5183,20 @@ def do_markdown_rollback(stamp: str, payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "nothing_staged",
-            f"Markdown {stamp} has nothing staged at TCGplayer, so there is nothing to "
-            f"discard. Nothing was sent.",
+            f"Markdown {stamp} has no upload waiting at TCGplayer, so there is nothing to discard. Nothing was sent.",
         )
     if record.get("published_at"):
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "already_published",
-            f"That upload went live at {record['published_at']}, so TCGplayer no longer holds "
-            f"it staged and there is nothing to roll back. A live price goes back the way it "
-            f"came down — another markdown. Nothing was sent.",
+            f"That upload went live at {record['published_at']}, so there is nothing left to roll back. "
+            "A live price goes back the way it came down, with another markdown. Nothing was sent.",
         )
     if not bool(payload.get("confirm")):
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
             "confirm_required",
-            "Discarding a staged upload reaches TCGplayer. Send `confirm` once the operator "
-            "has pressed it; nothing was sent.",
+            "Discarding an upload reaches TCGplayer, so it needs your confirmation. Nothing was sent.",
         )
     try:
         tcg_import.rollback(str(record["upload_id"]))
@@ -6111,16 +6096,15 @@ def _history_row(directory: Path, sku: str) -> dict:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "pricing_not_written",
-            f"Run {directory.name} has no {run_files.PRICING} — `join` is what writes it, "
-            f"and a price history is read off the export row it stores. Join this run.",
+            f"Run {directory.name} has no prices file yet. Match the run again, then try again.",
         )
     try:
         payload = json.loads(table.read_text("utf-8"))
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError):
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "pricing_unreadable",
-            f"{run_files.PRICING} could not be read: {exc}. Re-join this run to rewrite it.",
+            "The prices file for this run could not be read. Match the run again to rewrite it.",
         ) from None
     for entry in payload.get("skus") or ():
         if str(entry.get("sku") or "") == sku:
@@ -6282,9 +6266,8 @@ def do_product_history(sku: str) -> dict:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "not_catalogued",
-            f"{row.get(tcgcsv.NAME_COLUMN) or wanted} is not in a catalogued product line, "
-            f"so there is no product to look a history up by. D22 makes that the permanent "
-            f"state for `misc` rather than a missing export.",
+            f"{row.get(tcgcsv.NAME_COLUMN) or wanted} is not in a product line Banchi has a catalogue for, "
+            "so there is no price history to look up.",
         )
 
     base = {
@@ -6311,12 +6294,11 @@ def do_product_history(sku: str) -> dict:
         reading = market.reading_for_row(row)
     except pricehistory.Blocked as exc:
         raise PipelineRefusal(HTTPStatus.BAD_GATEWAY, "history_blocked", str(exc)) from None
-    except pricehistory.Unreachable as exc:
+    except pricehistory.Unreachable:
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY,
             "history_unreachable",
-            f"{exc} Nothing is wrong with this card — a public mirror did not answer, and "
-            f"the reading is the only thing lost. Try again.",
+            "A public price mirror did not answer, so the reading is missing. Nothing is wrong with this card. Try again.",
         ) from None
     except pricehistory.NotResolvable as exc:
         raise PipelineRefusal(HTTPStatus.CONFLICT, "history_unresolved", str(exc)) from None
@@ -6375,9 +6357,8 @@ def _history_for_entry(entry: dict, wanted: str, source: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "not_catalogued",
-            f"{entry.get('name') or wanted} is not in a catalogued product line, so there is "
-            f"no product to look a history up by. D22 makes that the permanent state for "
-            f"`misc` rather than a missing export.",
+            f"{entry.get('name') or wanted} is not in a product line Banchi has a catalogue for, "
+            "so there is no price history to look up.",
         )
 
     market = pricehistory.Market(cache_dir=market_cache_dir(), user_agent=_history_user_agent())
@@ -6394,12 +6375,11 @@ def _history_for_entry(entry: dict, wanted: str, source: dict) -> dict:
             "history_blocked",
             str(exc),
         ) from None
-    except pricehistory.Unreachable as exc:
+    except pricehistory.Unreachable:
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY,
             "history_unreachable",
-            f"{exc} Nothing is wrong with this run — a public mirror did not answer, and "
-            f"the reading is the only thing lost. Try again.",
+            "A public price mirror did not answer, so the reading is missing. Nothing is wrong with this run. Try again.",
         ) from None
     except pricehistory.NotResolvable as exc:
         raise PipelineRefusal(
@@ -6521,16 +6501,15 @@ def do_pipeline_trends(name: str, skus: Sequence[str] = ()) -> dict:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "pricing_not_written",
-            f"Run {directory.name} has no {run_files.PRICING} — `join` is what writes it, "
-            f"and a price history is read off the export rows it stores. Join this run.",
+            f"Run {directory.name} has no prices file yet. Match the run again, then try again.",
         )
     try:
         payload = json.loads(table.read_text("utf-8"))
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError):
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "pricing_unreadable",
-            f"{run_files.PRICING} could not be read: {exc}. Re-join this run to rewrite it.",
+            "The prices file for this run could not be read. Match the run again to rewrite it.",
         ) from None
 
     entries = {
@@ -6676,8 +6655,7 @@ def do_pipeline_file(name: str, filename: str) -> Tuple[bytes, str]:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_such_file",
-            f"Run {name} has no file called {filename}. It may not have been written yet — "
-            f"`emit` is what writes the import files.",
+            f"Run {name} does not have that file yet. Write the import file first.",
         )
     target = directory / filename
     kind = "text/csv" if target.suffix == ".csv" else "text/plain; charset=utf-8"
@@ -6806,9 +6784,8 @@ def _exports_for_join(directory: Path, payload: dict) -> List[str]:
                 raise PipelineRefusal(
                     HTTPStatus.NOT_FOUND,
                     "no_such_file",
-                    f"No fetched export named {wanted}, in run {directory.name} or under "
-                    f"inventory/{EXPORTS_DIR}/. A fetch that refused deletes what it wrote, "
-                    f"so this is a name from a fetch that did not land.",
+                    f"There is no fetched export called {wanted} in this run or in the store. "
+                    "A fetch that was refused keeps nothing, so this name is from a fetch that did not finish.",
                 )
             argv += ["--export", str(candidate)]
 
@@ -7006,8 +6983,7 @@ def _scope_counts(directory: Path) -> Tuple[Dict[str, dict], Dict[str, dict]]:
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "export_refused",
-            f"{directory / run_files.IDENTIFICATIONS} does not exist — run `pkmnscan "
-            f"identify` first.",
+            "Nothing has been identified for this run yet. Identify it first.",
         )
 
     by_game: Dict[str, dict] = {}
@@ -7087,9 +7063,8 @@ def _scope_for_run(directory: Path, payload: dict) -> Tuple[object, dict]:
         raise PipelineRefusal(
             HTTPStatus.BAD_REQUEST,
             "game_required",
-            f"This run holds more than one game and one fetch answers for one category. "
-            f"Send `game` as one of: {', '.join(sorted(catalogued))}. Each is fetched "
-            f"separately and the join takes them together.",
+            "This run holds more than one game, and a fetch covers one game. "
+            f"Pick one of: {', '.join(sorted(catalogued))}. Each is fetched separately.",
         )
 
     entry = game_registry.get(game)
@@ -8003,8 +7978,7 @@ def do_pipeline_step(name: str, step: str, payload: dict) -> dict:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_such_step",
-            f"{step!r} is not a step. The free ones are {', '.join(FREE_STEPS)}; identify "
-            f"is POST /pipeline/identify because it spends money.",
+            f"{step!r} is not a step that can run for free. Identify spends money, so it has its own button.",
         )
 
     argv = [str(PKMNSCAN), step, str(directory)]

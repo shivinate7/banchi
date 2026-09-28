@@ -4326,6 +4326,34 @@ def check_import_layering(report: Report) -> None:
     )
 
 
+def check_error_words(report: Report) -> None:
+    """The refusal messages a screen prints word for word obey D196 too.
+
+    `no mechanism on screen` reads JSX literals and `machine-words.spec.ts` reads loaded
+    screens, so neither ever sees a REFUSAL: those strings live in `server/*.py` and in
+    `app/src/server.ts`'s `ServerError` calls. `scripts/error-words.py` reads them at the
+    source, so this row needs no browser. It fails on a message carrying a backtick, a
+    decision id, a repository path, a snake_case token, an HTTP detail, raw exception text or a
+    typed dot, and on an allow-list entry that matches nothing (`scripts/error-words-allow.json`).
+    """
+    proc = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "error-words.py")],
+        capture_output=True, text=True, cwd=ROOT,
+    )
+    lines = [ln for ln in proc.stdout.splitlines() if ln.strip() and ln != "error-words: ok"]
+    findings = [Finding(ln.split(":", 1)[0], ln) for ln in lines]
+    if proc.returncode != 0 and not findings:
+        findings.append(Finding("scripts/error-words.py", f"could not run: {proc.stderr.strip()[:200]}"))
+    report.add(
+        "error words",
+        MECHANICAL,
+        findings,
+        "every refusal message in server/ and server.ts is plain, the allow list has no stale entry"
+        if not findings else f"{len(findings)} refusal message(s) break D196",
+        scanned=1,
+    )
+
+
 # docs/specs/identity-follows-sku.md §4.1/§4.3 (lane 7): the directories a real card mutation
 # can reach — the same six the spec's own text names for this row.
 _IDENTITY_WRITERS_ROOTS = ("server", "store", "pipeline", "cli", "codes", "scripts")
@@ -20584,6 +20612,7 @@ TIER: Dict[str, int] = {
     "shell substitution": 1,
     "unscoped walk": 1,
     "import layering": 1,
+    "error words": 1,
     "identity writers": 1,
     "rule enforcement": 2,
     "check dispatch": 2,
@@ -20786,6 +20815,8 @@ def audit(staged_only: bool, commit_only: bool = False) -> Report:
         check_unscoped_walk(report)
     if _run_at_commit("import layering", commit_only):
         check_import_layering(report)
+    if _run_at_commit("error words", commit_only):
+        check_error_words(report)
     if _run_at_commit("identity writers", commit_only):
         check_identity_writers(report)
     if _run_at_commit("rule enforcement", commit_only):

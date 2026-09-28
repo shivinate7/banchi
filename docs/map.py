@@ -3734,6 +3734,25 @@ COMPONENTS = [
                 "governed_by": ["D1", "D2", "D9", "D11", "D24", "D58", "D63", "D86", "D87",
                                 "D99", "D106", "D174", "D181", "D196",
                                 "D260", "D284"]},
+            "error-words.py": {
+                "does": "the refusal half of D196, read at the source. `machine-words.spec.ts` "
+                        "reads loaded screens and never sees an error state, and `no mechanism "
+                        "on screen` reads JSX literals, so the messages a refusal carries to the "
+                        "screen word for word were unread. This walks `server/*.py` for the "
+                        "message argument of every refusal constructor and `app/src` for "
+                        "`new ServerError(...)`, and fails on a backtick, a decision id, a repo "
+                        "path, a snake_case token, an HTTP detail, raw exception text, a typed "
+                        "dot, a word from `machine-words.json`, or a lowercase first letter. "
+                        "Run as `make docs-audit`'s `error words` row. `--list` prints every "
+                        "finding, `--self-test` proves the matcher. Never writes.",
+                "governed_by": ["D196", "D284"]},
+            "error-words-allow.json": {
+                "does": "the shrinking offender list for `error words` (D196), file -> the "
+                        "first 50 characters of a message -> the lane that owes it. Every entry "
+                        "today is request-shape validation, a message for a caller and not a "
+                        "person. Read by `scripts/error-words.py`, which fails on an unlisted "
+                        "finding and on a listed entry that matches nothing.",
+                "governed_by": ["D196", "D284"]},
             "machine-words-allow.json": {
                 "does": "the shrinking offender list for `no mechanism on screen` (D196), "
                         "file -> word -> lane, on `kit-adoption-allow.json`'s own shape. "

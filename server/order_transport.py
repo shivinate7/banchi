@@ -375,10 +375,9 @@ def search_body(
     if not key:
         raise FetchRefusal(
             "order_seller_key_missing",
-            f"No {SELLER_KEY_ENV} in .env. Without it this host answers 403, which reads "
-            f"exactly like an expired session and is not one. The value is the lowercased "
-            f"prefix of any order number on the Orders page — the part before the first dash "
-            f"and everything up to it, lowercased. Nothing was fetched.",
+            "The seller key is missing from the Mac's settings file. Without it the order service refuses "
+            "every request, and that looks like an expired session but is not one. Add the first part of any "
+            "order number on the Orders page, in lowercase, then try again. Nothing was fetched.",
         )
     return {
         "searchRange": canonical,
@@ -428,8 +427,7 @@ def project_order(
     if not isinstance(detail, dict):
         raise FetchRefusal(
             "order_response_unreadable",
-            "An order came back as something other than a JSON object. The API may have "
-            "changed shape; nothing was read.",
+            "An order came back in a shape this app does not read. TCGplayer may have changed something. Nothing was read.",
         )
     fallback = summary if isinstance(summary, dict) else {}
     number = str(detail.get("orderNumber") or fallback.get("orderNumber") or "").strip()
@@ -443,14 +441,12 @@ def project_order(
     if raw_lines is None:
         raise FetchRefusal(
             "order_response_unreadable",
-            f"Order {number} carries no `products` list, so its lines cannot be read. An "
-            f"order with unreadable lines is refused rather than treated as empty. Nothing "
-            f"was read.",
+            f"Order {number} came back without its lines, so it cannot be read. Nothing was read.",
         )
     if not isinstance(raw_lines, list):
         raise FetchRefusal(
             "order_response_unreadable",
-            f"Order {number}'s `products` is not a list. Nothing was read.",
+            f"Order {number} has its lines in a shape this app does not read. Nothing was read.",
         )
 
     lines: List[Dict[str, Any]] = []
@@ -532,8 +528,7 @@ def project_summary(entry: Any) -> Dict[str, Any]:
     if not isinstance(entry, dict):
         raise FetchRefusal(
             "order_response_unreadable",
-            "A search result came back as something other than a JSON object. Nothing was "
-            "read.",
+            "A search result came back in a shape this app does not read. Nothing was read.",
         )
     number = str(entry.get("orderNumber") or "").strip()
     if not number:
@@ -598,17 +593,13 @@ def _cookie() -> str:
     if not value:
         raise FetchRefusal(
             "order_cookie_missing",
-            f"No {COOKIE_ENV} in .env, so there is no session to read orders with. Sign in to "
-            f"tcgplayer.com, copy the whole `Cookie:` header off any request the Orders page "
-            f"makes in the browser's network tab, and put it in .env as {COOKIE_ENV}=<that "
-            f"value>. It is the same cookie the export uses — one session, both hosts. It is a "
-            f"bearer instrument: .env only.",
+            "TCGplayer is not signed in on this Mac. Sign in at tcgplayer.com in your browser, copy the "
+            "session cookie into the Mac's settings file, then try again. Keep it private.",
         )
     if "=" not in value:
         raise FetchRefusal(
             "order_cookie_malformed",
-            f"{COOKIE_ENV} holds no `name=value` pair, so it is not a Cookie header. Copy the "
-            f"whole header value, not just the ticket.",
+            "The saved TCGplayer session is not a valid cookie. Copy the whole cookie value, not just part of it.",
         )
     return value
 
@@ -693,30 +684,25 @@ def _check_status(status: int, headers: dict, body: bytes) -> None:
         if _LOGON_MARKER in location.lower():
             raise FetchRefusal(
                 "order_session_expired",
-                f"TCGplayer redirected the order request to its login page, which means the "
-                f"session in {COOKIE_ENV} has expired. Sign in again, copy the fresh `Cookie:` "
-                f"header, and replace the value in .env. Nothing was read.",
+                "TCGplayer sent the request to its sign-in page, so the saved session has expired. Sign in again, "
+                "copy the fresh session into the Mac's settings file, then try again. Nothing was read.",
             )
         raise FetchRefusal(
             "order_unexpected_response",
-            f"The order API answered {status} with a redirect. This is a JSON API and no "
-            f"redirect off it is followed. Nothing was read.{note}",
+            f"The order service sent a redirect, which this app does not follow. Nothing was read.{note}",
         )
     if status == 401:
         raise FetchRefusal(
             "order_session_expired",
-            f"The order API refused the session in {COOKIE_ENV} (401). Sign in again and "
-            f"replace the value in .env. It is the same cookie the export uses, so the export "
-            f"will have stopped working too. Nothing was read.{note}",
+            "TCGplayer refused the saved session. Sign in again and replace the saved session in the Mac's "
+            f"settings file. The price export will have stopped working too. Nothing was read.{note}",
         )
     if status == 403:
         raise FetchRefusal(
             "order_seller_key_rejected",
-            f"The order API answered 403. ON THIS HOST THAT IS USUALLY THE REQUEST, NOT THE "
-            f"SESSION: a missing or wrong `filters.sellerKey` answers 403 rather than 400. "
-            f"Check {SELLER_KEY_ENV} in .env — it is the lowercased prefix of any order number "
-            f"on the Orders page. Only if that is right is this the account having lost its "
-            f"seller permissions. Nothing was read.{note}",
+            "The order service refused the request. This is usually a missing or wrong seller key, not the "
+            "session. Check the seller key in the Mac's settings file. Only if that is right has the account lost "
+            f"its seller permissions. Nothing was read.{note}",
         )
     if status == 404:
         raise FetchRefusal(
@@ -727,16 +713,14 @@ def _check_status(status: int, headers: dict, body: bytes) -> None:
     if status == 405:
         raise FetchRefusal(
             "order_route_missing",
-            f"The order API answered 405, which is what it says when a path is not one of its "
-            f"routes — `/orders` is a prefix, not a route. That is a defect here rather than "
-            f"anything to fix at TCGplayer. Nothing was read.{note}",
+            "The order service does not recognise the request. That is a fault in Banchi, not something to "
+            f"fix at TCGplayer. Nothing was read.{note}",
         )
     if status == 429:
         raise FetchRefusal(
             "order_rate_limited",
-            f"The order API is rate-limiting this client (429). One fetch is one search plus "
-            f"one request per order, so a narrower range is fewer requests. Try again in a "
-            f"minute. Nothing was read.{note}",
+            "The order service is asking for a slower pace. Try a narrower date range, or wait a minute and "
+            f"try again. Nothing was read.{note}",
         )
     if status >= 500:
         raise FetchRefusal(
@@ -773,17 +757,15 @@ def _parse(body: bytes, headers: dict) -> Any:
         # because either alone is defeatable.
         raise FetchRefusal(
             "order_session_expired",
-            f"The order API sent a web page rather than JSON, which is what a login page looks "
-            f"like when it is served without a redirect. The session in {COOKIE_ENV} has most "
-            f"likely expired. Nothing was read.",
+            "The order service sent a web page instead of orders, which usually means the saved session has "
+            "expired. Sign in again and replace it. Nothing was read.",
         )
     try:
         return json.loads(body.decode("utf-8", "replace"))
     except ValueError:
         raise FetchRefusal(
             "order_response_unreadable",
-            "The order API's answer did not parse as JSON. The API may have changed shape; "
-            "nothing was read.",
+            "The order service's answer could not be read. TCGplayer may have changed something. Nothing was read.",
         ) from None
 
 
@@ -820,8 +802,7 @@ def _search_page(
     if not isinstance(parsed, dict) or not isinstance(parsed.get("orders"), list):
         raise FetchRefusal(
             "order_response_unreadable",
-            "The order search answered without an `orders` list. The API may have changed "
-            "shape; nothing was read.",
+            "The order search answered without an orders list. TCGplayer may have changed something. Nothing was read.",
         )
     try:
         total = int(parsed.get("totalOrders"))

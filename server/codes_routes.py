@@ -125,9 +125,9 @@ def _box_of(payload: dict) -> int:
         box = int(raw)
     except (TypeError, ValueError):
         _refuse(HTTPStatus.BAD_REQUEST, "box_required",
-                f"box was {raw!r}; send the box number whose photographs should be scanned.")
+                f"The box {raw!r} is not a box number. Send the number of the box to scan.")
     if box < 1:
-        _refuse(HTTPStatus.BAD_REQUEST, "box_required", "a box number is 1 or higher.")
+        _refuse(HTTPStatus.BAD_REQUEST, "box_required", "A box number is 1 or higher.")
     return box
 
 
@@ -143,7 +143,7 @@ def do_codes_scan(payload: dict, captures_root) -> Tuple[HTTPStatus, dict]:
     directory = Path(captures_root) / f"box{box}"
     if not directory.is_dir():
         _refuse(HTTPStatus.NOT_FOUND, "box_has_no_photos",
-                f"nothing has been captured into box {box} — {directory} does not exist.")
+                f"Nothing has been captured into box {box} yet.")
     try:
         reading = codescan.read_directory(directory, box=box)
     except qr.QrUnavailable as exc:
@@ -177,7 +177,7 @@ def _lane_of(payload: dict) -> str:
     lane = str(payload.get("lane") or "").strip().lower()
     if lane not in LANES:
         _refuse(HTTPStatus.BAD_REQUEST, "lane_invalid",
-                f"lane was {payload.get('lane')!r}; use one of {', '.join(LANES)}.")
+                f"The lane {payload.get('lane')!r} is not one of {', '.join(LANES)}.")
     return lane
 
 
@@ -219,8 +219,7 @@ def do_codes_export(payload: dict) -> Tuple[HTTPStatus, dict]:
         product = str(product).strip().lower()
         if product not in products.KEYS:
             _refuse(HTTPStatus.BAD_REQUEST, "product_invalid",
-                    f"product was {payload.get('product')!r}; "
-                    f"use one of {', '.join(products.KEYS)}.")
+                    f"The product {payload.get('product')!r} is not one of {', '.join(products.KEYS)}.")
     raw_count = payload.get("count")
     confirm = bool(payload.get("confirm"))
 
@@ -234,9 +233,9 @@ def do_codes_export(payload: dict) -> Tuple[HTTPStatus, dict]:
             count = int(raw_count)
         except (TypeError, ValueError):
             _refuse(HTTPStatus.BAD_REQUEST, "count_invalid",
-                    f"count was {raw_count!r}; send a whole number, or omit it to take the lane.")
+                    f"The count {raw_count!r} is not a whole number. Send a whole number, or leave it out to take the lane.")
         if count < 1:
-            _refuse(HTTPStatus.BAD_REQUEST, "count_invalid", "count is 1 or higher.")
+            _refuse(HTTPStatus.BAD_REQUEST, "count_invalid", "The count is 1 or higher.")
 
     body = {
         "lane": lane,
@@ -257,8 +256,7 @@ def do_codes_export(payload: dict) -> Tuple[HTTPStatus, dict]:
     order_id = str(payload.get("order_id") or "").strip()
     if not order_id:
         _refuse(HTTPStatus.BAD_REQUEST, "order_id_required",
-                "a confirmed export assigns codes to an order, so it needs an order_id. "
-                "Any string you can find the sale by later will do.")
+                "A confirmed export assigns codes to an order, so it needs an order id. Any text you can find the sale by later will do.")
     if len(pool) < count:
         _refuse(HTTPStatus.CONFLICT, "not_enough_codes",
                 f"{count} asked for, {len(pool)} sellable in the {lane} lane"
@@ -338,17 +336,16 @@ def do_codes_lot(payload: dict) -> Tuple[HTTPStatus, dict]:
             box = int(box)
         except (TypeError, ValueError):
             _refuse(HTTPStatus.BAD_REQUEST, "box_invalid",
-                    f"box was {payload.get('box')!r}; send a whole number.")
+                    f"The box {payload.get('box')!r} is not a whole number.")
     count = payload.get("count")
     if count is not None:
         try:
             count = int(count)
         except (TypeError, ValueError):
             _refuse(HTTPStatus.BAD_REQUEST, "count_invalid",
-                    f"count was {payload.get('count')!r}; send a whole number, or omit it "
-                    "to take the whole box.")
+                    f"The count {payload.get('count')!r} is not a whole number. Send a whole number, or leave it out to take the whole box.")
         if count < 1:
-            _refuse(HTTPStatus.BAD_REQUEST, "count_invalid", "count is 1 or higher.")
+            _refuse(HTTPStatus.BAD_REQUEST, "count_invalid", "The count is 1 or higher.")
 
     # `premium` defaults to False — a lot is a BULK lot unless somebody says otherwise,
     # which is the safe default given that the expensive mistake on this track runs in
