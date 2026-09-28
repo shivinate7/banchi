@@ -548,6 +548,9 @@ what `docs/DESIGN.md` refuses in as many words.
   as its accessible description only (`aria-describedby`, screen-reader text).
 - **Closed Rarity row: bars only.** The picked names are screen-reader text in the row's
   accessible name; the open picker lists every rarity by name, unchanged.
+- **Clear (RIG) asks first.** The sentence under the button is gone. Pressing Clear opens the
+  kit's `ConfirmSheet` with that sentence and a "Clear" button; Esc cancels, Enter confirms,
+  only confirm clears (toast Undo stays). Clear has no key binding, so `SHORTCUTS` is unchanged.
 
 ## 6. trigger-seam
 

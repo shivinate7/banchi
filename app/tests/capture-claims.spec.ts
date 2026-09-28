@@ -1368,6 +1368,7 @@ test('clearing the setup empties every claim, forgets the key, and can be undone
   const clear = page.getByRole('button', { name: 'Clear' })
   await expect(clear).toBeEnabled()
   await clear.click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Clear' }).click()
 
   await expect(page.locator('.capture-box-val')).toContainText('None')
   await expect(page.locator('.capture-row').filter({ hasText: /Set hint/ })).toContainText('None')
@@ -1395,6 +1396,34 @@ test('clearing the setup empties every claim, forgets the key, and can be undone
   await expect(page.locator('.capture-row').filter({ hasText: /Box/ })).toContainText('Epics')
   await expect(page.locator('.capture-row').filter({ hasText: /Set hint/ })).toContainText('MEG')
   expect(await storedSetup(page)).toMatchObject({ box: 3, setHint: 'MEG', finish: ['normal'] })
+})
+
+test('Clear asks first: cancel and Esc change nothing, confirm and Enter clear', async ({
+  page,
+}) => {
+  await open(page, { box: 3, bid: 23, setHint: 'MEG', finish: ['normal'] }, GAMES, HAND_BOXES)
+  const dialog = page.getByRole('alertdialog')
+  const hintRow = page.locator('.capture-row').filter({ hasText: /Set hint/ })
+
+  // The sentence moved into the confirmation; nothing is written under the button.
+  await expect(page.locator('.capture-clear')).not.toContainText('Resets the box')
+  await page.getByRole('button', { name: 'Clear' }).click()
+  await expect(dialog).toContainText('Resets the box, game, and claims. The camera, rotation, and store are untouched.')
+
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(hintRow).toContainText('MEG')
+  expect(await storedSetup(page)).toMatchObject({ box: 3, setHint: 'MEG' })
+
+  await page.getByRole('button', { name: 'Clear' }).click()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(hintRow).toContainText('MEG')
+
+  await page.getByRole('button', { name: 'Clear' }).click()
+  await page.keyboard.press('Enter')
+  await expect(dialog).toHaveCount(0)
+  await expect(hintRow).toContainText('None')
 })
 
 test('the clear is disabled while there is nothing to clear, rather than absent', async ({

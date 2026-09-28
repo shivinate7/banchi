@@ -55,7 +55,7 @@ import { captureBoxLabel } from './runScope'
 // The one thing this screen takes from the library drawing: how long a pause has to be
 // before it is a different sitting. Imported rather than restated — see `sitting` below.
 import { GAP_MINUTES } from './storeHistory'
-import { Button, Icon, IconButton, Kbd, Notice, Page, Pill, Stat } from './kit'
+import { Button, ConfirmSheet, Icon, IconButton, Kbd, Notice, Page, Pill, Stat } from './kit'
 import { matchQuery } from './kit/match'
 import { toast } from './kit/toast'
 import { placePartsOf } from './position'
@@ -2214,12 +2214,10 @@ export function CaptureScreen() {
 
   /** ONE PRESS PUTS THE SETUP BACK TO NOTHING CHOSEN (D142).
    *
-   *  THE OWNER ASKED FOR IT IN FOUR WORDS: *"a quick clear all settings button"*. Quick is a
-   *  requirement, so there is no confirmation dialog: the press clears, the screen visibly goes
-   *  back to its empty state, and a receipt toast carries the way back. That is the shape D28
-   *  settled for the review answer — act, receipt, undo — and it is the right one here for the
-   *  same reason: a confirmation ahead of a reversible act buys nothing and costs a press every
-   *  single time.
+   *  THE OWNER ASKED FOR IT IN FOUR WORDS: *"a quick clear all settings button"*. Since
+   *  2026-09-28 (owner's ruling) the press asks first — `clearOpen`, a `ConfirmSheet` carrying
+   *  the sentence that used to sit under the button — and this runs only on confirm. The
+   *  receipt toast with Undo stays.
    *
    *  IT CLEARS CHOICES ABOUT CARDS, AND LEAVES THE RIG ALONE. Box, game, set hint, rarity,
    *  finish and product are things the operator decided about the stack in front of them, and
@@ -2241,6 +2239,7 @@ export function CaptureScreen() {
    *  null would leave the screen drawing *"Waiting for the game list from the server"* — the
    *  blocked reason for a registry that has not arrived — which would be a sentence that is
    *  simply untrue, about a fetch that finished minutes ago. */
+  const [clearOpen, setClearOpen] = useState(false)
   const clearSetup = useCallback(() => {
     const before: CaptureSetup = { box, bid: boxBid, game, setHint, finish, rarityClaim, product }
     setBox(null)
@@ -2282,6 +2281,21 @@ export function CaptureScreen() {
       },
     })
   }, [box, boxBid, game, setHint, finish, rarityClaim, product, registry, closeField])
+
+  /* ENTER CONFIRMS THE CLEAR (owner, 2026-09-28; Esc is the sheet's own). First focus is
+     Cancel, whose native Enter would cancel, so this takes Enter first, in the capture phase. */
+  useEffect(() => {
+    if (!clearOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter') return
+      event.preventDefault()
+      event.stopPropagation()
+      setClearOpen(false)
+      clearSetup()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [clearOpen, clearSetup])
 
   /* WHAT ENTER DOES, which is a POLICY and not a control: take the top row if there is one,
      and otherwise make what the offer names. That ordering is what keeps typing `com` from
@@ -5568,19 +5582,24 @@ export function CaptureScreen() {
               block
               icon="eraser"
               words="not-in-vocabulary"
-              onClick={clearSetup}
+              onClick={() => setClearOpen(true)}
               disabled={!setupChosen}
             >
               Clear
             </Button>
-            {/* TXT-31 (density): "Nothing to clear." under a disabled button said nothing the
-                disabled state had not already said. The sentence now only earns its place
-                when there is something to explain. */}
-            {setupChosen ? (
-              <p className="capture-opennote capture-clear-note">
-                Resets the box, game, and claims. The camera, rotation, and store are untouched.
-              </p>
-            ) : null}
+            <ConfirmSheet
+              open={clearOpen}
+              tone="primary"
+              title="Clear the setup?"
+              confirmLabel="Clear"
+              onClose={() => setClearOpen(false)}
+              onConfirm={() => {
+                setClearOpen(false)
+                clearSetup()
+              }}
+            >
+              <p>Resets the box, game, and claims. The camera, rotation, and store are untouched.</p>
+            </ConfirmSheet>
           </div>
         </section>
 
