@@ -47,14 +47,26 @@ Each item gets an id, `F<n>`, and one line here. The line names its route:
 - `logged`: a new lane that waits for the owner's word.
 - `own lane <X>`: the owner named it, so it is dispatched at once.
 
-- F1 (logged, diagnosis running): Inventory, Sets shows two "Unleashed" sets. The one with 99
-  cards has no photos. Owner: `why does this 99 card set of unleashed even exist?`
-- F2 (logged, diagnosis running): Sales draws "No photo" where Sets and Pricing draw stock card
-  images.
-- F3 (own lane, running): a blind Sonnet agent reviews the demo's Pricing screen and proposes
-  filters. Owner: `ask it what filters would be nice to have / optimal for an end user`.
+- F1 (own lane F1, running): Inventory, Sets shows two "Unleashed" sets. The one with 99 cards
+  has no photos. Owner: `why does this 99 card set of unleashed even exist?` Cause: 99 cards in
+  box 5 were born by `cli/cmd_emit.py:_stamp_single` with no game. The stock photo lookup refuses
+  an empty game. Owner chose a code fix plus a one-off repair that the owner runs.
+- F2 (own lane F2photos, running): Sales draws "No photo" where Sets and Pricing draw stock card
+  images. Cause: Sales asks only for the owner's own photo of an on-hand copy. Owner chose the
+  stock photo fallback, `including Pokemon sealed`. It amends one D298 sentence.
+- F3 (done, waiting for the owner's word): a blind Sonnet agent reviewed the demo's Pricing
+  screen. Owner: `ask it what filters would be nice to have / optimal for an end user`. Its
+  ranked list: a name search, a price-column sort, a set and game filter, and price-band chips.
+  It also found that "10 held" and "Held 15" disagree on one screen.
 - F4 (to lane D's plan): an odd gap on Capture's top, below the subheading. It was recorded
   nowhere. Capture's old top-gap exception left the allow-list earlier, so the gap may follow.
+- F5 (own lane, running): a blind Sonnet agent lists every multi-word string on every screen.
+  Each gets DELETE or ONE WORD, with no option to keep a phrase (the owner's rule).
+- F6 (logged): the owner asked whether one spacing mandate covers every kind of spacing. The
+  scale exists (`--bn-1` to `--bn-10` on a 4px base, plus the page width and top gap, D272).
+  `make token-literal-check` catches only a literal equal to a token. About 327 raw px margins,
+  paddings and gaps remain, and an off-scale value (10px, 14px) passes. No rule says which step
+  serves which relation.
 
 ## PR 3B: the demo data follow-up (DONE, 2026-09-27)
 
