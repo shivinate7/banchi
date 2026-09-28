@@ -70,7 +70,8 @@ PASS, with `cd app && npx tsc --noEmit` at the merge.
 | G | `ux/pr4b-G` | Every staged image gets the QR scan, fail closed. `claim-selftest` skips ignored files. The tsc out-of-memory cause | Merged (73037a92). The tsc premise no longer held. |
 | L2 | `ux/pr4b-L2` | Cut `ste offenders`. Identifier spelling reads staged files only and learns markdown. S3, S4 | Building. Then a review. Then L4, L8, L12. |
 | R | `ux/pr4b-R` | `make reap` stops only processes tagged with the caller's id | Building. Then a review. |
-| F9 | `ux/pr4b-F9` | Empty sections leave the Inventory walk | Reported at 04661648. In review. It also hides a sold-out section: the wire cannot tell it from an empty one. |
+| F9 | `ux/pr4b-F9` | Empty sections leave the Inventory walk | Review FAIL: the box header still drew the empty section, and no test sold a section's last card. Back with the builder. |
+| F10 | `ux/pr4b-F10` | Search: a complete word ("punch first", "body rune") finds nothing, and a partial word finds the card | Diagnosing. Then a review. |
 | A4 | `ux/pr4b-A4` | Walk rows carry `CardLocations` rows | Building. Then a review. Then A5. |
 | H | `ux/h-record` | Eight many-color palettes, the sheet and the method | Its own deferred PR. The screenshots join after G merges. |
 | Q1 tiers | merged | A proposed tier for each docs-audit row: `docs/reviews/test-audit-2026-09-27/TIERS.md`. 65 Tier 1, 22 Tier 2, 13 Tier 3, 9 CUT, 7 unsure. | Waiting for the owner, together with Q8's merge families (PLAN.md item M3). No docs-audit lane starts before that. |
@@ -202,6 +203,7 @@ Lane D and the feedback items:
   with no repo home a real home: a debt, a spec or a decision entry. It also proposes
   global-rule sentences for the owner. After it merges, `autoMemoryEnabled: false` goes into the project's
   `.claude/settings.json`. The session scratchpad is the per-session note file.
+- F10 (2026-09-28), the owner's report: `if i type let's say punch first, or body rune (fully) then it shows no searches found, but if i type body run or punch firs then it does show up`.
 - F5 and D276 (2026-09-27): `Keep "Go to" (Recommended)`. The palette keeps its D276 name.
 - F5: `Approved on cutting everything from F5`, `rest are good to cull`, and for Review's line
   `middle option approved for the cut mismatch+data`.
