@@ -50,22 +50,33 @@ const auditSource = (mode: Mode) => `(() => {
      behind it, so a sweep of the whole document while the drawer is open reports the tab bar,
      the brand and every stage card as unpressable — which is true, and is the modal working.
      The first run of this file said exactly that, in five confident lines. */
-  /* THE LAST MATCH, NOT THE FIRST (found 2026-09-27, the ReviewQueue R2-dialog lane): a layer
-     opened INSIDE another (D291's own runs-composer-over-the-runs-sheet case, and kit-frame-2's
-     own rule that a nested layer paints on top even opened in the same commit) is a SECOND
-     match for this selector, portalled after the first and so LATER in document.body's own
-     children. querySelector took the FIRST match regardless -- the outer, now-covered layer --
-     so a sweep over two nested layers audited the one a thumb cannot reach at all and never the
-     one on top. This went unseen for as long as ReviewQueue.tsx's own re-check sheet happened
-     to sit in the DOM from first paint (a hand-rolled aside, hidden attribute, never removed,
-     always first): that accidental decoy was always querySelector's own first match, so this
-     file's over never actually pointed at a REAL nested pair until that sheet moved onto the
-     kit's Sheet component (which mounts nothing until open) and stopped supplying one. The last
-     match is the one most recently portalled, which is the one on top by construction of every
-     layer this product opens. */
+  /* THE HIGHEST Z-INDEX, NOT THE LAST MATCH (found 2026-09-27, the ReviewQueue R2-dialog lane;
+     corrected the same day). A layer opened INSIDE another (D291's own runs-composer-over-the-
+     runs-sheet case, "Check first") is a SECOND match for this selector, and querySelector took
+     the FIRST match regardless -- the outer, now-covered layer -- so a sweep over two nested
+     layers audited the one a thumb cannot reach at all and never the one on top. This went
+     unseen for as long as ReviewQueue.tsx's own re-check sheet happened to sit in the DOM from
+     first paint (a hand-rolled aside, hidden attribute, never removed, always first): that
+     accidental decoy was always querySelector's own first match, so this file's over never
+     actually pointed at a REAL nested pair until that sheet moved onto the kit's Sheet component
+     (which mounts nothing until open) and stopped supplying one.
+     "LAST IN THE DOM" WAS THE FIRST FIX, AND IT IS ALSO WRONG. kit/overlay.tsx's own comment
+     names the exact case: "A layer drawn inside another layer sits above it, EVEN WHEN BOTH OPEN
+     IN ONE COMMIT (the runs fold, D291). React runs a child's layout effects before its parent's,
+     so a Dialog mounted in the same commit as the Sheet around it joined the stack FIRST" -- so
+     the composer's own DOM node lands BEFORE the Runs sheet's, not after, on "Check first" (both
+     open together). The one fact that IS always true is kit/overlay.tsx's own layerZ/restack:
+     every layer's root carries its real stack position as an inline z-index, recomputed on
+     every insertion regardless of DOM order. Reading that is what "on top" actually means here --
+     DOM order only breaks a tie between two layers at the same depth, which never happens in
+     this product (each depth is its own pair of z-indices). */
+  const layerZ = (el) => parseInt(getComputedStyle(el).zIndex, 10) || 0
   const over = document.querySelector('.bn-scrim') === null
     ? document
-    : [...document.querySelectorAll('.bn-cmdk, .bn-drawer, .bn-sheet, .bn-dialog')].pop() ?? document
+    : [...document.querySelectorAll('.bn-cmdk, .bn-drawer, .bn-sheet, .bn-dialog')].reduce(
+        (top, el) => (top === null || layerZ(el) >= layerZ(top) ? el : top),
+        null,
+      ) ?? document
   /* THE SHELL'S OWN FIXED CHROME IS NOT AN OBSTRUCTION. Content scrolls UNDER the top bar and
      the tab bar by design: .bn-shell-main pads its foot by the tab bar's height plus the safe
      area precisely so anything can be scrolled clear of them. A sticky bar INSIDE the scroller is
@@ -437,6 +448,69 @@ test('the sheets and menus a phone opens hold the floor too', async ({ page }) =
     failures.push(...(await sweep(page, "runs' composer sheet")))
   }
 
+  expect(failures, failures.join('\n')).toEqual([])
+})
+
+/* "CHECK FIRST" IS THE ONE-COMMIT CASE, PROVED HERE RATHER THAN ASSUMED (found 2026-09-27,
+ * reviewing the fix above). The sweep test just above opens the Runs sheet FIRST, on its own
+ * press, and only opens the composer on a SECOND press over it -- two commits, so the DOM
+ * order and the z-order happen to agree there and neither the old bug nor a DOM-order "fix"
+ * would have been caught by it. `openRuns(true)` (ReviewQueue.tsx) sets `runsOpen` and
+ * `runsCompose` together, in ONE state update, so the Runs sheet and its composer both mount
+ * in ONE React commit -- the exact case kit/overlay.tsx's own comment names: "a Dialog mounted
+ * in the same commit as the Sheet around it joined the stack FIRST", i.e. the composer's own
+ * DOM node lands BEFORE the sheet's. A "last match" reading of `over` would score this
+ * backwards. review.spec.ts:1612 already proves the CLICK reaches the composer, not the sheet,
+ * at desktop width; this proves the THUMB-FLOOR SWEEP scopes to it too, at 390. */
+test('"Check first" mounts the composer over the runs sheet in one commit, and the sweep reaches it', async ({ page }) => {
+  await page.setViewportSize(PHONE)
+  // Newer than sealEveryTest's own /status and /pipeline/runs stubs, so these win (Playwright
+  // matches most-recently-registered first) -- only the two facts this case needs: a captured
+  // count so the strip offers "Check first" at all, and an answer for the list it prices.
+  await page.route(/\/status$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        captures_root: 'captures',
+        store: 'inventory/store.sqlite',
+        store_exists: true,
+        cards: 122,
+        states: { captured: 12 },
+        queues: { review: 0, parked: 0 },
+        next_index: {},
+      }),
+    }),
+  )
+  await page.route(/\/pipeline\/waiting$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ keys: Array.from({ length: 12 }, (_, at) => `9/${at + 1}`), claimed: 0 }),
+    }),
+  )
+  await page.route(/\/pipeline\/runs$/, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runs: [] }) }),
+  )
+
+  /* THE ROUTE COMES OFF THE DRAWER, NOT A TYPED HASH (docs-audit's `route rosters` row):
+     the same harvest and the same `find` shape the sweep test above this one already uses. */
+  const routes = await phoneRoutes(page)
+  const find = (tail: string) => {
+    const hit = routes.find((h) => h.endsWith(tail))
+    expect(hit, `no route ending ${tail} in the drawer's own roster`).toBeDefined()
+    return hit as string
+  }
+  await page.goto(find('/review'))
+  await page.waitForTimeout(400)
+  await page.locator('.review-identify-open').click()
+  // Both layers ARE open (D291's own "opened in the same commit" case) -- this is the fact the
+  // sweep below has to get right, not a precondition to relax away.
+  await expect(page.locator('.runs-composer')).toBeVisible()
+  await expect(page.locator('.review-runs-sheet')).toBeVisible()
+  await page.waitForTimeout(300)
+
+  const failures = await sweep(page, 'the "Check first" composer, opened in the same commit as the runs sheet')
   expect(failures, failures.join('\n')).toEqual([])
 })
 
