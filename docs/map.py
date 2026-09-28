@@ -2277,8 +2277,8 @@ COMPONENTS = [
                 # after it drifts, which is why an edit has to be stopped and not caught.
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
-                "governed_by": ["D11", "D14", "D16", "D18", "D44", "D47", "D58", "D70", "D92",
-                                "D295"],
+                "governed_by": ["D11", "D14", "D16", "D18", "D24", "D44", "D47", "D58", "D70",
+                                "D92", "D295", "D-every-image-is-scanned"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; a sibling "
                         "hook's arrival is caught by `hook roster` since 2026-09-05. "
@@ -2595,8 +2595,8 @@ COMPONENTS = [
                 # violating it, so wired into the commit path it would refuse its own commits.
                 # D43 and D53 join with D139: the cases turn on a linked worktree having its own
                 # store, and on the primary checkout being the one the live server is built from.
-                "governed_by": ["D18", "D42", "D43", "D53", "D139", "D151",
-                                "D158", "D176"],
+                "governed_by": ["D18", "D42", "D43", "D53", "D139", "D151", "D158", "D176",
+                                "D-every-image-is-scanned"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -3954,9 +3954,8 @@ COMPONENTS = [
                 # split `--unclaim` and the fixed `stale_claims` both have to read through; D186
                 # and D188 are the real, landed entries the incident this file's own docstring
                 # narrates is about.
-                "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
-                                "D140", "D151", "D160", "D182", "D185", "D186", "D188",
-                                "D190"],
+                "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135", "D140", "D151",
+                                "D160", "D182", "D185", "D186", "D188", "D190", "D295"],
             },
             "catalog-refresh.py": {
                 "does": "build-order step 9, piece 1 (D15): shallow-clone "
@@ -4056,7 +4055,7 @@ COMPONENTS = [
                 # the incident arm's own prose names the two real, landed entries it replays.
                 "governed_by": ["D1", "D2", "D16", "D18", "D47", "D80", "D135", "D136", "D140",
                                 "D141", "D143", "D148", "D151", "D160", "D185", "D186", "D188",
-                                "D190", "D249"],
+                                "D190", "D249", "D295"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
