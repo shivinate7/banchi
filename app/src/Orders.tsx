@@ -940,12 +940,15 @@ function verdictOf(open: readonly OrderRow[], resolved: readonly ResolvedOrder[]
   /* The breakdown adds nothing where every copy is pickable (`short` and `elsewhere` both
    * zero, so `pick === owed`) — it would only repeat the number the sentence already gives.
    * It is said only where it explains something the plain sentence does not. */
-  const parts = short > 0 || elsewhere > 0 ? [`${pick} to pick`] : []
+  /* F5 verbiage cut: the reviewer's own "Status" word would drop the four-way split this
+     line is the only place to see broken out, which the data rule refuses — every number
+     stays, as a short labeled figure, never a bare word standing in for all of them. */
+  const parts = short > 0 || elsewhere > 0 ? [`${pick} pick`] : []
   if (short > 0) parts.push(`${short} short`)
-  if (elsewhere > 0) parts.push(`${elsewhere} not in the store`)
+  if (elsewhere > 0) parts.push(`${elsewhere} missing`)
   return (
     <>
-      <strong>{owed}</strong> {plural(owed, 'copy', 'copies')} owed to <strong>{buyers}</strong> {plural(buyers, 'buyer', 'buyers')}
+      <strong>{owed}</strong> owed, <strong>{buyers}</strong> {plural(buyers, 'buyer', 'buyers')}
       {parts.length === 0 ? null : (
         <>
           {' — '}
@@ -3275,7 +3278,7 @@ function PullStage({
           setWalkTicked(allTicked ? new Set() : new Set(tickableKeys))
         }}
       >
-        {allTicked ? 'Stop walking all' : `Walk all ${tickableKeys.size} buyers`}
+        {allTicked ? 'Stop' : `Walk ${tickableKeys.size}`}
       </Button>
     )
   const readyFirst = sortedReadyFirst(shownGroups, readyOf)
@@ -3284,7 +3287,7 @@ function PullStage({
     <>
       {walkAll === null && !readyFirst ? null : (
         <div className="orders-buyers-head">
-          {readyFirst ? <span className="orders-buyers-note">Ready to ship first</span> : <span />}
+          {readyFirst ? <span className="orders-buyers-note">Ready</span> : <span />}
           {walkAll}
         </div>
       )}
@@ -3382,7 +3385,7 @@ function PullStage({
             )}
             <span className="bn-spacer" />
             <HideToggle checked={hideSold} onChange={setHideSold} count={walk.soldKeys.size}>
-              Hide picked
+              Picked
             </HideToggle>
           </div>
           <WalkList walk={walk} hideSold={hideSold} collapsed={sectionsCollapsed} owedBySku={owedBySku} showBuyers={walkedGroups.length > 1} />
@@ -3552,8 +3555,8 @@ function figuresOf(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
  *  ("N cards need a look"), naming no single one of them wrongly. */
 function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder>): string {
   const words: Partial<Record<OrderLineReason, string>> = {
-    sku_unseen: 'not in the store',
-    sku_unknown: 'not in the store',
+    sku_unseen: 'missing',
+    sku_unknown: 'missing',
     no_copies_on_hand: 'short',
     short: 'short',
     not_a_single: 'sealed',
@@ -3571,9 +3574,9 @@ function lookWords(group: BuyerGroup, answers: ReadonlyMap<string, ResolvedOrder
   const only = entries.length === 1 ? entries[0] : undefined
   if (only !== undefined) {
     const [word, count] = only
-    return word === 'short' ? `${count} short` : `${count} ${plural(count, 'card', 'cards')} ${word}`
+    return word === 'short' || word === 'missing' ? `${count} ${word}` : `${count} ${plural(count, 'card', 'cards')} ${word}`
   }
-  return `${total} ${plural(total, 'card', 'cards')} need a look`
+  return `${total} review`
 }
 
 /** The one status a buyer shows, in words. */
@@ -3738,15 +3741,10 @@ function OrderDetail({
           placed {placed}
         </time>
       )}
-      <span className="orders-feed-word">
-        {order.status === null ? (
-          sourceName(order.source)
-        ) : (
-          <>
-            {sourceName(order.source)} says <q>{order.status}</q>
-          </>
-        )}
-      </span>
+      {/* F5 verbiage cut: the marketplace's own status quote restated the status pill above
+          it a second time (row 111) — this now just names the marketplace, as the null-status
+          case already did. */}
+      <span className="orders-feed-word">{sourceName(order.source)}</span>
     </span>
   )
 
@@ -3832,7 +3830,7 @@ function OrderDetail({
             <>All {order.wanted} sold</>
           ) : (
             <>
-              <b>{order.wanted - order.recorded}</b> {order.wanted - order.recorded === 1 ? 'copy' : 'copies'} still to sell
+              <b>{order.wanted - order.recorded}</b> remaining
               {order.recorded === 0 ? null : <i>{order.recorded} already sold</i>}
             </>
           )}

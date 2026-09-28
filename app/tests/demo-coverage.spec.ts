@@ -178,7 +178,7 @@ test.describe('the published demo draws what reviewers grade', () => {
   test.afterEach(async ({ page }, testInfo) => {
     if (testInfo.status === 'passed') return
     if (testInfo.title !== 'Orders draws a walk') return
-    const walkAll = page.getByRole('button', { name: /^Walk all \d+ buyers?$/ })
+    const walkAll = page.getByRole('button', { name: /^Walk \d+$/ })
     const walkAllCount = await walkAll.count().catch(() => -1)
     const walkAllLabel =
       walkAllCount > 0
@@ -196,8 +196,8 @@ test.describe('the published demo draws what reviewers grade', () => {
       .innerText({ timeout: 3_000 })
       .catch((exc) => `<could not read main: ${String(exc).slice(0, 200)}>`)
     console.log('=== Orders draws a walk: failure evidence ===')
-    console.log('"Walk all N buyers" button count:', walkAllCount)
-    console.log('"Walk all N buyers" button label:', walkAllLabel)
+    console.log('"Walk N" button count:', walkAllCount)
+    console.log('"Walk N" button label:', walkAllLabel)
     console.log(`"${REFUSAL}" count:`, refusalCount)
     console.log('console/pageerror during this test:', ordersConsole.length === 0 ? '<none>' : '')
     for (const line of ordersConsole) console.log(' ', line)
@@ -328,7 +328,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     // STALE, REWRITTEN 2026-09-27 (D295 full mirror, plus an unrelated aria-label rename):
     // no order is ticked by default, and nothing named "cards this walk covers" exists any
     // more — `OrdersWalkPane.tsx:WalkList`'s list is now "The cards to pick, in the order
-    // the boxes are walked". Press "Walk all N buyers" first (the demo-mirror-data-build
+    // the boxes are walked". Press "Walk N" first (the demo-mirror-data-build
     // lane's walk-plan fix records exactly this "walk all" set), then read the current list.
     //
     // THE PRIOR FIX (CI run 36314954311) RAISED THE WRONG TIMEOUT. Pressing "Walk all"
@@ -342,7 +342,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     // is the knob that actually needed raising.
     test.setTimeout(60_000)
     await visit(page, 'Orders')
-    await page.getByRole('button', { name: /^Walk all \d+ buyers?$/ }).first().click()
+    await page.getByRole('button', { name: /^Walk \d+$/ }).first().click()
     const walk = page.getByRole('list', { name: /cards to pick/i })
     await expect(walk).toBeVisible({ timeout: 45_000 })
     // DEBT23's shape: the list container appearing does not mean its rows have. A bare
