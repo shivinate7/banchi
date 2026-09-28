@@ -2260,16 +2260,18 @@ COMPONENTS = [
         "modules": {
             # ---- the commit path. D18's rule is not advice here; this IS the path ----
             "githooks/pre-commit": {
-                "does": "the commit gate: fixtures read-only, no image staged outside "
-                        "captures/, no iCloud Drive conflict copy (`foo 2.py`) staged while "
-                        "the repo still lives there, no printed code-card layout in the "
-                        "staged diff, no symlink whose target leaves the repository (D47 — "
-                        "a tracked absolute link points at itself in the tree it names, and "
-                        "checking it out removes the ignored real directory), then "
-                        "the docs audit — whose exit code it maps, 1 blocking, 2 printing "
-                        "the coupling question, 64 warning loudly that the auditor was "
-                        "invoked with a flag it does not accept. Tracked and reviewable "
-                        "through core.hooksPath rather than living unversioned inside git.",
+                "does": "the commit gate: fixtures read-only, every staged image outside "
+                        "captures/ decoded for a QR and refused on a decode or an unavailable "
+                        "scanner (`PKMNSCAN_QR=off` is the hatch), no iCloud Drive conflict "
+                        "copy (`foo 2.py`) staged while the repo still lives there, no "
+                        "printed code-card layout in the staged diff, no symlink whose target "
+                        "leaves the repository (D47 — a tracked absolute link points at "
+                        "itself in the tree it names, and checking it out removes the "
+                        "ignored real directory), then the docs audit — whose exit code it "
+                        "maps, 1 blocking, 2 printing the coupling question, 64 warning "
+                        "loudly that the auditor was invoked with a flag it does not accept. "
+                        "Tracked and reviewable through core.hooksPath rather than living "
+                        "unversioned inside git.",
                 # D18 binds this file harder than any other in the repo: it is the path
                 # that decides whether a commit proceeds, so "nothing that writes may run
                 # here" is a property to preserve rather than a principle to admire. D11
@@ -2277,8 +2279,8 @@ COMPONENTS = [
                 # after it drifts, which is why an edit has to be stopped and not caught.
                 # D14 is why a code-shaped literal is worth a rule at all: the other track
                 # on the shared rig handles bearer instruments.
-                "governed_by": ["D11", "D14", "D16", "D18", "D44", "D47", "D58", "D70", "D92",
-                                "D295"],
+                "governed_by": ["D11", "D14", "D16", "D18", "D24", "D44", "D47", "D58", "D70",
+                                "D92", "D295", "D-every-image-is-scanned"],
                 "note": "THE ORPHAN RULE CANNOT SEE THIS FILE — it has no suffix to "
                         "declare. Listed, so its absence would be a finding; a sibling "
                         "hook's arrival is caught by `hook roster` since 2026-09-05. "
@@ -2595,8 +2597,8 @@ COMPONENTS = [
                 # violating it, so wired into the commit path it would refuse its own commits.
                 # D43 and D53 join with D139: the cases turn on a linked worktree having its own
                 # store, and on the primary checkout being the one the live server is built from.
-                "governed_by": ["D18", "D42", "D43", "D53", "D139", "D151",
-                                "D158", "D176"],
+                "governed_by": ["D18", "D42", "D43", "D53", "D139", "D151", "D158", "D176",
+                                "D-every-image-is-scanned"],
             },
             "lan-check.py": {
                 "does": "answers whether the owner's LAN URL still works, end to end and from "
@@ -3954,9 +3956,8 @@ COMPONENTS = [
                 # split `--unclaim` and the fixed `stale_claims` both have to read through; D186
                 # and D188 are the real, landed entries the incident this file's own docstring
                 # narrates is about.
-                "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135",
-                                "D140", "D151", "D160", "D182", "D185", "D186", "D188",
-                                "D190"],
+                "governed_by": ["D16", "D18", "D42", "D47", "D72", "D80", "D135", "D140", "D151",
+                                "D160", "D182", "D185", "D186", "D188", "D190", "D295"],
             },
             "catalog-refresh.py": {
                 "does": "build-order step 9, piece 1 (D15): shallow-clone "
@@ -4056,7 +4057,7 @@ COMPONENTS = [
                 # the incident arm's own prose names the two real, landed entries it replays.
                 "governed_by": ["D1", "D2", "D16", "D18", "D47", "D80", "D135", "D136", "D140",
                                 "D141", "D143", "D148", "D151", "D160", "D185", "D186", "D188",
-                                "D190", "D249"],
+                                "D190", "D249", "D295"],
             },
             "docs-audit-allow.txt": {
                 "does": "paths and identifiers the docs name before they exist, one "
@@ -5915,7 +5916,7 @@ COMPONENTS = [
                                    "governed_by": ["D5", "D94", "D102"]},
             "public/manifest.webmanifest": {"does": "the web app manifest, and it does TWO jobs. It began as an icon manifest — `apple-touch-icon` pointed at an SVG, which iOS does not render, so the app had no home-screen icon at all rather than a degraded one. Since D108 it is also what makes Chrome's `Install page as app` produce a real dock app: `display: standalone`, and `launch_handler: focus-existing` so a second press on the dock icon focuses the open window instead of opening another. EVERY URL IN IT IS RELATIVE, and that is a correctness fix rather than a style: Vite rebases the `<link rel=\"manifest\">` address and copies app/public/ VERBATIM, so a site-absolute `/icon-192.png` is right at `/` and 404s under `make demo-static`'s `/pkmnscan/` base — measured against the published demo, icons and start_url both. ITS ICON LIST IS THE macOS APP ICON SET AND NOTHING ELSE (logo.md section 17): three PNGs, all inset to Apple's 824/1024 grid, because Chrome resizes THESE into the installed app's .icns and one full-bleed entry would pad the dock icon at one size and not the next. `favicon.svg` was removed from it for exactly that reason and is still the tab icon by `<link rel=\"icon\">`. Still NO service worker and no offline story; the page is served by `make up` and there is nothing to cache.",
                                             "governed_by": ["D94", "D102", "D108"]},
-            "public/icon-180.png": {"does": "the apple-touch-icon, and the ONE raster that is NOT inset to the macOS grid (logo.md section 17) — iOS applies its own mask to a full-bleed square, so insetting would put the mark in a box inside a box. The DISPLAY cut because 180px is squarely inside the range section 3 locks for 64px and up — taper and holographic foil, not the favicon's small cut. GENERATED by `node scripts/build-mark.mjs --icons`, which needs Playwright and is deliberately behind a flag: committing what it writes needs `--no-verify`, since the pre-commit image guard refuses any .png outside captures/ and has no PKMNSCAN_*=off hatch.",
+            "public/icon-180.png": {"does": "the apple-touch-icon, and the ONE raster that is NOT inset to the macOS grid (logo.md section 17) — iOS applies its own mask to a full-bleed square, so insetting would put the mark in a box inside a box. The DISPLAY cut because 180px is squarely inside the range section 3 locks for 64px and up — taper and holographic foil, not the favicon's small cut. GENERATED by `node scripts/build-mark.mjs --icons`, which needs Playwright and is deliberately behind a flag: the pre-commit image guard now QR-scans any .png staged outside captures/ (`PKMNSCAN_QR=off` is its hatch) rather than refusing on sight, so a generated icon clears it on a clean decode with no override needed.",
                                     "governed_by": ["D94", "D102"]},
             "public/icon-192.png": {"does": "the manifest's smallest icon, INSET to Apple's macOS icon grid like the rest of that set (logo.md section 17) — 155 of 192, which is 80.73% against the grid's 80.47%, the rounding. Same drawing and same generator as icon-180.png; what differs is that it is drawn smaller on a transparent canvas, because section 3 locks the tile and nothing may redraw it.",
                                     "governed_by": ["D94", "D102", "D108"]},
