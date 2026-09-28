@@ -120,7 +120,7 @@ stale dev-server enforcement and two parent-guard bugs.
 
 - Q1's tier list: an agent is proposing a tier per docs-audit row, for the owner to approve.
 - Q5, Q6 and Q8 from the test-audit plan.
-- Q7 is the owner's own act: turn GitHub's required status checks on again.
+- Q7 is closed (2026-09-27). The owner turned on the required checks `check` and `revert-guard` on main, with strict off. Read back from the GitHub API.
 - Merge the small PR that fixes main's red?
 - The cadence rule's home waits for the test-audit rulings. The two NOT MECHANIZED rules
   outside CLAUDE.md's Hard rules block are deferred.
