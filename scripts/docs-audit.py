@@ -169,6 +169,29 @@ class Row(NamedTuple):
     scanned: Optional[int] = None
 
 
+def _merge_rows(name: str, rows: "List[Row]") -> Row:
+    """Combine several sub-checks' verdicts into the one row the report prints.
+
+    M3 (test-audit-2026-09-27, L8): several rows that reconcile the same kind of
+    fact — the logo family, the vocabulary family, and a handful of pairs — are one
+    printed row now, never more code or a lighter check. Each sub-check keeps its
+    own function and its own body untouched; only `report.add` moved out of it, into
+    a `Row` it returns instead. This is what turns several of those back into one:
+    every finding survives, `scanned` sums what each sub-check scanned, and the row
+    is MECHANICAL if any sub-check is — a family is never quieter than its loudest
+    member.
+    """
+    findings: List[Finding] = [f for row in rows for f in row.findings]
+    scanned_parts = [row.scanned for row in rows if row.scanned is not None]
+    scanned = sum(scanned_parts) if scanned_parts else None
+    severity = MECHANICAL if any(row.severity == MECHANICAL for row in rows) else ADVISORY
+    summary = (
+        "; ".join(f"{row.check}: {row.summary}" for row in rows if row.summary)
+        if not findings else ""
+    )
+    return Row(name, severity, findings, summary, scanned)
+
+
 # Rows whose subject may legitimately be empty, and the reason beside each name. A
 # BLANKET exemption is how a rule stops being one, so this is per-row and per-mode:
 #
@@ -209,7 +232,7 @@ EXPECTED_EMPTY: Dict[str, Tuple[str, str]] = {
         "staged",
         "counts the `<!-- derived:<name> -->` markers it found in the staged documents",
     ),
-    "env vars": ("staged", "counts the variables the staged documents name"),
+    "env vocabulary": ("staged", "counts the variables the staged documents name"),
     "doc hygiene": ("staged", "its subject IS the staged markdown list"),
     "check numbering": ("staged", "its subject IS the staged markdown list"),
     "coupling": ("staged", "runs in --staged only, over the source groups this commit touched"),
@@ -2558,10 +2581,14 @@ def check_pass_criteria(report: Report) -> None:
                     f"the doc.",
                 )
             )
-    report.add("pass criteria", MECHANICAL, mechanical, "every threshold matches GATES.md",
-               scanned=compared)
-    report.add("criteria wording", MECHANICAL, wording,
-               "every criterion is published verbatim", scanned=read_criteria)
+    # `pass criteria` and `criteria wording` merged into one row by M3 (test-audit-
+    # 2026-09-27, L8, Q8 yes) — both questions this function already answers, now one
+    # printed verdict. `scanned` takes `read_criteria`, the wider of the two subject
+    # counts: every test whose PASS_CRITERIA this function could read, a superset of
+    # `compared` (which also needs a docs/GATES.md section to exist).
+    report.add("pass criteria", MECHANICAL, mechanical + wording,
+               "every threshold matches GATES.md, and every criterion is published verbatim",
+               scanned=read_criteria)
 
 
 # ------------------------------------------------------ the evidence behind a criterion
@@ -3121,14 +3148,16 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     code_haystack = decision_id_code_haystack()
     scan(code_haystack, in_code)
 
-    report.add("decision ids", MECHANICAL, in_docs,
-               f"{len(singles)} D + {len(codes)} C headings",
-               scanned=len(singles) + len(codes))
-    # Code is advisory: `C1` or `D2` could plausibly be a variable one day, and a false
-    # positive that blocks a commit is worse than one that prints a line.
-    report.add("decision ids in code", ADVISORY, in_code,
-               "citations in .py, .ts, .tsx, .css and .js all resolve",
-               scanned=len(code_haystack))
+    # `decision ids in code` folded into this row by the owner's ruling (test-audit-
+    # 2026-09-27, row 15 into row 14, "as one blocking row"): a dangling `D<n>` in code used
+    # to be ADVISORY on its own (a false positive that blocks a commit is worse than one
+    # that prints a line), but the docs-side half of this same function was always
+    # MECHANICAL, and one row can carry only one severity — so the merge is BLOCKING now,
+    # on the owner's own word rather than by an automatic worst-of-both computation.
+    report.add("decision ids", MECHANICAL, in_docs + in_code,
+               f"{len(singles)} D + {len(codes)} C headings; citations in .py, .ts, .tsx, "
+               f".css and .js all resolve",
+               scanned=len(singles) + len(codes) + len(code_haystack))
 
 
 # --------------------------------------------------------- the gates corpus as a directory
@@ -5280,7 +5309,7 @@ def check_estimate_wire(report: Report) -> None:
     )
 
 
-def check_shipping_columns(report: Report) -> None:
+def _shipping_columns() -> Row:
     """The Pirate Ship import's column count, published in two files, decided by one.
 
     WHY THIS ROW EXISTS. `docs/specs/order-pipeline.md` said the renderer produced a file of
@@ -5302,7 +5331,7 @@ def check_shipping_columns(report: Report) -> None:
     findings: List[Finding] = []
 
     if total is None:
-        report.add(
+        return Row(
             "shipping columns",
             MECHANICAL,
             [
@@ -5315,7 +5344,6 @@ def check_shipping_columns(report: Report) -> None:
             ],
             "",
         )
-        return
 
     for path, pattern in _SHIPPING_COLUMN_CLAIMS:
         text = read(ROOT / path)
@@ -5346,7 +5374,7 @@ def check_shipping_columns(report: Report) -> None:
                 )
             )
 
-    report.add(
+    return Row(
         "shipping columns",
         MECHANICAL,
         findings,
@@ -5413,7 +5441,7 @@ def _tcg_import_columns_count() -> Optional[int]:
     return None
 
 
-def check_column_count(report: Report) -> None:
+def _column_count() -> Row:
     """`server/tcg_import.py`'s own comment against the tuple it describes.
 
     THE DEFECT IS ALREADY IN THE TREE. The comment above `COLUMNS` says "The eleven fields
@@ -5461,7 +5489,7 @@ def check_column_count(report: Report) -> None:
                 .format(match.group(1), total),
             ))
 
-    report.add(
+    return Row(
         "column count",
         MECHANICAL,
         findings,
@@ -5472,6 +5500,23 @@ def check_column_count(report: Report) -> None:
 
 _THRESHOLD_TSX_RE = re.compile(r"const THRESHOLD = ([0-9.]+)")
 _THRESHOLD_PY_RE = re.compile(r'THRESHOLD = Decimal\("([0-9.]+)"\)')
+
+
+def check_column_counts(report: Report) -> None:
+    """Two published column counts, each against the one file that settles it: the
+    Pirate Ship import's own columns, and `server/tcg_import.py`'s own comment.
+
+    Merged from `column count` and `shipping columns` by M3 (test-audit-2026-09-27, L8, Q8
+    yes) — both are "a published count against `len(...)` somewhere in the tree" and neither
+    changes what the other judges. Each sub-check below is unchanged; only the last line of
+    each moved from `report.add` to `return Row`.
+    """
+    merged = _merge_rows("column counts", [
+        _column_count(),
+        _shipping_columns(),
+    ])
+    report.add("column counts", merged.severity, merged.findings, merged.summary,
+               scanned=merged.scanned)
 
 
 def check_threshold_agreement(report: Report) -> None:
@@ -6362,7 +6407,7 @@ def check_transport_standing(report: Report) -> None:
     )
 
 
-def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
+def _env_vars(docs: List[Path], allowed: Dict[str, str]) -> Row:
     haystack = code_haystack()
     findings: List[Finding] = []
     seen: Set[str] = set()
@@ -6393,7 +6438,7 @@ def check_env_vars(report: Report, docs: List[Path], allowed: Dict[str, str]) ->
                             f"is named before it is built.",
                         )
                     )
-    report.add("env vars", MECHANICAL, findings, f"{len(seen)} documented, all real",
+    return Row("env vars", MECHANICAL, findings, f"{len(seen)} documented, all real",
                scanned=len(seen))
 
 
@@ -6423,7 +6468,7 @@ def _env_sites() -> Dict[str, List[str]]:
     return sites
 
 
-def check_env_names(report: Report) -> None:
+def _env_names() -> Row:
     """A variable the code reads must be named in the markdown somewhere.
 
     `check_env_vars` above runs the other direction — documented, therefore real — and has
@@ -6469,7 +6514,7 @@ def check_env_names(report: Report) -> None:
                 f"use.",
             )
         )
-    report.add(
+    return Row(
         "env names",
         MECHANICAL,
         findings,
@@ -6679,6 +6724,21 @@ def cited_decisions(path: Path) -> Set[str]:
 #: The shape of a hatch's VALUE. Every one of them is `<NAME>=off`, printed in the refusal
 #: it lifts, so "set to something" is not the question — "set to off" is.
 _HATCH_OFF = "off"
+
+
+def check_env_vocabulary(report: Report, docs: List[Path], allowed: Dict[str, str]) -> None:
+    """`PKMNSCAN_*` names, both directions: documented => real, and real => documented.
+
+    Merged from `env vars` and `env names` by M3 (test-audit-2026-09-27, L8, Q8 yes). Each
+    sub-check below is unchanged; only the last line of each moved from `report.add` to
+    `return Row`, so both directions still fail this one row exactly as they failed two.
+    """
+    merged = _merge_rows("env vocabulary", [
+        _env_vars(docs, allowed),
+        _env_names(),
+    ])
+    report.add("env vocabulary", merged.severity, merged.findings, merged.summary,
+               scanned=merged.scanned)
 
 
 def check_hatch_state(report: Report) -> None:
@@ -9025,7 +9085,7 @@ def check_supervisor_self_watch(report: Report) -> None:
     )
 
 
-def check_withhold_reasons(report: Report) -> None:
+def _withhold_reasons() -> Row:
     """The three withhold reasons, reconciled across the two languages that declare them.
 
     D49 gives `overrides` a second kind of answer — a SKU the operator is deliberately not
@@ -9105,7 +9165,7 @@ def check_withhold_reasons(report: Report) -> None:
             )
         )
 
-    report.add(
+    return Row(
         "withhold reasons",
         MECHANICAL,
         findings,
@@ -9114,7 +9174,7 @@ def check_withhold_reasons(report: Report) -> None:
     )
 
 
-def check_order_reasons(report: Report) -> None:
+def _order_reasons() -> Row:
     """The six order-line reasons, reconciled across the two languages that declare them.
 
     D69's order screen looks a reason UP rather than re-deriving it from whatever the line
@@ -9238,7 +9298,7 @@ def check_order_reasons(report: Report) -> None:
             )
         )
 
-    report.add(
+    return Row(
         "order reasons",
         MECHANICAL,
         findings,
@@ -9247,7 +9307,7 @@ def check_order_reasons(report: Report) -> None:
     )
 
 
-def check_terminal_statuses(report: Report) -> None:
+def _terminal_statuses() -> Row:
     """The terminal-status vocabulary, reconciled between the code and its own published claim.
 
     D63 amended 2026-09-13 on the owner's two rulings — a Canceled order is never open, and
@@ -9360,7 +9420,7 @@ def check_terminal_statuses(report: Report) -> None:
             )
         )
 
-    report.add(
+    return Row(
         "terminal statuses",
         MECHANICAL,
         findings,
@@ -9369,7 +9429,7 @@ def check_terminal_statuses(report: Report) -> None:
     )
 
 
-def check_pricing_presets(report: Report) -> None:
+def _pricing_presets() -> Row:
     """The three pricing presets, reconciled between the tuple that prices them and the
     table that writes them.
 
@@ -9516,7 +9576,7 @@ def check_pricing_presets(report: Report) -> None:
             )
         )
 
-    report.add(
+    return Row(
         "pricing presets",
         MECHANICAL,
         findings,
@@ -10194,7 +10254,7 @@ def _roster(module: str, name: str) -> Optional[List[str]]:
     return roster
 
 
-def check_reason_emissions(report: Report) -> None:
+def _reason_emissions() -> Row:
     """Every published reason is in a roster, and every roster reason has a producer.
 
     `check_reason_codes` reconciles this vocabulary across the screen, docs/DESIGN.md and the
@@ -10303,7 +10363,7 @@ def check_reason_emissions(report: Report) -> None:
                 )
             )
 
-    report.add(
+    return Row(
         "reason emissions",
         MECHANICAL,
         findings,
@@ -10313,7 +10373,7 @@ def check_reason_emissions(report: Report) -> None:
     )
 
 
-def check_reason_codes(report: Report) -> None:
+def _reason_codes() -> Row:
     """The twelve review reasons, reconciled across the three places they are published.
 
     They are written down in three independent places and nothing compared them: the
@@ -10417,7 +10477,7 @@ def check_reason_codes(report: Report) -> None:
                 )
             )
 
-    report.add(
+    return Row(
         "reason codes",
         MECHANICAL,
         findings,
@@ -10443,6 +10503,28 @@ def check_reason_codes(report: Report) -> None:
 # true and asserts nothing, which is to say it recreates the unenforced field this row
 # exists to enforce, using the machinery meant to enforce it.
 FOLLOW_ROOT = "harness/"
+
+
+def check_closed_vocabularies(report: Report) -> None:
+    """Six closed vocabularies, one row: withhold reasons, order reasons, terminal
+    statuses, pricing presets, reason codes and reason emissions — each a hand-authored set
+    declared twice (once for a parser or resolver, once for a screen or a decision entry)
+    and reconciled here so the two copies cannot drift apart in silence.
+
+    Merged from six rows by M3 (test-audit-2026-09-27, L8, Q8 yes). Each sub-check below is
+    unchanged; only the last line of each moved from `report.add` to `return Row`, so every
+    defect any of the six used to catch still fails this one.
+    """
+    merged = _merge_rows("closed vocabularies", [
+        _reason_codes(),
+        _reason_emissions(),
+        _withhold_reasons(),
+        _order_reasons(),
+        _terminal_statuses(),
+        _pricing_presets(),
+    ])
+    report.add("closed vocabularies", merged.severity, merged.findings, merged.summary,
+               scanned=merged.scanned)
 
 
 def imported_names(source: str) -> Set[str]:
@@ -11813,8 +11895,11 @@ _S9_ROW = re.compile(
 )
 
 
-def check_logo_parity(report: Report) -> None:
+def _logo_parity() -> Row:
     """`app/src/kit/markPalettes.ts` and docs/specs/logo.md section 9 name the same colors.
+
+    Folded into the `logo` row by `check_logo` (M3, L8, 2026-09-27) — this still does the
+    same comparison and returns its own verdict rather than adding to the report directly.
 
     THIS ROW IS WHY THE MARK IS ALLOWED TO NAME COLORS AT ALL. CLAUDE.md's rule is that
     `app/src/tokens.css` is the only file in `app/` that may name one, and D102 takes a
@@ -11843,9 +11928,8 @@ def check_logo_parity(report: Report) -> None:
     if not exists(LOGO_SPEC) or not exists(MARK_PALETTES):
         # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
         # the render, and an absent row is the one state nothing in this file reads.
-        report.add("logo parity", MECHANICAL, [],
+        return Row("logo parity", MECHANICAL, [],
                    "the spec or the generated palettes are not there", scanned=0)
-        return
 
     spec = read(LOGO_SPEC)
     # `chrome` -> ['#FFFFFF', '#B8C8D8', '#F2F8FF', '#8FA4B8'], off the legend table.
@@ -11865,13 +11949,12 @@ def check_logo_parity(report: Report) -> None:
         }
 
     if not published:
-        report.add("logo parity", MECHANICAL, [Finding(
+        return Row("logo parity", MECHANICAL, [Finding(
             rel(LOGO_SPEC),
             "section 9's locked-set table did not parse, so this row is not comparing "
             "anything. Say so here rather than passing — a check that silently stops "
             "checking is worse than no check.",
         )], "")
-        return
 
     source = read(MARK_PALETTES)
     generated: Dict[str, Dict[str, object]] = {}
@@ -11928,7 +12011,7 @@ def check_logo_parity(report: Report) -> None:
                     f"re-run `node scripts/build-mark.mjs`, or move section 9 first.",
                 ))
 
-    report.add("logo parity", MECHANICAL, findings, scanned=len(published), summary=
+    return Row("logo parity", MECHANICAL, findings, scanned=len(published), summary=
                f"{len(published)} locked marks, every prism, ground, bracket and base "
                f"against section 9 ({sum(len(m['prism']) + len(m['ground']) + len(m['bracket']) + 1 for m in published.values())} hexes)"
                if not findings else f"{len(findings)} disagreements with section 9")
@@ -11960,7 +12043,7 @@ def _png_canvas(path: Path) -> "tuple[int, int] | None":
     return int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
 
 
-def check_mac_icon_grid(report: Report) -> None:
+def _mac_icon_grid() -> Row:
     """Apple's icon grid is one number in three places, and they must agree.
 
     docs/specs/logo.md section 17 publishes it, `scripts/build-mark.mjs` insets by it, and
@@ -12053,7 +12136,7 @@ def check_mac_icon_grid(report: Report) -> None:
                 f"Re-run `node scripts/build-mark.mjs --icons`.",
             ))
 
-    report.add("mac icon grid", MECHANICAL, findings, scanned=len(declared), summary=
+    return Row("mac icon grid", MECHANICAL, findings, scanned=len(declared), summary=
                (f"{published.group(1)}/{published.group(2)} in section 17 and in build-mark.mjs, "
                 f"over {len(declared)} inset icons"
                 if published and const and not findings
@@ -12070,7 +12153,7 @@ MARK_PALETTES = ROOT / "app" / "src" / "kit" / "markPalettes.ts"
 _LOCKUP_SPEC_ROW = re.compile(r"^\|\s*`(\w+)`\s*\|\s*([0-9.]+)\s*\|", re.M)
 
 
-def check_lockup_bracket(report: Report) -> None:
+def _lockup_bracket() -> Row:
     """The lockup's dark bracket is a LOCKED palette, not a colour the sheet owns.
 
     §16 settles the dark theme's bracket as the chrome gradient `markPalettes.ts` already gives
@@ -12084,30 +12167,27 @@ def check_lockup_bracket(report: Report) -> None:
     if not exists(SIDEBAR_MORPH) or not exists(MARK_PALETTES):
         # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
         # the render, and an absent row is the one state nothing in this file reads.
-        report.add("lockup bracket", MECHANICAL, [],
+        return Row("lockup bracket", MECHANICAL, [],
                    "the lockup sheet or the generated palettes are not there", scanned=0)
-        return
     sheet, gen = read(SIDEBAR_MORPH), read(MARK_PALETTES)
     # the component reads the palette rather than naming hexes; if it ever stops, say so here
     if exists(LOCKUP_TSX):
         tsx = read(LOCKUP_TSX)
         if "MARKS.bluesteel.bracket" not in tsx and re.search(r"#[0-9A-Fa-f]{6}", tsx):
-            report.add("lockup bracket", MECHANICAL, [Finding(
+            return Row("lockup bracket", MECHANICAL, [Finding(
                 rel(LOCKUP_TSX),
                 "the lockup names a color of its own instead of reading "
                 "`MARKS.bluesteel.bracket`. §16 settles the dark bracket as the MARK's metal so "
                 "the two are one object; `markPalettes.ts` is the only file in app/ outside "
                 "tokens.css allowed to name a hex, and `raw color` cannot see a .tsx.",
             )], "")
-            return
     m = re.search(r"bluesteel:\s*\{.*?bracket:\s*\[([^\]]+)\]", gen, re.S)
     if not m:
-        report.add("lockup bracket", MECHANICAL, [Finding(
+        return Row("lockup bracket", MECHANICAL, [Finding(
             rel(MARK_PALETTES),
             "`bluesteel`'s bracket is gone from the generated palettes. §16 draws the lockup's "
             "dark bracket from it; with it missing this row compares nothing.",
         )], "")
-        return
     want = re.findall(r"#[0-9A-Fa-f]{6}", m.group(1))
     got_block = re.search(r"const DARK_BRACKET = \[(.*?)\]\n", sheet, re.S)
     got = re.findall(r"#[0-9A-Fa-f]{6}", got_block.group(1)) if got_block else []
@@ -12119,12 +12199,12 @@ def check_lockup_bracket(report: Report) -> None:
             f"{' '.join(want)}. §16 settles them as the same metal so the lockup and the mark "
             f"are one object; a sheet that drifts from the palette makes them two.",
         ))
-    report.add("lockup bracket", MECHANICAL, problems,
+    return Row("lockup bracket", MECHANICAL, problems,
                f"{len(want)} stops against `bluesteel`'s locked bracket",
                scanned=len(want))
 
 
-def check_rail_mark(report: Report) -> None:
+def _rail_mark() -> Row:
     """The sidebar mockup's rail bracket is the mark the app actually ships.
 
     IT WAS AN INVENTION, and drew four things wrong at once — stroke 11.0 against the mark's
@@ -12139,9 +12219,8 @@ def check_rail_mark(report: Report) -> None:
     if not exists(SIDEBAR_MORPH) or not exists(MARK_GEOMETRY):
         # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
         # the render, and an absent row is the one state nothing in this file reads.
-        report.add("rail mark", MECHANICAL, [],
+        return Row("rail mark", MECHANICAL, [],
                    "the sidebar mockup or the generated mark is not there", scanned=0)
-        return
     sheet, gen = read(SIDEBAR_MORPH), read(MARK_GEOMETRY)
     # How many comparisons this row actually made. Two of them are the copied
     # constants and the rest are the tab's, which only exist if the favicon does.
@@ -12151,12 +12230,11 @@ def check_rail_mark(report: Report) -> None:
     got_path = re.search(r"MARK_SMALL_BRACKET = '([^']+)'", sheet)
     got_stroke = re.search(r"MARK_SMALL_STROKE = ([\d.]+)", sheet)
     if not (want_path and want_stroke):
-        report.add("rail mark", MECHANICAL, [Finding(
+        return Row("rail mark", MECHANICAL, [Finding(
             rel(MARK_GEOMETRY),
             "SMALL_BRACKET or SMALL_STROKE is gone from the generated mark. The sidebar mockup "
             "copies both; with them missing this row compares nothing, which is worse than failing.",
         )], "")
-        return
     problems = []
     compared += 2  # the bracket path and the stroke, both copied out of the generated mark
     if not got_path or got_path.group(1) != want_path.group(1):
@@ -12250,12 +12328,12 @@ def check_rail_mark(report: Report) -> None:
                 "pair is about twelve pixels of ink and a four-stop gradient across it resolves to "
                 "noise. Every other surface keeps its metal; this one traded it for legibility.",
             ))
-    report.add("rail mark", MECHANICAL, problems,
+    return Row("rail mark", MECHANICAL, problems,
                "the rail bracket is the shipped mark — in the sheet, at both ends of the "
                "morph, and on the tab", scanned=compared)
 
 
-def check_lockup_params(report: Report) -> None:
+def _lockup_params() -> Row:
     """The lockup sheet's declared holds and docs/specs/logo.md's settled table agree.
 
     A PARAMETER SETTLED IN A ROUND AND THEN TYPED A SECOND TIME IS HOW THAT SHEET ALREADY WENT
@@ -12273,19 +12351,17 @@ def check_lockup_params(report: Report) -> None:
     if not exists(LOGO_SPEC) or not exists(LOCKUP_ROUND):
         # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
         # the render, and an absent row is the one state nothing in this file reads.
-        report.add("lockup params", MECHANICAL, [],
+        return Row("lockup params", MECHANICAL, [],
                    "the spec or the round lockup sheet is not there", scanned=0)
-        return
 
     spec_section = read(LOGO_SPEC)
     marker = "### The settled values, and the one place they live"
     if marker not in spec_section:
-        report.add("lockup params", MECHANICAL, [Finding(
+        return Row("lockup params", MECHANICAL, [Finding(
             rel(LOGO_SPEC),
             "the settled-values table is gone. This row compares it against the sheet's holds; "
             "with it missing the row is not comparing anything, which is worse than failing.",
         )], "")
-        return
     tail = spec_section[spec_section.index(marker):]
     tail = tail[: tail.index("\n### ", 10)] if "\n### " in tail[10:] else tail
     published = {k: float(v) for k, v in _LOCKUP_SPEC_ROW.findall(tail)}
@@ -12298,12 +12374,11 @@ def check_lockup_params(report: Report) -> None:
     sweeping = sweeping.group(1) if sweeping else ""
     block = re.search(r"holds:\s*\{([^}]*)\}", sheet)
     if block is None or not published:
-        report.add("lockup params", MECHANICAL, [Finding(
+        return Row("lockup params", MECHANICAL, [Finding(
             rel(LOCKUP_ROUND),
             "no `holds: {...}` in the round sheet, or no rows in the spec table. Say so here "
             "rather than passing.",
         )], "")
-        return
     declared = {
         k: float(v)
         for k, v in re.findall(r"(\w+)\s*:\s*([0-9.]+)", block.group(1))
@@ -12364,11 +12439,30 @@ def check_lockup_params(report: Report) -> None:
                     f"ignore.",
                 ))
 
-    report.add("lockup params", MECHANICAL, findings, scanned=len(published), summary=
+    return Row("lockup params", MECHANICAL, findings, scanned=len(published), summary=
                f"{len(published)} settled values against the sheet's holds"
                + (" and the generated geometry" if exists(LOCKUP_GEOMETRY) else "")
                + (f", `{sweeping}` under test" if sweeping in published else "")
                if not findings else f"{len(findings)} disagreements")
+
+
+def check_logo(report: Report) -> None:
+    """The logo family, one row: parity, the mac icon grid, the lockup bracket, the rail
+    mark and the lockup params — every reconciliation against docs/specs/logo.md.
+
+    Merged from five rows by M3 (test-audit-2026-09-27, L8, Q8 yes). Each sub-check below
+    is unchanged; only the last line of each moved from `report.add` to `return Row`, so
+    every defect any of the five used to catch still fails this one.
+    """
+    merged = _merge_rows("logo", [
+        _logo_parity(),
+        _mac_icon_grid(),
+        _lockup_params(),
+        _rail_mark(),
+        _lockup_bracket(),
+    ])
+    report.add("logo", merged.severity, merged.findings, merged.summary,
+               scanned=merged.scanned)
 
 
 # ------------------------------------------------------------------ views opsec (D24)
@@ -15171,7 +15265,7 @@ def _checks_registry() -> Optional[Tuple[List[dict], dict]]:
     return [dict(entry) for entry in entries], dict(needs)
 
 
-def check_check_registry(report: Report) -> None:
+def _check_registry() -> Row:
     """scripts/checks.py against the `check:` recipe it describes, both directions.
 
     THE REGISTRY IS A PARALLEL DECLARATION AND NOT THE DRIVER, which is the shape that makes
@@ -15211,18 +15305,16 @@ def check_check_registry(report: Report) -> None:
     ci_recipe = _ci_check_recipe()
     loaded = _checks_registry()
     if recipe is None:
-        report.add("check registry", MECHANICAL, [Finding(
+        return Row("check registry", MECHANICAL, [Finding(
             "Makefile",
             "the `check:` recipe could not be read, so nothing can be reconciled against it. "
             "If the target changed shape, this row's reader has to move with it.")])
-        return
     if loaded is None:
-        report.add("check registry", MECHANICAL, [Finding(
+        return Row("check registry", MECHANICAL, [Finding(
             rel(CHECKS_REGISTRY),
             "CHECKS and NEEDS could not be read as module-level literals. They are parsed "
             "with `ast.literal_eval` and never imported, so every entry must stay a plain "
             "literal — no helper class, no call, no comprehension.")])
-        return
 
     entries, needs = loaded
     findings: List[Finding] = []
@@ -15334,7 +15426,7 @@ def check_check_registry(report: Report) -> None:
             ))
 
     ungated = sum(1 for entry in entries if entry.get("gates") is False)
-    report.add("check registry", MECHANICAL, findings,
+    return Row("check registry", MECHANICAL, findings,
                "{0} checks in recipe order, {1} in ci-check, {2} declared non-gating".format(
                    len(recipe), len(ci_recipe or ()), ungated),
                scanned=len(recipe))
@@ -16529,7 +16621,7 @@ def check_guard_scope(report: Report) -> None:
                scanned=len(roster))
 
 
-def check_check_census(report: Report) -> None:
+def _check_census() -> Row:
     """Every published list of what `make check` runs, against scripts/checks.py.
 
     MECHANICAL, on `route census`'s reasoning exactly: the recipe is in the repository, the
@@ -16565,9 +16657,8 @@ def check_check_census(report: Report) -> None:
     """
     loaded = _checks_registry()
     if loaded is None:
-        report.add("check census", MECHANICAL, [Finding(
+        return Row("check census", MECHANICAL, [Finding(
             rel(CHECKS_REGISTRY), "CHECKS could not be read; see the `check registry` row.")])
-        return
     entries, _ = loaded
     recipe = _check_recipe()
     expected = recipe if recipe else [str(entry.get("target", "")) for entry in entries]
@@ -16627,7 +16718,7 @@ def check_check_census(report: Report) -> None:
                     " + ".join(claimed), " + ".join(expected),
                 )))
 
-    report.add("check census", MECHANICAL, findings,
+    return Row("check census", MECHANICAL, findings,
                "{0} published lists, {1} checks each, in {2}'s order".format(
                    checked, len(expected), authority),
                scanned=checked)
@@ -16640,6 +16731,23 @@ def check_check_census(report: Report) -> None:
 INVOKERS = ["Makefile", "scripts/githooks/pre-commit", ".claude/commands/docs-audit.md"]
 
 _INVOCATION_RE = re.compile(r"docs-audit\.py((?:\s+--[a-z][a-z-]*)*)")
+
+
+def check_check_registry(report: Report) -> None:
+    """`scripts/checks.py` against the `check:` recipe, and every published list of what
+    `make check` runs, against that same recipe.
+
+    Merged from `check registry` and `check census` by M3 (test-audit-2026-09-27, L8, Q8
+    yes) — "check census into check registry", the destination keeps the surviving name.
+    Each sub-check below is unchanged; only the last line of each moved from `report.add`
+    to `return Row`, so both still fail this one row exactly as they failed two.
+    """
+    merged = _merge_rows("check registry", [
+        _check_registry(),
+        _check_census(),
+    ])
+    report.add("check registry", merged.severity, merged.findings, merged.summary,
+               scanned=merged.scanned)
 
 
 def check_audit_invocation(report: Report) -> None:
@@ -21453,15 +21561,15 @@ def self_test() -> int:
         try:
             globals()["_TCG_IMPORT_PATH"] = fixture
             report = Report()
-            check_column_count(report)
+            check_column_counts(report)
         finally:
             globals()["_TCG_IMPORT_PATH"] = _saved
         by_label = {row.check: row.findings for row in report.checks}
         ok(
-            any("eleven" in f.message and "3 pairs" in f.message for f in by_label["column count"]),
-            "column count: a comment saying `eleven` against a 3-pair tuple fails the row, "
-            "naming both",
-            str(by_label["column count"]),
+            any("eleven" in f.message and "3 pairs" in f.message for f in by_label["column counts"]),
+            "column counts: a comment saying `eleven` against a 3-pair tuple fails the row "
+            "(the merged `column count` sub-check), naming both",
+            str(by_label["column counts"]),
         )
         code_agreement_arms += 1
 
@@ -21678,13 +21786,13 @@ def self_test() -> int:
 
     # And end to end, unpatched: the real tree agrees with itself on a clean checkout.
     report = Report()
-    check_column_count(report)
+    check_column_counts(report)
     check_threshold_agreement(report)
     check_dist_path_agreement(report)
     check_import_filename_agreement(report)
     check_duplicated_measurements(report)
     by_label = {row.check: row.findings for row in report.checks}
-    for label in ("column count", "threshold agreement", "dist path agreement", "import filename agreement", "duplicated measurements"):
+    for label in ("column counts", "threshold agreement", "dist path agreement", "import filename agreement", "duplicated measurements"):
         ok(not by_label[label], f"the real tree has zero findings on `{label}`", str(by_label[label]))
 
     print("\ncommands roster: three ways to be documented, and the allow-list only shrinks")
@@ -21901,8 +22009,7 @@ def audit(staged_only: bool) -> Report:
     check_debts_headings(report)
     check_debt_index(report)
     check_debt_ids(report, docs)
-    check_env_vars(report, docs, allowed)
-    check_env_names(report)
+    check_env_vocabulary(report, docs, allowed)
     check_hatch_state(report)
     check_subagent_override(report)
     check_claim_decode(report)
@@ -21911,8 +22018,7 @@ def audit(staged_only: bool) -> Report:
     check_sole_reader(report)
     check_server_concurrency(report)
     check_estimate_wire(report)
-    check_shipping_columns(report)
-    check_column_count(report)
+    check_column_counts(report)
     check_threshold_agreement(report)
     check_dist_path_agreement(report)
     check_import_filename_agreement(report)
@@ -21931,19 +22037,11 @@ def audit(staged_only: bool) -> Report:
     check_game_coverage(report)
     check_matrix_superset(report)
     check_join_key_shape(report)
-    check_reason_codes(report)
-    check_reason_emissions(report)
+    check_closed_vocabularies(report)
     check_supervisor_self_watch(report)
     check_motion_params(report)
-    check_logo_parity(report)
-    check_mac_icon_grid(report)
-    check_lockup_params(report)
-    check_rail_mark(report)
-    check_lockup_bracket(report)
-    check_withhold_reasons(report)
-    check_order_reasons(report)
-    check_terminal_statuses(report)
-    check_pricing_presets(report)
+    check_logo(report)
+
     check_export_request(report)
     check_transport_promise(report)
     check_hint_reasons(report)
@@ -21964,7 +22062,6 @@ def audit(staged_only: bool) -> Report:
     check_route_census(report)
     check_check_registry(report)
     check_commit_path(report)
-    check_check_census(report)
     check_no_mechanism_on_screen(report)
     check_typed_interpunct(report)
     check_suite_lock(report)
