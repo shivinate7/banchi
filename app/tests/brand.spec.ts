@@ -858,12 +858,9 @@ test('the second step reaches the mini and the iPhone 14, and stops short of a t
   await page.locator('.bn-drawer .bn-nav a.bn-nav-link').last().scrollIntoViewIfNeeded()
   await expect(page.locator('.bn-drawer .bn-nav a.bn-nav-link').last()).toBeVisible()
 
-  /* THE MINI GENUINELY DOES NOT FIT TEN ROWS AT THE FLOOR, AND THAT IS THE HONEST ANSWER. 375 x
-     722 needs more than ten rows at 40 plus the head, the foot and three headings leave room
-     for — 29px short, measured — and there is no third step: the next one would break the thumb
-     floor CLAUDE.md sets. What covers it is the fade-scroll fallback already built for a phone
-     this cannot reach at all (the iPhone SE, below), now doing the same job one family up: the
-     row is on the floor, the list scrolls, and the scroll-driven mask says there is more. */
+  /* THE MINI FITS TEN ROWS AT THE FLOOR SINCE THE SERVER ROW WAS DELETED (owner's ruling,
+     2026-09-28). 375 x 722 was 29px short with it. The scroll fallback has its own arm below,
+     on a viewport short enough to overflow for real. */
   await page.setViewportSize({ width: 375, height: 722 })
   await page.goto('/')
   await page.getByText('More', { exact: true }).click()
@@ -880,13 +877,32 @@ test('the second step reaches the mini and the iPhone 14, and stops short of a t
     }
   })
   expect(mini.row, 'the rows sit ON the thumb floor, not under it').toBe(40)
-  // THE SERVER ROW'S DELETION (owner's ruling, 2026-09-28) TOOK 40px OFF THIS LIST: the mini,
-  // 29px short before, now fits every row at the floor. The scroll fallback is still asserted
-  // below, on the phone this cannot reach at all.
   expect(mini.overflow, 'the mini fits every row at the floor once the server row is gone').toBeLessThanOrEqual(0)
   // every row is still reachable, just not without scrolling
   await page.locator('.bn-drawer .bn-nav a.bn-nav-link').last().scrollIntoViewIfNeeded()
   await expect(page.locator('.bn-drawer .bn-nav a.bn-nav-link').last()).toBeVisible()
+
+  /* THE SCROLL FALLBACK, PROVED WITH REAL OVERFLOW. A `scrollable` CSS property proves nothing
+     when nothing overflows, so this viewport is short enough to push the list past the fold, and
+     the last row is reached by a real scroll and a real click. */
+  await page.setViewportSize({ width: 375, height: 600 })
+  await page.goto('/')
+  await page.getByText('More', { exact: true }).click()
+  await page.waitForTimeout(400)
+  const short = await page.evaluate(() => {
+    const nav = document.querySelector('.bn-drawer .bn-nav')!
+    return {
+      overflow: nav.scrollHeight - nav.clientHeight,
+      scrollable: getComputedStyle(nav).overflowY === 'auto' || getComputedStyle(nav).overflowY === 'scroll',
+    }
+  })
+  expect(short.overflow, 'a 600px phone must overflow, or this arm proves nothing').toBeGreaterThan(0)
+  expect(short.scrollable, 'what does not fit scrolls, rather than clipping silently').toBe(true)
+  const lastRow = page.locator('.bn-drawer .bn-nav a.bn-nav-link').last()
+  await expect(lastRow).not.toBeInViewport()
+  await page.locator('.bn-drawer .bn-nav').evaluate((el) => el.scrollTo(0, el.scrollHeight))
+  await expect(lastRow).toBeInViewport({ ratio: 1 })
+  await lastRow.click()
 
   // AND A TALLER PHONE IS UNTOUCHED, which is the half a threshold gets wrong when it is placed
   // by feel rather than by where the arithmetic actually changes.

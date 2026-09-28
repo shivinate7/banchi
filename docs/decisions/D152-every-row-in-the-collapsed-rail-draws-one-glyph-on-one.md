@@ -14,7 +14,7 @@ the sidebar's 8px gutter plus half of the 48px box each row draws in. Read off t
   straddling the whole rail, in a 48px box, beside three rows carrying one glyph at 32.
 - **The server dot was never centered at all** (drew at **24**, not 32: `.bn-server` kept its
   open-sidebar padding into the rail). **The dot is deleted (owner's ruling, 2026-09-28):** the
-  offline banner already says when the server is down. The foot is Go to and Theme only.
+  offline banner already says when the server is down. The foot is Pull, Go to and Theme.
 
 **THE CAUSE IS THE SHAPE OF THE RULES, NOT EITHER ELEMENT.** `App.css`'s rail block describes the
 foot by LISTING what was in it when the block was written. The fold-away is an enumeration of class

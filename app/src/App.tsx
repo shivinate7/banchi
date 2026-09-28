@@ -1282,7 +1282,7 @@ function Drawer({ open, path, onClose, theme, onToggleTheme }: { open: boolean; 
             <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
             <span className="bn-nav-text">Theme</span>
           </button>
-          </div>
+        </div>
       </nav>
     </Sheet>
   )
