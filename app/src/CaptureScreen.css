@@ -370,9 +370,22 @@
   /* A long box list grew the card itself before this (in flow); now that it overlays
      instead, an unbounded height would run the list off the bottom of the screen with
      nothing to stop it. Capped and scrollable, never clipped mid-row. */
-  max-height: min(420px, calc(100dvh - 200px));
   overflow-y: auto;
+  /* The whole list, header row included, fits between the phone's bars: the shell's own
+     tokens, zero where it draws no bar. */
+  max-height: min(
+    420px,
+    calc(100dvh - 200px),
+    calc(100dvh - var(--bn-topbar-h) - var(--bn-tabbar-h) - var(--bn-4))
+  );
+  scroll-margin-top: calc(var(--bn-topbar-h) + var(--bn-2));
+  scroll-margin-bottom: calc(var(--bn-tabbar-h) + var(--bn-2));
 }
+/* OWNER'S RULING, 2026-09-28: the open list goes in FRONT and scrolls. The overlay's own
+   z-index is scoped to `.capture-card`'s stacking context (its animation makes one), so the
+   later RECENT footer and the sibling cards painted over the list's lower rows. While a
+   field is open its card outranks them; the overlay stays out of flow, so nothing moves (D118). */
+.capture-card:has(.capture-open-pinned) { position: relative; z-index: 5; }
 .capture-open-body { display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 10px; }
 .capture-open-lg > .capture-row { min-height: 40px; }
 .capture-meta {
