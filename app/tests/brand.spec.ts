@@ -880,8 +880,10 @@ test('the second step reaches the mini and the iPhone 14, and stops short of a t
     }
   })
   expect(mini.row, 'the rows sit ON the thumb floor, not under it').toBe(40)
-  expect(mini.overflow, 'the mini genuinely does not fit ten rows at the floor').toBeGreaterThan(0)
-  expect(mini.scrollable, 'what does not fit scrolls, rather than clipping silently').toBe(true)
+  // THE SERVER ROW'S DELETION (owner's ruling, 2026-09-28) TOOK 40px OFF THIS LIST: the mini,
+  // 29px short before, now fits every row at the floor. The scroll fallback is still asserted
+  // below, on the phone this cannot reach at all.
+  expect(mini.overflow, 'the mini fits every row at the floor once the server row is gone').toBeLessThanOrEqual(0)
   // every row is still reachable, just not without scrolling
   await page.locator('.bn-drawer .bn-nav a.bn-nav-link').last().scrollIntoViewIfNeeded()
   await expect(page.locator('.bn-drawer .bn-nav a.bn-nav-link').last()).toBeVisible()
