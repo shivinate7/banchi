@@ -296,13 +296,13 @@ import json
 import os
 import re
 import signal
-import queue
 import selectors
 import socket
 import sqlite3
 import sys
 import unicodedata
 import concurrent.futures
+from queue import Empty, SimpleQueue
 import threading
 import time
 import uuid
@@ -17507,7 +17507,7 @@ class CaptureServer(ThreadingHTTPServer):
             self._photo_pool = concurrent.futures.ThreadPoolExecutor(
                 max_workers=PHOTO_SLOTS, thread_name_prefix="photo"
             )
-        self._arrivals: "queue.SimpleQueue" = queue.SimpleQueue()
+        self._arrivals: "SimpleQueue" = SimpleQueue()
         self._wake_r, self._wake_w = socket.socketpair()
         self._wake_r.setblocking(False)
         self._sorter = threading.Thread(target=self._sort, name="sorter", daemon=True)
@@ -17517,10 +17517,8 @@ class CaptureServer(ThreadingHTTPServer):
         if self._sorter is None:
             self._start_pools()
         self._arrivals.put((request, client_address))
-        try:
+        with contextlib.suppress(OSError):  # a full wake buffer: the sorter is already due to wake
             self._wake_w.send(b"x")
-        except OSError:
-            pass  # a full wake buffer means the sorter is already due to wake
 
     def _route(self, request, client_address, peeked: bytes) -> None:
         pool = self._photo_pool if peeked.startswith(_PHOTO_LANE_LINES) else self._pool
@@ -17548,7 +17546,7 @@ class CaptureServer(ThreadingHTTPServer):
                         while True:
                             try:
                                 request, addr = self._arrivals.get_nowait()
-                            except queue.Empty:
+                            except Empty:
                                 break
                             try:
                                 fd = request.fileno()
