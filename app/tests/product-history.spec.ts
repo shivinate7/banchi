@@ -47,6 +47,7 @@ function searchGroup(over: Partial<SearchGroup> & { sku: string; names: string[]
     live_as_of: null,
     on_hand: 1,
     listable: 1,
+    rank: 0,
     copies: [],
     ...over,
   }
