@@ -223,7 +223,17 @@ The tier model and every row not named below stand as proposed. The owner's word
 - **Row 60, `mac icon grid`:** Tier 2, inside L8's logo family.
 - **Row 49, `build order mirror`:** a later lane makes the build order one source. Then the row
   goes.
-- **Q8, merge 16 rows into 4:** `Yes, as L8 (Recommended)`.
+- **Q8, merge 16 rows into 4:** `Yes, as L8 (Recommended)`. L8 landed the logo family (5
+  rows into `logo`), the closed-vocabularies family (6 rows into `closed vocabularies`),
+  and four pairs: `env vocabulary`, `pass criteria`, `column counts`, and `check registry`.
+  Row 15 `decision ids in code` folded into row 14 `decision ids`, as one blocking row.
+  Row count: 107 to 93 on a full run. NOT landed: `check numbering` and `numbering in
+  code`. That function's own docstring argues the two need a different scope and a
+  different severity. A merge cannot preserve that without changing what one row judges.
+  This needs the owner's word before it can proceed. The line-anchor trio, M3's third
+  group, is superseded by the owner's fuller "convert and collapse" ruling. That is a
+  separate, larger lane: L8 measured 776 real line-number citations in 44 files today,
+  not the about 88 once estimated, and did not attempt the conversion.
 - **Markdown spelling (lane L2's measurement, 727 British spellings in 226 files):** `Shrinking
   offender list now`. The `identifier spelling` check reaches markdown now. Today's words are
   listed per file, and the list may only shrink, on D280's pattern. New prose uses American
