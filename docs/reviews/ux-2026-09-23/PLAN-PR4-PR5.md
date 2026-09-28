@@ -196,6 +196,7 @@ G, T and PR 5:
 - PR 5 into PR 4: `bring everything that was PR5 into PR4, so you can do that debt27 check now`.
 - H: `it'll be the epilogue of PR4`.
 - H, on the first mockups (current, A, B, C, desktop only): `all of the H concepts tend to just pick one color and stick to it, when the power of cyberpunk is its fusion of several loud color schema contrasting and clashing`. So no single-accent concept is the answer.
+- H, same round: `neon noir was the closest of the dynamism though if i had to pick one`, then `none were good tho`. Neon Noir is the starting point, not the answer.
 - Walk density: `Cards to pick at the stop (what's built)`.
 - Test-audit Q1, the tiers: `Three tiers, agent proposes, you approve (Recommended)`. Q2: `Yes (Recommended)`.
 - Start now: `L1, L3, L6, L7`. The owner asked for the other three options explained first.
