@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 
-import type { SearchCopy, SearchGroup, SectionDetail } from './types'
+import type { BoxRecord, SearchCopy, SearchGroup, SectionDetail } from './types'
 import { isDeparted, photoUrl, placeSentence } from './server'
 import { PlaceNeighbors } from './PlaceNeighbors'
 import { PullConfirm } from './PullConfirm'
@@ -160,6 +160,22 @@ function RowIdentity({
   )
 }
 
+/** Each box's divider layout, keyed by box number, out of the registry `BoxBrowse`'s own
+ *  `getBoxes()` read already returned. Keyed by `box` so one box's dividers can never be
+ *  handed to another box's card. Shared home, moved off `Inventory.tsx`: Orders' own walk
+ *  reads the same registry and feeds the same `sections` prop below. */
+export function layoutsOf(records: readonly BoxRecord[]): ReadonlyMap<number, readonly SectionDetail[]> {
+  const out = new Map<number, readonly SectionDetail[]>()
+  for (const record of records) {
+    if (record === null || typeof record !== 'object') continue
+    if (typeof record.box !== 'number' || !Number.isFinite(record.box)) continue
+    const detail: unknown = record.sections_detail
+    if (!Array.isArray(detail) || detail.length === 0) continue
+    out.set(record.box, detail as readonly SectionDetail[])
+  }
+  return out
+}
+
 export type CardLocationsProps = {
   group: SearchGroup
 
@@ -252,6 +268,12 @@ export type CardLocationsProps = {
    *  scope a rule to its usage (the walk's row `min-height`, D118) without it reaching
    *  `#/inventory` or `#/fulfillment`. Omitted, the section carries its usual two classes only. */
   className?: string
+
+  /** Draw the heading, the stats and the SKU line. Owner skin only. Defaults to `true`, so
+   *  every existing caller renders exactly as before. `false` draws the row list alone, for a
+   *  caller that already carries its own heading — the walk row, which draws one `CardLocations`
+   *  per pick and cannot repeat "Every copy of this card" on each one. */
+  head?: boolean
 }
 
 export function CardLocations(props: CardLocationsProps) {
@@ -313,6 +335,7 @@ function OwnerRows({
   onRerank,
   preserveOrder = false,
   className,
+  head = true,
 }: Omit<CardLocationsProps, 'persona'>) {
   const number = collectorNumber(group)
 
@@ -409,6 +432,7 @@ function OwnerRows({
 
   return (
     <section className={['card-locations', 'card-locations-owner', className ?? ''].filter(Boolean).join(' ')}>
+      {!head ? null : (
       <header className="card-locations-head">
         <h3 className="bn-section-title card-locations-title">Every copy of this card</h3>
         {/* THE ONE THING THAT RESHUFFLES THIS LIST, and it is a press rather than a consequence.
@@ -521,6 +545,7 @@ function OwnerRows({
           </p>
         ) : null}
       </header>
+      )}
 
       <ul className="card-locations-rows bn-stagger">
         {drawn.map((copy, i) => {
