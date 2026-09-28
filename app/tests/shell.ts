@@ -76,7 +76,7 @@ import { CAPTURE_PORT, DEV_PORT } from '../devPort'
  * every stub a spec registers wins over it.
  *
  * WHICH IS ALSO THE ONE WAY THIS CAN FAIL SILENTLY, so it is checked rather than asked for.
- * `gallery`, `pull-confirm` and `brand` navigate INSIDE a `test.beforeEach` of their own, and
+ * `gallery` and `brand` navigate INSIDE a `test.beforeEach` of their own, and
  * within one suite Playwright runs `beforeEach` hooks in DECLARATION order — so a
  * `sealEveryTest()` written below one of those would install the seal after the navigation it
  * was meant to catch, those requests would reach the real port unrecorded, and the assertion
@@ -206,7 +206,8 @@ const CARDS = {
 
 /* ---------------------------------------------------------------------------- the seal */
 
-/** Is this request bound for somewhere that is not this machine's two servers?
+/** Is this request bound for somewhere that is not this machine's two servers, or a hostname
+ *  this spec named by hand?
  *
  *  AN ALLOW-LIST OF TWO PORTS, AND THE BLOCK-LIST IT REFUSES TO BE. The thing that prompted
  *  this guard was three typefaces on `fonts.googleapis.com`, and a rule naming that host would
@@ -221,15 +222,27 @@ const CARDS = {
  *  a different host on the same two ports, and both are still this Mac. A hostname allow-list
  *  would have to guess at that set; the ports are derived from this checkout (D43).
  *
+ *  `allowHosts` IS PER-SPEC, NEVER A SECOND DEFAULT HERE (DEBT47). One real outside host is
+ *  intended production traffic since D301: `pipeline/stockimages.py` hotlinks stock images
+ *  from `tcgplayer-cdn.tcgplayer.com`, and `demo-coverage.spec.ts` reads the BUILT demo
+ *  artifact, so stubbing that host there would test a rule the shipped page does not follow.
+ *  Widening the DEFAULT here instead — the fix DEBT47 explicitly declined — would weaken the
+ *  seal for every OTHER spec that imports this file, the same reasoning that keeps the two
+ *  ports themselves off a guessed name. So the exception is an argument each caller states for
+ *  itself, through `sealEveryTest({ allowOutside: [...] })`, and every host not named there is
+ *  still refused.
+ *
  *  ONLY `http:` AND `https:`. `data:` and `blob:` never leave the process — the capture
  *  screen's encoder and every inline SVG fixture in this file are blobs and data URIs — and
  *  Playwright does not route them anyway. */
-function isOutside(url: URL): boolean {
+export function isOutside(url: URL, allowHosts: readonly string[]): boolean {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
-  return url.port !== String(DEV_PORT) && url.port !== String(CAPTURE_PORT)
+  if (url.port === String(DEV_PORT) || url.port === String(CAPTURE_PORT)) return false
+  return !allowHosts.includes(url.hostname)
 }
 
-/** Refuse and record every request that would leave this machine.
+/** Refuse and record every request that would leave this machine, except a hostname this
+ *  spec named through `sealEveryTest({ allowOutside: [...] })` — see `isOutside` above.
  *
  *  REGISTERED BEFORE `sealCapture`, SO IT IS THE LAST RESORT UNDER EVERYTHING — Playwright
  *  matches newest-first, and this one has to lose to every stub including the capture seal.
@@ -247,11 +260,11 @@ function isOutside(url: URL): boolean {
  *  IT ABORTS AS `blockedbyclient` rather than `addressunreachable`. Nothing in `app/src` reads
  *  the code, so this changes no rendering; what it changes is the sentence in a trace, which
  *  for an escaped request is a policy refusal and not a dead server. */
-async function sealOutside(page: Page): Promise<void> {
+async function sealOutside(page: Page, allowHosts: readonly string[]): Promise<void> {
   const seen: string[] = []
   escaped.set(page, seen)
   await page.route(
-    (url) => isOutside(url),
+    (url) => isOutside(url, allowHosts),
     async (route) => {
       const request = route.request()
       seen.push(`${request.method()} ${request.url()}`)
@@ -340,11 +353,11 @@ async function stubShell(page: Page, cards: number): Promise<void> {
 /* ---------------------------------------------------------------------- the small store */
 
 /** The whole read surface, small and coherent, for the specs that carry no fixtures of their
- *  own — `cursor`, `gallery`, `pull-confirm`, `brand`, `motion-live`.
+ *  own — `cursor`, `gallery`, `brand`, `motion-live`.
  *
  *  WHY THESE SPECS GET ONE AND THE OTHERS DO NOT. A spec with its own fixtures gets the seal
  *  alone, so a gap in it is REPORTED; handing it a shared answer would close the gap and the
- *  report together. These five register no handlers at all and are not about the data — they
+ *  report together. These four register no handlers at all and are not about the data — they
  *  sweep cursors, render the kit sheet, or drive the motion trigger — so what they need is for
  *  every screen to draw its POPULATED controls, the same way, in every checkout.
  *
@@ -766,10 +779,14 @@ async function stubStore(page: Page): Promise<void> {
  *
  *  `store: true` adds the small read surface for a spec that registers no handlers of its own.
  *  Leave it off and the spec gets the seal and `/status` only, which is what makes a missing
- *  fixture fail by name. */
-export function sealEveryTest(opts?: { store?: boolean; cards?: number }): void {
+ *  fixture fail by name.
+ *
+ *  `allowOutside` names hosts `sealOutside` lets through for THIS SPEC ONLY (DEBT47) — see
+ *  `isOutside`'s own header for why this is never a second default here. Every host not
+ *  named is still refused, for this spec exactly as for every other. */
+export function sealEveryTest(opts?: { store?: boolean; cards?: number; allowOutside?: readonly string[] }): void {
   test.beforeEach(async ({ page }) => {
-    await sealOutside(page)
+    await sealOutside(page, opts?.allowOutside ?? [])
     await sealCapture(page)
     await stubShell(page, opts?.cards ?? 0)
     if (opts?.store === true) await stubStore(page)

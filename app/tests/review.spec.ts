@@ -1331,8 +1331,8 @@ const ORDER_LINE_PLACE: Place = {
 /** The WCAG contrast of an element's text against the ground under it, both read from the
  *  computed style of the element and its painted ancestors, alpha composited in order —
  *  `app/tests/kit-data.spec.ts:contrastOf`'s own method, duplicated rather than imported
- *  (every spec file in this repo carries its own contrast helper; `pull-confirm.spec.ts`
- *  and `fulfillment.spec.ts` each do too). This one is the right shape for a TRANSLUCENT
+ *  (every spec file in this repo carries its own contrast helper; `fulfillment.spec.ts`
+ *  does too). This one is the right shape for a TRANSLUCENT
  *  ground — `noThinContrast` in `fulfillment.spec.ts` refuses one by design (`docs/DESIGN.md`'s
  *  floor is for an opaque owner-facing panel), and this pill is glass over a photograph. */
 async function contrastOf(page: Page, selector: string): Promise<number> {
