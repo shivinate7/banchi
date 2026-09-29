@@ -9,4 +9,4 @@ app therefore offers no release. Recovery today is a hand repair of the row.
 
 **Why not fixed.** A remedy needs claim rows that tolerate an unreadable claim, so the screen
 can draw and release it by key. That is more than 40 lines and a screen change. Owner's word,
-2026-09-29: leave as a gap. It has never occurred on the real store (unmeasured beyond that).
+2026-09-28: leave as a gap. It has never occurred on the real store (unmeasured beyond that).

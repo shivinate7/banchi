@@ -72,7 +72,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-from store.files import StoreError
+from store.files import UnreadableClaim
 from store.rows import Rows, TableSpec
 
 # A claim is one of two things and there is no third. `live` holds cards; `released` is the
@@ -296,7 +296,7 @@ class Submissions:
         """
         found = self.entries.where(state=STATE_LIVE)
         if self.entries.dropped:
-            raise StoreError(
+            raise UnreadableClaim(
                 f"A live submission claim will not parse and would stop protecting its cards: {', '.join(self.entries.dropped)}"
             )
         return sorted(found, key=lambda sub: (sub.started_at or "", sub.receipt))
