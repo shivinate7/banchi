@@ -8760,6 +8760,17 @@ COMPONENTS = [
                         "became a set, tsc, eslint and every spec stayed green over a "
                         "control that had never been pressed by anything but a human.",
             },
+            "tests/capture-width.spec.ts": {
+                "does": "the Capture screen leaves no unused horizontal band at 1440 and 820, "
+                        "both themes: every 8px row from the stage's top to the photo's bottom, "
+                        "the shell width no painted box covers stays within the grid gaps plus "
+                        "24px. Made red on the layout where a 1fr last-capture column left "
+                        "white bands the 9:16 photo could not use (97px at 1440, 241px at 820).",
+                "governed_by": ["D118", "D195", "D197"],
+                "note": "Nothing is captured and no camera opens; the empty frame is put in "
+                        "the has-a-receipt state by attribute, so it measures the photo's "
+                        "real hugging width.",
+            },
             "tests/capture-undo.spec.ts": {
                 "does": "the undo STACK on the capture screen (D10, the owner's list of ten, "
                         "2026-08-29): the session's captures newest first and capped at ten, "
