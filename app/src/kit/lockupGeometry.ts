@@ -17,8 +17,7 @@
    read at build time and never committed. Outlines are artwork, not font software. */
 
 /** Section 13's eleven settled parameters, read out of the spec's own table.
- *  `make docs-audit`'s `lockup params` row reconciles these against it and against the round
- *  sheet's holds, so all three cannot disagree. */
+ *  `make docs-audit`'s `lockup params` row reconciles these against it, so the two cannot disagree. */
 export const PARAMS = {
   pad: 0.5, gap: 0.08, stroke: 0.05, rrMul: 4, arm: 0.32,
   tl: 0.7, tip: 0.15,

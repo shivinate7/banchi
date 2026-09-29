@@ -92,10 +92,7 @@ PHOTOS_RELOCATED = "photos_relocated"
 # `readings_sources` tables are the purest additive step there is (`_add_readings`'s own
 # docstring), exactly `_add_submissions`'s case one version up.
 #
-# SIX, FOR D192 (store-scaling item 2). `docs/specs/store-scaling/00-phases.md`
-# reserves 6 for item 8's FTS5 search, "after D189's 5," and says the branch that reaches 6
-# FIRST keeps it while the other renumbers — this item is Phase 1 and item 8 is Phase 2, so
-# by that document's own ordering this is the branch that reaches it first. AN INDEX ALONE IS
+# SIX, FOR D192. AN INDEX ALONE IS
 # NOT A FREE ADDITION ON AN EXISTING STORE: adding a tuple to `_INDEXES` only reaches
 # `_ensure_schema`'s NEW-STORE branch — a store already stamped at `SCHEMA_VERSION` takes the
 # `_repair` branch and returns before that loop ever runs, so the index would silently never
@@ -104,9 +101,8 @@ PHOTOS_RELOCATED = "photos_relocated"
 # the CURRENT schema version, reads `SCAN cards` / `USE TEMP B-TREE FOR ORDER BY` — the exact
 # O(table) sort this item's own `Rows.top` exists to avoid.
 #
-# SEVEN, FOR STORE-SCALING ITEM 8. `docs/specs/store-scaling/00-phases.md` reserved 6 for
-# this item and item 2 reached it first (see the paragraph above and D192), so this item
-# renumbers its own — the D140 rule for decision ids, applied to schema versions, and the
+# SEVEN, FOR THE SEARCH INDEX. The per-box index reached 6 first (see the paragraph above
+# and D192), so this step renumbers its own — the D140 rule for decision ids, applied to schema versions, and the
 # same shape `store/db.py`'s own 3->4 comment already names as precedent. `_add_search_index`
 # builds the FTS5 index that replaces `do_search`'s O(cards) walk.
 #
@@ -263,7 +259,7 @@ _INTEGER = {
 _INDEXES = (
     ("cards", "box"), ("cards", "sku"), ("cards", "capture_id"), ("cards", "state"),
     ("cards", "idx"),
-    # D192 (store-scaling item 2): `Rows.top`/`SqliteSource.top`'s
+    # D192: `Rows.top`/`SqliteSource.top`'s
     # `ORDER BY captured_at DESC LIMIT ?` — Home's hero deck — is an index scan rather than a
     # sort-the-whole-table, or it would be exactly the O(store) cost the item exists to
     # remove. `_ensure_schema` creates it with `CREATE INDEX IF NOT EXISTS` at connect, so an
@@ -437,7 +433,7 @@ def _ensure_schema(
     for statement in _CID_INDEXES:
         conn.execute(statement)
     # THE FRESH PATH BUILDS THE SEARCH INDEX TOO, FOR THE SAME REASON THE TWO STATEMENTS
-    # ABOVE DO (store-scaling item 8). `_upgrade`'s `ALTER`/`CREATE VIRTUAL TABLE` steps never
+    # ABOVE DO. `_upgrade`'s `ALTER`/`CREATE VIRTUAL TABLE` steps never
     # run here — this branch stamps `SCHEMA_VERSION` directly — so without this call
     # `cards_fts` would not exist on any newly created store: every worktree, the demo seed,
     # and every harness test that starts from an empty store, and `do_search` would raise
@@ -1036,7 +1032,7 @@ def _add_readings(conn: sqlite3.Connection) -> None:
 
 
 def _add_captured_at_index(conn: sqlite3.Connection) -> None:
-    """Schema 6: the `cards_captured_at` index (D192, store-scaling item 2).
+    """Schema 6: the `cards_captured_at` index (D192).
 
     `Rows.top`/`SqliteSource.top` power `Inventory.newest_captured` — Home's hero deck — with
     an `ORDER BY captured_at DESC LIMIT ?`, and without an index on that column SQLite has no

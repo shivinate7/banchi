@@ -3528,7 +3528,7 @@ def check_debt_ids(report: Report, docs: List[Path]) -> None:
     (measured 2026-09-16, `docs/specs/mechanization-backlog.md`, `docs/specs/logo.md`,
     `docs/specs/motion-trigger.md` among them), and `docs/decisions/*.md` and
     `scripts/docs-audit.py` add over a hundred more citing OTHER documents' own sections by
-    the same bare sigil — `logo.md §3`, `order-pipeline.md §6`, `store-scaling.md §0`. A rule
+    the same bare sigil — `logo.md §3`, `order-pipeline.md §6`. A rule
     that failed every bare `§<n>` outside `docs/debts/` would be red on all of those, none of
     which are about debts at all. THIS IS WHY THE ID IS `DEBT<n>` AND NOT A BARE `§<n>`
     (the fix this row exists to protect): only a prefixed token can be checked without
@@ -3842,12 +3842,11 @@ def check_unscoped_walk(report: Report) -> None:
     """Every full-table read of `inventory.cards`, against an allowlist that starts at
     the 2026-09-12 census and may only shrink.
 
-    docs/specs/store-scaling.md §0: almost every non-capture handler in `server/`
-    materialises the whole `cards` table and then does per-card work over it, and at
-    50,000 cards several of those routes cost seconds rather than milliseconds. §3 item 1
-    is this row: land the guard BEFORE any of the six PRs that remove a full-table read,
-    so each of them is checked against something rather than landing with no reader — the
-    exact shape `docs/GATES.md` step 7's own finding names, one register down.
+    Almost every non-capture handler in `server/` once materialised the whole `cards`
+    table and then did per-card work over it, and at 50,000 cards several of those routes
+    cost seconds rather than milliseconds. This row checks every removal of a full-table
+    read against something, so none lands with no reader — the exact shape
+    `docs/GATES.md` step 7's own finding names, one register down.
 
     THREE KINDS OF DISAGREEMENT, exactly `check_storage_keys`'s shape:
       - a site this file scans and finds, not on the allowlist: a NEW full-table read.
@@ -3860,9 +3859,9 @@ def check_unscoped_walk(report: Report) -> None:
         drop an entry and leave the printed count claiming coverage it no longer has.
 
     `do_inventory`'s `to_payload()` call is the one entry that can never be removed: the
-    owner ruled (docs/specs/store-scaling/00-phases.md) that `GET /inventory` stays on the
-    wire, unused, rather than being deleted once item 2 lands a scoped `GET
-    /inventory/<box>`. Nothing in this function treats it specially — it is simply an
+    owner ruled that `GET /inventory` stays on the
+    wire, unused, rather than being deleted once the scoped `GET
+    /inventory/<box>` landed. Nothing in this function treats it specially — it is simply an
     entry nothing will ever delete, which is why `UNSCOPED_WALK_EXPECTED`'s floor never
     reaches zero.
 
@@ -3888,8 +3887,8 @@ def check_unscoped_walk(report: Report) -> None:
                 f"`where(...)`/`select(..., **filter)` with an index, or a per-box read "
                 f"through `records_in` — or add `(\"{path}\", \"{fname}\", \"{shape}\") "
                 f"to `UNSCOPED_WALK_ALLOWED` and raise `UNSCOPED_WALK_EXPECTED` by one, "
-                f"with the reason in the commit message. docs/specs/store-scaling.md §0 "
-                f"is why this matters: every one of these costs proportionally more as "
+                f"with the reason in the commit message. this "
+                f"matters: every one of these costs proportionally more as "
                 f"the store grows, and none of it shows up until it does.",
             ))
 
@@ -3911,7 +3910,7 @@ def check_unscoped_walk(report: Report) -> None:
         findings.append(Finding(
             "scripts/docs-audit.py -> UNSCOPED_WALK_ALLOWED",
             f"has {len(allowed)} entries where {UNSCOPED_WALK_EXPECTED} are pinned. The "
-            f"count is the plan's progress meter (docs/specs/store-scaling.md §3): raise "
+            f"count is the plan's progress meter: raise "
             f"`UNSCOPED_WALK_EXPECTED` only alongside a NEW site you are deliberately "
             f"keeping (say why), and lower it in the same commit that deletes a site the "
             f"tree no longer has.",
@@ -3931,7 +3930,7 @@ def _pipeline_imports(path: Path) -> List[Tuple[int, str]]:
     """`(line, spelling)` for every `import pipeline...` / `from pipeline...` in one file.
 
     MODULE-LEVEL OR INSIDE A FUNCTION — a lazy `from pipeline import join` hidden in a
-    function body is the exact shape store-scaling item 8 shipped (`store/db.py:
+    function body is the exact shape the search-index step shipped (`store/db.py:
     _add_search_index`) and it does not show at the top of the file, so `ast.walk` over
     the whole tree (not just `tree.body`) is what a grep-the-top-lines reader would miss.
     A relative import (`from . import x`, `node.level > 0`) is never `pipeline` and is
@@ -11037,8 +11036,6 @@ def _mac_icon_grid() -> Row:
                 else f"{len(findings)} problem(s)"))
 
 
-LOCKUP_ROUND = ROOT / "docs" / "specs" / "logo" / "sheets" / "lockup-round.html"
-SIDEBAR_MORPH = ROOT / "docs" / "specs" / "logo" / "sheets" / "sidebar-morph.html"
 MARK_GEOMETRY = ROOT / "app" / "src" / "kit" / "markGeometry.ts"
 LOCKUP_TSX_ = ROOT / "app" / "src" / "kit" / "Lockup.tsx"
 FAVICON = ROOT / "app" / "public" / "favicon.svg"
@@ -11053,17 +11050,16 @@ def _lockup_bracket() -> Row:
     §16 settles the dark theme's bracket as the chrome gradient `markPalettes.ts` already gives
     `bluesteel` — the default mark's own bracket — so the lockup and the mark are one object in
     one metal. That means four hexes are written in a sheet as well as in the generated file,
-    which is the defect this work keeps finding, so this row reconciles them.
+    which is the defect this work keeps finding, so this row checks that the component reads them.
 
-    `raw color` cannot see either side: its scope is `app/src/*.css`, and these are a `.ts` and
-    an `.html`. Provably wrong when it fires — both sides are literals.
+    `raw color` cannot see it: its scope is `app/src/*.css`, and this is a `.tsx`.
     """
-    if not exists(SIDEBAR_MORPH) or not exists(MARK_PALETTES):
+    if not exists(LOCKUP_TSX) or not exists(MARK_PALETTES):
         # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
         # the render, and an absent row is the one state nothing in this file reads.
         return Row("lockup bracket", MECHANICAL, [],
-                   "the lockup sheet or the generated palettes are not there", scanned=0)
-    sheet, gen = read(SIDEBAR_MORPH), read(MARK_PALETTES)
+                   "the lockup component or the generated palettes are not there", scanned=0)
+    gen = read(MARK_PALETTES)
     # the component reads the palette rather than naming hexes; if it ever stops, say so here
     if exists(LOCKUP_TSX):
         tsx = read(LOCKUP_TSX)
@@ -11083,18 +11079,8 @@ def _lockup_bracket() -> Row:
             "dark bracket from it; with it missing this row compares nothing.",
         )], "")
     want = re.findall(r"#[0-9A-Fa-f]{6}", m.group(1))
-    got_block = re.search(r"const DARK_BRACKET = \[(.*?)\]\n", sheet, re.S)
-    got = re.findall(r"#[0-9A-Fa-f]{6}", got_block.group(1)) if got_block else []
-    problems = []
-    if [c.upper() for c in got] != [c.upper() for c in want]:
-        problems.append(Finding(
-            rel(SIDEBAR_MORPH),
-            f"the lockup's dark bracket is {' '.join(got) or 'absent'} and `bluesteel`'s is "
-            f"{' '.join(want)}. §16 settles them as the same metal so the lockup and the mark "
-            f"are one object; a sheet that drifts from the palette makes them two.",
-        ))
-    return Row("lockup bracket", MECHANICAL, problems,
-               f"{len(want)} stops against `bluesteel`'s locked bracket",
+    return Row("lockup bracket", MECHANICAL, [],
+               f"the lockup reads `bluesteel`'s locked bracket ({len(want)} stops)",
                scanned=len(want))
 
 
@@ -11106,47 +11092,28 @@ def _rail_mark() -> Row:
     the small cut on a measurement. It had been re-derived from the DISPLAY cut's unit rescaled
     into the wrong box, in the one sheet the sidebar's size is decided from.
 
-    The fix copies two constants out of the generated file, which is itself the defect this
-    project keeps finding — a value typed a second time. So this row reconciles them. Provably
-    wrong when it fires: both sides are literals.
+    The shipped component and the generated files are what this row reads: the lockup imports
+    `RAIL_ARM`, draws no path of its own, and the tab keeps its settled paint.
     """
-    if not exists(SIDEBAR_MORPH) or not exists(MARK_GEOMETRY):
+    if not exists(MARK_GEOMETRY):
         # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
         # the render, and an absent row is the one state nothing in this file reads.
         return Row("rail mark", MECHANICAL, [],
-                   "the sidebar mockup or the generated mark is not there", scanned=0)
-    sheet, gen = read(SIDEBAR_MORPH), read(MARK_GEOMETRY)
-    # How many comparisons this row actually made. Two of them are the copied
-    # constants and the rest are the tab's, which only exist if the favicon does.
+                   "the generated mark is not there", scanned=0)
+    gen = read(MARK_GEOMETRY)
     compared = 0
     want_path = re.search(r"SMALL_BRACKET = '([^']+)'", gen)
     want_stroke = re.search(r"SMALL_STROKE = ([\d.]+)", gen)
-    got_path = re.search(r"MARK_SMALL_BRACKET = '([^']+)'", sheet)
-    got_stroke = re.search(r"MARK_SMALL_STROKE = ([\d.]+)", sheet)
     if not (want_path and want_stroke):
         return Row("rail mark", MECHANICAL, [Finding(
             rel(MARK_GEOMETRY),
-            "SMALL_BRACKET or SMALL_STROKE is gone from the generated mark. The sidebar mockup "
-            "copies both; with them missing this row compares nothing, which is worse than failing.",
+            "SMALL_BRACKET or SMALL_STROKE is gone from the generated mark. The lockup's rail "
+            "end is built from them; with them missing this row compares nothing, which is worse than failing.",
         )], "")
     problems = []
-    compared += 2  # the bracket path and the stroke, both copied out of the generated mark
-    if not got_path or got_path.group(1) != want_path.group(1):
-        problems.append(Finding(
-            rel(SIDEBAR_MORPH),
-            "the rail's bracket path is not the mark's. `markGeometry.ts` is generated from "
-            "`small-cut.html` and is what every surface below 64px draws (D102); a sheet that "
-            "re-derives it is drawing a mark the product does not contain.",
-        ))
-    if not got_stroke or abs(float(got_stroke.group(1)) - float(want_stroke.group(1))) > 1e-9:
-        problems.append(Finding(
-            rel(SIDEBAR_MORPH),
-            f"the rail's stroke is {got_stroke.group(1) if got_stroke else 'absent'} and the "
-            f"mark's is {want_stroke.group(1)}.",
-        ))
-    # THE SHIPPED COMPONENT IS THE THIRD SIDE, and it is checked differently on purpose.
+    # THE SHIPPED COMPONENT IS CHECKED DIRECTLY.
     # `Lockup.tsx` does not COPY the rail's bracket — it imports `RAIL_ARM`, which
-    # `build-lockup.mjs` generates by running the sheet's own `taperParts` at `tip = 1` and then
+    # `build-lockup.mjs` generates by running the drawing's own `taperParts` at `tip = 1` and then
     # RENDERS against this file's stroked wire, refusing to write if they differ by more than 2%
     # of inked pixels at 10x. That is a stronger check than anything this row could perform, so
     # what is checked here is that it is still the check in force: a component that stops
@@ -11223,30 +11190,23 @@ def _rail_mark() -> Row:
                 "noise. Every other surface keeps its metal; this one traded it for legibility.",
             ))
     return Row("rail mark", MECHANICAL, problems,
-               "the rail bracket is the shipped mark — in the sheet, at both ends of the "
+               "the rail bracket is the shipped mark — at both ends of the "
                "morph, and on the tab", scanned=compared)
 
 
 def _lockup_params() -> Row:
-    """The lockup sheet's declared holds and docs/specs/logo.md's settled table agree.
+    """docs/specs/logo.md's settled table and the generated lockup geometry agree.
 
-    A PARAMETER SETTLED IN A ROUND AND THEN TYPED A SECOND TIME IS HOW THAT SHEET ALREADY WENT
-    WRONG, twice, in the same row: a hand-written caption said a value had been rejected in a
-    round it had not been. The sheet fixed its own half by deriving every label from one
-    `ROUND` object. This row is the other half — the object and the spec are two copies of the
-    same decision, and nothing was comparing them.
-
-    The sheet asserts, on every render, that the values it DECLARES as held were the values it
-    actually DREW. That is a different claim from this one and neither covers the other: the
-    sheet cannot see the spec, and this row cannot see a drawing.
+    A settled parameter typed a second time is how these two drift. The spec is the store of
+    record; `lockupGeometry.ts` is generated from it by `scripts/build-lockup.mjs`.
 
     Provably wrong when it fires — both sides are literals.
     """
-    if not exists(LOGO_SPEC) or not exists(LOCKUP_ROUND):
+    if not exists(LOGO_SPEC):
         # A ROW, NOT A RETURN — see `raw color`. A silent return deletes the row from
         # the render, and an absent row is the one state nothing in this file reads.
         return Row("lockup params", MECHANICAL, [],
-                   "the spec or the round lockup sheet is not there", scanned=0)
+                   "the spec is not there", scanned=0)
 
     spec_section = read(LOGO_SPEC)
     marker = "### The settled values, and the one place they live"
@@ -11260,50 +11220,15 @@ def _lockup_params() -> Row:
     tail = tail[: tail.index("\n### ", 10)] if "\n### " in tail[10:] else tail
     published = {k: float(v) for k, v in _LOCKUP_SPEC_ROW.findall(tail)}
 
-    sheet = read(LOCKUP_ROUND)
-    # THE KEY THE ROUND IS SWEEPING CANNOT ALSO BE HELD, and the first version of this row did not
-    # know that: it fired the moment a settled parameter came up for its own round. A settled value
-    # must be pinned OR be the one under test, and "under test" is a state the sheet declares.
-    sweeping = re.search(r"sweeping:\s*'(\w+)'", sheet)
-    sweeping = sweeping.group(1) if sweeping else ""
-    block = re.search(r"holds:\s*\{([^}]*)\}", sheet)
-    if block is None or not published:
+    if not published:
         return Row("lockup params", MECHANICAL, [Finding(
-            rel(LOCKUP_ROUND),
-            "no `holds: {...}` in the round sheet, or no rows in the spec table. Say so here "
-            "rather than passing.",
+            rel(LOGO_SPEC),
+            "no rows in the settled-values table. Say so here rather than passing.",
         )], "")
-    declared = {
-        k: float(v)
-        for k, v in re.findall(r"(\w+)\s*:\s*([0-9.]+)", block.group(1))
-    }
 
     findings: List[Finding] = []
-    for key in sorted(set(published) - set(declared) - {sweeping}):
-        findings.append(Finding(
-            rel(LOCKUP_ROUND),
-            f"docs/specs/logo.md settles `{key}` at {published[key]} and the sheet neither holds "
-            f"it nor is sweeping it. A settled parameter that is neither pinned nor under test is "
-            f"one the next round can move without anybody noticing.",
-        ))
-    for key in sorted(set(declared) - set(published)):
-        findings.append(Finding(
-            rel(LOGO_SPEC),
-            f"the sheet holds `{key}` at {declared[key]} and the settled table does not list it. "
-            f"Every value a round holds fixed is a decision, even an inherited one.",
-        ))
-    for key in sorted(set(declared) & set(published)):
-        if abs(declared[key] - published[key]) > 1e-9:
-            findings.append(Finding(
-                f"{rel(LOCKUP_ROUND)} -> {key}",
-                f"held at {declared[key]} in the sheet and settled at {published[key]} in "
-                f"docs/specs/logo.md. The spec is the store of record; move the sheet, or move "
-                f"the spec first and say which round moved it.",
-            ))
-
-    # THE GENERATED FILE IS THE THIRD COPY, and §15 asked for it by name: "once a generated file
-    # exists it must reconcile both directions against that too, exactly as `logo parity` does
-    # for `markPalettes.ts`". Without this row the app could draw a lockup the spec does not
+    # THE GENERATED FILE IS THE COPY THE APP DRAWS FROM, reconciled both directions exactly as
+    # `logo parity` does for `markPalettes.ts`. Without this row the app could draw a lockup the spec does not
     # describe and every other check would stay green — which is what `logo parity` exists for.
     if exists(LOCKUP_GEOMETRY):
         gen = read(LOCKUP_GEOMETRY)
@@ -11334,9 +11259,7 @@ def _lockup_params() -> Row:
                 ))
 
     return Row("lockup params", MECHANICAL, findings, scanned=len(published), summary=
-               f"{len(published)} settled values against the sheet's holds"
-               + (" and the generated geometry" if exists(LOCKUP_GEOMETRY) else "")
-               + (f", `{sweeping}` under test" if sweeping in published else "")
+               f"{len(published)} settled values against the generated geometry"
                if not findings else f"{len(findings)} disagreements")
 
 
@@ -12251,8 +12174,8 @@ def check_no_mechanism_on_screen(report: Report) -> None:
 
     WHAT IS NOT: a string returned by an arbitrary helper and interpolated by reference —
     `{formatLabel(x)}` — because that needs data-flow tracing the AST alone does not carry.
-    So the count this row prints is a FLOOR, the same word `docs/specs/corpus-pruning.md`
-    already uses for its own undercount, and for the identical reason: what is missed
+    So the count this row prints is a FLOOR, the same word D177's prune measurement
+    uses for its own undercount, and for the identical reason: what is missed
     understates the defect, never invents one.
 
     `Notice`'s own `code` prop is deliberately NOT extracted — CLAUDE.md's Register
@@ -16554,20 +16477,16 @@ _ARGUMENT_MIN_WORDS = 12
 # on this list, matched by `shape="items"` restricted to the `.cards` chain in the
 # matcher itself, never by which `.items()` call comes first in the function body).
 #
-# TAKEN 2026-09-12, docs/specs/store-scaling.md §4, PLUS TWO. `do_inventory`'s
-# `to_payload()` call is kept here PERMANENTLY, on the owner's word recorded in
-# docs/specs/store-scaling/00-phases.md ("do_inventory is kept, unused, on the
-# allowlist") — §4's own table says "Removed by: item 2" for that row and that line is
-# stale; the correction lives here and in 00-phases.md, not in store-scaling.md itself.
+# `do_inventory`'s `to_payload()` call is kept here PERMANENTLY, on the owner's word
+# ("do_inventory is kept, unused, on the allowlist").
 #
 # `store/master.py:next_box_number`'s `.distinct("box")` IS A THIRTEENTH SITE THE
-# PLAYBOOK'S OWN CENSUS MISSED — this scanner found it the first time it ran against the
-# real tree (docs/specs/store-scaling/01-guard.md's "Call sites" table names twelve and
-# §4's table agrees). It is the same shape as `do_boxes`/`counts` right above and below
+# HAND CENSUS MISSED — this scanner found it the first time it ran against the
+# real tree (the census named twelve). It is the same shape as `do_boxes`/`counts` right above and below
 # it in this list: one indexed column, read once per box CREATION rather than per load or
 # per press, which is cheaper than either of those two already-permanent entries. Kept
 # here permanently for the same reason they are — the guard names it and moves on — and
-# the count is 13, not 12, because the tree already had this site on 2026-09-12; nothing
+# the count is 13, not 12, because the tree already had this site; nothing
 # added it, this row's own scan just found what the hand census did not.
 #
 # THIS COUNT MAY ONLY GO DOWN FROM HERE, same rule as `PROSE_ONLY_EXPECTED` above: an item
@@ -16576,12 +16495,12 @@ _ARGUMENT_MIN_WORDS = 12
 # (site not found) rather than silently shrinking. An item that cannot yet remove its
 # site for some reason must not touch the count.
 #
-# STORE-SCALING ITEM 4 REPLACED ONE ENTRY WITH ANOTHER RATHER THAN REMOVING ONE. `_copies_
+# THE ONE-PASS COPIES REWRITE REPLACED ONE ENTRY WITH ANOTHER RATHER THAN REMOVING ONE. `_copies_
 # out` and `_committed_keys` (`cli/resolve.py`) used to each call `Inventory.positions_for_
 # sku`/`copies_not_sold`/`sales_before`/`copies_on_hand` once PER SKU — none of those are
 # `.select()`/`.distinct()` on `.cards` directly (they are `Rows.where(sku=sku)` calls one
 # level down in `store/master.py`, invisible to this scanner, which is exactly the cost
-# `docs/specs/store-scaling/04-copies-out.md` names: the guard sees shapes on the page, not
+# the guard sees shapes on the page, not
 # runtime cost). The fix is `cli/resolve.py:_cards_by_sku`, ONE deliberate `.select()` with
 # no keyword filter — genuinely unscoped by this scanner's own rule, and genuinely cheap for
 # the same reason `store/master.py:counts` is: one pass, once per request, never once per
@@ -16614,12 +16533,12 @@ UNSCOPED_WALK_ALLOWED: FrozenSet[Tuple[str, str, str]] = frozenset({
     ("server/capture_server.py", "do_inventory", "to_payload"),   # kept permanently — owner's word
     ("server/capture_server.py", "_boxes_named", "distinct"),
     ("server/capture_server.py", "do_boxes", "distinct"),
-    ("server/pipeline_routes.py", "_value_rows", "select"),   # store-scaling item 7 — renamed from `do_pipeline_value`'s `.values()`; the aggregate pass is unavoidably store-wide (D277), so the CALL survives, only its shape and enclosing function change
+    ("server/pipeline_routes.py", "_value_rows", "select"),   # renamed from `do_pipeline_value`'s `.values()`; the aggregate pass is unavoidably store-wide (D277), so the CALL survives, only its shape and enclosing function change
     ("store/master.py", "to_payload", "items"),
     ("store/master.py", "counts", "select"),
     ("store/master.py", "next_box_number", "distinct"),   # kept permanently — one indexed column, cheap; missed by the hand census
-    ("cli/resolve.py", "box_views", "select"),   # store-scaling item 7 — renamed from `.values()`; the unbounded (`boxes=None`) branch every existing caller still uses is genuinely store-wide, for the same reason `_value_rows` is
-    ("cli/resolve.py", "_cards_by_sku", "select"),   # store-scaling item 4 — one pass, replaces per-SKU `_copies_out`/`_committed_keys`/`_unsent_ledger` reads; the `_unsent_ledger` distinct scan above is deleted, not merely moved
+    ("cli/resolve.py", "box_views", "select"),   # renamed from `.values()`; the unbounded (`boxes=None`) branch every existing caller still uses is genuinely store-wide, for the same reason `_value_rows` is
+    ("cli/resolve.py", "_cards_by_sku", "select"),   # one pass, replaces per-SKU `_copies_out`/`_committed_keys`/`_unsent_ledger` reads; the `_unsent_ledger` distinct scan above is deleted, not merely moved
     ("server/capture_server.py", "do_inventory_copies", "select"),   # §27, site 1 — a NEW full-table scan, added rather than removed, and named as a cost paid: `POST /inventory/copies` replaces `Orders.tsx`'s `GET /inventory` (D192's own site 1), and the one unfiltered `_cards_by_sku`-shaped pass here is what lets the box set handed to `_Places.for_keys` be DERIVED from the scan rather than guessed at from the request — the docstring on the function has the full argument for why that is sound where box-scoping the walk itself is not. This is the count going UP by one, on purpose, for a route this file's own item 1 could not have existed to forbid before it existed to write.
     ("server/capture_server.py", "_facet_cells", "select"),   # D213's inventory filter, moved here from `_card_facets` by FLT-09: `_facet_cells` is now the ONE scan and `_card_facets` folds its answer, so `GET /boxes` still pays one pass for both blocks. Was: — a NEW full-table scan, added rather than removed. It answers "what game/set/rarity values does this store hold, and how many of each" — an aggregate over every distinct value, which by definition cannot be scoped to one `equals` filter the way a lookup can. `GET /boxes` already pays one O(cards) pass per box (`_box_row`'s own docstring); this adds one MORE full pass, on the same route, at the same poll cadence — named here rather than folded into an existing entry because it is a genuinely new site, over three columns rather than the two-or-three `_cards_by_sku`/`do_inventory_copies` already read.
 })
@@ -19467,7 +19386,7 @@ def self_test() -> int:
         str(by_label["unscoped walk"]),
     )
 
-    # `import layering` (D63, store-scaling item 8): a lazy `from pipeline import x` inside
+    # `import layering` (D63): a lazy `from pipeline import x` inside
     # a function body must be caught the same as a module-level one — that shape is exactly
     # how the real defect shipped (`store/db.py:_add_search_index`, several hundred lines
     # in, invisible to a top-of-file reader).

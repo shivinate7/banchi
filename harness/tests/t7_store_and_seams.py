@@ -10633,7 +10633,7 @@ def check_inventory_box_route(checks: Checks) -> None:
     """D192/item 2: `GET /inventory/<box>` reads one box, never the store.
 
     THE PROOF IS `Rows.loaded_count`, NOT A TIMING. A wall-clock assertion is what
-    docs/specs/store-scaling.md's own `.backup`-copy measurement is for, run by hand against
+    a `.backup`-copy measurement is for, run by hand against
     the owner's real store; a harness test needs to be true on every machine and every CI
     runner, so it asserts what the route BUILT rather than how long it took. `Rows` already
     tracks this for exactly this reason (D88) — see `check_store_of_record` for the
@@ -10704,7 +10704,7 @@ def check_inventory_box_route(checks: Checks) -> None:
 def check_rows_scoped_after_full_load(checks: Checks) -> None:
     """D192/item 2: `where()`/`select()` cost what the index costs, even after this
     session's own `Rows` has been fully materialised. The mechanism is `store/rows.Rows`'s `__len__` own
-    citation in docs/specs/store-scaling.md; this pins it so a later change to `Rows` cannot
+    cost; this pins it so a later change to `Rows` cannot
     reopen it silently.
     """
     checks.note("")
@@ -25640,7 +25640,7 @@ def check_pricing_labels(checks: Checks) -> None:
 
 
 def check_box_views_bounded(checks: Checks) -> None:
-    """`cli/resolve.py:box_views(inventory, boxes=...)` (store-scaling item 7) — the bounded
+    """`cli/resolve.py:box_views(inventory, boxes=...)` — the bounded
     branch a caller uses when its own positions already name a small set of boxes, and the
     unbounded default every existing caller still gets.
 
@@ -26440,7 +26440,7 @@ def _copies_out_reference(
     `check_copies_out_one_pass_matches_reference` below. Never import this into `cli/`; it
     exists so a future edit to `_copies_out`'s one-pass body can be checked against the
     arithmetic it must never silently drift from. Copied verbatim from `cli/resolve.py`
-    before store-scaling item 4's rewrite (docs/specs/store-scaling/04-copies-out.md).
+    before the one-pass rewrite.
     """
     out: dict = {}
     live_now: dict = {}
@@ -26478,8 +26478,7 @@ def _copies_out_reference(
 
 
 def check_copies_out_one_pass_matches_reference(checks: Checks) -> None:
-    """`resolve._copies_out`'s one-pass rewrite (store-scaling item 4,
-    docs/specs/store-scaling/04-copies-out.md) must equal the per-listing arithmetic it
+    """`resolve._copies_out`'s one-pass rewrite must equal the per-listing arithmetic it
     replaced, on a store exercising every branch: `read > 0` with a sale, `read <= 0` with a
     sale before AND after `read_at`, a SKU only in `live_by_sku`, a SKU only in
     `inventory.listings`, and a SKU whose two copies are one SOLD and one RETIRED — the case
@@ -34560,7 +34559,7 @@ def check_order_places_scoped(checks: Checks) -> None:
     answer, because the SAME walk also builds D58's neighbor/gap decoration, which
     genuinely needs every card's name. An order's picks routinely span most of the store's
     boxes, so five boxes cost a fifth of a full read, five times — measured 185 ms ->
-    3,465 ms at 20x the store (`docs/specs/store-scaling.md` §1).
+    3,465 ms at 20x the store.
 
     `Orders.tsx`/`OrdersShipStage.tsx` read neither `neighbors` nor `section_gaps`, so
     `_Places.for_keys` answers everything else — `Inventory.occupied_indices`, two columns
@@ -34583,7 +34582,7 @@ def check_order_places_scoped(checks: Checks) -> None:
     put a pooled card back into D58's counting space for every OTHER card in a mixed box.
     """
     checks.note("")
-    checks.note("PLACES SCOPED TO PICKS — do_orders, store-scaling item 6")
+    checks.note("PLACES SCOPED TO PICKS — do_orders")
 
     with isolated_home():
         # Five 20-card boxes, mirroring §0's own shape ("five boxes, an order's picks span
@@ -38831,7 +38830,7 @@ def check_value_table(checks: Checks) -> None:
         checks.equal(
             payload["totals"]["valued"], 8, "the totals count what could actually be ranked"
         )
-        # NEW, ADDITIVE TOTALS FIELDS (store-scaling item 7) — the sum of every box's own
+        # NEW, ADDITIVE TOTALS FIELDS — the sum of every box's own
         # under_cutoff/at_or_over, checked explicitly since `checks.equal` above compares only
         # `totals["valued"]` and not the whole dict.
         checks.equal(
@@ -38864,12 +38863,12 @@ def check_value_table(checks: Checks) -> None:
         checks.equal(
             (empty["totals"]["under_cutoff"], empty["totals"]["at_or_over"]),
             (0, 0),
-            "the new totals fields (store-scaling item 7) read 0 on an empty store too",
+            "the new totals fields read 0 on an empty store too",
         )
 
 
 def check_value_page(checks: Checks) -> None:
-    """`GET /pipeline/value?band=...` (store-scaling item 7) — the paginated sibling of
+    """`GET /pipeline/value?band=...` — the paginated sibling of
     `do_pipeline_value()` must never disagree with the whole-list route it pages through.
 
     THE FIXTURE IS `check_value_table`'S OWN SHAPE, rebuilt here rather than shared, because

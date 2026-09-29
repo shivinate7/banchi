@@ -40,3 +40,12 @@
 - **The demo draws no strip.** The published demo holds no recording of `POST /pipeline/waiting`, so it refuses the read as `demo_not_recorded` (`demoServer.ts`, `docs/specs/demo.md`: an unrecorded read is refused, never answered with an empty list). The strip treats that refusal as nothing waiting, and draws nothing. Identify is frozen in the demo anyway.
 - **The estimate says it is one.** "~" marks every figure, "under a cent" included. A title says "An estimate from this store's past runs, not a quote", and a screen reader hears "(estimate)".
 - **Which press is worded, and which is primary.** Both keep their words, because both are about money (the iconography rule, step 2). "Identify now" takes the one solid fill, because it is the press that spends and must read as the loud one. "Check first" is ghost. The header itself holds no worded primary, so the header rule still holds.
+
+### Where emit and reconcile live
+
+Both stay together in the Runs sheet. Neither moves to `#/pricing`, and neither becomes its own page. Placement is a scroll. The ordered work saves the time. A run stalls for a missing answer (the sub-threshold disposition, an unanswered review queue), never for where a button sits. Measured: identification takes minutes and the review queue takes most of a sitting, so the calendar is made of runs that stop and not of stages.
+
+- **Emit is free.** A pricing screen may hold its button, and a stale run list or a race with the pricing autosave are the costs of doing so. It has no argument for moving.
+- **Reconcile does not belong on pricing under any reading.** Its input is a file that exists only after the operator has left the app, imported to TCGplayer and downloaded Export From Staged. It reads no pricing answer. Its only tie to emit is one manifest key. What it needs is to be findable on re-entry, so a run's phase says what the run owes in its own unit ("price 12", "answer 4"), and does not name three different states as `emit`.
+- **Three items are built:** the preset moves `rule` and `basis`; `#/pricing` draws the sub-threshold answer; `app/src/readiness.ts` computes what a run owes. Three are abandoned by the owner: collapsing a finished step's body, a `#/runs?run=<name>` link back from pricing, and the same ink weight for the `reconcile` phase as for `identifying`.
+- **What would reopen it:** emit still complained about after the sheet, a median box needing two or more refused emit presses, or the emit-to-reconcile gap measured in days on a real listing box (one measurement exists, 6m44s, 13 SKUs).

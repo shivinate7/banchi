@@ -901,7 +901,7 @@ def _box_names() -> Dict[int, "BoxFacts"]:
     elapsed time and the download links are what that poll is actually for.
 
     THE RUN SET IS NOW ONE INDEXED QUERY PER REGISTRY BOX, NEVER A FILTER-LESS PASS OVER
-    `cards` (store-scaling item 7). `inventory.boxes` is the registry — a handful of rows —
+    `cards`. `inventory.boxes` is the registry — a handful of rows —
     and `select(("run",), box=b)` is the same indexed column read `_positions_in` already
     relies on, so this walks `O(boxes) x O(cards per box)` rather than `O(all cards)`.
     """
@@ -2198,7 +2198,7 @@ def _relabel_positions(table) -> None:
         # makes for a malformed corpus, degrading the way `_Places` does: null,
         # never the stored string and never a guess.
         inventory = None
-    # Bounded to exactly the boxes THIS TABLE'S own positions name (store-scaling item 7) —
+    # Bounded to exactly the boxes THIS TABLE'S own positions name —
     # a `pricing.json` is always one run's SKUs, never the whole store, so walking every box
     # to relabel a handful of them is the exact defect item 7 exists to remove.
     boxes = {
@@ -2568,7 +2568,7 @@ def _unsent_ledger(
     realign, corrects it. NO CAP IS SPENT HERE. This previews the worklist; `--cap` and a
     row's own quantity are asked for at the press and spent there (D7).
 
-    ONE `_cards_by_sku` READ FOR THE WHOLE FUNCTION (store-scaling item 4). Every per-SKU
+    ONE `_cards_by_sku` READ FOR THE WHOLE FUNCTION. Every per-SKU
     walk below — the orphan scan that used to be `distinct("sku")` plus a `copies_on_hand`
     loop, the on-screen fold-through's own `copies_on_hand` loop, and `_copies_out`'s and
     `_committed_keys`' own internal per-SKU reads — shares the SAME one-pass dict, built once
@@ -2610,7 +2610,7 @@ def _unsent_ledger(
     # SKUs carried one no table names** and were invisible. Three runs held them —
     # `2026-08-29-box1-01` 18, `2026-09-01-box5-01` 9, `2026-09-11-box1-01` 4.
     #
-    # `by_sku` IS ALREADY ONE FULL PASS OVER `cards` (store-scaling item 4), so "every SKU
+    # `by_sku` IS ALREADY ONE FULL PASS OVER `cards`, so "every SKU
     # any card carries" is just its key set — no second `distinct("sku")` scan, and no
     # `copies_on_hand` call per orphan SKU either, since `by_sku` already carries every row
     # (state, box, index, run) that call would have re-read from the store. The orphan set
@@ -2696,7 +2696,7 @@ def _on_hand_by_run(inventory: master.Inventory, runs: Iterable[str]) -> Dict[st
     SOLD AND RETIRED ARE NOT ON HAND and are not counted; a buried record is not in this
     table at all (D134).
 
-    `runs` IS THE CALLER'S OWN LIST OF NAMES TO COUNT (store-scaling item 7), not a set this
+    `runs` IS THE CALLER'S OWN LIST OF NAMES TO COUNT, not a set this
     function discovers by asking the whole `cards` table which runs exist — every caller
     already knows this list before calling (it is the joined-run directory listing
     `do_pipeline_worklist` builds anyway), so asking the whole `cards` table which runs
@@ -2863,7 +2863,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
     except (files.StoreError, OSError, ValueError, TypeError):
         snapshot = None
 
-    # JOINED RUN NAMES, COLLECTED ONCE BEFORE THE MAIN LOOP (store-scaling item 7). This is
+    # JOINED RUN NAMES, COLLECTED ONCE BEFORE THE MAIN LOOP. This is
     # the SAME `joined` filter the main loop below applies — reading each manifest once here
     # and caching it, so the loop reuses the parsed dict instead of re-reading the file a
     # second time per run. `_on_hand_by_run` then counts exactly these runs rather than
@@ -3074,8 +3074,8 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
                 here["copies"] = len(positions)
 
     loaded_names = {row["run"] for row in summaries}
-    # Bounded to exactly the boxes THIS WORKLIST'S merged positions name (store-scaling
-    # item 7) — a cross-run worklist spans the joined runs above, never the whole store, so
+    # Bounded to exactly the boxes THIS WORKLIST'S merged positions name (a
+    # cross-run worklist spans the joined runs above, never the whole store, so
     # walking every box to label a bounded set is the exact defect item 7 exists to remove.
     worklist_boxes = {
         p.get("box")
@@ -3552,7 +3552,7 @@ def _value_rows(
     and `do_pipeline_value_page`, so the two routes can never disagree about a card's row or
     a drawer's tally.
 
-    NO `Card` OBJECT IS EVER BUILT (store-scaling item 7). `inventory.cards.values()` used to
+    NO `Card` OBJECT IS EVER BUILT. `inventory.cards.values()` used to
     trigger `Rows._load_all()`, JSON-parsing and constructing a `Card` for every stored
     payload; every field this loop reads — `box`, `index`, `sku`, `state`, `name`,
     `set_hint`, `condition`, `game` — is an indexed column, so the whole loop runs over
@@ -3928,7 +3928,7 @@ def do_pipeline_value() -> dict:
             "cards": len(copies),
             "valued": agg["valued"],
             "value": tcgcsv.format_price(agg["total"]),
-            # NEW, ADDITIVE FIELDS (store-scaling item 7) — the sum of every box's own
+            # NEW, ADDITIVE FIELDS — the sum of every box's own
             # under_cutoff/at_or_over, so a store-wide chip count needs no row list either,
             # matching `do_pipeline_value_page`'s identical totals block.
             "under_cutoff": sum(seat["under"] for seat in agg["tally"].values()),

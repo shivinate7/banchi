@@ -5,8 +5,7 @@
 The question was open for a good reason. `cli/cmd_join.py` records the asymmetry in its own
 comment — *"Nothing here can see the other boxes, so nothing here may remove"* — and that
 comment is scoped to a join over one drawer. **A store-wide join removes that specific ignorance**, so it looked as though it removed the objection with it. It does not. The
-measurement is `docs/specs/corpus-pruning.md`, taken 2026-09-12 against store
-`b9e983c752…` and corpus `1cea3cbd5a…`.
+measurement was read off a `.backup` snapshot of the store and the corpus file, and the figures below are that one snapshot.
 
 ### The argument
 
@@ -71,6 +70,13 @@ for the whole store, keyed by SKU, is exactly why the file can hold an answer fo
 box ever contained, and that property is the feature rather than the leak.
 
 **The measurement is analytic and says so.** There is no store-wide join to compare against,
-so `docs/specs/corpus-pruning.md` §5 names seven ways its model differs from a real one — six
-of which make the real prune list longer, never shorter, and the seventh being the sealed
-product that no join can reach. **The eleven is a floor.**
+so it differs from a real store-wide join in seven ways — six of which make the real prune list longer, never shorter, and the seventh being the sealed
+product that no join can reach. **The eleven is a floor.** The model: a SKU survives if some card record carries it as its settled identity and the current catalog export still has that row, or if the ladder could reach it from a card with no settled identity yet.
+
+1. **No store-wide join exists to compare against.** `cli/resolve.py:load` reads one run directory, never the store. Walking card records uses settled identities. Walking every run's identifications and realigning re-derives them. The two give different answers, so the join's SKU set is a design choice still to make.
+2. **A run-assembled join can refuse a run.** D36's `refuse_reallocated` refuses a run whose box number was deleted and reused. "This run may not be read" is a different answer from "no card matches", and a prune rule must not collapse them.
+3. **`bid` cannot rescue a buried record.** D20's box index was migrated in after the box was deleted, so the buried payloads carry no `bid`. The `buried` history line is the only evidence they belonged to another box.
+4. **The ladder probe over-approximates on purpose.** For cards with no settled SKU it took the union of every catalog row their number key or name key could reach, where the real ladder narrows by set hint, rarity and finish. Over-approximating is the safe direction for a question about deletion.
+5. **The catalog scope is the most favorable one.** Both exports were full-category. D76 means a real run fetches a narrower scope, which makes the prune list longer.
+6. **A stored SKU the export has dropped falls to the ladder**, never a guess. None was missing in the snapshot. One would be the moment a set rotates out of a fetched scope.
+7. **Sealed product and accessories never enter a join.** This runs the unsafe way, and it is a permanent property of the inputs, not an artifact of the measurement.

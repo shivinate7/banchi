@@ -1,6 +1,6 @@
 ## D192 — Inventory fetches one box only
 
-Item 2 of `docs/specs/store-scaling.md`'s §3 plan. Reopens the refusal at
+The first step of the store-scaling plan. Reopens the refusal at
 `server/capture_server.py`'s old `GET /boxes/<n>` comment — "a per-box read would be a second
 renderer for one caller that does not exist yet" — because the caller exists now: `#/inventory`
 is a real screen fetching the whole store on every box switch and after every write.
@@ -10,8 +10,7 @@ was already box-scoped and lazy (D88) — nothing in `store/master.py` needed to
 one box's cards. The new route (`do_inventory_box`) is the same decoration `do_inventory`
 already does, narrowed to the rows `records_in` returns, reusing `asdict(card)` so the two
 routes can never drift on what a `Card` serialises to. `GET /inventory` itself is **kept**,
-unused by any screen this item touches, on the owner's word recorded in
-`docs/specs/store-scaling/00-phases.md`.
+unused by any screen this item touches, on the owner's word.
 
 **Verified against the tree, correcting the playbook this item was built from.** The new
 route's refusal is NOT box-scoped, and an earlier draft of `do_inventory_box`'s docstring said
@@ -99,9 +98,8 @@ not fix an EXISTING store: `_ensure_schema` only runs that loop on a brand-new s
 branch, and every store already stamped at a schema version takes the `_repair` path and
 returns before reaching it — so the index would never have existed on any store that predates
 this change, the owner's real one included. The real fix is a schema bump to **6** — reserved
-for item 8 by `docs/specs/store-scaling/00-phases.md`, whose own text says the branch that
-reaches it FIRST keeps it and the other renumbers; this item is Phase 1 and item 8 is Phase 2,
-so by that ordering this item is first. `_add_captured_at_index` is the upgrade step
+for the search index, on the rule that the branch that reaches it FIRST keeps it and the other
+renumbers; this step is Phase 1 and the search index is Phase 2, so this step is first. `_add_captured_at_index` is the upgrade step
 (`store/db.py`), additive and idempotent like every step beside it. Re-verified after the fix:
 `EXPLAIN QUERY PLAN` now reads `SEARCH cards USING INDEX cards_captured_at (captured_at>?)`.
 

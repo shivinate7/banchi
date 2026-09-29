@@ -3660,7 +3660,7 @@ def do_inventory() -> dict:
 
 def do_inventory_box(box: int) -> dict:
     """One box's cards, in exactly `do_inventory`'s per-card shape. The per-box twin of
-    `GET /inventory` (D192 — see docs/specs/store-scaling.md item 2), through
+    `GET /inventory` (D192), through
     `Inventory.records_in`, which is already scoped and already lazy (D88): it queries the
     indexed `box` column and builds a `Card` object only for rows in this box, never for the
     store.
@@ -3677,9 +3677,8 @@ def do_inventory_box(box: int) -> dict:
     non-coercible box or index still raises `BadPosition` out of THIS route too, for every
     box, which is a real regression against `do_inventory`'s own per-record
     `continue`-and-keep-going (it never calls `_positions_in` at all). Fixing that is
-    `_positions_in`'s own job, named as a follow-up rather than folded into this diff — see
-    `docs/specs/store-scaling/02-per-box-read.md`'s "Do not touch" section, which is explicit
-    that `records_in`/`_positions_in`/`_Places` are not refactored here. What IS box-scoped,
+    `_positions_in`'s own job, named as a follow-up: `records_in`/`_positions_in`/`_Places`
+    are not refactored here. What IS box-scoped,
     and is what this route's O(cards-in-box) claim actually rests on, is the row-building
     query below it, `self.cards.where(box=box)` — a healthy store never touches this refusal
     at all, and that is the case T7 exercises.
@@ -6387,7 +6386,7 @@ def _release_plan(inventory: master.Inventory, box: int) -> Tuple[List[dict], di
     remaining commitment could be backed by. It is also what the operator counts when they
     look in the box, which is the number they will check this screen against.
 
-    TWO INDEXED PASSES, NEVER A FULL-TABLE WALK (store-scaling item 7): the first reads only
+    TWO INDEXED PASSES, NEVER A FULL-TABLE WALK: the first reads only
     this box's own SKUs (`select(("sku", "state"), box=box)`), and the second reads, per
     distinct SKU this box holds, every OTHER copy of it store-wide
     (`select(("box", "state"), sku=sku)`) — bounded by `O(cards in box) + O(distinct SKUs in
@@ -11444,7 +11443,7 @@ def _fts_term_alternatives(term: str) -> List[str]:
 
 
 def _fts_query(text: str) -> str:
-    """Turn a typed search string into an FTS5 MATCH expression (store-scaling item 8).
+    """Turn a typed search string into an FTS5 MATCH expression.
 
     ONE TERM PER WHITESPACE-SEPARATED WORD, EACH QUOTED, EACH A PREFIX. Quoting
     (`"word"*`) escapes FTS5's own operators (`-`, `"`, `*`, `OR`, `NOT`, `AND`) so a query
@@ -16408,7 +16407,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                 # WITH NO `band` IN THE QUERY STRING, this is the whole ranked list in one
                 # response — `do_pipeline_value`'s original shape, kept unchanged for T7 and
                 # any other direct caller. WITH A `band`, the ROW LIST pages by a value
-                # cursor (store-scaling item 7, the owner's 2026-09-12 ruling): a concurrent
+                # cursor (the owner's ruling): a concurrent
                 # sale or capture cannot skip or repeat a row, because the cursor names a
                 # row by its VALUE rather than by an offset into a list that may have
                 # shifted between two fetches. The aggregates (`boxes`, `unrankable`,

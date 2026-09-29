@@ -489,8 +489,7 @@ def box_views(
     space rather than being skipped past, because a card nobody can place might be one of
     the cards being counted.
 
-    `boxes=None` (the default, and every existing caller's behavior before store-scaling
-    item 7) WALKS EVERY CARD IN THE STORE, exactly as before — needed by `do_pipeline_value`
+    `boxes=None` (the default, and every existing caller's behavior before the paginated value page) WALKS EVERY CARD IN THE STORE, exactly as before — needed by `do_pipeline_value`
     and `do_pipeline_value_page`, which rank across every box there is. `boxes={...}` BOUNDS
     THE WALK to exactly those box numbers, through the SAME indexed `select(box=n)` the
     unbounded branch already uses — needed by a caller whose positions already name a
@@ -920,7 +919,7 @@ def _oldest_first(copies: Sequence[_SkuCardRow]) -> List[_SkuCardRow]:
     stamp — the empty string ties every key and `(box, index)` decides — so a store written
     before the field existed behaves exactly as it did.
 
-    OPERATES ON `_SkuCardRow`, NOT `master.Card`, since store-scaling item 4's rewrite: the
+    OPERATES ON `_SkuCardRow`, NOT `master.Card`, since the one-pass rewrite: the
     caller below (`_committed_keys`) reads the same one-pass `_cards_by_sku` dict `_copies_out`
     reads rather than calling `Inventory.copies_on_hand` per SKU, and `_SkuCardRow` carries the
     same three fields (`captured_at`, `box`, `index`) this sort has always kept.
@@ -985,7 +984,7 @@ def _committed_keys(
 
     `live` is counted ONCE now, inside `_copies_out`, and this spends that same number.
 
-    REWRITTEN ONTO THE SAME ONE-PASS DICT `_copies_out` READS (store-scaling item 4):
+    REWRITTEN ONTO THE SAME ONE-PASS DICT `_copies_out` READS:
     `Inventory.copies_on_hand(sku)` per SKU was the identical `Rows.where(sku=sku)`
     `_loaded`-accumulation cost `_copies_out` used to pay (see `_cards_by_sku`'s docstring),
     called once per SKU in `copies_out` rather than once per listing — the same shape,
@@ -1051,7 +1050,7 @@ def _needed_games(
     held_cards = inventory.cards
     # The same coordinates `load` renders in, off the same store, so a refusal names cards
     # by the numbers the operator will see on the screen they go looking on (D58). Bounded
-    # to exactly the boxes THIS caller's own `cards` names (store-scaling item 7) — a run's
+    # to exactly the boxes THIS caller's own `cards` names — a run's
     # positions in the common case, or every box the store holds when `cards` is a
     # store-backed join's full `store_payload` (D188), where the bound simply names every
     # box that exists and costs nothing extra.
@@ -2323,7 +2322,7 @@ def _resolve(
             sources[_path] = runs.describe_source(_path)
 
     held_cards = snapshot.inventory.cards
-    # Read the store's SKU-grouped columns ONCE (store-scaling item 4) and hand the same
+    # Read the store's SKU-grouped columns ONCE and hand the same
     # dict to both `_copies_out` and `_committed_keys`, rather than each rebuilding it.
     by_sku = _cards_by_sku(snapshot.inventory)
     copies_out, live_now = _copies_out(
@@ -2334,7 +2333,7 @@ def _resolve(
     committed_keys = _committed_keys(snapshot.inventory, copies_out, by_sku=by_sku)
     # D58's label coordinates, off the same snapshot for the same reason — one read, and
     # every position this run renders counted against the box as it stands right now.
-    # Bounded to exactly the boxes THIS RUN'S OWN positions name (store-scaling item 7) —
+    # Bounded to exactly the boxes THIS RUN'S OWN positions name —
     # a join is always over one run's payload, never the whole store, so walking every box
     # to label a handful of them is the exact defect item 7 exists to remove.
     run_boxes = {

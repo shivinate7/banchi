@@ -510,7 +510,7 @@ async function stubStore(page: Page): Promise<void> {
     )
     return json(route, { cards })
   })
-  /* D192 (store-scaling item 2): `#/inventory` and Home's hero deck no longer call
+  /* D192: `#/inventory` and Home's hero deck no longer call
    * the bare `/inventory` above — `getInventoryBox`/`getRecentCards` reach these two instead.
    * `/\/inventory$/` above is anchored and never matches either (a box number or `recent`
    * follows the slash), so both need their own stub or a walk over `#/inventory`/`#/` reaches
@@ -617,7 +617,7 @@ async function stubStore(page: Page): Promise<void> {
       floor: null,
     }),
   )
-  /* `?band=` (store-scaling item 7) — a default so a spec that navigates to `#/pricing?band=`
+  /* `?band=` — a default so a spec that navigates to `#/pricing?band=`
      without its own stub (every case today is `value-bands.spec.ts`, which overrides this with
      its own fixture-driven handler) still gets a real response rather than a hung request.
      `(\?|$)` covers both the unpaginated `do_pipeline_value()` shape (no query string, still

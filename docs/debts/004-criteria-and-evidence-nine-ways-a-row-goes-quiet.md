@@ -1,15 +1,14 @@
 ## 4 — Criteria and evidence: nine ways a row goes quiet
 
-Recorded 2026-08-11. **One file (`scripts/docs-audit.py`) and one spec
-(`docs/specs/criteria-binding.md`), so this parallelizes as a focused pass and not across
+Recorded 2026-08-11. **One file (`scripts/docs-audit.py`), so this parallelizes as a focused pass and not across
 agents.** Re-checked 2026-08-30: `EVIDENCE_SOURCES` is still three bare literals nothing
 resolves.
 
 - **`criteria evidence` can go silent.** If the score file's `test` value stops matching the
   filename-derived key, the row compares nothing and still reports `gate field published`.
   Trigger is narrow — hand-editing `NAME` in `harness/tests/t1_id_eval.py` — but there is no
-  ADVISORY downgrade for the "could not look" state. First thing to build in
-  `docs/specs/criteria-binding.md`, because the threshold fix walks straight into it.
+  ADVISORY downgrade for the "could not look" state. First thing to build,
+  because the threshold fix walks straight into it.
 - **It never opens the value it names.** `holdout_accuracy: null` — a run that measured
   nothing — still reports `gate field published`.
 - **`Pass:` matching is narrow and one-sided.** `startswith("Pass:")` misses `**Pass**:`, the

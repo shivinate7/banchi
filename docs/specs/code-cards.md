@@ -329,6 +329,7 @@ the channel decision is unexecuted, and section 8 names the experiment that woul
   conflating the two would make disposal look like losing the asset.
 - **Reservation is all-or-nothing and refuses anything not `held`.** Double-selling is
   unrecoverable, so the refusal is loud rather than a no-op.
+- **The ledger is one file parsed in full on every request.** It breaks past about 100,000 code entries. That is a different axis from the singles card count. Measure it when a real code card runs through it, and not before.
 - **A duplicate is recorded, never resolved.** One code read at two positions means either
   one card photographed twice or two cards bearing one code. A human decides with both
   photographs; a rule would be wrong half the time.

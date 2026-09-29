@@ -475,12 +475,6 @@
         "generalised"
       ]
     },
-    "docs/decisions/*-fonts-are-vendored-the-suite-allows-two-ports.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "licence"
-      ]
-    },
     "docs/decisions/*-home-states-what-is-owed.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -673,15 +667,6 @@
         "normalise"
       ]
     },
-    "docs/specs/box-drawings.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "artefact",
-        "defence",
-        "labelled",
-        "summarising"
-      ]
-    },
     "docs/specs/capture-app.md": {
       "lane": "docs-sweep",
       "SPELLING": [
@@ -717,13 +702,6 @@
       "SPELLING": [
         "catalogue",
         "catalogue"
-      ]
-    },
-    "docs/specs/emit-reconcile-placement.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "neighbouring",
-        "totalling"
       ]
     },
     "docs/specs/iconography.md": {
@@ -888,66 +866,6 @@
         "catalogue",
         "honour",
         "materialises"
-      ]
-    },
-    "docs/specs/store-scaling.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "materialises",
-        "modelled"
-      ]
-    },
-    "docs/specs/store-scaling/00-phases.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "finalised"
-      ]
-    },
-    "docs/specs/store-scaling/01-guard.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "materialise",
-        "modelled",
-        "modelled"
-      ]
-    },
-    "docs/specs/store-scaling/02-per-box-read.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "materialised",
-        "materialises",
-        "parameterisation",
-        "serialises",
-        "serialises"
-      ]
-    },
-    "docs/specs/store-scaling/03-history.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "denormalised",
-        "optimiser"
-      ]
-    },
-    "docs/specs/store-scaling/04-copies-out.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "honoured",
-        "materialised"
-      ]
-    },
-    "docs/specs/store-scaling/07-value-and-aggregates.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "materialise",
-        "materialises"
-      ]
-    },
-    "docs/specs/store-scaling/08-search-fts5.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "materialises",
-        "modelled",
-        "modelled"
       ]
     },
     "docs/specs/subbox-capture.md": {

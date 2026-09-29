@@ -169,7 +169,7 @@ def names(home: Path) -> Dict[str, Optional[str]]:
 def table_bytes(home: Path) -> Dict[str, List[tuple]]:
     """Every table's rows, for a byte-exact comparison across a reverse.
 
-    `cards_fts*` IS CARVED OUT (store-scaling item 8), for two independent reasons and
+    `cards_fts*` IS CARVED OUT, for two independent reasons and
     either alone would be enough. First, a plain `SELECT * FROM cards_fts` cannot even run:
     `note` is a virtual column of the FTS5 table with no matching column on `cards` (the
     external content table), and external-content mode resolves a column's TEXT by reading
@@ -420,7 +420,7 @@ def case_the_four_column_rosters_agree() -> None:
           ["idx", "number_display", "number_key", "ord"],
           "and every other one of them is a declared field on `Card` — `idx` and `ord` are "
           "the two named aliases, for `index` (a Python builtin's name in every other "
-          "context) and for `order` (a SQL keyword, D294), and `number_key`/`number_display` (store-scaling item 8) are the two "
+          "context) and for `order` (a SQL keyword, D294), and `number_key`/`number_display` are the two "
           "DERIVED columns `_card_columns` composes from `number`/`printed_total` through "
           "`pipeline/join.py` rather than reading off a `Card` field of their own name — "
           "there is no `Card.number_key`, on purpose, because the composed form has no "
@@ -721,7 +721,7 @@ def case_the_reverse_restores_every_table_byte_identically() -> None:
           "`payload_text`'s exact serialization")
 
     # `cards_fts*` GETS A SEMANTIC CHECK IN PLACE OF THE BYTE-EXACT ONE ABOVE
-    # (store-scaling item 8) — the forward migration's raw UPDATE loop, the manual reverse
+    # — the forward migration's raw UPDATE loop, the manual reverse
     # above (also a raw UPDATE), and `_add_search_index`'s own seed all touch `cards_fts`'s
     # shadow tables, whose page layout is not guaranteed byte-stable across an equivalent
     # rebuild even when the logical index is unchanged. What the byte comparison stood in
