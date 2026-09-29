@@ -1,4 +1,4 @@
-## D-empty-state-fills-the-frame — An empty state fills the frame to one cap, centered
+## D309 — An empty state fills the frame to one cap, centered
 
 **Ruling (owner).** The empty and lone states of the plain screens (Orders, Review, Shipping) fill
 the page frame up to one shared cap, centered. Home keeps its own layout by owner exemption.

@@ -1,4 +1,4 @@
-## D-position-ruler-ticks — The card ruler ticks every 5th card
+## D310 — The card ruler ticks every 5th card
 
 **The owner picked design B.** The card ruler under the section strip (`PositionBar`) draws a thin
 tick at every 5th card. Every 10th tick is darker, taller and carries its number. A tick stands at

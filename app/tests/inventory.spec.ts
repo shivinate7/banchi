@@ -5984,7 +5984,7 @@ test('a narrow copies column shortens the bar, never the position label', async 
      so what is asserted now is the one that is left: it does not wrap, and the bar stays inside
      the space it and two tracks need. */
   for (const h of geom.capHeights) expect(h).toBeLessThan(20)
-  /* NONE IS LEFT (D-position-ruler-ticks): the section caption went the same way, so the loop
+  /* NONE IS LEFT (D310): the section caption went the same way, so the loop
      above holds for whatever a later round draws and this count says there is nothing today. */
   expect(geom.capHeights.length).toBe(0)
   /* THE CEILING ROSE WITH THE RULERS THEMSELVES (the owner's Direction-B build, 2026-09-25:

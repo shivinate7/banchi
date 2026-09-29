@@ -278,7 +278,7 @@ test('the section ruler is drawn above the card ruler', async ({ page }) => {
 })
 
 
-test('a numbered tick within 1 card of the end loses its number (D-position-ruler-ticks)', async ({ page }) => {
+test('a numbered tick within 1 card of the end loses its number (D310)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await open(page, 3, 21)
   const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')
@@ -286,7 +286,7 @@ test('a numbered tick within 1 card of the end loses its number (D-position-rule
   await expect(ruler.locator('.position-bar-tick-num')).toHaveText(['10'])
 })
 
-test('a long section ticks every 10 and numbers every 50 (D-position-ruler-ticks)', async ({ page }) => {
+test('a long section ticks every 10 and numbers every 50 (D310)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await open(page, 3, 150)
   const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')
@@ -294,7 +294,7 @@ test('a long section ticks every 10 and numbers every 50 (D-position-ruler-ticks
   await expect(ruler.locator('.position-bar-tick-num')).toHaveText(['50', '100'])
 })
 
-test('the card ruler ticks every 5th card and numbers every 10th (D-position-ruler-ticks)', async ({ page }) => {
+test('the card ruler ticks every 5th card and numbers every 10th (D310)', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await open(page, 3, 48)
   const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')

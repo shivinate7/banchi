@@ -82,7 +82,7 @@ export function PositionBar({
     : null
   const gone = isDeparted(place)
 
-  /* WITH THE RULER THE STRIP HAS NO CAPTION (the owner's call, D-position-ruler-ticks): the header
+  /* WITH THE RULER THE STRIP HAS NO CAPTION (the owner's call, D310): the header
      already says `Section N`, and the chips say the rest. Without the ruler the caption is the
      card's own `Card 5 of 12`. */
   const boxCaption = parts.main
@@ -163,7 +163,7 @@ export function PositionBar({
           class too; only document order makes that selector return the strip. The visual order
           is done with CSS `order`. */}
       {/* WITH THE RULER, `back` AND `front` ARE WRITTEN ONCE, under the card ruler at the foot
-          (D-position-ruler-ticks): both strips run the same way, so one pair says it for both. */}
+          (D310): both strips run the same way, so one pair says it for both. */}
       {sectionDepth ? null : (
         <p className="position-bar-text position-bar-text-box">
           {boxCaption}
@@ -229,7 +229,7 @@ export function PositionBar({
                     aria-hidden="true"
                   />
                 )}
-                {/* THE TICKS (D-position-ruler-ticks): every 5th card, every 10th darker and numbered. */}
+                {/* THE TICKS (D310): every 5th card, every 10th darker and numbered. */}
                 {rulerTicksOf(depth.of).map((tick) => (
                   <span
                     key={tick.card}
@@ -253,7 +253,7 @@ export function PositionBar({
               style={{ left: `${sectionAt}%` }}
               aria-hidden="true"
             >
-              {/* THE CARD'S NUMBER, in a chip beside the pin (D-position-ruler-ticks). It rides the
+              {/* THE CARD'S NUMBER, in a chip beside the pin (D310). It rides the
                   pin, so it eases and fades with it, and it flips to the pin's other side past the
                   middle so it never meets the ruler's end. */}
               {depth?.marker == null || place.card === null ? null : (

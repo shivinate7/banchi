@@ -300,7 +300,7 @@ export type SectionDepth = {
   lastCard: number
 }
 
-/** The card ruler's ticks (D-position-ruler-ticks): a tick at every 5th card, and every 10th one
+/** The card ruler's ticks (D310): a tick at every 5th card, and every 10th one
  *  darker and numbered. `at` is the card's own cell centre, the same place the pin stands, so a
  *  tick labelled 10 sits exactly where the pin sits on card 10. The section's last card is never
  *  ticked: the ruler's end label already says it, and a number within 1 card of the end is

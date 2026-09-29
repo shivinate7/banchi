@@ -1,4 +1,4 @@
-## DEBT-stock-image-first-ask-cold — the first ask for a cold catalog group answers nothing
+## DEBT75 — the first ask for a cold catalog group answers nothing
 
 `StockImages._tcgcsv_name_lookup` (and `url_for_line_name`) return `None` while the background
 tcgcsv fetch for a group is pending. `#/revenue` asked once, so a sealed or dropped SKU in a

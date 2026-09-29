@@ -252,7 +252,7 @@ for (const size of SIZES) {
          ruler" — D260 stands). The section ruler's own pair lives in `.position-bar-ends-row`;
          the card ruler's own lives in `.position-bar-zoom-ends`, added this round so both
          instruments orient on their own rather than sharing one row between them. */
-      /* ONE PAIR, UNDER THE CARD RULER (D-position-ruler-ticks): the section strip draws none. */
+      /* ONE PAIR, UNDER THE CARD RULER (D310): the section strip draws none. */
       await expect(bar.locator('.position-bar-ends-row')).toHaveCount(0)
       await expect(bar.locator('.position-bar-end-back')).toHaveCount(1)
 

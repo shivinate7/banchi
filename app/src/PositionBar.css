@@ -232,7 +232,7 @@
     opacity var(--bn-t-slow) var(--bn-ease);
 }
 
-/* The ticks (D-position-ruler-ticks). Each one is a hairline standing on the ruler's floor at its
+/* The ticks (D310). Each one is a hairline standing on the ruler's floor at its
    card's centre: thin every 5th card, darker and taller with its number above it every 10th.
    The numbers sit in the top band and the end labels sit at mid-height, so the two never meet. The
    ruler's own height does not change (D155, D118). */
