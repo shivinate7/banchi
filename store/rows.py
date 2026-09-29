@@ -272,8 +272,10 @@ class Rows(MutableMapping):
                 if self._matches(self._loaded[key], equals):
                     keys.add(key)
                 continue
-            self._remember(key, text)
-            keys.add(key)
+            # A row `parse` refuses is skipped, as `_load_all` skips it: adding its key
+            # anyway made the return below a KeyError (found on `price_history`'s bogus range).
+            if self._remember(key, text) is not None:
+                keys.add(key)
         for key in self._touched:
             if key in self._deleted or key not in self._loaded or key in keys:
                 continue

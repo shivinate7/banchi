@@ -790,8 +790,9 @@ def freshness_index(existing: Iterable[Bucket]) -> Dict[str, Dict[str, int]]:
     table — never once per subject SKU. `store-scaling` item 2's own complaint about a
     full-table walk repeated per row (measured on `cli/resolve.py:_copies_out`, ~1s per
     call on the owner's real store) is exactly the mistake this function exists to avoid:
-    `PriceArchive.for_sku` is a full scan of `entries`, and calling it once per subject
-    across a 900-SKU pass would be 900 scans of a table this same pass keeps growing.
+    `PriceArchive.for_sku` is one indexed read per SKU, but this pass needs EVERY SKU's `at`,
+    so one walk of the whole table beats 900 indexed reads of a table this same pass keeps
+    growing.
     """
     index: Dict[str, Dict[str, int]] = {}
     for bucket in existing:

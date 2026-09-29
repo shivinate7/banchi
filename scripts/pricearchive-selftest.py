@@ -253,7 +253,7 @@ def main() -> int:
        "a pass over one range never erases another range's own accounting row", payload)
 
     # ------------------------------------------------- for_sku: an index, not a full scan
-    print("\n-- store/pricearchive.py: for_sku reads a per-SKU index, never a full scan --")
+    print("\n-- store/pricearchive.py: for_sku answers what the scan did (in memory) --")
 
     def _old_for_sku(archive: PriceArchive, sku: str) -> List[Bucket]:
         """THE SCAN THIS FIX REPLACES — kept here ONLY as this test's own reference, never
@@ -297,27 +297,18 @@ def main() -> int:
     old_answers = {sku: _old_for_sku(old_archive, sku) for sku in sample}
     old_elapsed = time.time() - old_started
 
-    # A FRESH instance from the SAME rows — the new `for_sku`'s index is built cold, on its
-    # own first call, exactly as it would be in a real request.
     new_archive = PriceArchive()
     new_archive.upsert(synthetic_payload)
-    new_started = time.time()
     new_answers = {sku: new_archive.for_sku(sku) for sku in sample}
-    new_elapsed = time.time() - new_started
-
     print(
-        f"    for_sku timing, {len(sample)} skus over {len(synthetic_payload)} archive rows: "
-        f"BEFORE (full scan) {old_elapsed*1000:.0f}ms -> "
-        f"AFTER (per-sku index) {new_elapsed*1000:.0f}ms"
+        f"    for_sku over {len(sample)} skus, {len(synthetic_payload)} in-memory rows: "
+        f"the old scan took {old_elapsed*1000:.0f}ms (the speed claim is the store-backed arm below)"
     )
     ok(old_answers == new_answers,
-       "IDENTICAL OUTPUT: the index-backed for_sku answers exactly what the full-table scan "
-       "it replaces did, same buckets, same order, for every one of 300 skus")
-    ok(new_elapsed * 5 < old_elapsed,
-       f"the index answers at least 5x faster than the scan it replaces "
-       f"({new_elapsed*1000:.0f}ms against {old_elapsed*1000:.0f}ms over {len(sample)} skus)")
+       "IDENTICAL OUTPUT: for_sku answers exactly what the full-table scan it replaces did, "
+       "same buckets, same order, for every one of 300 skus")
 
-    # upsert KEEPS THE INDEX IN STEP once it has been built — a re-read of an existing key
+    # upsert stays visible to for_sku — a re-read of an existing key
     # replaces that bucket in the index too, not only in `entries`, and a brand-new key for a
     # sku the index has never seen is found on the very next `for_sku`, no rebuild needed.
     live_key = _key(sample[0], "month", date(2020, 1, 1).isoformat())
@@ -340,6 +331,63 @@ def main() -> int:
     ok(len(new_archive.for_sku(brand_new_sku)) == 1,
        "and a sku ADDED after the index was built is found on the next for_sku, without a "
        "full rescan")
+
+    # ------------------------------ for_sku on a STORE-BACKED archive: one SKU's rows, no more
+    print("\n-- store/pricearchive.py: for_sku on a store reads only that SKU's rows --")
+    from server import pipeline_routes  # noqa: E402  (lazy: only this arm needs the routes)
+
+    read_previous = os.environ.get(files.HOME_ENV)
+    read_home = Path(tempfile.mkdtemp(prefix="pricearchive-selftest-perkey-"))
+    os.environ[files.HOME_ENV] = str(read_home)
+    try:
+        seeded = {k: v for k, v in synthetic_payload.items()
+                  if v.sku in set(synthetic_skus[:40])}
+        with Store().write() as snapshot:
+            snapshot.archive.upsert(seeded)
+        wanted = synthetic_skus[7]
+        wanted_rows = [b for b in seeded.values() if b.sku == wanted]
+        reference = sorted(wanted_rows, key=lambda b: (b.range, b.start))
+
+        fresh = Store().read().archive
+        got = fresh.for_sku(wanted)
+        ok(got == reference, "for_sku on a store-backed archive answers the scan's own list")
+        ok(fresh.entries.loaded_count == len(wanted_rows),
+           f"and loads only that SKU's {len(wanted_rows)} rows, none of the other "
+           f"{len(seeded) - len(wanted_rows)}", fresh.entries.loaded_count)
+        ok(fresh.for_sku("no-such-sku") == [], "a SKU the store never saw answers empty")
+
+        # do_product_history's read: productview.archive_payload, against a payload built from
+        # the scan by hand.
+        by_range: Dict[str, List[Bucket]] = {}
+        for b in reference:
+            by_range.setdefault(b.range, []).append(b)
+        expected_ranges = [
+            productview._archive_range_series(r, by_range[r][0].width_days, by_range[r])
+            for r in sorted(by_range)
+        ]
+        cold = Store().read().archive
+        ok(productview.archive_payload(cold, wanted) == expected_ranges,
+           "productview.archive_payload is unchanged over the store")
+        ok(cold.entries.loaded_count == len(wanted_rows),
+           "and reads only that SKU's rows", cold.entries.loaded_count)
+        ok(productview.archive_payload(Store().read().archive, "no-such-sku") is None,
+           "an unseen SKU still answers None, the live-read signal")
+
+        # do_pipeline_price_now's read: newest priced month bucket per SKU.
+        priced = pipeline_routes.do_pipeline_price_now([wanted, "no-such-sku"])["prices"]
+        month = [b for b in wanted_rows if b.range == "month" and b.market]
+        newest = max(month, key=lambda b: b.start)
+        ok(priced == {wanted: {"market": newest.market,
+                               "at": pipeline_routes._bucket_at(newest.start),
+                               "source": "archive"}},
+           "do_pipeline_price_now answers the newest priced month bucket, and omits an unseen SKU",
+           priced)
+    finally:
+        if read_previous is None:
+            os.environ.pop(files.HOME_ENV, None)
+        else:
+            os.environ[files.HOME_ENV] = read_previous
+        shutil.rmtree(read_home, ignore_errors=True)
 
     # ---------------------------------------------- pipeline: parse_ledger_name (sealed subjects)
     print("\n-- pipeline/pricearchive.py: parse_ledger_name, pure, no store, no network --")
