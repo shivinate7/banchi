@@ -26,7 +26,7 @@ HOW A READER TELLS THE TWO CLASSES APART, without having to trust a comment's ow
 about itself: every function in `REGISTRY` is named for a LIVE ARTIFACT under version
 control (a file count, a substring count, a declaration count) and takes only `root: Path`
 — nothing here reads a date, a run id, or a fixture. A number that can only be produced by
-reading `docs/gates/gate-runs/*.md` or a `harness/traces/*.json` file has no honest way into
+reading a Gate run record or a `harness/traces/*.json` file has no honest way into
 this shape, which is `check_derived_numbers`'s enforcement of the distinction: THIS FILE
 NEVER GROWS AN ENTRY FOR A HISTORICAL FIGURE, so a marker naming one finds nothing in
 `REGISTRY` and fails exactly like a typo (see `scripts/docs-audit.py`'s `derived numbers`
