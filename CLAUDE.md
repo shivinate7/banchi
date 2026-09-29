@@ -658,10 +658,10 @@ never a code fence. Start with the point. No task restatement.
 - Keep UI/UX at the forefront of any screen work (owner's ruling, 2026-09-02: *"experience
   is everything."*). Run a design pass before you build a screen. Review the built screen
   against that pass before you call it done.
-- Reserve Opus for planning. Reserve it for an adversarial review of a path touching money,
-  TCGplayer or the store's data. Reserve it for a builder redesigning a whole flow, or
-  resolving a hard merge. Sonnet builds and reviews every ordinary screen lane, fix round and
-  delta review by default (owner's ruling, 2026-09-24).
+- Reserve Opus for planning, for a builder redesigning a whole flow, and for resolving a hard
+  merge. Every review is Sonnet. An Opus review needs the orchestrator to ask the owner first
+  and get a yes (owner's ruling, 2026-09-28). Sonnet builds every ordinary screen lane, fix
+  round and delta review by default (owner's ruling, 2026-09-24).
 - A builder commits and pushes its own branch after every pass, even when a check is red.
   Each commit message ends with a `Done:` line and a `Next:` line. The `Next:` line names
   what is left, in order, so a lane can resume from its branch alone (owner's ruling,
