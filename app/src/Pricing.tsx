@@ -82,6 +82,7 @@ import {
   cropStyle,
   EmptyState,
   FailureNotice,
+  FilterBar,
   Icon,
   IconButton,
   Kbd,
@@ -96,14 +97,20 @@ import {
   Retry,
   Segmented,
   Sheet,
+  countFacets,
+  filterRows,
+  matchQuery,
   openSheet,
+  useFacetParams,
+  useSortParam,
   useUndoHotkey,
   useViewParam,
 } from './kit'
+import type { FilterFacet, SortOption, SortValue } from './kit'
 import { toast } from './kit/toast'
 import './Pricing.css'
 import { SendCard } from './SendCard'
-import { noPhotoSentence } from './CardHero'
+import { gameLabel, noPhotoSentence } from './CardHero'
 
 /* #/pricing — THE HAND-PRICING WORKLIST (D49, D86), REBUILT TO THE OWNER'S RE-INTERVIEW (D277).
  *
@@ -469,6 +476,34 @@ function numberSuffix(number: string): RegExp | null {
  *  depending on which name happened to already hold it). The meta line always draws the
  *  number when the row has one; this strips a trailing repeat off the DISPLAYED name only —
  *  the stored name is never touched. */
+/* F3 (the owner's word, 2026-09-29): THE FILTERS ARE VIEW-ONLY. `docs/reviews/ux-2026-09-23/F3-pricing-filters.md`
+   is the design. Price bands read the MARKET cell and nothing else. A row with no market price is
+   its own band (D49: a missing price is unknown, never low). */
+const BANDS = [
+  { value: 'none', text: 'No market price', label: <>No market price</>, within: (c: number | null) => c === null },
+  { value: 'under1', text: 'Under one dollar', label: <>Under <Money value={1} /></>, within: (c: number | null) => c !== null && c < 100 },
+  { value: 'to5', text: 'One to five dollars', label: <><Money value={1} /> to <Money value={5} /></>, within: (c: number | null) => c !== null && c >= 100 && c < 500 },
+  { value: 'to20', text: 'Five to twenty dollars', label: <><Money value={5} /> to <Money value={20} /></>, within: (c: number | null) => c !== null && c >= 500 && c < 2000 },
+  { value: 'over20', text: 'Twenty dollars and up', label: <><Money value={20} /> and up</>, within: (c: number | null) => c !== null && c >= 2000 },
+] as const
+
+function bandOf(row: PricingSku): string {
+  const c = cents(row.snap.market)
+  return BANDS.find((band) => band.within(c))?.value ?? 'none'
+}
+
+type PricingSortKey = 'arranged' | 'price' | 'name'
+const SORT_OPTIONS: readonly SortOption<PricingSortKey>[] = [
+  { key: 'arranged', label: 'Suggested', asc: 'Needs you first', desc: 'Needs you first', first: 'desc' },
+  { key: 'price', label: 'Market price', desc: 'High to low', asc: 'Low to high', first: 'desc' },
+  { key: 'name', label: 'Name', desc: 'Z to A', asc: 'A to Z', first: 'asc' },
+]
+const SORT_AT_REST: SortValue<PricingSortKey> = { key: 'arranged', dir: 'desc' }
+
+function facetValueOf(row: PricingSku, key: string): string {
+  return key === 'game' ? row.game : key === 'set' ? row.set_name : bandOf(row)
+}
+
 function displayName(name: string, number: string): string {
   const pattern = numberSuffix(number)
   return pattern === null ? name : name.replace(pattern, '')
@@ -1318,6 +1353,38 @@ export function Pricing() {
 
   const held = useMemo(() => rows.filter((sku) => isWithheld(answerFor(sku))), [rows, answerFor])
 
+  /* F3: THE VIEW'S OWN FILTERS. Search, sort and the facets live in the URL (`?q=`, `?sort=`, `?game=`),
+     narrow what is DRAWN and touch nothing else: Send, the presets and the counts read every row. */
+  const [query, setQuery] = useViewParam('q')
+  const [sort, setSort] = useSortParam<PricingSortKey>(SORT_AT_REST, { options: SORT_OPTIONS })
+  const facetShape = useMemo<readonly FilterFacet[]>(() => {
+    const games = [...new Set(rows.map((row) => row.game))].filter((game) => game !== '').sort()
+    const sets = [...new Set(rows.map((row) => row.set_name))].filter((name) => name !== '').sort((a, b) => a.localeCompare(b))
+    return [
+      ...(games.length > 1 ? [{ key: 'game', label: 'Game', options: games.map((game) => ({ value: game, label: gameLabel(game) })) }] : []),
+      ...(sets.length > 0 ? [{ key: 'set', label: 'Set', options: sets.map((name) => ({ value: name, label: name })) }] : []),
+      { key: 'band', label: 'Market price', options: BANDS.map(({ value, label, text }) => ({ value, label, text })) },
+    ]
+  }, [rows])
+  const [facetPicks, setFacetPicks] = useFacetParams(facetShape)
+  const keepRow = useCallback(
+    (row: MergedSku) =>
+      (!filterHeld || isWithheld(answerFor(row))) &&
+      matchQuery(query, { text: [row.name, row.set_name, gameLabel(row.game), row.condition], numbers: [row.row['Number']], skus: [row.sku] }),
+    [filterHeld, answerFor, query],
+  )
+  /** The facets, each option counted under the OTHER picks and the search; a band nothing is in is not offered. */
+  const facets = useMemo(
+    () =>
+      countFacets(rows, facetShape, facetPicks, facetValueOf, keepRow).map((facet) =>
+        facet.key === 'band'
+          ? { ...facet, options: facet.options.filter((option) => (option.count ?? 0) > 0 || (facetPicks.band ?? []).includes(option.value)) }
+          : facet,
+      ),
+    [rows, facetShape, facetPicks, keepRow],
+  )
+  const filtering = query.trim() !== '' || Object.values(facetPicks).some((values) => values.length > 0) || filterHeld
+
   /** The bar's figures: what a write would put in the file, and what stays back. */
   const progress = useMemo(() => {
     let heldCount = 0
@@ -1326,15 +1393,16 @@ export function Pricing() {
     let outCopies = 0
     let byHand = 0
     for (const row of rows) {
+      const standing = answerFor(row)
+      /* A HOLD IS A FACT ABOUT THE ROW, SENT OR NOT: counted before the cap branch, so this figure
+         and the "Held" press (`held`, above) read the same rows (F3). */
+      const isHeld = isWithheld(standing)
+      if (isHeld) heldCount += 1
       if (row.at_cap) {
         closed += 1
         continue
       }
-      const standing = answerFor(row)
-      if (isWithheld(standing)) {
-        heldCount += 1
-        continue
-      }
+      if (isHeld) continue
       /* THE ONE ROW RULE HOME ALSO READS (`standing.ts:rowShare`): a row with no market price
          and no answer is left out of the send, so it is never among the ready copies (Q3). */
       const share = rowShare(row, standing)
@@ -1419,10 +1487,17 @@ export function Pricing() {
      re-partition cannot add one, but a reload race could) goes last rather than vanishing. */
   const drawn = useMemo(() => {
     const order = arrival?.order ?? new Map<string, number>()
-    const shown = filterHeld ? rows.filter((row) => isWithheld(answerFor(row))) : rows
-    const sorted = [...shown].sort(
-      (a, b) => (order.get(a.sku) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.sku) ?? Number.MAX_SAFE_INTEGER),
-    )
+    const shown = filterRows(rows, facetShape, facetPicks, facetValueOf, keepRow)
+    const place = (row: MergedSku) => order.get(row.sku) ?? Number.MAX_SAFE_INTEGER
+    /* A SORT ORDERS WITHIN EACH GROUP, never across them: the rows that need the owner stay on top
+       (D277). A row with no market price goes last in both directions; ties keep arrival order. */
+    const by = (a: MergedSku, b: MergedSku): number => {
+      if (sort.key === 'name') return a.name.localeCompare(b.name) * (sort.dir === 'asc' ? 1 : -1)
+      const [ca, cb] = [cents(a.snap.market), cents(b.snap.market)]
+      if (ca === null || cb === null) return ca === cb ? 0 : ca === null ? 1 : -1
+      return (ca - cb) * (sort.dir === 'asc' ? 1 : -1)
+    }
+    const sorted = [...shown].sort((a, b) => (sort.key === 'arranged' ? 0 : by(a, b)) || place(a) - place(b))
     const needs: MergedSku[] = []
     const ready: MergedSku[] = []
     const closed = new Map<string, MergedSku[]>()
@@ -1446,7 +1521,7 @@ export function Pricing() {
     /* THE SERVER'S SENTENCE, VERBATIM (D59): the client never composes a reason. */
     for (const [why, group] of closed) groups.push({ head: why, rows: group })
     return groups
-  }, [arrival, rows, filterHeld, answerFor, stamp])
+  }, [arrival, rows, facetShape, facetPicks, keepRow, sort, stamp])
 
   const order = useMemo(() => drawn.flatMap((group) => group.rows.map((row) => row.sku)), [drawn])
 
@@ -2708,6 +2783,22 @@ export function Pricing() {
         {table !== null && table.length === 0 && liveTab ? (
           <EmptyState icon="tag" title="Nothing live in that read" body="Every row TCGplayer returned was sold out." />
         ) : (
+          <>
+          {rows.length === 0 ? null : (
+            <FilterBar<PricingSortKey>
+              className="pricing-filterbar"
+              facets={facets}
+              value={facetPicks}
+              onChange={setFacetPicks}
+              count={{ shown: drawn.reduce((sum, group) => sum + group.rows.length, 0), total: rows.length, noun: { one: 'item', many: 'items' } }}
+              search={{ query, onChange: setQuery, placeholder: 'Name, set, number or SKU', label: 'Search this list' }}
+              sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
+            />
+          )}
+          {filtering ? <p className="pricing-filter-note">Filters change what you see. Send still covers every row.</p> : null}
+          {filtering && drawn.length === 0 ? (
+            <EmptyState icon="search" title="Nothing matches" body="Loosen the search or a filter to see more rows." />
+          ) : null}
           <div className="pricing-list" data-copies={source.copies ? 'some' : 'none'}>
             <div className="pricing-caption" aria-hidden="true">
               {source.copies ? <span /> : null}
@@ -2771,6 +2862,7 @@ export function Pricing() {
               </section>
             ))}
           </div>
+          </>
         )}
       </div>
       </Page>
