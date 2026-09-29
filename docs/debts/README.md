@@ -91,4 +91,6 @@ DEBT69 prices are not refreshed on a schedule, and nothing says which SKUs moved
 DEBT70 the owner's realized prices are not read
 DEBT71 the value of the set hint is asserted, not measured
 DEBT72 PKMNVAULT, Supabase and eBay are unbuilt
+DEBT73 the Mac dock icon has no drop shadow, and none was tried
+DEBT74 the mark's four HELD base parameters were never compared
 ```

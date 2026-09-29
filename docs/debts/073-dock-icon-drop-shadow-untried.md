@@ -1,4 +1,4 @@
-## DEBT-dock-icon-drop-shadow-untried — the Mac dock icon has no drop shadow, and none was tried
+## DEBT73 — the Mac dock icon has no drop shadow, and none was tried
 
 **Gap.** Safari, Mail and Calculator carry a drop shadow out to 87.5% of the canvas. The Banchi icon carries none, so it sits slightly flatter on the dock's shelf. `docs/specs/logo.md` section 17 leaves the shadow out on purpose, because a shadow is a drawing decision and section 3 locks the drawing.
 

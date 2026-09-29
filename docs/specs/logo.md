@@ -405,6 +405,6 @@ an 844px viewport on every screen.
 
 ## Open
 
-- **The HELD base parameters** (section 3) were never swept. See `DEBT-logo-base-parameters-held-never-swept`.
-- **A drop shadow on the Mac dock icon** was never tried. See `DEBT-dock-icon-drop-shadow-untried`.
+- **The HELD base parameters** (section 3) were never swept. See `DEBT74`.
+- **A drop shadow on the Mac dock icon** was never tried. See `DEBT73`.
 - **A compact horizontal lockup** for the phone bar (section 19).
