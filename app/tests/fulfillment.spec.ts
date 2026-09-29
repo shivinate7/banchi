@@ -1838,6 +1838,25 @@ test('a card an open order owes is drawn as "Pick N" with every copy the store h
   await battery(page, 'sold through an order')
 })
 
+/* SCREEN PASS F11: a card owed by several orders read "Pick 1 , 6 orders" -- the heading is a
+ * flex row and its gap sat before the comma. The comma belongs to the text it ends. */
+test('a card owed by two orders reads "Pick 1, 2 orders" with no space before the comma', async ({ page }) => {
+  const twoOrders = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [
+      {
+        ...ONE_OPEN_ORDER_PLAN.stops[0]!,
+        takes: [{ ...ORDER_TAKE, for: [...ORDER_TAKE.for, { key: 'TCGplayer:OTHER-1', number: 'OTHER-1', buyer: 'Sam Second' }] }],
+      },
+    ],
+  }
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: twoOrders })
+  const pick = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' }).locator('.ff-owed-pick')
+  await expect(pick).toContainText('Pick 1')
+  const said = await pick.evaluate((el) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim())
+  expect(said).toBe('Pick 1, 2 orders')
+})
+
 /* THE OWNER'S OWN CASE. `MULTI_PLAN`'s own comment has the ruling verbatim: two wanted,
  * three on hand, three different boxes -- and the screen must say "Pick 2" and offer every
  * one of the three, never two preselected copies standing in for the SKU. */

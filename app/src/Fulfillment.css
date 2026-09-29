@@ -509,9 +509,7 @@
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) backwards;
 }
 .ff-owed-pick {
-  display: flex;
-  align-items: baseline;
-  gap: var(--bn-2);
+  /* A TEXT RUN, NOT A FLEX ROW: the gap sat before the comma ("Pick 1 , 6 orders"). */
   margin: 0 0 var(--bn-2);
 }
 .ff-owed-pick-num {
