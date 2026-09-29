@@ -17414,8 +17414,8 @@ def self_test() -> int:
         ok(both == ["D9", unclaimed],
            "the heading roster reads a number and a slug out of one file", str(both))
 
-    cited = _DECISION_RE.findall(f"this cites D140 and {past_end} in one line")
-    ok(cited == ["72", "100"], "a two-digit citation still resolves, beside a three-digit one", str(cited))
+    cited = _DECISION_RE.findall(f"this cites D70 and {past_end} in one line")
+    ok(cited == ["70", "100"], "a two-digit citation still resolves, beside a three-digit one", str(cited))
     ok(not _DECISION_RE.findall(f"{four_digits} is not an id"), "four digits is not a citation")
     codes = _CODES_DECISION_RE.findall(f"the code track cites C7 and {codes_past_end}")
     ok(codes == ["7", "100"], "the C-track citation reads three digits too", str(codes))
@@ -17458,8 +17458,8 @@ def self_test() -> int:
            "`governed_by`'s reader excludes suppressions too — the row it feeds is MECHANICAL",
            str(cited_decisions(module)))
 
-    kept = without_noqa("    except Exception as exc:  # noqa: BLE001 — 500 is for bugs, see D140")
-    ok(_DECISION_RE.findall(kept) == ["72"],
+    kept = without_noqa("    except Exception as exc:  # noqa: BLE001 — 500 is for bugs, see D70")
+    ok(_DECISION_RE.findall(kept) == ["70"],
        "a citation in the prose AFTER a suppression survives", repr(kept))
     ok(without_noqa("no directive here, just D140") == "no directive here, just D140",
        "a line with no suppression is returned unchanged")

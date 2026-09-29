@@ -507,12 +507,6 @@
         "behaviours"
       ]
     },
-    "docs/decisions/*-presence-is-a-distance-from-the-session-baseline.md": {
-      "lane": "docs-sweep",
-      "SPELLING": [
-        "labelled"
-      ]
-    },
     "docs/decisions/*-one-pricing-file-for-the-store.md": {
       "lane": "docs-sweep",
       "SPELLING": [
