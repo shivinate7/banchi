@@ -1697,7 +1697,7 @@ design-check-quiet:
 # RUFF JOINED THIS TARGET 2026-09-01 (D82), ON A SLICE MEASURED AGAINST THIS TREE, NOT ON
 # WHAT IT ENABLES BY DEFAULT. Zero-config `ruff check .` found 2,131 things on this repo,
 # 79% of them three pyupgrade rules rewriting `Dict`/`Optional[X]` to PEP 585/604 syntax —
-# a runtime TypeError on the Python 3.9.6 this repo pins, unless ruff is told the target
+# a runtime TypeError on the system Python 3.9.6 that runs `scripts/`, unless ruff is told the target
 # version, which its own default does not do. `ruff.toml` sets it and selects only
 # pyflakes + bugbear + flake8-simplify; the other ~890 default-enabled rules are unmeasured
 # here and stay off. Three rules in even that narrower selection produced confirmed false
