@@ -322,3 +322,5 @@ sorter sets `_sorting` false, hands every held connection to the slot pool, and 
 and requires `/status` and a photo to answer afterwards. The previous head, run through the same
 leg, hung on all three answers. Leg A holds the photo pool to `PHOTO_SLOTS` threads and goes red
 under a thread per photo connection (10 threads for 10 callers).
+
+Gzip-compressing responses (speed item F) was considered in the 2026-09-28 speed review and skipped by the owner.
