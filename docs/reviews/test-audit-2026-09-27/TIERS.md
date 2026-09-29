@@ -247,7 +247,8 @@ The tier model and every row not named below stand as proposed. The owner's word
   anchor offenders` are gone, with the two data files they read. CLAUDE.md's D245 hard rule describes the one row.
   **Widened 2026-09-28 by the second line-anchor lane (owner's word).** The row also refuses
   `file.ext:N` with no directory, a bare `:N` after a cited file, and the same shapes in code
-  comments (.py, .ts, .tsx, .js, .mjs, .css). It converted the remaining short forms.
+  comments (.py, .ts, .tsx, .js, .mjs, .css), Python docstrings and `docs/map.py`'s prose, plus an
+  approximate `~N` anchor. It converted the remaining short forms.
 - **Row 20, `entry budget`:** CUT.
 - **Row 48, `gates structure`:** CUT. Gating retired, and `gates-selftest` proves the set is
   complete.

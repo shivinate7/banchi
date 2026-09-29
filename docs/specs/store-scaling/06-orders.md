@@ -566,7 +566,7 @@ exists) before deciding which.
 
 ## Do not touch
 
-- **The wire shape.** `PlaceBlock` (`app/src/types.ts:~1200-1272`) is unchanged: every field
+- **The wire shape.** `PlaceBlock` (`app/src/types.ts`'s `PlaceBlock`) is unchanged: every field
   stays present, `neighbors`/`section_gaps` go through the SAME optional-null path the
   degraded case already uses (no new field, no removed field, no renamed field).
   `app/tests/orders.spec.ts`'s stubbed fixtures must keep passing unmodified.

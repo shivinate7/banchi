@@ -604,7 +604,7 @@ Rationale, sales strategy, and open questions: `docs/CODES-DECISIONS.md`.
   Write a decision id, a section, or the `module.symbol` form the `paths` row verifies. That
   form takes no `.py` before the symbol. A method is "`module.Class`'s `method`". A CSS rule is
   its selector. Mechanized by one `make docs-audit` row, `line anchors`, at commit. It refuses
-  `path:N`, `file.ext:N` and a bare `:N` after a cited file, in every markdown file and in
+  `path:N`, `file.ext:N`, `~N` and a bare `:N` after a cited file, in every markdown file and in
   code comments, docstrings and `docs/map.py`'s prose, with no list of exceptions. A time, a
   ratio, `host:port`, a slice and a port `server/ports.py` emits are not anchors. A bare `:N`
   with no file in its paragraph cannot be told from other text, so it is not read. A dated record that must quote a line writes it in words, as in

@@ -61,7 +61,7 @@ backwards for lines whose `position` equals one key, plus (four of them: `_answe
 3. All three call sites in `server/capture_server.py` (`_answer_origin`,
    `_reverse_stand_down`, `_origin`) call `store.history_at(key)` instead of
    `store.history()`.
-4. ~~`_sell` (line ~7232) and `do_retire` (line ~7508) skip the `_sale_origin` /
+4. ~~`_sell` and `do_retire` skip the `_sale_origin` /
    `_retirement_origin` read entirely when `undo` is `False`~~ — **NOT BUILT, see the
    correction at the top of this file: both routes' responses read `previous`
    unconditionally to populate `restores_to`, so the read cannot be skipped without

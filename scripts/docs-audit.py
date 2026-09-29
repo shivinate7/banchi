@@ -58,8 +58,8 @@ from __future__ import annotations
 import argparse
 import ast
 import contextlib
-import importlib.util
 import csv
+import importlib.util
 import io
 import json
 from datetime import datetime, timedelta, timezone
@@ -685,8 +685,8 @@ def path_candidates(line: str) -> List[str]:
 # (`_ROUTE`, `_QUOTED_ROUTE`, `_PLACEHOLDER`) so a route or a placeholder is still not a
 # path here either, and returns a distinct, richer type instead.
 _LINE_ANCHOR_RE = re.compile(
-    r"(?P<path>@?(?:\.\./)*[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]*):"
-    r"(?P<start>[0-9]+)(?:-(?P<end>[0-9]+))?"
+    r"(?P<path>@?(?:\.\./)*[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]*):~?"
+    r"(?P<start>[0-9]+)(?:[-–](?P<end>[0-9]+))?"
 )
 
 
@@ -1165,8 +1165,8 @@ def check_allowlist(report: Report, allowed: Dict[str, str]) -> None:
 # section heading or a decision id.
 _ANCHOR_EXTS = r"(?:py|ts|tsx|css|md|mjs|js|json|toml|yml|yaml|sh|html)"
 _BARE_FILE_ANCHOR_RE = re.compile(
-    r"(?<![\w/.@-])(?P<path>[A-Za-z0-9_-][A-Za-z0-9_.-]*\." + _ANCHOR_EXTS + r"):"
-    r"(?P<start>[0-9]+)(?:-(?P<end>[0-9]+))?(?![\w:])"
+    r"(?<![\w/.@-])(?P<path>[A-Za-z0-9_-][A-Za-z0-9_.-]*\." + _ANCHOR_EXTS + r"):~?"
+    r"(?P<start>[0-9]+)(?:[-–](?P<end>[0-9]+))?(?![\w:])"
 )
 _FILE_TOKEN_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]*\." + _ANCHOR_EXTS + r"\b")
 _FRAGMENT_RE = re.compile(
@@ -1188,6 +1188,12 @@ def _is_served_port(number: int) -> bool:
     except Exception:
         return False
 
+# An APPROXIMATE anchor: `~7199` or `~7199–7232`, three digits or more, which either ends a clause
+# (`)`, `,`, `;`, `:`, `.`, `|` or the line) after a cited file, or follows the word "line" or
+# "lines". "~5 ms", "~30 worktrees" and "~2x" read as a quantity and are not anchors.
+_TILDE_RE = re.compile(r"(?<![\w~:])~(?P<start>[0-9]+)(?:[-–](?P<end>[0-9]+))?(?![\w%]|[.,][0-9])")
+_TILDE_TAIL_RE = re.compile(r"\s*(?:[)\]`;:,.|]|$)")
+_LINE_WORD_RE = re.compile(r"\blines?\s*\(?$")
 _CODE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".mjs", ".css")
 
 
@@ -1264,6 +1270,11 @@ def anchor_hits_in_units(
             hits.append((doc, number, m.group(0)))
         if _FILE_TOKEN_RE.search(clean):
             cited = True
+        for m in _TILDE_RE.finditer(clean):
+            after_line_word = _LINE_WORD_RE.search(clean[: m.start()]) is not None
+            clause_end = len(m.group("start")) >= 3 and _TILDE_TAIL_RE.match(clean[m.end():])
+            if after_line_word or (cited and clause_end):
+                hits.append((doc, number, m.group(0)))
         if cited:
             for m in _FRAGMENT_RE.finditer(clean):
                 if not _is_served_port(int(m.group("start"))):
@@ -1282,10 +1293,10 @@ def line_anchor_hits(docs: Sequence[Path], code: Sequence[Path] = ()) -> List[Tu
         hits += anchor_hits_in_units(units, doc, tops)
     for path in code:
         text = read(path)
-        # A file whose raw text holds none of the three shapes has no hit in its comments
+        # A file whose raw text holds none of the four shapes has no hit in its comments
         # either; skipping it keeps the row cheap, because tokenizing 440 files is not.
         if not (_LINE_ANCHOR_RE.search(text) or _BARE_FILE_ANCHOR_RE.search(text)
-                or _FRAGMENT_RE.search(text)):
+                or _FRAGMENT_RE.search(text) or _TILDE_RE.search(text)):
             continue
         hits += anchor_hits_in_units(comment_units(path, text), path, tops)
     return hits
@@ -3761,7 +3772,7 @@ def unscoped_walk_sites(paths: Sequence[Path]) -> List[Tuple[str, int, str, str]
     shape `_payload_keys` and `mechanism_refs` are tested in already.
 
     WHAT THIS CANNOT SEE, and it says so rather than pretending completeness:
-    `store/rows.Rows`'s `__len__` degradation — a `where()`/`select()` call that LOOKS scoped but
+    `store/rows.Rows`'s `_load_all` degradation — a `where()`/`select()` call that LOOKS scoped but
     answers from a Python-side list because an earlier call in the same request already
     materialised everything — is invisible here. This function reads one file at a time
     with no notion of a request's call order, so it cannot tell a `where()` that hits the
@@ -3825,7 +3836,7 @@ def check_unscoped_walk(report: Report) -> None:
     entry nothing will ever delete, which is why `UNSCOPED_WALK_EXPECTED`'s floor never
     reaches zero.
 
-    WHAT IT CANNOT SEE: `store/rows.Rows`'s `__len__` runtime degradation (a call that reads
+    WHAT IT CANNOT SEE: `store/rows.Rows`'s `_load_all` runtime degradation (a call that reads
     scoped in the source and answers unscoped at runtime because an earlier call in the
     same request already loaded everything) — see `unscoped_walk_sites`'s own docstring,
     which item 2 is what actually removes. This row reads Python source shapes, never
@@ -17500,6 +17511,10 @@ def self_test() -> int:
             ("cites Revenue.css:81-90 here", "a bare file.ext:N-M range is refused"),
             ("`store/db.py` opens it (`:1279`) and", "a bare :N after a cited file is refused"),
             ("`store/db.py` opens it at `:1279-1290` and", "a bare :N-M after a cited file is refused"),
+            ("`store/db.py` names `do_search` (~7929) here", "an approximate ~N after a cited file is refused"),
+            ("`store/db.py` names `_sell` (~7199–7232), and", "an approximate ~N–M range is refused"),
+            ("`app/src/server.ts`'s `request()` (line ~624) is", "line ~N is refused"),
+            ("see `app/src/types.ts:~1200-1272` here", "a path:~N-M anchor is refused"),
         ):
             doc.write_text(cited + "\n", encoding="utf-8")
             report = Report()
@@ -17521,6 +17536,8 @@ def self_test() -> int:
             ("see `store/db.py` at http://example.com:8080/x", "a URL with a port is not an anchor"),
             ("see `app/src/a.css` for a:hover and ::before and :nth-child(2)", "a pseudo-selector is not an anchor"),
             ("`:1279` alone, with no file named in this paragraph", "a bare :N with no cited file is not read"),
+            ("see `store/db.py`: it takes ~5 ms and ~30 worktrees", "a ~N quantity is not an anchor"),
+            ("see `store/db.py`: ~120 lines, ~17 s, ~2x, ~5%", "a ~N with a unit is not an anchor"),
         ):
             doc.write_text(clean + "\n", encoding="utf-8")
             report = Report()

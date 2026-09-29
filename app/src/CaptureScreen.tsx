@@ -3057,7 +3057,7 @@ export function CaptureScreen() {
             const undone = await undoCapture(target.box, target.index)
             patchOnHand(target.box, undone.on_hand)
             // THE CAUSE, NOT THE SYMPTOM (reviewer's finding): the capture handler increments
-            // this same section's count on the way in (line ~2865); an undo removes exactly
+            // this same section's count on the way in; an undo removes exactly
             // that card, so it decrements it back on the way out. Left undone, the Section
             // row's own "next card N" stayed one too high until the next `GET /boxes` — the
             // number every other "next card" on this screen now also reads (D118's one number).

@@ -31,9 +31,9 @@ the brand the published page carries are the same generated ones the real app dr
 ## 1. Why not a fork
 
 The product this repo builds is one Vite/React front end talking to one Python capture
-server over one HTTP boundary. `app/src/server.ts`'s `request()` (line ~624) is the **only**
+server over one HTTP boundary. `app/src/server.ts`'s `request()` is the **only**
 place a client call is made — every one of the client's exported functions funnels through
-it — and `app/src/server.ts:photoUrl()` (line ~334) is the **only** place a photograph is
+it — and `app/src/server.ts:photoUrl()` is the **only** place a photograph is
 addressed. Both were read and confirmed current as of this entry.
 
 That means a demo differs from the real product in exactly two functions: what `request()`

@@ -180,8 +180,7 @@ _UNSCOPED_METHODS = frozenset({"values", "items", "distinct"})
 def _enclosing_functions(tree: ast.AST) -> Dict[int, str]:
     """line number -> the name of the FunctionDef/AsyncFunctionDef that contains it.
 
-    Copied from `_history_readers`'s own inline dict-building loop (line ~2697, was cited
-    as line ~2689, corrected) rather
+    Copied from `_history_readers`'s own inline dict-building loop rather
     than imported, because that loop is not split into its own function there — if a
     future session factors it out, prefer that shared helper over keeping two copies.
     """
