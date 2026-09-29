@@ -277,3 +277,13 @@ test('the section ruler is drawn above the card ruler', async ({ page }) => {
   expect(sectionTop, 'the section ruler sits above the card ruler').toBeLessThan(cardTop)
 })
 
+
+test('the card ruler ticks every 5th card and numbers every 10th (D-position-ruler-ticks)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await open(page, 3, 48)
+  const ruler = page.locator('.card-locations-row.is-current .position-bar-sectiontrack')
+  await expect(ruler.locator('.position-bar-tick')).toHaveCount(9)
+  await expect(ruler.locator('.position-bar-tick[data-major]')).toHaveCount(4)
+  await expect(ruler.locator('.position-bar-tick-num')).toHaveText(['10', '20', '30', '40'])
+  await expect(page.locator('.card-locations-row.is-current .position-bar-text-box')).toHaveText(/^Section \d+ of 3$/)
+})

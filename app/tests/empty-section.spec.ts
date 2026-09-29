@@ -260,7 +260,7 @@ test('an empty last section does not draw in the walk strip, and "of N" does not
   await expect(track.getByText('11', { exact: true })).toHaveCount(0)
 
   // "OF N": the empty eleventh section is not the denominator.
-  await expect(row.locator('.position-bar-text-box')).toHaveText('Position 10 of 10')
+  await expect(row.locator('.position-bar-text-box')).toHaveText('Section 10 of 10')
 })
 
 test('the box header hides the same empty section too, and a move target still shows it (F9)', async ({

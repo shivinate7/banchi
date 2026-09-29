@@ -3,12 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import type { Place, SectionDetail } from './types'
 import {
   clamp,
-  graduationStep,
   nonEmptySections,
   sectionBlankSentence,
   sectionDepthOf,
   sentenceOf,
   sentencePartsOf,
+  rulerTicksOf,
   spansOf,
 } from './position'
 import { isDeparted } from './server'
@@ -101,7 +101,7 @@ export function PositionBar({
         ? /* No count of the box's sections to state, and the section caption above already names
              this one: the line keeps only back and front. */
           ''
-        : `Position ${place.section} of ${sectionCount}`
+        : `Section ${place.section} of ${sectionCount}`
       : parts.main
   const boxDetail = sectionDepth ? null : parts.detail
 
@@ -252,11 +252,18 @@ export function PositionBar({
                     aria-hidden="true"
                   />
                 )}
-                <span
-                  className="position-bar-rule"
-                  style={{ ['--pb-marks' as string]: String(depth.of / graduationStep(depth.of)) }}
-                  aria-hidden="true"
-                />
+                {/* THE TICKS (D-position-ruler-ticks): every 5th card, every 10th darker and numbered. */}
+                {rulerTicksOf(depth.of).map((tick) => (
+                  <span
+                    key={tick.card}
+                    className="position-bar-tick"
+                    data-major={tick.major ? 'true' : undefined}
+                    style={{ left: `${tick.at}%` }}
+                    aria-hidden="true"
+                  >
+                    {tick.major ? <span className="position-bar-tick-num">{tick.card}</span> : null}
+                  </span>
+                ))}
                 {/* SECTION NUMBERS AT BOTH ENDS (LOC-04): card 1 at the back, the last card at the
                     front, the same count as the caption above. */}
                 <span className="position-bar-edge position-bar-edge-start" aria-hidden="true">{depth.firstCard}</span>

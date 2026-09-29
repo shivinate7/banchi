@@ -7382,7 +7382,7 @@ COMPONENTS = [
             # sentence: each takes a `persona` and renders owner-dense or Fulfiller-large from
             # ONE implementation. The alternative — a second component per screen — is what
             # docs/DESIGN.md rejected when it declined two visual worlds.
-            "src/PositionBar.tsx": {"does": "where a card sits: its SECTION drawn as a graduated "
+            "src/PositionBar.tsx": {"does": "where a card sits: its SECTION drawn as a ticked (5, 10) "
                                             "ruler that marks the exact card (its own cell filled, the "
                                             "pin at the cell's centre) with section numbers at both "
                                             "ends, and under it a strip of the box's sections, "
@@ -7396,9 +7396,9 @@ COMPONENTS = [
                                             "`sectionDepth` PROP and never on whether the depth "
                                             "resolved, so every owner state is one DOM at one height "
                                             "(D118).",
-                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D58", "D41",
-                                                    "D68", "D118", "D132", "D155", "D218",
-                                                    "D260"]},
+                                    "governed_by": ["D5", "D10", "D13", "D20", "D24", "D41", "D58",
+                                                    "D68", "D118", "D132", "D155", "D218", "D260",
+                                                    "D-position-ruler-ticks"]},
             "src/SectionTitle.tsx": {"does": "ONE SECTION TITLE FOR EVERY BOX-WALK LIST: "
                                              "`#/inventory`'s shelf and `#/orders`' walk both draw "
                                              "it. The section's name is whole (it wraps, never cut: it "
@@ -7427,9 +7427,9 @@ COMPONENTS = [
                                         "hands the caption over as `head`/`tail` FIELDS, never as a "
                                         "string to split: a section name may itself contain ` · ` "
                                         "(D132).",
-                                "governed_by": ["D5", "D10", "D20", "D24", "D58", "D41",
-                                                "D68", "D118", "D132", "D155", "D181", "D284",
-                                                "D218", "D259", "D260", "D299"]},
+                                "governed_by": ["D5", "D10", "D20", "D24", "D41", "D58", "D68",
+                                                "D118", "D132", "D155", "D181", "D218", "D259",
+                                                "D260", "D284", "D299", "D-position-ruler-ticks"]},
             "src/PositionBar.css": {"does": "the two scales at two densities: the section ruler with "
                                             "its fill, graduations, edge labels and crossing pin, the "
                                             "demoted box strip with the caret that replaced the "
@@ -7440,7 +7440,7 @@ COMPONENTS = [
                                             "too, so document order is the only thing that makes the "
                                             "spec's `querySelector` return the box strip.",
                                     "governed_by": ["D5", "D20", "D41", "D50", "D118", "D155",
-                                                    "D218", "D260"]},
+                                                    "D218", "D260", "D-position-ruler-ticks"]},
             "src/cardState.ts": {"does": "the card-state vocabulary and the age of a reading, with no "
                                          "component in it — `readingAgo`, `readingExact`, `stateTone`, "
                                          "`stateLabel`, and the `SOLD` / `RETIRED` words those two are "
@@ -8876,7 +8876,7 @@ COMPONENTS = [
                         "fit; and the section ruler is drawn above the card ruler. Stubs its own "
                         "minimal one-copy fixture rather than `inventory.spec.ts`'s fixed box, "
                         "so a section count is a parameter. Run by `make design-check`.",
-                "governed_by": ["D118", "D155", "D260"],
+                "governed_by": ["D118", "D155", "D260", "D-position-ruler-ticks"],
             },
             "tests/empty-section.spec.ts": {
                 "does": "F9 (the owner's report, 2026-09-27, the ux-2026-09-23 review, "

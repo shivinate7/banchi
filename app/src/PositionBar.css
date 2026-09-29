@@ -232,30 +232,40 @@
     opacity var(--bn-t-slow) var(--bn-ease);
 }
 
-/* The graduations. MAJORS ARE LISTED FIRST: in `background-image: a, b` the first layer paints
-   on top, and every major sits at a multiple of the minor pitch, so a minors-first list
-   overpaints every one of them. `--pb-marks` is set inline as `of / graduationStep(of)`, and a
-   percentage in a 90deg gradient resolves against this box's width, so the pitch is exactly
-   `step` cards wide even where that division is fractional. */
-.position-bar-rule {
+/* The ticks (D-position-ruler-ticks). Each one is a hairline standing on the ruler's floor at its
+   card's centre: thin every 5th card, darker and taller with its number above it every 10th.
+   The numbers sit in the top band and the end labels sit at mid-height, so the two never meet. The
+   ruler's own height does not change (D155, D118). */
+.position-bar-tick {
   position: absolute;
-  inset: 0 var(--bn-0-5);
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  translate: -50% 0;
   pointer-events: none;
-  background-image:
-    repeating-linear-gradient(
-      90deg,
-      transparent 0,
-      transparent calc(500% / var(--pb-marks) - 1px),
-      var(--bn-line-strong) calc(500% / var(--pb-marks) - 1px),
-      var(--bn-line-strong) calc(500% / var(--pb-marks))
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent 0,
-      transparent calc(100% / var(--pb-marks) - 1px),
-      var(--bn-line) calc(100% / var(--pb-marks) - 1px),
-      var(--bn-line) calc(100% / var(--pb-marks))
-    );
+}
+.position-bar-tick::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--bn-1-5);
+  background: var(--bn-line);
+}
+.position-bar-tick[data-major]::after {
+  height: var(--bn-3);
+  background: var(--bn-ink-3);
+}
+.position-bar-tick-num {
+  position: absolute;
+  top: var(--bn-0-75);
+  left: 50%;
+  translate: -50% 0;
+  font-size: var(--bn-fs-2xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--bn-ink-2);
 }
 
 /* The ruler's two ends, in SECTION numbers: card 1 at the back and the section's last card at the

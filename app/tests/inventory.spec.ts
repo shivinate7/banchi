@@ -2746,7 +2746,7 @@ test('a copy row draws how far into the box AND how far into the section', async
   const first = bars.nth(0).locator('.position-bar-text')
   /* NO "SO FAR" ON THE BOX LINE (owner's ruling, 2026-09-19 — see the case below this one for
      the full argument): `#1 of 5`, not `#1 of 5 so far`. */
-  await expect(first.nth(0)).toHaveText('Position 1 of 2')
+  await expect(first.nth(0)).toHaveText('Section 1 of 2')
   /* SETTLED SECTION, SO THE DENOMINATOR IS SLOTS. Section 1 runs 1..3 and the box holds 5, so
      its far bound is a divider with cards behind it: three slots today and three next week —
      said now on the row's own header (`Card 1 of 3`), never restated here (the owner's
@@ -2755,7 +2755,7 @@ test('a copy row draws how far into the box AND how far into the section', async
   await expect(rows.nth(0).locator('.card-locations-identity')).toContainText('Card 1 of 3')
 
   const second = bars.nth(1).locator('.position-bar-text')
-  await expect(second.nth(0)).toHaveText('Position 1 of 2')
+  await expect(second.nth(0)).toHaveText('Section 1 of 2')
   await expect(bars.nth(1).locator('.position-bar-text-section')).toHaveCount(0)
   await expect(rows.nth(1).locator('.card-locations-identity')).toContainText('Card 3 of 3')
 
@@ -2786,7 +2786,7 @@ test('the last section of an open box counts what is in it, and the box line dro
    * second ruling the same evening — "drop it everywhere" — reached the section line too: a
    * growing section reads `card 2 of 2`, a settled one `card 2 of 2 slots`. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
-  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Position 2 of 2')
+  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Section 2 of 2')
   /* THE CARD RULER'S OWN CAPTION IS OMITTED HERE (the owner's Direction-B build, 2026-09-25):
      the header now says `Card 2 of 2` once, and this section carries no name, so there is
      nothing left for this caption to say. */
@@ -2813,7 +2813,7 @@ test('the card with no group gets both depths too', async ({ page }) => {
    * so the bars below are the ROW's, in the same shape every identified card gets. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar).toHaveCount(1)
-  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Position 1 of 2')
+  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Section 1 of 2')
   await expect(bar.locator('.position-bar-text-section')).toHaveCount(0)
 
   /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D41). This test reaches

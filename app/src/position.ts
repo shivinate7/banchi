@@ -300,13 +300,20 @@ export type SectionDepth = {
   lastCard: number
 }
 
-/** The pitch of the ruler's minor graduations, in cards, so the comb never draws more than 24
- *  teeth. The ladder is the ordinary 1-2-5 one; past 500-card sections it falls back to an
- *  exact 24. Narrowest render this component has in the product is the retire dialog at a 390
- *  viewport — 194px — which is 8.1px a tooth at the cap. */
-const GRADUATIONS = [1, 2, 5, 10, 25, 50, 100, 250, 500] as const
-export function graduationStep(of: number): number {
-  return GRADUATIONS.find((step) => of / step <= 24) ?? Math.ceil(of / 24)
+/** The card ruler's ticks (D-position-ruler-ticks): a tick at every 5th card, and every 10th one
+ *  darker and numbered. `at` is the card's own cell centre, the same place the pin stands, so a
+ *  tick labelled 10 sits exactly where the pin sits on card 10. The section's last card is never
+ *  ticked: the ruler's end label already says it.
+ *  ponytail: past 100 cards the pitch is 50 and the numbers every 100, so a 440px ruler never
+ *  draws more than about 20 ticks. Add a finer rule only if the owner holds 100-card sections. */
+export type RulerTick = { card: number; at: number; major: boolean }
+export function rulerTicksOf(of: number): RulerTick[] {
+  const pitch = of <= 100 ? 5 : 50
+  const out: RulerTick[] = []
+  for (let card = pitch; card < of; card += pitch) {
+    out.push({ card, at: ((card - 0.5) / of) * 100, major: card % (pitch * 2) === 0 })
+  }
+  return out
 }
 
 /**
