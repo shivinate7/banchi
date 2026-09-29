@@ -250,15 +250,27 @@ def _unheld_positions(resolved, snapshot) -> List[str]:
     return sorted(unheld)
 
 
+def _refused(say, sentence: str) -> None:
+    """The one way a refusal reaches the Send screen: a plain line, then a JSON line
+    `server/send_routes._empty_send_refusal` reads, so the owner sees THIS sentence and not
+    the console's last line."""
+    import json
+
+    say(f"REFUSING to write: {sentence} Nothing was written.")
+    say(json.dumps({"send_refused": {"sentence": sentence}}))
+
+
 def _refuse_unheld(run_name, unheld, say) -> None:
-    say(
-        f"REFUSING to write: run {run_name} lists {len(unheld)} position(s) where the store "
-        f"holds no card, so no copy of them may be sent. Nothing was written."
+    places = []
+    for key in unheld[:5]:
+        box, index = key.split("/")
+        places.append(f"Box {box}, card {index}")
+    more = f" and {len(unheld) - 5} more" if len(unheld) > 5 else ""
+    _refused(
+        say,
+        f"Run {run_name} lists cards the store does not hold ({'; '.join(places)}{more}), "
+        f"so nothing was sent.",
     )
-    for key in unheld[:10]:
-        say(f"    {key}")
-    if len(unheld) > 10:
-        say(f"    ... and {len(unheld) - 10} more")
 
 
 def _report_withheld(withheld: List[dict], say) -> None:
@@ -1064,6 +1076,9 @@ def run(args, say) -> int:
     except join.EmptyCatalog as refusal:
         say(str(refusal))
         return 1
+    except resolve.DisownedRun as refusal:
+        _refused(say, refusal.sentence)
+        return 1
 
     # ------------------------------------------------------- READ BEFORE RESOLVING, AND WHY
     #
@@ -1740,6 +1755,9 @@ def _resolve_one(run_dir, book, say, args):
     except join.EmptyCatalog as refusal:
         say(f"{run_dir.name}: {refusal}")
         return None
+    except resolve.DisownedRun as refusal:
+        _refused(say, refusal.sentence)
+        return None
     policy = book.policy_for(run_dir.name)
     try:
         return resolve.load(
@@ -1757,6 +1775,9 @@ def _resolve_one(run_dir, book, say, args):
         )
     except join.EmptyCatalog as refusal:
         say(f"{run_dir.name}: {refusal}")
+        return None
+    except resolve.DisownedRun as refusal:
+        _refused(say, refusal.sentence)
         return None
 
 

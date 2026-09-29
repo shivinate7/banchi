@@ -16835,9 +16835,11 @@ def check_emit_buried_box(checks: Checks) -> None:
 
     THE CASE: a run over box 3 was joined, then box 3 was deleted (its cards buried, its
     registry row gone). `Inventory.box_disowns_run` used to answer None for a box with no row,
-    so the emit upserted a ghost card per position and sent phantom copies. Both halves are
-    asserted: the deletion record refuses the run (docs/debts slug `emit-buried-box`), and a
-    position the store holds no card at is refused by `emit` itself even where the box is live.
+    so the emit upserted a ghost card per position and sent phantom copies. Asserted: the
+    deletion record refuses the run on both branches (bid, time), the single and the merged
+    path refuse, a position the store holds no card at is refused, the Send screen's mapping
+    shows the owner one plain sentence, and a card that MOVED to another live box still sends.
+    (docs/debts slug `emit-buried-box`.)
     """
     checks.note("")
     checks.note("EMIT OVER A BURIED BOX — refused, and no ghost card is born")
@@ -16852,35 +16854,100 @@ def check_emit_buried_box(checks: Checks) -> None:
             inventory._log("box_deleted", None, box=3, bid=entry.bid, name=entry.name,
                            cards=2, buried=2)
 
+    def owner_sentence(said: str) -> str:
+        refused = send_routes._empty_send_refusal(said, [], "sent", 1)
+        return str(refused.args[-1]) if refused.args else str(refused)
+
+    # --- both branches of `box_disowns_run`, on the rule itself ---------------------------
+    with isolated_home():
+        inventory = Store().read().inventory
+        gone = [{"event": "box_deleted", "box": 3, "bid": 7, "at": "2026-09-16T02:00:00+00:00"}]
+        checks.ok(
+            inventory.box_disowns_run(3, "r", "2026-09-01T00:00:00+00:00", bid=7, deleted=gone)
+            is not None,
+            "bid branch: the run's drawer index equals the deleted drawer's — refused",
+        )
+        checks.ok(
+            inventory.box_disowns_run(3, "r", "2026-09-01T00:00:00+00:00", bid=8, deleted=gone)
+            is None,
+            "bid branch: a different drawer's index is not the deleted one — passes",
+        )
+        checks.ok(
+            inventory.box_disowns_run(3, "r", "2026-09-01T00:00:00+00:00", deleted=gone)
+            is not None,
+            "time branch: no index anywhere, deleted after the run started — refused",
+        )
+        checks.ok(
+            inventory.box_disowns_run(3, "r", "2026-09-20T00:00:00+00:00", deleted=gone)
+            is None,
+            "time branch: deleted BEFORE the run started — not this run's drawer, passes",
+        )
+        checks.ok(
+            inventory.box_disowns_run(3, "r", "2026-09-01T00:00:00+00:00") is None,
+            "and with no deletion record and no row the rule still abstains, as before",
+        )
+
+    # --- the single path, through the Send screen's mapping -------------------------------
     with isolated_home():
         run_dir, _ = seam_run(checks, cards)
         with Store().write() as snapshot:
             bury(snapshot.inventory, log=True)
         said = command(checks, "emit", str(run_dir.directory), exits=1)
+        sentence = owner_sentence(said)
         checks.ok(
-            "deleted" in said and run_dir.name in said and "box 3" in said,
-            "a run over a deleted box refuses in a plain sentence naming the run and the box",
+            run_dir.name in sentence and "box 3" in sentence and "nothing was sent" in sentence
+            and "REFUSING" not in sentence,
+            "a run over a deleted box refuses, and the Send screen shows ONE plain sentence "
+            "naming the run and the box",
+            sentence,
+        )
+        checks.equal(len(Store().read().inventory.cards), 0, "and no card was created")
+
+    # --- the merged path (what Send runs): one good run, one over the buried box ----------
+    with isolated_home():
+        good, _ = seam_run(checks, [(4, 1, "Articuno", "161", None)])
+        bad, _ = seam_run(checks, cards)
+        with Store().write() as snapshot:
+            bury(snapshot.inventory, log=True)
+        before = len(Store().read().inventory.cards)
+        said = command(checks, "emit", str(good.directory), str(bad.directory), exits=1)
+        checks.ok(
+            bad.name in owner_sentence(said) and "box 3" in owner_sentence(said),
+            "the merged emit refuses the whole send on the buried run, same sentence",
             said,
         )
         checks.equal(
-            len(Store().read().inventory.cards), 0,
-            "and the refused emit created no card at all",
+            len(Store().read().inventory.cards), before,
+            "and the merged refusal created no card and stamped nothing",
         )
 
+    # --- a position with no card, in a live box -------------------------------------------
     with isolated_home():
         run_dir, _ = seam_run(checks, cards)
         with Store().write() as snapshot:
             bury(snapshot.inventory, log=False)
             snapshot.inventory.ensure_box(3)
         said = command(checks, "emit", str(run_dir.directory), exits=1)
+        sentence = owner_sentence(said)
         checks.ok(
-            "holds no card" in said,
-            "a live box with no card at a run's position is reported as unmatched, not upserted",
-            said,
+            "Box 3, card 1" in sentence and "3/1" not in sentence and "nothing was sent" in sentence,
+            "a position with no card refuses, named as a place ('Box 3, card 1'), never a key",
+            sentence,
         )
-        checks.equal(
-            len(Store().read().inventory.cards), 0,
-            "and that refusal created no card either",
+        checks.equal(len(Store().read().inventory.cards), 0, "and no card was created")
+
+    # --- the moved card still sends -------------------------------------------------------
+    with isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        with Store().write() as snapshot:
+            snapshot.inventory.ensure_box(4)
+            snapshot.inventory.move_card("3/1", 4)
+        said = command(checks, "emit", str(run_dir.directory))
+        checks.ok(
+            "pushed" in said and "REFUSING" not in said,
+            "a run over box 3 whose card moved to box 4 still sends: nothing here may refuse "
+            "a card that is where the store says it is",
+            said,
         )
 
 
@@ -26591,7 +26658,7 @@ def check_listing_commands(checks: Checks) -> None:
         )
         said = command(checks, "emit", str(run_dir.directory), exits=1)
         checks.ok(
-            "holds no card" in said and "7/1" in said,
+            "Box 7, card 1" in said,
             "emit REFUSES and names the position the store holds no card at",
             said,
         )

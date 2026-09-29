@@ -1865,6 +1865,15 @@ def follow_moved(
     return at, None
 
 
+class DisownedRun(runs.RunError):
+    """A run over a box that was deleted or replaced. `sentence` is the owner's one line
+    (plain words, no mechanism), which `cli/cmd_emit.py` hands the Send screen."""
+
+    def __init__(self, message: str, sentence: str) -> None:
+        super().__init__(message)
+        self.sentence = sentence
+
+
 def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run) -> None:
     """Refuse a run over a box whose number was deleted and reused since (D36, amended).
 
@@ -1929,13 +1938,15 @@ def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run
         )
         if sentence is None:
             continue
-        raise runs.RunError(
+        raise DisownedRun(
             f"REFUSING: {sentence}. This run describes a drawer that no longer exists and "
             f"cannot be joined.\n"
             f"Re-identify the box as it is now (`pkmnscan identify`, or Identify on #/runs) "
             f"if that is what you want joined; this run's directory is a record of the old "
             f"drawer and is left as it is.\n"
-            f"Nothing was joined, nothing was written, and no queue was touched."
+            f"Nothing was joined, nothing was written, and no queue was touched.",
+            f"Run {run.name} was over box {box}, which has been deleted or replaced since, "
+            f"so nothing was sent.",
         )
 
 
