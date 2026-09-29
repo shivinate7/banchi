@@ -13,7 +13,7 @@ The codes track, from the operator putting a stack of code cards on the feeder t
 arriving. It supersedes `code-card-fork/CLAUDE.md`'s architecture section and amends
 C2, C4 and C5 below, each of which is named where it is overturned.
 
-Everything numeric here was measured on 2026-08-30 — either against
+Everything numeric here was measured, either against
 `fixtures/pokemon_wide_export_untouched.csv`, or on this machine, or by web research whose
 sources are named. Nothing is carried forward from an earlier draft unmeasured.
 
@@ -47,7 +47,7 @@ section 4.
 
 ## 2. What a code card is, verified
 
-Confirmed 2026-08-30 against first-party sources, correcting C1 in two places.
+Confirmed against first-party sources, correcting C1 in two places.
 
 - **The QR payload is a redeem URL carrying the code in a `2d_code` parameter.** Confirmed
   by reading the official redeemer's own JavaScript bundle: it reads `2d_code`, stores it,
@@ -190,7 +190,7 @@ the honest headline and it is not softened here.
 
 ### 6.1 Destroying the card forecloses three things — CONDITIONALLY, and the condition changed
 
-**AMENDED 2026-08-30 by the owner's ruling. Read this before the list below.** The owner
+**AMENDED by the owner's ruling. Read this before the list below.** The owner
 holds the PREMIUM code cards physically, in a box, at tracked locations, and will ship them.
 Only the BULK tier is destroyed. Everything below is therefore true **of a destroyed card and
 of nothing else** — the original draft stated it unconditionally and that was wrong.
@@ -201,7 +201,7 @@ The consequences of the split, settled:
   Import to Staged` path already reaches it: 263 code-card rows in the fixture export, five
   conditions each, a 16-column schema byte-identical to singles.
 - **TCGplayer's BULK lane is open, CSV-listable, and economically dead. All three.**
-  Corrected 2026-08-30 against first-party API reads after the owner challenged the first
+  Corrected against first-party API reads after the owner challenged the first
   draft, which was wrong.
 
   **It IS an ordinary catalog product.** `productId 253512`, category 56 "Bulk Lots", group
@@ -239,7 +239,7 @@ The owner's pile is **~30,000 codes**. Measured against that:
 
 - TCGplayer's bulk SKU absorbs **8,694 units/year across every seller combined — about $299
   of GMV** — and already carries **31,493 standing units across 56 listings** (re-counted
-  first-hand 2026-08-30; an earlier figure of ~19,300 was low). The pile alone is roughly
+  first-hand; an earlier figure of ~19,300 was low). The pile alone is roughly
   **3.5 years of total market demand**, queued behind **3.6 years** of existing supply.
 - The best eBay 1,000-lot comparable sold **twice, lifetime**.
 - The entire PREMIUM tier absorbs **924 units and $231 gross per year, marketplace-wide**. At a
@@ -367,8 +367,8 @@ Named rather than buried, and none of it blocks the build.
    bans a user-visible string naming a pipeline-internal noun. D24 already hides this same
    number from a card's identity, for the reason D58 hides a singles card's stored index.
    No fix landed. Codes carry no section-relative number the way a located singles card
-   does (D260). There is nothing today to compose in its place. The owner's ruling,
-   2026-09-25: **"Leave it, known gap."** Open until the dormant feature wakes.
+   does (D260). There is nothing today to compose in its place. The owner's ruling:
+   **"Leave it, known gap."** Open until the dormant feature wakes.
 
 ---
 
@@ -410,7 +410,7 @@ and screenshot that catches it, so the screen links to the file.
 
 ## 10. Seller level gates the whole TCGplayer plan
 
-Measured 2026-08-30 from TCGplayer's own help articles. **The item cap counts QUANTITY, not
+Measured from TCGplayer's own help articles. **The item cap counts QUANTITY, not
 distinct products**, which is what makes it bite here:
 
     Level 1     100 items        30,000 units is impossible
@@ -439,7 +439,7 @@ the old codes decisions file, which is deleted. Sections 1 to 10 above amend C2,
 and each one is named where it is overturned. A `C<n>` citation resolves to the `## C<n>`
 heading below.
 
-## C1 — Card anatomy, verified on physical cards (Aug 2026)
+## C1 — Card anatomy, verified on physical cards
 
 The face side carries everything needed. Single-sided capture, no flipping.
 
@@ -456,7 +456,7 @@ The face side carries everything needed. Single-sided capture, no flipping.
 
 ## C2 — Identification architecture
 
-**SUPERSEDED IN PART, 2026-08-30. Steps 1 and 2 stand; steps 3, 4 and 5 are retired.** The QR
+**SUPERSEDED IN PART. Steps 1 and 2 stand; steps 3, 4 and 5 are retired.** The QR
 decode is built and is the primary path. The OCR half — SKU crop, Tesseract, fuzzy match
 against a hand-built SKU table — is NOT built and should not be: see C9. The cost argument
 below still holds and is now stronger, because the primary path costs nothing at all.
@@ -478,7 +478,7 @@ card. That is 1–2% of a code's retail value — tolerable, but unnecessary.
 
 ## C3 — Data model
 
-**AMENDED 2026-08-30 (C9): the redemption limits below are SOFT, not hard caps.** Past a
+**AMENDED (C9): the redemption limits below are SOFT, not hard caps.** Past a
 limit a code grants a small amount of in-game currency instead of the product; it is not
 refused. The figures are otherwise confirmed against the official FAQ.
 
@@ -500,7 +500,7 @@ justification for the SKU OCR work.
 
 ## C5 — Ship the physical cards AND message the codes instantly
 
-**OVERTURNED 2026-08-30 by C11.** Its mechanism is unavailable: D24 disposes of the physical
+**OVERTURNED by C11.** Its mechanism is unavailable: D24 disposes of the physical
 cards, so there is nothing to ship. The problem it identified is real and its solution is
 gone — read C11 for what replaces it. The analysis below is kept because the risk it names
 is exactly the risk the track now carries unmitigated.
@@ -549,7 +549,7 @@ since a misread QR fails to decode rather than mispricing a $40 card.
 
 ## C8 — The code ledger: every code's text beside its photograph, for the dispute that will come
 
-Ratified by the owner 2026-08-23, in his own words: code cards *"live in the arbitrary box of
+Ratified by the owner, in his own words: code cards *"live in the arbitrary box of
 code cards, ideally sorted by set"*, and *"we likely will need both the code card image +
 image to text csv of them saved (in case a customer says a certain code didn't work, we check
 that code retroactively, tap its image, and likely it was an image to text error)."*
@@ -572,7 +572,7 @@ guard both fire on a code literal precisely because a file like this must never 
 The runtime writing codes into a gitignored file is the sanctioned path; an agent pasting one
 into a tracked file is what the guards exist to stop.
 
-**BUILT 2026-08-23, the same day it was ratified.** The profile is `pokemon_code_v1`:
+**BUILT.** The profile is `pokemon_code_v1`:
 `{code, name, confidence}`, uncertainty per character (`?` outside the printed alphabet, so
 the owner's re-read knows exactly which character was doubtful), the 3-4-3-3 layout described
 in words because a literal example would trip the commit guard on the prompt's own source.
@@ -595,7 +595,7 @@ keeps the located boxes' denominators honest).
 
 ## C9 — The QR is the whole identification, and the OCR half is retired
 
-Ratified by measurement, 2026-08-30. `docs/specs/code-cards.md` carries the full argument;
+Ratified by measurement. `docs/specs/code-cards.md` carries the full argument;
 this entry records the decision and what it overturns.
 
 **The redemption code IS the QR's payload.** Confirmed first-party by reading the official
@@ -660,7 +660,7 @@ the rule D22 already imposes on rarities and which has no reason to be weaker on
 ## C11 — Disposal forecloses two channels, and the tier decides the rest
 
 D24 rules that the physical card is destroyed once the code is extracted, and the owner
-reaffirmed it on 2026-08-30. **It has a price, recorded here so nobody rediscovers it.**
+reaffirmed it. **It has a price, recorded here so nobody rediscovers it.**
 
 **TCGplayer is foreclosed outright.** Its own help article permits code cards *"attached to a
 physical card"* and states that *"the sale of promo codes not attached to a physical card is
