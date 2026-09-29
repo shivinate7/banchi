@@ -391,7 +391,7 @@ def check_order_key_migration(checks: Checks) -> None:
         column = conn.execute("SELECT count(*) FROM cards WHERE ord = idx").fetchone()[0]
         stamp = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()[0]
         conn.close()
-        checks.equal((column, stamp), (13, "13"), "the column is filled too, and the file is stamped 13")
+        checks.equal((column, stamp), (13, str(db.SCHEMA_VERSION)), "the column is filled too, and the file is stamped current")
         checks.equal(
             [_label(1, f"o{i}") for i in range(1, 10)], labels_before,
             "no label moves: D58's counted numbers are exactly what they were",
