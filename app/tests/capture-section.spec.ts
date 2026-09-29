@@ -881,3 +881,109 @@ test('a capture after a 409 with Keep unanswered does not fire — nothing was w
   await page.keyboard.press('c')
   await expect(page.locator('.capture-undo-row').first()).toBeVisible()
 })
+
+/* OWNER'S RULING, 2026-09-28: the open Section list goes in FRONT of the RECENT footer and
+ * scrolls. `.capture-open-pinned` is z-indexed inside `.capture-card`'s own stacking context,
+ * so the later footer painted over rows 8-11 of an 11-section box and they could not be
+ * reached. The last option must take a real (never forced) click, at every width. */
+function manySections(n: number): Span[] {
+  return Array.from({ length: n }, (_, at) => ({
+    section: at + 1,
+    start: at * 5 + 1,
+    end: at === n - 1 ? null : at * 5 + 5,
+    count: at === n - 1 ? 0 : 5,
+    name: null,
+    div: String(at * 5 + 1),
+  }))
+}
+
+for (const [width, height] of [
+  [1440, 900],
+  [550, 800],
+  [390, 844],
+] as const) {
+  test(`the last of 12 sections scrolls into view and takes a real click at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await open(page, {
+      spans: manySections(12),
+      boxes: [
+        {
+          ...BOX,
+          sections: manySections(12).map((s) => s.start),
+          sections_detail: manySections(12),
+        },
+      ],
+    })
+    await sectionRow(page).click()
+    await expect(page.locator('.capture-open-pinned')).toBeVisible()
+    const last = page.locator('.capture-opt').filter({ hasText: /Section 12 of 12/ })
+    // A real click: Playwright scrolls the list, then refuses if anything else covers the row.
+    await last.click({ timeout: 5_000 })
+    await expect(sectionRow(page)).toContainText('Section 12 of 12')
+  })
+}
+
+/* KEYBOARD AT 390. Capture's open list has no arrow-key handler (`[` and `]` step the pick and
+ * never open the list), so the keyboard path is the native one: focus starts on the first
+ * option and Tab walks the rest. Each focused option must stay inside the list and above the
+ * tab bar, down to the last row. */
+test('walking the open list by keyboard keeps the focused option in view to the last row at 390', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await open(page, {
+    spans: manySections(12),
+    boxes: [
+      { ...BOX, sections: manySections(12).map((s) => s.start), sections_detail: manySections(12) },
+    ],
+  })
+  await sectionRow(page).click()
+  await expect(page.locator('.capture-open-pinned')).toBeVisible()
+  const tabTop = (await page.locator('.bn-tabbar').boundingBox())!.y
+  for (let at = 0; at < 12; at += 1) {
+    if (at > 0) await page.keyboard.press('Tab')
+    const focused = page.locator('.capture-open-pinned .capture-opt:focus')
+    await expect(focused).toContainText(`Section ${at + 1} of 12`)
+    await page.waitForTimeout(60)
+    const list = (await page.locator('.capture-open-pinned').boundingBox())!
+    const opt = (await focused.boundingBox())!
+    expect(opt.y).toBeGreaterThanOrEqual(list.y)
+    expect(opt.y + opt.height).toBeLessThanOrEqual(list.y + list.height + 1)
+    expect(opt.y + opt.height).toBeLessThanOrEqual(tabTop)
+  }
+})
+
+/* PHONE CASE (coordinator, 2026-09-28): on opening, the whole list, its own header row
+ * included, sits between the top bar and the tab bar. Measured right after the open, before
+ * any scroll of the list. */
+for (const [width, height] of [
+  [550, 800],
+  [390, 844],
+] as const) {
+  test(`the open list fits between the top bar and the tab bar at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await open(page, {
+      spans: manySections(12),
+      boxes: [
+        {
+          ...BOX,
+          sections: manySections(12).map((s) => s.start),
+          sections_detail: manySections(12),
+        },
+      ],
+    })
+    await sectionRow(page).click()
+    const pinned = page.locator('.capture-open-pinned')
+    await expect(pinned).toBeVisible()
+    await page.waitForTimeout(500) // the open's own scroll settles
+    const tabTop = (await page.locator('.bn-tabbar').boundingBox())!.y
+    const topBarBottom = (await page.locator('.bn-topbar').boundingBox())!.y +
+      (await page.locator('.bn-topbar').boundingBox())!.height
+    const list = (await pinned.boundingBox())!
+    expect(list.y + list.height).toBeLessThanOrEqual(tabTop)
+    expect(list.y).toBeGreaterThanOrEqual(topBarBottom)
+    const header = (await pinned.locator('> .capture-row').boundingBox())!
+    expect(header.y).toBeGreaterThanOrEqual(list.y)
+    expect(header.y + header.height).toBeLessThanOrEqual(list.y + list.height)
+  })
+}

@@ -8162,8 +8162,7 @@ COMPONENTS = [
                                                "D118", "D123", "D132", "D159", "D171", "D181",
                                                "D192", "D193", "D194", "D195", "D196", "D203",
                                                "D209", "D212", "D218", "D220", "D221", "D259",
-                                               "D271", "D274", "D285", "D296",
-                                               "D304"]},
+                                               "D270", "D271", "D274", "D285", "D296", "D304"]},
             "src/Orders.css": {"does": "the order screen at owner density: the line, its reason "
                                        "and remedy, and the pick rows under it. A copy already "
                                        "spoken for by another line is drawn as spoken for "
@@ -8730,7 +8729,7 @@ COMPONENTS = [
                         "it, and a walk refused partway reporting how far it got in the "
                         "server's own words. Run by `make design-check`.",
                 "governed_by": ["D10", "D41", "D58", "D67", "D101", "D117", "D118", "D136", "D153",
-                                "D164", "D196", "D211", "D218"],
+                                "D164", "D196", "D211", "D218", "D259"],
                 "note": "THE ONLY SPEC THAT CAPTURES, and it is the opposite of "
                         "capture-claims.spec.ts's rule rather than an exception to it: "
                         "`POST /capture` and `DELETE /inventory/...` are both intercepted, so "
@@ -9442,9 +9441,8 @@ COMPONENTS = [
                                                      "D90", "D91", "D93", "D96", "D103", "D113",
                                                      "D114", "D118", "D123", "D132", "D171", "D181",
                                                      "D193", "D194", "D196", "D203", "D209", "D212",
-                                                     "D218", "D220", "D221", "D263", "D274", "D285",
-                                                     "D289", "D296",
-                                                     "D304"]},
+                                                     "D218", "D220", "D221", "D263", "D270", "D274",
+                                                     "D285", "D289", "D296", "D304"]},
             "tests/order-walk.spec.ts": {"does": "`OrdersWalkPane.tsx`'s OWN undo, and nothing "
                                                  "else `tests/orders.spec.ts` already covers "
                                                  "(that file's own docstring names this file so "
