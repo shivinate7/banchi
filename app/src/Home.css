@@ -17,7 +17,10 @@
   letter-spacing: -0.035em;
   line-height: 1;
 }
-.home-hero-body { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
+/* The verdict block and the deck sit side by side UNDER the greeting, as before 1e4c5346 — the
+   deck was in the header's actions slot, which stretched the header to its 310px. */
+.home-hero-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--bn-8); }
+.home-hero-text { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
 /* ── THE STANDING LINE ─────────────────────────────────────────────────────────────────
    One sentence naming what the store is waiting on, ranked by `standing.ts`. The emphasis
    floor is a TINT and never a fill: an accent fill spends the element's only colour channel,
@@ -224,6 +227,7 @@ a.home-deck { pointer-events: auto; }
   /* Hidden WITHOUT `display: none`: Chromium's full-page capture matches this media query for
      a frame, and a display toggle restarts the deck's enter animations — so every screenshot
      of this screen at 1440 showed an empty hero. A zero-height, invisible block toggles nothing. */
+  .home-hero-body { grid-template-columns: 1fr; gap: 0; }
   .home-hero-art { height: 0; overflow: hidden; visibility: hidden; margin: 0; padding: 0; }
   .home-actions { flex-direction: column; margin-top: var(--bn-2); }
   .home-actions .bn-btn { width: 100%; }

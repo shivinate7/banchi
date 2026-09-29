@@ -9167,6 +9167,14 @@ COMPONENTS = [
                         "it, and shipping the display cut into a 32px rail is section 9's own "
                         "measured failure. Observed red under `size < 64` -> `size < 16`.",
             },
+            "tests/home-deck.spec.ts": {
+                "does": "`#/`'s verdict sits within 64px of the greeting at 1440 and 820, both "
+                        "themes: the card deck lives beside the verdict, never in `Page`'s "
+                        "header slot, where its 310px once left an empty band. Not a harness "
+                        "test; `make design-check` runs it.",
+                "governed_by": ["D121", "D275"],
+                "note": "Proved red first on main: the gap measured about 250px.",
+            },
             "tests/home.spec.ts": {
                 "does": "`#/`'s 'cannot be filled' figure against a mixed ledger: one order "
                         "still open and short 2 copies, one order the feed already reports "
