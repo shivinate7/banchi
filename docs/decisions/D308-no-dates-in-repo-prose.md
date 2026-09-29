@@ -1,4 +1,4 @@
-## D-no-dates-in-repo-prose — No date in repo prose, because git keeps the history and a date only ages
+## D308 — No date in repo prose, because git keeps the history and a date only ages
 
 **The owner ruled it.** A date in prose says when a claim was written. Git already says that, and
 says it exactly. A status date ("DORMANT as of ...") goes stale with no reader to notice.

@@ -1,4 +1,4 @@
-## D-claude-md-culled-rulings — Rulings that CLAUDE.md carried in prose, now held here
+## D307 — Rulings that CLAUDE.md carried in prose, now held here
 
 **Why this entry exists.** The owner asked for CLAUDE.md to be rewritten in place and cut to rules.
 A ruling's home is a decision entry. CLAUDE.md points at it. These rulings had no entry, so this one holds

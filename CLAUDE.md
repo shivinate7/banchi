@@ -285,7 +285,7 @@ you build here. Rationale and open questions live in `docs/CODES-DECISIONS.md`.
   `docs/map.py` first. **NOT MECHANIZED:** a machine cannot read a sentence to a person and decide whether
   this repo can already do it.
 - **No date in repo prose.** History is git's. Rewrite a claim in place, and keep only what is true now.
-  Old dates go when their file is next rewritten. Never in a sweep. See D-no-dates-in-repo-prose (no dates in repo prose).
+  Old dates go when their file is next rewritten. Never in a sweep. See D308 (no dates in repo prose).
   **NOT MECHANIZED:** a machine cannot tell a date from a version number, a port or a test fixture without intent.
 - **Opsec.** A live unredeemed code card is a bearer instrument. No code-card photo in a listing, README,
   screenshot or commit. `scripts/githooks/pre-commit` enforces it, armed by `make hooks`.
@@ -318,7 +318,7 @@ Report format: **Done, Deviations, Input Needed, Next**, in that order (parent C
 Use bold labels in one quoted block, never a code fence. Start with the point. No task restatement.
 
 - Run `make harness` before you say something works. Give the verdict, never the output.
-- Screen work: experience is everything (D-claude-md-culled-rulings, rulings CLAUDE.md carried). Run a design pass
+- Screen work: experience is everything (D307, rulings CLAUDE.md carried). Run a design pass
   before you build. Review the built screen against it before you call it done.
 - Reserve Opus for planning, for a builder redesigning a whole flow, and for resolving a hard merge.
   Every review is Sonnet. An Opus review needs the orchestrator to ask the owner first and get a yes.
