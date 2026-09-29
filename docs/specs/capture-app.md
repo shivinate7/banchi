@@ -558,8 +558,10 @@ what `docs/DESIGN.md` refuses in as many words.
   no label (a reload, or a card that slid after a remove) shows the box name alone. No
   `B<n> #<n>` key is drawn or spoken.
 - **The viewfinder panel hugs its portrait frame** (desktop and tablet). Its width is derived
-  from its height (`--cap-stage-w`), not a 1fr track; the freed width goes to the last-capture
-  photo (desktop) and the run and last cards (tablet). The phone keeps a full-width panel: its
+  from its height (`--cap-stage-w`), not a 1fr track; the last-capture column hugs ITS 9:16 photo the same
+  way (`--cap-last-w`) and the freed width goes to the rail (desktop, fixed 2026-09-29: a `1fr` last
+  column left white bands the photo could not use). On tablet the receipt sits beside the photo and
+  the empty frame fills its panel. `capture-width.spec.ts` measures no unpainted band at 1440 and 820. The phone keeps a full-width panel: its
   height budget pins the shutter above the tab bar. Layout only: capture, motion trigger and
   rotation are untouched. Width only. §5.1's order is unchanged.
 - **Phone (390, 375, 430): the panel hugs the frame and sits BESIDE the last capture**
