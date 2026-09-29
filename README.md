@@ -121,7 +121,7 @@ The name Banchi belongs to the app. The packages, CLI, store and wire keep `pkmn
 
 ## More
 
-- [`CLAUDE.md`](CLAUDE.md): the full command list and the working rules.
+- `make explain`: every make target and what it checks. [`CLAUDE.md`](CLAUDE.md) holds the rules agents work by.
 - [`docs/decisions/`](docs/decisions/): each settled decision. `make map ARGS=D<n>` prints one.
 - [`docs/specs/`](docs/specs/): the spec for each feature.
 - [`docs/DESIGN.md`](docs/DESIGN.md): the design tokens, and the limits on the Fulfiller's screen.
