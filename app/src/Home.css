@@ -25,7 +25,7 @@
   letter-spacing: -0.035em;
   line-height: 1;
 }
-.home-hero-body { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; }
+.home-hero-body { display: flex; flex-direction: column; gap: var(--bn-3); min-width: 0; padding-bottom: var(--bn-4); /* the old hero's own bottom pad */ }
 /* ── THE STANDING LINE ─────────────────────────────────────────────────────────────────
    One sentence naming what the store is waiting on, ranked by `standing.ts`. The emphasis
    floor is a TINT and never a fill: an accent fill spends the element's only colour channel,
