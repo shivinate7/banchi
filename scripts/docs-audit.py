@@ -16688,6 +16688,36 @@ def argued_exemption(block: str) -> Tuple[bool, int]:
     return True, len(block[at + len(NOT_MECHANIZED):].split())
 
 
+_BARE_ID_RE = re.compile(r"\b(?:DEBT|D)\d+\b")
+_ID_GLOSS_RE = re.compile(r"`?,\s+[a-z]")
+
+
+def bare_id_findings(text: str) -> List[Finding]:
+    """Each decision or debt id in `CLAUDE.md`, at its first use in a paragraph, needs a gloss.
+
+    The gloss is `D43, short words` (parent rule `speak-cite-id-plus-gloss`). A paragraph is
+    a run of lines with no blank line. A later use of the same id in that paragraph may stay
+    bare. It reads the shape, never the words: `D43, x` passes. Whether the gloss is true is a
+    person's judgement.
+    """
+    found: List[Finding] = []
+    line = 1
+    for para in re.split(r"(\n\s*\n)", text):
+        seen: Set[str] = set()
+        for m in _BARE_ID_RE.finditer(para):
+            if m.group(0) in seen:
+                continue
+            seen.add(m.group(0))
+            if not _ID_GLOSS_RE.match(para[m.end():m.end() + 6]):
+                found.append(Finding(
+                    f"CLAUDE.md:{line + para.count(chr(10), 0, m.start())}",
+                    f"`{m.group(0)}` has no gloss. Write `{m.group(0)}, <2-6 words from its "
+                    "heading>` at its first use in the paragraph.",
+                ))
+        line += para.count("\n")
+    return found
+
+
 def check_rule_enforcement(report: Report) -> None:
     """Every hard rule names the thing that enforces it, or argues why nothing can.
 
@@ -16744,6 +16774,8 @@ def check_rule_enforcement(report: Report) -> None:
     makefile = ROOT / "Makefile"
     targets = set(_MAKE_RULE_RE.findall(read(makefile))) if exists(makefile) else set()
     rows = audit_row_names()
+
+    findings.extend(bare_id_findings(text))
 
     prose_only: List[str] = []
     for line, block in blocks:
