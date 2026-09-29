@@ -16698,6 +16698,81 @@ def argued_exemption(block: str) -> Tuple[bool, int]:
     return True, len(block[at + len(NOT_MECHANIZED):].split())
 
 
+_BARE_ID_RE = re.compile(r"\b(DEBT|D)(\d+)(?:-D(\d+))?\b")
+_GLOSS_STOPWORDS = frozenset((
+    "the", "and", "for", "not", "one", "its", "are", "was", "but", "who", "has", "had", "can",
+    "may", "his", "her", "that", "this", "with", "from", "into", "what", "when", "than", "then",
+    "them", "they", "their", "there", "where", "which", "while", "will", "would"))
+
+
+def _entry_heading(kind: str, number: int) -> Optional[str]:
+    """The heading line of decision `D<n>` or debt `DEBT<n>`, or None. One home: the corpus."""
+    corpus = _corpus() if kind == "D" else _debts_corpus()
+    path = corpus.path_for(f"D{number}" if kind == "D" else str(number)) if corpus else None
+    return read(path).split("\n", 1)[0] if path else None
+
+
+def _gloss_words(s: str) -> Set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+", s.lower())
+            if len(w) >= 3 and w not in _GLOSS_STOPWORDS}
+
+
+def _gloss_matches(gloss: str, heading: str) -> bool:
+    """True when at least one gloss word is in the heading (equal, or the same 5-letter stem)."""
+    head = _gloss_words(heading)
+    for w in _gloss_words(gloss):
+        if any(w == h or (len(w) >= 5 and len(h) >= 5 and w[:5] == h[:5]) for h in head):
+            return True
+    return False
+
+
+def _gloss_after(rest: str) -> Optional[str]:
+    """The gloss that follows an id: ` (gloss)` or `, gloss`. None when neither is there."""
+    rest = rest[1:] if rest.startswith("`") else rest
+    if rest.startswith(" ("):
+        return rest[2:].split(")", 1)[0]
+    m = re.match(r",\s+([^,);:.\n]+)", rest)
+    return m.group(1) if m else None
+
+
+def bare_id_findings(text: str) -> List[Finding]:
+    """Each decision or debt id in `CLAUDE.md`, at its first use in a paragraph, needs a gloss.
+
+    The gloss is `D43 (short words)` or `D43, short words` (parent rule
+    `speak-cite-id-plus-gloss`). A paragraph is a run of lines with no blank line, and each
+    bullet starts its own. A later use of the same id in that paragraph may stay bare. At
+    least one gloss word must be in the entry's own heading (`docs/decisions/`,
+    `docs/debts/`), so `D7, rewritten` fails. A range `D<a>-D<b> (words)` may match any
+    heading in it. Whether the gloss is a fair short is a person's judgement.
+    """
+    found: List[Finding] = []
+    seen: Set[str] = set()
+    for number, line in enumerate(text.split("\n"), 1):
+        if not line.strip() or re.match(r"\s*[-*] ", line):
+            seen = set()
+        for m in _BARE_ID_RE.finditer(line):
+            ident = m.group(0)
+            if ident in seen:
+                continue
+            seen.add(ident)
+            kind = m.group(1)
+            lo = int(m.group(2))
+            hi = int(m.group(3)) if m.group(3) else lo
+            gloss = _gloss_after(line[m.end():])
+            headings = [_entry_heading(kind, n) for n in range(lo, hi + 1)]
+            if gloss is None:
+                found.append(Finding(
+                    f"CLAUDE.md:{number}",
+                    f"`{ident}` has no gloss. Write `{ident} (<2-6 words from its heading>)` "
+                    "at its first use in the paragraph."))
+            elif not any(h and _gloss_matches(gloss, h) for h in headings):
+                found.append(Finding(
+                    f"CLAUDE.md:{number}",
+                    f"the gloss `{gloss}` for `{ident}` shares no word with the entry's own "
+                    "heading. Take the gloss from the heading."))
+    return found
+
+
 def check_rule_enforcement(report: Report) -> None:
     """Every hard rule names the thing that enforces it, or argues why nothing can.
 
@@ -16754,6 +16829,8 @@ def check_rule_enforcement(report: Report) -> None:
     makefile = ROOT / "Makefile"
     targets = set(_MAKE_RULE_RE.findall(read(makefile))) if exists(makefile) else set()
     rows = audit_row_names()
+
+    findings.extend(bare_id_findings(text))
 
     prose_only: List[str] = []
     for line, block in blocks:
