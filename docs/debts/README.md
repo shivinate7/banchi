@@ -79,6 +79,6 @@ DEBT57 an emit over a buried box made ghost cards and phantom copies
 DEBT58 the Lane H palette record is on a branch, not in main
 DEBT59 an unreadable live claim has no way out on screen
 DEBT60 the demo builds with Hide unpullable forced off
-DEBT-advances-carryover eight build proposals from the 2026-08-31 review are still open
-DEBT-demo-assets-lfs the demo photos are 171 MB of plain git, and the owner wants them in Git LFS
+DEBT61 eight build proposals from the 2026-08-31 review are still open
+DEBT62 the demo photos are 171 MB of plain git, and the owner wants them in Git LFS
 ```
