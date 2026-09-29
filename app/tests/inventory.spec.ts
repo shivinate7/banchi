@@ -4209,7 +4209,7 @@ test('the box lives in the walk\'s column, and it is the only thing in that head
 
   /* THE RUN STATUS LINE (`BoxRuns.tsx`) IS DELETED, on the owner's word ("Remove it").
      Inventory no longer mentions runs at all — a card is identified from Review's own
-     identify strip instead. `docs/reviews/ux-2026-09-23/RULINGS.md` records the ruling. What
+     identify strip instead. What
      is left to assert is that its slot leaves no hole: the box's own header holds only its
      identity strip and the Manage control now. */
   /* AND THE SCREEN CLEARS `docs/DESIGN.md`'s OWN FIRST-CONTENT FLOOR: "the first row of real

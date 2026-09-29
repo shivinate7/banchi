@@ -23,8 +23,8 @@ since been built.
 (what each command reads, writes and refuses on), operator ergonomics (route switches, fold
 position, keystrokes), an adversarial pass instructed to defend the status quo and find what
 every move breaks, and a workflow pass over the real calendar of a box. Three were additionally
-pointed at `docs/specs/ui-redesign-options.md` and `docs/specs/ui-research.md`, which had
-already argued a neighbouring question and which none of them would otherwise have found.
+pointed at two earlier UI spec files (a redesign-options file and a research file, both
+later deleted), which had already argued a neighbouring question and which none of them would otherwise have found.
 
 **Every measurement below was re-checked against the live store before it was written down.**
 The agents' numbers are not taken on trust: the run manifests, `decisions.json` contents, and
@@ -134,7 +134,7 @@ already run. `.runs` sets no `max-width`, so the four steps stack at full width 
 buttons occupy roughly 90px of a ~1,376px line: **the vertical budget is expensive and the
 horizontal budget is 93% idle.**
 
-That is a page-chrome-budget failure, and `docs/specs/ui-research.md` already drew the
+That is a page-chrome-budget failure, and the earlier UI research file already drew the
 distinction that decides it — `#/inventory`'s 240px header was fixed by deleting a title, a lede
 and a mode switch, not by re-zoning. **Relocating emit carries ~200px of fresh page chrome to a
 new address and leaves every one of those dead pixels standing.**
@@ -159,8 +159,8 @@ was built to deliver.
 
 ### An own route — REFUSED
 
-It is a partial adoption of `docs/specs/ui-redesign-options.md`'s proposal B, whose stops table
-lists EMIT and IMPORT as separate destinations, and which `docs/specs/ui-research.md` refuted on
+It is a partial adoption of proposal B in the earlier UI redesign-options file, whose stops table
+lists EMIT and IMPORT as separate destinations, and which the earlier UI research file refuted on
 external evidence: Jenkins Blue Ocean deprecated, Dagster beating Airflow by moving further
 toward objects, Shopify demoting stage tabs, and no tool with multiple object types navigating by
 stage alone.
@@ -219,7 +219,7 @@ it **6m44s after emit, in the same sitting**. n=1 is not enough to build a split
 
 What it needs is to be *findable on re-entry*. `_phase` draws `reconcile` at 11px in `--muted`,
 the quietest register on the panel, while `.run-phase-identifying` gets ink at 600. And,
-before `BoxRuns.tsx` was deleted (2026-09-26, `docs/reviews/ux-2026-09-23/RULINGS.md`), it
+before `BoxRuns.tsx` was deleted (2026-09-26, the owner's word, "Remove it"), it
 filtered on `row.live`, so box 2 — parked five days short of emitting — rendered
 **"Box 2 · nothing running"** on `#/inventory`.
 

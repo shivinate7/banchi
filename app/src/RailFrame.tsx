@@ -1,5 +1,5 @@
 /* app/src/RailFrame.tsx — the rail's own frame, lifted out of `BoxBrowse.tsx` (lane A2b, on
- * `docs/reviews/ux-2026-09-23/orders-a/PLAN.md`'s component reuse map: "A `RailFrame` with the
+ * the orders-a plan's component reuse map: "A `RailFrame` with the
  * rest-top measure and the fit-to-window height (D289 rule 2). Inventory passes its box list
  * and walk. Orders passes its buyer list."). WHAT MOVED: the sticky wrapper `<div
  * className="browse-map">` and its one effect, D289 rule 2's own measure ("`BoxBrowse.tsx`

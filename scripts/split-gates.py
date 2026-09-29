@@ -277,7 +277,6 @@ def selftest() -> int:
         if not body.endswith("\n"):
             problems.append("the reassembled corpus does not end in a newline.")
     tests = manifest.get("tests") or []
-    runs = manifest.get("runs") or []
     steps = manifest.get("steps") or {"shipped": [], "open": []}
     shipped, open_ = steps.get("shipped") or [], steps.get("open") or []
     overlap = sorted(set(shipped) & set(open_))
@@ -291,13 +290,9 @@ def selftest() -> int:
         problems.append(f"only {len(tests)} harness-contract entries — expected at least 9 "
                          f"(T1..T9). A parser finding fewer over a renamed heading is broken, "
                          f"not a clean tree.")
-    if len(runs) < 5:
-        problems.append(f"only {len(runs)} gate-run entries — expected at least 5 "
-                         f"(Gate A, Gate B, Box 2, Gate C, the per-run reading).")
     if len(shipped) < 15:
         problems.append(f"only {len(shipped)} shipped steps — expected at least 15.")
     print(f"contract     {len(tests)} entries: {', '.join(tests)}")
-    print(f"runs         {len(runs)} entries: {', '.join(runs)}")
     print(f"steps        {len(shipped)} shipped, {len(open_)} open")
     if pending:
         print(f"pending      {len(pending)} file(s) not yet in the manifest — normal on a "

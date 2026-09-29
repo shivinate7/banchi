@@ -39,6 +39,7 @@ make map            # docs/map.py rendered. ARGS=<package|path|D<n>|--stale|--de
                     #   ARGS="D<n> --full" prints that entry verbatim.
 make explain        # what `make check` runs, and what each row is worth. ARGS=<target>.
 make serve-scope    # first path gate, read by `make serve-selftest`. ARGS=list | "classify --base <rev>".
+                    #   PKMNSCAN_SERVE_SCOPE=off runs it anyway.
 make guard-scope    # second path gate, read by each gated self-test. ARGS=list | classify.
 make orient         # ARGS=<file.tsx> [--name <C>]: which component draws it. Run before briefing a screen.
 make map-fix        # adds a file's cited decision ids to docs/map.py. Previews. ARGS=--write.

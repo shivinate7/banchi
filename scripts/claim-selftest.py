@@ -2466,7 +2466,7 @@ def main() -> int:
                   "forked from, not a fabricated 'before')")
 
         print("\n  -- and docs-audit refuses a NUMBERED record a branch allocates by hand --")
-        # THE EXACT DEFECT `DEBT53` WAS: a branch writing
+        # THE EXACT DEFECT A DEBT COLLISION ONCE WAS: a branch writing
         # `docs/debts/048-....md` straight, never a slug, so `scripts/claim-ids.py` could
         # independently plan the same number for a pending slug elsewhere.
         # `scripts/docs-audit.py:check_numbered_record_growth` is the mechanized refusal

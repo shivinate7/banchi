@@ -1168,9 +1168,8 @@ that. It only says the choice is free.
 
 ## 16. The walk rejoins Inventory's own components — the owner's answers, 2026-09-27
 
-`docs/reviews/ux-2026-09-23/orders-a/PLAN.md` names where the built screen (§13, §14, §15)
-drifted from D220 and D274. `D304` is the decision record. This
-section points there for the design and adds the one argument that belongs in this spec: the
+`D304` (orders walk rejoins inventory) names where the built screen (§13, §14, §15)
+drifted from D220 and D274. This section adds the one argument that belongs in this spec: the
 sort key.
 
 **The layout, the row detail, the pane and the phone order** are all the owner's answers, in
@@ -1202,8 +1201,7 @@ Every caller of the drawn order was checked against this change:
 - `harness/tests/t11_walk_plan.py` asserts that `order` is contiguous from 1. A new case adds
   two boxes whose number order and name order disagree, and is red on the old sort.
 
-This is lane A1 of the lane plan. `docs/reviews/ux-2026-09-23/orders-a/PLAN.md` names the
-rest of the lanes and their checks.
+This is lane A1 of the lane plan.
 
 ## 17. How each screen ranks a search — one shared record, 2026-09-29
 

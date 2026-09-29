@@ -294,7 +294,7 @@ CHECKS = (
         "target": "token-literal-check",
         "runs": "python3 scripts/token-literal-check.py",
         "asserts": "A CSS literal exactly equal to a design token's value, in its own "
-                   "property family (`docs/reviews/ux-2026-09-20/RANKING.md` §4): "
+                   "property family (D256, token literals are pinned): "
                    "`font-size: 22px` where `--bn-fs-2xl: 22px`, `padding: 8px` where "
                    "`--bn-2: 8px`, `transition: ... 480ms` where `--bn-t-draw: 480ms`. "
                    "css-var-check's sibling, the other direction — that one catches a "

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """`make token-literal-check` — a CSS literal that exactly equals a design token's value.
 
-WHAT THIS EXISTS ABOUT (`docs/reviews/ux-2026-09-20/RANKING.md` section 4, "Literals that
-duplicate a token exactly", measured against `docs/reviews/ux-2026-09-20/system.md`'s
+WHAT THIS EXISTS ABOUT (the ux-2026-09-20 review's section 4, "Literals that
+duplicate a token exactly", measured against that review's
 inventories). `app/src/tokens.css` names the scale — `--bn-fs-2xl: 22px`, `--bn-t-draw: 480ms`,
 `--bn-2: 8px` — and a stylesheet that writes `font-size: 22px` instead of
 `font-size: var(--bn-fs-2xl)` gets the same pixel today and a silent divergence the next time

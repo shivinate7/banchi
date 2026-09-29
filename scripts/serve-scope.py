@@ -12,7 +12,7 @@ here: nine targets in `make check` cost under a tenth of a second each, so thirt
 lists would cost more to maintain than they save. This is the one place where the seconds are
 large AND the dependency is crisp. A request for a SECOND entry is evidence the policy is
 spreading and needs the owner's word again — that is the ruling, recorded in
-`docs/specs/verification-cost.md` §9.
+the owner's ruling of 2026-09-17.
 
 THE LIST IS DERIVED FROM THE SELF-TEST'S OWN `CARRY`, NOT TYPED BESIDE IT. `CARRY` in
 `scripts/serve-selftest.py` is the literal list of what gets copied into the throwaway tree,

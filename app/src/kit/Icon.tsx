@@ -55,7 +55,7 @@ const PATHS = {
   pin: 'M12 22s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z M12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   divider: 'M4 12h16 M8 4v4 M8 16v4 M16 4v4 M16 16v4',
   /* RE-CENTERED, 2026-09-27 (the owner's review, 2026-09-26: "the lock icon and label look
-     off-center", `docs/reviews/ux-2026-09-23/PLAN-PR4-PR5.md` section D). The bounding box of
+     off-center"). The bounding box of
      the original artwork (`M6 11h12v10H6z M9 11V7a3 3 0 0 1 6 0v4`) sat within half a unit of
      the viewBox's own center — measured, that half-unit is under a third of a rendered pixel
      at this icon's usual 14px size — yet the icon still read as sitting low against a label

@@ -180,7 +180,7 @@ const LOOSE_GROUP: SearchGroup = {
  * WHY IT IS BUNDLED: a data URI is a closed system — no origin, no port, no store, no server
  * that has to be up. `make screenshot` renders this page against `make dev` alone, and the
  * render is the same bytes in every checkout on every day, which is what makes comparing it
- * against `docs/design-refs/` the loop docs/DESIGN.md calls mandatory rather than a coin toss.
+ * against the spec the loop docs/DESIGN.md calls mandatory rather than a coin toss.
  *
  * WHY 9:16 AND NOT CARD-SHAPED: 2160x3840 is the rig's stored aspect, the same reasoning
  * `app/tests/review.spec.ts` states over its own fixture. `.card-locations-fulfiller

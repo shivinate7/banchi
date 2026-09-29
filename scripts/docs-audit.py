@@ -2736,7 +2736,7 @@ def gates_text() -> str:
         return ""
 
 
-# `gates structure` is CUT (owner ruling, test-audit-2026-09-27/TIERS.md row 48,
+# `gates structure` is CUT (owner ruling, test-audit TIERS row 48,
 # 2026-09-28): gating is retired, and `make gates-selftest` already proves the corpus
 # complete from the split side.
 
@@ -2904,7 +2904,7 @@ def check_id_claims(report: Report) -> None:
 # slug entirely and writes the number itself — a `docs/decisions/D<n>-*.md` or
 # `docs/debts/<n>-*.md` file with a real number in its own name, D140's exact violation
 # ("never allocate a numbered record on a branch. Write a slug. Claim the number at merge.").
-# That is how `DEBT53` collided: lane B2 added
+# That is how a debt entry once collided: lane B2 added
 # `docs/debts/048-...md` straight, and `scripts/claim-ids.py` independently planned the
 # SAME number for a pending slug.
 #
@@ -5434,10 +5434,10 @@ DEFAULT_SOURCE_SUFFIXES: Tuple[str, ...] = (".py",)
 
 # The optional per-entry key that widens it. A single repo-wide suffix set was the obvious
 # fix and is the wrong one: adding the web extensions to it would conscript
-# `docs/design-refs/*.html` and `*.css`, which are drawings of docs/DESIGN.md and
+# static `.html` and `.css` drawing sheets, which are drawings of docs/DESIGN.md and
 # deliberately not components, into demanding map entries. Per-entry is the only shape that
 # lets `app/` declare what it is written in without deciding that for the rest of the tree —
-# and `docs/design-refs/` stays uncovered by having no entry with a module list at all,
+# and a sheet directory stays uncovered by having no entry with a module list at all,
 # rather than by an exemption someone has to maintain.
 SOURCE_SUFFIXES_KEY = "source_suffixes"
 
@@ -5981,7 +5981,6 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     components = data.get("COMPONENTS") or []
     shipped = data.get("SHIPPED") or []
     open_steps = data.get("OPEN") or []
-    gates = data.get("GATES") or []
     if not components:
         report.add("repo map", MECHANICAL, [Finding("docs/map.py", "no COMPONENTS list to read")])
         return
@@ -6125,25 +6124,10 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
                     f"something that has not landed. Move it to SHIPPED or drop the field.",
                 ))
 
-    # Gate status has two homes; they must agree.
-    gates_corpus_text = gates_text()
-    for gate in gates:
-        name = gate.get("gate", "")
-        heading = re.search(r"^#{2,3}\s+Gate\s+" + re.escape(name) + r"\b(.*)$",
-                             gates_corpus_text, re.MULTILINE)
-        if not heading:
-            findings.append(Finding("docs/map.py", f"Gate {name} has no `### Gate {name}` heading in docs/GATES.md."))
-            continue
-        passed_in_gates = "PASSED" in heading.group(1)
-        passed_in_map = gate.get("status") == "passed"
-        if passed_in_gates != passed_in_map:
-            findings.append(
-                Finding(
-                    "docs/map.py",
-                    f"Gate {name} is {'passed' if passed_in_map else gate.get('status')} here but "
-                    f"{'PASSED' if passed_in_gates else 'not marked PASSED'} in docs/GATES.md.",
-                )
-            )
+    # THE GATE-STATUS RECONCILIATION IS RETIRED. It compared docs/map.py's `GATES` list against
+    # the `### Gate X` headings of the Gate A/B/C run records, and those records were deleted
+    # (the owner's ruling: old records are deleted and history lives in version control).
+    # Nothing is left to reconcile against, so a row over `GATES` would only ever be red.
 
     # THE STEP-SET RECONCILIATION THAT LIVED HERE MOVED TO `build order mirror` (D80). It
     # scanned docs/GATES.md for `^\d+\.` across the WHOLE FILE, so any numbered list anywhere
@@ -9756,7 +9740,7 @@ LENGTH = "length"
 # property is abbreviated (`--util`), and the spacing scale is one row of numbers where the
 # properties are `--s1`, `--s2` and so on. Renaming one side to match the other was the
 # obvious alternative and is the wrong one — app/src/tokens.css says in its own header that
-# its property names match docs/design-refs/locked.html, and the doc's block is laid out to
+# its property names match the palette sheet that once sat beside it, and the doc's block is laid out to
 # be read as a palette by a person. A three-line table is cheaper than either file getting
 # worse to spare it.
 # THE BLOCK NAMES TOKENS; IT NO LONGER SPELLS A PALETTE IN ROWS. What the old reader parsed —
@@ -10270,9 +10254,8 @@ def check_raw_color(report: Report) -> None:
     is not there, which is D16's test. Comments are stripped first — a paragraph explaining
     why `#000000` is the wrong ground is prose about a color, not a color.
 
-    **Scope is `app/src/*.css` only.** `docs/design-refs/` is full of hex on purpose: those
-    sheets are drawings of the spec, they import nothing, and `docs/design-refs/README.md`
-    already records that nothing audits the values inside them.
+    **Scope is `app/src/*.css` only.** A static drawing sheet is full of hex on purpose:
+    it is a drawing of the spec and imports nothing, so nothing audits the values inside it.
     """
     if not exists(APP_STYLES):
         # A ROW, NOT A RETURN. A silent return deletes the row from the render entirely,
@@ -12941,7 +12924,7 @@ def check_doc_hygiene(report: Report, docs: List[Path]) -> None:
           preserving, so the paragraph also lost "Do not add a harness test for the server in
           this plan, and do not register" and ended mid-clause. Green for eight days.
 
-      two level-1 headings  `docs/specs/ui-research.md` was two documents in one file, the
+      two level-1 headings  a research spec once was two documents in one file, the
           second titled "PKMNSCAN UI: final design recommendation". A reader's table of
           contents, this project's own heading parsers, and the status line that governs a
           file all assume one title.
@@ -15244,7 +15227,7 @@ def check_serve_scope(report: Report) -> None:
     THE ONE PATH-GATED TARGET IN THE REPO, and the row exists because of what makes it
     dangerous rather than what makes it useful. `make serve-selftest` is 70.1s of `make
     check`'s 187.5, and the owner ruled it in and path gating in general out
-    (`docs/specs/verification-cost.md` §9). A second gated target needs the owner's word
+    (D247, guard self-test scope). A second gated target needs the owner's word
     again, so this row is deliberately written about THIS gate and not as a framework.
     """
     if not exists(SERVE_SCOPE_SCRIPT):
@@ -20319,7 +20302,7 @@ def self_test() -> int:
 
 # ------------------------------------------------------------------------------ main
 
-# THE TIER, per row (owner's ruling on Q1, test-audit-2026-09-27/TIERS.md, applied by L12,
+# THE TIER, per row (owner's ruling on Q1, test-audit-2026-09-27 TIERS, applied by L12,
 # 2026-09-28). Three tiers, read straight into the dispatch below rather than restated as a
 # second list somewhere else:
 #

@@ -121,15 +121,12 @@ DEBT40 a divider save can move a divider past departed records
 DEBT41 Pricing never offers "Make this the rule"
 DEBT43 the merge-speed guard counts SQLite ticks only, and a pure-Python loop is invisible to it
 DEBT44 pokemontcg.io is deprecated (ends 2027-03-01), and `pipeline/stockimages.py` does not call it today
-DEBT45 ~~no page lists what each test protects, so the owner cannot confirm the tests are current~~ — CLOSED 2026-09-29, `docs/TESTS.md`
 DEBT46 a search with a typo finds nothing, and no near match is offered
-DEBT47 ~~the demo's network guard blocks the stock images the demo now loads on purpose~~ — CLOSED 2026-09-27, fixed as recommended
 DEBT48 code-side mechanization left open after PR #379 / PR #380
 DEBT49 `_copies_out` and `_committed_keys` cost a full-table pass per call
 DEBT50 git and gh CLI traps hit from this checkout
 DEBT51 A guard or probe can pass for the wrong reason
 DEBT52 Claude Code multi-agent and worktree session traps
-DEBT53 ~~the pricing corpus has five unlocked writers~~ — CLOSED 2026-09-27, fixed as recommended
 DEBT54 the 13th-row undo walk times out under load
 DEBT55 the audit self-test crashes when app/node_modules is missing
 DEBT56 the worktree-provision selftest's race case fails

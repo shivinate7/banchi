@@ -708,7 +708,7 @@ hand-search-selftest:
 	@python3 scripts/hand-search-selftest.py
 
 # A CSS LITERAL EXACTLY EQUAL TO A DESIGN TOKEN'S VALUE, IN ITS OWN PROPERTY FAMILY
-# (`docs/reviews/ux-2026-09-20/RANKING.md` §4): `font-size: 22px` where `--bn-fs-2xl: 22px`
+# (D256, token literals are pinned): `font-size: 22px` where `--bn-fs-2xl: 22px`
 # means nothing here stops the two diverging the next time the scale moves. `css-var-check`'s
 # sibling, opposite direction: that one catches a `var()` pointed at nothing, this one catches
 # a value that should have BEEN a `var()`. Reads `tokens.css` itself on every run — no copied
@@ -1084,8 +1084,8 @@ janitor-selftest:
 # it reads from the self-test's own `CARRY` and answers 0 to run, 3 to skip. It fails OPEN:
 # no merge-base, an unreadable diff and an EMPTY diff all run it.
 #
-# THE OWNER RULED THIS ONE IN AND PATH GATING IN GENERAL OUT (docs/specs/verification-cost.md
-# §9). Nine targets in `make check` cost under a tenth of a second each, so a scope list per
+# THE OWNER RULED THIS ONE IN AND PATH GATING IN GENERAL OUT (D247, guard self-test
+# scope). Nine targets in `make check` cost under a tenth of a second each, so a scope list per
 # target would cost more to maintain than it saves. A SECOND gated target needs the owner's
 # word again — do not read this recipe as a pattern to copy.
 #

@@ -41,7 +41,7 @@
 # disease as rendering the wrong tree.
 #
 # WHAT THESE RENDERS SHOW DEPENDS ON WHETHER `make server` IS UP, and that is worth knowing
-# before comparing one against docs/design-refs/locked.html. EVERY view below reads the
+# before comparing one against the spec. EVERY view below reads the
 # capture server, the gallery included: with it down they draw their failure panel, which is a
 # real screen and the wrong one to judge a layout by. With it up and an empty store they draw
 # their empty state. Neither shows a populated screen, and no run in this repo has ever

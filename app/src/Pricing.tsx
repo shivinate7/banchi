@@ -476,7 +476,7 @@ function numberSuffix(number: string): RegExp | null {
  *  depending on which name happened to already hold it). The meta line always draws the
  *  number when the row has one; this strips a trailing repeat off the DISPLAYED name only —
  *  the stored name is never touched. */
-/* F3 (the owner's word, 2026-09-29): THE FILTERS ARE VIEW-ONLY. `docs/reviews/ux-2026-09-23/F3-pricing-filters.md`
+/* F3 (the owner's word, 2026-09-29): THE FILTERS ARE VIEW-ONLY. the ux-2026-09-23 review's F3
    is the design. Price bands read the MARKET cell and nothing else. A row with no market price is
    its own band (D49: a missing price is unknown, never low). */
 const BANDS = [

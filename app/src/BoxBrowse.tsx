@@ -568,7 +568,7 @@ function pooledText(card: InventoryCard, key: string): string {
  * always held (`game`, `selectedLabel`, `searchGroups`, `open`, `panelDetail`, ...). The
  * RENDERED OUTPUT IS UNCHANGED — `app/tests/inventory.spec.ts` is what proves that — only the
  * JSX that builds it moved house, so `#/orders` can build the same pane later without forking
- * it (`docs/reviews/ux-2026-09-23/orders-a/PLAN.md`, "The component reuse map"). */
+ * it (the orders-a plan's "component reuse map"). */
 
 /** The open question about one position, or null — the entry and which queue it is in. */
 function openQuestion(

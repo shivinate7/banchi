@@ -211,7 +211,7 @@ def render(relative: str, entry: Dict[str, object]) -> str:
     A ruling was the expensive part: 108 decisions on `server/capture_server.py` cost
     38,130 bytes on every single edit, most of it text `make map ARGS="D<n> --full"` (or
     `make map ARGS=<path>`) already gives on demand. The owner's ruling, from
-    `docs/reviews/token-budget-2026-09-27/REPORT.md` §5: "Id + title only (Recommended)."
+    the token-budget review (2026-09-27): "Id + title only (Recommended)."
     `decision_gists()` still computes rulings — `scripts/map-view.py`'s `make map ARGS=D<n>`
     still shows them, and `scripts/status.py` still reads titles off the same call — so
     nothing here is removed, only what THIS render prints.

@@ -137,7 +137,7 @@ class QueueEntry:
         This is not a new idea and it is not a guess: prioritised medical worklists hit the
         same wall, where a scored ordering pushed the worst-case wait to 1178 minutes
         against 890 under plain FIFO until a maximum-waiting-time escalation was added.
-        docs/specs/ui-research.md carries the citation. The fix is the same shape here.
+        The fix is the same shape here.
 
         ESCALATION IS A TIER, NOT A WEIGHT. A blended score — price plus some multiple of
         age — would be one number nobody could predict, and it would quietly re-order the
