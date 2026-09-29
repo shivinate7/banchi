@@ -554,6 +554,76 @@ ci-check:
 	@$(MAKE) --no-print-directory lint
 	@$(MAKE) --no-print-directory typecheck
 
+# CI RUNS `ci-check` AS THREE PARALLEL SHARDS (owner's word, 2026-09-28; D161, amended): the
+# serial job took 600s on run 36509895299, and the shards together run exactly `ci-check`'s
+# recipe. Each shard keeps D161's order, product first: `ci-check-product` is the harness and
+# the checks of the product; the two guards shards are the guards' own self-tests, balanced by
+# the times that run measured. `ci-check` stays the one command a session runs before pushing.
+# `make docs-audit`'s `check registry` row fails when the shards' union is not `ci-check`'s
+# recipe, target for target, with none missing and none run twice.
+ci-check-product:
+	@$(MAKE) --no-print-directory harness
+	@$(MAKE) --no-print-directory docs-audit
+	@$(MAKE) --no-print-directory port-agreement
+	@$(MAKE) --no-print-directory set-hint-agreement
+	@$(MAKE) --no-print-directory readiness-agreement
+	@$(MAKE) --no-print-directory screen-freshness
+	@$(MAKE) --no-print-directory sigil-check
+	@$(MAKE) --no-print-directory css-var-check
+	@$(MAKE) --no-print-directory token-literal-check
+	@$(MAKE) --no-print-directory kit-adoption
+	@$(MAKE) --no-print-directory ignore-check
+	@$(MAKE) --no-print-directory lint
+	@$(MAKE) --no-print-directory typecheck
+
+ci-check-guards-1:
+	@$(MAKE) --no-print-directory audit-self-test
+	@$(MAKE) --no-print-directory mutate-anchors
+	@$(MAKE) --no-print-directory githooks-selftest
+	@$(MAKE) --no-print-directory merge-selftest
+	@$(MAKE) --no-print-directory revert-selftest
+	@$(MAKE) --no-print-directory claim-selftest
+	@$(MAKE) --no-print-directory decisions-selftest
+	@$(MAKE) --no-print-directory debts-selftest
+	@$(MAKE) --no-print-directory gates-selftest
+	@$(MAKE) --no-print-directory submission-selftest
+	@$(MAKE) --no-print-directory cid-selftest
+	@$(MAKE) --no-print-directory pricearchive-selftest
+	@$(MAKE) --no-print-directory archive-review-selftest
+	@$(MAKE) --no-print-directory holdings-selftest
+	@$(MAKE) --no-print-directory identity-checks-selftest
+	@$(MAKE) --no-print-directory price-postings-selftest
+	@$(MAKE) --no-print-directory product-history-selftest
+	@$(MAKE) --no-print-directory sku-number-contradictions-selftest
+	@$(MAKE) --no-print-directory readings-selftest
+	@$(MAKE) --no-print-directory skus-selftest
+	@$(MAKE) --no-print-directory identity-store-selftest
+	@$(MAKE) --no-print-directory identity-binding-selftest
+	@$(MAKE) --no-print-directory identity-readers-selftest
+	@$(MAKE) --no-print-directory identity-cli-selftest
+	@$(MAKE) --no-print-directory revert-guard
+	@$(MAKE) --no-print-directory janitor-selftest
+	@$(MAKE) --no-print-directory reap-selftest
+	@$(MAKE) --no-print-directory silent-write-selftest
+	@$(MAKE) --no-print-directory guard-shell-selftest
+	@$(MAKE) --no-print-directory suite-lock-selftest
+	@$(MAKE) --no-print-directory browser-scope-selftest
+
+ci-check-guards-2:
+	@$(MAKE) --no-print-directory serve-selftest
+	@$(MAKE) --no-print-directory sync-selftest
+	@$(MAKE) --no-print-directory verdict-selftest
+	@$(MAKE) --no-print-directory js-breakpoints-selftest
+	@$(MAKE) --no-print-directory subagent-override-selftest
+	@$(MAKE) --no-print-directory guard-scope-selftest
+	@$(MAKE) --no-print-directory token-literal-check-selftest
+	@$(MAKE) --no-print-directory kit-adoption-selftest
+	@$(MAKE) --no-print-directory port-slots-selftest
+	@$(MAKE) --no-print-directory match-selftest
+	@$(MAKE) --no-print-directory screen-freshness-selftest
+	@$(MAKE) --no-print-directory css-var-check-selftest
+	@$(MAKE) --no-print-directory hand-search-selftest
+
 # The other half of D47: every path a worktree provisions is ignored whatever kind of thing is
 # at it. In `check` and never in the git hook — D18 forbids a commit gate that depends on local
 # state, and this asks about provisioning, so a fresh clone would fail a commit over nothing.
@@ -1416,7 +1486,7 @@ janitor-install:
 # answers from the tree alone, and a row that resolves DNS and expects a server to be up would
 # go red on a train and in every worktree. A check that fails for reasons unrelated to the
 # commit is one people learn to ignore.
-.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check
+.PHONY: janitor janitor-selftest janitor-install serve-selftest sync-selftest ci-check ci-check-product ci-check-guards-1 ci-check-guards-2
 
 .PHONY: lan-check
 # Is the LAN URL still good? DNS, both servers, and a real write. Reaches the

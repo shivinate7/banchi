@@ -13892,6 +13892,10 @@ def _check_recipe() -> Optional[List[str]]:
     return _recipe_targets("check")
 
 
+# The parallel shards `.github/workflows/check.yml` runs in place of one `make ci-check`.
+CI_SHARD_RULES = ("ci-check-product", "ci-check-guards-1", "ci-check-guards-2")
+
+
 def _ci_check_recipe() -> Optional[List[str]]:
     """The targets `make ci-check` runs — the gate `.github/workflows/check.yml` invokes.
 
@@ -14062,6 +14066,36 @@ def _check_registry() -> Row:
                     "an absence that is over; delete it, or the next reader believes CI does "
                     "not run this.",
                 ))
+
+    # ---- CI runs `ci-check` as shards; their union is `ci-check`, target for target -----
+    shards = [_recipe_targets(rule) for rule in CI_SHARD_RULES]
+    if ci_recipe is not None:
+        for rule, body in zip(CI_SHARD_RULES, shards):
+            if body is None:
+                findings.append(Finding("Makefile", (
+                    "the `{0}:` recipe could not be read, and `.github/workflows/check.yml` "
+                    "runs it as one of the parallel shards of `ci-check`."
+                ).format(rule)))
+        if all(body is not None for body in shards):
+            ran = [name for body in shards for name in body]
+            for name in ci_recipe:
+                if name not in ran:
+                    findings.append(Finding("Makefile", (
+                        "`make ci-check` runs `{0}` and no CI shard does.\n"
+                        "  A target in no shard gates nothing on a pull request, and the "
+                        "`check` job is green because it never ran."
+                    ).format(name)))
+            for name in sorted(set(ran)):
+                if name not in ci_recipe:
+                    findings.append(Finding("Makefile", (
+                        "a CI shard runs `{0}` and `make ci-check` does not.\n"
+                        "  A session cannot reproduce it before pushing."
+                    ).format(name)))
+                elif ran.count(name) > 1:
+                    findings.append(Finding("Makefile", (
+                        "`{0}` is in more than one CI shard, or twice in one.\n"
+                        "  Each target runs once."
+                    ).format(name)))
 
     # ---- a slot in `make check` that cannot fail says so where the run is read ----------
     makefile_text = read(ROOT / "Makefile") if exists(ROOT / "Makefile") else ""
