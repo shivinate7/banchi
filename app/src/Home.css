@@ -77,7 +77,7 @@ a.home-standing-row:hover .home-standing-go { color: var(--bn-accent); translate
   max-width: 620px; display: flex; flex-direction: column; gap: var(--bn-3); }
 .home-foot-sum { margin: 0; font-size: var(--bn-fs-md); color: var(--bn-ink-3); }
 .home-foot-sum b { color: var(--bn-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
-.home-foot-sum i { font-style: normal; color: var(--bn-ink-3); padding: 0 5px; }
+.home-foot-sum i { font-style: normal; color: var(--bn-ink-3); padding: 0 var(--bn-1-5); }
 /* D218: the separator is CSS content now, not typed into the JSX; the padding above still
    frames it on both sides exactly as it framed the character. */
 .home-foot-sum i::before { content: '·'; }
@@ -170,7 +170,7 @@ a.home-deck { pointer-events: auto; }
    on the stand is portrait with room to spare at the top; `object-position` favours the upper
    half, where the art and the name are. The gradient stays underneath as the ground a slow or
    missing image falls back to. */
-.home-deck-card-1 { padding-bottom: calc(12px + var(--deck-chip)); }
+.home-deck-card-1 { padding-bottom: calc(var(--bn-3) + var(--deck-chip)); }
 /* The window the photograph is seen through. It clips, so a cropped photograph can be scaled
    past the frame and still sit inside the card. */
 .home-deck-frame {

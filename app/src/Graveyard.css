@@ -127,7 +127,7 @@
 }
 /* D218: `.bn-pill` is already `inline-flex; gap: 5px`, so the gap alone spaces the reason from
    "Retired"; the dot needs only a trailing margin to clear the reason after it. */
-.graveyard-reason::before { content: '·'; margin-right: 5px; }
+.graveyard-reason::before { content: '·'; margin-right: var(--bn-1-5); }
 
 .graveyard-where { display: inline-flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-2); min-width: 0; }
 .graveyard-where-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

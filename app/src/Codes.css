@@ -135,10 +135,10 @@
 }
 .codes-dup:hover { background: var(--bn-hover); }
 .codes-dup-where { display: inline-flex; align-items: center; gap: var(--bn-3); flex-wrap: wrap; font-size: var(--bn-fs-sm); color: var(--bn-ink-2); }
-.codes-dup-link { display: inline-flex; align-items: center; gap: 5px; color: var(--bn-ink-2); font-weight: 500; }
+.codes-dup-link { display: inline-flex; align-items: center; gap: var(--bn-1-5); color: var(--bn-ink-2); font-weight: 500; }
 /* D218: `.codes-dup-link` is already `inline-flex; gap: 5px`, so the gap alone spaces the box
    and index facts apart; the dot needs only a trailing margin to clear "index" after it. */
-.codes-dup-link > span:not(:first-child)::before { content: '·'; margin-right: 5px; color: var(--bn-ink-4); }
+.codes-dup-link > span:not(:first-child)::before { content: '·'; margin-right: var(--bn-1-5); color: var(--bn-ink-4); }
 .codes-dup-link:hover { color: var(--bn-accent); text-decoration: none; }
 
 /* ---- hero: the pile ------------------------------------------------------- */
@@ -250,7 +250,7 @@
 @keyframes codes-grow { from { transform: scaleX(0); opacity: 0.4; } to { transform: none; opacity: 1; } }
 
 .codes-legend { display: flex; gap: var(--bn-5); flex-wrap: wrap; }
-.codes-legend-item { display: inline-flex; align-items: center; gap: 7px; font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); }
+.codes-legend-item { display: inline-flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink-2); }
 .codes-legend-dot { width: 10px; height: 10px; border-radius: 3px; background: var(--bn-ink-4); flex: none; }
 .codes-legend-item.is-premium .codes-legend-dot { background: var(--bn-accent); }
 /* Half the lane bar's own pitch, by scaling the SAME image rather than authoring a second
@@ -274,7 +274,7 @@
   column-gap: var(--bn-3);
   row-gap: var(--bn-0-75);
   align-items: center;
-  padding: 5px var(--bn-2);
+  padding: var(--bn-1-5) var(--bn-2);
   border-radius: var(--bn-r);
   /* `--delay` is set inline per row; the bar inside reads the same variable, so it grows as its
      row fades in rather than while the row is still hidden */
@@ -581,7 +581,7 @@
 .codes-sets { display: flex; gap: var(--bn-1-5); flex-wrap: wrap; }
 /* D218: `.bn-pill` is already `inline-flex; gap: 5px`, so the gap alone spaces the set from its
    count; the dot needs only a trailing margin to clear the count after it. */
-.codes-set-count::before { content: '·'; margin-right: 5px; color: var(--bn-ink-4); }
+.codes-set-count::before { content: '·'; margin-right: var(--bn-1-5); color: var(--bn-ink-4); }
 .codes-mini-table th:first-child, .codes-mini-table td:first-child { padding-left: 0; }
 .codes-mini-table th:last-child, .codes-mini-table td:last-child { padding-right: 0; }
 

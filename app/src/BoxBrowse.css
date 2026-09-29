@@ -241,7 +241,7 @@
   overscroll-behavior: contain;
   /* The scroller's bottom edge reads as a fade into the key hints rather than a cut row; the
      padding keeps the last row whole once the list is scrolled to its end. */
-  padding-bottom: 18px;
+  padding-bottom: var(--bn-5);
   mask-image: linear-gradient(to bottom, currentColor calc(100% - 18px), transparent);
   -webkit-mask-image: linear-gradient(to bottom, currentColor calc(100% - 18px), transparent);
 }
@@ -384,11 +384,11 @@
   text-align: left;
   flex: 1 1 auto;
   min-width: 0;
-  padding: 5px var(--bn-2) 5px var(--bn-3);
+  padding: var(--bn-1-5) var(--bn-2) var(--bn-1-5) var(--bn-3);
   border-radius: var(--bn-r-sm) 0 0 var(--bn-r-sm);
   position: relative;
   color: var(--bn-ink-2);
-  scroll-margin-top: 36px;
+  scroll-margin-top: var(--bn-8);
   scroll-margin-bottom: var(--bn-1);
   transition: background-color var(--bn-t-fast) var(--bn-ease), color var(--bn-t-fast) var(--bn-ease);
 }
@@ -659,8 +659,8 @@
   transform: translateX(-50%) translateY(4px);
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: var(--bn-1) 10px;
+  gap: var(--bn-1-5);
+  padding: var(--bn-1) var(--bn-3);
   border-radius: var(--bn-r-full);
   /* over a photograph in either theme: the page's ink, mostly opaque, with the page's ground on it */
   background: color-mix(in srgb, var(--bn-ink) 72%, transparent);

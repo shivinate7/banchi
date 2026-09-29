@@ -183,7 +183,7 @@
      makes the same argument in the same words, and the padding is what keeps the last row whole
      once the list is scrolled to its end. Without it a card with more copies than the band holds
      looks like a rendering fault rather than a list with more in it. */
-  padding-bottom: 18px;
+  padding-bottom: var(--bn-5);
   mask-image: linear-gradient(to bottom, var(--bn-mask) calc(100% - 18px), transparent);
   -webkit-mask-image: linear-gradient(to bottom, var(--bn-mask) calc(100% - 18px), transparent);
   /* THE SLOT COLUMN THIS COMMENT ONCE DESCRIBED IS RETIRED (the owner's ruling, 2026-09-25,
