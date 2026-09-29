@@ -1,9 +1,8 @@
 # Sub-box capture: a picked section fills like a sub-box
 
-**Status: Lane A (store, server, harness, records) is BUILT on `ux/subbox-store`. Lane B (the
-Capture screen) is BUILT on `ux/subbox-capture`. Lane C (the Move-to-box section choice) is
-NOT BUILT.** Written 2026-09-26 from the plan the owner ruled on the same day. The decision
-entry has the slug `sections-are-sub-boxes`.
+**Status: BUILT, all three lanes.** D300 (a picked section fills like a sub-box) records the
+ruling. The section choice on Move to box is in `app/src/server.ts` (`moveCard`, `moveCards`).
+Written 2026-09-26.
 
 ## 0. The ask, in the owner's words
 

@@ -247,7 +247,7 @@ the per-product view D227 added, and Runs since D291), so the nav itself draws t
 #/shipping     Shipping       shipping export routed into three lanes
 #/revenue      Sales          gross-revenue retrospective (D214):
                               verdict, month strip, by-name search. Canceled excluded, gross
-                              only, never profit. AN ELEVENTH NAV ROW ON PURPOSE — the owner
+                              only, never profit. A NAV ROW ON PURPOSE — the owner
                               was shown the 37px-past-the-fold cost at 390x754 and chose the
                               sidebar tab anyway, 2026-09-19
 #/inventory    Inventory      box walk: search, copies, box operations (Manage box sheet).
