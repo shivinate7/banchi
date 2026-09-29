@@ -116,6 +116,6 @@ own rule price always goes. Proof: T7 `check_live_markdown_guards`.
 
 **`_check` still refuses a negative, and that stays.** Whether the pipeline may write one is a separate owner decision. The reprice path's `Add to Quantity` 0 rule is untouched. `pkmnscan reconcile --phantoms` remains a worklist tool.
 
-### 2026-09-29 amendment: a sale or retirement in the app never lowers TCGplayer
+### 2026-09-28 amendment: a sale or retirement in the app never lowers TCGplayer
 
-**The owner ruled on 2026-09-29, in paraphrase: marking a card sold or retired in the app must not lower its TCGplayer quantity.** The phantom-listing finding in the amendment above (sold or retired cards never lower TCGplayer) is therefore accepted behaviour. The drift it leaves is corrected by an explicit write-down.
+**The owner ruled on 2026-09-28, in paraphrase: marking a card sold or retired in the app must not lower its TCGplayer quantity.** The phantom-listing finding in the amendment above (sold or retired cards never lower TCGplayer) is therefore accepted behavior. The drift it leaves is corrected by an explicit write-down.
