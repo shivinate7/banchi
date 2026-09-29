@@ -94,7 +94,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | --- | --- | --- |
 | `app/tests/brand.spec.ts` | The generated logo mark draws at the right cut and size at every place the app shows it. | D102, D134, D136, D204 |
 | `app/tests/button-stack.spec.ts` | Buttons of the same role that stack in one panel share one width. | D195 |
-| `app/tests/cursor.spec.ts` | Every control shows the right cursor, response and press behaviour, and no press or hover moves the layout. | D43, D50, D70, D110, D118 |
+| `app/tests/cursor.spec.ts` | Every control shows the right cursor, response and press behavior, and no press or hover moves the layout. | D43, D50, D70, D110, D118 |
 | `app/tests/filters.spec.ts` | The shared filter bar, hide toggle, sortable table header and match highlight behave the same on every screen that filters a list. | D118, D132, D270, D288 |
 | `app/tests/gallery.spec.ts` | The Kit sheet draws every row shape the product can draw, so no specimen is unreachable there. | D24, D68, D71, D118, D119, D269, D272 |
 | `app/tests/icon-button.spec.ts` | The icon button keeps its 40px hit area, unclipped tooltip, no ghost click after a long press, readable toast close and correct glyph size. | D118, D288 |
@@ -146,7 +146,7 @@ Each test below still cites a decision that the corpus marks as superseded. A wh
 | `scripts/pipeline-trends-archive-ids-selftest.py` | The trends route reuses the archive's verified product ids and never resolves a product it already covers. | D254 |
 | `scripts/price-postings-selftest.py` | The price postings table is append-only, so posting one SKU twice keeps both rows. | D243, D244, D247 |
 | `scripts/pricearchive-selftest.py` | The price-history archive sweeps, stores and reads back correctly with a fake market and no network call. | D62, D219, D223, D247 |
-| `scripts/pricehistory-cache-selftest.py` | Catalogue answers never expire from the cache while current prices keep their own finite lifetime. | none |
+| `scripts/pricehistory-cache-selftest.py` | Catalog answers never expire from the cache while current prices keep their own finite lifetime. | none |
 | `scripts/pricehistory-offline-selftest.py` | The price-history market fails fast once the network is unreachable instead of sleeping through every retry. | D62 |
 | `scripts/readings-selftest.py` | The stored market readings equal an independent walk of every run, and refresh only what changed. | D18, D189 |
 | `scripts/repair-born-game-selftest.py` | The born-game repair sets the game on cards with a bound SKU, leaves the rest alone and writes nothing on a preview. | D18 |

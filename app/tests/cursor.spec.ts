@@ -1,4 +1,4 @@
-// Protects: Every control shows the right cursor, response and press behaviour, and no press or hover moves the layout.
+// Protects: Every control shows the right cursor, response and press behavior, and no press or hover moves the layout.
 // Governs: D43, D50, D70, D110, D118
 import { test, expect } from '@playwright/test'
 import { settleFonts } from './fontsReady'
