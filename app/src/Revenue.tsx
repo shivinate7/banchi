@@ -753,6 +753,8 @@ function MetaLine({ product }: { readonly product: Product }) {
   return null
 }
 
+const STOCK_RETRY_MS = 5000
+
 export function Revenue() {
   const [orders, setOrders] = useState<OrderRow[] | null>(null)
   const [failure, setFailure] = useState<Failure | null>(null)
@@ -972,19 +974,30 @@ export function Revenue() {
     if (skus.length === 0) return
     skus.forEach((sku) => asked.current.add(sku))
     let alive = true
-    getSkuPhotos(skus)
-      .then((found) => {
-        if (!alive) return
-        setPhotos((prev) => ({ ...prev, ...found.photos }))
-        setStockPhotos((prev) => ({ ...prev, ...found.stockPhotos }))
-      })
-      .catch(() => {
-        // A failed thumbnail lookup falls back to the plain tile CardThumb already draws for
-        // a missing photo — the same shape a photographed SKU with no on-hand copy gets, so
-        // this screen never needs a second failure state for it.
-      })
+    let retry: number | undefined
+    const ask = (wanted: string[], again: boolean) =>
+      getSkuPhotos(wanted)
+        .then((found) => {
+          if (!alive) return
+          setPhotos((prev) => ({ ...prev, ...found.photos }))
+          setStockPhotos((prev) => ({ ...prev, ...found.stockPhotos }))
+          // The catalogue loads in the background on first ask and answers nothing until it
+          // has, so a SKU still missing gets one more ask a few seconds on.
+          const missing = wanted.filter((sku) => !(sku in found.photos) && !(sku in found.stockPhotos))
+          if (again && missing.length > 0) retry = window.setTimeout(() => ask(missing, false), STOCK_RETRY_MS)
+        })
+        .catch(() => {
+          // A failed thumbnail lookup falls back to the plain tile CardThumb already draws for
+          // a missing photo — the same shape a photographed SKU with no on-hand copy gets, so
+          // this screen never needs a second failure state for it.
+        })
+    ask(skus, true)
     return () => {
       alive = false
+      window.clearTimeout(retry)
+      // A sort, filter or scope change re-runs this effect; a SKU whose answer was dropped
+      // with it must be asked again, not remembered as asked.
+      skus.forEach((sku) => asked.current.delete(sku))
     }
   }, [products])
 

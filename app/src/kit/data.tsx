@@ -409,7 +409,7 @@ export function CardThumb({
           <Icon name="image" size={size === 'sm' ? 14 : size === 'md' ? 18 : 24} />
           {size === 'sm' ? null : (
             <span className="bn-thumb-none" aria-hidden="true">
-              None
+              No photo found
             </span>
           )}
         </>
