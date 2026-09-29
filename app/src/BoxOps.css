@@ -70,7 +70,7 @@
 .boxops-track {
   position: relative;
   display: flex;
-  gap: 2px;
+  gap: var(--bn-0-5);
   height: 10px;
   margin-top: var(--bn-1);
 }
@@ -121,7 +121,7 @@
 .boxops-census-cell {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--bn-0-5);
   padding: var(--bn-2) var(--bn-3);
   border-radius: var(--bn-r);
   background: var(--bn-surface-2);
@@ -242,7 +242,7 @@
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--bn-1);
   height: var(--bn-control-h-sm);
   padding: 0 var(--bn-2) 0 var(--bn-1);
   margin-left: calc(-1 * var(--bn-1));
@@ -331,11 +331,11 @@
 .boxops-check::after { content: ''; position: absolute; inset: -9px -4px; }
 
 /* the vocabulary chips */
-.boxops-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.boxops-chips { display: flex; flex-wrap: wrap; gap: var(--bn-1-5); }
 .boxops-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--bn-1);
   height: 26px;
   padding: 0 10px;
   border-radius: var(--bn-r-full);

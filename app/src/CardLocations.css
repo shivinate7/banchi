@@ -33,7 +33,7 @@
   font-variant-numeric: tabular-nums;
 }
 /* D218: the two figures are sibling spans; the seam between them is CSS, never typed. */
-.card-locations-since > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.card-locations-since > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 
 /* ---------------------------------------------------------------- the owner: dense ---- */
 
@@ -65,7 +65,7 @@
    baseline and a chip has no baseline worth sharing. */
 /* D218: `.bn-chip` is already `inline-flex; gap: 6px`, so the gap alone spaces the two spans
    apart; the dot needs only a margin on its own trailing side to clear the label after it. */
-.card-locations-owner .card-locations-rerank-go::before { content: '·'; margin-right: 6px; color: var(--bn-ink-4); }
+.card-locations-owner .card-locations-rerank-go::before { content: '·'; margin-right: var(--bn-1-5); color: var(--bn-ink-4); }
 .card-locations-owner .card-locations-rerank-slot {
   grid-area: rerank;
   align-self: center;
@@ -96,7 +96,7 @@
 .card-locations-owner .card-locations-stat .bn-stat-value {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--bn-1-5);
   font-size: var(--bn-fs-2xl);
   line-height: 1.05;
 }
@@ -124,9 +124,9 @@
 /* SKU, set code and number are machine strings; the condition is a phrase. */
 .card-locations-owner .card-locations-meta-mono { font-family: var(--bn-font-mono); }
 /* D218: SKU, set hint and number are sibling spans now, not a joined string. */
-.card-locations-owner .card-locations-meta-mono > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.card-locations-owner .card-locations-meta-mono > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 .card-locations-owner .card-locations-cond { font-family: var(--bn-font-ui); }
-.card-locations-owner .card-locations-cond::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.card-locations-owner .card-locations-cond::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 /* The stages: figures in Inter, tabular. Only the SKU line above is a machine string.
    INK-3, NOT INK-4: it is a sentence a person reads, and at 11px ink-4 measures 3.64:1 in the
    light theme — under AA for body text. ink-4 is for a mark, not for a line of prose. */
@@ -139,7 +139,7 @@
   white-space: nowrap;
 }
 /* D218: pushed, staged and headroom are sibling spans; the seam is CSS. */
-.card-locations-owner .card-locations-counts > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.card-locations-owner .card-locations-counts > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 /* Narrow: the identity keeps every character and the stage triple drops under it, rather than
    the SKU line being cut to fit the least useful three numbers on the row. */
 @container copies (max-width: 479px) {
@@ -309,7 +309,7 @@
   grid-area: place;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--bn-1);
   min-width: 0;
 }
 /* THE NEIGHBOURS LINE IS ITS OWN GRID ROW, NOT A CHILD OF `place` (Direction B, 2026-09-25):
@@ -322,7 +322,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px 6px;
+  gap: var(--bn-1) var(--bn-1-5);
   min-width: 0;
   white-space: nowrap;
 }
@@ -468,7 +468,7 @@
   overflow-wrap: anywhere;
 }
 /* D218: "pooled" and the pool's own key are sibling spans; the seam is CSS. */
-.card-locations-owner .card-locations-boxname > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.card-locations-owner .card-locations-boxname > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 
 /* The walk-to: a transparent wrapper around the label, with an arrow that says the address is
    the target. */
@@ -479,7 +479,7 @@
   gap: var(--bn-2);
   width: 100%;
   margin: 0;
-  padding: 2px 4px;
+  padding: var(--bn-0-5) var(--bn-1);
   margin-left: -4px;
   border: 0;
   border-radius: var(--bn-r-sm);
@@ -509,7 +509,7 @@
    badge, so it takes the same floor as the `Mark sold` button beside it (`Button size="sm"`
    is `--bn-control-h-sm`, which the phone tokens raise to 40px). 28px is a mouse size. */
 @media (max-width: 639px), (hover: none) and (pointer: coarse) {
-  .card-locations-owner .card-locations-goto { min-height: var(--bn-control-h-lg); padding-top: 4px; padding-bottom: 4px; }
+  .card-locations-owner .card-locations-goto { min-height: var(--bn-control-h-lg); padding-top: var(--bn-1); padding-bottom: var(--bn-1); }
   .card-locations-owner .card-locations-claim {
     height: var(--bn-control-h-sm);
     min-height: var(--bn-control-h-sm);
@@ -556,7 +556,7 @@
 }
 /* D218: harmless on a plain sentence (no span children); joins sibling facts where there are
    some — `about` (condition, number) and the "on hand · for sale" line. */
-.card-locations-fulfiller .card-locations-say > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.card-locations-fulfiller .card-locations-say > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 
 .card-locations-fulfiller .card-locations-copies {
   display: flex;

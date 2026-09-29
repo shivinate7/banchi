@@ -16,7 +16,7 @@
   display: flex;
   flex-direction: column;
   align-self: flex-end;
-  padding-bottom: 2px;
+  padding-bottom: var(--bn-0-5);
   min-width: 0;
   font-family: var(--bn-font-ui);
   font-size: var(--pos-path, 11px);
@@ -27,7 +27,7 @@
   white-space: nowrap;
 }
 /* The box's note wraps under `BOX 1` where the column is tight, rather than clipping. */
-.position-path > span { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; min-width: 0; }
+.position-path > span { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--bn-1); min-width: 0; }
 .position-path b {
   font-weight: 700;
   color: var(--bn-ink);
@@ -35,7 +35,7 @@
   font-variant-numeric: tabular-nums;
 }
 .position-path-note {
-  margin-left: 2px;
+  margin-left: var(--bn-0-5);
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -157,7 +157,7 @@
 /* D218: the server's own `' · '` is never retyped. `PositionLabel.tsx:whole()` hands this one
    span per part; the seam between them is drawn here, on every part but the first, in the same
    register `CardLocations.css`'s `.card-locations-cond` already uses for the same mark. */
-.position-plain-parts > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.position-plain-parts > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 .position-storekey {
   font-family: var(--bn-font-mono);
   font-size: clamp(var(--pos-path, 11px), 0.295em, 13px);
@@ -185,7 +185,7 @@
   color: var(--bn-ink-3);
 }
 .position-run-path { margin-right: var(--bn-2); }
-.position-run-note { margin-left: 4px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--bn-ink-3); }
+.position-run-note { margin-left: var(--bn-1); font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--bn-ink-3); }
 .position-run-path b { font-weight: 700; color: var(--bn-ink); letter-spacing: 0; }
 .position-run-key { margin-right: var(--bn-1); }
 .position-run-num { font-weight: 800; color: var(--bn-ink); letter-spacing: 0; font-variant-numeric: tabular-nums; }

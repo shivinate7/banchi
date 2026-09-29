@@ -39,7 +39,7 @@
 
 .livecheck-age .bn-icon {
   flex: none;
-  margin-top: 2px;
+  margin-top: var(--bn-0-5);
   color: var(--bn-ink-4);
 }
 

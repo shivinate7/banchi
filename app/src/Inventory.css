@@ -115,7 +115,7 @@
 .inventory-retire-reason:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--bn-shadow-2); background: var(--bn-surface-3); }
 .inventory-retire-reason:active:not(:disabled) { transform: translateY(0) scale(0.99); }
 .inventory-retire-reason:disabled { opacity: var(--bn-disabled); }
-.inventory-retire-text { display: flex; flex-direction: column; gap: 2px; }
+.inventory-retire-text { display: flex; flex-direction: column; gap: var(--bn-0-5); }
 .inventory-retire-label { font-size: var(--bn-fs-base); font-weight: 700; }
 .inventory-retire-said { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 

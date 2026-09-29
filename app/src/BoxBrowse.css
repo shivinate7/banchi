@@ -150,7 +150,7 @@
   font-size: var(--bn-fs-xs);
   font-weight: 600;
 }
-.browse-boxcell-mini { font-size: var(--bn-fs-xs); letter-spacing: 0; padding: 0 2px; overflow: hidden; }
+.browse-boxcell-mini { font-size: var(--bn-fs-xs); letter-spacing: 0; padding: 0 var(--bn-0-5); overflow: hidden; }
 .browse-boxcell-text { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .browse-boxcell-name {
   font-size: var(--bn-fs-md);
@@ -192,7 +192,7 @@
   border-bottom: 1px solid var(--bn-line);
 }
 .browse-manage { flex: none; }
-.browse-shelfnote { display: flex; flex-direction: column; gap: 4px; }
+.browse-shelfnote { display: flex; flex-direction: column; gap: var(--bn-1); }
 .browse-shelfnote p { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 .browse-mapnote { padding: var(--bn-2) var(--bn-3); }
 
@@ -215,7 +215,7 @@
 .browse-quiet {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--bn-1);
   height: 24px;
   padding: 0 var(--bn-2);
   border-radius: var(--bn-r-sm);
@@ -317,7 +317,7 @@
   flex: none;
   min-width: 22px;
   height: 18px;
-  padding: 0 6px;
+  padding: 0 var(--bn-1-5);
   border-radius: var(--bn-r-full);
   background: var(--bn-surface-2);
   font-size: var(--bn-fs-xs);
@@ -479,7 +479,7 @@
   gap: var(--bn-3);
   padding: var(--bn-5) var(--bn-5) var(--bn-4);
 }
-.browse-hero-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.browse-hero-text { display: flex; flex-direction: column; gap: var(--bn-1-5); min-width: 0; }
 .browse-hero-name {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-2xl);
@@ -494,7 +494,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px var(--bn-2);
+  gap: var(--bn-1) var(--bn-2);
   font-size: var(--bn-fs-md);
   color: var(--bn-ink-3);
 }
@@ -505,7 +505,7 @@
 @container pane (max-width: 559px) {
   .browse-hero-place { display: block; }
 }
-.browse-hero-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
+.browse-hero-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1-5); margin-top: var(--bn-0-5); }
 .browse-queuechip { text-decoration: none; }
 .browse-queuechip:hover { text-decoration: none; filter: brightness(0.95); }
 .browse-queued { padding: 0 var(--bn-5) var(--bn-4); }
@@ -516,7 +516,7 @@
 .browse-variants-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--bn-0-5);
   max-height: 60vh;
   overflow-y: auto;
 }
@@ -546,7 +546,7 @@
   flex: none;
 }
 .browse-variant-photo > img { width: 100%; height: 100%; object-fit: cover; }
-.browse-variant-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.browse-variant-text { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .browse-variant-name {
   font-weight: 600;
   overflow: hidden;
@@ -660,7 +660,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px;
+  padding: var(--bn-1) 10px;
   border-radius: var(--bn-r-full);
   /* over a photograph in either theme: the page's ink, mostly opaque, with the page's ground on it */
   background: color-mix(in srgb, var(--bn-ink) 72%, transparent);
@@ -744,7 +744,7 @@
   grid-template-columns: 88px minmax(0, 1fr);
   gap: var(--bn-3);
   align-items: baseline;
-  padding: 6px 0;
+  padding: var(--bn-1-5) 0;
   border-bottom: 1px solid var(--bn-line);
 }
 .browse-fact:last-child { border-bottom: 0; }
@@ -760,7 +760,7 @@
   display: inline-flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 2px 6px;
+  gap: var(--bn-0-5) var(--bn-1-5);
 }
 .browse-fact-live .bn-tnum { font-weight: 600; }
 
@@ -826,8 +826,8 @@
 .browse-stepper {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
+  gap: var(--bn-0-5);
+  padding: var(--bn-0-5);
   border-radius: var(--bn-r-lg);
   background: var(--bn-surface-2);
   flex: none;
@@ -857,7 +857,7 @@
 .browse-actionbar-slot .bn-btn-ghost { display: none; }
 
 @media (max-width: 639px) {
-  .browse { padding-bottom: 64px; }
+  .browse { padding-bottom: var(--bn-10); }
   /* the toast stack rises above the screen's own action bar */
   body:has(.browse-actionbar) .bn-toasts { bottom: calc(64px + 60px + env(safe-area-inset-bottom)); }
 }
@@ -865,7 +865,7 @@
 /* ---- thumb sizes: 40px+ for anything a thumb presses, 44 for the two it presses most.
        A tablet is a thumb too, so this rides the pointer and not the width alone. ---- */
 @media (max-width: 639px), (hover: none) and (pointer: coarse) {
-  .browse-row { min-height: 44px; padding-top: 8px; padding-bottom: 8px; }
+  .browse-row { min-height: 44px; padding-top: var(--bn-2); padding-bottom: var(--bn-2); }
   .browse-row-name { font-size: var(--bn-fs-base); }
   .browse-sectfold { min-height: 44px; }
   .browse-tick { width: 22px; height: 22px; border-radius: 5px; }

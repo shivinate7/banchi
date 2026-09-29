@@ -60,7 +60,7 @@
 .capture-odo .bn-stat-value { font-size: var(--bn-fs-2xl); }
 .capture-odo-rule { width: 1px; height: 24px; background: var(--bn-line); }
 .capture-odo-verdict { margin-left: var(--bn-1); }
-.capture-odo-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.capture-odo-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: var(--bn-0-5); }
 /* WHERE THE SITTING WENT, AND IT HOLDS ITS HEIGHT EMPTY (D118). `min-height` is the line box
    this text would occupy, so the first drawer switch adds a figure to a line that was already
    there — nothing below it moves. Without the floor, the line appears on the first capture and
@@ -91,7 +91,7 @@
 .capture-odo-drawer { white-space: nowrap; }
 .capture-odo-drawer b { font-weight: 700; color: var(--bn-ink-3); }
 /* The separator between drawers is drawn here, never typed into the row (D218). */
-.capture-odo-drawer + .capture-odo-drawer::before { content: '·'; margin-right: 6px; color: var(--bn-ink-4); }
+.capture-odo-drawer + .capture-odo-drawer::before { content: '·'; margin-right: var(--bn-1-5); color: var(--bn-ink-4); }
 /* The drawer the Box field is on. The whole point of the split is that the operator can see
    the drawer they are NOT on, so the one they are on is the thing to mark. */
 .capture-odo-drawer.is-here { color: var(--bn-ink-2); }
@@ -148,7 +148,7 @@
 .capture-card {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--bn-0-5);
   min-width: 0;
   padding: var(--bn-2) var(--bn-3) var(--bn-3);
   border-radius: var(--bn-r-lg);
@@ -158,7 +158,7 @@
 }
 .capture-card-stack { animation-delay: 60ms; }
 .capture-card-rig { animation-delay: 90ms; }
-.capture-card-label { padding: 2px 6px 2px; }
+.capture-card-label { padding: var(--bn-0-5) var(--bn-1-5) var(--bn-0-5); }
 
 /* The Rig panel's own disclosure — Game, Camera, Rotation and Trigger fold behind this once a
    box is picked. A plain button rather than `.capture-row` (which reserves a keycap column
@@ -169,7 +169,7 @@
   gap: var(--bn-2);
   width: 100%;
   min-width: 0;
-  padding: 2px 6px 2px;
+  padding: var(--bn-0-5) var(--bn-1-5) var(--bn-0-5);
   border: none;
   background: none;
   border-radius: var(--bn-r);
@@ -199,7 +199,7 @@
   gap: var(--bn-2);
   width: 100%;
   min-height: 32px;
-  padding: 0 6px 0 6px;
+  padding: 0 var(--bn-1-5) 0 var(--bn-1-5);
   border-radius: var(--bn-r);
   text-align: left;
   font: inherit;
@@ -228,12 +228,12 @@
    stack card's narrow column always is. `min-width: 0` lets `.capture-val` shrink below its
    content size so `.capture-val-name`'s own ellipsis can engage before `.capture-sub`, which
    carries `flex: none`, is ever asked to give up a pixel. */
-.capture-right { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
+.capture-right { display: flex; align-items: center; justify-content: flex-end; gap: var(--bn-1-5); min-width: 0; }
 .capture-chev { color: var(--bn-ink-4); }
 .capture-val {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--bn-1-5);
   min-width: 0;
   flex: 1 1 auto;
   font-size: var(--bn-fs-md);
@@ -269,7 +269,7 @@
   grid-template-rows: auto auto;
   min-height: 54px;
   row-gap: 0;
-  padding: 6px 6px 6px 6px;
+  padding: var(--bn-1-5) var(--bn-1-5) var(--bn-1-5) var(--bn-1-5);
   background: var(--bn-surface-2);
 }
 :root[data-theme='dark'] .capture-row-lg { background: var(--bn-surface-3); }
@@ -398,7 +398,7 @@
    later RECENT footer and the sibling cards painted over the list's lower rows. While a
    field is open its card outranks them; the overlay stays out of flow, so nothing moves (D118). */
 .capture-card:has(.capture-open-pinned) { position: relative; z-index: 5; }
-.capture-open-body { display: flex; flex-direction: column; gap: 6px; padding: 8px 8px 10px; }
+.capture-open-body { display: flex; flex-direction: column; gap: var(--bn-1-5); padding: var(--bn-2) var(--bn-2) 10px; }
 .capture-open-lg > .capture-row { min-height: 40px; }
 .capture-meta {
   font-size: var(--bn-fs-xs);
@@ -430,7 +430,7 @@
   gap: var(--bn-2);
   width: 100%;
   min-height: 30px;
-  padding: 0 6px;
+  padding: 0 var(--bn-1-5);
   border-radius: var(--bn-r-sm);
   text-align: left;
   font: inherit;
@@ -465,7 +465,7 @@
    272px rail, which cut `Box 1 UNL Rares` to `Box 1 UNL Ra…`, so the column goes. */
 .capture-open-lg .capture-opts .capture-opt { grid-template-columns: 16px minmax(0, 1fr) auto; }
 .capture-open-lg .capture-opts .capture-k-blank { display: none; }
-.capture-opennote { font-size: var(--bn-fs-sm); line-height: 1.45; color: var(--bn-ink-3); padding: 0 4px; }
+.capture-opennote { font-size: var(--bn-fs-sm); line-height: 1.45; color: var(--bn-ink-3); padding: 0 var(--bn-1); }
 .capture-opennote code { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); }
 .capture-note-alert { color: var(--bn-warn); }
 
@@ -491,12 +491,12 @@
 .capture-entrymeta-alert { color: var(--bn-warn); }
 
 /* ---- the segmented track -------------------------------------------------------------------------------- */
-.capture-trackline { padding: 2px 0; }
+.capture-trackline { padding: var(--bn-0-5) 0; }
 .capture-track[aria-label='Trigger'] .capture-cell { text-transform: capitalize; }
 .capture-cell[aria-disabled='true'] { opacity: 0.4; cursor: not-allowed; }
 
 /* ---- the shutter, and what stands before it ----------------------------------------------------------- */
-.capture-controls { display: flex; flex-direction: column; gap: var(--bn-2); padding: 6px 0 0; }
+.capture-controls { display: flex; flex-direction: column; gap: var(--bn-2); padding: var(--bn-1-5) 0 0; }
 .capture-shutter { --btn-h: 52px; font-size: var(--bn-fs-lg); border-radius: var(--bn-r-lg); }
 .capture-shutter .bn-kbd { height: 22px; min-width: 22px; font-size: var(--bn-fs-sm); margin-left: var(--bn-2); }
 /* UX-136: the hover lift used to be `translateY(-1px)`, on the `transform` property base.css
@@ -532,7 +532,7 @@
   display: grid;
   grid-template-columns: auto max-content minmax(0, 1fr);
   column-gap: var(--bn-2);
-  row-gap: 2px;
+  row-gap: var(--bn-0-5);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -552,14 +552,14 @@
   border-top: 1px solid var(--bn-line);
   margin-top: calc(var(--bn-2) - 2px);
 }
-.capture-block-row > .bn-icon { grid-column: 1; align-self: start; margin-top: 2px; color: var(--bn-ink-4); }
+.capture-block-row > .bn-icon { grid-column: 1; align-self: start; margin-top: var(--bn-0-5); color: var(--bn-ink-4); }
 /* Warn is for the two a shortcut cannot reach and a run would otherwise waste cards on. */
 .capture-block-row[data-tone='warn'] { color: var(--bn-ink); }
 .capture-block-row[data-tone='warn'] > .bn-icon { color: var(--bn-warn); }
 .capture-block-say { grid-column: 2 / 4; align-self: start; min-width: 0; }
-.capture-block-fix { grid-column: 2; justify-self: stretch; align-self: start; margin-top: 6px; }
+.capture-block-fix { grid-column: 2; justify-self: stretch; align-self: start; margin-top: var(--bn-1-5); }
 .capture-replayed { font-size: var(--bn-fs-sm); line-height: 1.4; padding: var(--bn-2) var(--bn-3); }
-.capture-section { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; }
+.capture-section { display: flex; flex-direction: column; gap: var(--bn-1-5); padding-top: var(--bn-1-5); }
 /* The way onward: once the box holds cards, the run card hands it to the pipeline. */
 .capture-onward { margin-top: var(--bn-2); padding-top: var(--bn-2); border-top: 1px solid var(--bn-line); }
 .capture-onward .bn-btn { justify-content: space-between; }
@@ -568,7 +568,7 @@
    which is the same grammar for the same reason: a control that is not one of the panel's rows
    is separated from them rather than drawn as a fourth one. Quiet, never danger — it writes
    nothing to the store (D142). */
-.capture-clear { margin-top: var(--bn-2); padding-top: var(--bn-2); border-top: 1px solid var(--bn-line); display: flex; flex-direction: column; gap: 4px; }
+.capture-clear { margin-top: var(--bn-2); padding-top: var(--bn-2); border-top: 1px solid var(--bn-line); display: flex; flex-direction: column; gap: var(--bn-1); }
 
 /* ---- the stage: dark in both themes ----------------------------------------------------------------------- */
 .capture-stage {
@@ -647,10 +647,10 @@
   min-height: 40px;
   padding: var(--bn-3) var(--bn-4) 0;
 }
-.capture-lamps { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.capture-lamps { display: flex; align-items: center; gap: var(--bn-1-5); flex-wrap: wrap; }
 .capture-lamp {
   height: 26px;
-  padding: 0 10px 0 8px;
+  padding: 0 10px 0 var(--bn-2);
   font-size: var(--bn-fs-sm);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -844,7 +844,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--bn-1-5);
   padding: var(--bn-6);
   text-align: center;
   color: var(--vf-ink-2);
@@ -857,7 +857,7 @@
   place-items: center;
   background: var(--bn-surface-2);
   color: var(--vf-ink);
-  margin-bottom: 6px;
+  margin-bottom: var(--bn-1-5);
 }
 .capture-frame-glyph.is-danger { background: var(--bn-danger-tint); color: var(--bn-danger); }
 .capture-frame-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 700; color: var(--vf-ink); }
@@ -886,7 +886,7 @@
   border: 2.5px solid var(--bn-line-strong);
   border-top-color: var(--vf-ink);
   animation: bn-spin var(--bn-t-spin) linear infinite;
-  margin-bottom: 4px;
+  margin-bottom: var(--bn-1);
 }
 
 .capture-stage-warn {
@@ -928,7 +928,7 @@
   font-family: var(--bn-font-mono);
   font-size: var(--bn-fs-xs);
   color: var(--vf-ink-2);
-  padding: 2px 6px;
+  padding: var(--bn-0-5) var(--bn-1-5);
   border-radius: 4px;
   background: var(--bn-surface-2);
   white-space: nowrap;
@@ -949,7 +949,7 @@
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) both;
   animation-delay: 60ms;
 }
-.capture-panel-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); min-height: 24px; padding: 0 2px; }
+.capture-panel-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-2); min-height: 24px; padding: 0 var(--bn-0-5); }
 .capture-written { animation-duration: var(--bn-t-slow); }
 .capture-last-viewport {
   --said-h: 0px;
@@ -981,7 +981,7 @@
 .capture-frame-note-last .capture-frame-body { color: var(--bn-ink-3); font-size: var(--bn-fs-sm); }
 .capture-frame-last:has(.capture-frame-note-last) { box-shadow: inset 0 0 0 1.5px var(--bn-line-strong); background: transparent; }
 
-.capture-said { display: flex; flex-direction: column; gap: var(--bn-2); padding: 2px 2px 0; width: 100%; }
+.capture-said { display: flex; flex-direction: column; gap: var(--bn-2); padding: var(--bn-0-5) var(--bn-0-5) 0; width: 100%; }
 .capture-label {
   --pos-slot: 28px;
   font-size: var(--pos-slot);
@@ -990,10 +990,10 @@
   color: var(--bn-ink);
 }
 .capture-label .position-path { font-family: var(--bn-font-ui); }
-.capture-said-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.capture-said-meta { display: flex; flex-wrap: wrap; gap: var(--bn-1-5); }
 .capture-inline { display: flex; }
 .capture-note-wrap { width: 100%; }
-.capture-note-wrap .bn-input { padding-right: 40px; min-height: 36px; font-size: var(--bn-fs-md); }
+.capture-note-wrap .bn-input { padding-right: var(--bn-8); min-height: 36px; font-size: var(--bn-fs-md); }
 .capture-note-save { position: absolute; right: 4px; }
 .capture-inline-label { font-weight: 600; color: var(--bn-ink); }
 /* A SHARED SEPARATOR FOR EVERY LIST OF FACTS THIS SCREEN DRAWS ON ONE LINE (D218): the section
@@ -1001,7 +1001,7 @@
    tuning summary, the rig fold and the trigger meta. One class rather than one rule per site —
    the dot is CSS, never typed into a joined string, so it is never in the DOM text a screen
    reader or a copy-paste sees. */
-.capture-list-part + .capture-list-part::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.capture-list-part + .capture-list-part::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 
 /* ---- the filmstrip: what undo can reach --------------------------------------------------------------------------- */
 .capture-film {
@@ -1016,10 +1016,10 @@
   animation: bn-page-in var(--bn-t-slow) var(--bn-ease-out) both;
   animation-delay: 30ms;
 }
-.capture-film-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); flex-wrap: wrap; padding: 0 2px; }
-.capture-film-hint { display: flex; align-items: center; gap: 6px; font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
-.capture-undo-depth { margin-left: 6px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-3); }
-.capture-film-empty { display: flex; align-items: flex-start; gap: var(--bn-2); padding: 6px 4px 4px; font-size: var(--bn-fs-sm); }
+.capture-film-head { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-3); flex-wrap: wrap; padding: 0 var(--bn-0-5); }
+.capture-film-hint { display: flex; align-items: center; gap: var(--bn-1-5); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
+.capture-undo-depth { margin-left: var(--bn-1-5); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--bn-ink-3); }
+.capture-film-empty { display: flex; align-items: flex-start; gap: var(--bn-2); padding: var(--bn-1-5) var(--bn-1) var(--bn-1); font-size: var(--bn-fs-sm); }
 .capture-film-empty .bn-icon { color: var(--bn-ink-4); }
 /* UN-1: THE WHOLE SITTING SCROLLS INSIDE THE STRIP RATHER THAN GROWING THE PAGE (D164's cap
    is gone). Fixed at a round number of grid rows rather than a viewport fraction, so the strip's
@@ -1030,10 +1030,10 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   grid-auto-rows: min-content;
-  gap: 6px 8px;
+  gap: var(--bn-1-5) var(--bn-2);
   list-style: none;
   margin: 0;
-  padding: 8px 2px 2px;
+  padding: var(--bn-2) var(--bn-0-5) var(--bn-0-5);
   max-height: 360px;
   overflow-y: auto;
   overscroll-behavior-y: contain;
@@ -1078,7 +1078,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 14px 0 4px;
+  padding: 14px 0 var(--bn-1);
   border-radius: 0 0 var(--bn-r) var(--bn-r);
   /* THREE STOPS SINCE THE CAPTION GREW A SECOND LINE. At one line the old two-stop ramp put
      the ink over its solid end; at two the drawer name sat in the faint half, and a card
@@ -1115,7 +1115,7 @@
   left: -5px;
   min-width: 18px;
   height: 18px;
-  padding: 0 4px;
+  padding: 0 var(--bn-1);
   border-radius: var(--bn-r-full);
   display: grid;
   place-items: center;
@@ -1219,7 +1219,7 @@
 }
 .capture-halt-main { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--bn-3); align-items: center; }
 .capture-halt-glyph { width: 32px; height: 32px; border-radius: var(--bn-r); display: grid; place-items: center; background: var(--bn-danger-tint); color: var(--bn-danger); }
-.capture-halt-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.capture-halt-text { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .capture-halt-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 800; letter-spacing: -0.01em; line-height: 1.25; color: var(--bn-ink); }
 .capture-halt-message { font-size: var(--bn-fs-md); line-height: 1.4; color: var(--bn-ink-2); }
 .capture-halt-count { color: var(--bn-ink); }
@@ -1227,7 +1227,7 @@
 .capture-halt-details summary {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--bn-1);
   font-size: var(--bn-fs-sm);
   font-weight: 600;
   color: var(--bn-ink-3);
@@ -1235,9 +1235,9 @@
 }
 .capture-halt-details summary .bn-icon { transition: transform var(--bn-t-fast) var(--bn-ease); }
 .capture-halt-details[open] summary .bn-icon { transform: rotate(90deg); }
-.capture-halt-server { margin-top: 6px; padding: 6px 10px; border-radius: var(--bn-r); background: var(--bn-surface-2); }
-.capture-halt-code { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); margin-top: 4px; }
-.capture-halt-last { margin-top: 6px; color: var(--bn-ink-3); }
+.capture-halt-server { margin-top: var(--bn-1-5); padding: var(--bn-1-5) 10px; border-radius: var(--bn-r); background: var(--bn-surface-2); }
+.capture-halt-code { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); margin-top: var(--bn-1); }
+.capture-halt-last { margin-top: var(--bn-1-5); color: var(--bn-ink-3); }
 .capture-carried { animation: capture-drop var(--bn-t-slow) var(--bn-ease-spring) both; }
 
 /* ---- tuning drawer: a pill in the stage foot, a panel floating above it ------------------------------------------ */
@@ -1247,7 +1247,7 @@
   align-items: center;
   gap: 5px;
   height: 26px;
-  padding: 0 8px 0 7px;
+  padding: 0 var(--bn-2) 0 7px;
   border-radius: var(--bn-r-full);
   background: var(--bn-surface-2);
   font-size: var(--bn-fs-xs);
@@ -1291,7 +1291,7 @@
 .capture-motion-hud {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px 10px;
+  gap: var(--bn-1) 10px;
   font-family: var(--bn-font-mono);
   font-size: var(--bn-fs-xs);
   font-variant-numeric: tabular-nums;
@@ -1299,7 +1299,7 @@
 }
 .capture-motion-hud > span:first-child { grid-column: 1 / -1; color: var(--bn-accent); font-weight: 600; text-transform: uppercase; letter-spacing: var(--bn-tracking-caps); font-size: var(--bn-fs-xs); }
 .capture-motion-hud > .capture-refused { display: inline; font-family: inherit; font-size: inherit; }
-.capture-tuning-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.capture-tuning-actions { display: flex; flex-wrap: wrap; gap: var(--bn-1-5); }
 .capture-tuning-actions:empty { display: none; }
 
 /* ---- prose: quiet, refused, ok ------------------------------------------------------------------------------------------ */
@@ -1318,10 +1318,10 @@
 .capture-note-ok { display: block; color: var(--bn-ok); }
 .capture-stage-warn { align-items: center; }
 .capture-stage-warn .capture-refused { display: block; }
-.capture-servernote { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 6px 4px 0; }
+.capture-servernote { display: flex; flex-direction: column; align-items: flex-start; gap: var(--bn-1-5); padding: var(--bn-1-5) var(--bn-1) 0; }
 /* `flex: none` — the count marks are a fixed-width sibling of `.capture-val-name` and never
    the thing an overflowing row shrinks or clips; the name box gives way first. */
-.capture-bits { display: inline-flex; flex: none; gap: 2px; margin-left: 2px; }
+.capture-bits { display: inline-flex; flex: none; gap: var(--bn-0-5); margin-left: var(--bn-0-5); }
 .capture-bit { width: 5px; height: 5px; border-radius: 1.5px; background: var(--bn-line-strong); }
 .capture-bit.on { background: var(--bn-accent); }
 
@@ -1349,7 +1349,7 @@
   .capture.bn-page { --cap-rail-w: 272px; --cap-last-w: 250px; --cap-gap: var(--bn-2); }
   .capture-shell { gap: var(--cap-gap) var(--bn-3); }
   .capture-card,
-  .capture-film { padding: 6px var(--bn-3) var(--bn-2); }
+  .capture-film { padding: var(--bn-1-5) var(--bn-3) var(--bn-2); }
 }
 
 /* ---- tablet: the run beside the feed so the shutter shares the first viewport with it; the
@@ -1381,7 +1381,7 @@
        screen can opt out of), so the same `::before` reaching 8px above the FIRST row's
        drop button needs that much clearance from the list's own top edge or it is clipped
        exactly as if it were real scrolled-past content. */
-    padding: 16px 4px 4px;
+    padding: var(--bn-4) var(--bn-1) var(--bn-1);
     /* One scrolling row, not a scrolling grid — the desktop rule's `max-height` and vertical
        scroll would clip this row's own thumbnails, which are taller than it. */
     max-height: none;
@@ -1400,7 +1400,7 @@
   /* D272/D275, the follow-up lane after PR 2: was a literal 12px, matching the base rule's
      old compressed pad. `--bn-page-top` is still the desktop 24px at this breakpoint (it
      only drops at 767px and below). */
-  .capture.bn-page { padding: var(--bn-page-top) 20px 16px; }
+  .capture.bn-page { padding: var(--bn-page-top) var(--bn-5) var(--bn-4); }
 }
 
 /* ---- phone: the viewfinder first, then the run, then everything else ----------------------------------------------------- */

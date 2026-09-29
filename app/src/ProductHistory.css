@@ -24,7 +24,7 @@
 .producthistory-result {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--bn-0-5);
   align-items: flex-start;
   width: 100%;
   padding: var(--bn-3) var(--bn-4);
@@ -151,7 +151,7 @@
    span and the bucket-width caption; no string in ProductHistory.tsx types one. */
 .producthistory-bucket-width::before {
   content: '·';
-  margin: 0 4px;
+  margin: 0 var(--bn-1);
   color: var(--bn-ink-3);
 }
 

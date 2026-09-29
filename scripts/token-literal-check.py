@@ -201,6 +201,11 @@ PROPERTY_FAMILIES: Tuple[Family, ...] = (
 # do not start with "-", so the optional group cannot consume them and the anchor fails).
 
 
+# The second finding kind (F6, owner's word 2026-09-29): a spacing literal on no rung of the
+# `--bn-*` scale. Same scan, same allow-list, its own ratchet ("off_scale" in the pin file).
+OFF_SCALE = "spacing-off-scale"
+
+
 class TokenDef(NamedTuple):
     name: str
     value: str
@@ -411,6 +416,10 @@ def css_findings(
             hit = _match_token(family, num, tokens)
             if hit:
                 out.append(Finding(path, line, family.key, prop, comp, hit, line_text))
+            elif family.key == "spacing" and num != 0 and not _match_token(family, abs(num), tokens):
+                # F6: a spacing value on no rung of the scale (`5px`, `10px`). A negative
+                # offset whose magnitude IS a rung (`-4px`) is on the scale.
+                out.append(Finding(path, line, OFF_SCALE, prop, comp, "(no rung)", line_text))
     return out
 
 
@@ -540,11 +549,13 @@ def apply_allow_list(
 # ------------------------------------------------------------------------- pin (ratchet)
 
 
-def load_pin() -> Dict[str, int]:
+def load_pin(key: str = "files") -> Dict[str, int]:
+    """`key` is "files" (a literal that equals a token) or "off_scale" (F6: a spacing literal
+    on no rung of the scale)."""
     if not PIN_FILE.exists():
         return {}
     data = json.loads(PIN_FILE.read_text(encoding="utf-8"))
-    return {str(k): int(v) for k, v in data.get("files", {}).items()}
+    return {str(k): int(v) for k, v in data.get(key, {}).items()}
 
 
 def counts_by_file(findings: Sequence[Finding]) -> Dict[str, int]:
@@ -773,6 +784,24 @@ def self_test() -> int:
         lambda: len(_scan_css_text(".x { scroll-padding-inline-start: 4px; }")) == 1,
     )
 
+    # ---- F6: off-scale spacing ----
+    def off_of(text: str) -> List[Finding]:
+        return [f for f in _scan_css_text(text) if f.family == OFF_SCALE]
+
+    case("an off-scale spacing value (5px) is an off-scale finding",
+         lambda: len(off_of(".x { padding: 5px; }")) == 1)
+    case("an on-scale value (8px) is never off-scale",
+         lambda: len(off_of(".x { padding: 8px; }")) == 0)
+    case("a negative offset whose magnitude is a rung (-8px) is on-scale",
+         lambda: len(off_of(".x { margin: -8px; }")) == 0)
+    case("0 is on-scale", lambda: len(off_of(".x { margin: 0; }")) == 0)
+    case("off-scale is per component: padding 5px 8px 7px is two",
+         lambda: len(off_of(".x { padding: 5px 8px 7px; }")) == 2)
+    case("an off-scale value in a var() fallback or calc() is not read",
+         lambda: len(off_of(".x { gap: var(--y, 5px); padding: calc(5px + 1px); }")) == 0)
+    case("width: 5px is not a spacing property",
+         lambda: len(off_of(".x { width: 5px; }")) == 0)
+
     # ---- ratchet arithmetic ----
     case(
         "a raised per-file count fails",
@@ -842,9 +871,21 @@ def main(argv: Sequence[str]) -> int:
     findings, family_tokens, css_scanned, ts_scanned, tsx_count = scan()
     allow = load_allow_list()
     findings, stale_allow = apply_allow_list(findings, allow)
+    off = [f for f in findings if f.family == OFF_SCALE]
+    findings = [f for f in findings if f.family != OFF_SCALE]
     pin = load_pin()
     counts = counts_by_file(findings)
     failures, notes = ratchet_verdict(counts, pin)
+    off_counts = counts_by_file(off)
+    off_failures, off_notes = ratchet_verdict(off_counts, load_pin("off_scale"))
+    failures += [f"off-scale spacing, {m}" for m in off_failures]
+    notes += [f"off-scale spacing, {m}" for m in off_notes]
+    if off_failures:
+        for f in off:
+            if not any(m.startswith(f"{f.path}:") for m in off_failures):
+                continue
+            failures.append(f"  {f.path}:{f.line}  {f.property}: {f.value} is on no `--bn-*` spacing "
+                            f"rung (docs/DESIGN.md, Spacing relations)")
 
     token_total = sum(len(v) for v in family_tokens.values())
     by_family = ", ".join(
@@ -883,7 +924,7 @@ def main(argv: Sequence[str]) -> int:
 
     print(
         f"token-literal-check: {css_scanned} stylesheet(s), {token_total} token(s) in scope "
-        f"({by_family}), {len(counts)} file(s) with a pinned finding, 0 rise(s). "
+        f"({by_family}), {len(counts)} file(s) with a pinned finding, {sum(off_counts.values())} pinned off-scale spacing value(s) in {len(off_counts)} file(s), 0 rise(s). "
         f"TSX inline-style literals measured (never gated): {tsx_count} over {ts_scanned} "
         f"TS/TSX file(s)."
     )

@@ -25,7 +25,7 @@
   background: var(--bn-surface);
   z-index: 1;
 }
-.inv-sheet-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.inv-sheet-head-text { display: flex; flex-direction: column; gap: var(--bn-0-5); min-width: 0; }
 .inv-sheet-title {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-xl);
@@ -72,7 +72,7 @@
 
 /* dialog */
 .inv-dialog { padding: 0; }
-.inv-dialog-head { padding: var(--bn-5) var(--bn-5) 0; display: flex; flex-direction: column; gap: 4px; }
+.inv-dialog-head { padding: var(--bn-5) var(--bn-5) 0; display: flex; flex-direction: column; gap: var(--bn-1); }
 .inv-dialog-title {
   font-family: var(--bn-font-display);
   font-size: var(--bn-fs-xl);

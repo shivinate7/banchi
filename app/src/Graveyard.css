@@ -30,7 +30,7 @@
     scrollbar-width: none;
     max-width: 100%;
     margin: 0 calc(-1 * var(--bn-4));
-    padding: 3px var(--bn-4);
+    padding: var(--bn-0-75) var(--bn-4);
   }
   .graveyard-toolbar .bn-seg::-webkit-scrollbar { display: none; }
   .graveyard-toolbar .bn-seg-item { flex: none; }
@@ -108,7 +108,7 @@
 
 .graveyard-when { font-size: var(--bn-fs-sm); color: var(--bn-ink-2); white-space: nowrap; }
 
-.graveyard-card-cell { display: flex; flex-direction: column; gap: 2px; }
+.graveyard-card-cell { display: flex; flex-direction: column; gap: var(--bn-0-5); }
 .graveyard-name { font-weight: 500; }
 .graveyard-sub { display: flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-sm); color: var(--bn-ink-3); }
 
@@ -160,7 +160,7 @@
   .graveyard-table td[data-th='Order']::before,
   .graveyard-table td[data-th='Captured']::before {
     content: attr(data-th);
-    margin-right: 6px;
+    margin-right: var(--bn-1-5);
     font-size: var(--bn-fs-2xs);
     font-weight: 600;
     letter-spacing: var(--bn-tracking-caps);
