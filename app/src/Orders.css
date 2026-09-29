@@ -347,7 +347,7 @@ label.orders-index-tick:hover { background: var(--bn-hover); }
 .orders-walk-rows { list-style: none; display: flex; flex-direction: column; gap: var(--bn-3); }
 /* A4: the press stays one flex item, and the copies underneath it (`.walk-pick-where`) wrap
    onto their own full-width row rather than sitting beside it — the shape
-   `docs/reviews/ux-2026-09-23/orders-a/mock.css` already worked out. */
+   the orders-a mock already worked out. */
 .orders-walk-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1); }
 .orders-walk-press {
   display: grid;

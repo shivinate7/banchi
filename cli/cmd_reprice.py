@@ -861,7 +861,7 @@ def _apply(args, say) -> int:
 
     # THE FAST REFUSAL, FOR THE ORDINARY CASE, BEFORE ANY BYTE IS BUILT. Checked again below,
     # INSIDE THE LOCK, right before the write — that second check is the one that counts
-    # (DEBT53). A caller that read a revision, then waited here for CSV building and a
+    # (pricing-corpus lock). A caller that read a revision, then waited here for CSV building and a
     # `Store().write()` block, then waited AGAIN for another writer's corpus lock, was
     # checking a revision that could go stale on either wait. This one only saves the work of
     # building a file this command is about to refuse to write.
@@ -896,7 +896,7 @@ def _apply(args, say) -> int:
     target = path.parent / IMPORT
 
     # ONE LOCK, HELD ONCE, AND THE REVISION IS REFUSED BEFORE ANYTHING IS WRITTEN (fixes
-    # the defect DEBT53's own fix left behind). `Store().write()` already takes
+    # the defect the pricing-corpus lock's own fix left behind). `Store().write()` already takes
     # `files.exclusive(files.inventory_dir())` inside itself (`store/session.py:Store.write`)
     # — the SAME flock this command used to take a SECOND time, over the same directory, for
     # the corpus half. `flock` is not re-entrant across two open file descriptions even in one
@@ -909,7 +909,7 @@ def _apply(args, say) -> int:
     #
     # So there is now one hold, and everything moves inside it: the fresh revision check,
     # the corpus write, the posting, and `import.csv` last. A refusal here writes NONE of the
-    # three. THIS IS THE CHECK THAT COUNTS (DEBT53): the one above only saves the work of
+    # three. THIS IS THE CHECK THAT COUNTS (pricing-corpus lock): the one above only saves the work of
     # building a file this command may still refuse to write; this one is taken immediately
     # before the write, so nothing after it can move the file first.
     with Store().write() as writable:
@@ -1042,7 +1042,7 @@ def _apply(args, say) -> int:
         # `COMMIT` leaves the corpus and `import.csv` consistent WITH EACH OTHER, and only the
         # posting row missing — never the reverse, and never a file or a price with nothing
         # behind it. Closing this last window needs one transaction across two stores
-        # (`store.sqlite` and `inventory/prices.json`), which is not built here (DEBT53).
+        # (`store.sqlite` and `inventory/prices.json`), which is not built here (pricing-corpus lock).
         for edit in application.edits:
             writable.postings.record(
                 sku=edit.sku,

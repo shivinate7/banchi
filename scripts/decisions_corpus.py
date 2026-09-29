@@ -2,9 +2,9 @@
 """The decision corpus, read as one text or as one entry.
 
 THE CORPUS IS A DIRECTORY AND WAS ONE FILE. `docs/decisions/` holds one markdown file per
-entry; `docs/DECISIONS.md` is a stub that points at it and is read by nothing. This module
-is the seam: every reader that used to open that path calls `text()` instead and gets the
-same bytes, so the split changed where the corpus LIVES without changing what any checker
+entry; `docs/decisions/README.md` points at it and is read by nothing. This module
+is the seam: every reader that used to open the old single file calls `text()` instead and
+gets the same bytes, so the split changed where the corpus LIVES without changing what any checker
 parses. That is deliberate — a split that also rewrote eleven audit rows would have been
 two changes wearing one diff, and only one of them provable.
 
@@ -36,7 +36,7 @@ from typing import Dict, List, Optional
 ROOT = Path(__file__).resolve().parent.parent
 DIRECTORY = ROOT / "docs" / "decisions"
 MANIFEST = DIRECTORY / "ORDER.json"
-STUB = ROOT / "docs" / "DECISIONS.md"
+STUB = ROOT / "docs" / "decisions" / "README.md"
 
 # scripts/prose-guard.py's `_ID`, which is scripts/docs-audit.py's `_ID_ANY`: a number, or a
 # claim slug a branch writes and `make merge` substitutes. Spelled here a third time rather
@@ -84,7 +84,8 @@ def order() -> List[str]:
     if "order" not in _cache:
         listed = json.loads(MANIFEST.read_text(encoding="utf-8"))["order"]
         known = set(listed)
-        extra = sorted((p.name for p in DIRECTORY.glob("*.md") if p.name not in known),
+        extra = sorted((p.name for p in DIRECTORY.glob("*.md")
+                        if p.name not in known and p.name != "README.md"),
                        key=_rank)
         _cache["order"] = listed + extra
     return list(_cache["order"])  # a copy: callers sort and filter it
@@ -93,7 +94,8 @@ def order() -> List[str]:
 def unregistered() -> List[str]:
     """Entry files on disk that the manifest has not been told about."""
     listed = set(json.loads(MANIFEST.read_text(encoding="utf-8"))["order"])
-    return sorted((p.name for p in DIRECTORY.glob("*.md") if p.name not in listed), key=_rank)
+    return sorted((p.name for p in DIRECTORY.glob("*.md")
+                   if p.name not in listed and p.name != "README.md"), key=_rank)
 
 
 def files() -> List[Path]:
@@ -103,7 +105,7 @@ def files() -> List[Path]:
 def text() -> str:
     """The whole corpus as the single document it used to be.
 
-    Byte-identical to the pre-split `docs/DECISIONS.md`, which is asserted rather than
+    Byte-identical to the pre-split `docs/decisions/`, which is asserted rather than
     claimed: `scripts/split-decisions.py --verify` diffs this reassembly against the
     original bytes, and `make decisions-selftest` runs it.
     """

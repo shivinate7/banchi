@@ -4352,7 +4352,7 @@ test('a reworded owed sentence draws the same chip while its code stays', async 
 
 /* ------------------------------------------------------------------------------------------
  * F3 (the owner's word, 2026-09-29): the filters an end user needs on this list. The design is
- * `docs/reviews/ux-2026-09-23/F3-pricing-filters.md`. Search, sort and the facets narrow what is
+ * F3 of the ux-2026-09-23 review. Search, sort and the facets narrow what is
  * DRAWN and nothing else.
  * ------------------------------------------------------------------------------------------ */
 

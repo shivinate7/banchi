@@ -533,7 +533,7 @@ Revert `do_orders` to the whole-store `_Places(snapshot.inventory)` construction
 Assertion 1 against the OLD code path) and confirm it goes red — `after_loaded -
 before_loaded` should be close to the total card count in the fixture store (all five
 20-card boxes = up to 100, not ≤20). Record this as the mutation-tested arm in the PR
-description, the way `docs/DEBTS.md` and the mutation-tested guards elsewhere in this repo
+description, the way `docs/debts/` and the mutation-tested guards elsewhere in this repo
 report survivor/kill counts (see e.g. `make reap-selftest`'s "twenty-two arms" framing in
 `CLAUDE.md` for the expected report shape — this item is not required to build a formal
 mutation harness, just to demonstrate the arm by hand and say so).

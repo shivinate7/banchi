@@ -40,7 +40,7 @@ unmoved. The money gate cannot be lowered past this hook by accident.
   Checked rather than assumed: `make sigil-check` runs the self-test WITHOUT a `-` prefix, so a
   broken pattern fails `make check` and blocks the turn one gate later.
 - **One roster entry was mis-paired**, not a guard that failed: `check_detector_standing` never
-  opens `docs/DECISIONS.md`, and its docstring says D75's corpus is deliberately out of scope.
+  opens `docs/decisions/`, and its docstring says D75's corpus is deliberately out of scope.
 
 **Two corrections to the run that produced this, because a measurement is worth what its errors
 are worth.** First, the earlier fifty-of-fifty included at least one verdict attributed to the

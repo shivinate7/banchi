@@ -79,21 +79,21 @@ every input this repo's tests already exercise.
 ## Read first
 
 - `docs/specs/store-scaling.md` §0 (the one-paragraph diagnosis), §1's table row for
-  `_copies_out`, §2's bullet ("`docs/DEBTS.md`'s `_copies_out` entry names the wrong fix"),
+  `_copies_out`, §2's bullet ("`docs/debts/`'s `_copies_out` entry names the wrong fix"),
   and §3 item 4's own paragraph. **§2's claim needs a correction — read it here before
-  trusting it**: `docs/DEBTS.md` was grepped for `_copies_out` (`grep -n "_copies_out"
-  docs/DEBTS.md`) and its only hit is section 24 (`## 24 — A zero reading cannot tell a
+  trusting it**: `docs/debts/` was grepped for `_copies_out` (`grep -n "_copies_out"
+  docs/debts/`) and its only hit is section 24 (`## 24 — A zero reading cannot tell a
   sold-out listing from an import sitting in Staged`, starts line 2045), which is about an
   ARITHMETIC ambiguity (D150/D147) and says nothing about an index or a cost. There is no
-  paragraph anywhere in `docs/DEBTS.md` today asking for a `sku` index on `Rows`, or naming
+  paragraph anywhere in `docs/debts/` today asking for a `sku` index on `Rows`, or naming
   any fix for this function's performance at all. So §2's "the entry names the wrong fix" is
   not verifiable against the file as it stands — either that paragraph was removed by a
   branch that merged between the plan being written and this item opening, or the plan's
   author was thinking of `store-scaling.md` §0 itself (which *is* precise: "`cli/resolve.py:
   _copies_out` calls `positions_for_sku` and `copies_not_sold` once per listing... which at
   50,000 cards with proportional listings is the single largest figure in the plan") and
-  misattributed it to DEBTS.md in the summary bullet. Either way: **do not go looking for a
-  DEBTS.md paragraph to edit — there is none to correct.** If a future session's `make
+  misattributed it to docs/debts/ in the summary bullet. Either way: **do not go looking for a
+  docs/debts/ paragraph to edit — there is none to correct.** If a future session's `make
   docs-audit` or a stale grep turns one up, the corrected text is: *the `cards_sku` index
   exists (`store/db._INDEXES`, generated from the `("cards", "sku")` tuple in `_INDEXES` at
   line 135 via the `CREATE INDEX IF NOT EXISTS {table}_{column}` loop at line 272); `Inventory.
@@ -658,7 +658,7 @@ pointing at this section so a future reader does not re-derive the same analysis
   rewrite — which preserves the exact same dicts — cannot affect them. Confirmed by grep:
   `pipeline/join.py`'s only `_copies_out` references (lines 1781, 1786, 1856, 1860) are
   comments, not calls.
-- `docs/DEBTS.md` — see "Read first" above; there is no existing paragraph there to edit for
+- `docs/debts/` — see "Read first" above; there is no existing paragraph there to edit for
   this item. Do not add one speculatively; if the owner wants the corrected analysis
   recorded as a debt (it is not really a debt any more once this item lands — the cost is
   fixed, not merely documented), that is a separate, small edit outside this item's scope.

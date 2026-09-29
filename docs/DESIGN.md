@@ -204,7 +204,7 @@ a token declared in the stylesheet that this block does not name fails the commi
 name here that nothing renders. **It compares a value only where this block states a hex** —
 31 of them, across both themes. An alpha (`ink 8%`), an alias (`= ink in both themes`), a
 duration, an easing curve and a shadow are named and checked for existence, and their values are
-locked nowhere a script can read; `docs/DEBTS.md` carries that gap rather than this row implying
+locked nowhere a script can read; `docs/debts/` carries that gap rather than this row implying
 a coverage it does not have. **The row is still not to be satisfied by respelling the palette —
 that is D16's forbidden direction.** What changed is which side was wrong.
 
@@ -1244,11 +1244,6 @@ the spec asserts the floor. And the key chip does not belong on this control: "e
 shows its key" is an owner-side rule, `keyHint` renders nothing when omitted, and the spec
 asserts its absence by default.
 
-**`docs/design-refs/locked.html` and `rejected.html` draw the 2026-08-12 palette and no
-longer draw this product.** They are a record of that interview — the two findings above were
-found by disagreeing with them — and they are not a reference for anything built today. The
-reference is `#/gallery`.
-
 ## The screenshot loop is mandatory
 
 `make screenshot` renders the key views to `captures/ui/`. Claude Code writes CSS it has
@@ -1263,7 +1258,7 @@ is why the tokens above are hex values and typeface names rather than words like
 
 **The reference is `#/gallery`, and it is in the build for this reason.** A component sheet
 that the app renders is a component sheet that cannot go stale — which is exactly what
-happened to `docs/design-refs/locked.html`, a static drawing of a palette this product no
+happened to the static palette sheets this product once kept, which drew a palette it no
 longer has. Hex values substitute for color; they do not substitute for layout or density,
 and those are most of what a reference carries, which is why the kit page draws every
 primitive in every state rather than listing their names.

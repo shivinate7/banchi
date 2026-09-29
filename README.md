@@ -23,7 +23,7 @@ secrets ([`docs/specs/demo.md`](docs/specs/demo.md)).
 
 The store is one SQLite file, `inventory/store.sqlite`. Capture and paid work are separate
 phases. Cost per card:
-[Gate C](docs/gates/gate-runs/GateC-note1-the-per-run-reading-900-against-1200-priced-and-powered.md).
+[Gate C](https://github.com/shivinate7/banchi/blob/0e1eef12b59aed02666f6a976e62fd1638157851/docs/gates/gate-runs/GateC-note1-the-per-run-reading-900-against-1200-priced-and-powered.md).
 
 ### TCGplayer, live
 
@@ -117,7 +117,7 @@ The name Banchi belongs to the app. The packages, CLI, store and wire keep `pkmn
 - **Guards run on every commit and in CI** through `make docs-audit`: the docs against the code,
   design tokens, route rosters, decision ids, and opsec rules for code-card photos.
 - **Tests:** [`docs/TESTS.md`](docs/TESTS.md) says what each test protects.
-- **Gates:** [`docs/GATES.md`](docs/GATES.md) records the runs on real cards.
+- **Contract:** [`docs/GATES.md`](docs/GATES.md) indexes the harness thresholds and the build order.
 
 ## More
 

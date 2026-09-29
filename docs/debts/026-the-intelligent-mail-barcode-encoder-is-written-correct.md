@@ -2,7 +2,7 @@
 
 **The owner's ruling, 2026-09-11**: *"How can we keep the code and shelve it? I don't want to land
 it, I don't want it lost."* This section is the shelf record. It is here rather than in
-`docs/DECISIONS.md` because no architecture was decided — a body of work was set down where it can
+`docs/decisions/` because no architecture was decided — a body of work was set down where it can
 be found again, which is what this file is for.
 
 ### Where it is
@@ -114,5 +114,5 @@ today. Nothing else here is blocked on anything.
 
 **The number may move, and nothing allocates it.** This entry was written as 25 and renumbered
 when PR #282 took that number while this branch was open — the rule working rather than a
-collision, and the same one `docs/DECISIONS.md` keeps: renumber your own, never another's. 26 is
+collision, and the same one `docs/decisions/` keeps: renumber your own, never another's. 26 is
 what was next on 2026-09-11.

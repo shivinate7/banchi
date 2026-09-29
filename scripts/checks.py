@@ -213,7 +213,7 @@ CHECKS = (
                    "index — and on box 3 those spaces are 76 apart, so `#27` named two "
                    "different cards on one screen. Text-matched and therefore narrow: it "
                    "refuses a `#` composed from an expression naming `index`, and a renamed "
-                   "local walks past it (docs/DEBTS.md).",
+                   "local walks past it (docs/debts/).",
         "needs": ("python3",),
         "writes": "",
         "commit_path": True,
@@ -294,7 +294,7 @@ CHECKS = (
         "target": "token-literal-check",
         "runs": "python3 scripts/token-literal-check.py",
         "asserts": "A CSS literal exactly equal to a design token's value, in its own "
-                   "property family (`docs/reviews/ux-2026-09-20/RANKING.md` §4): "
+                   "property family (D256, token literals are pinned): "
                    "`font-size: 22px` where `--bn-fs-2xl: 22px`, `padding: 8px` where "
                    "`--bn-2: 8px`, `transition: ... 480ms` where `--bn-t-draw: 480ms`. "
                    "css-var-check's sibling, the other direction — that one catches a "
@@ -1467,7 +1467,7 @@ def one(name: str) -> str:
     if entry.get("why_off_ci"):
         block("ci-check", "NOT run on CI.")
         block("", entry["why_off_ci"])
-    block("governed by", ", ".join(entry["governed_by"]) + "  — docs/DECISIONS.md")
+    block("governed by", ", ".join(entry["governed_by"]) + "  — docs/decisions/")
     return "\n".join(lines)
 
 

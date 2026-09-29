@@ -1430,7 +1430,7 @@ async function confirmCall(
 
 /**
  * Answer a homogeneous group of queued cards in one write — `POST /review/group-answer`,
- * docs/DECISIONS.md's "A homogeneous queue may be answered as a group" (the entry that
+ * docs/decisions/'s "A homogeneous queue may be answered as a group" (the entry that
  * reopens D4's one-card-at-a-time, narrowly).
  *
  * EACH CARD IS ANSWERED WITH ITS OWN SINGLE CANDIDATE, and every element's pair is copied

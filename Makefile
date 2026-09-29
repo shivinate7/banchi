@@ -708,7 +708,7 @@ hand-search-selftest:
 	@python3 scripts/hand-search-selftest.py
 
 # A CSS LITERAL EXACTLY EQUAL TO A DESIGN TOKEN'S VALUE, IN ITS OWN PROPERTY FAMILY
-# (`docs/reviews/ux-2026-09-20/RANKING.md` §4): `font-size: 22px` where `--bn-fs-2xl: 22px`
+# (D256, token literals are pinned): `font-size: 22px` where `--bn-fs-2xl: 22px`
 # means nothing here stops the two diverging the next time the scale moves. `css-var-check`'s
 # sibling, opposite direction: that one catches a `var()` pointed at nothing, this one catches
 # a value that should have BEEN a `var()`. Reads `tokens.css` itself on every run — no copied
@@ -1084,8 +1084,8 @@ janitor-selftest:
 # it reads from the self-test's own `CARRY` and answers 0 to run, 3 to skip. It fails OPEN:
 # no merge-base, an unreadable diff and an EMPTY diff all run it.
 #
-# THE OWNER RULED THIS ONE IN AND PATH GATING IN GENERAL OUT (docs/specs/verification-cost.md
-# §9). Nine targets in `make check` cost under a tenth of a second each, so a scope list per
+# THE OWNER RULED THIS ONE IN AND PATH GATING IN GENERAL OUT (D247, guard self-test
+# scope). Nine targets in `make check` cost under a tenth of a second each, so a scope list per
 # target would cost more to maintain than it saves. A SECOND gated target needs the owner's
 # word again — do not read this recipe as a pattern to copy.
 #
@@ -1631,7 +1631,7 @@ screenshot:
 # three shards on three 2-vCPU runners — `PW_ARGS="--shard=1/3 --workers=1"` — because one
 # runner ran all 481 cases on ONE worker in 15 minutes, against 89-175s for the rig's seven.
 # Sharding splits the CASES and leaves the worker count alone, which is the half that matters:
-# docs/DEBTS.md section 8 measured a one-in-thirteen red whose only known mechanism is "the
+# docs/debts/ section 8 measured a one-in-thirteen red whose only known mechanism is "the
 # suite around it", and more workers on one box is more suite around it. On the rig `PW_ARGS`
 # is for a session that wants one spec — `PW_ARGS=tests/brand.spec.ts` — and nothing else.
 # Each shard leaves its own `.serve/design-check.json`; on a runner that is one file per job.
@@ -1687,7 +1687,7 @@ design-check-quiet:
 	@python3 scripts/reap_mark.py design-check; DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # eslint over app/, config and rules in app/eslint.config.js. It began 2026-08-13 as the two
-# guards docs/DECISIONS.md's v1 bug table promised — no `facingMode` (bug 3), no `split(",")`
+# guards docs/decisions/'s v1 bug table promised — no `facingMode` (bug 3), no `split(",")`
 # CSV parsing (bug 2) — and has since gained a rule per bug this project caught itself: the
 # two-argument `.then` that swallows its own success handler's throw, and `localStorage`
 # outside D27's carve-out. THE COUNT IS DELIBERATELY NOT STATED: this comment said "two" while

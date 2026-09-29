@@ -835,7 +835,7 @@ def main() -> int:
             # the sync in the foreground and PRINTS — a person typed `make up` and is watching
             # that terminal — so this is `up`'s own stdout and not the supervisor log. The
             # first draft of this arm ended in `or True`, which is the vacuous green
-            # docs/DEBTS.md opens by warning about: it would have passed against a sync that
+            # docs/debts/ opens by warning about: it would have passed against a sync that
             # said nothing at all.
             check(
                 "primary-sync:" in started5.stdout and "-> main" in started5.stdout,

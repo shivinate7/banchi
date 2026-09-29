@@ -26,5 +26,4 @@ function. The choice is the owner's.
 reliably trips the 10 s backstop, measured rather than guessed. Or add a call-count assertion
 on the merge's own per-card function, beside the tick count rather than replacing it.
 
-Cites the T7 review (`docs/reviews/ux-2026-09-23/RULINGS.md`, "Timing guards must count work,
-not wall time alone") and `harness/tests/t7_box_map.py:check_merge_speed`.
+Cites the T7 review's ruling, "Timing guards must count work, not wall time alone", and `harness/tests/t7_box_map.py:check_merge_speed`.

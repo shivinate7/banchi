@@ -332,7 +332,7 @@ home-screen bookmark, if one exists, is re-added.
 describes `make dev` only). `README.md`'s quick start. D53 gains an amendment paragraph
 pointing here for the reversal of its `dist` rejection and `restart` folding into `up`; D108 gains
 one for the port and the two origin-keyed resets. `docs/map.py` entries for `serve.py`,
-`status.py`, `capture_server.py`, `lan-check.py`. `docs/DEBTS.md` names what §8 leaves
+`status.py`, `capture_server.py`, `lan-check.py`. `docs/debts/` names what §8 leaves
 unmeasured.
 
 ## 6. What does not move, checked before writing this

@@ -16,7 +16,7 @@
  * `DEMO_PREVIEW_URL` set — for example `http://localhost:4173` while `make demo-preview`
  * runs — each file is fetched from that preview server instead, so the same assertions read
  * what the preview serves. Either way the page itself talks to its own origin and to one named
- * outside host, `tcgplayer-cdn.tcgplayer.com` (DEBT47, closed — see the allow-list below), and
+ * outside host, `tcgplayer-cdn.tcgplayer.com` (see the allow-list below), and
  * `sealEveryTest` still refuses anything else.
  *
  * SKIPPED, BY NAME, WHEN THERE IS NO BUILD. `make design-check` does not build the demo, so a
@@ -55,7 +55,7 @@ function basePath(): string {
 
 const REFUSAL = 'Not in this demo.'
 
-// THE ONE NAMED HOST, NEVER A STUB (DEBT47, closed). `pipeline/stockimages.py` (D301)
+// THE ONE NAMED HOST, NEVER A STUB (closed). `pipeline/stockimages.py` (D301)
 // hotlinks Riftbound and One Piece stock images straight from `tcgplayer-cdn.tcgplayer.com` —
 // that is the design, not a leak, and the published page really does load them. A one-pixel
 // stub used to answer in its place, which tested a rule the shipped page does not follow: the

@@ -8,7 +8,7 @@ at a temporary directory, so nothing here touches the real inventory.
   gate in the repo on the day they shipped: the `PUT` that never reached the sidecar — which
   passed its own route test while doing it — and the `c.box == box` filter that dropped a
   string-typed record and returned an index that collided later. Both are recorded in
-  `docs/DEBTS.md`, and both were re-introduced deliberately to confirm this test catches
+  `docs/debts/`, and both were re-introduced deliberately to confirm this test catches
   them before it was committed.
 - **The markdown blocks are two, and the second is about a seam the first cannot reach**
   (D103). `check_markdown` owns the byte contract — every file carries `Add to Quantity` 0, the

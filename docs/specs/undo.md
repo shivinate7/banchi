@@ -225,8 +225,7 @@ an older row's `Undo`, mutation-tested against the granularity the owner decline
 
 **STATE: PLANNED, NOT BUILT.** This section replaces the 2026-09-24 placeholder. It distills
 a blind audit of the running app and the owner's interview of 2026-09-25. The rulings are
-recorded verbatim in `docs/reviews/ux-2026-09-23/RULINGS.md`, under "Undo session". The
-blind audit itself stays in the session scratchpad. Its words are quoted below where an item
+the ones this section states. The blind audit itself stays in the session scratchpad. Its words are quoted below where an item
 cites it.
 
 The owner's words, verbatim:

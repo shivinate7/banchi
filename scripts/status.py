@@ -86,7 +86,7 @@ SOURCES = (
         "path": "scripts/decision-context.py",
         "kind": "defs",
         "requires": ("decision_gists",),
-        "why": "the lift of bolded rulings out of docs/DECISIONS.md — reused, never reimplemented",
+        "why": "the lift of bolded rulings out of docs/decisions/ — reused, never reimplemented",
     },
     {
         "path": "scripts/docs-audit.py",
@@ -113,7 +113,7 @@ SOURCES = (
         "why": "T1 scores, the gate criterion, and T1's own blind-spot note",
     },
     {
-        "path": "docs/DECISIONS.md",
+        "path": "docs/decisions/ORDER.json",
         "kind": "file",
         "requires": (),
         "why": "read by decision_gists()",
@@ -268,7 +268,7 @@ def literals(path: Path) -> Dict[str, object]:
 
 
 def load_gists() -> Dict[str, Tuple[str, List[str]]]:
-    """Reuse scripts/decision-context.py rather than re-parsing docs/DECISIONS.md.
+    """Reuse scripts/decision-context.py rather than re-parsing docs/decisions/.
 
     One lift, one place to break — and the PreToolUse hook already exercises it on every
     edit, so it is the best-tested parser in the repo. The filename has a hyphen, hence
@@ -382,7 +382,7 @@ def do_this_next(mapdata: Dict[str, object], gists: Dict[str, Tuple[str, List[st
         governed = sorted(set(re.findall(r"\bD[1-9][0-9]{0,2}\b", str(step.get("note") or ""))),
                           key=lambda d: int(d[1:]))
         for name in governed[:3]:
-            title, _ = gists.get(name, ("(no such entry in docs/DECISIONS.md)", []))
+            title, _ = gists.get(name, ("(no such entry in docs/decisions/)", []))
             out.extend(cont(line) for line in wrap(f"{name}  {title}", LABEL + 2))
     out.append(field("Read first", "docs/GATES.md `What is open` · `make map`"))
     return out

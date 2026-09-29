@@ -46,7 +46,7 @@ the moment the button was pressed, and nothing in it is a window onto anything.
 `TCG Market Price` is the only column with sales behind it, and it is TCGplayer's own
 aggregate over recent sales rather than a sale — one number, no window. **There are no
 last-sold rows in this export, and TCGplayer publishes none anywhere**, so this is not a
-gap to be filled from another one of their files. `docs/DECISIONS.md`'s Someday list
+gap to be filled from another one of their files. `docs/decisions/`'s Someday list
 carries what is available instead.
 
 ## Variant lives in the Condition string
@@ -80,7 +80,7 @@ Built from pokemontcg.io data, matched against the `Number` column.
 
 Never emit two rows with the same `TCGplayer Id` in one import file — behavior is
 undefined. Aggregate by SKU, set `Add to Quantity` to the copy count, cap live quantity at
-4, hold the remainder as backstock. See `docs/DECISIONS.md` D7.
+4, hold the remainder as backstock. See `docs/decisions/` D7.
 
 ## Round trip
 

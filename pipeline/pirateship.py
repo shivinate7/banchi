@@ -99,7 +99,7 @@ ORDER_ID_COLUMN = "Order ID"
 # THE EXAMPLE IS SPELLED IN THIS REPO'S OWN LABEL VOCABULARY ON PURPOSE, and the shorter
 # form it replaces is worth naming as a class rather than as a string. Abbreviating the card
 # to a bare letter-plus-digits produces exactly the shape of a code-card decision id
-# (docs/CODES-DECISIONS.md), so `scripts/docs-audit.py`'s decision-id scan reads the shelf
+# (docs/specs/code-cards.md), so `scripts/docs-audit.py`'s decision-id scan reads the shelf
 # location as a citation of a heading that does not exist and asks about it on every run —
 # permanent noise in the one check whose whole value is that its questions are worth reading.
 # It is ambiguous to a person for the same reason, which is the half that would still matter

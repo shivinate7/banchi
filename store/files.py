@@ -50,7 +50,7 @@ LIVE_PREFIX = "live-tcgplayer-"
 
 LOCK_NAME = ".lock"
 
-# The code ledger (docs/CODES-DECISIONS.md C8): one line per code card, the transcribed
+# The code ledger (docs/specs/code-cards.md C8): one line per code card, the transcribed
 # code beside the position its photograph is keyed by, so a disputed code is looked up and
 # its photo re-read by eye. A LEDGER OF UNREDEEMED CODES IS A FILE OF BEARER INSTRUMENTS —
 # C8's own sentence — which is why it lives under `inventory/` beside the master store:

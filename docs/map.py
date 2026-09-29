@@ -2,7 +2,7 @@
 
 Written because that question kept costing a subagent sweep and a quarter-million tokens to
 re-derive from prose that already knew the answer. `docs/GATES.md` has the build order,
-`docs/DECISIONS.md` has the rulings, `README.md` has the layout — but all three are prose,
+`docs/decisions/` has the rulings, `README.md` has the layout — but all three are prose,
 and prose has to be read in full before it can be trusted.
 
 Read by four consumers, which is the reason it is data and not another markdown section:
@@ -58,7 +58,7 @@ that way: an audit must not run project code.
 #
 # `n` IS A STABLE ID AND IS NEVER REUSED OR RENUMBERED. Not for tidiness — 218 references to
 # `step <n>` live in this tree, across CLAUDE.md, README.md, .claude/settings.json, six
-# specs, docs/DECISIONS.md, harness code and Playwright specs, and 74 of them say `step 7`.
+# specs, docs/decisions/, harness code and Playwright specs, and 74 of them say `step 7`.
 # A renumber would leave every one of them pointing at a real step that is not the one meant,
 # which is D72's citation drift with nothing able to detect it — after a renumber the stale
 # number still resolves. So the ids here are out of order in `SHIPPED` (11 landed before 4)
@@ -69,7 +69,7 @@ that way: an audit must not run project code.
 # premise in docs/GATES.md pointed at the gating system retired on 2026-08-23, and it then
 # spent a week `blocked` on step 9 — a dependency invented on its behalf to keep it from
 # claiming a blocker that no longer existed. The deferred list it named lives in
-# docs/DECISIONS.md and is that file's to open or close.
+# docs/decisions/ and is that file's to open or close.
 #
 # `make docs-audit`'s `build order mirror` row checks the ids in both lists against the two
 # lists in docs/GATES.md, in both directions. A step landing in one file and not the other
@@ -91,12 +91,12 @@ SHIPPED = [
     {"n": 5, "on": "2026-08-11", "title": "Capture server: POST /capture, sidecars, /status, photo service, inventory state",
      "note": "code done 2026-08-11, spec at docs/specs/capture-server.md. Shipped with no harness "
               "coverage; T7 closed that 2026-08-13 \u2014 every route, every named refusal, and the sidecar "
-              "seam. What it still does not reach is in docs/DEBTS.md."},
+              "seam. What it still does not reach is in docs/debts/."},
     {"n": 6, "on": "2026-08-12", "title": "Design tokens locked, one component built against them",
      "note": "tokens locked 2026-08-12 by interview; the pull-confirm built against them 2026-08-12 at "
               "app/src/PullConfirm.tsx, rendered by `make screenshot` and asserted by `make "
-              "design-check`. Building it caught two places where docs/design-refs/locked.html "
-              "disagrees with docs/DESIGN.md \u2014 see that directory's README."},
+              "design-check`. Building it caught two places where the static palette sheet "
+              "disagreed with docs/DESIGN.md \u2014 both are recorded in docs/DESIGN.md."},
     {"n": 7, "on": "2026-08-13", "title": "Vite capture app: device picker, capture, inventory, review queue, Fulfillment view",
      "note": "BOTH HALVES BUILT 2026-08-13 on branch step-7-capture-app. 7a is "
               "docs/specs/capture-app.md's scope \u2014 the shell and its three routes, the capture screen, "
@@ -197,7 +197,7 @@ SHIPPED = [
               "app/tests/run-panel.spec.ts is the check the hard rule says does not exist. "
               "AMENDED 2026-09-26, ON THE OWNER'S WORD: src/BoxRuns.tsx IS DELETED. #/inventory "
               "mentions no run at all now; a card is identified from Review's own identify strip "
-              "instead. docs/reviews/ux-2026-09-23/RULINGS.md records the ruling."},
+              "instead. the ux-2026-09-23 review records the ruling."},
     {"n": 16, "on": "2026-08-30", "title": "Hand pricing: the price a listing goes out at, set by a person",
      "note": "D49, D54, D59, D62, D78. #/pricing is a worklist of one row per SKU with the deliberate "
               "holds D49 rules on, the price history D62 puts beside the hold, D59's per-SKU live cap, "
@@ -326,29 +326,13 @@ OPEN = [
 # deleted on 2026-08-31 (D80) when the list became SHIPPED and OPEN. It survives here
 # because a gate genuinely was a sequence — A then B then C — and all three passed.
 
-GATES = [
-    {"gate": "A", "status": "passed", "on": "2026-07-26",
-     "what": "TCGplayer seam: Level 4, SV09 fixture, 2-row Import to Staged end to end"},
-    {"gate": "B", "status": "passed", "on": "2026-08-22",
-     "what": "53 real cards end to end — capture through staged listings and the pull preview, "
-             "finish detection measured against the whole lot instead of ten staged photos"},
-    {"gate": "C", "status": "passed", "on": "2026-08-22",
-     "what": "feeder integration: motion state machine, 50-card run, then a full box",
-     "why_it_matters": "the feeder already ran Gate B at manual-trigger pace, so this gate "
-                       "tunes a trigger against a rhythm the run has now demonstrated."},
-]
+GATES = []
 
-# THE LIST ABOVE IS A RECORD AND NOT A SCHEDULE, as of 2026-08-23. All three gates have
-# passed, CLAUDE.md no longer names a current gate, and docs/GATES.md is what was measured
-# rather than what is owed. THERE IS NO GATE D, and its absence is the decision rather than
-# an omission — do not add one because this list looks unfinished without an open row.
-#
-# THE LIST IS KEPT, AND KEPT AUDITED, WHICH IS THE POINT. `check_map` still reconciles every
-# row here against the `### Gate X` headings in docs/GATES.md and against their PASSED
-# markers, so the history cannot quietly drift: a gate that never happened cannot appear
-# here, and one that did cannot be edited into having gone differently. Deleting the list
-# would retire the check along with the schedule, and only one of those two had stopped
-# earning its place.
+# THE LIST IS EMPTY ON PURPOSE. Gates A, B and C all passed (2026-07-26, 2026-08-22, 2026-08-22),
+# and their run records were deleted; history lives in version control. The check that
+# reconciled each row against the run records is retired with them. THERE IS NO GATE D, and its
+# absence is the decision rather than an omission. Keep the name: `scripts/status.py` requires it.
+
 
 # ---------------------------------------------------------------------------- components
 #
@@ -1785,7 +1769,7 @@ COMPONENTS = [
                 "through a route, which is what earned queues.py its tested_by. cache.py is "
                 "still only read through a session there, with nothing asserting its own "
                 "behavior, so it carries no tested_by: an unenforced claim is the defect "
-                "docs/DEBTS.md names, not a rounding error.",
+                "docs/debts/ names, not a rounding error.",
         "modules": {
             "numbers.py": {"does": "a card's number, composed (`join_key`), screen-drawn "
                                    "(`display_number`) and stripped of a glued set code "
@@ -2233,7 +2217,7 @@ COMPONENTS = [
         # that does not start with a dot, so no value here can reach it. It is listed
         # below, so its *disappearance* is caught — but a second extensionless hook
         # (`pre-push`, `commit-msg`) would land unnamed and nothing would fail. Left to
-        # docs/DEBTS.md rather than worked around: the limit is in scripts/docs-audit.py,
+        # docs/debts/ rather than worked around: the limit is in scripts/docs-audit.py,
         # and inventing a second key in this file to route around it would put the
         # workaround inside the thing the rule audits.
         #
@@ -2244,7 +2228,7 @@ COMPONENTS = [
         # missing entry that day was `githooks-selftest.sh`, one directory up and carrying a
         # declared suffix, which failed the commit until it was described. The two outcomes
         # from one change are the clearest statement of this hole available, so they are
-        # recorded here rather than only in docs/DEBTS.md.
+        # recorded here rather than only in docs/debts/.
         "source_suffixes": [".py", ".sh", ".txt", ".mjs"],
         "note": "THIS ENTRY HAD NO MODULE LIST UNTIL 2026-08-13, so the orphan rule never "
                 "scanned this directory — the rule is guarded on `modules`, and an entry "
@@ -3987,7 +3971,7 @@ COMPONENTS = [
                         "would refuse the one case this exists to answer, where this branch's "
                         "own number collides with an UNRELATED entry `ref` independently "
                         "claimed. Reproducing that incident also found `stale_claims` reading "
-                        "the flat `docs/DECISIONS.md` stub instead of the corpus directory for "
+                        "the flat `docs/decisions/` stub instead of the corpus directory for "
                         "the decision namespace — silently blind to every decision collision "
                         "since D160 split the corpus — fixed alongside it.",
                 # D72 IS THE FAILURE THIS REPLACES and D16 the rule its audit rows answer to.
@@ -4258,7 +4242,7 @@ COMPONENTS = [
                         "`docs/decisions/` holds one markdown file per entry and was one "
                         "1.4 MB file until the split; `text()` reassembles it in "
                         "`ORDER.json`'s order and hands every checker the same bytes it used "
-                        "to get from `docs/DECISIONS.md`, so ten audit rows assert exactly "
+                        "to get from `docs/decisions/`, so ten audit rows assert exactly "
                         "what they asserted before. `path_for(id)` answers \"which file "
                         "holds this entry\" by reading the HEADING rather than the filename, "
                         "because a slug is lossy and the claimer renames files. Reads and "
@@ -4282,7 +4266,7 @@ COMPONENTS = [
                                 "D160"],
             },
             "split-decisions.py": {
-                "does": "Performed the split of docs/DECISIONS.md into docs/decisions/, and "
+                "does": "Performed the split of docs/decisions/ into docs/decisions/, and "
                         "proves it lost nothing. Cuts the file at every `## ` line so every "
                         "line lands in exactly ONE chunk and reassembly is concatenation — "
                         "losslessness true by construction, with no separator convention to "
@@ -4307,11 +4291,11 @@ COMPONENTS = [
             },
             "debts_corpus.py": {
                 "does": "The debts corpus, read as one text or as one entry — the same "
-                        "seam decisions_corpus.py builds for docs/DECISIONS.md, applied to "
-                        "docs/DEBTS.md. `docs/debts/` holds one markdown file per finding "
+                        "seam decisions_corpus.py builds for docs/decisions/, applied to "
+                        "docs/debts/. `docs/debts/` holds one markdown file per finding "
                         "and was one 174 KB file until the split; `text()` reassembles it in "
                         "`ORDER.json`'s order and hands every checker the same bytes it used "
-                        "to get from `docs/DEBTS.md`. `path_for(n)` accepts the bare number "
+                        "to get from `docs/debts/`. `path_for(n)` accepts the bare number "
                         "or the `DEBT<n>` id form. A debt now joins D140's claim-at-merge "
                         "scheme too, reusing the decision machinery: a branch writes "
                         "`## DEBT-<slug>` in its own file and `scripts/claim-ids.py` "
@@ -4334,9 +4318,9 @@ COMPONENTS = [
                 "governed_by": ["D54", "D149", "D185", "D245", "D277"],
             },
             "split-debts.py": {
-                "does": "Performed the split of docs/DEBTS.md into docs/debts/, and proves "
+                "does": "Performed the split of docs/debts/ into docs/debts/, and proves "
                         "it lost nothing — split-decisions.py's chunk model applied to "
-                        "docs/DEBTS.md's plain-numbered `## <n> — <title>` headings instead "
+                        "docs/debts/'s plain-numbered `## <n> — <title>` headings instead "
                         "of `## D<id>`. `--verify REF` diffs a reassembly against the "
                         "pre-split bytes; `--verify-split REF` re-establishes that later "
                         "from git; `--selftest` is the ongoing claim, run as "
@@ -4348,8 +4332,8 @@ COMPONENTS = [
             "gates_corpus.py": {
                 "does": "The gates corpus, read as one text — decisions_corpus.py's twin. "
                         "`docs/gates/` holds one markdown file per record in three kind "
-                        "folders (contract/ for the harness's Tn thresholds, gate-runs/ for the "
-                        "Gate A/B/C run records and their addenda, steps/ for the build "
+                        "folders (contract/ for the harness's Tn thresholds, "
+                        "steps/ for the build "
                         "order's SHIPPED and OPEN lists); `text()` reassembles it in "
                         "ORDER.json's order and hands every checker the same bytes it used "
                         "to get from docs/GATES.md, so gates_sections(), check_id_claims() "
@@ -4796,7 +4780,7 @@ COMPONENTS = [
                         "PATH \u2014 scripts/githooks/pre-commit runs it, self-test first \u2014 "
                         "because it writes nothing and needs no venv, which is the whole of "
                         "what D18 asks. Text-matched and therefore NARROW: a renamed local "
-                        "walks past it, recorded in docs/DEBTS.md rather than left to be "
+                        "walks past it, recorded in docs/debts/ rather than left to be "
                         "discovered. It found three unexamined key renders on its first run "
                         "and a CSS class that had called one a slot since it was written.",
                 # D58 and D68 are the two halves of the rule it enforces \u2014 which number is
@@ -5362,7 +5346,7 @@ COMPONENTS = [
                 # D49, orders and shipping by D69) and the count beside them was not, the same
                 # drift the app/ entry below carries a paragraph about. It later went stale
                 # again when D24's owner ruled that `#/inventory` keeps the pooled
-                # photographs on its `Pooled` shelf and loses its render (docs/DEBTS.md
+                # photographs on its `Pooled` shelf and loses its render (docs/debts/
                 # section 14). The `route census` row that once caught drift like this is
                 # CUT (test-audit plan Q2, 2026-09-28) — recount from `scripts/views.txt`
                 # and `app/src/App.tsx` instead of trusting a number in this comment. D13 is
@@ -5418,7 +5402,7 @@ COMPONENTS = [
                 "refusal, and the sidecar seam read back through identify.sidecar.scan. "
                 "7b's three routes arrived with their own T7 cases in the same session, "
                 "which is the one thing about 7b that did NOT get built ahead of its "
-                "evidence. What T7 still does not cover is in docs/DEBTS.md. Writes only "
+                "evidence. What T7 still does not cover is in docs/debts/. Writes only "
                 "through the store session, never straight to disk. The capture root is "
                 "captures/cards/ and not captures/, so screenshot renders under "
                 "captures/ui/ are never scanned as paid captures.",
@@ -5904,14 +5888,14 @@ COMPONENTS = [
         # package-lock.json, and a manifest is not a module anyone writes a `does` for.
         "source_suffixes": [".ts", ".tsx", ".css", ".js", ".html"],
         "note": "THE ORPHAN RULE WAS INERT OVER THIS DIRECTORY UNTIL 2026-08-13, AND IT COST "
-                "EXACTLY WHAT docs/DEBTS.md SAID IT WOULD. It filtered on one repo-wide `.py` "
+                "EXACTLY WHAT docs/debts/ SAID IT WOULD. It filtered on one repo-wide `.py` "
                 "suffix, one level deep, so step 7a's thirteen new files landed beside the "
                 "described modules and this list named none of them — a green row over an "
                 "entry nothing had checked. The rule reaches here now because the entry "
                 "declares `source_suffixes` above and scripts/docs-audit.py reads it, which is "
                 "the half of that fix that lives in this file. It did its job on the same day: "
                 "7b's seven files could not land here unnamed. "
-                "Nothing here imports docs/design-refs/: those are drawings of the spec, and "
+                "Nothing here imports the static palette sheets: they were drawings of the spec, and "
                 "this is built from docs/DESIGN.md itself. "
                 "NO ENTRY BELOW CARRIES tested_by, and that is a measurement rather than an "
                 "oversight: no harness test imports anything in this directory. Neither "
@@ -7539,7 +7523,7 @@ COMPONENTS = [
                                  "governed_by": ["D94", "D117", "D118", "D252"]},
             "src/RailFrame.tsx": {"does": "the rail's own sticky frame, lifted out of "
                                           "`BoxBrowse.tsx` (lane A2b, "
-                                          "`docs/reviews/ux-2026-09-23/orders-a/PLAN.md`'s "
+                                          "the orders-a plan's "
                                           "component reuse map: \"Inventory passes its box list "
                                           "and walk. Orders passes its buyer list.\"). MOVED "
                                           "WHOLE: the `<div className=\"browse-map\">` wrapper "
@@ -8693,7 +8677,7 @@ COMPONENTS = [
                                  "governed_by": ["D5", "D13"]},
             # ---- what checks the above ----
             "eslint.config.js": {
-                "does": "the two v1-bug rules docs/DECISIONS.md's table has named as guards since "
+                "does": "the two v1-bug rules docs/decisions/'s table has named as guards since "
                         "it was written and never had: no facingMode (bug 3), no split(\",\") CSV "
                         "parsing (bug 2). No shared preset, no --fix — D18 keeps anything that "
                         "writes off the path `make check` runs.",
@@ -8914,8 +8898,8 @@ COMPONENTS = [
                 "governed_by": ["D118", "D155", "D260"],
             },
             "tests/empty-section.spec.ts": {
-                "does": "F9 (the owner's report, 2026-09-27, `docs/reviews/ux-2026-09-23/"
-                        "PLAN-PR4-PR5.md`): a section with no card on hand does not draw in the "
+                "does": "F9 (the owner's report, 2026-09-27, the ux-2026-09-23 review, "
+                        "PR4 and PR5 plan): a section with no card on hand does not draw in the "
                         "walk's own strip OR in `BoxOps.tsx:BoxIdentity`'s own box-header track "
                         "(the review round, 2026-09-27 — that header is the walk's own "
                         "always-visible box top, never \"Manage box\"), and the caption's "
@@ -9940,10 +9924,10 @@ COMPONENTS = [
 # It has a reader and a check now — see the docstring at the top of this file.
 
 TRACKS = [
-    {"name": "singles", "owns": "", "decisions": "docs/DECISIONS.md", "rules": "CLAUDE.md",
+    {"name": "singles", "owns": "", "decisions": "docs/decisions/", "rules": "CLAUDE.md",
      "status": "current",
      "note": "the default track: every path this map covers except the codes ones below."},
-    {"name": "codes", "owns": "codes/", "decisions": "docs/CODES-DECISIONS.md",
+    {"name": "codes", "owns": "codes/", "decisions": "docs/specs/code-cards.md",
      "rules": "code-card-fork/CLAUDE.md", "status": "shakedown",
      "note": "C1-C11. The decode path, the ledger and the product claim are BUILT, and D70 "
              "gave the track a screen of its own at #/codes on 2026-08-30 — so 'shakedown' "

@@ -21,7 +21,7 @@ import type { Page } from '@playwright/test'
  * type it now reads off the Vite server the page came from. `app/tests/shell.ts:sealOutside`
  * is what stops that coming back.
  *
- * THIS IS NOT THE WHOLE OF THE DESIGN-CHECK FLAKE AND MUST NOT BE READ AS IT. `docs/DEBTS.md`
+ * THIS IS NOT THE WHOLE OF THE DESIGN-CHECK FLAKE AND MUST NOT BE READ AS IT. `docs/debts/`
  * carries the full reading. The recorded red was a `toBeVisible()` timeout in a test's own
  * `open()` — the app had not rendered at all — and that is answered by `expect.timeout` in
  * `app/playwright.config.ts`, not by anything here. What the swap explains is the second,

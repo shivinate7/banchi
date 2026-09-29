@@ -60,7 +60,7 @@ export default defineConfig({
   // WHAT IT IS NOT IS A CURE FOR A STARVED RIG. At 40 workers against 12 hogs a context can
   // fail to render at all rather than slowly: with the allowance raised to 120s, 10 of 80
   // still failed and one took 122s. A wait cannot answer that, and that load is 4x
-  // oversubscription — `make design-check` runs 7 workers. See docs/DEBTS.md.
+  // oversubscription — `make design-check` runs 7 workers. See docs/debts/.
   expect: { timeout: 15_000 },
   use: {
     baseURL: DEV_URL,
