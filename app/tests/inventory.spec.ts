@@ -3703,7 +3703,10 @@ test('a name that names no photograph draws no photo address at all', async ({ p
 
   await page.locator('.browse-row', { hasText: 'Thievul' }).first().click()
   await expect(page.locator('.browse-photo')).toHaveCount(0)
-  await expect(page.locator('.browse-absent')).toContainText('never photographed')
+  /* A tombstone is a card that MOVED, with its photograph, so it may not read as never
+     photographed. The fixture's tombstone carries no `moved_to`, hence the fallback words. */
+  await expect(page.locator('.browse-absent')).toContainText('This card moved to another box')
+  await expect(page.locator('.browse-absent')).not.toContainText('never photographed')
 
   await page.locator('.browse-row', { hasText: 'Nickit' }).first().click()
   await expect(page.locator('.browse-photo')).toHaveCount(0)

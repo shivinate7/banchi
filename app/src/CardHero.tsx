@@ -430,13 +430,15 @@ export type PhotoPanelProps = {
   nonce: string | null
   onZoom: () => void
   reshoot: ReactNode
+  /** The box registry, so a moved card can say which box it went to by name. */
+  boxes?: readonly BoxRecord[]
 }
 
 /** Three ways a photo can be missing — never stored, reclaimed on purpose after the sale
  *  (D89), or claimed and not on disk — each a card-shaped placeholder. `reshoot` is optional
  *  by the caller's own choice: `#/orders` passes `null`, since re-shooting a card mid-walk is
  *  an Inventory-only correction. */
-export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoot }: PhotoPanelProps) {
+export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoot, boxes = [] }: PhotoPanelProps) {
   /* D218: `label` is the server's `Position.label`, and this panel only ever speaks it —
      the paragraph below and the photo's own `alt` are plain text and an accessible name,
      where there is no CSS to draw the ` · ' with, so `sayPlace` reads it as a sentence
@@ -477,6 +479,19 @@ export function PhotoPanel({ row, label, absent, onAbsent, nonce, onZoom, reshoo
 
   /* The card's own name says it never had a photograph, so there is no file to ask for and
      nothing to call missing. */
+  if (src === null && row.card.cid?.startsWith('moved:')) {
+    /* A `moved:` name is the tombstone a move left: the card lives on at another place, with
+       its photograph, so this is not a card that was never photographed. */
+    const boxN = Number(row.card.moved_to?.split('/')[0])
+    const name = Number.isFinite(boxN) ? boxes.find((b) => b.box === boxN)?.name : undefined
+    return (
+      <div className="bn-photo browse-absent">
+        <Icon name="arrowRight" size={28} />
+        <p>This card moved to {typeof name === 'string' && name.trim() !== '' ? name : 'another box'}.</p>
+      </div>
+    )
+  }
+
   if (src === null) {
     return (
       <div className="bn-photo browse-absent">

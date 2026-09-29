@@ -2719,6 +2719,7 @@ export function BoxBrowse({
                     }
                     photo={{
                       label: selectedLabel,
+                      boxes: boxRecords,
                       absent: photoAbsent === panelRow.key,
                       onAbsent: () => setPhotoAbsent(panelRow.key),
                       nonce: reshot[panelRow.key] ?? null,

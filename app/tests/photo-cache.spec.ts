@@ -38,17 +38,18 @@ async function photosOn(page: Page, hash: string): Promise<string[]> {
 
 /* A CARD WITH NO PHOTOGRAPH GETS NO PHOTO ADDRESS AT ALL (D172). Its name is `nophoto:…`, which
  * no route serves, and building `/photo/<box>/<index>` from its slot 404s. Home is seeded on
- * purpose with a store whose every recent card is one, so the old code's slot fallback is the
- * only thing that could draw a photograph. `/boxes` waits for the card read, so the slot
- * placeholder (which is only for the moment before the cards answer) is never drawn. */
-test('Home asks for no photograph of a card that has none', async ({ page }) => {
+ * purpose with a store whose every recent card is one. The card read is HELD while `/boxes`
+ * answers and the screen renders, because that is the window in which a slot placeholder used
+ * to ask for `/photo/<box>/<index>` before anything knew what sat there. */
+test('Home asks for no photograph before the card read answers, or of a card that has none', async ({ page }) => {
   const asked: string[] = []
   page.on('request', (r) => {
     if (/\/photo\//.test(r.url())) asked.push(r.url())
   })
-  let answered!: () => void
-  const recentAnswered = new Promise<void>((resolve) => (answered = resolve))
+  let release!: () => void
+  const held = new Promise<void>((resolve) => (release = resolve))
   await page.route(/\/inventory\/recent(\?|$)/, async (route) => {
+    await held
     const cards = Object.fromEntries(
       [1, 2, 3].map((index) => [
         `2/${index}`,
@@ -59,17 +60,17 @@ test('Home asks for no photograph of a card that has none', async ({ page }) => 
       ]),
     )
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ cards }) })
-    answered()
-  })
-  await page.route(/\/boxes$/, async (route) => {
-    await recentAnswered
-    await page.waitForTimeout(300)
-    await route.fallback()
   })
   const boxesRead = page.waitForResponse(/\/boxes$/)
   await page.goto('/')
   await boxesRead
-  await page.waitForTimeout(500) // a wait for the render after both reads, not an assertion
+  await page.waitForTimeout(500) // a wait for the render after `/boxes`, not an assertion
+  await expect(page.locator('.home-deck')).toBeVisible()
+  expect(asked, 'no /photo/ request while the card read is out').toEqual([])
+  const answered = page.waitForResponse(/\/inventory\/recent/)
+  release()
+  await answered
+  await page.waitForTimeout(500) // a wait for the render after the card read
   await expect(page.locator('.home-deck[data-empty="true"]')).toBeVisible()
   expect(await page.evaluate(() => [...document.images].filter((i) => i.src.includes('/photo/')).length)).toBe(0)
   expect(asked, 'no /photo/ request at all').toEqual([])
