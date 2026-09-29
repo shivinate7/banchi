@@ -1204,3 +1204,34 @@ Every caller of the drawn order was checked against this change:
 
 This is lane A1 of the lane plan. `docs/reviews/ux-2026-09-23/orders-a/PLAN.md` names the
 rest of the lanes and their checks.
+
+## 17. How each screen ranks a search — one shared record, 2026-09-29
+
+The owner's word, 2026-09-29 (A1): Inventory and the Orders walk both lead with section
+density, and they now break a tie the same way. D132 (Inventory) and D304 (the walk) each
+point here.
+
+**Inventory's box rail under a search** (`app/src/BoxBrowse.tsx`'s `order`):
+
+1. Main key: the most LIVE copies of the answer in the box's best section. A box is ranked by
+   its fullest section, never by its total. Only the best rank tier that still has a live copy
+   counts (F8).
+2. Tie: the box's natural name (`boxTitle`, digit runs compared as numbers, so "Box 2"
+   before "Box 10").
+3. Then the box's own `bid`, newest first, then the box number.
+
+**The Orders walk** (`pipeline/walkplan.py`'s `_drawn_key`):
+
+1. Main key: `Stop.copies`, the density of the section. Pooled stops last.
+2. Tie: the box name from `box_title`, in natural order (`_natural_key`).
+3. Then the section number.
+
+**With no search**, Inventory ranks by this device's box recency, then `bid`, then the box
+number (D132). The walk has no no-search order.
+
+**The order is frozen once taken** (D181, D118, `app/src/frozenRank.ts`). A copy that left
+since the order was taken still counts for its section, so a sale never re-ranks a list under
+the hand that made it. The walk's ranking is frozen for the pass the same way (§8). One
+difference stays. Inventory's natural sort is the platform's `Intl.Collator` with `numeric`.
+The walk's is `_natural_key`. Python and TypeScript cannot share one function, so the two
+agree on digit runs and case, and may differ on punctuation and accents.
