@@ -1,11 +1,7 @@
 # Banchi
 
-Photograph a box of trading cards. Banchi lists it on TCGplayer, prices it, and tells you which
-drawer to open when it sells.
-
-Banchi is the working tool of one TCGplayer seller (Pokemon, One Piece, Riftbound). No card
-needs more than a photo from a person. Banchi (番地) means lot number: every card has an
-address, box, section and position.
+Photograph a box of trading cards (Pokemon, One Piece, Riftbound). Banchi (番地, "lot number")
+lists them on TCGplayer, prices them, and tells you which drawer to open when one sells.
 
 [Live demo](https://shivinate7.github.io/banchi/): the real app on recorded answers from a
 scrubbed copy of a store. It reaches no real store, and CI checks the published build for
