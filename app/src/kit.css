@@ -1660,6 +1660,6 @@ img.bn-crop[data-cropped='true'] {
   .bn-head-actions > .bn-btn-icon { order: 1; margin-left: auto; }
 }
 
-/* An empty or lone state fills the frame up to `--bn-empty-w`, centred (D309).
+/* An empty or lone state fills the frame up to `--bn-empty-w`, centred (D-empty-state-fills-the-frame).
    A screen adds this class and keeps no cap of its own; body copy keeps its `ch` measure. */
 .bn-empty-frame { width: 100%; max-width: var(--bn-empty-w); margin-inline: auto; }

@@ -154,7 +154,7 @@ PAGE WIDTH                      --bn-page-w 1600 · -rows 1344
                                 A `Page` reads --bn-page-w alone; -rows is for the screens
                                 not yet on `Page` (D272)
 EMPTY OR LONE STATE             --bn-empty-w 960. `.bn-empty-frame` fills the frame to it, centred
-                                (D309). A screen keeps no cap of its own.
+                                (D-empty-state-fills-the-frame). A screen keeps no cap of its own.
 
 TYPE ROLES                      aliases onto the scale, never new sizes (UX-067, UX-115)
 --bn-fs-h1                      = --bn-fs-3xl (28)  the page title, `.bn-title`

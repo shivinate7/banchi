@@ -1,10 +1,10 @@
 // Protects: The empty states of Shipping, Orders and Review fill the frame to one cap, centered, and Shipping's loaded lanes leave no band.
-// Governs: D197, D309
+// Governs: D197, D-empty-state-fills-the-frame
 import { expect, test, type Page } from '@playwright/test'
 import { sealEveryTest, settleAnimations } from './shell'
 import { batchOf, shippingRow as row } from './routeFixtures'
 
-/* AN EMPTY STATE FILLS THE FRAME TO ONE CAP, CENTRED (D309).
+/* AN EMPTY STATE FILLS THE FRAME TO ONE CAP, CENTRED (D-empty-state-fills-the-frame).
  * `.shipping-empty` was capped at 880px and `.orders-empty`, `.review-lone` at 720px inside a frame
  * up to 1600px: a band of 500px at 1440, 700px at 2000. WHAT THIS MEASURES: each state's block is
  * as wide as the smaller of the frame and `--bn-empty-w`, and is centered in the frame. Shipping's

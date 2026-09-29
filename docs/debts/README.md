@@ -93,5 +93,4 @@ DEBT71 the value of the set hint is asserted, not measured
 DEBT72 PKMNVAULT, Supabase and eBay are unbuilt
 DEBT73 the Mac dock icon has no drop shadow, and none was tried
 DEBT74 the mark's four HELD base parameters were never compared
-DEBT75 the first ask for a cold catalog group answers nothing
 ```

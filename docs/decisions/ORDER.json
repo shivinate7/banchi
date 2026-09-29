@@ -249,7 +249,6 @@
     "D305-the-reaper-stops-only-its-own.md",
     "D306-worktreeinclude-carries-local-env-files.md",
     "D307-owner-rulings-claude-md-points-to.md",
-    "D308-no-dates-in-repo-prose.md",
-    "D309-empty-state-fills-the-frame.md"
+    "D308-no-dates-in-repo-prose.md"
   ]
 }
