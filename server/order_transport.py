@@ -373,11 +373,10 @@ def search_body(
         )
     key = str(seller_key or "").strip()
     if not key:
+        print(f"orders: set {SELLER_KEY_ENV} in the settings file", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "order_seller_key_missing",
-            "The seller key is missing from the Mac's settings file. Without it the order service refuses "
-            "every request, and that looks like an expired session but is not one. Add the first part of any "
-            "order number on the Orders page, in lowercase, then try again. Nothing was fetched.",
+            "The seller key is missing from the Mac's settings file (the .env file in the app's folder). Without it the order service refuses every request, and that looks like an expired session but is not one. Add the first part of any order number shown on the Orders page, before its first dash, in lowercase. Nothing was fetched.",
         )
     return {
         "searchRange": canonical,
@@ -591,15 +590,16 @@ def _cookie() -> str:
     """
     value = envfile.get_live(COOKIE_ENV)
     if not value:
+        print(f"orders: set {COOKIE_ENV} in the settings file", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "order_cookie_missing",
-            "TCGplayer is not signed in on this Mac. Sign in at tcgplayer.com in your browser, copy the "
-            "session cookie into the Mac's settings file, then try again. Keep it private.",
+            "TCGplayer is not signed in on this Mac. Sign in at tcgplayer.com in your browser, open the Orders page, and copy the Cookie header of any request in the browser's network tab. Paste it into the Mac's settings file (the .env file in the app's folder), keeping it private, then try again.",
         )
     if "=" not in value:
+        print(f"orders: {COOKIE_ENV} holds no name=value pair", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "order_cookie_malformed",
-            "The saved TCGplayer session is not a valid cookie. Copy the whole cookie value, not just part of it.",
+            "The saved TCGplayer session in the Mac's settings file (the .env file in the app's folder) is not a valid cookie. Copy the whole Cookie header value from your browser, not just part of it.",
         )
     return value
 
@@ -682,27 +682,30 @@ def _check_status(status: int, headers: dict, body: bytes) -> None:
     if status in (301, 302, 303, 307, 308):
         location = str(headers.get("Location") or "")
         if _LOGON_MARKER in location.lower():
+            print(f"orders: {COOKIE_ENV} has expired", file=sys.stderr, flush=True)
             raise FetchRefusal(
                 "order_session_expired",
                 "TCGplayer sent the request to its sign-in page, so the saved session has expired. Sign in again, "
-                "copy the fresh session into the Mac's settings file, then try again. Nothing was read.",
+                "copy the fresh Cookie header into the Mac's settings file (the .env file in the app's folder), then try again. Nothing was read.",
             )
         raise FetchRefusal(
             "order_unexpected_response",
             f"The order service sent a redirect, which this app does not follow. Nothing was read.{note}",
         )
     if status == 401:
+        print(f"orders: {COOKIE_ENV} was refused", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "order_session_expired",
-            "TCGplayer refused the saved session. Sign in again and replace the saved session in the Mac's "
-            f"settings file. The price export will have stopped working too. Nothing was read.{note}",
+            "TCGplayer refused the saved session as not authorised. Sign in again and replace the saved session in "
+            "the Mac's settings file (the .env file in the app's folder). The price export will have stopped working too. Nothing was read." + note,
         )
     if status == 403:
+        print(f"orders: check {SELLER_KEY_ENV} in the settings file", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "order_seller_key_rejected",
-            "The order service refused the request. This is usually a missing or wrong seller key, not the "
-            "session. Check the seller key in the Mac's settings file. Only if that is right has the account lost "
-            f"its seller permissions. Nothing was read.{note}",
+            "The order service refused the request as forbidden. This is usually a missing or wrong seller key, not the "
+            "session. Check the seller key in the Mac's settings file (the .env file in the app's folder). Only if that is right has the account lost "
+            "its seller permissions. Nothing was read." + note,
         )
     if status == 404:
         raise FetchRefusal(
@@ -755,10 +758,10 @@ def _parse(body: bytes, headers: dict) -> Any:
         # A LOGIN PAGE SERVED AS A 200 IS THE THIRD WAY A SESSION FAILS, and on the admin host
         # it is the one that got parsed as data. The header is checked as well as the body
         # because either alone is defeatable.
+        print(f"orders: {COOKIE_ENV} looks expired", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "order_session_expired",
-            "The order service sent a web page instead of orders, which usually means the saved session has "
-            "expired. Sign in again and replace it. Nothing was read.",
+            "The order service sent a web page instead of orders, which usually means the saved session has expired. Sign in again and replace it in the Mac's settings file (the .env file in the app's folder). Nothing was read.",
         )
     try:
         return json.loads(body.decode("utf-8", "replace"))

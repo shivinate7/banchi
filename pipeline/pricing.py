@@ -342,7 +342,7 @@ def flat_price(price, allow_below_floor: bool = False, floor: Decimal = FLOOR) -
     if price < floor and not allow_below_floor:
         raise BelowFloor(
             f"${price} is under the ${floor} floor, where a sale loses money once labor is counted. "
-            "Confirm it to go below the floor."
+            "Go below the floor only by allowing it explicitly."
         )
     return Disposition(kind=FLAT_PRICE, price=price)
 

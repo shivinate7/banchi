@@ -675,10 +675,11 @@ def _run_sync(argv: Sequence[str], timeout: int) -> Tuple[int, str]:
             "That step did not finish in time. Nothing is written half way, so run it again.",
         ) from None
     except FileNotFoundError:
+        files.log_note(f"pkmnscan_missing: {PKMNSCAN} is not executable from {REPO_ROOT}")
         raise PipelineRefusal(
             HTTPStatus.INTERNAL_SERVER_ERROR,
             "pkmnscan_missing",
-            f"{PKMNSCAN} is not executable from {REPO_ROOT}.",
+            "Banchi's command tool could not be found on the Mac, so this step could not run. Set the app up again on the Mac.",
         ) from None
     return finished.returncode, finished.stdout.decode("utf-8", "replace")
 
@@ -1534,10 +1535,11 @@ def do_pipeline_crop_preview(payload: dict) -> dict:
         # exactly this reason: `server/capture_server.py` has never needed Pillow, and a
         # top-level import would turn a missing dependency into a server that will not boot
         # over a preview nobody had asked for yet.
+        files.log_cause('crop preview', exc)
         raise PipelineRefusal(
             HTTPStatus.SERVICE_UNAVAILABLE,
             "imaging_unavailable",
-            "The crop preview needs image tools that this copy of the app was set up without. Set the app up again on the Mac.",
+            f"The crop preview needs the {getattr(exc, 'name', None) or 'image'} library, which is not installed for this copy of the app. Set the app up again on the Mac.",
         ) from exc
 
     captures = [c for c in _selection_captures(selection) if c.has_position]
@@ -1716,11 +1718,12 @@ def _spawn(send: Send, captures) -> dict:
                 # Batch job killed halfway is paid for and not collected.
                 start_new_session=True,
             )
-    except OSError:
+    except OSError as exc:
+        files.log_cause('identify spawn', exc)
         raise PipelineRefusal(
             HTTPStatus.INTERNAL_SERVER_ERROR,
             "spawn_failed",
-            f"Could not start the identify run for {send.selection.sentence()}. Try again, and if it repeats, restart the app on the Mac.",
+            f"Could not start the identify run for {send.selection.sentence()} because {files.plain_cause(exc)}. Try again, and if it repeats, restart the app on the Mac.",
         ) from None
     # THE HANDLE FIRST, THE MARKER SECOND. `_live_pid` reads the handle for a run this server
     # owns, so a poll landing between the two still reads the run as live; the reverse order
@@ -2205,11 +2208,12 @@ def do_pipeline_pricing(name: str) -> dict:
 
     try:
         pricing = json.loads(table.read_text("utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError) as exc:
+        files.log_cause('prices file', exc)
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "pricing_unreadable",
-            "The prices file for this run could not be read. Match the run again to rewrite it.",
+            f"The prices file for this run could not be read because {files.plain_cause(exc)}. Match the run again to rewrite it.",
         ) from None
     # THE LABELS, RE-RENDERED BEFORE ANYTHING LEAVES (D58). In place on the document just
     # parsed, which nothing else holds — the file on disk is untouched, exactly as D58 left
@@ -3719,11 +3723,12 @@ def do_pipeline_holdings_value(range_: str) -> dict:
         )
     try:
         snapshot = Store().read()
-    except (files.StoreError, OSError, ValueError, TypeError):
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        files.log_cause('store read', exc)
         raise PipelineRefusal(
             HTTPStatus.SERVICE_UNAVAILABLE,
             "store_unreadable",
-            "The store could not be read, so nothing can be valued. Try again, and if it repeats, restart the app on the Mac.",
+            f"The store could not be read because {files.plain_cause(exc)}, so nothing can be valued. Try again, and if it repeats, restart the app on the Mac.",
         ) from None
 
     report = holdings.build_holdings_report(
@@ -3805,11 +3810,12 @@ def do_pipeline_value() -> dict:
     """
     try:
         inventory = Store().read().inventory
-    except (files.StoreError, OSError, ValueError, TypeError):
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        files.log_cause('store read', exc)
         raise PipelineRefusal(
             HTTPStatus.SERVICE_UNAVAILABLE,
             "store_unreadable",
-            "The store could not be read, so nothing can be valued. Try again, and if it repeats, restart the app on the Mac.",
+            f"The store could not be read because {files.plain_cause(exc)}, so nothing can be valued. Try again, and if it repeats, restart the app on the Mac.",
         ) from None
 
     found, sources = _readings()
@@ -3898,11 +3904,12 @@ def do_pipeline_value_page(
         )
     try:
         inventory = Store().read().inventory
-    except (files.StoreError, OSError, ValueError, TypeError):
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        files.log_cause('store read', exc)
         raise PipelineRefusal(
             HTTPStatus.SERVICE_UNAVAILABLE,
             "store_unreadable",
-            "The store could not be read, so nothing can be valued. Try again, and if it repeats, restart the app on the Mac.",
+            f"The store could not be read because {files.plain_cause(exc)}, so nothing can be valued. Try again, and if it repeats, restart the app on the Mac.",
         ) from None
 
     found, sources = _readings()
@@ -4067,11 +4074,12 @@ def do_pipeline_sets(images: Optional["stockimages.StockImages"] = None) -> dict
     """
     try:
         snapshot = Store().read()
-    except (files.StoreError, OSError, ValueError, TypeError):
+    except (files.StoreError, OSError, ValueError, TypeError) as exc:
+        files.log_cause('store read', exc)
         raise PipelineRefusal(
             HTTPStatus.SERVICE_UNAVAILABLE,
             "store_unreadable",
-            "The store could not be read, so nothing can be grouped. Try again, and if it repeats, restart the app on the Mac.",
+            f"The store could not be read because {files.plain_cause(exc)}, so nothing can be grouped. Try again, and if it repeats, restart the app on the Mac.",
         ) from None
     inventory = snapshot.inventory
 
@@ -4608,10 +4616,11 @@ def do_live_export() -> dict:
 
     try:
         export = tcgcsv.read_export(path)
-    except (tcgcsv.MalformedCsv, OSError):
+    except (tcgcsv.MalformedCsv, OSError) as exc:
         # A REFUSAL TEARS DOWN WHAT IT BUILT — `do_pipeline_export`'s rule again. A directory
         # accumulating one dead file per mis-timed press stops explaining itself.
         path.unlink(missing_ok=True)
+        files.log_cause('export read', exc)
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY,
             "tcg_unexpected_response",
@@ -4904,11 +4913,12 @@ def _survey(directory: Path) -> Dict[str, dict]:
     try:
         payload = json.loads(path.read_text("utf-8"))
         rows = payload["skus"]
-    except (OSError, ValueError, KeyError):
+    except (OSError, ValueError, KeyError) as exc:
+        files.log_cause('price survey', exc)
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "survey_unreadable",
-            "The price survey for this markdown could not be read. Start a new markdown from the same export.",
+            f"The price survey for markdown {directory.name} could not be read because {files.plain_cause(exc)}. Start a new markdown from the same export.",
         ) from None
     # PROJECTED SO BOTH DOCUMENTS ANSWER `_history_for_entry` IN ONE SHAPE. A run's
     # `pricing.json` entry nests the export's own figures under `snap`; a survey row carries
@@ -5070,7 +5080,7 @@ def do_markdown_file(stamp: str, filename: str) -> Tuple[bytes, str]:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_such_file",
-            f"Markdown {stamp} does not have that file yet. Finish its price step first.",
+            f"Markdown {stamp} does not have {filename} yet. Finish its price step first.",
         )
     target = directory / filename
     kind = "text/csv" if target.suffix == ".csv" else "text/plain; charset=utf-8"
@@ -5416,9 +5426,11 @@ def do_pricing_corpus_write(payload: dict) -> dict:
         )
     try:
         book = corpus.Corpus.parse(document)
-    except (decisions.MalformedDecisions, ValueError) as exc:
+    except decisions.MalformedDecisions as said:
+        raise PipelineRefusal(HTTPStatus.BAD_REQUEST, "corpus_invalid", str(said)) from None
+    except ValueError:
         raise PipelineRefusal(
-            HTTPStatus.BAD_REQUEST, "corpus_invalid", str(exc)
+            HTTPStatus.BAD_REQUEST, "corpus_invalid", "The price settings are not in a shape Banchi reads."
         ) from None
 
     # THE ANSWER IS DATED HERE, WHICH IS WHERE IT WAS NOT (D103). `Answer.at` was written in
@@ -5600,13 +5612,17 @@ def do_pricing_clear(payload: dict) -> dict:
         _clear_revision_guard(payload)
         try:
             book = corpus.Corpus.read()
-        except (decisions.MalformedDecisions, ValueError) as exc:
+        except decisions.MalformedDecisions as said:
             # A CORPUS THIS PARSER CANNOT READ IS A REFUSAL HERE, WHERE `PUT /pricing` LETS THE
             # WRITE THROUGH. That route REPLACES the document, so an unreadable one is what is
             # being fixed; this one reads the document to decide what to destroy inside it, and
             # deciding that against a file nothing could parse is the one thing it must not do.
             raise PipelineRefusal(
-                HTTPStatus.CONFLICT, "corpus_unreadable", str(exc)
+                HTTPStatus.CONFLICT, "corpus_unreadable", str(said)
+            ) from None
+        except ValueError:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT, "corpus_unreadable", "The price settings could not be read. Restore them from a backup."
             ) from None
 
         plan = corpus.clearable(
@@ -5754,9 +5770,13 @@ def do_pricing_restore(payload: dict) -> dict:
 
         try:
             book = corpus.Corpus.read()
-        except (decisions.MalformedDecisions, ValueError) as exc:
+        except decisions.MalformedDecisions as said:
             raise PipelineRefusal(
-                HTTPStatus.CONFLICT, "corpus_unreadable", str(exc)
+                HTTPStatus.CONFLICT, "corpus_unreadable", str(said)
+            ) from None
+        except ValueError:
+            raise PipelineRefusal(
+                HTTPStatus.CONFLICT, "corpus_unreadable", "The price settings could not be read. Restore them from a backup."
             ) from None
 
         # A NEWER KEPT CLEAR THAT TOOK THE SAME SKU HOLDS THE LATER ANSWER ("until it's built
@@ -6100,11 +6120,12 @@ def _history_row(directory: Path, sku: str) -> dict:
         )
     try:
         payload = json.loads(table.read_text("utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError) as exc:
+        files.log_cause('prices file', exc)
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "pricing_unreadable",
-            "The prices file for this run could not be read. Match the run again to rewrite it.",
+            f"The prices file for this run could not be read because {files.plain_cause(exc)}. Match the run again to rewrite it.",
         ) from None
     for entry in payload.get("skus") or ():
         if str(entry.get("sku") or "") == sku:
@@ -6294,7 +6315,8 @@ def do_product_history(sku: str) -> dict:
         reading = market.reading_for_row(row)
     except pricehistory.Blocked as exc:
         raise PipelineRefusal(HTTPStatus.BAD_GATEWAY, "history_blocked", str(exc)) from None
-    except pricehistory.Unreachable:
+    except pricehistory.Unreachable as exc:
+        files.log_cause('price mirror', exc)
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY,
             "history_unreachable",
@@ -6375,7 +6397,8 @@ def _history_for_entry(entry: dict, wanted: str, source: dict) -> dict:
             "history_blocked",
             str(exc),
         ) from None
-    except pricehistory.Unreachable:
+    except pricehistory.Unreachable as exc:
+        files.log_cause('price mirror', exc)
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY,
             "history_unreachable",
@@ -6505,11 +6528,12 @@ def do_pipeline_trends(name: str, skus: Sequence[str] = ()) -> dict:
         )
     try:
         payload = json.loads(table.read_text("utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError) as exc:
+        files.log_cause('prices file', exc)
         raise PipelineRefusal(
             HTTPStatus.CONFLICT,
             "pricing_unreadable",
-            "The prices file for this run could not be read. Match the run again to rewrite it.",
+            f"The prices file for this run could not be read because {files.plain_cause(exc)}. Match the run again to rewrite it.",
         ) from None
 
     entries = {
@@ -6655,7 +6679,7 @@ def do_pipeline_file(name: str, filename: str) -> Tuple[bytes, str]:
         raise PipelineRefusal(
             HTTPStatus.NOT_FOUND,
             "no_such_file",
-            f"Run {name} does not have that file yet. Write the import file first.",
+            f"Run {name} does not have {filename} yet. Write the import file first.",
         )
     target = directory / filename
     kind = "text/csv" if target.suffix == ".csv" else "text/plain; charset=utf-8"

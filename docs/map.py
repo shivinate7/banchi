@@ -3752,7 +3752,7 @@ COMPONENTS = [
                         "today is request-shape validation, a message for a caller and not a "
                         "person. Read by `scripts/error-words.py`, which fails on an unlisted "
                         "finding and on a listed entry that matches nothing.",
-                "governed_by": ["D196", "D284"]},
+                "governed_by": ["D22", "D32", "D58", "D91", "D196", "D284"]},
             "machine-words-allow.json": {
                 "does": "the shrinking offender list for `no mechanism on screen` (D196), "
                         "file -> word -> lane, on `kit-adoption-allow.json`'s own shape. "

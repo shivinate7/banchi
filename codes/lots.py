@@ -157,17 +157,17 @@ def plan(
     right-looking arguments.
     """
     if scope not in SCOPES:
-        raise LotError(f"scope was {scope!r}; use one of {', '.join(SCOPES)}")
+        raise LotError(f"Scope was {scope!r}; use one of {', '.join(SCOPES)}")
     if delivery not in DELIVERIES:
-        raise LotError(f"delivery was {delivery!r}; use one of {', '.join(DELIVERIES)}")
+        raise LotError(f"Delivery was {delivery!r}; use one of {', '.join(DELIVERIES)}")
     if delivery == DELIVERY_PHYSICAL and scope != SCOPE_BOX:
         raise LotError(
-            "a PHYSICAL lot must be scoped to a box. Chosen by count, the codes reserved "
+            "A PHYSICAL lot must be scoped to a box. Chosen by count, the codes reserved "
             "and the cards pulled off the shelf are two different thousand cards, and the "
             "buyer gets codes that were never committed to them."
         )
     if scope == SCOPE_BOX and box is None:
-        raise LotError("a box-scoped lot needs a box number")
+        raise LotError("A box-scoped lot needs a box number")
 
     pool = _sellable(entries, box=box if scope == SCOPE_BOX else None, premium=premium)
 
@@ -175,7 +175,7 @@ def plan(
         taking = pool if count is None else pool[:count]
         if count is not None and len(pool) < count:
             raise LotError(
-                f"box {box} holds {len(pool)} sellable code(s), {count} asked for — "
+                f"Box {box} holds {len(pool)} sellable code(s), {count} asked for — "
                 "nothing was reserved"
             )
         if not taking:
@@ -206,11 +206,11 @@ def plan(
                     blocked[reason] = blocked.get(reason, 0) + 1
                 detail = "; ".join(f"{n} {why}" for why, n in sorted(blocked.items()))
                 raise LotError(
-                    f"box {box} holds {len(present)} card(s), and none of them can enter "
+                    f"Box {box} holds {len(present)} card(s), and none of them can enter "
                     f"this lot: {detail}. Nothing was reserved."
                 )
             raise LotError(
-                f"box {box} holds no codes at all. Scan it first, or check the box number."
+                f"Box {box} holds no codes at all. Scan it first, or check the box number."
             )
         if delivery == DELIVERY_PHYSICAL:
             # A PHYSICAL LOT TAKES THE WHOLE BOX OR IT IS REFUSED, and this is the check
@@ -259,7 +259,7 @@ def plan(
                     blocked[why] = blocked.get(why, 0) + 1
                 detail = "; ".join(f"{n} {why}" for why, n in sorted(blocked.items()))
                 raise LotError(
-                    f"box {box} physically holds {len(left)} card(s) this lot would NOT "
+                    f"Box {box} physically holds {len(left)} card(s) this lot would NOT "
                     f"take, so 'pull box {box}' would ship them anyway: {detail}. A physical "
                     "lot is the whole box or it is nothing — move those cards out of the "
                     "box, give the unclaimed ones a product claim, or settle the ones "
@@ -267,7 +267,7 @@ def plan(
                 )
     else:
         if count is None:
-            raise LotError("a count-scoped lot needs a count")
+            raise LotError("A count-scoped lot needs a count")
         if len(pool) < count:
             raise LotError(
                 f"{count} asked for, {len(pool)} sellable — nothing was reserved"
@@ -317,7 +317,7 @@ def build(entries, *, lot_id: str, scope: str, delivery: str, venue: str,
     does — putting a lock in here would give the store two locking disciplines.
     """
     if venue not in VENUES:
-        raise LotError(f"venue was {venue!r}; use one of {', '.join(VENUES)}")
+        raise LotError(f"Venue was {venue!r}; use one of {', '.join(VENUES)}")
     taking, summary = plan(
         entries, scope=scope, delivery=delivery, box=box, count=count, premium=premium
     )

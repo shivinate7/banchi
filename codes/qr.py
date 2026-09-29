@@ -229,8 +229,7 @@ def _read(image) -> Optional[Tuple[str, Tuple[Tuple[int, int], ...], Optional[in
         import zxingcpp  # noqa: PLC0415 — lazy, so a missing wheel is a named failure
     except ImportError as exc:  # pragma: no cover — the stub path is exercised by T8
         raise QrUnavailable(
-            "zxing-cpp is not installed, so no code card can be read. "
-            "`make venv` installs it from requirements.txt."
+            "The code reader is not installed, so no code card can be read. Set the app up again on the Mac to install it."
         ) from exc
     found = zxingcpp.read_barcodes(image, formats=zxingcpp.BarcodeFormat.QRCode)
     if not found:

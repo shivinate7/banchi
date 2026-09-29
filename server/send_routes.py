@@ -621,11 +621,12 @@ def _live_quantities(path: Path, step: str) -> Dict[str, int]:
     try:
         export = tcgcsv.read_export(path)
         return sendguard.live_by_sku(export.rows, export.header)
-    except (OSError, ValueError, tcgcsv.MalformedCsv):
+    except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
+        files.log_cause('live check', exc)
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY,
             "live_check_failed",
-            f"Banchi could not read what is live at TCGplayer, so nothing was {step}. Try again.",
+            f"Banchi could not read the live export from TCGplayer because {files.plain_cause(exc)}, so nothing was {step}. Try again, or fetch the live export again.",
         ) from None
 
 
@@ -2122,11 +2123,12 @@ def _markdown_judge(directory: Path, live_path: Path) -> Tuple[set, List[dict]]:
         fresh = tcgcsv.read_export(live_path)
         live = sendguard.live_by_sku(fresh.rows, fresh.header)
         prices = sendguard.live_prices(fresh.rows)
-    except (OSError, ValueError, tcgcsv.MalformedCsv):
+    except (OSError, ValueError, tcgcsv.MalformedCsv) as exc:
+        files.log_cause('live check', exc)
         raise PipelineRefusal(
             HTTPStatus.BAD_GATEWAY,
             "live_check_failed",
-            "Banchi could not read what is live at TCGplayer, so nothing was sent. Try again.",
+            "Banchi could not read the live export from TCGplayer, so nothing was sent. Try again, or fetch the live export again.",
         ) from None
     named: Dict[str, tuple] = {}
     candidates: Dict[str, tuple] = {}

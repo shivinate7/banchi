@@ -992,7 +992,7 @@ def require(key: str) -> Dict[str, object]:
         raise EmptyVocabulary(
             f"{key!r} has no known rarity list yet"
             + (" (no export has been seen)" if entry["unverified"] else "")
-            + ". Add its rarities before capturing it. Another game's list is never borrowed."
+            + ". Add its rarities to Banchi's game list before capturing it. Another game's list is never borrowed."
         )
     return entry
 

@@ -914,7 +914,7 @@ def check_sections(sections) -> Tuple[int, ...]:
     if list(out) != sorted(out):
         raise BadSections(f"{list(out)} is not sorted")
     if len(set(out)) != len(out):
-        raise BadSections(f"{list(out)} repeats a starting card, so two dividers would share one spot.")
+        raise BadSections(f"{list(out)} repeats a starting card, so two dividers would share one spot")
     return out
 
 

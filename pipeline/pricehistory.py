@@ -168,7 +168,9 @@ harness asserts the join against a committed fixture and never against a live fe
 
 from __future__ import annotations
 
+import http.client
 import json
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -955,28 +957,31 @@ def fetch_json(
             try:
                 body = response.read()
             except (urllib.error.URLError, OSError, TimeoutError) as exc:
+                print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
                 raise Unreachable("The price service could not be reached. Check the connection, then try again.") from exc
     except urllib.error.HTTPError as exc:
         if exc.code == 403:
             # NEVER THE VALUE, ONLY THE NAME OF THE KNOB — D171's rule that a refusal must
             # name its remedy, and CLAUDE.md's rule that no message here ever carries the
             # user agent string itself.
+            print(f"price service {url}: HTTP 403; set {AGENT_ENV} in the settings file", file=sys.stderr, flush=True)
             raise Blocked(
-                "The price service refused this request. Either what it allows changed, or it is declining this "
-                "app's browser signature. Set the browser signature in the Mac's settings file to match your "
-                "browser, then try again."
+                "The price service answered 'forbidden'. Either what it allows changed, or it is declining this app's browser signature. Set the browser signature in the Mac's settings file (the .env file in the app's folder) to match your browser, then try again."
             ) from exc
-        raise Unreachable("The price service refused the request. Try again in a moment.") from exc
+        print(f"price service {url}: HTTP {exc.code} {exc.reason}", file=sys.stderr, flush=True)
+        raise Unreachable(f"The price service answered '{http.client.responses.get(exc.code, 'an error').lower()}'. Try again in a moment.") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         # `Offline`, NOT THE PLAIN `Unreachable` ABOVE — raised only here, from `urlopen`
         # itself, which means no HTTP response arrived at all: a refused connection, a DNS
         # failure, or a timeout reaching the socket in the first place. Every socket
         # attempt after this one is heading for the identical failure. See `Offline`'s own
         # docstring for what a caller does with that distinction.
+        print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
         raise Offline("The price service could not be reached. Check the connection, then try again.") from exc
     try:
         return json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        print(f"price service {url}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
         raise Unreachable("The price service sent back something that could not be read. Try again in a moment.") from exc
 
 
@@ -1133,7 +1138,7 @@ class Market:
         if row is None:
             raise NotResolvable(
                 f"No product line called {product_line!r} exists in the price catalogue. "
-                "Either Banchi's game list or the catalogue renamed a product line."
+                "Either Banchi's game list or the catalogue renamed a product line. Check the export's Product Line column first."
             )
         return int(row["categoryId"])  # type: ignore[index]
 

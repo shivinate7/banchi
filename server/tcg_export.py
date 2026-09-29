@@ -382,15 +382,16 @@ def _cookie() -> str:
     """
     value = envfile.get_live(COOKIE_ENV)
     if not value:
+        print(f"export: set {COOKIE_ENV} in the settings file", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "tcg_cookie_missing",
-            "TCGplayer is not signed in on this Mac. Sign in at store.tcgplayer.com in your browser, copy the "
-            "session cookie into the Mac's settings file, then try again. Keep it private.",
+            "TCGplayer is not signed in on this Mac. Sign in at store.tcgplayer.com in your browser, open the pricing page, and copy the Cookie header of any request in the browser's network tab. Paste it into the Mac's settings file (the .env file in the app's folder), keeping it private, then try again.",
         )
     if "=" not in value:
+        print(f"export: {COOKIE_ENV} holds no name=value pair", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "tcg_cookie_malformed",
-            "The saved TCGplayer session is not a valid cookie. Copy the whole cookie value, not just part of it.",
+            "The saved TCGplayer session in the Mac's settings file (the .env file in the app's folder) is not a valid cookie. Copy the whole Cookie header value from your browser, not just part of it.",
         )
     return value
 
@@ -469,10 +470,10 @@ def _check_status(status: int, headers: dict, url: str) -> Optional[str]:
     if status in (301, 302, 303, 307, 308):
         location = str(headers.get("Location") or "")
         if _LOGON_MARKER in location.lower():
+            print(f"export: {COOKIE_ENV} has expired", file=sys.stderr, flush=True)
             raise FetchRefusal(
                 "tcg_session_expired",
-                "TCGplayer sent the download to its sign-in page, so the saved session has expired. Sign in again, "
-                "copy the fresh session into the Mac's settings file, then try again. Nothing was written.",
+                "TCGplayer sent the download to its sign-in page, so the saved session has expired. Sign in again, copy the fresh Cookie header into the Mac's settings file (the .env file in the app's folder), then try again. Nothing was written.",
             )
         if not location:
             raise FetchRefusal(
@@ -481,17 +482,16 @@ def _check_status(status: int, headers: dict, url: str) -> Optional[str]:
             )
         return urljoin(url, location)
     if status == 401:
+        print(f"export: {COOKIE_ENV} was refused", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "tcg_session_expired",
-            "TCGplayer refused the saved session. Sign in again and replace the saved session in the Mac's "
-            "settings file. Nothing was written.",
+            "TCGplayer refused the saved session as not authorised. Sign in again and replace the saved session in the Mac's settings file (the .env file in the app's folder). Nothing was written.",
         )
     if status == 403:
+        print(f"export: HTTP 403; set {AGENT_ENV} in the settings file", file=sys.stderr, flush=True)
         raise FetchRefusal(
             "tcg_blocked",
-            "TCGplayer refused the request. Either the session lost its permissions, or TCGplayer is declining "
-            "this app's browser signature. Set the browser signature in the Mac's settings file to match your "
-            "browser and try again. If it keeps refusing, download the export by hand. Nothing was written.",
+            "TCGplayer refused the request as forbidden. Either the session lost its permissions, or TCGplayer is declining this app's browser signature. Set the browser signature in the Mac's settings file (the .env file in the app's folder) to match your browser and try again. If it keeps refusing, download the export by hand. Nothing was written.",
         )
     if status >= 500:
         raise FetchRefusal(

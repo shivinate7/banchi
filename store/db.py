@@ -393,8 +393,7 @@ def _ensure_schema(
         # loud, before any card exists — rather than once per capture, where a refusal is a
         # 500 on `POST /capture` with the physical card already in the drawer.
         raise files.StoreError(
-            "The store was written by a newer version of Banchi than this one, so it was not opened. "
-            "Update Banchi on the Mac, then try again."
+            "The store was written by a newer version of Banchi than this one, so it was not opened. Update this copy of Banchi on the Mac to the latest version, then try again."
         )
     if stored == SCHEMA_VERSION:
         _repair(conn, directory=directory, locked=locked)
@@ -2017,12 +2016,12 @@ def history(conn: sqlite3.Connection) -> List[dict]:
     with the `sqlite3` CLI can find it.
     """
     out = []
-    for _row_id, text in conn.execute("SELECT id, payload FROM events ORDER BY id").fetchall():
+    for row_id, text in conn.execute("SELECT id, payload FROM events ORDER BY id").fetchall():
         try:
             out.append(json.loads(text))
         except ValueError as exc:
             raise files.StoreError(
-                "An entry in the store's history could not be read. Nothing was changed. Restore the store from a backup."
+                f"History entry {row_id} in the store could not be read. Nothing was changed. Restore the store from a backup."
             ) from exc
     return out
 
@@ -2044,12 +2043,12 @@ def events_named(conn: sqlite3.Connection, event: str) -> List[dict]:
     rows = conn.execute(
         "SELECT id, payload FROM events WHERE event = ? ORDER BY id DESC", (event,)
     ).fetchall()
-    for _row_id, text in rows:
+    for row_id, text in rows:
         try:
             out.append(json.loads(text))
         except ValueError as exc:
             raise files.StoreError(
-                "An entry in the store's history could not be read. Nothing was changed. Restore the store from a backup."
+                f"History entry {row_id} in the store could not be read. Nothing was changed. Restore the store from a backup."
             ) from exc
     return out
 
@@ -2093,12 +2092,12 @@ def events_at(conn: sqlite3.Connection, key: str) -> List[dict]:
         (f"{box}/*",),
     ).fetchall()
     out = []
-    for _row_id, text in rows:
+    for row_id, text in rows:
         try:
             out.append(json.loads(text))
         except ValueError as exc:
             raise files.StoreError(
-                "An entry in the store's history could not be read. Nothing was changed. Restore the store from a backup."
+                f"History entry {row_id} in the store could not be read. Nothing was changed. Restore the store from a backup."
             ) from exc
     return out
 

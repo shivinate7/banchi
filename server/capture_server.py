@@ -1734,9 +1734,8 @@ def _check_variant_members(
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "variant_invalid",
-            f"variant {', '.join(repr(u) for u in unknown)} is not a finish of "
-            f"{entry['display']}. Stocked: {', '.join(vocabulary) or '(no finishes)'}. "
-            "GET /games serves the registry.",
+            f"{', '.join(unknown)} is not a finish of {entry['display']}. "
+            f"Stocked: {', '.join(vocabulary) or '(no finishes)'}. Pick one of those.",
         )
     return [finish for finish in vocabulary if finish in claim]
 
@@ -2112,12 +2111,18 @@ def _optional_sections(payload: dict) -> Optional[Tuple[int, ...]]:
         # is not an existing empty section still refuses there, once mapped to keys.
         master.check_sections(list(dict.fromkeys(raw)))
         return tuple(int(v) for v in raw)
-    except (master.BadSections, TypeError, ValueError) as exc:
+    except master.BadSections as said:
+        # A first-party message (every `BadSections` raise is read by `scripts/error-words.py`).
         raise BadRequest(
             HTTPStatus.BAD_REQUEST,
             "sections_invalid",
-            f"{exc}. Sections are the index each one STARTS at, so the first is 1 and the "
-            f"list climbs without repeating: [1, 31, 56] is three dividers.",
+            f"{said}. Each section starts at a card number: the first is 1 and each next one is higher, like 1, 31, 56.",
+        ) from None
+    except (TypeError, ValueError):
+        raise BadRequest(
+            HTTPStatus.BAD_REQUEST,
+            "sections_invalid",
+            "The sections are not a list of card numbers. Each section starts at a card number: the first is 1 and each next one is higher, like 1, 31, 56.",
         ) from None
 
 
@@ -5300,14 +5305,15 @@ def _unmove_one(snapshot, store: Store, box: int, index: int) -> dict:
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "move_built_on",
-            "This move can no longer be undone. Move the card back instead.",
+            f"This move can no longer be undone: {why}. Move the card back instead.",
         )
     try:
         restored, new_key = inventory.unmove_card(
             key, sections_at_move=_arrival_layout(store, key, new_key)
         )
-    except (master.CardNotFound, master.CardDeparted):
-        raise BadRequest(HTTPStatus.CONFLICT, "move_built_on", "This move can no longer be undone. Move the card back instead.") from None
+    except (master.CardNotFound, master.CardDeparted) as exc:
+        files.log_cause('move undo', exc)
+        raise BadRequest(HTTPStatus.CONFLICT, "move_built_on", "This move can no longer be undone: the card it moved to has since left the box or changed. Move the card back instead.") from None
 
     found = photo_for(inventory, restored)
     restored.photo = str(found) if found is not None else None
@@ -7716,7 +7722,7 @@ def _answer_target(
         raise BadRequest(
             HTTPStatus.CONFLICT,
             "condition_not_listed",
-            f"{sku} is a {offered_condition!r} row, and this product does not list that condition. "
+            f"{sku} is a {offered_condition!r} row, and this product does not list that condition. It lists {', '.join(sorted(listable))}. "
             "Match this run again and the question will be rewritten with rows that fit. Nothing was written.",
         )
 
@@ -9636,10 +9642,11 @@ def _reverse_correction(box: int, index: int) -> dict:
         try:
             event = _correction_event(store.history_at(key), key)
         except (files.StoreError, OSError, ValueError) as exc:
+            files.log_cause('history read', exc)
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "correction_origin_unknown",
-                "The store's history could not be read, so nothing was guessed. Correct the card by hand instead.",
+                f"The store's history could not be read because {files.plain_cause(exc)}, so nothing was guessed. Correct the card by hand instead.",
             ) from exc
         if event is None:
             raise BadRequest(
@@ -9914,10 +9921,11 @@ def _reverse_confirm(box: int, index: int) -> dict:
         try:
             event = _confirm_event(store.history_at(key), key)
         except (files.StoreError, OSError, ValueError) as exc:
+            files.log_cause('history read', exc)
             raise BadRequest(
                 HTTPStatus.CONFLICT,
                 "confirm_origin_unknown",
-                "The store's history could not be read, so nothing was guessed. Fix the card by hand instead.",
+                f"The store's history could not be read because {files.plain_cause(exc)}, so nothing was guessed. Fix the card by hand instead.",
             ) from exc
         restores_to = _valid_identity_restore(event.get("restores_to")) if event else None
         if restores_to is None:
@@ -15289,8 +15297,7 @@ def do_order_fill(payload: dict) -> dict:
             raise BadRequest(
                 HTTPStatus.BAD_REQUEST,
                 "fill_reason_invalid",
-                "That is not a reason a line can be closed for. A refund or a cancellation is not closed "
-                "here; stand it down instead.",
+                "A line can be closed here only when it was picked by hand and is not a single, when it is a single this store never photographed, or when the copy was sold separately on the Inventory screen. A refund or a cancellation is not closed here; stand it down instead.",
             )
 
     with Store().write() as snapshot:

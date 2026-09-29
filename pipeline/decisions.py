@@ -278,7 +278,7 @@ class Decisions:
     def parse(cls, payload: dict) -> "Decisions":
         if not isinstance(payload, dict):
             raise MalformedDecisions(
-                f"Expected an object, got {type(payload).__name__}"
+                "The pricing settings are not a set of named settings. Restore them from a backup."
             )
 
         overrides: Dict[str, object] = {}
