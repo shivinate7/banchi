@@ -27,6 +27,8 @@ const PAINTED = [
 
 /** 24px for a frame's own padding and rounding, on top of the grid's two column gaps (read live). */
 const SLACK = 24
+/** The deliberate right-hand margin: what is left of the shell once the controls sit at their cap. */
+const RIGHT_MARGIN = (w: { rightBand: number; railW: number }) => (w.railW >= 459 ? w.rightBand : 0)
 
 for (const theme of ['light', 'dark'] as const) {
   for (const [width, height] of [
@@ -93,15 +95,17 @@ for (const theme of ['light', 'dark'] as const) {
           const colGap = parseFloat(getComputedStyle(document.querySelector('.capture-shell')!).columnGap) || 0
           // Nothing may sit between Last capture and the shell's right edge but a small margin.
           const lastRight = document.querySelector('.capture-last')!.getBoundingClientRect().right
-          return { colGap, rightBand: Math.round(shell.right - lastRight), worstGap: Math.round(worstGap), worstY, shellWidth: Math.round(shell.width) }
+          const railW = Math.round(document.querySelector('.capture-card-run')!.getBoundingClientRect().width)
+          return { colGap, railW, rightBand: Math.round(shell.right - lastRight), worstGap: Math.round(worstGap), worstY, shellWidth: Math.round(shell.width) }
         },
         { painted: PAINTED, step: 8 },
       )
       expect(
         worst.worstGap,
         `${worst.worstGap}px of the ${worst.shellWidth}px shell is unpainted at y=${worst.worstY}`,
-      ).toBeLessThanOrEqual(2 * worst.colGap + SLACK)
-      expect(worst.rightBand, `${worst.rightBand}px of empty shell right of Last capture`).toBeLessThanOrEqual(48)
+      ).toBeLessThanOrEqual(2 * worst.colGap + SLACK + RIGHT_MARGIN(worst))
+      // Width the controls cannot use (they stop at 460px) is page margin on the right, and only then.
+      expect(worst.rightBand, `${worst.rightBand}px of empty shell right of Last capture`).toBeLessThanOrEqual(worst.railW >= 459 ? 400 : 48)
     })
   }
 }

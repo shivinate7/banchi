@@ -7,10 +7,15 @@
 .capture.bn-page {
   --cap-gap: var(--bn-4);
   --cap-rail-w: 300px;
-  /* THE CONTROLS COLUMN STOPS AT ITS COMFORTABLE WIDTH (owner, 2026-09-29: "already too wide").
-     365px is what it drew at 1440 with the rail open, and the widest that leaves the stage its full frame beside two 16px gaps there. Width past
-     the three columns goes to the column gaps (`.capture-shell`), never to stretched rows. */
-  --cap-rail-max: 365px;
+  /* THE CONTROLS COLUMN IS CAPPED (owner, 2026-09-29: "already too wide"). 365px is what it drew at
+     1440 with the rail open; the gap between columns is the spare width past that, held between
+     16px and 48px (owner: "tighten the gaps"); what the gaps give back goes to the controls, up
+     to 460px so rows never stretch as they did at 653px. Past that it is page margin on the
+     right: the kit's page cap stays and the page stays left-anchored (D197). */
+  --cap-rail-base: 365px;
+  --cap-rail-max: 460px;
+  --cap-col-gap: clamp(var(--bn-4), calc((100cqw - var(--cap-rail-base) - var(--cap-stage-w) - var(--cap-last-w)) / 2), var(--bn-9));
+  --cap-rail-track: clamp(var(--cap-rail-w), calc(100cqw - var(--cap-stage-w) - var(--cap-last-w) - 2 * var(--cap-col-gap)), var(--cap-rail-max));
   /* THE LAST-CAPTURE COLUMN HUGS ITS PHOTO TOO (docs/specs/capture-app.md §5.7, owner 2026-09-28:
      the width the viewfinder gave up was white space). The photo is 9:16 and height-bound, so it
      can never use a wider column: 164px is the panel head (24), the gap (8) and the receipt
@@ -130,17 +135,14 @@
   min-height: 0;
   display: grid;
   /* The stage and the last capture each hug their 9:16 frame, so the rail takes what is left. */
-  grid-template-columns: minmax(var(--cap-rail-w), var(--cap-rail-max)) minmax(0, var(--cap-stage-w)) minmax(0, var(--cap-last-w));
+  grid-template-columns: var(--cap-rail-track) minmax(0, var(--cap-stage-w)) minmax(0, var(--cap-last-w));
   grid-template-rows: auto auto auto minmax(0, 1fr);
   grid-template-areas:
     'run stage last'
     'film stage last'
     'stack stage last'
     'rig stage last';
-  /* The gap between columns is the spare width split in two, held between 16px and 160px. The page
-     stays anchored left (D197), so past 160px per gap the remainder is a quiet right margin, chosen
-     over stretching the controls or the 9:16 frames, which cannot use width. */
-  gap: var(--cap-gap) clamp(var(--bn-4), calc((100cqw - var(--cap-rail-max) - var(--cap-stage-w) - var(--cap-last-w)) / 2), calc(var(--bn-10) * 2.5));
+  gap: var(--cap-gap) var(--cap-col-gap);
 }
 .capture-card-run { grid-area: run; }
 .capture-card-stack { grid-area: stack; }
@@ -1357,7 +1359,7 @@
    tallest — at 800px of height the four stacked cards outgrew the viewfinder and took the
    whole page over the fold with them, so they give up 6px of padding each. ------------------ */
 @media (max-width: 1359px) and (min-width: 1280px) {
-  .capture.bn-page { --cap-rail-w: 272px; --cap-gap: var(--bn-2); --cap-rail-max: 1fr; /* no spare width to cap here: the rail takes what the two frames leave */ }
+  .capture.bn-page { --cap-rail-w: 272px; --cap-gap: var(--bn-2); --cap-rail-track: minmax(272px, 1fr); /* no spare width to cap here: the rail takes what the two frames leave */ }
   .capture-shell { gap: var(--cap-gap) var(--bn-3); }
   .capture-card,
   .capture-film { padding: var(--bn-1-5) var(--bn-3) var(--bn-2); }
