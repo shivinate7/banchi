@@ -138,6 +138,34 @@ def idents() -> List[str]:
     return out
 
 
+_SUPERSEDED_BODY = re.compile(r"^\*\*(?:Superseded|Overtaken) by (D" + _ID + r")\b")
+_SUPERSEDED_HEADING = re.compile(r"^#{2,4} Superseded( in part)?\b.*?`(D" + _ID + r")`")
+
+
+def supersession(ident: str) -> Optional[Dict[str, str]]:
+    """How an entry says it was superseded: `{"kind": "full"|"part", "by": "D<id>"}`, or None.
+
+    THE CORPUS HAS NO STATUS FIELD, so this reads the two forms an entry uses: a first line
+    `**Superseded by D<n>` or `**Overtaken by D<n>` (the whole entry), and a heading
+    `### Superseded [in part] <date> — `D<n>`` (the whole entry, or the part it names). A
+    supersession written in ordinary prose elsewhere in an entry is NOT read, so a decision
+    that a later entry overtakes without leaving one of these marks reads as current.
+    """
+    path = path_for(ident)
+    if path is None:
+        return None
+    lines = path.read_text(encoding="utf-8").split("\n")
+    for line in lines[1:4]:
+        m = _SUPERSEDED_BODY.match(line.strip())
+        if m:
+            return {"kind": "full", "by": m.group(1)}
+    for line in lines[1:]:
+        m = _SUPERSEDED_HEADING.match(line)
+        if m:
+            return {"kind": "part" if m.group(1) else "full", "by": m.group(2)}
+    return None
+
+
 def invalidate() -> None:
     """Drop the cache. For a caller that has just written to the directory."""
     _cache.clear()

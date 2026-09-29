@@ -13264,6 +13264,53 @@ def check_agent_links(report: Report) -> None:
     )
 
 
+TEST_ROSTER_FLOOR = 90  # non-vacuity: the roster held 95 files when this row was built.
+
+
+def check_test_purposes(report: Report) -> None:
+    """Every test file states what it protects, and docs/TESTS.md says the same as the files.
+
+    `scripts/tests_page.py` owns the roster, the header format and the page. This row
+    only READS it (D18): it never writes the page, it regenerates in memory and compares. A
+    test file with no `Protects:` line, a `Governs:` id that resolves to no entry, a file no
+    area names, or a page that differs from the regenerated one is a finding.
+    """
+    mod = _sibling("tests_page.py")
+    if mod is None:
+        report.add("test purposes", MECHANICAL,
+                   [Finding("scripts/tests_page.py", "is missing or unreadable; the test roster cannot be read.")],
+                   "", scanned=0)
+        return
+    findings: List[Finding] = []
+    corpus = _corpus()
+    known = set(corpus.idents()) if corpus is not None else set()
+    files = mod.roster()
+    if len(files) < TEST_ROSTER_FLOOR:
+        findings.append(Finding("scripts/tests_page.py", f"found {len(files)} test files, under the floor of {TEST_ROSTER_FLOOR}; the roster globs no longer reach the tests."))
+    for path in files:
+        rel = path.relative_to(ROOT).as_posix()
+        head = mod.header(path)
+        if not head.get("Protects", "").strip():
+            findings.append(Finding(rel, "has no `Protects:` line in its first 80 lines. Add one plain sentence saying what the test protects."))
+        for ident in mod.governs(head):
+            if known and ident not in known:
+                findings.append(Finding(rel, f"`Governs:` cites `{ident}`, which is no decision entry."))
+        if mod.area_of(path) == mod.UNFILED:
+            findings.append(Finding(rel, "names no area. Add a rule to `AREAS` in scripts/tests_page.py."))
+    page = mod.PAGE
+    if not page.exists():
+        findings.append(Finding("docs/TESTS.md", "is missing. Run `make tests-page ARGS=--write`."))
+    elif page.read_text(encoding="utf-8") != mod.render():
+        findings.append(Finding("docs/TESTS.md", "is stale against the test headers. Run `make tests-page ARGS=--write`."))
+    report.add(
+        "test purposes",
+        MECHANICAL,
+        findings,
+        f"{len(files)} test files carry a Protects line, and docs/TESTS.md matches them",
+        scanned=len(files),
+    )
+
+
 def check_route_rosters(report: Report) -> None:
     """A hand-typed list of routes in a spec, against `App.tsx`'s own table.
 
@@ -20273,6 +20320,7 @@ TIER: Dict[str, int] = {
     "doc hygiene": 3,
     "route rosters": 2,
     "recorded deletions": 1,
+    "test purposes": 2,
     "spec seal": 1,
     "verdict file": 2,
     "check registry": 2,
@@ -20458,6 +20506,8 @@ def audit(staged_only: bool, commit_only: bool = False) -> Report:
         check_route_rosters(report)
     if _run_at_commit("agent links", commit_only):
         check_agent_links(report)
+    if _run_at_commit("test purposes", commit_only):
+        check_test_purposes(report)
     if _run_at_commit("recorded deletions", commit_only):
         check_recorded_deletions(report)
     if _run_at_commit("spec seal", commit_only):

@@ -4685,6 +4685,24 @@ COMPONENTS = [
                         "in `make check`, on `catalog-index-selftest`'s precedent: what it "
                         "writes is already verified by a gate that runs on every commit.",
             },
+            "tests_page.py": {
+                "does": "`make tests-page` — writes `docs/TESTS.md`, one page of what "
+                        "each test file protects. It reads the `Protects:` and `Governs:` lines "
+                        "from the header of every browser spec, harness test and dedicated "
+                        "self-test file, groups them by area, and flags each test whose "
+                        "`Governs:` cites a superseded decision (read from "
+                        "`decisions_corpus.supersession`, the one home for that fact). It "
+                        "previews by default and `--write` applies. It gates nothing: the "
+                        "`test purposes` row regenerates in memory and compares, and never "
+                        "writes.",
+                "governed_by": ["D18", "D173"],
+                "note": "THE ROSTER IS THREE GLOBS, not every guard that has a self-test. A "
+                        "guard whose self-test lives inside its own script "
+                        "(`map-fix.py --selftest`, `guard-scope.py selftest`) is not on the "
+                        "page. A superseded decision is read only from the two marks an entry "
+                        "uses (`**Superseded by`, a `### Superseded` heading), so a decision "
+                        "overtaken in ordinary prose reads as current.",
+            },
             "offenders-prune.py": {
                 "does": "`make offenders-prune` — delete the STALE entries from the two "
                         "shrinking offender lists (`typed-interpunct-allow.json`, "

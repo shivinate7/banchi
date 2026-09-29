@@ -19,6 +19,7 @@
   "mutate-guards": "runs every guard's mutation suite for real, ~190s; explicitly off `make check`, a manual verification step",
   "offenders-prune-selftest": "proves a generator that gates nothing (D18); not in `make check`, same precedent as `map-fix-selftest`",
   "serve-scope-selftest": "proves the serve-scope gate; not wired into `make check`'s own recipe (unlike its sibling `guard-scope-selftest`)",
-  "venv": ".venv + requirements.txt; cited by name throughout CLAUDE.md's guards (VENV_GUARD) rather than reached for directly",
+  "tests-page": "writes docs/TESTS.md, the page the owner reads; `test purposes` regenerates it in memory and compares, so nothing reaches for the target except after a header edit",
+  "venv":".venv + requirements.txt; cited by name throughout CLAUDE.md's guards (VENV_GUARD) rather than reached for directly",
   "worktree-provision-selftest": "proves the worktree node_modules provisioning logic on a fixture; not in `make check`, a fresh-worktree diagnostic"
 }
