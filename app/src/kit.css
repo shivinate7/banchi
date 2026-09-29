@@ -515,7 +515,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   justify-content: center;
   min-width: 18px;
   height: 18px;
-  padding: 0 var(--bn-1-5);
+  padding: 0 var(--bn-1);
   border-radius: 5px;
   border: 1px solid var(--bn-line-strong);
   border-bottom-width: 2px;
