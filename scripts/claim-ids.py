@@ -1117,7 +1117,37 @@ def perform(root: Path, claims: Sequence[Claim], write: bool) -> Dict[str, int]:
             touched[f"{d.directory}/{old_name} -> {new_name}"] = 1
     for label in settle_corpus(root, write):
         touched[label] = 1
+    for label in regenerate_derived(root, write):
+        touched[label] = 1
     return touched
+
+
+# GENERATED FILES THAT READ DECISION IDS FROM A HEADER. The rewrite above changes a test's
+# `Governs:` line, and `docs/TESTS.md` is derived from it, so `docs-audit`'s `test purposes`
+# row failed on the claim commit itself. One place regenerates: a generated file the rewrite
+# can stale is added here. Checked: `docs/map.py` is rewritten by `renumber_map`, the decision
+# index is a rendering (D60), and `map-fix` / `offenders-prune` only delete stale entries.
+DERIVED = (("scripts/tests_page.py", "docs/TESTS.md"),)
+
+
+def regenerate_derived(root: Path, write: bool) -> List[str]:
+    out: List[str] = []
+    for script, page in DERIVED:
+        if not write or not (root / script).exists():
+            continue
+        before = read(root / page) if (root / page).exists() else ""
+        done = subprocess.run([sys.executable, str(root / script), "--write"], cwd=str(root),
+                              stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
+        if done.returncode:
+            say(f"REFUSED: `{script}` failed, so `{page}` is stale.",
+                "  The tree HOLDS the rewrite, uncommitted. Nothing is committed or pushed.",
+                "  Read the error below, fix its cause, then run `make tests-page ARGS=--write`",
+                "  and commit the tree as it stands.", "",
+                done.stderr.decode("utf-8", errors="replace")[-800:])
+            raise SystemExit(4)
+        if read(root / page) != before:
+            out.append(page)
+    return out
 
 
 def settle_corpus(root: Path, write: bool) -> List[str]:
@@ -1703,6 +1733,8 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
                 old_path.rename(new_path)
 
     for label in unsettle_manifest(root, u, write):
+        touched[label] = 1
+    for label in regenerate_derived(root, write):
         touched[label] = 1
     return touched
 
