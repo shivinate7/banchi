@@ -1136,8 +1136,15 @@ def regenerate_derived(root: Path, write: bool) -> List[str]:
         if not write or not (root / script).exists():
             continue
         before = read(root / page) if (root / page).exists() else ""
-        subprocess.run([sys.executable, str(root / script), "--write"], cwd=str(root),
-                       stdout=subprocess.DEVNULL, check=True)
+        done = subprocess.run([sys.executable, str(root / script), "--write"], cwd=str(root),
+                              stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
+        if done.returncode:
+            say(f"REFUSED: `{script}` failed, so `{page}` is stale.",
+                "  The tree HOLDS the rewrite, uncommitted. Nothing is committed or pushed.",
+                "  Read the error below, fix its cause, then run `make tests-page ARGS=--write`",
+                "  and commit the tree as it stands.", "",
+                done.stderr.decode("utf-8", errors="replace")[-800:])
+            raise SystemExit(4)
         if read(root / page) != before:
             out.append(page)
     return out
@@ -1726,6 +1733,8 @@ def perform_unclaim(root: Path, u: Unclaim, write: bool,
                 old_path.rename(new_path)
 
     for label in unsettle_manifest(root, u, write):
+        touched[label] = 1
+    for label in regenerate_derived(root, write):
         touched[label] = 1
     return touched
 

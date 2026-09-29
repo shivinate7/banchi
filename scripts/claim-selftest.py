@@ -2626,6 +2626,16 @@ def main() -> int:
         text = page.read_text(encoding="utf-8") if page.exists() else ""
         ok(f"| {D(3)} |" in text and SD3 not in text,
            "docs/TESTS.md carries the claimed number, not the slug", text[-300:])
+        # THE INVERSE REWRITES THE SAME HEADER, so it regenerates the page too.
+        _, rc = claim_rc(gwork, "--unclaim", D(3), "--ref", "origin/main", "--write")
+        text = page.read_text(encoding="utf-8")
+        ok(rc == 0 and f"| {D(3)} |" not in text,
+           "--unclaim regenerates docs/TESTS.md, so the claimed number leaves the page", text[-300:])
+        # A FAILING GENERATOR REFUSES IN PLAIN WORDS and says the tree holds the rewrite.
+        (gwork / "scripts" / "tests_page.py").write_text("raise SystemExit(1)\n", encoding="utf-8")
+        out, rc = claim_rc(gwork, "--write")
+        ok(rc == 4 and "REFUSED" in out and "HOLDS the rewrite" in out and "make tests-page" in out,
+           "a failing generator refuses and says the tree holds the rewrite and how to finish", out[-400:])
 
     print("\nclaim self-test: {0} passed{1}".format(
         PASS, ", {0} FAILED".format(FAIL) if FAIL else ""))
