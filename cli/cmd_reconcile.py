@@ -22,7 +22,8 @@ not tell us which ones anyway.
 
 from __future__ import annotations
 
-from datetime import datetime
+import csv
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Tuple
 
@@ -359,7 +360,89 @@ def run_live(args, say) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ phantom listings
+#
+# THE INCIDENT (2026-09-27 pricing Send): a run for a BURIED box (cards moved out, no `boxes`
+# row) was emitted, and `cmd_emit._stamp_merged` upserted its cards into that vanished box
+# and published copies for them. A GHOST is a card whose box has no row. This report lists
+# what TCGplayer holds beyond what is really on hand, per SKU the ghosts carry.
+#
+# NO CSV ROUTE LOWERS A QUANTITY (D100, `Add to Quantity` is a delta, `Total Quantity` is not
+# writable), and no other command here lowers one. So this writes a plain worklist for the
+# seller portal, never an import file.
+WORKLIST_HEADER = (
+    "SKU", "Product Name", "Condition", "Live", "Real", "Excess", "Sold Since Export",
+)
+
+
+def phantom_worklist(inventory, rows, taken_at: int):
+    """`[(sku, name, condition, live, real, excess, sold_since)]` for every SKU a ghost card
+    carries where TCGplayer's live quantity exceeds the real on-hand count.
+
+    REAL = copies not sold, retired or moved, EXCLUDING ghosts. A copy the store marked sold
+    AFTER the export was taken (`state_at` > `taken_at`) is added back: the export still counts
+    it, so subtracting it as well would double-count that sale. A sale TCGplayer already
+    counted before the export but the store marked later is added back too, which UNDERSTATES
+    the excess by that copy. That is the safe direction: never tell the owner to cut a real one.
+    """
+    real_boxes = {int(entry.box) for entry in inventory.boxes.values()}
+    ghost_skus, real, sold_since = set(), {}, {}
+    for card in inventory.cards.values():
+        sku = getattr(card, "sku", None)
+        if not sku:
+            continue
+        if int(card.box) not in real_boxes:
+            ghost_skus.add(sku)
+            continue
+        if card.state == master.SOLD:
+            at = card.state_at and datetime.fromisoformat(card.state_at).timestamp()
+            if at and at > taken_at:
+                sold_since[sku] = sold_since.get(sku, 0) + 1
+                real[sku] = real.get(sku, 0) + 1
+        elif card.state not in master.TERMINAL_STATES:
+            real[sku] = real.get(sku, 0) + 1
+    live = {r[tcgcsv.SKU_COLUMN]: r for r in rows}
+    out = []
+    for sku in sorted(ghost_skus):
+        row = live.get(sku)
+        held = tcgcsv.parse_quantity(row.get(tcgcsv.LIVE_QUANTITY_COLUMN, "")) if row else 0
+        excess = held - real.get(sku, 0)
+        if excess > 0:
+            out.append((
+                sku, row.get("Product Name", "") if row else "",
+                row.get("Condition", "") if row else "", held, real.get(sku, 0), excess,
+                sold_since.get(sku, 0),
+            ))
+    return out
+
+
+def run_phantoms(args, say) -> int:
+    path = Path(args.phantoms)
+    if not path.is_file():
+        say(f"live export not found: {path}")
+        return 1
+    export = tcgcsv.read_export(path)
+    taken_at, _ = _skus_stamp(runs.describe_source(path))
+    work = phantom_worklist(Store().read().inventory, export.rows, taken_at)
+    say("")
+    say(f"live export      {path.name}, taken {datetime.fromtimestamp(taken_at, timezone.utc).isoformat()}")
+    say(f"phantoms         {len(work)} SKU(s), {sum(w[5] for w in work)} excess cop(ies)")
+    for w in work:
+        say(f"  {w[0]}  live {w[3]}  real {w[4]}  excess {w[5]}  {w[1]} ({w[2]})")
+    say("")
+    say("No import can lower a quantity (D100). Lower these by hand in the seller portal.")
+    if args.out:
+        with open(args.out, "w", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(WORKLIST_HEADER)
+            writer.writerows(work)
+        say(f"worklist         {args.out}")
+    return 0
+
+
 def run(args, say) -> int:
+    if getattr(args, "phantoms", None):
+        return run_phantoms(args, say)
     if getattr(args, "live", None):
         return run_live(args, say)
     if not args.run_dir or not args.staged_export:

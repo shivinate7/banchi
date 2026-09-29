@@ -19701,6 +19701,42 @@ def check_readings_writer_after_live_export(checks: Checks) -> None:
                 os.environ[name] = value
 
 
+def check_phantom_worklist(checks: Checks) -> None:
+    """`reconcile --phantoms`: ghosts of a buried box are excluded from what is really on hand.
+
+    Fixture, never the owner's store. SKU A: 2 real copies + 2 ghosts in box 5 (no `boxes` row),
+    live 4 -> excess 2. SKU B: ghosts only, live 1 -> excess 1. SKU C: a real copy sold AFTER
+    the export, live 2 (the sale not yet counted) -> the sale is not subtracted twice, excess 0.
+    SKU D: live below real -> absent. A retired copy is not on hand.
+    """
+    from types import SimpleNamespace as NS
+
+    def card(box, sku, state="identified", at="2026-09-01T00:00:00+00:00"):
+        return NS(box=box, sku=sku, state=state, state_at=at)
+
+    inventory = NS(
+        boxes={"1": NS(box=1)},
+        cards={
+            "a1": card(1, "A"), "a2": card(1, "A"), "ag1": card(5, "A"), "ag2": card(5, "A"),
+            "bg": card(5, "B"), "cg": card(5, "C"),
+            "c1": card(1, "C"), "c2": card(1, "C", "sold", "2026-09-27T17:00:00+00:00"),
+            "d1": card(1, "D"), "d2": card(1, "D", "retired"), "dg": card(5, "D"),
+        },
+    )
+    rows = [
+        {"TCGplayer Id": sku, "Total Quantity": str(qty), "Product Name": sku, "Condition": "NM"}
+        for sku, qty in (("A", 4), ("B", 1), ("C", 2), ("D", 1))
+    ]
+    taken = int(datetime(2026, 9, 27, 16, 0, tzinfo=timezone.utc).timestamp())
+    got = {w[0]: w[3:] for w in cmd_reconcile.phantom_worklist(inventory, rows, taken)}
+    checks.equal(
+        got,
+        {"A": (4, 2, 2, 0), "B": (1, 0, 1, 0)},
+        "ghosts are not on hand: A live 4 real 2 excess 2, B live 1 real 0 excess 1; a sale "
+        "after the export is added back (C) and live below real (D) is no excess",
+    )
+
+
 def check_live_reconcile(checks: Checks) -> None:
     """The whole store against one live export, both directions (D87).
 
@@ -40423,6 +40459,7 @@ def run() -> Result:
     check_merged_cap_is_the_tightest(checks)
     check_threshold_and_file_shape(checks)
     check_live_reconcile(checks)
+    check_phantom_worklist(checks)
     check_unsent_listing_sells_out(checks)
     check_pricing_reach(checks)
     check_markdown(checks)

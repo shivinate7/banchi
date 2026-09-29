@@ -693,7 +693,7 @@ COMPONENTS = [
                             "governed_by": ["D7", "D9", "D10", "D25", "D26", "D49", "D54", "D58",
                                             "D59", "D86", "D88", "D99", "D172", "D174", "D213",
                                             "D243", "D253", "D277"], "tested_by": ["T7"]},
-            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87", "D106", "D115", "D59"], "tested_by": ["T7"]},
+            "cmd_reconcile.py": {"does": "diff intent against TCGplayer's Export From Staged; --phantoms lists live copies beyond what is really on hand", "governed_by": ["D7", "D8", "D11", "D49", "D54", "D87", "D106", "D115", "D59", "D100"], "tested_by": ["T7"]},
             "cmd_queue.py": {"does": "`pkmnscan queue refresh` — re-resolve every OPEN queue "
                                      "entry against a current export, store-wide. Free, "
                                      "re-runnable, previews by default, `--write` applies. "
