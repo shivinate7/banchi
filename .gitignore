@@ -107,7 +107,7 @@ test-results
 # was ever committable, so this pattern costs nothing at the commit; it is load-bearing for the
 # AUDIT. `scripts/docs-audit.py:ignored_paths` exempts gitignored paths precisely so a check
 # cannot be "green on the owner's machine and red on a fresh clone" — its own words — and
-# without this line three references in docs/DECISIONS.md failed `make check` on any clone that
+# without this line three references in docs/decisions/ failed `make check` on any clone that
 # had never made a worktree. Found by running the checks on a fresh clone rather than reasoning
 # about them.
 .claude/worktrees/

@@ -868,7 +868,7 @@ committed.
   own "a rule that can be mechanically enforced must be" standard, this repo would ordinarily
   want a check here too. None exists today for "does this specific comment's function list
   match which functions call `history_at` vs. `history`," and building one is out of scope
-  for this item — flag it as a `docs/DEBTS.md`-shaped gap if the implementing session wants
+  for this item — flag it as a `docs/debts/`-shaped gap if the implementing session wants
   to record it, per that file's own stated purpose ("known gaps in the verification tooling,
   deliberately unfixed").
 - **This item does not address `_copies_out` or `Inventory.to_payload()`/`do_orders()`** —

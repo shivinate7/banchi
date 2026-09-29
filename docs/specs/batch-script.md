@@ -806,7 +806,7 @@ Logic in `pipeline/`, `identify/`, `geometry/`; tests in `harness/`.
   §4.5 now describes two methods and why the border search added beside it finds 53/53.
   the gates corpus's `T6` entry carries the measurement and the mechanism. A green T6 is still
   not a detection rate — one rig, one lighting state, one day, and the regression case is a
-  drawing built from the measured ring values rather than a photograph; `docs/DEBTS.md`
+  drawing built from the measured ring values rather than a photograph; `docs/debts/`
   records what that leaves.
   number, and GATES.md records that blind spot the way T1's `finish` blind spot is recorded.
 
@@ -837,7 +837,7 @@ in `41221f6`. Kept as the record of what changed and why, not as an open gate:
    4, and are deliberately absent". This spec builds them; the docstring's rationale should
    be retired rather than left describing a state that no longer exists. Done 2026-08-03.
 
-4. **`docs/DECISIONS.md`, D9.** Sub-threshold disposition is described as a per-run choice.
+4. **`docs/decisions/`, D9.** Sub-threshold disposition is described as a per-run choice.
    This spec adds a `no_market_data` category that is *not* dispositioned at all. Worth a
    sentence in D9 so a later session does not "fix" it by sweeping those into the flat
    price. Done 2026-08-03.

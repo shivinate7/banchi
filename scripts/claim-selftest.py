@@ -381,7 +381,7 @@ def build(tmp: Path) -> Path:
     seed.mkdir()
     git(seed, "init", "-q", ".")
     write(seed, "docs/DECISIONS.md", DECISIONS_MAIN)
-    write(seed, "docs/CODES-DECISIONS.md", CODES_MAIN)
+    write(seed, "docs/specs/code-cards.md", CODES_MAIN)
     write(seed, "docs/GATES.md", GATES_MAIN)
     write(seed, "docs/map.py", MAP_MAIN)
     write(seed, "CLAUDE.md", f"# Fixture\n\nmain cites {D(2)} and step 2 and {C(1)}.\n")
@@ -415,7 +415,7 @@ def build_split(tmp: Path) -> Path:
         "order": ["_preamble.md", "D001-first.md", "D002-second.md"],
     }, indent=2) + "\n")
     write(seed, "docs/DECISIONS.md", "# Stub\n\nThe entries are in `docs/decisions/`.\n")
-    write(seed, "docs/CODES-DECISIONS.md", CODES_MAIN)
+    write(seed, "docs/specs/code-cards.md", CODES_MAIN)
     write(seed, "docs/GATES.md", GATES_MAIN)
     write(seed, "docs/map.py", MAP_MAIN)
     write(seed, "CLAUDE.md", f"# Fixture\n\nmain cites {D(2)} and step 2 and {C(1)}.\n")
@@ -459,7 +459,7 @@ def main() -> int:
         git(work, "checkout", "-q", "-b", "feature")
         write(work, "docs/DECISIONS.md",
               DECISIONS_MAIN + f"\n## {SD} — Third\n\nbody\n")
-        write(work, "docs/CODES-DECISIONS.md",
+        write(work, "docs/specs/code-cards.md",
               CODES_MAIN + f"\n## {SC} — Another\n\nbody\n")
         write(work, "docs/GATES.md",
               GATES_MAIN + f"0. `step {SS}` **Third step** — done.\n")
@@ -676,7 +676,7 @@ def main() -> int:
         # Honest at the time: main holds 1 and 2 in all three namespaces, so these are free.
         write(late, "docs/DECISIONS.md",
               DECISIONS_MAIN + f"\n## {D(3)} — The branch's third\n\nbody\n")
-        write(late, "docs/CODES-DECISIONS.md",
+        write(late, "docs/specs/code-cards.md",
               CODES_MAIN + f"\n## {C(2)} — The branch's code entry\n\nbody\n")
         write(late, "docs/GATES.md", GATES_MAIN + "3. ~~The branch's third step~~ — done.\n")
         git(late, "add", "-A")
@@ -691,7 +691,7 @@ def main() -> int:
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
         write(rival, "docs/DECISIONS.md",
               DECISIONS_MAIN + f"\n## {D(3)} — Somebody else's third\n\nbody\n")
-        write(rival, "docs/CODES-DECISIONS.md",
+        write(rival, "docs/specs/code-cards.md",
               CODES_MAIN + f"\n## {C(2)} — Somebody else's code entry\n\nbody\n")
         write(rival, "docs/GATES.md", GATES_MAIN + "3. ~~Somebody else's third step~~ — done.\n")
         git(rival, "add", "-A")
@@ -1671,7 +1671,7 @@ def main() -> int:
         rt_entry = "D-" + "round-trip-thing"
         write(trip, f"docs/decisions/{rt_entry}.md",
               f"## {rt_entry} — A round trip thing\n\nbody\n")
-        write(trip, "docs/CODES-DECISIONS.md", CODES_MAIN + f"\n## {SC} — Another\n\nbody\n")
+        write(trip, "docs/specs/code-cards.md", CODES_MAIN + f"\n## {SC} — Another\n\nbody\n")
         write(trip, "docs/GATES.md", GATES_MAIN + f"0. `step {SS}` **Third step** — done.\n")
         write(trip, "docs/map.py",
               MAP_MAIN.replace("]\n", '    {"n": "' + SS + '", "title": "Third"},\n]\n'))
@@ -1691,11 +1691,11 @@ def main() -> int:
         decision_file = next((trip / "docs/decisions").glob("D*-round-trip-thing.md"))
         d_number = decision_file.stem.split("-", 1)[0]              # zero-padded, e.g. D003
         d_number_bare = "D" + str(int(d_number[1:]))                # unpadded, as cited
-        # NAMED BY ITS OWN TITLE, not "the first heading" — `docs/CODES-DECISIONS.md` already
+        # NAMED BY ITS OWN TITLE, not "the first heading" — `docs/specs/code-cards.md` already
         # carries C1 from the fixture seed, and a bare `(C\d+)` match would silently grab that
         # instead of the entry this arm just claimed.
         codes_match = re.search(r"^##\s+(C\d+)\s+—\s+Another$",
-                                 (trip / "docs/CODES-DECISIONS.md").read_text(), re.M)
+                                 (trip / "docs/specs/code-cards.md").read_text(), re.M)
         step_match = re.search(r"^(\d+)\.\s+\*\*Third step\*\*", (trip / "docs/GATES.md").read_text(),
                                 re.M)
         c_number = codes_match.group(1) if codes_match else None
@@ -2314,8 +2314,8 @@ def main() -> int:
         write(dwork, "docs/debts/_preamble.md", "# Fixture\n")
         write(dwork, "docs/debts/001-first.md", "## 1 — First finding\n\nbody\n")
         write(dwork, "docs/debts/ORDER.json", json.dumps(
-            {"source": "docs/DEBTS.md", "order": ["_preamble.md", "001-first.md"]}))
-        write(dwork, "docs/DEBTS.md",
+            {"source": "docs/debts/README.md", "order": ["_preamble.md", "001-first.md"]}))
+        write(dwork, "docs/debts/README.md",
              "# Known gaps\n\n## Index\n\n```\nDEBT1  First finding\n```\n")
         git(dwork, "add", "-A")
         git(dwork, "commit", "-qm", "seed the debts corpus")
@@ -2344,8 +2344,8 @@ def main() -> int:
            "neither slug survives in prose after --write", claude_after)
         ok(f"the branch cites {D(3)} and DEBT2." in claude_after,
            "both citations were rewritten to their claimed numbers, IN ONE COMMIT", claude_after)
-        ok("DEBT2" in (dwork / "docs/DEBTS.md").read_text(encoding="utf-8"),
-           "the debt index (docs/DEBTS.md) was ALSO regenerated, alongside the decision index — "
+        ok("DEBT2" in (dwork / "docs/debts/README.md").read_text(encoding="utf-8"),
+           "the debt index (docs/debts/README.md) was ALSO regenerated, alongside the decision index — "
            "settle_corpus settles both directory corpora in the same claim, D18's write-time half")
         debt_names = sorted(p.name for p in (dwork / "docs/debts").glob("*.md"))
         ok("002-a-second-finding.md" in debt_names,
@@ -2374,8 +2374,8 @@ def main() -> int:
         write(cwork, "docs/debts/_preamble.md", "# Fixture\n")
         write(cwork, "docs/debts/001-first.md", "## 1 — First finding\n\nbody\n")
         write(cwork, "docs/debts/ORDER.json", json.dumps(
-            {"source": "docs/DEBTS.md", "order": ["_preamble.md", "001-first.md"]}))
-        write(cwork, "docs/DEBTS.md",
+            {"source": "docs/debts/README.md", "order": ["_preamble.md", "001-first.md"]}))
+        write(cwork, "docs/debts/README.md",
              "# Known gaps\n\n## Index\n\n```\nDEBT1  First finding\n```\n")
         git(cwork, "add", "-A")
         git(cwork, "commit", "-qm", "seed the debts corpus")
@@ -2387,9 +2387,9 @@ def main() -> int:
         write(cwork, "docs/debts/002-the-branchs-finding.md",
              "## DEBT2 — The branch's finding\n\nbody\n")
         write(cwork, "docs/debts/ORDER.json", json.dumps(
-            {"source": "docs/DEBTS.md",
+            {"source": "docs/debts/README.md",
              "order": ["_preamble.md", "001-first.md", "002-the-branchs-finding.md"]}))
-        write(cwork, "docs/DEBTS.md",
+        write(cwork, "docs/debts/README.md",
              "# Known gaps\n\n## Index\n\n```\nDEBT1 First finding\nDEBT2 The branch's finding\n```\n")
         git(cwork, "add", "-A")
         git(cwork, "commit", "-qm", "the branch claims DEBT2")
@@ -2404,9 +2404,9 @@ def main() -> int:
         write(rival, "docs/debts/002-somebody-elses-finding.md",
              "## DEBT2 — Somebody else's finding\n\nbody\n")
         write(rival, "docs/debts/ORDER.json", json.dumps(
-            {"source": "docs/DEBTS.md",
+            {"source": "docs/debts/README.md",
              "order": ["_preamble.md", "001-first.md", "002-somebody-elses-finding.md"]}))
-        write(rival, "docs/DEBTS.md",
+        write(rival, "docs/debts/README.md",
              "# Known gaps\n\n## Index\n\n```\nDEBT1 First finding\n"
              "DEBT2 Somebody else's finding\n```\n")
         git(rival, "add", "-A")
@@ -2442,8 +2442,8 @@ def main() -> int:
             write(owork, "docs/debts/_preamble.md", "# Fixture\n")
             write(owork, "docs/debts/001-first.md", "## 1 — First finding\n\nbody\n")
             write(owork, "docs/debts/ORDER.json", json.dumps(
-                {"source": "docs/DEBTS.md", "order": ["_preamble.md", "001-first.md"]}))
-            write(owork, "docs/DEBTS.md",
+                {"source": "docs/debts/README.md", "order": ["_preamble.md", "001-first.md"]}))
+            write(owork, "docs/debts/README.md",
                  "# Known gaps\n\n## Index\n\n```\nDEBT1  First finding\n```\n")
             git(owork, "add", "-A")
             git(owork, "commit", "-qm", "seed")

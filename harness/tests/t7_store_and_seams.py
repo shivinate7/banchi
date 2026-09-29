@@ -17,7 +17,7 @@ the inventory says it is not, discovered weeks later by a person opening the wro
 Pass: positions never collide and a replay burns none; the sidecar round-trips through the reader identify uses; every refusal answers in its own code; command seams read the columns they name, and commands refuse rather than prompt
 
 TWO CASES HERE ARE REGRESSION TESTS, NOT NEW COVERAGE. Both were live bugs that passed
-every gate in the repo on the day they shipped, and both are recorded in docs/DEBTS.md:
+every gate in the repo on the day they shipped, and both are recorded in docs/debts/:
 
   the PUT that never reached the sidecar   `cli/cmd_identify.py` builds its card from the
                                            sidecar, not from `inventory.json`, so a
@@ -76,7 +76,7 @@ because `GET /photo` is loaded by an `<img>`, which sends no `Origin` either.
 
 `check_history` LANDED ON 2026-08-13 WITH THE LINES IT ASSERTS. Three routes here write
 without moving a card between states — the PUT correction, the undo and the review answer —
-and until that day none of them appended anything to `history.jsonl`, which `docs/DEBTS.md`
+and until that day none of them appended anything to `history.jsonl`, which `docs/debts/`
 carried as a known gap. The section asserts the part that cannot be recovered afterwards: the
 value a correction replaced, the boundary between two physical cards at one reused position,
 and which queue's offer a human chose from. It also asserts the two properties that make the
@@ -87,7 +87,7 @@ THREE SECTIONS LANDED ON 2026-08-23 FOR THE MULTI-GAME FOUNDATION (D20-D25), and
 named by the work that shipped the code rather than invented here:
 
   `check_capture_claim_chain`   `store/master.py:CAPTURE_CLAIM_FIELDS` against `Card`, and
-                                the two hops docs/DEBTS.md says fail SILENTLY — the reload
+                                the two hops docs/debts/ says fail SILENTLY — the reload
                                 filter and the re-record upsert. Asserted over the tuple, so
                                 it grows with it; naming today's claims would pass on the day
                                 a fifth is added and dropped.
@@ -1125,7 +1125,7 @@ def check_next_index_sql(checks: Checks) -> None:
 
 
 def check_allocator(checks: Checks) -> None:
-    """The seventeen cases `docs/DEBTS.md` enumerates, plus the coercion that caused them.
+    """The seventeen cases `docs/debts/` enumerates, plus the coercion that caused them.
 
     `allocate_capture` is the one piece of step-5 logic Gate B exercised 53 times in a
     row on 2026-08-22, and it is the only place in the project that decides where a physical
@@ -8583,7 +8583,7 @@ def check_history(checks: Checks) -> None:
 
     THE ONLY APPEND-ONLY FILE IN THE STORE, which is what makes this worth a section. Every
     other file here is replaced whole on every write, so each of them answers "what does this
-    card say now" and none of them can answer "what did it say in August". `docs/DEBTS.md`
+    card say now" and none of them can answer "what did it say in August". `docs/debts/`
     carried the omission for two months on the grounds that the store logs state transitions
     and a correction, a deletion and an answer are none of them — true about the store's
     vocabulary, and never an argument about the audit trail.
@@ -8621,7 +8621,7 @@ def check_history(checks: Checks) -> None:
         checks.equal(
             [e.get("event") for e in corrections],
             [master.CAPTURED, capture_server.CORRECTED],
-            "a PUT correction appends one event — the gap docs/DEBTS.md recorded from "
+            "a PUT correction appends one event — the gap docs/debts/ recorded from "
             "2026-06 to 2026-08-13",
         )
 
@@ -9348,7 +9348,7 @@ def check_sidecar_seam(checks: Checks) -> None:
 def check_capture_claim_chain(checks: Checks) -> None:
     """`store/master.py:CAPTURE_CLAIM_FIELDS` — the tuple, and the two silences it closed.
 
-    `docs/DEBTS.md` names ten hops between the control on the capture screen and the
+    `docs/debts/` names ten hops between the control on the capture screen and the
     consumer that finally reads a claim, and says TWO OF THEM FAIL SILENTLY. Both are here,
     because both are the same shape: the value is written, the response is correct, the file
     on disk carries it, and something later hands back a card that never had it.
@@ -9550,7 +9550,7 @@ def check_game_and_note_seam(checks: Checks) -> None:
 
         # THE CORRECTION ROUTE IS THE ONLY WAY A NOTE ARRIVES, and it rewrites the sidecar
         # from the RECORD rather than from the request body — so a PUT naming one claim must
-        # leave the others standing. That is the failure `docs/DEBTS.md` calls the harder one
+        # leave the others standing. That is the failure `docs/debts/` calls the harder one
         # to see: it works until the operator corrects a card.
         capture_server.do_put_card(6, 1, {"note": "  bent corner, top left  "})
         checks.equal(

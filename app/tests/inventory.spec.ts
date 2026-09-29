@@ -5830,7 +5830,7 @@ test('the address holds one line at both widths, including the longest label the
      FLAKE — that one was diagnosed properly on the branch that landed as `6c70d55`, by loading
      the rig and CAPTURING the error text: 9 of 80 loaded repeats failed in `open()` on a
      `toBeVisible()` timeout, none on an assertion, and the geometry case that remained was a
-     case subtracting two layouts rather than a screen that moves. `docs/DEBTS.md` carries that
+     case subtracting two layouts rather than a screen that moves. `docs/debts/` carries that
      reading; this comment does not restate it.
 
      WHY THIS AWAIT IS STILL WORTH ITS LINE. Every number this case asserts is an advance width

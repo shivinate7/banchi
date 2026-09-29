@@ -48,7 +48,7 @@ changed, a flag that no longer exists, a sequence of steps in the wrong order, a
 guarantee the code stopped making. Not: wording you would have phrased differently, a
 section you would have organized another way, or prose that is merely terse.
 
-`docs/DECISIONS.md` needs its own care. Entries there are settled rulings, and its header
+`docs/decisions/` needs its own care. Entries there are settled rulings, and its header
 says sessions do not re-litigate them. A decision entry is stale only when it describes the
 implementation incorrectly. **A decision you disagree with is not a finding.** If the code
 contradicts a decision, that is a code finding — report it as one and leave the entry alone.

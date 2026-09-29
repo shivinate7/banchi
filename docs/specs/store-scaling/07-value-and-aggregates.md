@@ -954,7 +954,7 @@ matching `docs/specs/store-scaling.md` §1's own table shape. Expected shape of 
   rather than claiming flatness the design does not deliver; if the cost is unacceptable at
   50,000 cards, the follow-up is caching the aggregates briefly — new surface area with no
   existing precedent in this codebase (grep for one), out of scope here and named as a debt
-  in `docs/DEBTS.md` rather than built on a guess.
+  in `docs/debts/` rather than built on a guess.
 - **`_release_plan`, `_box_names`, `_on_hand_by_run`** — measure each with a small script
   calling the function directly (`server/capture_server.py:_release_plan` needs a `box`
   number that exists in the copied store; `_box_names`/`_on_hand_by_run` take no arguments

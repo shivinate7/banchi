@@ -30,7 +30,7 @@ import { CAPTURE_PORT, DEV_PORT } from '../devPort'
  * is what failed `the box lives in the walk's column` and `answering a card costs no
  * scrolling` on 2026-09-05, as a bare pixel count that named neither the banner nor the
  * missing stub. A design floor whose verdict depends on a process outside the test is the
- * defect D43 exists about, one level up. `docs/DEBTS.md` carried this as its section 13 until
+ * defect D43 exists about, one level up. `docs/debts/` carried this as its section 13 until
  * this file discharged it; the measurements are here and in `docs/map.py`'s entry now, which is
  * where a claim with a reader belongs.
  *
@@ -216,7 +216,7 @@ const CARDS = {
  *  be satisfied by the next person reaching for jsdelivr. What the suite is entitled to talk
  *  to is knowable and short — the Vite server the page came off, and the capture port
  *  `sealCapture` already owns — so the rule is stated as those two and everything else is
- *  refused. `docs/DEBTS.md` carries this repo's own receipt for the other shape: a dry-run
+ *  refused. `docs/debts/` carries this repo's own receipt for the other shape: a dry-run
  *  guard built as a block-list of guessed endpoint names let a real TCGplayer import through.
  *
  *  THE PORT IS THE WHOLE TEST, for the reason `CAPTURE_ORIGIN` above gives: `server.ts`

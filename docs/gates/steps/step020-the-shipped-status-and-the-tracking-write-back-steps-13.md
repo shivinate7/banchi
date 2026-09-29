@@ -7,5 +7,5 @@
 
 **Nothing in this list is blocked on a third-party benchmark.** A sub-floor T1 is worked
 directly — see the T1 section above. The TCGplayer Scan & Identify comparison was removed
-from this list on 2026-08-03 and parked in `docs/DECISIONS.md`; it is available as a
+from this list on 2026-08-03 and parked in `docs/decisions/`; it is available as a
 reference point when someone wants it, never as a precondition.

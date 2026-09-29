@@ -9,7 +9,7 @@ resolves to the correct condition string and price.
 Pass: all four stages correct, a finish claim is never contradicted by the photograph, and
 every routing row sends the card to the queue named.
 
-The ladder (D3 in docs/DECISIONS.md), in order:
+The ladder (D3 in docs/decisions/), in order:
   1. Capture-time metadata — variant toggle recorded in the card's JSON sidecar. Primary
      path. `--variant` on the batch script fills the finish in where a sidecar records
      none, and NEVER overrides one — asserted at the end of this file, because a flag able

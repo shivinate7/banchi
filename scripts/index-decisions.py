@@ -27,8 +27,8 @@ render from.
 
 DEBTS REUSE THIS EXACT MACHINERY, PARAMETERIZED, NOT A SECOND COPY. `docs/debts/` joined the
 claim path (D140's own scheme) on the owner's word — the debts corpus was hand-numbered
-before, `docs/DEBTS.md`'s own index hand-typed alongside it, which is the same collision this
-file was built to remove for decisions. UNLIKE DECISIONS, `docs/DEBTS.md` KEEPS A WRITTEN
+before, `docs/debts/`'s own index hand-typed alongside it, which is the same collision this
+file was built to remove for decisions. UNLIKE DECISIONS, `docs/debts/` KEEPS A WRITTEN
 INDEX — no rendered view has replaced it yet, so `rewrite_index` still regenerates it at
 claim time. `IndexSpec` below is the one difference between the two corpora: which corpus
 module to load, which directory/manifest it owns, which file holds the index block (or would,
@@ -75,11 +75,11 @@ DECISION_SPEC = IndexSpec("decisions_corpus.py", "docs/decisions", "CLAUDE.md",
 # heading may or may not carry the word) OR `## DEBT-<slug> — Title` (still unclaimed). The
 # captured group never includes the literal `DEBT`, so the index line always PREFIXES it —
 # `DEBT` + a number = `DEBT<n>`, `DEBT` + a slug = `DEBT-<slug>` — matching every line
-# `docs/DEBTS.md`'s own index already carries (`DEBT1  The reverse direction...`).
+# `docs/debts/`'s own index already carries (`DEBT1  The reverse direction...`).
 DEBT_HEADING_RE = re.compile(r"^##\s+(?:DEBT)?([1-9][0-9]{0,2}|-[a-z][a-z0-9]*(?:-[a-z0-9]+)+)"
                              r"\s*[—-]\s*(.+)$")
 DEBT_LINE_RE = re.compile(r"^DEBT(?:[1-9][0-9]{0,2}|-[a-z][a-z0-9]*(?:-[a-z0-9]+)+)\s")
-DEBT_SPEC = IndexSpec("debts_corpus.py", "docs/debts", "docs/DEBTS.md",
+DEBT_SPEC = IndexSpec("debts_corpus.py", "docs/debts", "docs/debts/README.md",
                       DEBT_HEADING_RE, DEBT_LINE_RE)
 
 
@@ -180,7 +180,7 @@ def main(argv: List[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--write", action="store_true", help="apply (default: preview)")
     ap.add_argument("--debts", action="store_true",
-                    help="operate on docs/debts/ + docs/DEBTS.md instead of decisions")
+                    help="operate on docs/debts/ + docs/debts/README.md instead of decisions")
     args = ap.parse_args(argv)
     spec = DEBT_SPEC if args.debts else DECISION_SPEC
 
@@ -193,7 +193,7 @@ def main(argv: List[str]) -> int:
 
     # DECISIONS STOP HERE. CLAUDE.md no longer carries a decision index (D60 amended) — `make
     # map ARGS=--decisions` renders that list off the corpus, on demand, so there is no stub
-    # left for this generator to rewrite. `docs/DEBTS.md` still hand-carries one, so the debt
+    # left for this generator to rewrite. `docs/debts/` still hand-carries one, so the debt
     # spec's own `stub_file` still gets regenerated below.
     if spec is not DEBT_SPEC:
         if not moved:

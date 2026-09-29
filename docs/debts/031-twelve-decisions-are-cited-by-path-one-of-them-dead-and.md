@@ -58,6 +58,6 @@ is the owner's to schedule.
    that can carry this citation. A repeat of that `scripts/docs-audit.py` citation is then caught on
    the day it is written. Nobody sweeps for it by hand again.
 
-None of the six files above is `docs/decisions/`, `docs/DECISIONS.md` or `docs/map.py`. PR
+None of the six files above is `docs/decisions/`, `docs/decisions/` or `docs/map.py`. PR
 #424's own change does not touch them. Leaving them as they are does not affect `repo map`'s
 `governed_by` accounting.

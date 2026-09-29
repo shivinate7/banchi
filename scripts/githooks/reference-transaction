@@ -113,7 +113,7 @@ if [ "$phase" = "committed" ]; then
     zero_oid "$new" && continue
 
     carried=""
-    for file in docs/DECISIONS.md docs/CODES-DECISIONS.md; do
+    for file in docs/DECISIONS.md docs/specs/code-cards.md; do
       hit="$(git show "$new:$file" 2>/dev/null | grep -E '^## [DC]-[a-z][a-z0-9]*-' 2>/dev/null)"
       [ -n "$hit" ] && carried="$carried$hit
 "

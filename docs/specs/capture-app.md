@@ -127,7 +127,7 @@ whatever Vite serves for a hash it does not recognize.
 throughout.** That combination is the finding, and it survives the fix: nothing on the path
 that decides whether a commit proceeds can tell whether a screen can be opened, and
 `make design-check` — the one check that can — is deliberately not on it, because it starts a
-browser and a dev server. Compare `docs/DEBTS.md`'s repo-map entry, where a whole directory
+browser and a dev server. Compare `docs/debts/`'s repo-map entry, where a whole directory
 went unaudited under a rule that looked like it covered it.
 
 **Wired 2026-08-13.** Six routes in the ROUTES table, one client function per new route in
@@ -217,7 +217,7 @@ session after this one.
 was not met: the build shipped and `docs/map.py` described none of the thirteen files it
 added, so the index D17 calls believed-therefore-dangerous was wrong about the directory that
 had just changed most. Nothing caught it, and nothing could — the repo-map orphan rule
-filtered on `.py` and did not descend, which `docs/DEBTS.md` had predicted in writing on
+filtered on `.py` and did not descend, which `docs/debts/` had predicted in writing on
 2026-08-12. Both halves are fixed now: the map carries every file, and the orphan rule
 reaches this directory through a per-entry `source_suffixes` declaration it makes in the map
 itself. The lesson for the next spec that ends in a map-flip is that a step scheduled as
@@ -245,7 +245,7 @@ it from the old list. **This is the one amendment that removes scope rather than
 it**, and it is worth being explicit that the removal is not a deferral — there is nothing
 left for the feature to do.
 
-Note what survives the removal: v1 bug 5 in `docs/DECISIONS.md` is about an import that
+Note what survives the removal: v1 bug 5 in `docs/decisions/` is about an import that
 silently skipped cards and reported nothing in either direction. Its guard is T3, which is
 green and stays green. Removing the app-side import does not weaken it.
 
@@ -259,7 +259,7 @@ from "build and integrate" to "tune the trigger against a rhythm that already ex
 ### 2.3 — The rig's camera path is recorded for the first time
 
 Nothing in the repo names the capture hardware. Three references to a camera exist —
-`CLAUDE.md`'s rule against `facingMode`, v1 bug 3 in `docs/DECISIONS.md`, and the step-5
+`CLAUDE.md`'s rule against `facingMode`, v1 bug 3 in `docs/decisions/`, and the step-5
 scope exclusion — and none says what the camera is.
 
 It is a Sony RX100 VII or A7C, over HDMI into an Elgato Cam Link 4K. **The consequence is
@@ -681,7 +681,7 @@ contract can be benchmarks, never components.
 - **Glare on the number corner is unrecoverable at any resolution.** Gate B's raking-light
   shot was never taken — finish detection was measured across all 53 cards under the one rig
   lighting instead — so the number corner under raking light is still unmeasured. Check it
-  whenever a second lighting run happens, which `docs/DEBTS.md`'s border-search entry wants
+  whenever a second lighting run happens, which `docs/debts/`'s border-search entry wants
   for its own reasons.
   shot is currently aimed at foil detection; check the number corner in the same pass.
 - **Request the resolution explicitly.** A browser video track defaults far below what the
@@ -717,7 +717,7 @@ v1-bug rules can actually catch:
 - no `facingMode` in any camera constraint (v1 bug 3)
 - no `split(",")` CSV parsing (v1 bug 2)
 
-Both are listed in `docs/DECISIONS.md`'s v1 bug table with "lint rule" named as the guard,
+Both are listed in `docs/decisions/`'s v1 bug table with "lint rule" named as the guard,
 and neither has had one since the table was written.
 
 ## 9. What step 7 still may not build
@@ -748,7 +748,7 @@ compaction or gap-filling, ever.
 `scripts/docs-audit.py` was forbidden here for the reason step 5 forbade it, and that ban is
 also lifted: the repo-map orphan rule could not see `app/`, which is what let the map go
 stale about the directory that had just changed most. The edits are recorded in
-`docs/DEBTS.md` and in D16's own terms — the file still never writes, still parses rather
+`docs/debts/` and in D16's own terms — the file still never writes, still parses rather
 than imports, and still has no `--fix` flag.
 
 And no edits to `scripts/docs-audit.py`, for the same reason step 5 forbade them.
@@ -917,7 +917,7 @@ later. Item 6 does not.
 
 It does not close the `tested_by` gap in `docs/map.py`, add the token-drift check for
 `app/src/tokens.css`, or extend the repo-map orphan rule to reach `app/`. All three are in
-`docs/DEBTS.md` with their reasons. The second of them gets materially worse during this
+`docs/debts/` with their reasons. The second of them gets materially worse during this
 work — step 7a is where the number of files reading those tokens stops being one — and it
 is the cheapest of the three. Doing it early in this session is defensible; doing it as a
 rider on the capture screen is not.
@@ -930,7 +930,7 @@ now parses the fenced block under `## Tokens` in `docs/DESIGN.md` against the `:
 properties in `app/src/tokens.css` and blocks on any disagreement in either direction, so the
 sentence this paragraph used to carry — that the two are "checked by nobody" — is exactly the
 false claim section 2 puts first in the order of operations. It was true when written and
-stopped being true in the same session. The first is unchanged. `docs/DEBTS.md` carries all
+stopped being true in the same session. The first is unchanged. `docs/debts/` carries all
 three, marks the second closed with what it does and does not cover, and records which of
 their stated moments went by.
 

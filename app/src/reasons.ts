@@ -31,7 +31,7 @@
  *
  * NOTHING KEEPS THIS MAP IN STEP WITH THOSE MODULES, and pretending otherwise would be
  * worse than saying so. A TypeScript file cannot import a Python constant, and no check in
- * this repo compares the two — the same gap `docs/DEBTS.md` records for `tokens.css` against
+ * this repo compares the two — the same gap `docs/debts/` records for `tokens.css` against
  * docs/DESIGN.md. What this file does instead is make drift VISIBLE rather than silent: an
  * unknown code renders as itself in both slots, with a sentence saying the screen has no
  * label for it, so a reason added to the pipeline shows up here as a plain string rather

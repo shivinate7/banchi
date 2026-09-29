@@ -1415,7 +1415,7 @@ export type GroupAnswerRow = {
  *  one outcome.
  *
  *  ALL OR NOTHING, WHICH IS WHY THIS SHAPE ONLY DESCRIBES SUCCESS. The route validates
- *  every position before writing any (docs/DECISIONS.md, "A homogeneous queue may be
+ *  every position before writing any (docs/decisions/, "A homogeneous queue may be
  *  answered as a group" — the entry that reopens D4, narrowly), and a group with one
  *  refused member refuses whole in `group_entry_refused` or `group_not_uniform` with
  *  nothing written — so a body of this type means every named position was answered.

@@ -204,7 +204,7 @@ a token declared in the stylesheet that this block does not name fails the commi
 name here that nothing renders. **It compares a value only where this block states a hex** —
 31 of them, across both themes. An alpha (`ink 8%`), an alias (`= ink in both themes`), a
 duration, an easing curve and a shadow are named and checked for existence, and their values are
-locked nowhere a script can read; `docs/DEBTS.md` carries that gap rather than this row implying
+locked nowhere a script can read; `docs/debts/` carries that gap rather than this row implying
 a coverage it does not have. **The row is still not to be satisfied by respelling the palette —
 that is D16's forbidden direction.** What changed is which side was wrong.
 

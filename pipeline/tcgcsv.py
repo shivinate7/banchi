@@ -94,7 +94,7 @@ SEALED_CONDITION = "Unopened"
 # it — a game is a partition and a grade is a scope.
 #
 # `Product Line` is the one that matters, and D25 is exact about why. The Deferred entry in
-# docs/DECISIONS.md used to call the catalog join "product-line-agnostic". Measured, it was
+# docs/decisions/ used to call the catalog join "product-line-agnostic". Measured, it was
 # product-line BLIND — and blind is not agnostic. Agnostic means the join reads the column
 # and does not care what it says; blind means it cannot see the column at all, so two
 # exports concatenated into one file would CROSS-JOIN IN SILENCE, a Riftbound number

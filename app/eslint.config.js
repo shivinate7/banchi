@@ -3,7 +3,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 
 /* eslint, flat config. Build-order step 7a item 6.
  *
- * `docs/DECISIONS.md`'s v1 bug table names "lint rule" as the guard on bugs 2 and 3, and
+ * `docs/decisions/`'s v1 bug table names "lint rule" as the guard on bugs 2 and 3, and
  * from the day that table was written until this file landed, neither guard existed. A
  * table that names a control which is not there is worse than one that admits there is
  * none: the next session reads the column and stops looking.
@@ -72,13 +72,13 @@ const FACING_MODE =
   'v1 bug 3: `facingMode` broke desktop camera selection — a desktop browser has no ' +
   'front/back to choose between, so the constraint selects nothing or the wrong device. ' +
   'Pick the camera by deviceId with a device picker. See the v1 bug table at the end of ' +
-  'docs/DECISIONS.md, and D13.'
+  'docs/decisions/, and D13.'
 
 const SPLIT_COMMA =
   'v1 bug 2: naive `split(",")` CSV parsing. TCGplayer export fields are quoted and ' +
   'contain commas (product names do), so this silently shreds rows and the damage ' +
   'surfaces as a wrong listing, not as an error. Use a real CSV library — PapaParse in ' +
-  'JS, `csv` in Python. See CLAUDE.md and the v1 bug table at the end of docs/DECISIONS.md.'
+  'JS, `csv` in Python. See CLAUDE.md and the v1 bug table at the end of docs/decisions/.'
 
 /* Matched by name anywhere, not by the shape of a getUserMedia call. Constraints get
  * assembled in a variable and spread in later, so a selector anchored to

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Docs staleness audit — the mechanical half. See docs/DECISIONS.md D16.
+"""Docs staleness audit — the mechanical half. See docs/decisions/ D16.
 
 This repo's markdown carries its architecture and its rationale. Nothing verified it until
 this script existed, so every path, target, subcommand, test id and decision number in it
@@ -322,7 +322,7 @@ class Report:
         return json.dumps({"rows": rows, "exit": exit_code}, indent=2)
 
     def render(self) -> str:
-        lines = ["PKMNSCAN docs audit — docs/DECISIONS.md D16", "=" * 72, ""]
+        lines = ["PKMNSCAN docs audit — docs/decisions/ D16", "=" * 72, ""]
         for row in self.checks:
             check, severity, findings, summary = row.check, row.severity, row.findings, row.summary
             if not findings:
@@ -827,7 +827,7 @@ def resolve_candidate(candidate: str, containing: Path, tops: Set[str]) -> Optio
     text = candidate.lstrip("@")
     if text.startswith("../"):
         # A `../` INSIDE A DECISION ENTRY MEANS EITHER `docs/` OR `docs/decisions/`, AND
-        # BOTH ARE TRIED. The entries were one file at `docs/DECISIONS.md` until the split;
+        # BOTH ARE TRIED. The entries were one file at `docs/decisions/` until the split;
         # their bytes are unchanged by design, and a pre-split entry writing `../` meant the
         # repo root because that is where it sat. D135 has one. Resolving only from the
         # deeper directory makes a faithful move look like a broken citation.
@@ -2358,14 +2358,14 @@ def check_evidence_freshness(report: Report, staged_only: bool) -> None:
 # `[1-9][0-9]?` read decision ids for a year and went vacuous at the hundredth entry: a
 # heading stops being a heading to this file and a citation stops being a citation, so
 # `decision ids`, `decision ids in code`, `decision index`, `decision structure` and
-# `id claims` all report GREEN over a file they can no longer see. docs/DEBTS.md carried
+# `id claims` all report GREEN over a file they can no longer see. docs/debts/ carried
 # that as a triggered debt from 2026-08-30 until this landed; the trigger fired at the
 # ninetieth entry and the file reached D92 before anyone discharged it. The entry is gone from
 # that file rather than rewritten as closed — its own preamble sends closure narrative to git,
 # and D72 carries what a reader needs.
 #
 # PROVED RATHER THAN ASSUMED, which is what the debt entry demanded and why it stayed open:
-# a three-digit heading appended to docs/DECISIONS.md left `decision ids` reporting 92 D
+# a three-digit heading appended to docs/decisions/ left `decision ids` reporting 92 D
 # headings over 93, `decision structure` reporting 92 entries over the same 93, `decision
 # index` reporting "92 indexed, matching 92 headings" while that entry sat outside the index,
 # and a dangling three-digit citation unreported. Four rows, all green, over a file none of
@@ -2426,7 +2426,7 @@ def is_slug(identifier: str) -> bool:
 # `server/tcg_export`, `server/order_transport` and `server/pipeline_routes` (one each)
 # — and mccabe's complexity code joins them the moment anyone writes one. The two-digit cap
 # could not reach their third digit, so widening it turns every one into a citation of an
-# entry that does not exist. That is exactly why docs/DEBTS.md kept the cap rather than
+# entry that does not exist. That is exactly why docs/debts/ kept the cap rather than
 # fixing it, and why the widen could not land without this.
 #
 # MEASURED, NOT PREDICTED. With the cap at three and this strip disabled, `decision ids in
@@ -2489,7 +2489,7 @@ def decision_heading_lines(path: Path, letter: str) -> List[Tuple[str, int]]:
 # ---------------------------------------------------------------- the corpus as a directory
 
 # THE DECISION CORPUS IS `docs/decisions/`, ONE FILE PER ENTRY, and was one 1.4 MB file until
-# the split. Every row below used to open `docs/DECISIONS.md`; they open the directory now and
+# the split. Every row below used to open `docs/decisions/`; they open the directory now and
 # assert exactly what they asserted before. What changed for the better is WHERE a finding
 # points: an over-budget entry names its own file and line 1, rather than an offset into a
 # file nobody scrolls to.
@@ -2598,7 +2598,7 @@ def decision_id_code_haystack() -> List[Path]:
 
 def check_decision_ids(report: Report, docs: List[Path]) -> None:
     singles = {i for i, _, _ in decision_heading_lines_across(decision_files(), "D")}
-    codes = decision_headings(ROOT / "docs" / "CODES-DECISIONS.md", "C")
+    codes = decision_headings(ROOT / "docs" / "specs" / "code-cards.md", "C")
 
     def scan(paths: Iterable[Path], severity_findings: List[Finding]) -> None:
         for path in paths:
@@ -2613,7 +2613,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
                             Finding(
                                 f"{rel(path)}:{number}",
                                 f"cites D{digits}, which has no `## D{digits}` heading in "
-                                f"docs/DECISIONS.md.",
+                                f"docs/decisions/.",
                             )
                         )
                 for digits in _CODES_DECISION_RE.findall(line):
@@ -2622,14 +2622,14 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
                             Finding(
                                 f"{rel(path)}:{number}",
                                 f"cites C{digits}, which has no `## C{digits}` heading in "
-                                f"docs/CODES-DECISIONS.md.",
+                                f"docs/specs/code-cards.md.",
                             )
                         )
 
     in_docs: List[Finding] = []
 
     # AN ID IS UNIQUE, AND NOTHING ASSERTED THAT UNTIL 2026-08-30 (D16, amended). Three
-    # entries in `docs/DECISIONS.md` carried ONE number, written by three sessions that each
+    # entries in `docs/decisions/` carried ONE number, written by three sessions that each
     # took the next free id against the same base and all merged. Every row here stayed green
     # throughout, because the count above is over a SET: it printed a distinct-id total for a
     # file holding more headings than that, and the citation scan below is satisfied by a
@@ -2649,7 +2649,7 @@ def check_decision_ids(report: Report, docs: List[Path]) -> None:
     # create by copying an entry rather than moving it.
     for paths, letter in (
         (decision_files(), "D"),
-        ([ROOT / "docs" / "CODES-DECISIONS.md"], "C"),
+        ([ROOT / "docs" / "specs" / "code-cards.md"], "C"),
     ):
         seen: Dict[str, List[Tuple[Path, int]]] = {}
         for found, path, number in decision_heading_lines_across(paths, letter):
@@ -2830,7 +2830,7 @@ def on_main() -> bool:
 
 def check_id_claims(report: Report) -> None:
     findings: List[Finding] = []
-    codes = ROOT / "docs" / "CODES-DECISIONS.md"
+    codes = ROOT / "docs" / "specs" / "code-cards.md"
 
     unclaimed: List[str] = []
     debt_corpus = _debts_corpus()
@@ -3160,7 +3160,7 @@ def code_haystack() -> str:
     return _HAYSTACK
 
 
-# D60's row. Reads docs/DECISIONS.md by hard-coded path, so it answers on every run rather
+# D60's row. Reads docs/decisions/ by hard-coded path, so it answers on every run rather
 # than only when that file is staged — the same asymmetry check_map and check_pass_criteria
 # already have, and for the same reason: a broken heading there breaks every consumer, not
 # only the commit that wrote it.
@@ -3253,7 +3253,7 @@ def _decision_index_findings(
     `is_unclaimed` says so — everything else that used to fail here still fails exactly the
     same way.
 
-    ONE CALLER LEFT: `check_debt_index`, with `_is_unclaimed_debt` and `docs/DEBTS.md`. The
+    ONE CALLER LEFT: `check_debt_index`, with `_is_unclaimed_debt` and `docs/debts/`. The
     decision-side twin this was built beside (`check_decision_index`, `_is_unclaimed`) is
     retired along with CLAUDE.md's decision index (D60 amended) — `make map
     ARGS=--decisions` renders that list off the corpus now, and a rendered view has nothing
@@ -3337,7 +3337,7 @@ def check_debts_headings(report: Report) -> None:
     this row is what stops the next one being written that way.
 
     THE CORPUS IS A DIRECTORY NOW (2026-09-16), one file per entry under `docs/debts/`, with
-    `docs/DEBTS.md` left as the stub — the same split D160 performed for decisions. This row
+    `docs/debts/` left as the stub — the same split D160 performed for decisions. This row
     reads the directory rather than the monolith and asserts exactly what it asserted before.
 
     A DEBT NOW JOINS THE CLAIM PATH TOO (D140's own scheme, the owner's word), so a heading
@@ -3396,7 +3396,7 @@ def check_debts_headings(report: Report) -> None:
 
 
 def check_debt_index(report: Report) -> None:
-    """`docs/DEBTS.md`'s fenced index against `docs/debts/`'s headings, both directions.
+    """`docs/debts/README.md`'s fenced index against `docs/debts/`'s headings, both directions.
 
     D160's own argument: an index that has drifted is worse than none, because it is
     believed. Both sides are ids and titles, so this is MECHANICAL — D16's test for what
@@ -3412,10 +3412,10 @@ def check_debt_index(report: Report) -> None:
     """
     if _debts_corpus_empty(report, "debt index"):
         return
-    stub = ROOT / "docs" / "DEBTS.md"
+    stub = ROOT / "docs" / "debts" / "README.md"
     if not exists(stub):
         report.add("debt index", MECHANICAL,
-                   [Finding("docs/DEBTS.md", "the stub does not exist.")])
+                   [Finding("docs/debts/README.md", "the README does not exist.")])
         return
 
     corpus = _debts_corpus()
@@ -3450,7 +3450,7 @@ def check_debt_index(report: Report) -> None:
             block.append(line)
 
     findings = _decision_index_findings(
-        want, got, is_unclaimed=_is_unclaimed_debt, doc="docs/DEBTS.md",
+        want, got, is_unclaimed=_is_unclaimed_debt, doc="docs/debts/README.md",
         empty_message="no debts index found.")
     report.add("debt index", MECHANICAL, findings,
                f"{len(got)} indexed, matching {len(want)} headings",
@@ -3564,7 +3564,7 @@ def _debts_section(number: int) -> Optional[str]:
     nothing it cares about.
 
     READS THE DIRECTORY, NOT THE MONOLITH, since 2026-09-16 — `scripts/debts_corpus.py`
-    hands this function the same bytes `docs/DEBTS.md` used to hold, so every caller below
+    hands this function the same bytes `docs/debts/` used to hold, so every caller below
     keeps working across the split unchanged.
     """
     corpus = _debts_corpus()
@@ -4500,7 +4500,7 @@ def check_server_concurrency(report: Report) -> None:
             MECHANICAL,
             [
                 Finding(
-                    "docs/DEBTS.md",
+                    "docs/debts/",
                     "section 11 is gone, and it is what publishes the capture server's "
                     "concurrency. Restore it, or delete this row with it — a check whose "
                     "subject has left is the vacuous green this file is about.",
@@ -4514,7 +4514,7 @@ def check_server_concurrency(report: Report) -> None:
     # names and `called` is what the sentence calls itself, so a message reads the same
     # whichever file is wrong.
     publications: List[Tuple[str, str, str]] = [
-        ("docs/DEBTS.md", "section 11", section),
+        ("docs/debts/", "section 11", section),
     ]
     claude_md = ROOT / "CLAUDE.md"
     claude_text = read(claude_md) if exists(claude_md) else None
@@ -4604,7 +4604,7 @@ def check_server_concurrency(report: Report) -> None:
     elif re.search(rf"\b{re.escape(owner)}\b", section) is None:
         findings.append(
             Finding(
-                "docs/DEBTS.md",
+                "docs/debts/",
                 f"section 11 does not name `{owner}`, which is where `Connection: close` is "
                 f"sent from. The method is the guarantee: every response reaches "
                 f"`end_headers` by construction, so no new route can forget the header, "
@@ -5414,7 +5414,7 @@ def _env_names() -> Row:
 # THE OWNER RETIRED THE GATING SYSTEM, so there is nothing left for it to reconcile: no gate
 # is current, `docs/GATES.md` is a record of runs rather than a schedule, and the declaration
 # it parsed no longer exists. A check whose subject is gone is deleted rather than left
-# passing vacuously — `docs/DEBTS.md` spends a section on the difference between a green row
+# passing vacuously — `docs/debts/` spends a section on the difference between a green row
 # and a row that cannot fail, and leaving this one would have manufactured exactly that.
 #
 # Deleted WITH its call, which is the clean form: `check_dispatch` compares the checks defined
@@ -5463,7 +5463,7 @@ def scan_plan(component: Dict[str, object]) -> Tuple[Tuple[str, ...], bool, List
 
     **A malformed declaration scans nothing and reports that it scanned nothing.** Falling
     back to the `.py` default would leave `app/` printing a clean orphan scan that had
-    looked at no file it contains — a check gone quiet, which docs/DEBTS.md already names
+    looked at no file it contains — a check gone quiet, which docs/debts/ already names
     as this auditor's worst failure mode. The complaints are MECHANICAL because the shape of
     a literal is provable: there is no context this script is missing.
     """
@@ -5580,7 +5580,7 @@ BINARY_SUFFIXES = frozenset({
 def cited_decisions(path: Path) -> Set[str]:
     """Every decision id a file cites, suppressions excluded.
 
-    THE THIRD SITE, and the one docs/DEBTS.md got wrong. That entry judged this reader "not
+    THE THIRD SITE, and the one docs/debts/ got wrong. That entry judged this reader "not
     separately broken — it compares against `decision_headings`", and about the CAP it was
     right: an id it cannot read is one `governed_by` never asks about. About the WIDEN it was
     wrong in the other direction. This is a `repo map` finding, which is MECHANICAL, so the
@@ -5996,7 +5996,7 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
     def check_decisions(where: str, names: Sequence[str]) -> None:
         for name in names:
             if name not in singles:
-                findings.append(Finding(where, f"governed_by cites {name}, which has no heading in docs/DECISIONS.md."))
+                findings.append(Finding(where, f"governed_by cites {name}, which has no heading in docs/decisions/."))
 
     def check_tests(where: str, names: Sequence[str]) -> None:
         for name in names:
@@ -6063,7 +6063,7 @@ def check_map(report: Report, allowed: Dict[str, str]) -> None:
                 )
 
         # Orphans: a source file the map never mentions. Still guarded on `modules`, which
-        # is the exception docs/DEBTS.md records for `scripts/`: an entry with no module
+        # is the exception docs/debts/ records for `scripts/`: an entry with no module
         # list has nothing to be an orphan of.
         if modules and exists(target):
             for orphan in sorted(source_names(target, suffixes, deep) - set(modules)):
@@ -6812,7 +6812,7 @@ def check_map_sections(report: Report) -> None:
 
     **`TRACKS` is why this row exists.** It sat in that file from 2026-08-07 to 2026-08-31
     with no reader anywhere in the repo and no check over it, and it went wrong twice
-    without anything being able to tell: it said `C1-C7` after `docs/CODES-DECISIONS.md`
+    without anything being able to tell: it said `C1-C7` after the codes decisions file
     had reached C11, and it said the codes track's delivery automation was gated on Gate B
     months after that gate passed and the gating system was retired outright. Three weeks
     wrong, in the file whose entire argument — D17 — is that it is audited exactly as hard
@@ -8738,7 +8738,7 @@ def check_transport_promise(report: Report) -> None:
     **WHAT IT DOES NOT CHECK.** The other three bullets. "It cannot cause a charge", "the secret
     never leaves this module" and "every anticipated failure has its own code" are arguments
     about what the code does NOT do, and a check that claimed to settle those would be asserting
-    the absence of something rather than the presence of it — the vacuous green docs/DEBTS.md
+    the absence of something rather than the presence of it — the vacuous green docs/debts/
     opens by warning about. They are verified by reading, and the reading is recorded in the
     bullets themselves.
     """
@@ -9501,7 +9501,7 @@ def reach_findings(
 ) -> Tuple[List[Finding], int]:
     """(findings, claims checked). Split out from the check so the self-test can drive it.
 
-    The self-test feeds it the exact false claim docs/DEBTS.md recorded — `store/queues.py`
+    The self-test feeds it the exact false claim docs/debts/ recorded — `store/queues.py`
     citing T3 — against the real harness, rather than a synthetic stand-in for it.
     """
     findings: List[Finding] = []
@@ -9576,7 +9576,7 @@ def check_tested_by_reach(report: Report) -> None:
     """A `tested_by` claim in docs/map.py, against what the cited test actually imports.
 
     The repo-map row proves a cited test id is registered in `harness/run.py:TESTS`. It has
-    never proved the test goes anywhere near the module claiming it, and docs/DEBTS.md
+    never proved the test goes anywhere near the module claiming it, and docs/debts/
     recorded the measurement: of the eleven entries audited by hand on 2026-08-11, ten were
     true and one was false — `store/queues.py` claimed T3 and T4 while nothing under
     `harness/` imported `store` at all. D17 says the map is audited exactly as hard as it is
@@ -9881,7 +9881,7 @@ def design_token_claims(block: str) -> Claims:
     in the doc that nothing renders, and a hex that disagrees between the two files. It does
     NOT check a duration, a shadow, an easing curve, an alpha, or the value behind a
     `color-mix()` — those are named and checked for existence, and their values are not locked
-    anywhere a script can read. `docs/DEBTS.md` carries that gap.
+    anywhere a script can read. `docs/debts/` carries that gap.
     """
     names: Set[str] = set()
     alts: List[Set[str]] = []
@@ -10125,7 +10125,7 @@ def check_design_tokens(report: Report) -> None:
     docs/DESIGN.md's token block is the record of an interview: every value in it was chosen
     by the owner from rendered alternatives, and the paragraphs under it argue for the
     choices. app/src/tokens.css is what the browser actually paints. Nothing compared them
-    until this row existed, and docs/DEBTS.md recorded the gap with the reason it matters:
+    until this row existed, and docs/debts/ recorded the gap with the reason it matters:
     a wrong hex renders perfectly, so the failure is silent by construction and the document
     is the one nobody re-reads.
 
@@ -10181,7 +10181,7 @@ def check_design_tokens(report: Report) -> None:
     if not doc or not css:
         # A side that parses to nothing must never report a clean row — same rule as a
         # malformed `source_suffixes` scanning nothing and saying so. This is the state
-        # docs/DEBTS.md calls this auditor's worst failure mode: a check gone quiet.
+        # docs/debts/ calls this auditor's worst failure mode: a check gone quiet.
         report.add(
             "design tokens",
             MECHANICAL,
@@ -10430,7 +10430,7 @@ def breakpoint_subject() -> Tuple[Optional[Tuple[Ladder, Dict[Path, Widths]]], L
     hide behind a helper. This is a helper genuinely shared by two rows, so it hands the
     findings back and each row files them under its own name.
 
-    An unreadable subject is a FINDING and never a skip — the state docs/DEBTS.md calls this
+    An unreadable subject is a FINDING and never a skip — the state docs/debts/ calls this
     auditor's worst failure mode, a check gone quiet.
     """
     if not exists(APP_STYLES) or not exists(DESIGN):
@@ -11745,7 +11745,7 @@ def check_storage_keys(report: Report) -> None:
                 f"  the app writes {len(local)} `localStorage` key(s): "
                 f"{', '.join('`' + k + '`' for k in sorted(local))}\n"
                 "  Restore the sentence, or delete this row rather than leaving it passing "
-                "vacuously — see docs/DEBTS.md on a green row that cannot fail.",
+                "vacuously — see docs/debts/ on a green row that cannot fail.",
             )
         )
     else:
@@ -12933,7 +12933,7 @@ def check_doc_hygiene(report: Report, docs: List[Path]) -> None:
           named. The `paths` row proves the FILE resolves and stops there, so the number is
           unchecked; this catches only the provable half, where the file is shorter than the
           number. A citation pointing at the wrong line of a long-enough file is invisible
-          here and is `docs/DEBTS.md`'s to carry.
+          here and is `docs/debts/`'s to carry.
 
     ADVISORY, and the severity is the argument. Each condition is provably true of the tree,
     which is D16's test for a blocking row — but "true" and "wrong" part company on the second
@@ -12992,7 +12992,7 @@ def check_doc_hygiene(report: Report, docs: List[Path]) -> None:
                 # WHAT THIS RESTORES IS EXACTLY WHAT EXISTED BEFORE — this row only ever
                 # proved the file was long enough, never that the line still says what the
                 # citation claims. A number drifting under an edit was invisible here before
-                # the split and is invisible now; docs/DEBTS.md carries that half.
+                # the split and is invisible now; docs/debts/ carries that half.
                 if match.group(1) == "docs/DECISIONS.md":
                     total = len(decisions_text().splitlines())
                     if total and int(match.group(2)) <= total:
@@ -13418,7 +13418,7 @@ def check_route_rosters(report: Report) -> None:
 #
 # So the guard lives HERE, in a file no screen change touches, and it is the smallest possible
 # claim: a decision that records a symbol as deleted is contradicted by that symbol existing
-# under app/src. The table is hand-written on purpose — reading DECISIONS.md for the word
+# under app/src. The table is hand-written on purpose — reading docs/decisions/ for the word
 # "deleted" would fire on every entry that deletes a sentence — and adding a row to it is how a
 # session says a deletion is meant to stay one. A symbol that is meant to come back is removed
 # from the table in the same commit that restores it, with the entry amended to say so.
@@ -14523,7 +14523,7 @@ def check_commit_path(report: Report) -> None:
     """D18, asserted mechanically for the first time.
 
     **Nothing that writes may run on the path that decides whether a commit proceeds.** That
-    rule is quoted in five Makefile comments, in `docs/DECISIONS.md` D18 and D16, and in the
+    rule is quoted in five Makefile comments, in `docs/decisions/` D18 and D16, and in the
     header of every self-test it governs — and until this row it was enforced by nobody. It is
     the most-cited rule in this repo with the least machinery behind it.
 
@@ -15629,7 +15629,7 @@ def check_dispatch(report: Report, source: Path = SELF) -> None:
 
     The failure: add a check function, forget the call. It never runs, the report still
     looks full, the hook still passes, and nothing in the repo can say the auditor is
-    smaller than it looks. `docs/DEBTS.md` carried that as the one entry where a check can
+    smaller than it looks. `docs/debts/` carried that as the one entry where a check can
     *vanish* rather than misreport, and it was uncovered from 2026-08-11 — the retired
     count-of-checks machinery had an `unaccounted` set doing this incidentally, and deleting
     the published number (D18, correctly) took the detector out with it.
@@ -15655,7 +15655,7 @@ def check_dispatch(report: Report, source: Path = SELF) -> None:
     running the function agrees with itself no matter what the file says. In `--staged` mode
     `read()` returns the staged blob, which makes this the one check whose subject is the
     file the commit will carry rather than the file that is executing — stage a new check
-    without its call and the hook fails on it, which is the exact moment `docs/DEBTS.md`
+    without its call and the hook fails on it, which is the exact moment `docs/debts/`
     describes.
 
     `source` is which file to reconcile: this one in every real run, a fixture under
@@ -17127,12 +17127,12 @@ NON_PATHS = [
 # The `@` of a Claude Code import is part of the extracted token; resolve_candidate strips
 # it. Kept that way so a finding quotes the doc as written rather than a normalised form.
 REAL_PATHS = [
-    ("see @docs/DECISIONS.md before proposing", "@docs/DECISIONS.md"),
+    ("see @docs/DESIGN.md before proposing", "@docs/DESIGN.md"),
     ("`harness/run.py` holds the registry", "harness/run.py"),
     ("Enforced by `scripts/githooks/pre-commit`.", "scripts/githooks/pre-commit"),
     ("`fixtures/sv09_export_untouched.csv` — real export", "fixtures/sv09_export_untouched.csv"),
     ("permissions live in `.claude/settings.json`", ".claude/settings.json"),
-    ("Rationale: @../docs/CODES-DECISIONS.md", "@../docs/CODES-DECISIONS.md"),
+    ("Rationale: @../docs/specs/code-cards.md", "@../docs/specs/code-cards.md"),
     ("`docs/specs/batch-script.md` — the four commands", "docs/specs/batch-script.md"),
     # THE OTHER HALF OF THE ROUTE RULE. `_ROUTE` drops a slash-path only when an HTTP method
     # stands in front of it, and this is what proves the rule stayed narrow: the same
@@ -17342,7 +17342,7 @@ def self_test() -> int:
        "and a marker that is not `0.` is a claimed step, read as its number")
 
     # EVERY PATTERN THAT READS A DECISION ID, AT THE DIGIT THAT USED TO END THEM (D16).
-    # docs/DEBTS.md recorded this as a TRIGGERED debt: seven patterns in this file and four
+    # docs/debts/ recorded this as a TRIGGERED debt: seven patterns in this file and four
     # more across scripts/ capped at `[1-9][0-9]?`, so at the hundredth entry a heading stops
     # being a heading and a citation stops being a citation — and every row built on them
     # reports GREEN over a file it can no longer see. The debt named the discharge, and these
@@ -17473,16 +17473,16 @@ def self_test() -> int:
     # The two forms with their own resolution rule. A `@` import that silently resolved to
     # nothing, or a `../` that escaped the repo, would make the whole check quietly vacuous.
     print("\nthe @ import and ../ forms resolve to real files")
-    resolved = resolve_candidate("@docs/DECISIONS.md", ROOT / "CLAUDE.md", tops)
+    resolved = resolve_candidate("@docs/DESIGN.md", ROOT / "CLAUDE.md", tops)
     ok(
         resolved is not None and resolved.exists(),
-        "@docs/DECISIONS.md from CLAUDE.md",
+        "@docs/DESIGN.md from CLAUDE.md",
         str(resolved),
     )
-    resolved = resolve_candidate("@../docs/CODES-DECISIONS.md", ROOT / "code-card-fork" / "CLAUDE.md", tops)
+    resolved = resolve_candidate("@../docs/specs/code-cards.md", ROOT / "code-card-fork" / "CLAUDE.md", tops)
     ok(
         resolved is not None and resolved.exists(),
-        "@../docs/CODES-DECISIONS.md from code-card-fork/CLAUDE.md",
+        "@../docs/specs/code-cards.md from code-card-fork/CLAUDE.md",
         str(resolved),
     )
     ok(
@@ -18135,7 +18135,7 @@ def self_test() -> int:
             str(sorted(packages)),
         )
 
-    # The false claim docs/DEBTS.md recorded, replayed against the real harness rather than
+    # The false claim docs/debts/ recorded, replayed against the real harness rather than
     # against a stand-in for it. `store/queues.py` cited T3 and T4 while nothing under
     # harness/ imported store.
     #
@@ -19183,10 +19183,10 @@ def self_test() -> int:
     ok(_module is not None, "scripts/browser-scope.py imports")
     if _module is not None:
         _read = lambda side, path: None  # noqa: E731 - no recipe is consulted by these paths
-        ok(not _module.classify_paths(["docs/DECISIONS.md"], _read).run, "a docs-only change skips")
+        ok(not _module.classify_paths(["docs/decisions/"], _read).run, "a docs-only change skips")
         ok(_module.classify_paths(["app/src/App.tsx"], _read).run, "a screen change runs")
-    _code = "const T = {\n  'harness/traces/x.json': 1,\n} // docs/DEBTS.md\n"
-    ok(_repo_literals(_code, {"harness/traces/x.json", "docs/DEBTS.md"}) == ["harness/traces/x.json"],
+    _code = "const T = {\n  'harness/traces/x.json': 1,\n} // docs/debts/\n"
+    ok(_repo_literals(_code, {"harness/traces/x.json", "docs/debts/"}) == ["harness/traces/x.json"],
        "a code string naming a tracked file is a dependency and a comment naming one is not")
 
     # A ROW THAT EXAMINED NOTHING IS NOT A ROW THAT PASSED. Driven over a synthetic report,
@@ -20623,7 +20623,7 @@ def audit(staged_only: bool, commit_only: bool = False) -> Report:
     # is `--self-test`, whose last case calls check_dispatch() directly and asserts this
     # function names every check — and `--self-test` runs by hand, on no gate. So this line
     # is the root of the recursion: unwiring anything else fails the commit, and unwiring
-    # THIS fails nothing automatic. docs/DEBTS.md records it under the entry that shipped
+    # THIS fails nothing automatic. docs/debts/ records it under the entry that shipped
     # the row; do not delete it on the strength of the audit staying green.
     #
     # TIER 2 (L12, 2026-09-28): `check_dispatch` reads THIS file's own source with `ast`,

@@ -213,7 +213,7 @@ CHECKS = (
                    "index — and on box 3 those spaces are 76 apart, so `#27` named two "
                    "different cards on one screen. Text-matched and therefore narrow: it "
                    "refuses a `#` composed from an expression naming `index`, and a renamed "
-                   "local walks past it (docs/DEBTS.md).",
+                   "local walks past it (docs/debts/).",
         "needs": ("python3",),
         "writes": "",
         "commit_path": True,
@@ -1467,7 +1467,7 @@ def one(name: str) -> str:
     if entry.get("why_off_ci"):
         block("ci-check", "NOT run on CI.")
         block("", entry["why_off_ci"])
-    block("governed by", ", ".join(entry["governed_by"]) + "  — docs/DECISIONS.md")
+    block("governed by", ", ".join(entry["governed_by"]) + "  — docs/decisions/")
     return "\n".join(lines)
 
 

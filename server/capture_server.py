@@ -264,7 +264,7 @@ refuses once `emit` has written the card's row into an import file. 7b's three r
 with their own cases in the same test, which is the schedule `docs/specs/capture-app.md`
 section 3 set for the undo route and the one thing it got right about scheduling.
 
-WHAT T7 STILL DOES NOT REACH, from `docs/DEBTS.md`, so a green harness is read for what it
+WHAT T7 STILL DOES NOT REACH, from `docs/debts/`, so a green harness is read for what it
 is. Two named cases rather than a package nobody looks at:
 
   twenty-way contention   T7 runs two and four simultaneous captures, matching D5's two
@@ -282,7 +282,7 @@ again at each route. The paragraph this replaces recorded the omission with a sh
 store logs state transitions and none of these is one. That much is true and was never the
 question, since `store/__init__.py` calls this file the audit trail and says the history IS
 inventory truth over time — which is a claim about the physical positions in a box, not
-about the state enum. `docs/DEBTS.md` now records what the three lines still do not cover.
+about the state enum. `docs/debts/` now records what the three lines still do not cover.
 """
 
 from __future__ import annotations
@@ -554,7 +554,7 @@ DEFAULT_ALLOWED_ORIGINS = tuple(
 # Left as a correction rather than deleted, because the failure is the interesting part: a
 # comment asserting its own safety net is exactly the sentence nothing mechanical can read,
 # and this file is where the next person looks to find out whether adding a knob is safe.
-# `docs/DEBTS.md` records the one-directional blind spot; `docs/specs/capture-server.md`
+# `docs/debts/` records the one-directional blind spot; `docs/specs/capture-server.md`
 # documents the variable itself.
 ORIGINS_ENV = "PKMNSCAN_ALLOWED_ORIGINS"
 
@@ -769,7 +769,7 @@ _SHIPPING_ITEM_RE = re.compile(r"^/shipping/batches/([A-Za-z0-9]{1,64})$")
 #
 # `store/master.py:CAPTURE_CLAIM_FIELDS` names every field a capture writes onto a record.
 # This maps each one to the name it wears on the wire and in the sidecar, and it is the
-# third of the three restatements `docs/DEBTS.md` named — the other two now read the tuple
+# third of the three restatements `docs/debts/` named — the other two now read the tuple
 # directly. Only `variant` differs from its record field: `metadata_finish` is what the
 # store calls it, `variant` is what the sidecar and the request body have always called it,
 # and renaming either would break a file `identify.sidecar` already reads.
@@ -847,7 +847,7 @@ ANSWER_FIELDS = ("sku", "condition", "undo", "from_catalog")
 # instruction rather than as a rejection of a field this route has obviously heard of.
 UNDO_FIELDS = ("undo",)
 
-# What the group answer carries: the list, alone (docs/DECISIONS.md, "A homogeneous queue
+# What the group answer carries: the list, alone (docs/decisions/, "A homogeneous queue
 # may be answered as a group" — the entry that reopens D4's one-card-at-a-time, narrowly).
 # `undo` is deliberately NOT here. The group's reversal is the single undo looped over its
 # positions by the screen holding the receipt, so a partial reversal reports per position
@@ -1213,7 +1213,7 @@ UNDOABLE_STATES = (master.CAPTURED,)
 # `store/master.py:_log` is reached from `record_capture` and `set_state` alone, and every
 # event either of them has ever written is a member of `master.STATES` — so the three routes
 # named below wrote nothing at all until 2026-08-13, and each said so in a comment citing
-# `docs/DEBTS.md`. The argument for each line is at its own route; what is common to all
+# `docs/debts/`. The argument for each line is at its own route; what is common to all
 # three is that they change a claim the pipeline will act on and spend money against, and
 # that the file they change is overwritten in place.
 #
@@ -2252,7 +2252,7 @@ def _history(inventory: master.Inventory, event: str, key: Optional[str], **extr
     worse. Reaching across the package for a private method makes a rename break a write path
     at runtime with nothing to catch it first. Giving `store/master.py` a public wrapper puts
     these three names beside the state vocabulary, which is the exact confusion
-    `docs/DEBTS.md` was guarding against when it called an `undone` event a D10 question
+    `docs/debts/` was guarding against when it called an `undone` event a D10 question
     rather than a logging one — the store goes on logging states only, and the route that
     knows why a write happened names it. What that costs is a second copy of a three-key
     record, so T7 asserts the shape against a capture event the store wrote itself.
@@ -3927,7 +3927,7 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
     the toggle a *claim* the ladder trusts ahead of the catalog, so the value corrected here
     is what decides which condition row the card matches and therefore what it is priced and
     listed as. A card sold as the wrong finish is answerable a month later only if something
-    kept what it used to say. `docs/DEBTS.md` recorded the omission as "the store logs state
+    kept what it used to say. `docs/debts/` recorded the omission as "the store logs state
     transitions and a correction is not one", which is true of the store and not an argument
     about whether this belongs in the audit trail.
     """
@@ -4008,7 +4008,7 @@ def do_put_card(box: int, index: int, payload: dict) -> dict:
         # that mark the change somebody is looking for. The question this event answers is
         # *when did the claim change*, so a no-op has no answer to contribute. The cost is
         # that a PUT which only repairs a sidecar that had drifted from the record leaves no
-        # trace; `docs/DEBTS.md` records that as uncovered.
+        # trace; `docs/debts/` records that as uncovered.
         #
         # KEYED BY THE RECORD'S FIELD NAMES, `metadata_finish` and not the wire's `variant`.
         # Every other key this file writes into the log — `position`, `sku`, `run` — is a
@@ -4100,7 +4100,7 @@ def do_put_box_claims(box: int, payload: dict) -> dict:
     SIDECARS ARE REWRITTEN FOR CHANGED CARDS ONLY — unlike the card route, which rewrites
     on every call. A no-op restatement over a 400-card box would otherwise churn 400
     files to say nothing; the drift-repair the card route incidentally performs stays the
-    card route's, and `docs/DEBTS.md` already records that repair as unlogged there.
+    card route's, and `docs/debts/` already records that repair as unlogged there.
 
     ONE `corrected` LINE PER CHANGED POSITION, carrying the same `changed` mapping the
     card route logs, plus `bulk` — the number of cards this call changed — so a reader of
@@ -4513,7 +4513,7 @@ def do_delete_card(box: int, index: int) -> dict:
     paid Batch request for a card that no longer exists. Deleting the expensive one first
     means every partial failure left after it is a cheap one.
 
-    IT APPENDS A `removed` EVENT, WHICH `docs/DEBTS.md` SPENT A PARAGRAPH ARGUING AGAINST,
+    IT APPENDS A `removed` EVENT, WHICH `docs/debts/` SPENT A PARAGRAPH ARGUING AGAINST,
     and the argument does not survive the index release two paragraphs above. What it said:
     naming a transition for a record that no longer exists reads as the tombstone
     `docs/specs/capture-app.md` section 3 forbids. A tombstone is a record left in
@@ -8596,7 +8596,7 @@ def do_review_answer(box: int, index: int, payload: dict) -> dict:
     two-field pair the whole route is built to validate is unreconstructible an hour after
     the tap. The refusals above enforce the hard rule at the moment of the choice and never
     again — afterwards a laundered SKU and an offered one are both just catalog rows on a
-    card. `docs/DEBTS.md` recorded the omission as "writing a SKU onto a card is not a state
+    card. `docs/debts/` recorded the omission as "writing a SKU onto a card is not a state
     transition", which is true and is a fact about the store's vocabulary rather than an
     argument about the audit trail.
 
@@ -10095,7 +10095,7 @@ def _condition_grade(target: dict) -> str:
 def do_review_group_answer(payload: dict) -> dict:
     """Answer a homogeneous group of queued cards in one write.
 
-    THE RULING IS docs/DECISIONS.md's "A homogeneous queue may be answered as a group" —
+    THE RULING IS docs/decisions/'s "A homogeneous queue may be answered as a group" —
     the entry that reopens D4's one-card-at-a-time, narrowly, on Gate B's evidence: 16 of
     53 queued, every one the same reason code, detection agreeing with itself across every
     duplicate pair. One systematic fact about the rig's lighting, sixteen identical taps.

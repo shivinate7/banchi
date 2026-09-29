@@ -3319,7 +3319,7 @@ test('a refused sale from a search result says so beside the control it names', 
 
 /* ------------------------------------------------------------------ pooled, not located
  *
- * The owner's ruling ("Code cards are pooled inventory, not located", docs/DECISIONS.md;
+ * The owner's ruling ("Code cards are pooled inventory, not located", docs/decisions/;
  * `pipeline/games.py`'s `located` flag) asks for exactly this assertion by name: non-located
  * cards never enter the Fulfillment view or the pull flow, "asserted in
  * app/tests/fulfillment.spec.ts rather than left to prose". A pooled card is a count with

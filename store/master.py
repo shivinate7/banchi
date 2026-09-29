@@ -60,7 +60,7 @@ place rather than swapped quietly, because nothing mechanical checks a claim of 
 audit resolves paths and thresholds, and a docstring asserting its own coverage is exactly the
 sentence it cannot read.
 
-WHAT T7 STILL DOES NOT ASSERT is in `docs/DEBTS.md`, so a green harness is read for what it
+WHAT T7 STILL DOES NOT ASSERT is in `docs/debts/`, so a green harness is read for what it
 is rather than as coverage of everything below.
 """
 
@@ -790,7 +790,7 @@ class UnnamedCard(ValueError):
 #
 # EVERY FIELD A CAPTURE WRITES, IN ONE PLACE, read by `allocate_capture`, `record_capture`
 # and — through `server/capture_server.py:CLAIM_WIRE_NAMES` — by the sidecar writer and the
-# correction route. `docs/DEBTS.md` recorded the absence of this tuple as the highest-value
+# correction route. `docs/debts/` recorded the absence of this tuple as the highest-value
 # edit in the project, and the reason is the two silences it closes:
 #
 #   `Inventory.parse` FILTERS ON `Card.__annotations__`. A field the dataclass does not
@@ -2450,7 +2450,7 @@ class Inventory:
 
         # THE TUPLE, NOT A LITERAL LIST OF THREE NAMES. This loop is where a claim added
         # everywhere else in the chain used to be discarded — on a re-record only, so it
-        # worked until the operator corrected a card. `docs/DEBTS.md` named it.
+        # worked until the operator corrected a card. `docs/debts/` named it.
         # AN EMPTY CLAIM CARRIES NO FURTHER THAN A MISSING ONE, and this line read
         # `if value is not None` until D3's amendment of 2026-08-23 made that unsafe.
         #

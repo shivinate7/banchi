@@ -1631,7 +1631,7 @@ screenshot:
 # three shards on three 2-vCPU runners — `PW_ARGS="--shard=1/3 --workers=1"` — because one
 # runner ran all 481 cases on ONE worker in 15 minutes, against 89-175s for the rig's seven.
 # Sharding splits the CASES and leaves the worker count alone, which is the half that matters:
-# docs/DEBTS.md section 8 measured a one-in-thirteen red whose only known mechanism is "the
+# docs/debts/ section 8 measured a one-in-thirteen red whose only known mechanism is "the
 # suite around it", and more workers on one box is more suite around it. On the rig `PW_ARGS`
 # is for a session that wants one spec — `PW_ARGS=tests/brand.spec.ts` — and nothing else.
 # Each shard leaves its own `.serve/design-check.json`; on a runner that is one file per job.
@@ -1687,7 +1687,7 @@ design-check-quiet:
 	@python3 scripts/reap_mark.py design-check; DESIGN_CHECK_QUIET=1 python3 scripts/suite-lock.py run $(ARGS) -- npm --prefix app run design-check -- $(PW_ARGS)
 
 # eslint over app/, config and rules in app/eslint.config.js. It began 2026-08-13 as the two
-# guards docs/DECISIONS.md's v1 bug table promised — no `facingMode` (bug 3), no `split(",")`
+# guards docs/decisions/'s v1 bug table promised — no `facingMode` (bug 3), no `split(",")`
 # CSV parsing (bug 2) — and has since gained a rule per bug this project caught itself: the
 # two-argument `.then` that swallows its own success handler's throw, and `localStorage`
 # outside D27's carve-out. THE COUNT IS DELIBERATELY NOT STATED: this comment said "two" while

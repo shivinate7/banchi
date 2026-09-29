@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """PreToolUse hook: say which settled decisions govern a file, before it is edited.
 
-`docs/DECISIONS.md` opens with "Every entry here is closed. Sessions do not re-litigate
+`docs/decisions/` opens with "Every entry here is closed. Sessions do not re-litigate
 them." Nothing enforced that. An agent editing `pipeline/variant.py` had no way to know
 D3 had already ruled that the capture toggle is trusted and `--variant` fills gaps rather
 than overriding — so the way that ruling got discovered was by violating it and being
 corrected. This closes the loop at the moment of the edit.
 
-The gists are read out of docs/DECISIONS.md itself — the heading, plus the bolded lead-in
+The gists are read out of docs/decisions/ itself — the heading, plus the bolded lead-in
 sentences the entries already use for their rulings ("**The toggle is trusted.**"). Nothing
 is restated here, so nothing here can disagree with the decision it summarises. That is the
 whole design: a hand-written summary of a decision is one more thing to keep in sync, and
@@ -41,7 +41,7 @@ MAP = ROOT / "docs" / "map.py"
 # `path_for` now makes "the file holding this entry" a real answer, which the entry that
 # dropped the `@` wanted and a monolith could not give: this hook can name a file a session
 # opens rather than a region of one it must not.
-DECISIONS = ROOT / "docs" / "DECISIONS.md"  # the stub; kept so a stale citation resolves
+DECISIONS = ROOT / "docs" / "decisions"  # the corpus directory
 
 MAX_RULINGS = 3  # per decision. The rest is a Read away, and this is a nudge, not a briefing.
 
@@ -88,7 +88,7 @@ def decision_gists(path: Optional[Path] = None, prefix: str = "D") -> Dict[str, 
     """`D3` -> ("Variant resolution ladder", ["The toggle is trusted.", ...]).
 
     The two parameters exist so a TRACK's own decisions file goes through THIS parser
-    rather than a second one — `docs/CODES-DECISIONS.md` numbers its entries `C1`..`C11`
+    rather than a second one — `docs/specs/code-cards.md` numbers its entries `C1`..`C11`
     and is otherwise the same document shape. Both default to the singles track, so every
     existing caller (`scripts/status.py`, and this file's own hook path) is unchanged.
     """
@@ -224,7 +224,7 @@ def render(relative: str, entry: Dict[str, object]) -> str:
     scope = str(entry.get("scope", ""))
     if scope and scope != relative:
         lines.append(f"(no entry for this file; showing what governs {scope})")
-    lines.append("Settled decisions that govern it — docs/DECISIONS.md, do not re-litigate:")
+    lines.append("Settled decisions that govern it — docs/decisions/, do not re-litigate:")
     for name in sorted(governed, key=lambda d: int(d[1:])):
         title, _ = gists.get(name, ("(no such entry)", []))
         lines.append(f"  {name:<4} {title}")
@@ -233,14 +233,20 @@ def render(relative: str, entry: Dict[str, object]) -> str:
         lines.append(f"Covered by: {', '.join(tested)}. Run `make harness` before claiming it works.")
     track = track_for(relative)
     if track:
+        # BANDAID: `docs/map.py`'s TRACKS still names the deleted codes decisions file, and the
+        # map was outside the prune's fence. The C entries are sections of the codes spec now.
+        # The cause is that one TRACKS line. Delete this fallback once the map names the spec.
+        track_file = ROOT / str(track.get("decisions"))
+        if not track_file.exists() and track.get("name") == "codes":
+            track_file = ROOT / "docs" / "specs" / "code-cards.md"
         lines.append(
             f"TRACK: {track.get('name')} (D14, two tracks one rig). The decisions above are "
-            f"the shared rig's; this path ALSO answers to {track.get('decisions')} and to "
+            f"the shared rig's; this path ALSO answers to {track_file.relative_to(ROOT)} and to "
             f"{track.get('rules')}, which is auto-loaded in that directory."
         )
         codes = [d for d in governed if d.startswith("C")]
         if codes:
-            track_gists = decision_gists(ROOT / str(track.get("decisions")), prefix="C")
+            track_gists = decision_gists(track_file, prefix="C")
             for name in sorted(codes, key=lambda d: int(d[1:])):
                 title, _ = track_gists.get(name, ("(no such entry)", []))
                 lines.append(f"  {name:<4} {title}")
