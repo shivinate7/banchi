@@ -995,6 +995,9 @@ export function Revenue() {
     return () => {
       alive = false
       window.clearTimeout(retry)
+      // A sort, filter or scope change re-runs this effect; a SKU whose answer was dropped
+      // with it must be asked again, not remembered as asked.
+      skus.forEach((sku) => asked.current.delete(sku))
     }
   }, [products])
 

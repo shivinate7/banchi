@@ -819,3 +819,25 @@ test('a SKU the catalogue had not loaded yet is asked once more, and then draws 
   await page.clock.fastForward(6000)
   await expect(thumb.locator('img')).toHaveAttribute('src', STOCK_URL)
 })
+
+test('changing the sort during the retry window still resolves the photo', async ({ page }) => {
+  const STOCK_URL = 'https://tcgplayer-cdn.tcgplayer.com/product/705996_200w.jpg'
+  await page.route(STOCK_URL, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="63" height="88"><rect width="63" height="88" fill="#ccc"/></svg>',
+    }),
+  )
+  await stub(page, generalOrders())
+  let asks = 0
+  await page.route(/\/skus\/photos\?/, (route) => {
+    asks += 1
+    return json(route, { photos: {}, stock_photos: asks <= 1 ? {} : { '9100001': STOCK_URL } })
+  })
+  await open(page)
+  await expect(page.locator('.revenue-podium .revenue-tile').first().locator('.bn-thumb')).toHaveAttribute('data-missing', 'true')
+  await page.getByLabel('Sort').getByRole('button', { name: 'Copies' }).click()
+  await page.clock.fastForward(6000)
+  await expect(page.locator('img[src="' + STOCK_URL + '"]').first()).toBeVisible()
+})

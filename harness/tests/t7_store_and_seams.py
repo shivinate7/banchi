@@ -40552,6 +40552,13 @@ def check_sales_stock_photo_fallback(checks: Checks) -> None:
                 "https://img/etb.jpg",
                 "A SOLD SKU THE skus TABLE NO LONGER HOLDS resolves off its order line's name",
             )
+            checks.equal(
+                images.url_for_line_name(
+                    "Pokemon - Scarlet & Violet: Scarlet & Violet Elite Trainer Box - Pokemon Center Exclusive"
+                ),
+                None,
+                "a longer line name is a different variant: no shorter product's photo",
+            )
             checks.ok(
                 "miss-sku" not in threaded["photos"] and "miss-sku" not in threaded["stock_photos"],
                 "a SKU with no on-hand copy and no skus-table row is absent from both "

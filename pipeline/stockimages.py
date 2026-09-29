@@ -481,24 +481,46 @@ class StockImages:
         delisted product leaves the export), from the line's own name alone:
         "<Product Line> - <Set>: <Product> [- <Condition or Unopened>]".
 
-        Every ": " is tried as the set/product split, and trailing " - " segments are dropped
-        until `url_for_product`'s exact-name join answers. It never guesses: the join is the
-        same exact, unambiguous one, so a name the catalogue does not carry answers `None`."""
+        Every ": " is a candidate set/product split. The product must match the catalogue
+        EXACTLY (a trailing " - Unopened" is the only suffix dropped, it is no variant), or
+        the answer is `None`: a longer name is a different variant, never a shorter one's photo.
+
+        THE CACHE IS READ ONLY, NEVER WARMED PER SPLIT. A cold answer schedules ONE background
+        thread that fetches the candidates in turn and stops at the first set the catalogue
+        knows, so a wrong split never costs a fetch of its own."""
         line, sep, rest = str(line_name or "").partition(" - ")
-        if not sep or game_registry.game_for_product_line(line) is None:
+        game = game_registry.game_for_product_line(line) if sep else None
+        if game is None:
             return None
-        for i in range(len(rest)):
-            if rest[i : i + 2] != ": ":
+        product_names = lambda product: (product, product.removesuffix(" - Unopened"))  # noqa: E731
+        splits = [
+            (rest[:i], rest[i + 2 :]) for i in range(len(rest)) if rest[i : i + 2] == ": "
+        ]
+        cold = []
+        for set_name, product in splits:
+            with self._lock:
+                entry = self._cache.get((game, set_name))
+            if entry is None:
+                cold.append(set_name)
                 continue
-            set_name, product = rest[:i], rest[i + 2 :]
-            while product:
-                url = self.url_for_product(line, set_name, product)
-                if url:
-                    return url
-                if " - " not in product:
-                    break
-                product = product.rsplit(" - ", 1)[0]
+            for name in dict.fromkeys(product_names(product)):
+                product_id = entry[1].products.find("", name)
+                if product_id is not None and product_id in entry[1].urls_by_product_id:
+                    return entry[1].urls_by_product_id[product_id]
+        if cold:
+            threading.Thread(target=self._warm_until_known, args=(game, cold), daemon=True).start()
         return None
+
+    def _warm_until_known(self, game: str, set_names: List[str]) -> None:
+        for set_name in set_names:
+            with self._lock:
+                if (game, set_name) in self._pending:
+                    return
+                self._pending.add((game, set_name))
+            self._warm_one(game, set_name)
+            with self._lock:
+                if self._cache[(game, set_name)][1].urls_by_product_id:
+                    return
 
     def display_name(self, game: str, set_name: str) -> Optional[str]:
         """The catalogue's own clean name for a set, when this resolver can name one.
