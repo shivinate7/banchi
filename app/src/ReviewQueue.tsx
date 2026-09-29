@@ -1300,7 +1300,7 @@ export function ReviewQueue() {
     if (next.entry.box < 1 || next.entry.photo === null) return null
     /* By name when the entry carries one, exactly as `QueuePhoto` renders it, or the prefetch
        warms a URL nothing asks for. */
-    return photoUrl(next.entry.box, next.entry.index, next.entry.cid)
+    return photoUrl(next.entry.box, next.entry.index, next.entry)
   }, [worklist])
 
   useEffect(() => {
@@ -1963,7 +1963,7 @@ function GroupConfirm({
               <img
                 className="review-group-photo"
                 /* By name (D172); the slot route only for an entry with no cid. */
-                src={photoUrl(row.entry.box, row.entry.index, row.entry.cid)}
+                src={photoUrl(row.entry.box, row.entry.index, row.entry)}
                 alt={`The card photographed at ${row.entry.label}`}
                 loading="lazy"
                 onError={() =>
@@ -2599,7 +2599,7 @@ function PhotoContent({ row, absent, onAbsent }: { row: Row; absent: boolean; on
   /* BY NAME WHEN THE ROUTE DECORATED THE ENTRY WITH ONE (D172): `_queue_row` adds `cid` for an
      addressable slot, so a revisit costs no request. An entry with none (box 0, no card at
      the slot) keeps the slot route, whose digest ETag stays honest while the box shifts. */
-  const src = photoUrl(entry.box, entry.index, entry.cid)
+  const src = photoUrl(entry.box, entry.index, entry)
 
   if (absent) {
     return (

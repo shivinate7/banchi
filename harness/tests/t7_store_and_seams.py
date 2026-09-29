@@ -12815,9 +12815,11 @@ def check_photo_cache(checks: Checks) -> None:
             httpd.server_close()
             thread.join(timeout=5)
 
-    # ---------------------------------------------------- by-card: 304 without a read
-    # A matching revalidation of `/photo/by-card/<cid>` must not read the 1.9 MB file: the
-    # tag is the name. The counter wraps `Path.read_bytes` for the photograph's own path.
+    # -------------------------------------- by-card: versioned, 304 without a read, re-shoot
+    # `?v=<capture_id>` versions the address. A matching revalidation is a 304 that never READS
+    # the file. A D26 re-shoot writes new bytes under the SAME cid, and the new version must
+    # get the new bytes, with the OLD tag answered 200. No version means `no-cache` over a
+    # content digest, never `immutable`.
     with isolated_home():
         capture_server.do_capture(
             {"box": 3, "capture_id": "q1", "image": blob(9), "set_hint": "sv9"}
@@ -12834,15 +12836,19 @@ def check_photo_cache(checks: Checks) -> None:
                 reads.append(str(self))
             return real(self)
 
+        url = f"/photo/by-card/{cid}"
         try:
             with mock.patch.object(Path, "read_bytes", counting):
-                status, body, headers = request(port, "GET", f"/photo/by-card/{cid}")
-                checks.equal(status, 200, "by-card answers 200 with the bytes")
-                etag = headers.get("ETag")
-                checks.equal(len(reads), 1, "and reads the file once")
+                status, body, headers = request(port, "GET", f"{url}?v=q1")
+                checks.equal(status, 200, "by-card with a version answers 200 with the bytes")
+                checks.ok(
+                    "immutable" in (headers.get("Cache-Control") or ""),
+                    "and is immutable, because the URL names the version",
+                )
+                old_tag = headers.get("ETag")
                 reads.clear()
                 status, body, headers = request(
-                    port, "GET", f"/photo/by-card/{cid}", extra_headers={"If-None-Match": etag}
+                    port, "GET", f"{url}?v=q1", extra_headers={"If-None-Match": old_tag}
                 )
                 checks.equal(status, 304, "a matching If-None-Match answers 304")
                 checks.equal(body, b"", "with no body")
@@ -12852,13 +12858,29 @@ def check_photo_cache(checks: Checks) -> None:
                     "close",
                     "and still says Connection: close (DEBT11: a kept socket holds a worker)",
                 )
-                status, body, _ = request(
-                    port,
-                    "GET",
-                    f"/photo/by-card/{cid}",
-                    extra_headers={"If-None-Match": '"stale"'},
+                reshot = b"\xff\xd8\xff" + bytes([77]) * 64
+                capture_server.do_reshoot(
+                    3, 1, {"capture_id": "q2", "image": base64.b64encode(reshot).decode("ascii")}
                 )
-                checks.equal(status, 200, "a tag we never issued gets the bytes")
+                status, body, headers = request(
+                    port, "GET", f"{url}?v=q2", extra_headers={"If-None-Match": old_tag}
+                )
+                checks.equal(
+                    status, 200, "AFTER A RE-SHOOT THE OLD TAG ON THE NEW VERSION IS 200, NOT 304"
+                )
+                checks.equal(body, reshot, "and the bytes are the new photograph's")
+                checks.ok(headers.get("ETag") not in (None, old_tag), "under a new ETag")
+                status, body, headers = request(port, "GET", url)
+                checks.equal(body, reshot, "an unversioned request gets the current bytes")
+                checks.equal(
+                    headers.get("Cache-Control"),
+                    "no-cache",
+                    "and is never immutable: it cannot say which version it means",
+                )
+                status, _, _ = request(
+                    port, "GET", url, extra_headers={"If-None-Match": headers.get("ETag")}
+                )
+                checks.equal(status, 304, "its digest tag still revalidates to 304")
         finally:
             httpd.shutdown()
             httpd.server_close()

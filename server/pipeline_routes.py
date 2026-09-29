@@ -2095,16 +2095,19 @@ def _position_label(
     return join.place_text(game, view.at(number, at))
 
 
-def _position_cid(inventory: Optional[master.Inventory], box, index) -> Optional[str]:
-    """The card's own name at `box/index` today, so a screen can address its photograph by
-    name (D172) and let the browser keep it. None where the slot names no card."""
-    if inventory is None:
-        return None
-    try:
-        card = inventory.cards.get(master.position_key(int(box), int(index)))
-    except (TypeError, ValueError):
-        return None
-    return getattr(card, "cid", None)
+def _position_name(inventory: Optional[master.Inventory], box, index) -> dict:
+    """The card's own name and photograph version at `box/index` today (D172), so a screen
+    can address the photograph by name and cache it. Nulls where the slot names no card."""
+    card = None
+    if inventory is not None:
+        try:
+            card = inventory.cards.get(master.position_key(int(box), int(index)))
+        except (TypeError, ValueError):
+            card = None
+    return {
+        "cid": getattr(card, "cid", None),
+        "capture_id": getattr(card, "capture_id", None),
+    }
 
 
 def _relabel_positions(table) -> None:
@@ -2179,7 +2182,7 @@ def _relabel_positions(table) -> None:
             if not isinstance(at, dict):
                 continue
             at["label"] = _position_label(views, inventory, at.get("box"), at.get("index"))
-            at["cid"] = _position_cid(inventory, at.get("box"), at.get("index"))
+            at.update(_position_name(inventory, at.get("box"), at.get("index")))
 
 
 def do_pipeline_pricing(name: str) -> dict:
@@ -3165,6 +3168,7 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
                         "index": card.index,
                         "label": _position_label(views, snapshot.inventory, card.box, card.index),
                         "cid": getattr(card, "cid", None),
+                        "capture_id": getattr(card, "capture_id", None),
                     }
                 )
                 drawn.add(key)

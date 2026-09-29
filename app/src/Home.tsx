@@ -177,7 +177,7 @@ function deckFromCards(cards: Record<string, InventoryCard> | null): DeckCard[] 
       index: card.index,
       /* BY NAME (D172): an inventory row carries the card's own `cid`, so the hero addresses
          the photograph rather than the slot it happens to sit in. */
-      photo: photoUrl(card.box, card.index, card.cid),
+      photo: photoUrl(card.box, card.index, card),
       card,
     }))
 }

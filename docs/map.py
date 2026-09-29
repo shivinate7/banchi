@@ -8883,13 +8883,13 @@ COMPONENTS = [
                 "governed_by": ["D57", "D58", "D118", "D181", "D260", "D264"],
             },
             "tests/photo-cache.spec.ts": {
-                "does": "Home and Review draw every photograph by name (`D172`), on the first "
-                        "visit and on the revisit: a slot URL is what the browser re-requests "
-                        "on every visit, a by-card URL is `immutable`. A route-fulfilled stub "
-                        "is never HTTP-cached, so this asserts the address shape, and harness "
-                        "T7 `check_photo_cache` holds the header and the 304. Run by "
-                        "`make design-check`.",
-                "governed_by": ["D172"],
+                "does": "Home, Review and Pricing draw every photograph by name and version "
+                        "(`D172`, `D26`): a by-card URL carries `?v=<capture_id>` because a "
+                        "re-shoot writes new bytes under the same name, and never a bare or "
+                        "slot URL. Read off the DOM, on the first visit and the revisit. A "
+                        "route-fulfilled stub is never HTTP-cached, so the cache hit itself "
+                        "is held by harness T7 `check_photo_cache`. Run by `make design-check`.",
+                "governed_by": ["D26", "D172"],
             },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "

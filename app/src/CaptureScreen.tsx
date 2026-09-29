@@ -25,6 +25,7 @@ import {
   newCaptureId,
   openSection,
   photoUrl,
+  type PhotoRef,
   removeCardInPlace,
   undoCapture,
   closeSection,
@@ -613,10 +614,9 @@ function describe(err: unknown): Note {
  * THE TEST IS WHETHER THE NAME CHANGED THE ADDRESS, never whether a cid was passed. `photoUrl`
  * ignores one in the demo build and refuses a `moved:`/`nophoto:` name, and both of those land
  * back on the slot route, where the nonce is still owed. */
-function photoSrc(box: number, index: number, cid: string | null, revision: number): string {
-  const url = photoUrl(box, index, cid)
-  if (url !== photoUrl(box, index)) return url
-  return `${url}${url.includes('?') ? '&' : '?'}v=${revision}`
+function photoSrc(box: number, index: number, ref: PhotoRef, revision: number): string {
+  const url = photoUrl(box, index, ref)
+  return url.includes('?') ? url : `${url}?v=${revision}`
 }
 
 function blurActive(): void {
@@ -4300,7 +4300,7 @@ export function CaptureScreen() {
               <img
                 key={last.card.key}
                 className="capture-media"
-                src={photoSrc(last.card.box, last.card.index, last.card.cid ?? null, revision)}
+                src={photoSrc(last.card.box, last.card.index, last.card, revision)}
                 alt={`Capture at ${last.card.label}`}
               />
             )}
@@ -4825,7 +4825,7 @@ export function CaptureScreen() {
                     >
                       <img
                         className="capture-undo-thumb capture-undo-thumb-portrait"
-                        src={photoSrc(target.box, target.index, target.cid, revision)}
+                        src={photoSrc(target.box, target.index, { cid: target.cid, capture_id: target.captureId }, revision)}
                         alt=""
                       />
                       {/* THE DRAWER GOES IN THE CAPTION, WHICH IS ALREADY ABSOLUTE — `left: 0;

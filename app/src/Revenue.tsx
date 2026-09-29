@@ -739,7 +739,7 @@ function RowThumb({
   const at = entry === undefined ? null : { box: entry.box, index: entry.index }
   const host = useRef<HTMLSpanElement | null>(null)
   const crop = useCardCropWhenSeen(at, host)
-  const src = entry !== undefined ? photoUrl(entry.box, entry.index, entry.cid) : (stockPhotos[sku] ?? null)
+  const src = entry !== undefined ? photoUrl(entry.box, entry.index, entry) : (stockPhotos[sku] ?? null)
   return (
     <span ref={host} style={{ display: 'contents' }}>
       <CardThumb src={src} alt={name} size={size} crop={entry === undefined ? null : crop} focus={THUMB_FOCUS} />

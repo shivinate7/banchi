@@ -1,39 +1,52 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
+import { seedPopulatedPricing } from './routeFixtures'
 
-/* HOME AND REVIEW ADDRESS PHOTOGRAPHS BY NAME, SO A REVISIT SENDS NO SLOT-URL REQUEST.
+/* HOME, REVIEW AND PRICING ADDRESS PHOTOGRAPHS BY NAME AND BY VERSION (D172).
  *
  * `GET /photo/<box>/<index>` names a slot, so it answers `no-cache` and the browser asks again
- * on every visit. `GET /photo/by-card/<cid>` names the photograph and answers `immutable`
- * (`capture_server._photo_by_card`; harness T7 `check_photo_cache` holds the header and the
- * 304), so a revisit sends nothing. A route-fulfilled stub is never stored by Chromium's HTTP
- * cache, so this spec cannot count the cache hit itself. It holds the app's half of the claim:
- * every photograph either screen asks for, on the first visit and on the revisit, is a by-card
- * URL. A slot URL is what re-requested on every visit before.
+ * on every visit. `GET /photo/by-card/<cid>?v=<capture_id>` names the photograph and its
+ * version and answers `immutable`, so a revisit sends nothing. The version is what makes that
+ * safe: a D26 re-shoot writes new bytes under the SAME cid, and only `capture_id` moves with
+ * them. `server.ts:photoUrl` is the one place that stamps it. A route-fulfilled stub is never
+ * stored by Chromium's HTTP cache, so this spec cannot count a cache hit. It holds the
+ * app's half, read off the DOM once each screen has drawn (never off a request log, which
+ * races the render): every photograph is a by-card URL with a `v` parameter, never a bare
+ * by-card URL and never a slot URL.
  *
- * `shell.ts`'s queue entry and cards carry a `cid`, as `_queue_row` and `_card_row` send. */
+ * `shell.ts`'s queue entry, cards and positions carry `cid` and `capture_id`, as the wire does. */
 sealEveryTest({ store: true, cards: 4 })
 
-test('Home and Review draw every photograph by name, on the first visit and the revisit', async ({ page }) => {
-  const photos: string[] = []
-  page.on('request', (request) => {
-    const path = new URL(request.url()).pathname
-    if (path.startsWith('/photo/')) photos.push(path)
+const PHOTO = /\/photo\/by-card\/[0-9a-f]{64}\?v=[^&]+$/
+
+async function photosOn(page: Page, hash: string): Promise<string[]> {
+  await page.evaluate((h) => (window.location.hash = h), hash)
+  /* Pricing draws the owner's own photograph in its photo sheet (the thumb shows the stock
+     picture), so open it: the thumb press is what asks for the by-card URL. */
+  if (hash === '#/pricing') await page.locator('.pricing-thumb').first().click()
+  let srcs: string[] = []
+  await expect
+    .poll(async () => {
+      srcs = await page.evaluate(() =>
+        [...document.images].map((img) => img.getAttribute('src') ?? '').filter((s) => s.includes('/photo/')),
+      )
+      return srcs.length
+    })
+    .toBeGreaterThan(0)
+  return srcs
+}
+
+for (const [name, hash] of [
+  ['Home', '#/'],
+  ['Review', '#/review'],
+  ['Pricing', '#/pricing'],
+] as const) {
+  test(`${name} draws every photograph by name and version, on the first visit and the revisit`, async ({ page }) => {
+    if (name === 'Pricing') await seedPopulatedPricing(page)
+    await page.goto('/#/shipping')
+    for (const visit of [1, 2]) {
+      for (const src of await photosOn(page, hash)) expect(src, `${name}, visit ${visit}`).toMatch(PHOTO)
+      await page.evaluate(() => (window.location.hash = '#/shipping'))
+    }
   })
-  const visit = async (hash: string, selector: string) => {
-    await page.goto(`/#${hash}`)
-    await page.locator(selector).first().waitFor({ state: 'attached' })
-    await page.waitForLoadState('networkidle')
-  }
-  const round = async () => {
-    await visit('/', '.home-hero img, img')
-    await visit('/review', 'img')
-  }
-
-  await round()
-  expect(photos.length, 'the first visit draws photographs').toBeGreaterThan(0)
-
-  await page.evaluate(() => (location.hash = '#/'))
-  await round()
-  expect(photos.filter((p) => !p.startsWith('/photo/by-card/')), 'no slot URL, ever').toEqual([])
-})
+}

@@ -841,7 +841,7 @@ function FulfillerCard({
                              `SearchCopy`, already filtered to a name that really is a
                              photograph's — so this thumbnail is THIS copy, not whatever
                              occupies its slot by the time the picture loads. */
-                          photoUrl(copy.place.box, copy.place.index, copy.cid)
+                          photoUrl(copy.place.box, copy.place.index, copy)
                         : photoSrc(copy)
                     }
                     alt={whereSpoken === null ? 'The card' : `The card in ${whereSpoken}`}

@@ -701,7 +701,7 @@ function VariantChooser({
                   {photoCopy === undefined ? (
                     <Icon name="image" size={18} />
                   ) : (
-                    <img src={photoUrl(photoCopy.place.box, photoCopy.place.index, photoCopy.cid)} alt="" />
+                    <img src={photoUrl(photoCopy.place.box, photoCopy.place.index, photoCopy)} alt="" />
                   )}
                 </span>
                 <span className="browse-variant-text">

@@ -1308,7 +1308,7 @@ function RetirePanel({
                  already filtered to the two shapes that name a photograph — so the copy this
                  dialog is about to retire is the copy on screen, whatever has slid through
                  its slot since the search answered. */
-              src={photoUrl(copy.place.box, copy.place.index, copy.cid)}
+              src={photoUrl(copy.place.box, copy.place.index, copy)}
               alt={`The card stored at ${sayPlace(copy.place.label ?? copy.key)}`}
               onError={() => setBroken(true)}
             />

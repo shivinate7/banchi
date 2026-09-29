@@ -562,6 +562,7 @@ async function stubStore(page: Page): Promise<void> {
           label: 'Box 2, Section 1, Card 1',
           photo: 'photos/2/1.jpg',
           cid: (2001).toString(16).padStart(64, '0'),
+          capture_id: 'cap-2-1',
           read: { name: 'Volcanion', number: '025', printed_total: '132', set_hint: 'ME01' },
           confidence: null,
           reason: 'no_catalog_row',

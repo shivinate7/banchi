@@ -692,7 +692,7 @@ function PricingThumb({
           className="bn-crop"
           /* BY NAME (D172): `_relabel_positions` decorates each position with the card's cid at read
              time. The frozen run file is untouched; the slot route remains where none is found. */
-          src={photoUrl(at.box, at.index, at.cid)}
+          src={photoUrl(at.box, at.index, at)}
           alt=""
           loading="lazy"
           /* `data-cropped` BELONGS ON THE IMG, NOT THE BUTTON (the owner's review, 2026-09-26):
@@ -3518,7 +3518,7 @@ function PhotoSheet({ sku, at, onNext, onClose }: { sku: MergedSku | null; at: n
       {sku === null ? null : (
         <div className="pricing-photo">
           <div className="pricing-photo-frame">
-            <img src={photoUrl(place?.box ?? 0, place?.index ?? 0, place?.cid)} alt={sku.name} />
+            <img src={photoUrl(place?.box ?? 0, place?.index ?? 0, place)} alt={sku.name} />
           </div>
           <p className="pricing-photo-caption">
             <Location label={place?.label ?? null} flow="run" />
