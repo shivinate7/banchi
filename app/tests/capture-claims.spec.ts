@@ -1790,9 +1790,9 @@ test('every field puts focus on its own first control when it opens, not the bod
 
 /* THE VIEWFINDER PANEL HUGS ITS PORTRAIT FRAME (owner, 2026-09-28: "oddly too square for a
    capturing that's done in a portrait view"). The frame is 9:16 and height-bound; the panel was a
-   1fr track that left 50px+ of dead dark on each side at desktop. Measured at rest, in one frame,
-   at the widths this screen is verified at above the phone layout (the phone keeps a full-width
-   panel: its height budget pins the shutter above the tab bar). */
+   1fr track that left 50px+ of dead dark on each side at desktop. Measured at rest, in one frame.
+   At phone width (390, 375) the panel hugs the frame TOO and sits BESIDE the last-capture photo
+   in one row (owner, 2026-09-28, picked from a mockup), so each shot is checked without a scroll. */
 test('the stage panel hugs the portrait frame: no dead side bands', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await open(page)
@@ -1801,6 +1801,8 @@ test('the stage panel hugs the portrait frame: no dead side bands', async ({ pag
     [1280, 800],
     [1100, 900],
     [820, 1100],
+    [390, 844],
+    [375, 812],
   ] as const) {
     await page.setViewportSize({ width, height })
     let last = ''
@@ -1810,9 +1812,21 @@ test('the stage panel hugs the portrait frame: no dead side bands', async ({ pag
           await page.evaluate(() => {
             const box = (sel: string) => {
               const r = document.querySelector(sel)!.getBoundingClientRect()
-              return { w: Math.round(r.width), h: Math.round(r.height) }
+              return {
+                w: Math.round(r.width),
+                h: Math.round(r.height),
+                l: Math.round(r.left),
+                r: Math.round(r.right),
+                t: Math.round(r.top),
+                b: Math.round(r.bottom),
+              }
             }
-            return { stage: box('.capture-stage'), frame: box('.capture-frame-live') }
+            return {
+              stage: box('.capture-stage'),
+              frame: box('.capture-frame-live'),
+              last: box('.capture-last'),
+              scrollW: document.documentElement.scrollWidth,
+            }
           }),
         )
         const still = now === last
@@ -1820,12 +1834,27 @@ test('the stage panel hugs the portrait frame: no dead side bands', async ({ pag
         return still
       })
       .toBe(true)
-    const { stage, frame } = JSON.parse(last) as { stage: { w: number; h: number }; frame: { w: number; h: number } }
-    // The 104px head + foot + padding constant in CaptureScreen.css (`--cap-stage-w`).
-    expect(Math.abs(stage.h - frame.h - 104), `overhead at ${width}x${height}`).toBeLessThanOrEqual(2)
+    type Box = { w: number; h: number; l: number; r: number; t: number; b: number }
+    const { stage, frame, last: lastBox, scrollW } = JSON.parse(last) as {
+      stage: Box
+      frame: Box
+      last: Box
+      scrollW: number
+    }
+    // The 104px (101px on a phone, whose head, foot and padding are tighter) head + foot + padding constant in CaptureScreen.css (`--cap-stage-w`).
+    expect(Math.abs(stage.h - frame.h - (width < 768 ? 101 : 104)), `overhead at ${width}x${height}`).toBeLessThanOrEqual(2)
     // Still a 9:16 portrait frame, within a pixel of rounding.
     expect(Math.abs(frame.w / frame.h - 9 / 16)).toBeLessThan(0.01)
     // The panel is the frame plus its 16px padding each side, never the wide dark track.
     expect(stage.w - frame.w, `${width}x${height}`).toBeLessThanOrEqual(40)
+    if (width < 768) {
+      // BESIDE: the last-capture panel starts where the stage ends and shares its rows, and
+      // nothing scrolls sideways.
+      expect(lastBox.l, `last starts right of the stage at ${width}`).toBeGreaterThanOrEqual(stage.r)
+      expect(Math.abs(lastBox.t - stage.t), `same top at ${width}`).toBeLessThanOrEqual(2)
+      expect(Math.abs(lastBox.b - stage.b), `same height at ${width}`).toBeLessThanOrEqual(2)
+      expect(lastBox.w, `last has room at ${width}`).toBeGreaterThanOrEqual(120)
+      expect(scrollW, `no sideways scroll at ${width}`).toBeLessThanOrEqual(width)
+    }
   }
 })
