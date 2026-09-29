@@ -970,9 +970,10 @@ export function Revenue() {
   // about to draw (the podium and board window, bounded by `PHOTO_LOOKUP_CAP`), and never
   // asks about a SKU twice.
   useEffect(() => {
-    const skus = products.slice(0, PHOTO_LOOKUP_CAP).map((p) => p.sku).filter((sku) => !asked.current.has(sku))
+    const askedSkus = asked.current
+    const skus = products.slice(0, PHOTO_LOOKUP_CAP).map((p) => p.sku).filter((sku) => !askedSkus.has(sku))
     if (skus.length === 0) return
-    skus.forEach((sku) => asked.current.add(sku))
+    skus.forEach((sku) => askedSkus.add(sku))
     let alive = true
     let retry: number | undefined
     const ask = (wanted: string[], again: boolean) =>
@@ -997,7 +998,7 @@ export function Revenue() {
       window.clearTimeout(retry)
       // A sort, filter or scope change re-runs this effect; a SKU whose answer was dropped
       // with it must be asked again, not remembered as asked.
-      skus.forEach((sku) => asked.current.delete(sku))
+      skus.forEach((sku) => askedSkus.delete(sku))
     }
   }, [products])
 
