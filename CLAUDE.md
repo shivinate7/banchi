@@ -16,7 +16,8 @@ track banner. Repealing those is a code change and needs the owner's word on its
 symlink to `CLAUDE.md`. `code-card-fork/AGENTS.md` and `code-card-fork/CLAUDE.md` are both
 relative symlinks to this same file too, since 2026-09-20 — the fold above, not a new
 exception. `.agents/skills` is a directory symlink to `.claude/skills`. `.codex/hooks.json`
-mirrors `.claude/settings.json`'s hooks. `make docs-audit`'s `codex hooks` row checks both
+mirrors `.claude/settings.json`'s hooks. `make docs-audit`'s `agent links` row checks the four
+links. Its `codex hooks` row checks both
 directions. `.codex/config.toml` stays untracked, like `.claude/settings.local.json`.
 
 ## The name is the app's, and nothing beneath it (D94)
