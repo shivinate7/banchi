@@ -501,3 +501,11 @@
 .pricing-restore-clear-row {
   display: block;
 }
+
+/* F3: the filter bar sits over the list, and says once that it only changes the view. */
+.pricing-filterbar { margin-bottom: var(--bn-3); }
+.pricing-filter-note {
+  margin: 0 0 var(--bn-3);
+  font-size: var(--bn-fs-sm);
+  color: var(--bn-ink-3);
+}

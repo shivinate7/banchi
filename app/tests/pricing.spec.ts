@@ -4347,3 +4347,100 @@ test('a reworded owed sentence draws the same chip while its code stays', async 
   await expect(chips.nth(0).locator('.pricing-run-owes')).toHaveText('Never sent')
   await expect(chips.nth(1).locator('.pricing-run-owes')).toHaveText('Sent, 3 need a price')
 })
+
+/* ------------------------------------------------------------------------------------------
+ * F3 (the owner's word, 2026-09-29): the filters an end user needs on this list. The design is
+ * `docs/reviews/ux-2026-09-23/F3-pricing-filters.md`. Search, sort and the facets narrow what is
+ * DRAWN and nothing else.
+ * ------------------------------------------------------------------------------------------ */
+
+const FILTER_SKUS = [
+  sku({ sku: '8608859', name: 'Articuno - 161/159', set_name: 'SV: Prismatic Evolutions', snap: { ...sku().snap, market: '22.03' } }),
+  sku({ sku: '8608459', name: 'Dunsparce - 001/193', set_name: 'Paldea Evolved', snap: { ...sku().snap, market: '0.30' } }),
+  sku({ sku: '9000001', name: 'Annie, Dark Child', game: 'riftbound', set_name: 'Origins', snap: { ...sku().snap, market: '3.50' } }),
+  sku({ sku: '9000002', name: 'Poro Snax', game: 'riftbound', set_name: 'Origins', bucket: 'no_market_data', snap: { ...sku().snap, market: null } }),
+]
+const firstWords = (texts: string[]) => texts.map((text) => text.trim().split(/[ ,-]/)[0])
+
+async function openFilterSheet(page: Page): Promise<Locator> {
+  await page.locator(`${VIEW} .bn-filterbar-trigger`).click()
+  const body = page.locator('.bn-filterbar-sheet-body')
+  await expect(body).toBeVisible()
+  return body
+}
+
+async function pickFilter(page: Page, facet: string, option: RegExp): Promise<void> {
+  const body = await openFilterSheet(page)
+  await body.getByRole('button', { name: new RegExp(`^${facet}`) }).click()
+  await page.getByRole('listbox', { name: facet }).getByRole('option', { name: option }).click()
+  await page.keyboard.press('Escape')
+  if (await body.isVisible()) await page.keyboard.press('Escape')
+  await expect(body).toBeHidden()
+}
+
+test('F3: the name search finds a card by any words of it, in any order, and by its set', async ({ page }) => {
+  await open(page, { skus: FILTER_SKUS })
+  await expect(page.locator('.pricing-row')).toHaveCount(4)
+  const search = page.getByRole('searchbox', { name: 'Search this list' })
+  await search.fill('child annie')
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+  await expect(page.locator('.pricing-row')).toContainText('Annie')
+  await search.fill('paldea')
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+  await expect(page.locator('.pricing-row')).toContainText('Dunsparce')
+  await search.fill('zzzz')
+  await expect(page.getByText('Nothing matches')).toBeVisible()
+})
+
+test('F3: the price sort orders within each heading, and a row with no price goes last', async ({ page }) => {
+  await open(page, { skus: FILTER_SKUS })
+  await pickFilter(page, 'Sort', /^Market price/)
+  /* HIGH TO LOW is the first pick. Poro Snax has no market price, so it sits under "Needs you";
+     the sort never crosses that line. */
+  const names = await page.locator('.pricing-row').allInnerTexts()
+  expect(firstWords(names.map((text) => text.replace(/^\s*/, '')))).toEqual(['Poro', 'Articuno', 'Annie', 'Dunsparce'])
+  await expect(page.locator('.pricing-group-head .pricing-group-why').first()).toHaveText('Needs you')
+})
+
+test('F3: the game filter and the set filter each narrow the list, and together with a search they combine', async ({ page }) => {
+  await open(page, { skus: FILTER_SKUS })
+  await pickFilter(page, 'Game', /Riftbound/)
+  await expect(page.locator('.pricing-row')).toHaveCount(2)
+  await pickFilter(page, 'Set', /Origins/)
+  await expect(page.locator('.pricing-row')).toHaveCount(2)
+  await page.getByRole('searchbox', { name: 'Search this list' }).fill('snax')
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+})
+
+test('F3: a price band keeps the rows in it, and "No market price" is a band of its own', async ({ page }) => {
+  await open(page, { skus: FILTER_SKUS })
+  await pickFilter(page, 'Market price', /Under/)
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+  await expect(page.locator('.pricing-row')).toContainText('Dunsparce')
+  await page.goto(`${VIEW_ROUTE}&band=none`)
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+  await expect(page.locator('.pricing-row')).toContainText('Poro Snax')
+})
+
+test('F3: a filter narrows the view only, and the Send bar still counts every row', async ({ page }) => {
+  await open(page, { skus: FILTER_SKUS })
+  const says = page.locator('.pricing-bar-says')
+  const before = await says.innerText()
+  await page.getByRole('searchbox', { name: 'Search this list' }).fill('dunsparce')
+  await expect(page.locator('.pricing-row')).toHaveCount(1)
+  await expect(page.locator('.pricing-filter-note')).toBeVisible()
+  await expect(says).toHaveText(before)
+})
+
+test('F3: the held count on the button and in the bar are one number, a sent row included', async ({ page }) => {
+  await open(page, {
+    skus: [
+      sku({ sku: '8608859', name: 'Articuno' }),
+      sku({ sku: '8608459', name: 'Dunsparce', at_cap: true, add_to_quantity: 0, nothing_to_add: 'every copy in this run is already listed or has left the box' }),
+      sku({ sku: '8608460', name: 'Snorlax' }),
+    ],
+    decisions: { rule: 'match', basis: 'market', sub_threshold: null, overrides: { '8608459': { withheld: 'keeping' }, '8608460': { withheld: 'bullish' } } },
+  })
+  await expect(page.getByRole('button', { name: 'Held 2' })).toBeVisible()
+  await expect(page.locator('.pricing-bar-says')).toContainText('2 held')
+})
