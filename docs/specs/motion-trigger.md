@@ -56,8 +56,8 @@ a HAND, and no session statistic measures how big a hand is in frame.
 
 **THE RESCUE IS THE EVENING OF 2026-09-11 AND §7 IS ALL OF IT.** A card that never settles is
 photographed off the quietest frame it manages rather than dropped, once the episode has run
-`rescueAfter` × `maxMoveMs`; six sessions go from 268 photographs and 20 stalls to 295 and 7,
-and the eight earlier sessions do not move. **It is SPECIFIED and BUILT and NOT VALIDATED**:
+`rescueAfter` × `maxMoveMs`; three sessions go from 122 photographs and 11 stalls to 136 and 6,
+and the pre-rescue sessions do not move. **It is SPECIFIED and BUILT and NOT VALIDATED**:
 the replay says the machine fires on more cards, and only the rig says whether those
 photographs are readable. §7's last block is that run's checklist.
 
@@ -71,9 +71,9 @@ about a trigger.
 
 **AND §4 NOW LOCKS THE CAMERA, WHICH IS D81'S BARGAIN COMING DUE (2026-09-12).** Every
 threshold being a multiple of a session measurement is what makes a setting that DRIFTS
-mid-session dangerous, and nothing in `motion.ts` can see one. Measured over all twenty banked
-traces: one 1/3 EV auto-exposure step moves the watch region 8.5-22.5 luma levels and reads as a
-CARD on nine of the fifteen sessions that carry a baseline, and a mid-session gain step is a
+mid-session dangerous, and nothing in `motion.ts` can see one. Measured before the banked
+traces were cut to ten (unmeasured on the ten kept): one 1/3 EV auto-exposure step moves the watch region 8.5-22.5 luma levels and reads as a
+CARD on most sessions that carry a baseline, and a mid-session gain step is a
 cliff rather than a gradient — one session stops firing altogether at +1.5 stops. The shutter and
 the picture profile came back NULL and are recorded as findings. `scripts/score-trace.py camera`
 re-derives all of it. **SPECIFIED and RECORDED, NOT BUILT and NOT VALIDATED** — no parameter
@@ -83,7 +83,7 @@ moves, and §4's last block is the checklist that is owed.
 D184).** A settled frame over the presence floor is asked one
 more question — is it the baseline TIMES ONE NUMBER? — and a frame that is (a gain step on the
 bare stand) is refused as `suppressed:uniform` and becomes the baseline, while a card, which is
-a pattern and not a level, never is: zero of the 748 fired frames in the corpus, every one 3.6×
+a pattern and not a level, never is: zero of the 353 fired frames in the corpus, every one 4.1×
 or more clear of the bound, the 85/85 run 5.3×. No threshold moved and no new constant decides
 anything. **BUILT and RECORDED, NOT VALIDATED**: no banked trace holds a real exposure step or a
 pixel outside the watch region, so the step is a model over real plates, and §4's "the gain step"
@@ -349,7 +349,7 @@ of the frames with a card in view over the noise window, the still level is take
 `restQuantile` (0.25) of all of them, `tHi` keeping its ratio — and only when that quantile is
 under the presence floor, because a frame-to-frame change no smaller than a card arriving is
 not a rest. The fraction is over frames with a card in view because an empty stand is still on
-every frame. **Measured in both directions**: the eight earlier sessions keep 46-83% of their
+every frame. **Measured in both directions** (before the cut to ten; unmeasured since): the earlier sessions keep 46-83% of their
 frames under `tLo` and change zero verdicts (the escape trips a handful of refreshes on the
 three 2026-09-01 sessions and decides nothing); the four 2026-09-11 sessions replay **31, 21,
 45, 85** against 5 and 5 live on the two the ratchet lost. The HUD's `escape` count is how a
@@ -381,8 +381,8 @@ derived from, mid-run, and nothing reports it.** No constant in `motion.ts` can 
 that. Only the camera configuration can, which is why it is written down here rather than left
 to whatever the body was last set to.
 
-**Every figure below was measured on the twenty traces banked in `harness/traces/` and is
-re-derivable with `scripts/score-trace.py camera`.** Where a number is a derivation rather than
+**Every figure below was measured before `harness/traces/` was cut to ten, and is unmeasured on
+the ten kept unless a row says T9 pins it. `scripts/score-trace.py camera` re-derives it.** Where a number is a derivation rather than
 a measurement it says so in the row. **Two of the questions came back NULL and the null is the
 answer** — sharpening and shutter speed — and they are recorded as findings rather than omitted.
 
@@ -390,7 +390,7 @@ answer** — sharpening and shutter speed — and they are recorded as findings 
 
 | setting | lock to | the measurement behind it |
 |---|---|---|
-| **Exposure mode** | `Movie` → **Manual Exposure** | **the single most consequential row.** One 1/3 EV step — the smallest a Sony AE can take — moves the watch region by **8.5 to 22.5 luma levels** across the fifteen traces that carry a baseline. That is over `tLo` on **15 of 15** and over `presenceMin` on **9 of 15**: on more than half this corpus, one AE step on an empty stand reads as **a card arriving**. **That figure is a DERIVATION on the baseline under a multiplicative model, not a recorded step — no banked trace contains one — and since 2026-09-12 the machine refuses the step it describes as `suppressed:uniform` ("the gain step" below). The lock is still what keeps the floor meaning one thing for a whole box** |
+| **Exposure mode** | `Movie` → **Manual Exposure** | **the single most consequential row.** One 1/3 EV step — the smallest a Sony AE can take — moves the watch region by **8.5 to 22.5 luma levels** across the traces that carry a baseline (count unmeasured). That is over `tLo` and over `presenceMin` on most of them (counts unmeasured): on most of this corpus, one AE step on an empty stand reads as **a card arriving**. **That figure is a DERIVATION on the baseline under a multiplicative model, not a recorded step — no banked trace contains one — and since 2026-09-12 the machine refuses the step it describes as `suppressed:uniform` ("the gain step" below). The lock is still what keeps the floor meaning one thing for a whole box** |
 | **ISO** | a **fixed** value. Never `ISO AUTO` | a gain step taken mid-session is **a cliff, not a gradient**. On the 2026-09-11 03:25 session, **+1/3 stop costs 48% of the fires after it** and **+1.5 stops stops the session firing at all** for its remaining 75 seconds. Mechanism in "the cliff" below |
 | **Shutter** | **1/60 or slower**, as slow as the feeder allows — spend it on keeping ISO down | **NULL RESULT.** At the instant the trigger fires the card is moving at **184 sensor px/s** (median) and 367 at p90, so 1/60 smears it **3.1 px of a 3840-px frame** (6.1 at p90, 4.6 at the rescue bar). Blur is not the binding constraint at the fire phase; noise is. Derivation below |
 | **Aperture** | **fixed**, wherever the lamp allows the ISO above | it is half the same exposure budget, and a body left in `A` re-levels when the scene changes |
@@ -404,7 +404,7 @@ answer** — sharpening and shutter speed — and they are recorded as findings 
 #### The cliff — why `ISO AUTO` is the row that can lose a whole box
 
 The still-frame floor is **sensor and codec noise**, and this is measurable rather than assumed.
-Over **299 quiet keyframe pairs** across all twenty sessions the delta field's **lag-1 spatial
+Over **299 quiet keyframe pairs** (pre-cut count, unmeasured since) the delta field's **lag-1 spatial
 correlation is +0.009 across and +0.008 down**, against a shuffled control of +0.001 — that is
 independent cell to cell, which flicker, an AE micro-adjustment and a lamp ripple are not. The
 same pairs put the **global brightness move at p50 0.00, p90 1.00 and max 4.00 luma levels per
@@ -416,9 +416,9 @@ presence floor with it. **A slow drift is absorbed — that is D81 working.** A 
 | gain step at the session midpoint | corpus fires | corpus stalls | sessions that stop firing entirely |
 |---|---|---|---|
 | none | 915 | 12 | — |
-| +1 stop | 879 | 18 | 0 of 20 |
-| +2 stops | 864 | 17 | 1 of 20 |
-| +3 stops | 789 | 22 | 2 of 20 |
+| +1 stop | 879 | 18 | 0 |
+| +2 stops | 864 | 17 | 1 |
+| +3 stops | 789 | 22 | 2 |
 
 **The corpus totals understate it, and the per-session column is the one to read.** Two sessions
 do not degrade, they STOP: 03:25 loses 48% of its post-step fires at **+1/3 stop**, 82% at +1
@@ -438,8 +438,8 @@ adaptive term only binds past `typ` 5.33 — **3.8 stops above the quietest sess
 `presenceMin` stays the binding term through anything a camera can be set to, which is D84's
 debt neither widened nor closed by this section.
 
-**And the lamp is nearly no lever here, which is the useful surprise.** On one rig over twelve
-sessions the floor tracks the plate level as **log(typ) = −0.125 × log(level), r = −0.868** —
+**And the lamp is nearly no lever here, which is the useful surprise.** On one rig over several
+sessions (count unmeasured) the floor tracks the plate level as **log(typ) = −0.125 × log(level), r = −0.868** —
 halving the light raises the floor **9%**. Shot noise under a FIXED gain predicts −0.10 after the
 display gamma, and the measured −0.125 is that. So a brighter lamp does not buy a quieter
 trigger; a lower ISO does, at **√2 per stop**. Reach for the lamp to buy shutter and aperture
@@ -447,7 +447,7 @@ headroom, and then spend that headroom on ISO.
 
 #### The frame rate — 24p is the floor, and it is being run AT the floor
 
-**The stream is 24p, on 20 of 20 traces.** The modal frame gap is **41.5–42.5 ms** everywhere
+**The stream is 24p, on every trace banked then.** The modal frame gap is **41.5–42.5 ms** everywhere
 and **69.7% of all 26,943 intervals** fall in 40.5–42.5 ms. That is the source rate rather than a
 browser dropping a 30p feed: a dropped 30p stream is bimodal at 33.3 and 66.7 ms, and only
 **0.13%** of the corpus sits near 66.7.
@@ -533,7 +533,7 @@ row above bite hardest**, because an exposure step costs luma levels in proporti
 own level. With exposure locked that trade does not exist, and the bright plate is pure gain.
 
 **Clipping has headroom on cards and almost none on the plate.** Card frames put **0.00–0.22%**
-of cells at 250 or above on the twelve newest sessions (against 1.89% and 0.97%, worst frame
+of cells at 250 or above on the newest sessions (count unmeasured) (against 1.89% and 0.97%, worst frame
 16.4%, on the 2026-08-23 pair). The plate itself reaches a bright quantile of 255 on **0.1–2.9%**
 of frames in five sessions, so an exposure step DOWN is fully visible and a step UP is partly
 absorbed — one more reason not to leave the decision to the camera.
@@ -552,7 +552,7 @@ hand, built over recordings alone; D184 is the decision.
 
 **What the corpus holds, and does not.** Every trace stores the watch region and nothing outside
 it — 1,064 cells at 38×28, keyframes and verdict frames alike — so a reference region outside the
-region, the shape first proposed, cannot be derived from it. A scan of all 20 sessions' consecutive
+region, the shape first proposed, cannot be derived from it. A scan of every banked session's consecutive
 keyframe pairs for a global gain change (median ratio ≥ 5% off unity with the pattern preserved)
 found none; the three candidates are quantisation on a 16-level plate. **The 8.5–22.5 figure in
 the exposure row is arithmetic on the baseline, and it is now labelled as such.**
@@ -580,19 +580,19 @@ in the units of the brighter of the two frames; UNIFORM when the residual is und
 the session's still-frame difference — the multiple the presence floor already rides. The units
 were measured three ways: the baseline's put sixteen of the 85/85 run's cards at 1.4× the bound;
 the frame's put the 03:25 session's closest real card at 1.8×; the brighter frame's keeps every
-real card on every session at **3.6× or more** (2026-09-01 03:06 at 22.5 s is the closest).
+real card on every session at **4.1× or more** (2026-09-01 21:14 is the closest).
 
-| reading, all twenty sessions | value |
+| reading, all ten sessions | value |
 |---|---|
-| fired frames over the floor | 748 |
+| fired frames over the floor | 353 |
 | refused as uniform | **0** |
-| closest real card to the bound | **3.65×** (85/85 run: 5.3×) |
+| closest real card to the bound | **4.1×** (85/85 run: 5.3×) |
 | the closest frame of any kind | 03:25 at 74.0 s, **1.02×** — the plate's dark disc displaced, NOT a card (contact sheet); its twin at 73.0 s reads 2.29× |
 | injected 1/3, 1/2, 1 EV on every baseline | uniform, or under the floor — never a card |
-| injected 1.5 EV | declined on six bright plates (fewer than a quarter of the region unclipped), the floor alone deciding as before |
-| the hand D84 photographed the stand with | 7.61 and 8.68 against bounds 7.41 and 8.09 — not uniform; refused by the floor as before |
+| injected 1.5 EV | declined on three bright plates (fewer than a quarter of the region unclipped), the floor alone deciding as before |
+| the hand D84 photographed the stand with | 8.96 against bound 8.09 — not uniform; refused by the floor as before |
 | the reference rig's genuine empty stand | k = 1, residual = raw, 1.70–1.78 |
-| scaled novelty between consecutive fires | ≥ 5.28 against `tNovel` 4.0 (raw minimum 7.0) |
+| scaled novelty between consecutive fires | ≥ 6.89 against `tNovel` 4.0 |
 
 **The novelty gate asks the same question of the last fired frame**, so a step over a card
 already photographed is `suppressed:unchanged` rather than a second photograph. **`d` is not
@@ -749,8 +749,8 @@ one 60-second trace and score it — `scripts/score-trace.py`, §4 — *before* 
 
 Added the evening D130's cadence trigger was deleted, and it is what replaced it. The owner's
 complaint is the whole subject: *"it's really bad when the cards are coming a little slower or
-aren't landing perfectly, the engine is then bad at picking those up"*. Six saved sessions say
-what that looked like — 268 photographs against 20 stalls, about 93% — and what each miss was.
+aren't landing perfectly, the engine is then bad at picking those up"*. Three banked sessions say
+what that looked like — 122 photographs against 11 stalls, about 92% — and what each miss was.
 
 **A stall is a card, and until this the answer was to drop it.** The trigger fires on a settle;
 a card that never settles inside `maxMoveMs` was reported and left unphotographed. That refusal
@@ -761,7 +761,7 @@ photograph: the card is about to be replaced, nothing comes back for it, and `U`
 one in one press while a lost card is found weeks later in a box that does not match its run.
 
 **What the nineteen stall episodes actually are.** Scored with `scripts/score-trace.py` over
-the six sessions, every one of them has a quietest frame between **1.02× and 1.25× `tLo`** —
+the six sessions then banked (unmeasured on the three kept), every one of them has a quietest frame between **1.02× and 1.25× `tLo`** —
 and **nine of the first fourteen are UNDER `tLo`**, frames the machine had already judged
 still. Those nine were refused by `stillWindow` alone: the card landed one or two frames after
 its transit ended, the window needs three to fill, and the next card's motion threw it away
@@ -788,22 +788,19 @@ HUD beside `stall`.
 
 | session | live | with the rescue | of those rescued | stalls |
 |---|---|---|---|---|
-| 21:52 | 55 | 59 | 6 | 2 → 0 |
 | 21:54 | 53 | 60 | 7 | 5 → 3 |
-| 22:10 | 40 | 44 | 6 | 3 → 0 |
-| 22:12 | 51 | 56 | 6 | 4 → 1 |
 | 22:25 | 17 | 23 | 7 | 5 → 2 |
 | 22:29 | 52 | 53 | 2 | 1 → 1 |
-| **six** | **268** | **295** | **34** | **20 → 7** |
+| **three** | **122** | **136** | **16** | **11 → 6** |
 
-**And the eight earliest sessions do not move**, which is the half with teeth: 86, 86, 20, 15,
-24, 49, 16, 12 before and after. A stillness rule that buys cards on one rig by spending them
+**And the pre-rescue sessions do not move**, which is the half with teeth: 86, 13, 10 live
+and 86, 16, 12 replayed, before and after. A stillness rule that buys cards on one rig by spending them
 on another is this subsystem's entire history — D81's brightness floor rescued one session of
-three and broke the other two — so the sweep was constrained by those eight rather than scored
-against the new six. `rescueAfter` below 0.60 gains the 21:14 session a fire 290 ms before its
+three and broke the other two — so the sweep was constrained by those rather than scored
+against the new three. `rescueAfter` below 0.60 gains the 21:14 session a fire 290 ms before its
 own next one, and that is the value the corpus refused.
 
-**What still stalls is the finding, not the residue.** The seven survivors are episodes whose
+**What still stalls is the finding, not the residue.** The six survivors are episodes whose
 quietest frame never came near the bar. The clearest is 22:25 at 27.9 s: 1.25 s inside the
 Schmitt band with **not one crossing of `tHi`** — a card sliding the entire time, quietest
 frame at 3.4× `tLo`. Extending a deadline for that one would photograph a moving card; the

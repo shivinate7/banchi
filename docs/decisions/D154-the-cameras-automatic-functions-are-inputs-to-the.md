@@ -1,8 +1,9 @@
 ## D154 — The camera's automatic functions are inputs to the trigger's arithmetic, and the ones that step are locked
 
 **Settled 2026-09-12.** The question was which Sony settings the motion trigger wants and why,
-answered by measuring the twenty traces banked in `harness/traces/` rather than by reasoning
-about photography. The rig is a **Sony RX100 VII over micro-HDMI into an Elgato Cam Link 4K**,
+answered by measuring the traces banked in `harness/traces/` rather than by reasoning
+about photography. Every figure below was measured before that set was cut to ten and is
+unmeasured on the ten kept, except where a line says otherwise. The rig is a **Sony RX100 VII over micro-HDMI into an Elgato Cam Link 4K**,
 confirmed by the owner; `docs/specs/motion-trigger.md` §4's last block is the settings, the
 derivations and the rig checklist, and `scripts/score-trace.py camera` is the reader that
 re-derives every figure.
@@ -24,8 +25,8 @@ same reason: a claim nobody can re-derive is one nobody can contradict.
 ### What was measured, and the two that came back null
 
 **EXPOSURE IS THE ROW THAT MATTERS.** One 1/3 EV step — the smallest a Sony AE takes — moves the
-watch region by **8.5 to 22.5 luma levels** across the fifteen traces carrying a baseline, over
-`tLo` on **15 of 15** and over `presenceMin` on **9 of 15**. On more than half this corpus a
+watch region by **8.5 to 22.5 luma levels** across the traces carrying a baseline (count unmeasured), over
+`tLo` and over `presenceMin` on most of them (counts unmeasured). On most of this corpus a
 single AE step on an empty stand reads as **a card arriving**. The transform is multiplicative in
 code space and the gamma bracket 1.9–2.4 moves the median figure over 18.7–23.3, so the
 conclusion does not rest on the assumed exponent.
@@ -43,8 +44,8 @@ act when its own quantile sits at or above the presence floor, which is exactly 
 gain step puts it, and loosening that would be repealing the guard that makes the escape safe.
 The failure is in the camera's gift. `ISO AUTO` is what is banned.
 
-**AND THE LAMP IS NEARLY NO LEVER, WHICH IS THE USEFUL SURPRISE.** On one rig over twelve
-sessions the floor tracks the plate level as **log(typ) = −0.125 × log(level), r = −0.868** —
+**AND THE LAMP IS NEARLY NO LEVER, WHICH IS THE USEFUL SURPRISE.** On one rig over several
+sessions (count unmeasured) the floor tracks the plate level as **log(typ) = −0.125 × log(level), r = −0.868** —
 halving the light raises the floor 9%. Shot noise at a FIXED gain predicts −0.10 after the
 display gamma, and the measured slope is that. A brighter lamp does not buy a quieter trigger; a
 lower ISO does, at √2 per stop. Reach for the lamp to buy exposure headroom, then spend the
@@ -65,7 +66,7 @@ blur out to a **12-pixel radius costs `d` 0.000** on 84 real card regions — th
 average destroys it; the knee is at 21–30 pixels. The Picture Profile is locked only so it does
 not CHANGE mid-run, not because its value matters.
 
-**FRAME RATE IS THE ONE FREE IMPROVEMENT.** The stream is **24p on 20 of 20 traces** (modal gap
+**FRAME RATE IS THE ONE FREE IMPROVEMENT.** The stream is **24p on every trace then banked** (modal gap
 41.5–42.5 ms, 69.7% of 26,943 intervals; a dropped 30p feed would be bimodal at 33.3 and 66.7 ms
 and only 0.13% sits there). `4K Output Select → HDMI Only(30p)` is one menu item. Frames are the
 currency: decimating the real series to 12 fps costs **8.7% of the corpus's fires** and takes

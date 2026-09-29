@@ -173,7 +173,7 @@ export type MotionParams = {
    *  while everything looks normal. That is the exact shape of the 2026-08-23 loss with the
    *  sign flipped. When the frames the machine calls still fall below this FRACTION of the
    *  window, its idea of still is wrong, and `dTypical` is taken instead from `restQuantile`
-   *  of ALL the window's frames. 0.30: every one of the eight earlier sessions keeps 46-83%
+   *  of ALL the window's frames. 0.30: every earlier session keeps 46-83%
    *  of its frames under tLo and never trips this; the three bright-lamp sessions sit at
    *  9-18% and trip it at once. Measured in both directions — 0 quantile-mode refreshes on
    *  the old corpus, 100/95/94% coverage on the new. */
@@ -310,7 +310,7 @@ export type MotionParams = {
    *
    *  0.60 IS WHERE TWO PLATEAUX MEET. Swept from 0.50 to 0.80 at 0.02: yield is FLAT at 295
    *  fires and 7 stalls over the six new sessions from 0.50 to 0.60 and falls away above it
-   *  (280 and 21 by 0.80); the eight earlier sessions are untouched from 0.60 up and gain a
+   *  (280 and 21 by 0.80); the earlier sessions are untouched from 0.60 up and gain a
    *  fire and a double at 0.58 and below — 21:14's 6.21 s rescue lands 290 ms before its own
    *  6.50 s fire. Below 0.60 costs a session nobody re-measured; above it costs cards. */
   rescueAfter: number
@@ -337,15 +337,15 @@ export type MotionParams = {
    *  presence floor already rides, no new constant — is the stand at a new gain: the frame
    *  becomes the baseline and the verdict is `suppressed:uniform`.
    *
-   *  MEASURED ON EVERY VERDICT FRAME IN `harness/traces/`, 2026-09-12. Over the 748 fired
-   *  frames that clear the floor across all twenty sessions, the smallest residual on every
-   *  session is 3.6x the bound or more — 42.5 against 8.04 on the 85/85 run — with ONE
+   *  MEASURED ON EVERY VERDICT FRAME IN `harness/traces/`, 2026-09-12. Over the 353 fired
+   *  frames that clear the floor across all ten sessions, the smallest residual on every
+   *  session is 4.1x the bound or more — 42.5 against 8.04 on the 85/85 run — with ONE
    *  frame closer: 03:25 t=74.0 reads 1.02x, and the contact sheet says it is the plate's own
    *  dark disc displaced, not a card (`score-trace.py contact`). Nothing that fired is called
    *  uniform, and no real card comes within 3x of it. A synthetic 1/3, 1/2 or 1 EV step on every one of
-   *  the twenty baselines is called uniform or is under the floor; 1.5 EV is declined on six
+   *  the ten baselines is called uniform or is under the floor; 1.5 EV is declined on three
    *  bright plates, where it clips three quarters of the region. The hand D84 photographed
-   *  the bare stand with (7.61 and 8.68 residual, bounds 7.41 and 8.09) is NOT uniform — and
+   *  the bare stand with (8.96 residual, bound 8.09) is NOT uniform — and
    *  is refused by the floor exactly as before, because it never clears it.
    *
    *  WHAT WAS REFUSED FIRST, WITH THE NUMBERS. Normalizing the frame ALWAYS — dividing by
@@ -889,7 +889,7 @@ export class MotionMachine {
      * now. `MotionControls.rebaseline` says a machine may not re-baseline on its own
      * judgement, and that stands: this is not a judgement about what is on the stand, it is
      * a proof that nothing on it changed, and a card cannot pass it because a card is not a
-     * scaled plate — zero of 748 did (`uniformMinShare`). Taking the baseline here is what
+     * scaled plate — zero of 353 did (`uniformMinShare`). Taking the baseline here is what
      * keeps the hand D84 measured at 8-11 UNDER the floor after a step: judged against the
      * old baseline it would carry the step on top of itself. */
     const uniform = this.uniformResidual(cells, this.baseline)
