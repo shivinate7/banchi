@@ -43,15 +43,17 @@ for (const theme of ['light', 'dark'] as const) {
       // the state every real session is in after the first capture; put the empty frame in it.
       await page.locator('.capture-last').evaluate((e) => e.setAttribute('data-has-last', 'true'))
       // Entrance animations move boxes; measure the settled layout.
-      // A looping animation (a live lamp, a spinner) never finishes; waiting on one hangs the test.
-      await page.evaluate(() =>
-        Promise.all(
-          document
-            .getAnimations()
-            .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
-            .map((a) => a.finished.catch(() => undefined)),
-        ),
-      )
+      // `finish()` settles a finite animation to its end state at once; awaiting `finished` can hang
+      // on a paused or idle one. A looping animation throws on finish() and is left running.
+      await page.evaluate(() => {
+        for (const a of document.getAnimations()) {
+          try {
+            a.finish()
+          } catch {
+            /* infinite: leave it */
+          }
+        }
+      })
 
       const worst = await page.evaluate(
         ({ painted, step }) => {
