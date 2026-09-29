@@ -1461,7 +1461,7 @@ test('a card with no name and no SKU is a one-copy list, not a special case', as
   /* No SKU, said as a sentence in the meta line — and the listing figures are NOT drawn at all,
      because `emit` has written no listing record and every one of them would be a structural
      zero under a `Room for 1 more live` nothing can keep. */
-  await expect(page.locator('.card-locations-meta')).toContainText('no SKU yet')
+  await expect(page.locator('.browse-details')).toContainText('no SKU yet')
   await expect(page.locator('.card-locations-live')).toHaveCount(0)
   await expect(page.locator('.card-locations-counts')).toHaveCount(0)
 
@@ -5297,7 +5297,7 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
      is not set in the face that carries SKUs and reason codes. Measured against the face the
      screen's own machine strings are drawn in, so it cannot go green by both moving together. */
   const machine = await page
-    .locator('.card-locations-meta-mono')
+    .locator('.browse-fact dd.is-util')
     .first()
     .evaluate((node) => getComputedStyle(node).fontFamily)
   expect(drawn.family).not.toBe(machine)
@@ -6501,7 +6501,7 @@ test('a group whose copies spell one number three ways still draws it', async ({
      agreed on after folding. A build that composed from `number`/`printed_total` here draws
      nothing at all, which is what the owner saw: one card, three strings, and the group between
      them silent. */
-  await expect(page.locator('.card-locations-meta')).toContainText('198/219')
+  await expect(page.locator('.browse-fact', { hasText: 'Number' }).locator('dd')).toHaveText('198')
 })
 
 /* THE COPIES LIST, WHICH IS WHERE THIS WAS REPORTED FROM — *"I'm seeing two box 1's"*. There is

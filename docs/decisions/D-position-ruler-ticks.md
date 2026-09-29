@@ -21,9 +21,10 @@ the chips say the rest. `back` and `front` are written once, under the card rule
 strips run the same way. The strip has no pair of its own. The Fulfiller's `Position N of M` is a card
 count and keeps its word.
 
-**The copies header drops the set code.** The card header above the panel already draws it. The SKU,
-the condition and the counts (`sent`, `waiting to go live`, headroom) are said nowhere else on the
-panel, so they stay. The number stays as well. A group whose copies spell it three ways has none
-in the card header, and this line is where the group's agreed number lands.
+**The gray SKU line is gone from the copies header.** The card header and Details draw the set
+code and the number. Details now also draws the SKU and the condition. The counts line (`sent`,
+`waiting to go live`, headroom) stays, because Details cannot compute headroom. A group whose
+copies spell the number three ways now shows the card's own number in Details, without the
+recovered total.
 
 **Amends** D155 (the ruler's graduations) and D260 (card numbers count within a section).
