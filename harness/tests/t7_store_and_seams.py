@@ -40125,6 +40125,17 @@ def check_stock_images(checks: Checks) -> None:
             "a set_name with no code prefix still matches on its first try",
         )
         checks.equal(
+            pokemon.url_for("ME01: Mega Evolution", "001/132"),
+            "https://images.pokemontcg.io/me1/1.png",
+            "a live export's 'number/total' cell resolves to the vendored bare number "
+            "(a sold SKU with no photographed copy, #/revenue)",
+        )
+        checks.equal(
+            pokemon.url_for("ME01: Mega Evolution", "999/132"),
+            None,
+            "a 'number/total' cell with an unknown number is still a miss",
+        )
+        checks.equal(
             pokemon.url_for("ME01: Mega Evolution", "999"),
             None,
             "a MISS is None, never a guess — this set exists, this number does not",
@@ -40419,6 +40430,19 @@ def check_sales_stock_photo_fallback(checks: Checks) -> None:
     with isolated_home():
         with Store().write() as snapshot:
             snapshot.inventory.ensure_box(1, name="skus-photos box")
+            # A SOLD SKU the skus table no longer holds: only its order line names it.
+            snapshot.ledger.ingest([
+                order_store.OrderRecord(
+                    source="TCGplayer",
+                    number="GONE-1",
+                    lines=[
+                        order_store.OrderLine(
+                            sku="gone-sku",
+                            name="Pokemon - Scarlet & Violet: Scarlet & Violet Elite Trainer Box - Unopened",
+                        )
+                    ],
+                )
+            ])
 
         # OWN PHOTO WINS — a real on-hand, photographed card, over anything the SKU table
         # or the resolver could otherwise answer.
@@ -40518,6 +40542,15 @@ def check_sales_stock_photo_fallback(checks: Checks) -> None:
                 "https://img/etb.jpg",
                 "a SEALED SKU (no number) falls back through url_for_product, by name — "
                 "Pokemon included",
+            )
+            checks.equal(
+                answers(
+                    checks,
+                    lambda: capture_server.do_skus_photos(["gone-sku"], images=images),
+                    "a sold SKU with no skus row",
+                )["stock_photos"].get("gone-sku"),
+                "https://img/etb.jpg",
+                "A SOLD SKU THE skus TABLE NO LONGER HOLDS resolves off its order line's name",
             )
             checks.ok(
                 "miss-sku" not in threaded["photos"] and "miss-sku" not in threaded["stock_photos"],

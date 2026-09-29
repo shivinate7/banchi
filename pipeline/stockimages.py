@@ -174,7 +174,14 @@ class _PokemonImages:
         set_id = self._set_id_for(set_name)
         if set_id is None:
             return None
-        return self._numbers_for(set_id).get(join.number_index_key(number))
+        index = self._numbers_for(set_id)
+        url = index.get(join.number_index_key(number))
+        if url is None and "/" in number:
+            # A live export's `Number` cell is "161/131" (number/printed total); the vendored
+            # tree's own `number` is "161". A store card carries the bare number, a SKU row
+            # the total too, so a sold SKU with no photographed copy missed here.
+            url = index.get(join.number_index_key(number.split("/", 1)[0]))
+        return url
 
     def display_name(self, set_name: str) -> Optional[str]:
         """The vendored tree's OWN name for `set_name`, resolved the SAME two-try order
@@ -468,6 +475,30 @@ class StockImages:
         if game is None:
             return None
         return self._tcgcsv_name_lookup(game, set_name, product_name)
+
+    def url_for_line_name(self, line_name: str) -> Optional[str]:
+        """The image for a SOLD order line whose SKU the `skus` table no longer holds (a
+        delisted product leaves the export), from the line's own name alone:
+        "<Product Line> - <Set>: <Product> [- <Condition or Unopened>]".
+
+        Every ": " is tried as the set/product split, and trailing " - " segments are dropped
+        until `url_for_product`'s exact-name join answers. It never guesses: the join is the
+        same exact, unambiguous one, so a name the catalogue does not carry answers `None`."""
+        line, sep, rest = str(line_name or "").partition(" - ")
+        if not sep or game_registry.game_for_product_line(line) is None:
+            return None
+        for i in range(len(rest)):
+            if rest[i : i + 2] != ": ":
+                continue
+            set_name, product = rest[:i], rest[i + 2 :]
+            while product:
+                url = self.url_for_product(line, set_name, product)
+                if url:
+                    return url
+                if " - " not in product:
+                    break
+                product = product.rsplit(" - ", 1)[0]
+        return None
 
     def display_name(self, game: str, set_name: str) -> Optional[str]:
         """The catalogue's own clean name for a set, when this resolver can name one.
