@@ -1015,6 +1015,14 @@ def _send_keys(captures: Sequence["sidecar.Capture"]) -> List[str]:
     return [capture.key for capture in captures if capture.has_position]
 
 
+def _unreadable_claim_sentence(exc: Exception) -> str:
+    """The refusal for a live claim the store cannot read. Nothing was started."""
+    return (
+        f"{str(exc).rstrip('. ')}. A claim that cannot be read cannot say which cards it holds, so no send can start "
+        "until it is fixed. Nothing in this send was started."
+    )
+
+
 def _claim_conflict(captures: Sequence["sidecar.Capture"]) -> Optional[dict]:
     """Which of these cards a live submission is already holding, or None. ONE press, ONE answer.
 
@@ -1046,8 +1054,10 @@ def _claim_conflict(captures: Sequence["sidecar.Capture"]) -> Optional[dict]:
     try:
         held = Store().read().submissions
         live = held.live()
-    except Exception:  # noqa: BLE001
-        return None
+    except files.UnreadableClaim as exc:
+        # A live claim that will not parse is not "no conflict": the write's own check refuses,
+        # and the press is told so now, in the same refusal shape a held card gets.
+        raise PipelineRefusal(HTTPStatus.CONFLICT, "claim_unreadable", _unreadable_claim_sentence(exc)) from None
     if not live:
         return None
     overlap = held.overlap(_send_keys(captures))
@@ -1401,8 +1411,8 @@ def do_pipeline_waiting(payload: dict) -> dict:
     try:
         for _, shared in Store().read().submissions.overlap(keys):
             held.update(shared)
-    except Exception:  # noqa: BLE001 — no claims readable is no claims, the press still refuses
-        pass
+    except files.UnreadableClaim as exc:  # an unreadable claim is not "no claims"
+        raise PipelineRefusal(HTTPStatus.CONFLICT, "claim_unreadable", _unreadable_claim_sentence(exc)) from None
     free = sorted(key for key in set(keys) if key not in held)
     return {"keys": free, "claimed": len(set(keys)) - len(free)}
 

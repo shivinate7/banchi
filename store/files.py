@@ -70,6 +70,11 @@ class StoreError(RuntimeError):
     """The store could not be read or written."""
 
 
+class UnreadableClaim(StoreError):
+    """A live claim row will not parse. Raised by `SendClaims.live` and `Submissions.live`, so a
+    caller can tell it from every other store failure and give it the claim's own sentence."""
+
+
 class LockTimeout(StoreError):
     """Someone else is holding the store lock. Almost always the capture server."""
 
