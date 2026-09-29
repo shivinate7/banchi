@@ -362,7 +362,7 @@ for (const size of SIZES) {
          on screen, left to right, and the sentence a screen reader hears says the same. */
       const order = pill.locator('.review-caption-order')
       await expect(order).toBeVisible()
-      const parts = await order.locator(':scope > span').evaluateAll((els) =>
+      const parts = await order.locator('span:not(.review-caption-grp)').evaluateAll((els) =>
         els.map((el) => {
           const box = el.getBoundingClientRect()
           return { text: (el.textContent ?? '').trim(), x: box.x, y: box.y + box.height / 2 }

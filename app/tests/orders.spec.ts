@@ -3392,6 +3392,11 @@ test('the card pane is the photograph, the pick and every copy with its place an
   const pane = page.locator('.browse-card')
   await expect(pane.locator('.browse-hero-name')).toContainText('Volcanion')
   await expect(pane.locator('.bn-photo')).toBeVisible()
+  /* THE PHOTO 404s, so the shared missing-photo panel: one sentence, a Re-shoot link to the card
+     on Inventory (no in-place control on this screen), and no address (`absent-photo.spec.ts`). */
+  await expect(pane.locator('.bn-photo')).toContainText("This card's photo is missing.")
+  await expect(pane.locator('.bn-photo').getByRole('link', { name: /re-shoot/i })).toHaveAttribute('href', /#\/inventory\?box=3/)
+  expect(await pane.locator('.bn-photo').innerText()).not.toMatch(/http|localhost|\/photo\//i)
   await expect(pane.locator('.orders-pick-chip')).toHaveText('Pick 1 of 1')
   await expect(pane.locator('.card-locations-row')).not.toHaveCount(0)
   await expect(pane.getByRole('button', { name: 'Mark sold' }).first()).toBeVisible()

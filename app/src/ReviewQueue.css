@@ -308,14 +308,18 @@
   min-height: var(--bn-control-h-lg);
   padding: var(--bn-1) 14px var(--bn-1) var(--bn-3);
   border-radius: var(--bn-r-lg);
-  background: var(--bn-surface-glass);
-  backdrop-filter: saturate(1.3) blur(10px);
-  -webkit-backdrop-filter: saturate(1.3) blur(10px);
+  /* OPAQUE, NOT GLASS (F3): a translucent pill takes its ground from whatever the photograph
+     puts behind it, so no ink token could be promised a ratio. On `--bn-surface` the ink tokens
+     hold their documented figures in both themes, over any photograph. */
+  background: var(--bn-surface);
   box-shadow: var(--bn-shadow-1);
   color: var(--bn-ink);
   --pos-slot: 18px;
   max-width: calc(100% - var(--bn-5) * 2);
 }
+/* The chip's positioning box: the well and the chip are siblings, so the chip can sit over the
+   photograph on a desk and under it where the column is narrow (F4, the 899px block below). */
+.review-photoblock { position: relative; min-width: 0; }
 /* THE PLACE WRAPS BETWEEN ITS PARTS, NEVER INSIDE ONE, AND NEVER CLIPS. A box is named now, not
    numbered (D259), so the pill is as long as the name: at 390 the card's
    own number fell off the end under `overflow: hidden`. Each part keeps one line. */
@@ -354,13 +358,15 @@
 }
 /* Whole or cut, never squeezed: the line wraps between its parts at 390 (like the label above
    it), and only a name longer than 16 characters is cut. */
+.review-caption-grp { display: inline-flex; align-items: baseline; gap: var(--bn-1-5); flex: none; }
 .review-caption-nb {
   flex: none;
-  max-width: 16ch;
+  max-width: 20ch;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.review-caption-nb.is-unread { font-style: italic; color: var(--bn-ink-2); }
+/* the right padding is the italic's overhang, which the ellipsis box would otherwise shave off */
+.review-caption-nb.is-unread { font-style: italic; color: var(--bn-ink-2); padding-right: 0.2em; }
 .review-caption-this { flex: none; font-weight: 600; color: inherit; }
 .review-caption-arrow { flex: none; color: var(--bn-ink-2); }
 .review-caption .position-run {
@@ -415,21 +421,10 @@
   gap: var(--bn-2);
   padding: var(--bn-6);
   text-align: center;
-  color: var(--rv-well-ink);
+  /* The shared panel (`.absent-photo`, CardHero.css) reads these on the dark well. */
+  --absent-ink: var(--rv-well-ink-strong);
+  --absent-ink-quiet: var(--rv-well-ink);
 }
-.review-absent-art {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--bn-r-xl);
-  display: grid;
-  place-items: center;
-  border: 1px dashed var(--bn-ink-3);
-  color: var(--bn-ink-3);
-  margin-bottom: var(--bn-2);
-}
-.review-absent-title { font-family: var(--bn-font-display); font-size: var(--bn-fs-lg); font-weight: 700; color: var(--rv-well-ink-strong); }
-.review-absent-body { font-size: var(--bn-fs-md); max-width: 30ch; }
-.review-absent-detail { max-width: 100%; overflow-wrap: anywhere; background: var(--rv-well-tint); color: var(--rv-well-ink); }
 
 /* The lookahead: a glass pill in the well's top-left corner. */
 .review-next {
@@ -993,6 +988,12 @@
   /* The whole stage narrows, not just the well: the lookahead pill is the stage's child and
      has to stay over the photograph. */
   .review-stage { position: relative; top: auto; width: min(100%, var(--rv-stage-w)); margin-inline: auto; }
+  /* THE PLACE CHIP LEAVES THE PHOTOGRAPH (F4). The stage is ~210px wide here, and a chip over it
+     covered the lower 40% of the card. It sits under the well instead, centred on it and free to
+     be wider than the photograph, since it no longer has a card to spare. */
+  .review-photoblock { display: flex; flex-direction: column; align-items: center; gap: var(--bn-2); }
+  .review-photoblock > .review-well { width: 100%; }
+  .review-caption { position: static; width: max-content; max-width: min(calc(100vw - 2 * var(--bn-4)), 420px); }
   .review-verdict { max-width: none; }
   .review-group-bar .bn-btn { white-space: normal; height: auto; min-height: var(--bn-control-h-lg); padding-top: var(--bn-2); padding-bottom: var(--bn-2); text-align: left; }
   .review-group-confirm { flex: 1 1 100%; justify-content: flex-start; }

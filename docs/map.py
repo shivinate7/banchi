@@ -8932,6 +8932,15 @@ COMPONENTS = [
                         "`make design-check`.",
                 "governed_by": ["D57", "D58", "D118", "D181", "D260", "D264"],
             },
+            "tests/absent-photo.spec.ts": {
+                "does": "A photograph that 404s says so the same way on Review and Pricing "
+                        "(`D196`, `D118`): one plain sentence, a Re-shoot link, no address and "
+                        "no machine noun, in both themes at 1440 and 820. On Review it also "
+                        "holds the place chip's ground opaque and, where the column is narrow, "
+                        "under the photograph. Orders' half is in `tests/orders.spec.ts`. Run "
+                        "by `make design-check`.",
+                "governed_by": ["D118", "D172", "D196"],
+            },
             "tests/photo-cache.spec.ts": {
                 "does": "Home, Review and Pricing draw every photograph by name and version "
                         "(`D172`, `D26`): a by-card URL carries `?v=<capture_id>` because a "

@@ -509,3 +509,4 @@
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
 }
+.pricing-photo-frame .absent-photo { padding: var(--bn-6) var(--bn-4); }

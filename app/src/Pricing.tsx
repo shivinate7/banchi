@@ -110,7 +110,7 @@ import type { FilterFacet, SortOption, SortValue } from './kit'
 import { toast } from './kit/toast'
 import './Pricing.css'
 import { SendCard } from './SendCard'
-import { gameLabel, noPhotoSentence } from './CardHero'
+import { ABSENT_SENTENCE, AbsentPhotoNote, gameLabel, noPhotoSentence } from './CardHero'
 
 /* #/pricing — THE HAND-PRICING WORKLIST (D49, D86), REBUILT TO THE OWNER'S RE-INTERVIEW (D277).
  *
@@ -3594,6 +3594,18 @@ function LiveSheet({
   )
 }
 
+/** The photograph in the sheet, or the shared missing-photo panel when it has none or the file
+ *  will not load. Keyed by the copy, so `broken` starts over on "Next copy". */
+function SheetPhoto({ name, place }: { name: string; place: MergedSku['positions'][number] | null }) {
+  const [broken, setBroken] = useState(false)
+  const url = photoUrl(place?.box ?? 0, place?.index ?? 0, place)
+  if (url === null) {
+    return <AbsentPhotoNote sentence={noPhotoSentence(place?.cid, null)} at={place === null ? null : { box: place.box, cid: place.cid }} />
+  }
+  if (broken) return <AbsentPhotoNote sentence={ABSENT_SENTENCE} icon="alert" at={place === null ? null : { box: place.box, cid: place.cid }} />
+  return <img src={url} alt={name} onError={() => setBroken(true)} />
+}
+
 /** One card's photograph, and the next copy of it (the drawer's Photo tab, as a sheet). */
 function PhotoSheet({ sku, at, onNext, onClose }: { sku: MergedSku | null; at: number; onNext: () => void; onClose: () => void }) {
   const count = sku?.positions.length ?? 0
@@ -3613,11 +3625,7 @@ function PhotoSheet({ sku, at, onNext, onClose }: { sku: MergedSku | null; at: n
       {sku === null ? null : (
         <div className="pricing-photo">
           <div className="pricing-photo-frame">
-            {photoUrl(place?.box ?? 0, place?.index ?? 0, place) === null ? (
-              <p className="pricing-photo-caption">{noPhotoSentence(place?.cid, null)}</p>
-            ) : (
-              <img src={photoUrl(place?.box ?? 0, place?.index ?? 0, place) ?? undefined} alt={sku.name} />
-            )}
+            <SheetPhoto key={`${place?.box}/${place?.index}/${place?.cid}`} name={sku.name} place={place} />
           </div>
           <p className="pricing-photo-caption">
             <Location label={place?.label ?? null} flow="run" />
