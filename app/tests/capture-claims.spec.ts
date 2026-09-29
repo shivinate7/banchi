@@ -1847,8 +1847,13 @@ test('the stage panel hugs the portrait frame: no dead side bands', async ({ pag
     expect(Math.abs(stage.h - frame.h - (width < 768 ? 101 : 104)), `overhead at ${width}x${height}`).toBeLessThanOrEqual(2)
     // Still a 9:16 portrait frame, within a pixel of rounding.
     expect(Math.abs(frame.w / frame.h - 9 / 16)).toBeLessThan(0.01)
-    // The panel is the frame plus its 16px padding each side, never the wide dark track.
-    expect(stage.w - frame.w, `${width}x${height}`).toBeLessThanOrEqual(40)
+    // Tablet and phone: the panel is the frame plus its 16px padding each side.
+    if (width >= 1280) {
+      // The desktop panel flexes with the sidebar (the demo's behaviour): the frame stays centred in it.
+      expect(Math.abs(frame.l - stage.l - (stage.r - frame.r)), `frame centred at ${width}x${height}`).toBeLessThanOrEqual(2)
+    } else {
+      expect(stage.w - frame.w, `${width}x${height}`).toBeLessThanOrEqual(40)
+    }
     if (width < 768) {
       // BESIDE: the last-capture panel starts where the stage ends and shares its rows, and
       // nothing scrolls sideways.
