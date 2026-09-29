@@ -40,7 +40,7 @@ WHAT IT IS NOT ALLOWED TO DO, each earned rather than admired:
   and is untouched.
 
   IT ADDS NO DEPENDENCY.  Pure Python, standard library only. `requirements.txt` argues every
-  dependency it carries and this venv is Python 3.9.6 with no `scipy`. A 1.1 ms solve over the
+  dependency it carries and this venv (Python 3.12) has no `scipy`. A 1.1 ms solve over the
   owner's forty open orders does not earn one — see `solve`'s own measurements.
 
 THIS IS A SET MULTICOVER, NOT A SET COVER, AND THE DISTINCTION IS THE WHOLE POINT. Each

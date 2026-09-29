@@ -1,0 +1,4 @@
+# scripts/ (hooks and stand-alone tools) runs under the system python3, 3.9.6, not the venv.
+# The root config is py312, so this nested one lowers only the target.
+extend = "../ruff.toml"
+target-version = "py39"

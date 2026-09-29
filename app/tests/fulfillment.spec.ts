@@ -1,7 +1,7 @@
 // Protects: Every row of the Fulfillment constraints table in DESIGN.md holds on the Fulfiller's screen, measured from the rendered page.
 // Governs: D5, D10, D13, D93, D115, D136, D212, D218
 import { test, expect, type Locator, type Page } from '@playwright/test'
-import { sealEveryTest } from './shell'
+import { sealEveryTest, settleAnimations } from './shell'
 import { settleFonts } from './fontsReady'
 import { settleMotion } from './motionSettled'
 
@@ -1269,14 +1269,7 @@ async function fatTargets(page: Page, where: string, hasControls = true): Promis
      animation (`bn-pop` scales it) read its 44px dismiss button at 43.99997 under load. The
      floor does not move. Only the moment of the read does. A looping shimmer never ends, so
      it is left out. */
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
-        .map((animation) => animation.finished.catch(() => undefined)),
-    ),
-  )
+  await settleAnimations(page)
   const found = await targets(page)
   if (hasControls) expect(found.length, `${where}: no control on screen`).toBeGreaterThan(0)
 
@@ -1836,6 +1829,25 @@ test('a card an open order owes is drawn as "Pick N" with every copy the store h
   // D193: the buyer's name leads, and the raw order id never stands alone.
   await expect(view(page)).toContainText(`Order ${ORDER_NUMBER}`)
   await battery(page, 'sold through an order')
+})
+
+/* SCREEN PASS F11: a card owed by several orders read "Pick 1 , 6 orders" -- the heading is a
+ * flex row and its gap sat before the comma. The comma belongs to the text it ends. */
+test('a card owed by two orders reads "Pick 1, 2 orders" with no space before the comma', async ({ page }) => {
+  const twoOrders = {
+    ...ONE_OPEN_ORDER_PLAN,
+    stops: [
+      {
+        ...ONE_OPEN_ORDER_PLAN.stops[0]!,
+        takes: [{ ...ORDER_TAKE, for: [...ORDER_TAKE.for, { key: 'TCGplayer:OTHER-1', number: 'OTHER-1', buyer: 'Sam Second' }] }],
+      },
+    ],
+  }
+  await openList(page, [], { orders: ONE_OPEN_ORDER, plan: twoOrders })
+  const pick = view(page).locator('.ff-owed-card', { hasText: 'Charizard ex' }).locator('.ff-owed-pick')
+  await expect(pick).toContainText('Pick 1')
+  const said = await pick.evaluate((el) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim())
+  expect(said).toBe('Pick 1, 2 orders')
 })
 
 /* THE OWNER'S OWN CASE. `MULTI_PLAN`'s own comment has the ruling verbatim: two wanted,

@@ -102,6 +102,7 @@ make catalog-mirror # dry run only. ARGS=--dry-run samples over HTTP HEAD.
 ./pkmnscan queue    refresh [--export <file.csv>] [--write]  # re-resolve every open queue entry.
 ./pkmnscan reconcile <run-dir> <staged-export.csv>   # one import against one Export From Staged.
 ./pkmnscan reconcile --live <my-pricing.csv> [--write]  # the whole store against one live export.
+./pkmnscan reconcile --phantoms <my-pricing.csv> [--out F]  # SKUs live beyond what is on hand. Read-only.
 ./pkmnscan reprice  list <my-pricing.csv> [--days N] [--percent P] [--write]  # unsold listings, proposed re-price.
 ./pkmnscan reprice  apply <worklist.csv> [--corpus-revision <digest>] [--write]  # `#/pricing` modal.
 ```

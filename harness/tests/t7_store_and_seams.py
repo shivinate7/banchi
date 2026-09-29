@@ -22469,6 +22469,65 @@ def check_send_review_r3(checks: Checks) -> None:
             "F5: A PRESS THAT SENDS NOTHING WRITES NO CLAIM, live or released",
         )
 
+    # ------------- F5b: one unreadable live claim must not kill the Sends list (DEBT59)
+    with _case(checks, "F5b: an unreadable live claim"), send_portal() as portal, isolated_home():
+        run_dir, _ = seam_run(checks, cards)
+        portal["live"] = _live_export_bytes(empty)
+        sent = send_routes.do_send({"runs": [run_dir.name], "confirm": True})["send"]
+        conn = db.connect(Store().directory)
+        try:
+            conn.execute(
+                "INSERT INTO send_claims (key, pid, state, started_at, kind, payload) "
+                "VALUES ('bad-row', 1, 'live', '2026-09-01T00:00:00+00:00', 'send', '{\"pid\": \"x\"}')"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        try:
+            listed = send_routes.do_sends()
+        except Exception as exc:  # noqa: BLE001
+            listed = {"sends": [], "unreadable_claims": repr(exc)}
+        checks.equal(
+            ([row["stamp"] for row in listed["sends"]], listed["unreadable_claims"]),
+            ([sent["stamp"]], 1),
+            "F5b: THE LIST DRAWS EVERY READABLE SEND AND FLAGS THE UNREADABLE CLAIM",
+        )
+        try:
+            Store().read().send_claims.overlap([ARTICUNO_SKU])
+            refused = False
+        except files.UnreadableClaim:
+            refused = True
+        checks.ok(refused, "F5b: and a path that guards a send still refuses over that claim")
+
+    # ------------- F5c: a copy `set_state` could not stamp is named in the emit result
+    with _case(checks, "F5c: unstamped copies are named"):
+        from types import SimpleNamespace as NS
+        from cli import cmd_emit
+
+        class NoRecord:
+            def set_state(self, key, state, **kw):
+                return False
+
+        position = NS(box=1, index=7)
+        match = NS(
+            sku="S1", row={}, condition="NM", live_positions=[position],
+            uncommitted_positions=[position],
+        )
+        writable = NS(inventory=NoRecord())
+        _, _, single = cmd_emit._stamp_single(
+            writable, NS(matches={"S1": match}, joins={}), {"S1"}, {}, NS(name="r"), {}, {}
+        )
+        leg = NS(run="r", match=match)
+        row = NS(sku="S1", game=None, legs=[leg], match=match)
+        plan = NS(skus=[row], live_keys={"S1": set()})
+        _, _, merged = cmd_emit._stamp_merged(writable, plan, {"S1"}, {})
+        said: List[str] = []
+        cmd_emit._report_unstamped(merged, said.append)
+        checks.ok(
+            len(single) == 1 and len(merged) == 1 and any("unstamped" in line for line in said),
+            f"F5c: BOTH STAMP PATHS COUNT THE MISS AND THE RESULT SAYS SO: {single} {merged} {said}",
+        )
+
     # --------------- F6: a hand emit between a press's plan and its save refuses the press
     with _case(checks, "F6: the stale half of the claim"), isolated_home():
         run_dir, _ = seam_run(checks, cards)

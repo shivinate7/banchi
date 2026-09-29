@@ -37,8 +37,8 @@ them would refill against inventory that is not for sale.
 
 POSITIONS ARE ASSIGNED HERE, by `allocate_capture` and nowhere else. It takes a box and no
 index, so there is no parameter through which a caller's stale read can enter a write.
-`record_capture` still accepts an explicit position, because `identify` and `emit` re-record
-cards they did not allocate — that is a seam to watch rather than a guarantee, and the
+`record_capture` still accepts an explicit position, because `identify` re-records
+cards it did not allocate — that is a seam to watch rather than a guarantee, and the
 safety is that the capture server never calls it.
 
 Positions are never renumbered and sold cards leave permanent gaps IN THE INDEX (D10).
@@ -138,6 +138,9 @@ RETIRED = "retired"
 # module's own `_log` writes the state name as the event name at every other transition —
 # reusing that convention here rather than minting a second word for one fact.
 MOVED = "moved"
+# The event a whole box leaving the store writes. One home: `server/capture_server.py`,
+# `cli/resolve.py`, `cli/cmd_rescue.py` and `server/pipeline_routes.py` all read it.
+BOX_DELETED = "box_deleted"
 
 # THE HISTORY EVENT A RECLAIMED PHOTOGRAPH WRITES (D89). An event and not a state: the card
 # stays `sold`, and what changed is that the bytes behind `photo` are gone. Not a member of
@@ -2416,8 +2419,8 @@ class Inventory:
             # `docs/specs/stable-card-id.md` §0.6 hazard 2).
             #
             # THIS IS WHERE A CARD IS BORN, and it is the birth site every writer reaches —
-            # `allocate_capture` above, and the three that do not go through it:
-            # `cli/cmd_identify.py` and `cli/cmd_emit.py` twice, which is the seam this
+            # `allocate_capture` above, and the one that does not go through it:
+            # `cli/cmd_identify.py`, which is the seam this
             # class's own header calls "a seam to watch rather than a guarantee". A record
             # minted without a name would be a card the photograph store cannot address.
             #

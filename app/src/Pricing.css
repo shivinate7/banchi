@@ -83,6 +83,14 @@
    put in it, so a row with no qty box still keeps the qty column's place rather than the price
    column sliding over to fill it, and `align-items: center` below centers every track to the
    row's own height independently, whatever that row's other columns run to. */
+/* THE THUMBNAIL IS A BUTTON, SO ON A THUMB IT IS 40px WIDE (F8: it drew 36). One variable feeds the
+   caption, the row and the photo button, so the columns can never disagree with the control. */
+.pricing-caption,
+.pricing-row { --pricing-thumb-w: 36px; }
+@media (hover: none) and (pointer: coarse) {
+  .pricing-caption,
+  .pricing-row { --pricing-thumb-w: 40px; }
+}
 .pricing-caption,
 .pricing-row {
   display: grid;
@@ -91,7 +99,7 @@
      `.pricetrend-mini`, `.pricetrend { gap: var(--bn-2) }`) — 120px, not 64 — so the column was
      narrower than what it draws, and `overflow: hidden` cropped it flush against Lowest's own
      right edge with none of the caption's gap visible past it. */
-  grid-template-columns: 36px minmax(0, 1fr) 76px 76px 128px 60px 136px 40px;
+  grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 76px 128px 60px 136px 40px;
   align-items: center;
   column-gap: var(--bn-3);
   padding: 0 var(--bn-3);
@@ -143,7 +151,7 @@
 
 .pricing-thumb {
   position: relative;
-  width: 36px;
+  width: var(--pricing-thumb-w);
   height: 48px;
   padding: 0;
   border: 0;
@@ -251,6 +259,7 @@
 }
 .pricing-currency { font-family: var(--bn-font-mono); font-size: var(--bn-fs-md); font-weight: 600; color: var(--bn-ink-3); }
 .pricing-input {
+  align-self: stretch; /* the input fills the field, so a press anywhere in it lands on the input (F8) */
   flex: 1 1 auto;
   min-width: 0;
   width: 100%;
@@ -417,7 +426,7 @@
 /* ---- 720 and narrower desks: Lowest and the trend leave the row (the product view has both) -- */
 @container bn-page (max-width: 899px) {
   .pricing-caption,
-  .pricing-row { grid-template-columns: 36px minmax(0, 1fr) 76px 60px 128px 40px; }
+  .pricing-row { grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 76px 60px 128px 40px; }
   .pricing-list[data-copies='none'] .pricing-caption,
   .pricing-list[data-copies='none'] .pricing-row { grid-template-columns: minmax(0, 1fr) 76px 128px 40px; }
   .pricing-col-low,
@@ -430,7 +439,7 @@
   .pricing-caption { display: none; }
   .pricing-row,
   .pricing-list[data-copies='none'] .pricing-row {
-    grid-template-columns: 36px minmax(0, 1fr) 112px 40px;
+    grid-template-columns: var(--pricing-thumb-w) minmax(0, 1fr) 112px 40px;
     grid-template-areas:
       'thumb id price hold'
       'thumb id market qty';
@@ -509,3 +518,4 @@
   font-size: var(--bn-fs-sm);
   color: var(--bn-ink-3);
 }
+.pricing-photo-frame .absent-photo { padding: var(--bn-6) var(--bn-4); }

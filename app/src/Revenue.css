@@ -53,11 +53,17 @@
 
 .revenue-months {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+  /* ONE ROW THAT SCROLLS IN ITS OWN BOX (screen pass F6). At 48px `auto-fit` wrapped a long strip
+     into overlapping rows, and a five-figure value or a `Sep 2026 Partial` label ran 8px past the
+     page edge. A column is 76px at least, the strip shares the width when there is room, and the
+     page never scrolls sideways. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(76px, 1fr);
   gap: var(--bn-2);
   align-items: end;
   height: 128px;
   min-width: 0;
+  overflow-x: auto;
 }
 .revenue-month-col {
   display: grid;
@@ -96,6 +102,7 @@
   justify-content: center;
   gap: var(--bn-1);
   white-space: nowrap;
+  flex-wrap: wrap;
 }
 
 .revenue-active-filter { display: flex; align-items: center; gap: var(--bn-2); margin-bottom: var(--bn-4); }

@@ -7,12 +7,12 @@ box 5 (cid `nophoto:...`) and published about 96 phantom copies to TCGplayer.
 
 **Cause, confirmed in code.** Two gaps, each enough alone.
 1. `Inventory.box_disowns_run` returned None when the box had no registry row, so
-   `refuse_reallocated` (D36, D145) never refused a run over a buried box.
+   `refuse_reallocated` (D36, run versus store slot; D145, box bid) never refused a run over a buried box.
 2. `cli/cmd_emit.py` `_stamp_single` and `_stamp_merged` called `record_capture` as an upsert
    for every uncommitted position, then `set_state` and `bind_sku`. A position with no card
    was born there, and its copy was counted as pushed.
 
-**Why `realign` (D36) passed the keys through.** Its evidence was gone with the box.
+**Why `realign` (D36, run versus store slot) passed the keys through.** Its evidence was gone with the box.
 `follow_moved` reads `cards.get(key)` for a `moved` tombstone. `do_delete_box` deletes the
 card rows and writes the tombstones only as `buried` events, so no row at `5/n` exists and
 the answer is "not a moved card". The per-box photograph check found no box-5 photographs
@@ -30,4 +30,4 @@ Test: `check_emit_buried_box` in `harness/tests/t7_store_and_seams.py`.
 (`~/pkmnscan-backups/store-before-box5-nuke-20260929T024312Z.sqlite`) and the 99 ghost rows were
 removed through `Store().write()`, one `ghost_removed` event each. The store now holds 3510
 cards. The live quantities were lowered by 96 copies in 64 SKUs, using negative
-`Add to Quantity` pushes (the D100 amendment on another branch records the measurement).
+`Add to Quantity` pushes (D100, never delete to reprice, records the measurement).

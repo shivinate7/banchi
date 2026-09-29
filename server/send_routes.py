@@ -565,7 +565,7 @@ def _receipts() -> List[Tuple[str, dict]]:
 
 def _held_stamps() -> frozenset:
     """The stamps whose claim is still live: a send in flight, or one whose outcome is unknown."""
-    return frozenset(claim.stamp for claim in Store().read().send_claims.live())
+    return frozenset(claim.stamp for claim in Store().read().send_claims.live(strict=False))
 
 
 def _release(stamp: str, by: str) -> None:
@@ -1506,7 +1506,20 @@ def do_sends() -> dict:
         "due": any(_due(record, now) for _, record in receipts) or _markdown_due(now),
         "check_at": _iso(check_at) if check_at else None,
         "now": _iso(now),
+        # A live claim that will not parse is skipped above and flagged here (DEBT59). The
+        # count is what the screen says; the keys are for the log.
+        "unreadable_claims": len(_unreadable_claims()),
     }
+
+
+def _unreadable_claims() -> List[str]:
+    """Keys of live send claims that will not parse. Read after `live(strict=False)`."""
+    claims = Store().read().send_claims
+    claims.live(strict=False)
+    bad = claims.unreadable()
+    if bad:
+        print(f"unreadable send claim rows: {', '.join(bad)}", file=sys.stderr)
+    return bad
 
 
 def do_send_file(stamp: str, name: str) -> bytes:
@@ -2268,7 +2281,7 @@ def _markdown_records() -> List[Tuple[str, Optional[datetime]]]:
         if _markdown_unknown(record):
             out.append((stamp, _parse((record or {}).get("check_after"))))
             seen.add(stamp)
-    for claim in Store().read().send_claims.live():
+    for claim in Store().read().send_claims.live(strict=False):
         if claim.kind != sendclaims.KIND_MARKDOWN or not claim.stamp.startswith(MARKDOWN_CLAIM):
             continue
         stamp = claim.stamp[len(MARKDOWN_CLAIM):]

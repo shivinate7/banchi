@@ -158,7 +158,7 @@ test.describe('#/product — the per-product view', () => {
 
     // THE PRODUCT LOADED, off the archive, with no host reached.
     await expect(view.getByText('Vilemaw', { exact: false })).toBeVisible()
-    await expect(view.getByText('Read from the archive', { exact: false })).toBeVisible()
+    await expect(view.getByText('Read from the saved archive; the market site could not be reached.', { exact: true })).toBeVisible()
 
     // THE LEGEND NAMES BOTH MARKS — the one place this screen states the distinction in
     // words, beside the shapes.

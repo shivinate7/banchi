@@ -2,7 +2,7 @@
 // Governs: D23, D24, D28, D32, D46, D77, D118, D218
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
-import { sealEveryTest } from './shell'
+import { sealEveryTest, settleAnimations } from './shell'
 import type { Place } from '../src/types'
 import { runRow } from './routeFixtures'
 
@@ -1344,9 +1344,7 @@ const ORDER_LINE_PLACE: Place = {
  *  ground — `noThinContrast` in `fulfillment.spec.ts` refuses one by design (`docs/DESIGN.md`'s
  *  floor is for an opaque owner-facing panel), and this pill is glass over a photograph. */
 async function contrastOf(page: Page, selector: string): Promise<number> {
-  await page.evaluate(() =>
-    Promise.all(document.getAnimations().map((one) => one.finished.catch(() => undefined))),
-  )
+  await settleAnimations(page)
   return page.locator(selector).first().evaluate((el) => {
     const parse = (value: string): number[] => {
       const m = value.match(/rgba?\(([^)]+)\)/)
@@ -1616,14 +1614,14 @@ test('the Identify strip says why when the server refuses to count', async ({ pa
       body: JSON.stringify({
         error: {
           code: 'claim_unreadable',
-          message: 'A live submission claim will not parse and would stop protecting its cards: sub-1. A claim that cannot be read cannot say which cards it holds, so no send can start until it is fixed. Nothing in this send was started.',
+          message: 'Sending is paused because one saved record cannot be read. Nothing was sent.',
         },
       }),
     }),
   )
   await open(page)
   const notice = page.locator('.review-identify-refusal')
-  await expect(notice).toContainText('will not parse')
+  await expect(notice).toContainText('saved record cannot be read')
   await expect(page.locator('.review-identify-strip')).toHaveCount(0)
 })
 

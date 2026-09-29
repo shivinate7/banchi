@@ -690,7 +690,7 @@
   background: repeating-linear-gradient(135deg, var(--bn-surface-2) 0 10px, var(--bn-surface) 10px 20px);
   color: var(--bn-ink-3);
 }
-.browse-absent > .bn-icon { color: var(--bn-ink-4); }
+.browse-absent .bn-icon { color: var(--bn-ink-4); }
 .browse-absent p { font-size: var(--bn-fs-md); color: var(--bn-ink-2); max-width: 26ch; }
 .browse-absent .browse-machine { max-width: 100%; }
 .browse-reshoot { display: flex; flex-direction: column; gap: var(--bn-2); align-items: center; }
@@ -881,7 +881,7 @@
   .browse-rowtick::after,
   .browse-secttick::after { content: ''; position: absolute; inset: -12px; }
   .browse-rowline .browse-rowtick { opacity: 0.8; }
-  .browse-quiet { height: var(--bn-control-h-lg); padding: 0 var(--bn-3); font-size: var(--bn-fs-sm); }
+  .browse-quiet { height: var(--bn-control-h-lg); min-width: 40px; justify-content: center; padding: 0 var(--bn-3); font-size: var(--bn-fs-sm); }
   .browse-status { gap: var(--bn-1) var(--bn-2); }
   /* the context bar's search button and the rail sheet's input are thumb-sized too */
   .browse-mobilebar .bn-btn { --btn-h: var(--bn-control-h-lg); min-width: var(--bn-control-h-lg); }

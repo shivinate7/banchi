@@ -865,3 +865,18 @@ export function sealEveryTest(opts?: { store?: boolean; cards?: number; allowOut
     })
   })
 }
+
+/** Settle every finite animation to its end state, now. `finish()` is synchronous and cannot hang;
+ *  awaiting `Animation.finished` can, on a paused or idle animation. A looping animation throws on
+ *  `finish()` and is left running. The one home for "let animations settle". */
+export async function settleAnimations(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const a of document.getAnimations()) {
+      try {
+        a.finish()
+      } catch {
+        /* infinite: leave it */
+      }
+    }
+  })
+}

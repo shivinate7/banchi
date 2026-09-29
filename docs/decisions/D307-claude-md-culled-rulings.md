@@ -8,16 +8,16 @@ them. Each is the owner's, and each is settled until the owner reopens it.
 
 **Code cards are a feature, not a second track.** The owner has not used the feature. It stays in the build.
 It is marked DORMANT in one place, the "Code cards (dormant feature)" section of CLAUDE.md.
-D14 keeps its structural half. `codes/` is its own package. `docs/map.py` keeps `TRACKS`.
+D14 (two tracks, one rig) keeps its structural half. `codes/` is its own package. `docs/map.py` keeps `TRACKS`.
 `scripts/decision-context.py` keeps its banner. Repeal of those needs the owner's word.
-D248 folded the code-card rules into the one file.
+D248 (code cards fold into one rules file) folded the code-card rules into the one file.
 
 **Gating is retired.** Gate A, B and C passed. Gate B was 53 real cards end to end.
 Gate C was two 85-card feeder runs. Nothing is blocked behind a gate.
 `docs/GATES.md` records runs and is never a schedule.
 Its numbers are evidence and are never rewritten to match a later tree.
 
-**The name is the app's, and nothing beneath it.** D94 holds the argument. It does not hold two facts.
+**The name is the app's, and nothing beneath it.** D94 (the product's name) holds the argument. It does not hold two facts.
 The local directory `~/Developer/pkmnscan` is not renamed. The GitHub repository is `shivinate7/banchi`.
 GitHub Pages followed the rename. `.github/workflows/demo.yml` derives `DEMO_BASE` from the repository name.
 The Makefile's own default is a stale fallback for a hand-run build, by design.
@@ -27,7 +27,7 @@ Only a session that the owner has called an Orchestrator may merge. It may merge
 It merges only through `make merge ARGS="<n> --confirm"`, with CI green, and never with `--admin`.
 The owner names it per turn. The designation is never inherited. It is never assumed from the shape of the work.
 `make merge` carries a needed rebase and force-push on a branch nobody else holds.
-It is never carried over from an earlier session. It replaced a standing grant. D42 holds the rest.
+It is never carried over from an earlier session. It replaced a standing grant. D42 (main moves by PR) holds the rest.
 
 **Model tiers.** Opus is for planning, for a builder that redesigns a whole flow, and for a hard merge.
 Every review is Sonnet. An Opus review needs the orchestrator to ask the owner first and get a yes.
@@ -48,7 +48,7 @@ Review the built screen against that pass before you call it done.
 The specs that assert phone layout stay in CI.
 
 **The Sales screen is a nav row on purpose.** The owner saw the cost of 37px past the fold at 390x754.
-The owner chose the sidebar tab anyway. D214 holds the retrospective itself.
+The owner chose the sidebar tab anyway. D214 (gross-revenue retrospective) holds the retrospective itself.
 
 **The route and screen count is read from `ROUTES`, never from prose.**
 A hand-typed count that a table already gives is deleted, not reconciled.
@@ -57,11 +57,11 @@ README's route table stays. The `route rosters` row of `make docs-audit` reconci
 ### Store
 
 **`banchi.runs.spend-notice` is a notice and never a cap.** The owner's words:
-"if I want to run everything, then I get to run everything." D180 holds the selection.
+"if I want to run everything, then I get to run everything." D180 (press names the cards) holds the selection.
 
 **No standing cap on copies.** A cap is something a send asks for.
 `policy.live_cap` is deleted, and a stored key is refused by name.
-The cap never stopped a copy going out twice. `uncommitted_positions` does that. D7 holds the rest.
+The cap never stopped a copy going out twice. `uncommitted_positions` does that. D7 (duplicates aggregate by SKU) holds the rest.
 
 ### What moved out of CLAUDE.md, and where it lives now
 

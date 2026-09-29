@@ -1441,11 +1441,10 @@ def run(args, say) -> int:
                     master.Card(
                         box=item.capture.box,
                         index=item.capture.index,
-                        # THE CARD'S NAME, AND THIS SITE IS ONE OF THE THREE `store/master.py`
+                        # THE CARD'S NAME, AND THIS SITE IS THE ONE `store/master.py`
                         # CALLS "a seam to watch rather than a guarantee" (D172). A position
                         # the store has never seen is BORN here rather than at
-                        # `allocate_capture` — an ordinary case, which `cli/cmd_emit.py`'s own
-                        # comment names — and `record_capture` refuses a nameless new card, so
+                        # `allocate_capture` — an ordinary case — and `record_capture` refuses a nameless new card, so
                         # without this line `identify` over such a directory refuses outright.
                         #
                         # `item.photo_sha256` IS THE RIGHT VALUE AND NOT MERELY AN AVAILABLE

@@ -286,7 +286,7 @@ class Submissions:
 
     # -------------------------------------------------------------------------- reading
 
-    def live(self) -> List["Submission"]:
+    def live(self, strict: bool = True) -> List["Submission"]:
         """Every claim still holding cards, oldest first.
 
         `where(state=...)` is one indexed query — `state` is a column — so this does not walk
@@ -295,7 +295,7 @@ class Submissions:
         it cannot become the full-table pass that `cli/resolve.py:_copies_out` was measured as.
         """
         found = self.entries.where(state=STATE_LIVE)
-        if self.entries.dropped:
+        if strict and self.entries.dropped:
             raise UnreadableClaim(
                 f"A live submission claim will not parse and would stop protecting its cards: {', '.join(self.entries.dropped)}"
             )

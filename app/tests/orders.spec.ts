@@ -3392,6 +3392,11 @@ test('the card pane is the photograph, the pick and every copy with its place an
   const pane = page.locator('.browse-card')
   await expect(pane.locator('.browse-hero-name')).toContainText('Volcanion')
   await expect(pane.locator('.bn-photo')).toBeVisible()
+  /* THE PHOTO 404s, so the shared missing-photo panel: one sentence, a Re-shoot link to the card
+     on Inventory (no in-place control on this screen), and no address (`absent-photo.spec.ts`). */
+  await expect(pane.locator('.bn-photo')).toContainText("This card's photo is missing.")
+  await expect(pane.locator('.bn-photo').getByRole('link', { name: /re-shoot/i })).toHaveAttribute('href', /#\/inventory\?box=3/)
+  expect(await pane.locator('.bn-photo').innerText()).not.toMatch(/http|localhost|\/photo\//i)
   await expect(pane.locator('.orders-pick-chip')).toHaveText('Pick 1 of 1')
   await expect(pane.locator('.card-locations-row')).not.toHaveCount(0)
   await expect(pane.getByRole('button', { name: 'Mark sold' }).first()).toBeVisible()
@@ -3837,6 +3842,18 @@ test('a long section name is drawn whole, and its count is said once, at 820', a
   const fit = await sectionTitleFit(title.locator('.browse-secttitle-head'), 'vintage binder')
   expect(fit.overflow).toBeLessThanOrEqual(0.5)
   await expect(title.locator('.browse-secttitle-count')).toHaveClass(/bn-sr/)
+})
+
+test('the walk column keeps the box name readable beside the action cell, at 820', async ({ page }) => {
+  /* SCREEN PASS F5: the action cell reserves 169px (D118) and the walk column is 220px, so the
+     row's `1fr` track was 3px and "RB Epics" drew as one character. */
+  await page.setViewportSize({ width: 820, height: 1180 })
+  await open(page, { orders: threeBuyerPayload(), walkPlan: walkPlanOf([walkPlanStop({})]) })
+  await page.locator('.orders-index-item').first().locator('.orders-index-tick input').check()
+  const box = page.locator('.walk-pick-where .card-locations-row .card-locations-identity-box').first()
+  await expect(box).toBeVisible()
+  const full = await box.evaluate((el) => ({ shown: el.getBoundingClientRect().width, needed: el.scrollWidth }))
+  expect(full.shown, 'the box name was cut to a sliver').toBeGreaterThanOrEqual(Math.min(full.needed, 60))
 })
 
 /* ------------------------------------------------------------------- the trap: no re-sort */
