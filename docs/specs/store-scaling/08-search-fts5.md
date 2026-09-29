@@ -94,13 +94,13 @@ store — real, fixture, demo-seeded, or CI's throwaway ones — is ever without
 ## Read first
 
 - `docs/specs/store-scaling.md` in full, and `CLAUDE.md`'s D88 paragraph (`## Hard rules`
-  is not where D88 lives — search `docs/decisions/D088-the-store-of-record-is-sqlite-and-a-write-is-one.md`
+  is not where D88 lives — search `docs/decisions/D088-sqlite-is-the-store-of-record.md`
   and the "THE STORE OF RECORD IS ONE SQLITE FILE" paragraph in `CLAUDE.md`'s main body) —
   the invariant this migration must not break is **"every `Store.write()` is ONE
   transaction over all of them"**; the FTS index must be maintained *inside* that
   transaction, by triggers, never by a second write from Python after the fact.
 - `CLAUDE.md`'s D45 paragraph (`#/inventory` screen description, and
-  `docs/decisions/D045-the-copies-list-is-a-way-back-into-the-walk-and-the.md`) — confirms
+  `docs/decisions/D045-a-copy-s-label-walks-to-that-copy.md`) — confirms
   search narrows the box walk **client-side**: `GET /search` is store-wide with no box
   parameter (verified: `grep -n "search" app/src/server.ts` — `search(q)` at
   `app/src/server.search` takes only `q`), and `app/src/BoxBrowse.tsx`'s `VariantChooser` intersects the

@@ -2505,6 +2505,29 @@ def main() -> int:
            "on main itself, with no branch growth, the row finds nothing",
            "\n".join(f.where for f in clean_row.findings))
 
+        print("\n  -- and a RETITLE, the same number under a new tail, is not an allocation --")
+        ttmp = tmp / "retitle"
+        ttmp.mkdir()
+        twork = build_split(ttmp)
+        git(twork, "checkout", "-q", "-b", "feature-retitle")
+        git(twork, "mv", "docs/decisions/D001-first.md", "docs/decisions/D001-a-better-title.md")
+        git(twork, "commit", "-qm", "retitle a record the base already holds")
+        audit.ROOT = twork
+        retitle_report = audit.Report()
+        audit.check_numbered_record_growth(retitle_report, False)
+        retitle_row = next(r for r in retitle_report.checks if r.check == "numbered record growth")
+        ok(not retitle_row.findings,
+           "renaming a held number to a new descriptive tail allocates nothing",
+           "\n".join(f.where + ": " + f.message for f in retitle_row.findings))
+        git(twork, "mv", "docs/decisions/D002-second.md", "docs/decisions/D009-second.md")
+        git(twork, "commit", "-qm", "a rename that changes the number")
+        changed_report = audit.Report()
+        audit.check_numbered_record_growth(changed_report, False)
+        changed_row = next(r for r in changed_report.checks if r.check == "numbered record growth")
+        ok(len(changed_row.findings) == 1 and "D009-second.md" in changed_row.findings[0].where,
+           "a rename to a different number is still an allocation and is refused",
+           "\n".join(f.where + ": " + f.message for f in changed_row.findings))
+
         print("\n  -- and it does NOT refuse the sanctioned claim itself --")
         # THE ROUND THIS ARM CLOSES: `merge-pr.py:claim_half` runs `claim-ids.py --write`
         # (a plain filesystem rename, no `git mv`), `git add -A`, then a plain `git commit`

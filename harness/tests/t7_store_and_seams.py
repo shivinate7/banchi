@@ -10346,7 +10346,7 @@ def check_search_fts5(checks: Checks) -> None:
     prefix-only trade-off. `server/capture_server.py:_fts_substring_candidates` is a
     fourth candidate source, a plain SQL `LIKE '%term%'` scan, measured first on a
     synthetic 2,500-card store before it shipped
-    (`docs/decisions/D271-one-forgiving-search-matcher.md` carries the numbers). The
+    (`docs/decisions/D271-every-search-uses-one-matcher.md` carries the numbers). The
     `midword` case below now asserts the FOUND direction.
 
     ORDINARY WRITES EXERCISE `cards_fts_ad` THEN `cards_fts_ai`, NEVER `cards_fts_au` —
@@ -10398,7 +10398,7 @@ def check_search_fts5(checks: Checks) -> None:
             "and a mid-word fragment DOES too ('izard' finds Charizard) — the owner "
             "reversed the earlier trade-off ('Add mid-word search'); measured first on a "
             "synthetic 2,500-card store, never this repo's own, before it shipped "
-            "(docs/decisions/D271-one-forgiving-search-matcher.md)",
+            "(docs/decisions/D271-every-search-uses-one-matcher.md)",
             f"midword={midword!r} prefix={prefix!r}",
         )
 

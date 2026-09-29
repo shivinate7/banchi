@@ -2937,9 +2937,17 @@ _SLUG_SOURCE_DEBT = re.compile(r"^DEBT-(.+)$")
 _NUMBERED_TAIL_DEBT = re.compile(r"^[0-9]+-(.+)$")
 
 
-def _sanctioned_rename(old_name: str, new_name: str, kind: str) -> bool:
-    """Whether `old_name -> new_name` is `claim-ids.py:rename_claimed_entries`'s OWN rename:
-    the unclaimed slug file becoming the numbered file with the IDENTICAL descriptive tail.
+_NUMBER_OF_DECISION = re.compile(r"^D([0-9]+)-")
+_NUMBER_OF_DEBT = re.compile(r"^([0-9]+)-")
+
+
+def _sanctioned_rename(old_name: str, new_name: str, kind: str,
+                       held: Optional[Set[str]] = None) -> bool:
+    """Whether `old_name -> new_name` allocates no number: either `claim-ids.py:
+    rename_claimed_entries`'s OWN rename (the unclaimed slug file becoming the numbered file
+    with the IDENTICAL descriptive tail), or a RETITLE, the same number under a new
+    descriptive tail. A retitle is sanctioned only when the base already holds that number
+    (`held`), so adding a new numbered file and then renaming it is still an allocation.
     """
     slug_re, numbered_re = (
         (_SLUG_SOURCE_DECISION, _NUMBERED_TAIL_DECISION) if kind == "decision"
@@ -2947,7 +2955,12 @@ def _sanctioned_rename(old_name: str, new_name: str, kind: str) -> bool:
     )
     slug_match = slug_re.match(old_name)
     numbered_match = numbered_re.match(new_name)
-    return bool(slug_match and numbered_match and slug_match.group(1) == numbered_match.group(1))
+    if slug_match and numbered_match and slug_match.group(1) == numbered_match.group(1):
+        return True
+    number_re = _NUMBER_OF_DECISION if kind == "decision" else _NUMBER_OF_DEBT
+    old_number, new_number = number_re.match(old_name), number_re.match(new_name)
+    return bool(old_number and new_number and old_number.group(1) == new_number.group(1)
+                and held is not None and old_number.group(1) in held.get(kind, set()))
 
 
 # A LOW THRESHOLD ON PURPOSE. `-M`'s default (50%) misses a genuine rename over a SHORT
@@ -2974,7 +2987,21 @@ def _rename_pairs(diff_text: str) -> List[Tuple[str, str]]:
     return pairs
 
 
-def _sanctioned_new_paths(diff_texts: Iterable[str]) -> Set[str]:
+def _held_numbers(ref: str) -> Dict[str, Set[str]]:
+    """The numbers of the numbered decision and debt files `ref` already holds."""
+    held: Dict[str, Set[str]] = {"decision": set(), "debt": set()}
+    for directory, kind, number_re in (
+        ("docs/decisions", "decision", _NUMBER_OF_DECISION), ("docs/debts", "debt", _NUMBER_OF_DEBT),
+    ):
+        for path in git("ls-tree", "-r", "--name-only", ref, "--", directory).splitlines():
+            match = number_re.match(Path(path).name)
+            if match:
+                held[kind].add(match.group(1))
+    return held
+
+
+def _sanctioned_new_paths(diff_texts: Iterable[str],
+                          held: Optional[Dict[str, Set[str]]] = None) -> Set[str]:
     """Every numbered file path that is the SANCTIONED rename's destination in any one of
     `diff_texts` — one diff per commit in range, never one diff across the whole range.
 
@@ -2995,7 +3022,7 @@ def _sanctioned_new_paths(diff_texts: Iterable[str]) -> Set[str]:
                 if old_path.startswith(directory) and new_path.startswith(directory):
                     old_name = old_path[len(directory):]
                     new_name = new_path[len(directory):]
-                    if _sanctioned_rename(old_name, new_name, kind):
+                    if _sanctioned_rename(old_name, new_name, kind, held):
                         sanctioned.add(new_path)
     return sanctioned
 
@@ -3030,7 +3057,7 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
         # decides, and exactly why an earlier, already-sanctioned claim on this same branch
         # is never re-litigated on every commit after it.
         cached_diff = git("diff", _RENAME_THRESHOLD, "--cached", "--name-status", "--", *dirs)
-        sanctioned = _sanctioned_new_paths([cached_diff])
+        sanctioned = _sanctioned_new_paths([cached_diff], _held_numbers("HEAD"))
         candidates = _added_or_renamed_paths([cached_diff])
         where = "the staged diff"
     else:
@@ -3050,7 +3077,7 @@ def check_numbered_record_growth(report: Report, staged_only: bool) -> None:
             for i in range(len(chain) - 1)
         ]
         diff_texts.append(git("diff", _RENAME_THRESHOLD, "--name-status", "HEAD", "--", *dirs))
-        sanctioned = _sanctioned_new_paths(diff_texts)
+        sanctioned = _sanctioned_new_paths(diff_texts, _held_numbers(base))
         candidates = set()
         for directory in dirs:
             dirpath = ROOT / directory
@@ -8207,7 +8234,9 @@ def _terminal_statuses() -> Row:
     """
     findings: List[Finding] = []
     python_path = ROOT / "store" / "orders.py"
-    doc_path = ROOT / "docs" / "decisions" / "D063-the-order-ledger-is-two-maps-and-the-sync-writes-only-one.md"
+    # the entry is found by its number, so a retitle never breaks this row
+    doc_path = next(iter(sorted((ROOT / "docs" / "decisions").glob("D063-*.md"))),
+                    ROOT / "docs" / "decisions" / "D063-missing.md")
 
     tree = ast.parse(read(python_path))
     authored: Optional[Set[str]] = None
