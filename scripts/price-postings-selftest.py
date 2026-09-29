@@ -21,7 +21,7 @@ NO NETWORK. `emit` and `reprice apply` are `store/postings.py:Postings.record()`
 callers today, both real presses (`./pkmnscan emit`, `./pkmnscan reprice apply`) — the sentence
 that used to sit here ("no caller a screen reaches yet") described the table's READ side,
 never the write side this file proves, and had gone stale for the write side regardless.
-NOTHING READS `price_postings` BACK ONTO A SCREEN YET (DEBT-posted-price-view: shelved until
+NOTHING READS `price_postings` BACK ONTO A SCREEN YET (DEBT68: shelved until
 there is a history to draw); that is a separate fact from whether a press writes it, and this file
 proves only the write.
 

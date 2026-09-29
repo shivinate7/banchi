@@ -1,4 +1,4 @@
-## DEBT-price-refresh-schedule — prices are not refreshed on a schedule, and nothing says which SKUs moved
+## DEBT69 — prices are not refreshed on a schedule, and nothing says which SKUs moved
 
 **Gap.** `fetch(Scope(...))` on a cron could store a dated export so a pricing decision meets today's market. The safe half is to show which SKUs moved more than 10% since listing, on `#/pricing`, and leave the decision to a person.
 

@@ -2048,7 +2048,7 @@ COMPONENTS = [
                                      "`append_postings` into an upsert keyed on `sku` turns "
                                      "the 13/13 pass into 3+ failures. NOTHING READS THIS "
                                      "TABLE BACK ONTO A "
-                                     "SCREEN YET (DEBT-posted-price-view) — record first, build the "
+                                     "SCREEN YET (DEBT68) — record first, build the "
                                      "view later."},
             "files.py": {"does": "where the store lives, the lock, and the atomic replace the "
                                  "files still beside the database use (prices.json, codes.jsonl)",
@@ -3122,7 +3122,7 @@ COMPONENTS = [
                         "apply` are this table's own real callers, both real presses; the "
                         "exemption this note used to state (\"no caller a screen reaches "
                         "yet\") described the READ side, never the write side this file "
-                        "proves (DEBT-posted-price-view — the view is shelved, the record is not).",
+                        "proves (DEBT68 — the view is shelved, the record is not).",
                 "governed_by": ["D88", "D189", "D212", "D219", "D243", "D247"],
             },
             "price-postings-recovery.py": {
