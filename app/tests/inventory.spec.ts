@@ -1461,7 +1461,7 @@ test('a card with no name and no SKU is a one-copy list, not a special case', as
   /* No SKU, said as a sentence in the meta line — and the listing figures are NOT drawn at all,
      because `emit` has written no listing record and every one of them would be a structural
      zero under a `Room for 1 more live` nothing can keep. */
-  await expect(page.locator('.card-locations-meta')).toContainText('no SKU yet')
+  await expect(page.locator('.browse-details')).toContainText('no SKU yet')
   await expect(page.locator('.card-locations-live')).toHaveCount(0)
   await expect(page.locator('.card-locations-counts')).toHaveCount(0)
 
@@ -2746,7 +2746,7 @@ test('a copy row draws how far into the box AND how far into the section', async
   const first = bars.nth(0).locator('.position-bar-text')
   /* NO "SO FAR" ON THE BOX LINE (owner's ruling, 2026-09-19 — see the case below this one for
      the full argument): `#1 of 5`, not `#1 of 5 so far`. */
-  await expect(first.nth(0)).toHaveText('Position 1 of 2')
+  await expect(first.nth(0)).toHaveCount(0)
   /* SETTLED SECTION, SO THE DENOMINATOR IS SLOTS. Section 1 runs 1..3 and the box holds 5, so
      its far bound is a divider with cards behind it: three slots today and three next week —
      said now on the row's own header (`Card 1 of 3`), never restated here (the owner's
@@ -2755,7 +2755,7 @@ test('a copy row draws how far into the box AND how far into the section', async
   await expect(rows.nth(0).locator('.card-locations-identity')).toContainText('Card 1 of 3')
 
   const second = bars.nth(1).locator('.position-bar-text')
-  await expect(second.nth(0)).toHaveText('Position 1 of 2')
+  await expect(second.nth(0)).toHaveCount(0)
   await expect(bars.nth(1).locator('.position-bar-text-section')).toHaveCount(0)
   await expect(rows.nth(1).locator('.card-locations-identity')).toContainText('Card 3 of 3')
 
@@ -2786,7 +2786,7 @@ test('the last section of an open box counts what is in it, and the box line dro
    * second ruling the same evening — "drop it everywhere" — reached the section line too: a
    * growing section reads `card 2 of 2`, a settled one `card 2 of 2 slots`. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
-  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Position 2 of 2')
+  await expect(bar.locator('.position-bar-text')).toHaveCount(0)
   /* THE CARD RULER'S OWN CAPTION IS OMITTED HERE (the owner's Direction-B build, 2026-09-25):
      the header now says `Card 2 of 2` once, and this section carries no name, so there is
      nothing left for this caption to say. */
@@ -2813,7 +2813,7 @@ test('the card with no group gets both depths too', async ({ page }) => {
    * so the bars below are the ROW's, in the same shape every identified card gets. */
   const bar = page.locator('.card-locations-row.is-current .position-bar')
   await expect(bar).toHaveCount(1)
-  await expect(bar.locator('.position-bar-text').nth(0)).toHaveText('Position 1 of 2')
+  await expect(bar.locator('.position-bar-text')).toHaveCount(0)
   await expect(bar.locator('.position-bar-text-section')).toHaveCount(0)
 
   /* AND ITS LABEL IS RANKED, WHICH IS THE HALF THIS CASE DID NOT LOOK AT (D41). This test reaches
@@ -5297,7 +5297,7 @@ test('the neighbour names are read as words, not as metadata', async ({ page }) 
      is not set in the face that carries SKUs and reason codes. Measured against the face the
      screen's own machine strings are drawn in, so it cannot go green by both moving together. */
   const machine = await page
-    .locator('.card-locations-meta-mono')
+    .locator('.browse-fact dd.is-util')
     .first()
     .evaluate((node) => getComputedStyle(node).fontFamily)
   expect(drawn.family).not.toBe(machine)
@@ -5984,7 +5984,9 @@ test('a narrow copies column shortens the bar, never the position label', async 
      so what is asserted now is the one that is left: it does not wrap, and the bar stays inside
      the space it and two tracks need. */
   for (const h of geom.capHeights) expect(h).toBeLessThan(20)
-  expect(geom.capHeights.length).toBe(1)
+  /* NONE IS LEFT (D310): the section caption went the same way, so the loop
+     above holds for whatever a later round draws and this count says there is nothing today. */
+  expect(geom.capHeights.length).toBe(0)
   /* THE CEILING ROSE WITH THE RULERS THEMSELVES (the owner's Direction-B build, 2026-09-25:
      "make both rulers clearly larger"). `--pb-track` and `--pb-rule` both grew, and the second
      caption's removal (above) gave back less than the rulers took, so the real height moved from
@@ -6499,7 +6501,7 @@ test('a group whose copies spell one number three ways still draws it', async ({
      agreed on after folding. A build that composed from `number`/`printed_total` here draws
      nothing at all, which is what the owner saw: one card, three strings, and the group between
      them silent. */
-  await expect(page.locator('.card-locations-meta')).toContainText('198/219')
+  await expect(page.locator('.browse-fact', { hasText: 'Number' }).locator('dd')).toHaveText('198')
 })
 
 /* THE COPIES LIST, WHICH IS WHERE THIS WAS REPORTED FROM — *"I'm seeing two box 1's"*. There is

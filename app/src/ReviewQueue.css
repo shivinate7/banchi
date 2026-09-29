@@ -1045,11 +1045,10 @@
 .review-group-confirm { gap: var(--bn-2); }
 
 /* ---- the reward at zero, and the lone panels --------------------------------------- */
-.review-lone { max-width: 720px; margin: 0 auto var(--bn-6); }
+.review-lone { margin-bottom: var(--bn-6); }
 .review-done {
   position: relative;
-  max-width: 720px;
-  margin: var(--bn-6) auto 0;
+  margin-top: var(--bn-6);
   padding: var(--bn-4);
   background:
     radial-gradient(60% 50% at 50% 18%, var(--bn-ok-tint), transparent 70%),

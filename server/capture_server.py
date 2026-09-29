@@ -12043,6 +12043,7 @@ def do_skus_photos(
     inventory = snapshot.inventory
     out: Dict[str, dict] = {}
     stock: Dict[str, str] = {}
+    line_names: Optional[Dict[str, str]] = None
     for sku in skus:
         if not sku or sku in out or sku in stock:
             continue
@@ -12063,6 +12064,16 @@ def do_skus_photos(
             continue
         sku_row = snapshot.skus.entries.get(sku)
         if sku_row is None:
+            # The export dropped this SKU (sold out, delisted). The order line still names it.
+            if line_names is None:
+                line_names = {
+                    str(line.sku): line.name
+                    for record in snapshot.ledger.orders.values()
+                    for line in record.lines
+                }
+            url = images.url_for_line_name(line_names.get(sku, ""))
+            if url:
+                stock[sku] = url
             continue
         if sku_row.number:
             game = games.game_for_product_line(sku_row.product_line)

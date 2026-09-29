@@ -553,6 +553,21 @@ export function PageHeader({
   )
 }
 
+/* ---- Empty frame -------------------------------------------------------------------- */
+/** The block an empty or lone state sits in: fills the frame to `--bn-empty-w`, centered
+ *  (D309). A screen keeps no cap of its own. */
+export function EmptyFrame({
+  as: Tag = 'div',
+  className,
+  children,
+}: {
+  readonly as?: 'div' | 'section'
+  readonly className?: string
+  readonly children?: ReactNode
+}) {
+  return <Tag className={['bn-empty-frame', className].filter(Boolean).join(' ')}>{children}</Tag>
+}
+
 /* ---- Empty state -------------------------------------------------------------------- */
 export function EmptyState({
   icon = 'sparkles',
