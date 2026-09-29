@@ -133,7 +133,7 @@
   justify-content: center;
   min-width: 20px;
   height: 20px;
-  padding: 0 5px;
+  padding: 0 var(--bn-1-5);
   border-radius: 5px;
   border: 1px solid var(--bn-line-strong);
   border-bottom-width: 2px;

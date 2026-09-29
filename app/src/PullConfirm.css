@@ -92,7 +92,7 @@
   line-height: 1;
   border: 1px solid color-mix(in srgb, var(--pc-on) 50%, transparent);
   border-radius: 6px;
-  padding: var(--bn-1) 7px;
+  padding: var(--bn-1) var(--bn-2);
   min-width: 24px;
   text-align: center;
   color: var(--pc-on);

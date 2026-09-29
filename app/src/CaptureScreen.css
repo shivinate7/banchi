@@ -401,7 +401,7 @@
    later RECENT footer and the sibling cards painted over the list's lower rows. While a
    field is open its card outranks them; the overlay stays out of flow, so nothing moves (D118). */
 .capture-card:has(.capture-open-pinned) { position: relative; z-index: 5; }
-.capture-open-body { display: flex; flex-direction: column; gap: var(--bn-1-5); padding: var(--bn-2) var(--bn-2) 10px; }
+.capture-open-body { display: flex; flex-direction: column; gap: var(--bn-1-5); padding: var(--bn-2) var(--bn-2) var(--bn-3); }
 .capture-open-lg > .capture-row { min-height: 40px; }
 .capture-meta {
   font-size: var(--bn-fs-xs);
@@ -519,7 +519,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--bn-2);
-  padding: 10px var(--bn-3) var(--bn-3);
+  padding: var(--bn-3) var(--bn-3) var(--bn-3);
   border: 1px solid var(--bn-line);
   border-radius: var(--bn-r);
   background: var(--bn-surface-2);
@@ -653,7 +653,7 @@
 .capture-lamps { display: flex; align-items: center; gap: var(--bn-1-5); flex-wrap: wrap; }
 .capture-lamp {
   height: 26px;
-  padding: 0 10px 0 var(--bn-2);
+  padding: 0 var(--bn-3) 0 var(--bn-2);
   font-size: var(--bn-fs-sm);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -1081,7 +1081,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 14px 0 var(--bn-1);
+  padding: var(--bn-4) 0 var(--bn-1);
   border-radius: 0 0 var(--bn-r) var(--bn-r);
   /* THREE STOPS SINCE THE CAPTION GREW A SECOND LINE. At one line the old two-stop ramp put
      the ink over its solid end; at two the drawer name sat in the faint half, and a card
@@ -1238,7 +1238,7 @@
 }
 .capture-halt-details summary .bn-icon { transition: transform var(--bn-t-fast) var(--bn-ease); }
 .capture-halt-details[open] summary .bn-icon { transform: rotate(90deg); }
-.capture-halt-server { margin-top: var(--bn-1-5); padding: var(--bn-1-5) 10px; border-radius: var(--bn-r); background: var(--bn-surface-2); }
+.capture-halt-server { margin-top: var(--bn-1-5); padding: var(--bn-1-5) var(--bn-3); border-radius: var(--bn-r); background: var(--bn-surface-2); }
 .capture-halt-code { font-family: var(--bn-font-mono); font-size: var(--bn-fs-xs); color: var(--bn-ink-3); margin-top: var(--bn-1); }
 .capture-halt-last { margin-top: var(--bn-1-5); color: var(--bn-ink-3); }
 .capture-carried { animation: capture-drop var(--bn-t-slow) var(--bn-ease-spring) both; }
@@ -1248,9 +1248,9 @@
 .capture-tuning > summary {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--bn-1-5);
   height: 26px;
-  padding: 0 var(--bn-2) 0 7px;
+  padding: 0 var(--bn-2) 0 var(--bn-2);
   border-radius: var(--bn-r-full);
   background: var(--bn-surface-2);
   font-size: var(--bn-fs-xs);
@@ -1294,7 +1294,7 @@
 .capture-motion-hud {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--bn-1) 10px;
+  gap: var(--bn-1) var(--bn-3);
   font-family: var(--bn-font-mono);
   font-size: var(--bn-fs-xs);
   font-variant-numeric: tabular-nums;
@@ -1317,7 +1317,7 @@
   color: var(--bn-danger);
 }
 .capture-refused > .bn-icon,
-.capture-note-ok > .bn-icon { display: inline-block; vertical-align: -2px; margin-right: 5px; }
+.capture-note-ok > .bn-icon { display: inline-block; vertical-align: -2px; margin-right: var(--bn-1-5); }
 .capture-note-ok { display: block; color: var(--bn-ok); }
 .capture-stage-warn { align-items: center; }
 .capture-stage-warn .capture-refused { display: block; }
@@ -1545,7 +1545,7 @@
   /* One row of lamps in 134px: the feed lamp keeps its word, the trigger-mode lamp keeps its
      icon (its word stays in the accessibility tree; font-size 0 hides it, not display). */
   .capture-lamps { flex-wrap: nowrap; }
-  .capture-lamp-mode { font-size: 0; gap: 0; padding: 0 7px; }
+  .capture-lamp-mode { font-size: 0; gap: 0; padding: 0 var(--bn-2); }
   .capture-tuning > summary { min-width: 40px; justify-content: center; }
   .capture-viewfinder { padding: var(--bn-2) var(--bn-3) var(--bn-3); }
   .capture-stage-foot { padding: 0 var(--bn-3); }
@@ -1577,7 +1577,7 @@
   .capture-open-body .bn-btn,
   .capture-tuning-actions .bn-btn,
   .capture-resume { --btn-h: var(--bn-control-h-sm); }
-  .capture-tuning > summary { height: 40px; padding: 0 var(--bn-3) 0 10px; }
+  .capture-tuning > summary { height: 40px; padding: 0 var(--bn-3) 0 var(--bn-3); }
   .capture-halt-details summary { min-height: 40px; }
   .capture-note-wrap .bn-input,
   .capture-filter.bn-input { min-height: 44px; }

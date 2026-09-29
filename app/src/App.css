@@ -834,7 +834,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
 .app-keys-group-title {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--bn-2);
   font-size: var(--bn-fs-base);
   font-weight: 700;
   color: var(--bn-ink);
@@ -861,7 +861,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
 .app-keys-rows {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 7px var(--bn-4);
+  gap: var(--bn-2) var(--bn-4);
   align-items: baseline;
 }
 .app-keys-row { display: contents; }
@@ -891,7 +891,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
   /* The caps keep their own column even here — the widest run in any group is about 100px,
      which still leaves a readable measure, and stacking every row made the nine jump keys
      eighteen lines long. */
-  .app-keys-rows { gap: 9px var(--bn-3); }
+  .app-keys-rows { gap: var(--bn-2) var(--bn-3); }
 }
 
 

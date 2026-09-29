@@ -337,7 +337,7 @@
   align-items: center;
   gap: var(--bn-1);
   height: 26px;
-  padding: 0 10px;
+  padding: 0 var(--bn-3);
   border-radius: var(--bn-r-full);
   font-size: var(--bn-fs-sm);
   font-weight: 600;
@@ -358,7 +358,7 @@
 @media (max-width: 639px), (hover: none) and (pointer: coarse) {
   .boxops-op { min-height: 52px; }
   .boxops-back { height: var(--bn-control-h-lg); padding: 0 var(--bn-3) 0 var(--bn-2); }
-  .boxops-chip { height: 40px; padding: 0 14px; }
+  .boxops-chip { height: 40px; padding: 0 var(--bn-4); }
   .boxops-check { width: 44px; height: 26px; }
   .boxops-check::before { width: 22px; height: 22px; }
   .boxops-check:checked::before { transform: translateX(18px); }

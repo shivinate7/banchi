@@ -515,7 +515,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   justify-content: center;
   min-width: 18px;
   height: 18px;
-  padding: 0 5px;
+  padding: 0 var(--bn-1-5);
   border-radius: 5px;
   border: 1px solid var(--bn-line-strong);
   border-bottom-width: 2px;
@@ -540,7 +540,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--bn-1-5);
   height: 22px;
   padding: 0 var(--bn-2);
   border-radius: var(--bn-r-full);
@@ -600,7 +600,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
   justify-content: center;
   min-width: 18px;
   height: 18px;
-  padding: 0 5px;
+  padding: 0 var(--bn-1-5);
   border-radius: var(--bn-r-full);
   background: var(--bn-surface-2);
   color: var(--bn-ink-3);
@@ -685,7 +685,7 @@ a.bn-btn, a.bn-btn:hover, a.bn-pill, a.bn-pill:hover, a.bn-chip, a.bn-chip:hover
 .bn-input-wrap > .bn-kbd { position: absolute; right: 8px; }
 .bn-select {
   appearance: none;
-  padding-right: 30px;
+  padding-right: var(--bn-7);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;

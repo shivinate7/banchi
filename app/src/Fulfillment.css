@@ -363,7 +363,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--bn-3);
   min-height: 56px;
   min-width: 44px;
   padding: 0 var(--bn-6) 0 var(--bn-5);
