@@ -36540,8 +36540,8 @@ def check_request_slots(checks: Checks) -> None:
         # READ WHILE THE LOAD IS ON, beside the other two. Taken after `gate.set()` the callers
         # have finished and the server's threads have gone with them, so the count is 0 whatever
         # the transport does — which is how the first draft of this passed with the pool deleted.
-        # THE ONE SORTER THREAD is excluded by name: it is a fixed cost of the photo lane, one
-        # thread for every connection, not a worker. A filter on a name that MATCHES NOTHING is
+        # THE ONE SORTER THREAD is excluded by name: it is ONE sorter thread shared by ALL
+        # connections, a fixed cost of the photo lane and not a worker per connection. A filter on a name that MATCHES NOTHING is
         # the vacuous shape this leg was rebuilt to avoid, so only this one name is dropped.
         serving = [
             t for t in threading.enumerate()
@@ -36922,6 +36922,172 @@ def check_photo_lane(checks: Checks) -> None:
         0,
         "and every photo slot is given back",
     )
+
+
+def check_photo_lane_threads_and_faults(checks: Checks) -> None:
+    """The photo pool bounds THREADS, and a sorter fault degrades the server to base.
+
+    LEG A: with more photo callers than `PHOTO_SLOTS`, the server holds no more than
+    `PHOTO_SLOTS` threads (the one sorter aside). Kept for a thread per photo connection, which
+    `check_photo_lane` cannot see because it widens the pool on purpose. READ ON A CONDITION: the
+    read waits until every caller is inside or answered, which a thread-per-connection build
+    reaches at once and the shipped pool never does, so the shipped read falls to a short deadline.
+
+    LEG B: a fault in the sorter must never become an outage. Once the selector's `select()`
+    raises, and once a route to the photo pool raises for one connection, `/status` and a photo
+    still answer afterwards. A sorter that dies on either leaves accept taking connections that
+    nothing serves.
+    """
+    import http.client
+
+    def get(port: int, path: str):
+        try:
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            conn.request("GET", path)
+            response = conn.getresponse()
+            response.read()
+            conn.close()
+            return int(response.status)
+        except Exception:  # noqa: BLE001 — a hang or reset is the finding
+            return None
+
+    # ------------------------------------------------------------------ leg A: threads
+    checks.note("")
+    checks.note("PHOTO LANE — leg A: the photo pool bounds threads")
+    asking = capture_server.PHOTO_SLOTS + 6
+    original = capture_server.do_photo
+    lock = threading.Lock()
+    state = {"depth": 0, "answered": 0}
+    gate = threading.Event()
+
+    def held_photo(*args, **kwargs):
+        with lock:
+            state["depth"] += 1
+        try:
+            gate.wait(timeout=5.0)
+            return original(*args, **kwargs)
+        finally:
+            with lock:
+                state["depth"] -= 1
+
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    thread = _spawn_server(httpd)
+    capture_server.do_photo = held_photo
+    real_timeout = files.LOCK_TIMEOUT_SECONDS
+    files.LOCK_TIMEOUT_SECONDS = 0.3
+    try:
+        before = set(threading.enumerate())
+
+        def one() -> None:
+            get(port, "/photo/1/1")
+            with lock:
+                state["answered"] += 1
+
+        callers = [threading.Thread(target=one, daemon=True, name="t7-caller") for _ in range(asking)]
+        for caller in callers:
+            caller.start()
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            with lock:
+                if state["depth"] >= capture_server.PHOTO_SLOTS:
+                    break
+            time.sleep(0.01)
+        # THE PEAK, sampled through the wait: a refused caller's thread ends the moment it is
+        # answered, so a single read at the end would miss it and pass a thread per connection.
+        peak_serving = 0
+        deadline = time.monotonic() + 1.5
+        while time.monotonic() < deadline:
+            peak_serving = max(peak_serving, len([
+                t for t in threading.enumerate()
+                if t not in before and t.name not in ("t7-caller", "sorter")
+            ]))
+            with lock:
+                if state["depth"] + state["answered"] >= asking:
+                    break
+            time.sleep(0.005)
+        serving = range(peak_serving)
+        gate.set()
+        for caller in callers:
+            caller.join(timeout=30)
+        checks.ok(
+            len(serving) <= capture_server.PHOTO_SLOTS,
+            f"the server holds no more than PHOTO_SLOTS ({capture_server.PHOTO_SLOTS}) threads "
+            f"for {asking} photo callers — {len(serving)}, where one per connection would be more",
+        )
+    finally:
+        files.LOCK_TIMEOUT_SECONDS = real_timeout
+        capture_server.do_photo = original
+        gate.set()
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+    # ------------------------------------------------------------------ leg B: sorter faults
+    checks.note("")
+    checks.note("PHOTO LANE — leg B: a sorter fault degrades to base, never to an outage")
+    import types
+
+    real_selectors = capture_server.selectors
+
+    class FaultySelector(real_selectors.DefaultSelector):
+        def select(self, timeout=None):
+            raise RuntimeError("t7: injected select() fault")
+
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    thread = _spawn_server(httpd)
+    capture_server.selectors = types.SimpleNamespace(
+        DefaultSelector=FaultySelector, EVENT_READ=real_selectors.EVENT_READ
+    )
+    try:
+        with redirect_stderr(io.StringIO()):
+            status = [get(port, "/status") for _ in range(2)]
+            photo = get(port, "/photo/1/1")
+        checks.equal(status, [200, 200], "after `select()` raised, `/status` still answers")
+        checks.ok(photo in (200, 404), f"and a photo still gets an answer, not a hang — {photo}")
+    finally:
+        capture_server.selectors = real_selectors
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+    class OnceBrokenPool:
+        """A photo pool whose first submit raises, as a per-connection routing fault would."""
+
+        def __init__(self, real):
+            self.real, self.broken = real, True
+
+        def submit(self, *args, **kwargs):
+            if self.broken:
+                self.broken = False
+                raise RuntimeError("t7: injected per-connection fault")
+            return self.real.submit(*args, **kwargs)
+
+        def shutdown(self, *args, **kwargs):
+            return self.real.shutdown(*args, **kwargs)
+
+    import concurrent.futures
+
+    httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+    port = httpd.server_address[1]
+    httpd._photo_pool = OnceBrokenPool(  # noqa: SLF001 — the fault under test
+        concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="t7-photo")
+    )
+    thread = _spawn_server(httpd)
+    try:
+        with redirect_stderr(io.StringIO()):
+            first = get(port, "/photo/1/1")
+            later = [get(port, "/status"), get(port, "/photo/1/1")]
+        checks.ok(first in (200, 404), f"the connection whose routing raised is still answered — {first}")
+        checks.ok(
+            later[0] == 200 and later[1] in (200, 404),
+            f"and the sorter goes on: `/status` and a photo answer afterwards — {later}",
+        )
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
 
 
 def check_order_fetch_route(checks: Checks) -> None:
@@ -40270,6 +40436,7 @@ def run() -> Result:
     check_order_fetch_route(checks)
     check_request_slots(checks)
     check_photo_lane(checks)
+    check_photo_lane_threads_and_faults(checks)
     check_connection_close(checks)
     check_crop_preview(checks)
     check_export_fetch(checks)

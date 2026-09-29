@@ -3460,6 +3460,7 @@ _SERVER_CLASS_RE = re.compile(r"^class CaptureServer\((\w+)\):", re.M)
 _HANDLER_TIMEOUT_RE = re.compile(r"^    timeout = (\d+)$", re.M)
 _BACKLOG_RE = re.compile(r"^    request_queue_size = (\d+)$", re.M)
 _SLOTS_RE = re.compile(r"^REQUEST_SLOTS = (\d+)$", re.M)
+_PHOTO_SLOTS_RE = re.compile(r"^PHOTO_SLOTS = (\d+)$", re.M)
 
 # WHAT SECTION 11 HAS TO SAY, AND IN WHAT SHAPE. Each row is (what, code pattern, code shape,
 # DOC-SIDE ANCHOR, the published form). The anchor is the half that was missing: it captures
@@ -3474,6 +3475,8 @@ _CONCURRENCY_FACTS = (
      re.compile(r"request_queue_size = (\d+)"), "request_queue_size = <n>"),
     ("the bound on executing requests", _SLOTS_RE, "REQUEST_SLOTS = <n>",
      re.compile(r"REQUEST_SLOTS = (\d+)"), "REQUEST_SLOTS = <n>"),
+    ("the bound on the photo lane", _PHOTO_SLOTS_RE, "PHOTO_SLOTS = <n>",
+     re.compile(r"PHOTO_SLOTS = (\d+)"), "PHOTO_SLOTS = <n>"),
 )
 
 

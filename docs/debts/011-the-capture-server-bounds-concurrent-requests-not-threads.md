@@ -313,3 +313,12 @@ pool's count is 0, and every response says `Connection: close`. Red on three mut
 semaphore (`/status` refused, slot count 4), and the sorter sending photos to the slot pool
 (`/status` waited 10 s, no refusals). `check_request_slots` leg 1 drops the one sorter thread by
 name and stays green.
+
+**The sorter degrades to base and never to an outage (review fix, 2026-09-28).** A fault on one
+connection is logged and that connection goes to the slot pool. If the selector itself fails, the
+sorter sets `_sorting` false, hands every held connection to the slot pool, and ends;
+`process_request` then routes straight to the slot pool, as base does. Proof:
+`check_photo_lane_threads_and_faults`, leg B injects a `select()` raise and a per-connection raise
+and requires `/status` and a photo to answer afterwards. The previous head, run through the same
+leg, hung on all three answers. Leg A holds the photo pool to `PHOTO_SLOTS` threads and goes red
+under a thread per photo connection (10 threads for 10 callers).

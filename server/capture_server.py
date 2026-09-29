@@ -297,6 +297,7 @@ import os
 import re
 import signal
 import selectors
+import traceback
 import socket
 import sqlite3
 import sys
@@ -17515,24 +17516,60 @@ class CaptureServer(ThreadingHTTPServer):
         self._arrivals: "SimpleQueue" = SimpleQueue()
         self._wake_r, self._wake_w = socket.socketpair()
         self._wake_r.setblocking(False)
+        self._sorting = True
         self._sorter = threading.Thread(target=self._sort, name="sorter", daemon=True)
         self._sorter.start()
+
+    # `_sorting` IS THE HEALTH FLAG. While true, connections go through the sorter. When the sorter
+    # cannot go on (its selector failed) it sets this false, hands everything it holds to the slot
+    # pool, and ends: `process_request` then routes straight to the slot pool, which is base
+    # behaviour. A sorter fault DEGRADES THE SERVER TO BASE. It never causes an outage.
+    _sorting = False
 
     def process_request(self, request, client_address) -> None:
         if self._sorter is None:
             self._start_pools()
+        if not self._sorting:
+            self._route(request, client_address, b"")
+            return
         self._arrivals.put((request, client_address))
+        if not self._sorting:  # the sorter ended between the check and the put
+            self._flush_arrivals()
+            return
         with contextlib.suppress(OSError):  # a full wake buffer: the sorter is already due to wake
             self._wake_w.send(b"x")
 
+    def _flush_arrivals(self) -> None:
+        while True:
+            try:
+                request, addr = self._arrivals.get_nowait()
+            except Empty:
+                return
+            self._route(request, addr, b"")
+
     def _route(self, request, client_address, peeked: bytes) -> None:
-        pool = self._photo_pool if peeked.startswith(_PHOTO_LANE_LINES) else self._pool
+        """Pick a pool. Never raises: a connection that cannot be routed is closed, not lost."""
         try:
+            pool = self._photo_pool if peeked.startswith(_PHOTO_LANE_LINES) else self._pool
             pool.submit(self._serve_one, request, client_address)
-        except RuntimeError:  # pool shut down under us
-            self.shutdown_request(request)
+        except Exception:  # noqa: BLE001 — one bad connection must not end the sorter
+            traceback.print_exc()
+            try:
+                self._pool.submit(self._serve_one, request, client_address)
+            except Exception:  # noqa: BLE001 — pool shut down: close it
+                self.shutdown_request(request)
 
     def _sort(self) -> None:
+        try:
+            self._sort_loop()
+        except Exception:  # noqa: BLE001 — the selector itself failed: degrade to base
+            traceback.print_exc()
+            sys.stderr.write("sorter failed: routing every connection to the slot pool\n")
+        finally:
+            self._sorting = False
+            self._flush_arrivals()
+
+    def _sort_loop(self) -> None:
         sel = selectors.DefaultSelector()
         sel.register(self._wake_r, selectors.EVENT_READ, None)
         waiting: Dict[int, tuple] = {}  # fd -> (request, client_address, deadline)
@@ -17557,11 +17594,13 @@ class CaptureServer(ThreadingHTTPServer):
                                 fd = request.fileno()
                                 sel.register(request, selectors.EVENT_READ, fd)
                                 waiting[fd] = (request, addr, time.monotonic() + SORT_SECONDS)
-                            except (OSError, ValueError):
-                                self.shutdown_request(request)
+                            except Exception:  # noqa: BLE001 — this one connection, not the loop
+                                traceback.print_exc()
+                                self._route(request, addr, b"")
                         continue
                     request, addr, _ = waiting.pop(key.data)
-                    sel.unregister(request)
+                    with contextlib.suppress(Exception):
+                        sel.unregister(request)
                     try:
                         peeked = request.recv(len(_PHOTO_LANE_LINES[-1]), socket.MSG_PEEK)
                     except OSError:
@@ -17570,15 +17609,16 @@ class CaptureServer(ThreadingHTTPServer):
                 now = time.monotonic()
                 for fd in [f for f, w in waiting.items() if w[2] <= now]:
                     request, addr, _ = waiting.pop(fd)
-                    sel.unregister(request)
+                    with contextlib.suppress(Exception):
+                        sel.unregister(request)
                     self._route(request, addr, b"")
-        except (OSError, ValueError):
-            pass  # the selector or wake socket closed: `server_close`
         finally:
-            for request, _, _ in waiting.values():
-                self.shutdown_request(request)
-            sel.close()
-            self._wake_r.close()
+            for request, addr, _ in waiting.values():
+                self._route(request, addr, b"")
+            with contextlib.suppress(Exception):
+                sel.close()
+            with contextlib.suppress(Exception):
+                self._wake_r.close()
 
     def _serve_one(self, request, client_address) -> None:
         """`ThreadingMixIn.process_request_thread`'s body, run on a pooled worker instead."""
