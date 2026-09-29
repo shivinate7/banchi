@@ -282,18 +282,21 @@ test.describe('the published demo draws what reviewers grade', () => {
     // so the box and its starting count are read off the screen instead of hardcoded —
     // same behavior asserted (Mark sold decrements by one, Undo restores it), against
     // whichever box and count the mirror actually holds.
+    // COPY RENAMED (F5 verbiage cut, ff1b3f71 and after): a box row reads "N stored", the
+    // Fulfiller's search placeholder is "Card name or number", and Sales' shelf line is
+    // "N of M priced, K not yet". Same behaviour asserted, new words.
     await visit(page, 'Inventory')
-    const box = page.locator('button', { hasText: /\d+ on hand/ }).first()
+    const box = page.locator('button', { hasText: /\d+ stored/ }).first()
     await expect(box).toBeVisible()
     const before = await box.textContent()
-    const match = /(\d+)\s*on hand/.exec(before ?? '')
-    expect(match, 'a box button carries an "N on hand" count').not.toBeNull()
+    const match = /(\d+)\s*stored/.exec(before ?? '')
+    expect(match, 'a box button carries an "N stored" count').not.toBeNull()
     const startCount = Number(match![1])
     await page.getByRole('button', { name: 'Mark sold' }).first().click()
-    await expect(box).toContainText(`${startCount - 1} on hand`)
+    await expect(box).toContainText(`${startCount - 1} stored`)
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
     await page.getByRole('button', { name: /^Undo/ }).first().click()
-    await expect(box).toContainText(`${startCount} on hand`)
+    await expect(box).toContainText(`${startCount} stored`)
     await expect(page.getByRole('button', { name: 'Mark sold' }).first()).toBeVisible()
   })
 
@@ -327,7 +330,7 @@ test.describe('the published demo draws what reviewers grade', () => {
 
   test('Cards to pull: search finds a card', async ({ page }) => {
     page = await visitFulfiller(page)
-    await page.getByPlaceholder(/For example/).pressSequentially('Crowd', { delay: 40 })
+    await page.getByPlaceholder('Card name or number').pressSequentially('Crowd', { delay: 40 })
     await expect(page.getByText('Crowd Favorite').first()).toBeVisible()
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
@@ -420,7 +423,7 @@ test.describe('the published demo draws what reviewers grade', () => {
     // used to trigger it is gone). Same behavior: the figure draws once holdings load, with
     // no press needed.
     await visit(page, 'Sales')
-    await expect(page.getByText(/Priced for \d+ of \d+ names on hand/)).toBeVisible()
+    await expect(page.getByText(/\d+ of \d+ priced, \d+ not yet/)).toBeVisible()
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
 })

@@ -6667,8 +6667,8 @@ COMPONENTS = [
                                           "Reached through a dynamic import inside `if (DEMO)`, "
                                           "so an ordinary build ships neither it nor the "
                                           "bundle.",
-                                  "governed_by": ["D10", "D20", "D26", "D28", "D37", "D43",
-                                                  "D49", "D57", "D58", "D86", "D103"]},
+                                  "governed_by": ["D10", "D20", "D26", "D28", "D37", "D43", "D49",
+                                                  "D57", "D58", "D86", "D103", "D172"]},
             "src/types.ts": {"does": "the shapes the server speaks, in the server's own field "
                                      "names — captures, inventory, boxes, listings and the "
                                      "standing queues. Types only, it emits no JavaScript. "
