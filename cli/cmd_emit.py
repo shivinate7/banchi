@@ -77,7 +77,7 @@ from pipeline import corpus, decisions, games, join, merge, pricing, routing, se
 from pipeline import skus as skus_walk
 from pathlib import Path
 
-from store import master, files, photos, queues
+from store import master, files, queues
 from store.session import Store
 
 
@@ -229,6 +229,36 @@ def _withhold_disputed(resolved, snapshot) -> List[dict]:
             else:
                 del game_join.report.matches[sku]
     return disputed_positions
+
+
+def _unheld_positions(resolved, snapshot) -> List[str]:
+    """Every UNCOMMITTED position this run would stamp that the store holds no card at.
+
+    THE 2026-09-27 PHANTOM-COPY INCIDENT (docs/debts, slug `emit-buried-box`). The stamp loops
+    used to UPSERT a card for any position the store did not know, and a run over a buried box
+    made 99 ghost cards and published about 96 copies TCGplayer never had. An emit may only
+    ever ship a copy that a card in the store stands behind, so an absent card is reported
+    here, BEFORE the CSV, and the caller refuses (T3: report unmatched before writing).
+    """
+    unheld = set()
+    for game_join in resolved.joins.values():
+        for match in game_join.report.matches.values():
+            for position in match.uncommitted_positions:
+                key = master.position_key(position.box, position.index)
+                if snapshot.inventory.cards.get(key) is None:
+                    unheld.add(key)
+    return sorted(unheld)
+
+
+def _refuse_unheld(run_name, unheld, say) -> None:
+    say(
+        f"REFUSING to write: run {run_name} lists {len(unheld)} position(s) where the store "
+        f"holds no card, so no copy of them may be sent. Nothing was written."
+    )
+    for key in unheld[:10]:
+        say(f"    {key}")
+    if len(unheld) > 10:
+        say(f"    ... and {len(unheld) - 10} more")
 
 
 def _report_withheld(withheld: List[dict], say) -> None:
@@ -999,41 +1029,6 @@ def _write_merged(resolved, priced, choice, run_dir, args, say, zero=None):
 
 
 
-def _name_for(key: str, photo) -> str:
-    """The card's name for a position the store has never seen (D172, section 3.4).
-
-    TWO OF `store/master.py`'s THREE "seam to watch rather than a guarantee" SITES ARE IN
-    THIS FILE, and this is what they were missing. `record_capture` refuses a nameless new
-    card — the refusal lives at the BIRTH of a record because a refusal at the flush would be
-    a 500 on the shutter mid-feeder — so an emit over a run whose positions the store has
-    never seen refused outright without this. That case is real and this file's own comment
-    names it: "a position the store has never seen — a run joined from a recovered
-    identifications file, say".
-
-    THE LADDER IS THE SPEC'S, BOTH RUNGS. Where the run resolved a photograph, the name is
-    that photograph's digest — which is D172's definition exactly, read off the disk rather
-    than allocated, so the record this creates is named the same way one born at the shutter
-    is. Where it did not, there is no photograph and no digest anywhere, and the honest
-    answer is shape 4: a NAME that says so, never a NULL. A NULL cannot distinguish "no
-    photograph was found" from "this writer did not look", which is this repo's signature
-    defect.
-
-    IT CARRIES `master.now()` AND NOT THE RECORD'S `captured_at`, which is absent here by
-    construction: this is the first time the store has seen the position, so there is no
-    capture stamp to borrow. The stamp is what keeps two photograph-less cards in one box
-    from composing one name.
-    """
-    if photo:
-        try:
-            return photos.sha256_of(Path(photo))
-        except OSError:
-            # The manifest resolved a path and the file is not there. Falling through to
-            # shape 4 is right and is not a swallowed error: the position genuinely has no
-            # photograph to be named by, and the name says exactly that.
-            pass
-    return f"{photos.NOPHOTO_PREFIX}{key}@{master.now()}"
-
-
 def run(args, say) -> int:
     # THE CAP IS PARSED FIRST, SO AN UNUSABLE ONE IS A SENTENCE (D7, amended 2026-09-08).
     # `_cap_for` raises `MalformedDecisions`, and the only `except` that names it wraps
@@ -1153,6 +1148,10 @@ def run(args, say) -> int:
     # a few lines down is D49's corpus-level SKU set, and reusing the name would silently
     # shadow this one (`_withhold_disputed`'s own docstring explains the naming).
     disputed_positions = _withhold_disputed(resolved, snapshot)
+    unheld = _unheld_positions(resolved, snapshot)
+    if unheld:
+        _refuse_unheld(run_dir.name, unheld, say)
+        return 1
 
     # THE WITHHELD POSITIONS' QUEUE ENTRY IS WRITTEN HERE, IN ITS OWN TRANSACTION, BEFORE
     # THE "missing" CHECK BELOW CAN EVER SEE THEM. `resolved.queued_positions`
@@ -1557,27 +1556,6 @@ def _stamp_single(writable, resolved, emitted, priced_flat, run_dir, sku_game, s
         }
         for position in match.uncommitted_positions:
             key = master.position_key(position.box, position.index)
-            # Upsert first. A position the store has never seen — a run joined from a
-            # recovered identifications file, say — would otherwise take a write that
-            # lands nowhere and is still reported as having happened.
-            writable.inventory.record_capture(
-                master.Card(
-                    box=position.box,
-                    index=position.index,
-                    cid=_name_for(key, resolved.photos.get(key)),
-                    photo=resolved.photos.get(key),
-                    # THE CAUSE OF THE NULL-GAME DEFECT, FIXED HERE (owner's report F1:
-                    # "there's two sets of unleashed, with the one with 99 cards having no
-                    # photos"). `game_name` is resolved two lines above this loop's own
-                    # start, for `bind_sku`'s `expected_product_line` — a never-seen
-                    # position born here inherited none of it, so `server/pipeline_routes.py:
-                    # do_pipeline_sets` (which groups on `(game, set_name)`) split it into a
-                    # second group with no game, and `pipeline/stockimages.py:url_for`
-                    # returns no photo for an empty game. `record_capture` skips a falsy
-                    # claim on a re-record, so this never overwrites a game already on file.
-                    game=game_name,
-                )
-            )
             # `set_state(key, IDENTIFIED)` rather than assigning `sku` and `condition`
             # straight onto the record, and the choice is not style. It is the only
             # writer that returns False for a position with no record, which is what
@@ -1860,6 +1838,10 @@ def run_merged(args, say) -> int:
             say("REFUSING to write. Nothing was written.")
             return 1
         disputed_positions.extend(_withhold_disputed(resolved, snapshot))
+        unheld = _unheld_positions(resolved, snapshot)
+        if unheld:
+            _refuse_unheld(run_dir.name, unheld, say)
+            return 1
         resolved_by_run[run_dir.name] = resolved
         policies[run_dir.name] = book.policy_for(run_dir.name)
         matched |= set(resolved.matches)
@@ -2157,20 +2139,7 @@ def _stamp_merged(writable, merged_plan, shipped, resolved_by_run):
             for position in leg.match.uncommitted_positions:
                 key = master.position_key(position.box, position.index)
                 owner.setdefault(key, (leg.run, position))
-        for key, (run_name, position) in owner.items():
-            writable.inventory.record_capture(
-                master.Card(
-                    box=position.box,
-                    index=position.index,
-                    cid=_name_for(key, resolved_by_run[run_name].photos.get(key)),
-                    photo=resolved_by_run[run_name].photos.get(key),
-                    # SAME FIX AS `_stamp_single` ABOVE, SAME DEFECT. `row.game` is
-                    # `MergedSku`'s own field (`pipeline/merge.py`), already read at this
-                    # loop's own start to resolve `entry` for `bind_sku` — a never-seen
-                    # position born here inherited none of it, until now.
-                    game=row.game,
-                )
-            )
+        for key, (run_name, _position) in owner.items():
             # THE FIVE IDENTITY KWARGS ARE GONE, exactly as in `_stamp_single` above —
             # `bind_sku` below is the one writer now, and D253's `name_corrections` read
             # retires with it.
