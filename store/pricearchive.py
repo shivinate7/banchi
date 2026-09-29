@@ -195,7 +195,12 @@ def summaries_of(buckets) -> Dict[str, Summary]:
     backfill and the writer cannot disagree. Later duplicates of one `(sku, range, start)` win,
     like `_index`."""
     grouped: Dict[Tuple[str, str], Dict[str, Point]] = {}
-    for b in buckets:
+    for raw in buckets:
+        # THE RELOAD'S OWN FUNCTION, NOT A COPY: a bucket `_parse_bucket` drops (or
+        # normalises) when `entries` reloads is dropped (or normalised) here too.
+        b = _parse_bucket("", raw._asdict())
+        if b is None:
+            continue
         grouped.setdefault((b.sku, b.range), {})[b.start] = Point(b.start, b.market, b.width_days)
     return {
         _summary_key(sku, rng): Summary(sku, rng, tuple(pts[s] for s in sorted(pts)))

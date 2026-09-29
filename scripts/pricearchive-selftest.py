@@ -1484,6 +1484,18 @@ def main() -> int:
         ok(derived == held,
            "every (sku, range) summary equals what the buckets themselves say, both ways")
 
+        with Store().write() as snapshot:
+            snapshot.archive.upsert({
+                _key("F2", "month", "2026-01-01"): _bucket("F2", "2026-01-01", "1.00"),
+                _key("F2", "bogus", "2026-01-02"):
+                    _bucket("F2", "2026-01-02", "1.00")._replace(range="bogus"),
+                _key("F2", "month", ""): _bucket("F2", "", "1.00"),
+            })
+        reloaded = sorted(b.start for b in Store().read().archive.for_sku("F2"))
+        ok(_summary("F2") == [("2026-01-01", "1.00", 1)] and reloaded == ["2026-01-01"],
+           "the summary skips exactly the buckets a reload drops (same _parse_bucket)",
+           (_summary("F2"), reloaded))
+
         # The one-time build: an archive with no summary (a schema-13 store) is summarised on
         # first open, under the lock, and matches the writer's own rows.
         import sqlite3
@@ -1504,16 +1516,26 @@ def main() -> int:
            "first open of a store with an archive and no summary builds it, identical to the "
            "writer's own rows", (len(good), len(rebuilt)))
 
-        # Every writer goes through `upsert`: nothing may assign into the bucket table
-        # directly, or its summary would fall behind with no transaction to blame.
+        # Every writer goes through `upsert`: nothing may write the bucket table any other
+        # way, or its summary would fall behind with no transaction to blame. Repo-wide.
         import re
+        writes = re.compile(
+            r"archive\.entries\[[^\]]*\]\s*=[^=]"
+            r"|archive\.entries\.(update|pop|popitem|setdefault|clear)\("
+            r"|\bdel\s+[\w.]*archive\.entries\["
+            r"|\b(INSERT|UPDATE|DELETE|REPLACE)\b[^;\n]*\bprice_history\b",
+            re.I,
+        )
+        skip = {"node_modules", ".venv", "venv", "vendor"}
         offenders = [
-            str(f) for d in ("cli", "pipeline", "server", "store", "scripts")
-            for f in sorted((ROOT / d).rglob("*.py"))
+            str(f.relative_to(ROOT))
+            for f in sorted(ROOT.rglob("*.py"))
             if f.name != "pricearchive-selftest.py"
-            and re.search(r"archive\.entries\[[^\]]*\]\s*=[^=]", f.read_text())
+            and not skip & set(f.relative_to(ROOT).parts)
+            and writes.search(f.read_text(errors="ignore"))
         ]
-        ok(not offenders, "no module assigns into archive.entries except upsert", offenders)
+        ok(not offenders, "nothing writes price_history or archive.entries except upsert",
+           offenders)
     finally:
         if previous is None:
             os.environ.pop(files.HOME_ENV, None)
