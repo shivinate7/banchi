@@ -1,4 +1,4 @@
-## DEBT-emit-buried-box — an emit over a buried box made ghost cards and phantom copies
+## DEBT57 — an emit over a buried box made ghost cards and phantom copies
 
 **Symptom.** The pricing Send of 2026-09-27T16:21:59Z emitted over 12 runs, including
 `2026-09-01-box5-01`. Box 5 (bid 5) was buried on 2026-09-16, with a `box_deleted` event, 105

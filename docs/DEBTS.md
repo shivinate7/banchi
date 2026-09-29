@@ -133,4 +133,5 @@ DEBT53 ~~the pricing corpus has five unlocked writers~~ — CLOSED 2026-09-27, f
 DEBT54 the 13th-row undo walk times out under load
 DEBT55 the audit self-test crashes when app/node_modules is missing
 DEBT56 the worktree-provision selftest's race case fails
+DEBT57 an emit over a buried box made ghost cards and phantom copies
 ```
