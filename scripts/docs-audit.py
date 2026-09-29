@@ -18695,7 +18695,7 @@ def self_test() -> int:
     # a later edit to either document cannot quietly turn them back into what they were.
     _section = (
         "serves on `class CaptureServer(ThreadingHTTPServer)` with `request_queue_size = 128`\n"
-        "and `CaptureHandler.timeout = 15`. `REQUEST_SLOTS = 4` is the bound.\n"
+        "and `CaptureHandler.timeout = 15`. `REQUEST_SLOTS = 4` is the bound, and `PHOTO_SLOTS = 4` bounds the photo lane.\n"
         "| `REQUEST_SLOTS` | 1 | 2 | 3 | **4** | 6 | 8 | 12 | 24 | 48 |\n"
     )
     for _what, _code_re, _shape, _anchor, _published in _CONCURRENCY_FACTS:
