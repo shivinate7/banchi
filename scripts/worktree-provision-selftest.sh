@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # `make worktree-provision-selftest` — scripts/worktree-provision.sh's app/node_modules
 # provisioning (D257), proved against a throwaway fixture.
+# Protects: A fresh worktree gets a current app/node_modules, and a run in main never deletes the real install.
+# Governs: D18, D257
 #
 # WHY A FIXTURE RATHER THAN THE REAL TREE. Eight cases matter: a fresh worktree cloning from
 # main, a worktree whose lockfile has moved needing a real install, an already-current

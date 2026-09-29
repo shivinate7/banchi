@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # `make silent-write-selftest` — scripts/silent-write-guard.py, proved by violating it.
+# Protects: The silent-write guard refuses a git write whose output is thrown away, proved by reproducing the 2026-09-12 incident.
+# Governs: D18
 #
 # WHY THIS EXISTS, AND WHY IT IS NOT A TABLE OF ASSERTIONS. The guard's whole claim is that it
 # can tell a git write whose output the session will read from one whose output is thrown away.

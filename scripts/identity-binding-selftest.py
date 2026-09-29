@@ -4,6 +4,9 @@ report (`docs/specs/identity-follows-sku.md` §5.5, §7, lane 2) — proved agai
 fixtures. No store, no network, no `Store()` — every function under test is pure, over plain
 `store.master.Card`/`store.skus.SkuRow` objects built in memory.
 
+Protects: The identity migration classifier and its report give every class in order and exclude human-bound cards.
+Governs: D242, D255
+
 WHAT THIS PROVES, in the lane's own words (§11's "done when" line): "every class and its
 order, the human-bound exclusion, and both report halves."
 

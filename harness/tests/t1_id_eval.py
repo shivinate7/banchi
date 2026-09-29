@@ -1,5 +1,8 @@
 """T1 — Ground-truth ID eval.
 
+Protects: The paid vision read identifies official card images correctly, at 95% holdout accuracy or better, on both name and number.
+Governs: D2, D23
+
 Official card images from pokemontcg.io across SV-era sets — sample size and set count
 are EVAL_IMAGE_TARGET and MIN_EVAL_SETS below — identified through the
 Anthropic Batch API, scored against the API records that supplied them. The API record

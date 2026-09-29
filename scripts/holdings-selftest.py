@@ -2,6 +2,9 @@
 """`pipeline/holdings.py`, proved against fixtures built in this file
 (`D236`).
 
+Protects: The holdings reader answers correctly over in-memory inventory, archive and ledger fixtures.
+Governs: D236, D247, D250
+
 NO STORE ON DISK. NO NETWORK. Every fixture below is a plain `Inventory`, `PriceArchive` or
 `Ledger` built in memory — the same dataclasses `store/session.py:Snapshot` carries, never a
 throwaway sqlite file. `pipeline/holdings.py` takes exactly these three objects and nothing

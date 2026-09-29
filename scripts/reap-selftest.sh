@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # `make reap-selftest` — scripts/reap.py, proved by pointing it at processes it must not kill.
+# Protects: The reap command stops only processes this session started and refuses every other process.
+# Governs: D18, D53
 #
 # WHY THIS EXISTS. The guard's whole claim is that it can tell a process this session started
 # from one it did not, and refuse the second. That claim is only worth anything if the REFUSALS

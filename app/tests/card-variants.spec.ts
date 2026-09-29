@@ -1,3 +1,5 @@
+// Protects: Two SKUs that differ only by set stay two distinguishable tiles in the name-to-variant chooser.
+// Governs: D213
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'

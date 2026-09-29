@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """`app/design-check-reporter.ts` actually writes a verdict, proved by running it.
 
+Protects: The design-check reporter really writes its verdict file when Playwright runs it.
+Governs: D18
+
 WHY THIS EXISTS SEPARATELY FROM `make docs-audit`'s `verdict file` ROW. That row reconciles
 four files that NAME the verdict path — the reporter's own `RESULT_FILE`, the config's
 reporter list, both Makefile recipes' `rm -f`, and the path CLAUDE.md publishes. It is a

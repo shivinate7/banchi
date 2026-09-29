@@ -3,6 +3,9 @@
 §4.1, lane 1) — `record_identification`'s narrowed write, and `hold_sku` (lane 7, the fourth
 writer), proved in memory.
 
+Protects: Binding and unbinding a SKU is the one writer of card identity, and its refusals write nothing.
+Governs: D18, D63
+
 `hold_sku` IS BIND_SKU'S SIBLING REFUSALS, RUN AGAIN (cases 5c-5g, beside bind_sku's own
 4/5). Same `SkuUnknown`/`GameMismatch` refusals, both writing nothing. Unlike `bind_sku`, it
 never derives the identity from the row — only `sku`/`identity_source`/`read_disputes`/

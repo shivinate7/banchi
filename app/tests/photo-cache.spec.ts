@@ -1,3 +1,5 @@
+// Protects: Home, Review and Pricing ask for each photograph by card name and version, never by box slot.
+// Governs: D26, D172
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest, card } from './shell'
 import { seedPopulatedPricing } from './routeFixtures'

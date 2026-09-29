@@ -2,6 +2,9 @@
 """Prove `scripts/catalog-index.py` and `pipeline/catalog.py` against a throwaway fixture
 (D15, build-order step 9, piece 2's guard).
 
+Protects: The catalog index builder and reader answer correctly over a small synthetic vendor tree.
+Governs: D15, D18, D206
+
 RED FIRST: every case here failed before `scripts/catalog-index.py` and `pipeline/catalog.py`
 existed — there was no index to build and no reader to open one. Run against a small,
 synthetic two-set vendor tree under a temp directory, never against the real 26 MB snapshot,

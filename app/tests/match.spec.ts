@@ -1,3 +1,4 @@
+// Protects: The one search matcher passes every row of the shared case table and stays fast on a large list.
 import { test, expect } from '@playwright/test'
 
 import { sealEveryTest } from './shell'

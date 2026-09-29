@@ -1,3 +1,5 @@
+// Protects: The Pricing Live tab reprices live TCGplayer listings and leaves the run-based Pricing flow untouched.
+// Governs: D28, D62, D103, D107, D118, D218, D273, D277
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'

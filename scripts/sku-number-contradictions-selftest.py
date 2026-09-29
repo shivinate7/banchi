@@ -3,6 +3,9 @@
 network (`D242`, kept apart from the four approved stored-data
 checks, built as a separate, sibling PR, on the owner's own ruling).
 
+Protects: The check for one number with disagreeing SKUs flags a real contradiction, even in a dense set.
+Governs: D242, D247
+
 NAME AGREEMENT, NOT MERE EXISTENCE. The owner's own measurement killed the first shape of
 this check: in a dense set (Vendetta, 258 products over 100% of numbers 1-166), asking
 "does a real product exist at this number" is vacuous — every candidate always resolves.

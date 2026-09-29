@@ -4,6 +4,9 @@ repair). NULL-game cards with a bound sku get the right game, a card that alread
 is left alone, a card whose sku maps to no registered game is refused and named, and the
 preview writes nothing. In `make check` and never in the git hook: it writes, into a
 directory it creates and destroys (D18).
+
+Protects: The born-game repair sets the game on cards with a bound SKU, leaves the rest alone and writes nothing on a preview.
+Governs: D18
 """
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+// Protects: The owner-side shell at phone width fits without sideways scroll and keeps every touch target at 40px or more, including menus, sheets and the palette.
+// Governs: D117, D134, D204, D266, D288, D291
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { seedPopulatedGraveyard } from './routeFixtures'

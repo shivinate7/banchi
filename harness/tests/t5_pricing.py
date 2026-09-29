@@ -1,5 +1,8 @@
 """T5 — Pricing rules.
 
+Protects: Every pricing rule prices exactly, the floor clamps after rounding, the threshold reads market, and a card with no market data is never auto-priced.
+Governs: D9
+
 New with batch script v2. A wrong price is a distinct failure from a wrong match: the join
 can be perfect and the money still wrong, and the two have different causes, different
 symptoms and different fixes. So it gets its own failing test name.

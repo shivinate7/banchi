@@ -1,3 +1,5 @@
+// Protects: The Kit sheet draws every row shape the product can draw, so no specimen is unreachable there.
+// Governs: D24, D68, D71, D118, D119, D269, D272
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { createRequire } from 'node:module'
 import { sealEveryTest } from './shell'

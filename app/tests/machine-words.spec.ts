@@ -1,3 +1,5 @@
+// Protects: No machine word (decision id, repository path, pipeline noun) reaches the rendered text of any screen.
+// Governs: D196, D269
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'

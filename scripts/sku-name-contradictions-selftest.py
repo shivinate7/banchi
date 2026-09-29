@@ -3,6 +3,9 @@
 network. D242's own sibling, the mirror image: fixed number, disagreeing SKU there;
 fixed SKU, disagreeing name here.
 
+Protects: The check for one SKU with disagreeing names flags a real contradiction and leaves a short title beside its full name alone.
+Governs: D240, D242
+
 REUSES `pipeline.join.name_disputes` RATHER THAN A SECOND SIMILARITY RULE, and the mutation
 arm below is what proves that matters: a naive EXACT-EQUALITY resolver (this module's
 tempting first shape) would flag a genuine near-miss — a champion's short title beside its

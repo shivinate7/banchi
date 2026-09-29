@@ -1,3 +1,5 @@
+// Protects: Every route inherits the page frame: one Page, one h1, the page width and top gap tokens, no sideways scroll, one fixed document title.
+// Governs: D121, D275, D276, D291
 import { test, expect, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'

@@ -1,3 +1,5 @@
+// Protects: Undo in the order walk stays on the newest pull and never expires on a clock.
+// Governs: D118, D136, D164, D252
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'

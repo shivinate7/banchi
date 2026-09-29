@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """The supervisor's build job, proved against a throwaway tree (D138).
 
+Protects: The supervisor rebuilds a stale bundle, keeps the old one when a build fails, and keeps Python and screen edits on separate tracks.
+Governs: D18, D138, D268
+
 WHAT IS UNDER TEST IS THE SUPERVISOR, NOT VITE. The behaviours that matter here are all the
 supervisor's own: when it decides the bundle is behind, what it does while a build is running,
 what it leaves on disk when one fails, and whether a Python edit and a screen edit stay on

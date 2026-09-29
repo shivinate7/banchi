@@ -1,3 +1,5 @@
+// Protects: Every claim control on the Capture screen (box, game, set hint, finish, rarity) works in a real browser.
+// Governs: D3, D10, D27, D65, D118, D142, D145, D218
 import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'

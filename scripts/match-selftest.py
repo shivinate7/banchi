@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """`make match-selftest` — the one forgiving matcher, proved against the shared case table.
 
+Protects: The Python search matcher agrees with the browser matcher on the shared case table, and the server search reaches it.
+
 WHY THIS EXISTS. FLT-06/04 (the owner's ruling, 2026-09-23) is one matcher everywhere. The
 filtering lane wrote `app/src/kit/match.ts` and the case table that proves it,
 `app/src/kit/match.cases.json`. `server/match.py` is a same-behaviour Python port

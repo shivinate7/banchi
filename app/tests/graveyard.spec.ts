@@ -1,3 +1,5 @@
+// Protects: The Graveyard shows its three tabs with the right cards in each, and Inventory shows where a moved card came from.
+// Governs: D134, D196
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'

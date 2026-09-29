@@ -1,3 +1,5 @@
+// Protects: The confirm control on a held card whose camera-read name is wrong sends the confirmation and shows its result.
+// Governs: D118, D252
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'

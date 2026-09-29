@@ -1,3 +1,5 @@
+// Protects: The shell keyboard (comma-then-letter jump, Cmd-arrow ring step, help sheet) does what it says and leaves typing alone.
+// Governs: D20, D43, D51, D70, D86, D105, D134, D192
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { CAPTURE_PORT } from '../devPort'

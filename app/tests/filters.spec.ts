@@ -1,3 +1,5 @@
+// Protects: The shared filter bar, hide toggle, sortable table header and match highlight behave the same on every screen that filters a list.
+// Governs: D118, D132, D270, D288
 import { createRequire } from 'node:module'
 
 import { test, expect, type Page } from '@playwright/test'

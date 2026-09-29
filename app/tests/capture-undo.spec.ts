@@ -1,3 +1,5 @@
+// Protects: The ten-deep undo stack on Capture walks back the right card each time, so an undo never deletes the record of a different physical card.
+// Governs: D10, D41, D58, D101, D117, D118, D164, D196
 import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'

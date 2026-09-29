@@ -1,3 +1,5 @@
+// Protects: The icon button keeps its 40px hit area, unclipped tooltip, no ghost click after a long press, readable toast close and correct glyph size.
+// Governs: D118, D288
 import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'

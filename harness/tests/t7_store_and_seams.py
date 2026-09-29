@@ -1,5 +1,8 @@
 """T7 — Inventory store, capture server, and the command seams.
 
+Protects: The store, the capture server and the command seams keep positions unique, round-trip sidecars, refuse with their own codes and read the columns they name.
+Governs: D4, D10
+
 The first test that reaches `store/`, `server/` and `cli/`. Until it existed those three
 packages held about 40% of product code with nothing checking any of it, and `make harness`
 went green at the end of every turn without looking at them once.

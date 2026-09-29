@@ -1,3 +1,5 @@
+// Protects: The generated logo mark draws at the right cut and size at every place the app shows it.
+// Governs: D102, D134, D136, D204
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
