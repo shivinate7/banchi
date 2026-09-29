@@ -346,7 +346,8 @@ One rung per relation. A new rule picks the rung for its relation, never a nearb
 
 The rung a screen uses today is not always the rung its relation names (gap 6px is the most
 common today, 57 uses, far beyond icon-to-text). Moving one moves pixels, so it is a design
-pass on that screen, not a swap. `make token-literal-check` fails a spacing literal on no rung
+pass on that screen, not a swap. That pass, and moving the off-scale values, waits for the
+final design review (owner's ruling, 2026-09-28). `make token-literal-check` fails a spacing literal on no rung
 (a `5px`, a `10px`), ratcheted per file in `scripts/token-literal-check.json` under
 `off_scale`, so the list only shrinks. A negative offset whose size is a rung (`-8px`) is on
 the scale. Fix an off-scale value by moving it to the relation's rung and looking at the screen.

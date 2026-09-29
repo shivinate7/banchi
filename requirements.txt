@@ -34,14 +34,12 @@ numpy>=1.21
 #            deterministic, local and free — no model call for the one field that must be
 #            exactly right, because it is the thing being sold.
 #
-# THE PIN IS LOAD-BEARING AND `>=` WOULD BREAK A CLEAN CLONE. This venv is Python 3.9.6
-# (`/usr/bin/python3` on this machine). The 3.x line dropped cp39 wheels, so plain
-# `pip install zxing-cpp` resolves 3.1.1 — whose `requires_python` is still >=3.9 — finds
-# no wheel, falls back to the sdist and DIES in CMake configure. It does not quietly pick
-# an older release. 2.3.0 ships a real cp39 universal2 wheel, 1.7 MB, no dependencies.
-# Revisit the pin only alongside a Python upgrade, and re-measure codes/qr.py if you do:
-# 3.1.x claims a materially better Version-1 detection rate, which is exactly the symbol
-# size a 1 cm code produces.
+# THE PIN WAS LOAD-BEARING ON 3.9. That venv was Python 3.9.6, and the 3.x line dropped cp39
+# wheels, so plain `pip install zxing-cpp` fell back to the sdist and died in CMake configure.
+# The venv is Python 3.12 since 2026-09-28, so that reason no longer holds. 2.3.0 stays:
+# T8 passes on 3.12 in CI, and the code-card feature is dormant. Revisit the pin when code
+# cards wake, and re-measure codes/qr.py if you do: 3.1.x claims a materially better
+# Version-1 detection rate, which is exactly the symbol size a 1 cm code produces.
 zxing-cpp==2.3.0
 
 # Deliberately absent:
