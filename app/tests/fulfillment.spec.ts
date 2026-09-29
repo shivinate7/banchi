@@ -1,7 +1,7 @@
 // Protects: Every row of the Fulfillment constraints table in DESIGN.md holds on the Fulfiller's screen, measured from the rendered page.
 // Governs: D5, D10, D13, D93, D115, D136, D212, D218
 import { test, expect, type Locator, type Page } from '@playwright/test'
-import { sealEveryTest } from './shell'
+import { sealEveryTest, settleAnimations } from './shell'
 import { settleFonts } from './fontsReady'
 import { settleMotion } from './motionSettled'
 
@@ -1269,14 +1269,7 @@ async function fatTargets(page: Page, where: string, hasControls = true): Promis
      animation (`bn-pop` scales it) read its 44px dismiss button at 43.99997 under load. The
      floor does not move. Only the moment of the read does. A looping shimmer never ends, so
      it is left out. */
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
-        .map((animation) => animation.finished.catch(() => undefined)),
-    ),
-  )
+  await settleAnimations(page)
   const found = await targets(page)
   if (hasControls) expect(found.length, `${where}: no control on screen`).toBeGreaterThan(0)
 

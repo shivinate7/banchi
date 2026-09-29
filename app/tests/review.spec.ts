@@ -2,7 +2,7 @@
 // Governs: D23, D24, D28, D32, D46, D77, D118, D218
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
-import { sealEveryTest } from './shell'
+import { sealEveryTest, settleAnimations } from './shell'
 import type { Place } from '../src/types'
 import { runRow } from './routeFixtures'
 
@@ -1344,9 +1344,7 @@ const ORDER_LINE_PLACE: Place = {
  *  ground — `noThinContrast` in `fulfillment.spec.ts` refuses one by design (`docs/DESIGN.md`'s
  *  floor is for an opaque owner-facing panel), and this pill is glass over a photograph. */
 async function contrastOf(page: Page, selector: string): Promise<number> {
-  await page.evaluate(() =>
-    Promise.all(document.getAnimations().map((one) => one.finished.catch(() => undefined))),
-  )
+  await settleAnimations(page)
   return page.locator(selector).first().evaluate((el) => {
     const parse = (value: string): number[] => {
       const m = value.match(/rgba?\(([^)]+)\)/)

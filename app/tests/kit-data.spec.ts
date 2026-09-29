@@ -2,7 +2,7 @@
 // Governs: D118, D195, D288
 import { test, expect, type Page } from '@playwright/test'
 
-import { sealEveryTest } from './shell'
+import { sealEveryTest, settleAnimations } from './shell'
 import { settleFonts } from './fontsReady'
 import { canonicalNumber, compactText, foldText, matchQuery, queryTokens } from '../src/kit/match'
 import { absoluteDate, relativeDate } from '../src/dates'
@@ -620,7 +620,7 @@ test('every kit-data control a thumb presses is 40px tall at 390', async ({ page
 async function contrastOf(page: Page, selector: string): Promise<number> {
   /* Every running transition finishes first. A ground read mid-fade is lighter than the one
      that stays, and it reads a pass that is not there. */
-  await page.evaluate(() => Promise.all(document.getAnimations().map((one) => one.finished.catch(() => undefined))))
+  await settleAnimations(page)
   return page.locator(selector).first().evaluate((el) => {
     const parse = (value: string): number[] => {
       const m = value.match(/rgba?\(([^)]+)\)/)
