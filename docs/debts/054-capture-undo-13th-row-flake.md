@@ -1,4 +1,4 @@
-## DEBT-capture-undo-13th-row-flake — the 13th-row undo walk times out under load
+## DEBT54 — the 13th-row undo walk times out under load
 
 **Deferred by the owner, 2026-09-28**, until the other capture-spec flake fixes land. Open.
 

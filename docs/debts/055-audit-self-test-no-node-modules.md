@@ -1,4 +1,4 @@
-## DEBT-audit-self-test-no-node-modules — the audit self-test crashes when app/node_modules is missing
+## DEBT55 — the audit self-test crashes when app/node_modules is missing
 
 **Symptom.** `make audit-self-test` in a tree with no `app/node_modules` ends in
 `KeyError: 'Two.tsx'` and a Python traceback, where it should report the toolchain as unknown.
