@@ -2120,6 +2120,21 @@ def _games_in_boxes(inventory: master.Inventory, boxes) -> Dict[str, Any]:
     return games
 
 
+def _position_name(inventory: Optional[master.Inventory], box, index) -> dict:
+    """The card's own name and photograph version at `box/index` today (D172), so a screen
+    can address the photograph by name and cache it. Nulls where the slot names no card."""
+    card = None
+    if inventory is not None:
+        try:
+            card = inventory.cards.get(master.position_key(int(box), int(index)))
+        except (TypeError, ValueError):
+            card = None
+    return {
+        "cid": getattr(card, "cid", None),
+        "capture_id": getattr(card, "capture_id", None),
+    }
+
+
 def _relabel_positions(table) -> None:
     """Re-render every position label in a parsed `pricing.json`, in place. The file is not touched.
 
@@ -2193,6 +2208,7 @@ def _relabel_positions(table) -> None:
             if not isinstance(at, dict):
                 continue
             at["label"] = _position_label(views, inventory, at.get("box"), at.get("index"), games)
+            at.update(_position_name(inventory, at.get("box"), at.get("index")))
 
 
 def do_pipeline_pricing(name: str) -> dict:
@@ -3188,6 +3204,8 @@ def do_pipeline_worklist(wanted: Sequence[str], images: Optional["stockimages.St
                         "box": card.box,
                         "index": card.index,
                         "label": _position_label(views, snapshot.inventory, card.box, card.index),
+                        "cid": getattr(card, "cid", None),
+                        "capture_id": getattr(card, "capture_id", None),
                     }
                 )
                 drawn.add(key)

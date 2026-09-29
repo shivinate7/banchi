@@ -8884,6 +8884,15 @@ COMPONENTS = [
                         "`make design-check`.",
                 "governed_by": ["D57", "D58", "D118", "D181", "D260", "D264"],
             },
+            "tests/photo-cache.spec.ts": {
+                "does": "Home, Review and Pricing draw every photograph by name and version "
+                        "(`D172`, `D26`): a by-card URL carries `?v=<capture_id>` because a "
+                        "re-shoot writes new bytes under the same name, and never a bare or "
+                        "slot URL. Read off the DOM, on the first visit and the revisit. A "
+                        "route-fulfilled stub is never HTTP-cached, so the cache hit itself "
+                        "is held by harness T7 `check_photo_cache`. Run by `make design-check`.",
+                "governed_by": ["D26", "D172"],
+            },
             "tests/page-edge.spec.ts": {
                 "does": "one left edge for every screen (`D197`): `.bn-page`'s "
                         "`margin: 0 auto` centered a screen with a lower `--bn-page-max` "
@@ -9265,7 +9274,7 @@ COMPONENTS = [
                         "re-add the link and all 20 brand cases fail naming the URL. Not "
                         "a harness test; it has no test of its own and is "
                         "exercised by every spec that imports it.",
-                "governed_by": ["D16", "D37", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
+                "governed_by": ["D16", "D37", "D172", "D43", "D46", "D56", "D58", "D63", "D70", "D86",
                                 "D124", "D125", "D134", "D174", "D192", "D259", "D273", "D276",
                                 "D298", "D301"]},
             "tests/fontsReady.ts": {

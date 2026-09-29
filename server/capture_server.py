@@ -3537,32 +3537,31 @@ def do_photo(box: int, index: int) -> Tuple[bytes, str]:
     return blob, '"' + hashlib.sha256(blob).hexdigest()[:32] + '"'
 
 
-def do_photo_by_card(cid: str) -> Tuple[bytes, str]:
-    """The photograph called `cid`, addressed by the card's own name (D172).
+def _etag_matches(header: Optional[str], etag: str) -> bool:
+    """RFC 9110 `If-None-Match`, weak comparison: `*` matches, `W/"x"` matches `"x"`."""
+    offered = [t.strip() for t in (header or "").split(",") if t.strip()]
+    return "*" in offered or etag in [t[2:] if t.startswith("W/") else t for t in offered]
 
-    THE URL NAMES THE PHOTOGRAPH, WHICH IS WHAT `do_photo` ABOVE COULD NOT DO. A cid is
-    frozen at issue and the path is a pure function of it, so this URL means one thing
-    forever: a mid-box delete does not change it, an undo does not change it, and two cards
-    cannot share it because `cards_cid` is UNIQUE. The staleness D52 measured — box 2's card
-    180 deleted, 363 cards shifted, and the screen serving the deleted card's photograph at
-    `transferSize: 0` — cannot happen through this address, because the address moved with
-    the card.
 
-    SO THE CACHING IS THE OPPOSITE OF THE SLOT ROUTE'S. `immutable` and a year, rather than
-    `no-cache` plus a digest computed on every request including the 304s: there is nothing
-    to revalidate, because the only thing that could change these bytes is a D26 re-shoot,
-    and a re-shoot of a card whose photograph is addressed by its name is a new photograph
-    at the same name — which is the one case this deliberately accepts, because D26 forbids
-    archiving the old one and the operator who pressed re-shoot is looking at the screen
-    that asked for it.
+def do_photo_by_card(
+    cid: str, if_none_match: Optional[str] = None, version: Optional[str] = None
+) -> Tuple[Optional[bytes], str]:
+    """The photograph called `cid` (D172), and the validator that follows its BYTES.
 
-    THE ETag IS THE NAME'S OWN FIRST 32 HEX and costs no read: the slot route has to hash
-    the bytes it is sending because a slot's occupant changes under it, and this one already
-    knows what it is serving.
+    A cid is frozen at issue and unique, so a mid-box delete or an undo never changes what
+    this address means. A D26 re-shoot does: `do_reshoot` writes NEW bytes under the SAME
+    cid and mints a new `capture_id` in the same transaction. So the address alone cannot be
+    `immutable`, and a cid-only ETag would answer a wrong 304 after a re-shoot.
+
+    `version` IS THE CAPTURE ID, carried by the client in `?v=` on every by-card URL
+    (`app/src/server.ts:photoUrl`, the one place that builds it). It moves exactly when the
+    bytes do, so the ETag is `cid + hash(version)`: a URL and a tag that both change with the
+    photograph, and a 304 that needs no read of the 1.9 MB file. A caller that sends no
+    version gets the slow safe answer instead — an ETag over the bytes themselves, read and
+    hashed on every request, and `no-cache` (see `_photo_by_card`) — never an immutable one.
 
     IT DOES NOT TOUCH THE STORE. The path is a function of the argument, so an unknown or
-    malformed name is a 404 from the filesystem rather than a lookup — which also means this
-    route cannot be used to ask whether a card exists.
+    malformed name is a 404 from the filesystem rather than a lookup.
     """
     if not photos.is_photo_cid(cid):
         raise BadRequest(
@@ -3578,7 +3577,14 @@ def do_photo_by_card(cid: str) -> Tuple[bytes, str]:
             "photo_not_found",
             f"No photograph stored under {cid[:12]}….",
         )
-    return path.read_bytes(), '"' + cid[:32] + '"'
+    if version:
+        etag = '"' + cid[:16] + "-" + hashlib.sha256(version.encode("utf-8")).hexdigest()[:16] + '"'
+        if _etag_matches(if_none_match, etag):
+            return None, etag
+        return path.read_bytes(), etag
+    blob = path.read_bytes()
+    etag = '"' + hashlib.sha256(blob).hexdigest()[:32] + '"'
+    return (None if _etag_matches(if_none_match, etag) else blob), etag
 
 
 def do_inventory() -> dict:
@@ -7241,6 +7247,7 @@ def _queue_row(
         row["place"] = place
         card = places._inventory.cards.get(master.position_key(int(entry.box), int(entry.index)))
         row["cid"] = getattr(card, "cid", None)
+        row["capture_id"] = getattr(card, "capture_id", None)
     return row
 
 
@@ -11196,6 +11203,21 @@ def do_reshoot(box: int, index: int, payload: dict) -> dict:
                 f"another card's.",
             )
 
+        # A RE-SHOOT MUST MINT A NEW ID WHEN THE BYTES CHANGE. The id is the version in every
+        # by-card URL (`?v=`, `immutable`), so new bytes under the card's CURRENT id would
+        # show the old photograph for up to a year. The same bytes under the same id is a
+        # replay, and stays idempotent.
+        if capture_id == card.capture_id:
+            current = photos.path(card.cid)
+            if not current.is_file() or current.read_bytes() != blob:
+                raise BadRequest(
+                    HTTPStatus.CONFLICT,
+                    "capture_id_in_use",
+                    f"capture_id {capture_id!r} already names this card's current photograph, "
+                    f"and these bytes differ. Every new photograph gets a fresh id — mint a "
+                    f"new one.",
+                )
+
         previous_capture_id = card.capture_id
 
         # The caller's own integers, exactly as `_card_row` renders from them: the record
@@ -12105,6 +12127,7 @@ def do_skus_photos(
                 "box": card.box,
                 "index": card.index,
                 "cid": card.cid if photos.is_photo_cid(card.cid) else None,
+                "capture_id": card.capture_id,
             }
             found = True
             break
@@ -16077,34 +16100,21 @@ class CaptureHandler(BaseHTTPRequestHandler):
         return self._send(HTTPStatus.OK, blob, "image/jpeg", headers)
 
     def _photo_by_card(self, cid: str) -> None:
-        """`GET /photo/by-card/<cid>`. See `do_photo_by_card`.
+        """`GET /photo/by-card/<cid>?v=<capture_id>`. See `do_photo_by_card`.
 
-        `immutable`, WHICH IS THE HEADER `_photo` ABOVE CANNOT SEND. That route serves a
-        SLOT, whose occupant changes under it, so it can only ever say "keep the bytes and
-        ask me again" and pay a digest per request to answer. This one serves a name, and
-        the name moves with the card — so there is nothing to revalidate and the right
-        answer is a year plus `immutable`, which tells the browser not to ask even on a
-        reload. That is the 1.9 MB per photograph D52 measured, not spent.
+        WITH `v` THE ANSWER IS `immutable`: the URL names the photograph AND its version, so
+        the bytes behind it cannot change and a revisit sends nothing. A hard reload may
+        still revalidate, and the tag answers that with a 304 and no read of the file.
 
-        IT STILL HONOURS `If-None-Match`, because a browser that has been told `immutable`
-        may still revalidate — a hard reload does — and answering 200 with 1.9 MB to a
-        question the ETag already settles would waste exactly what this route exists to
-        save. The tag costs no read here: it is the name's own first 32 hex.
+        WITHOUT `v` IT IS `no-cache` over a content digest, the slot route's own posture: an
+        unversioned address cannot say which bytes it means after a re-shoot.
         """
-        blob, etag = do_photo_by_card(cid)
-        headers = (
-            ("ETag", etag),
-            ("Cache-Control", "public, max-age=31536000, immutable"),
-        )
-        offered = [
-            tag.strip()
-            for tag in (self.headers.get("If-None-Match") or "").split(",")
-            if tag.strip()
-        ]
-        fresh = "*" in offered or etag in [
-            tag[2:] if tag.startswith("W/") else tag for tag in offered
-        ]
-        if fresh:
+        query = parse_qs(urlparse(self.path).query)
+        version = (query.get("v") or [None])[0]
+        blob, etag = do_photo_by_card(cid, self.headers.get("If-None-Match"), version)
+        control = "public, max-age=31536000, immutable" if version else "no-cache"
+        headers = (("ETag", etag), ("Cache-Control", control))
+        if blob is None:
             self.send_response(int(HTTPStatus.NOT_MODIFIED))
             for header, value in self._cors_headers():
                 self.send_header(header, value)

@@ -418,9 +418,7 @@ export function CardPane({ row, game, place = null, dimmed = false, preChips, po
  * response and the inventory re-read that carries the new `capture_id` onto the row. Moved
  * from `BoxBrowse.tsx` whole — see that file's history for the measurement this rests on. */
 export function photoSrc(row: Row, nonce: string | null): string {
-  const base = photoUrl(row.card.box, row.card.index, row.card.cid)
-  const stamp = nonce ?? row.card.capture_id
-  return stamp === null ? base : `${base}?card=${encodeURIComponent(stamp)}`
+  return photoUrl(row.card.box, row.card.index, row.card, nonce)
 }
 
 export type PhotoPanelProps = {

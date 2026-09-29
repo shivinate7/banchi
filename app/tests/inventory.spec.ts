@@ -2943,7 +2943,7 @@ test('a departed card draws no number, and the cards behind it count past it', a
    * D58 that is invisible on screen and load-bearing everywhere else: the sixth row draws
    * `Card 1` of section 2 and its photograph is still `/photo/2/6`. Nothing was renamed. */
   await page.locator('.browse-row').nth(5).click()
-  await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/2\/6\?card=cap-6$/)
+  await expect(page.locator('.browse-photo')).toHaveAttribute('src', /\/photo\/2\/6\?v=cap-6$/)
   await expect(page.locator('.card-locations-row.is-current .card-locations-label .card-locations-identity')).toHaveAttribute(
     'aria-label',
     'Box 2, Section 2, Card 1',
@@ -3588,7 +3588,7 @@ test('and the photograph follows the shift, because the URL names the capture', 
 
   /* Before: the slot's URL carries the id of the card standing in it. */
   const photo = page.locator('.browse-photo')
-  await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?card=cap-3$/)
+  await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?v=cap-3$/)
 
   await openCardOps(page)
   await page.getByRole('menuitem', { name: 'Remove' }).click()
@@ -3598,7 +3598,7 @@ test('and the photograph follows the shift, because the URL names the capture', 
      is re-fetched rather than reused. The facts beside it moved on their own and always
      did; it is the photograph that used to lie. */
   await expect(page.locator('.browse-about')).toContainText('Eiscue')
-  await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?card=cap-slid-into-3$/)
+  await expect(photo).toHaveAttribute('src', /\/photo\/2\/3\?v=cap-slid-into-3$/)
 })
 
 /* AND WHERE THE ROW CARRIES A NAME, THE ADDRESS IS THE NAME (D172).
@@ -3648,7 +3648,7 @@ test('a card whose row carries a name is addressed by the name, stamp and all', 
 
   await expect(page.locator('.browse-photo')).toHaveAttribute(
     'src',
-    new RegExp(`/photo/by-card/${NAME}\\?card=cap-1$`),
+    new RegExp(`/photo/by-card/${NAME}\\?v=cap-1$`),
   )
 })
 
@@ -3704,13 +3704,13 @@ test('a name that names no photograph falls back to the slot address', async ({ 
   await page.locator('.browse-row', { hasText: 'Thievul' }).first().click()
   await expect(page.locator('.browse-photo')).toHaveAttribute(
     'src',
-    /\/photo\/2\/1\?card=cap-1$/,
+    /\/photo\/2\/1\?v=cap-1$/,
   )
 
   await page.locator('.browse-row', { hasText: 'Nickit' }).first().click()
   await expect(page.locator('.browse-photo')).toHaveAttribute(
     'src',
-    /\/photo\/2\/2\?card=cap-2$/,
+    /\/photo\/2\/2\?v=cap-2$/,
   )
 })
 

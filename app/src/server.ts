@@ -359,8 +359,11 @@ export function describeFailure(err: unknown): Failure {
  * is FILED under the card's own name and `GET /photo/by-card/<cid>` serves it. The URL means
  * one thing forever — a mid-box delete does not change it, an undo does not change it, and two
  * cards cannot share it because `cards_cid` is UNIQUE — so a cache hit is always the right
- * bytes and the validator is a formality rather than the only defence. No caller has to know
- * which capture it is drawing, because the address says.
+ * bytes and the validator is a formality rather than the only defence. ONE CASE MOVES THE BYTES
+ * UNDER THE NAME: a D26 re-shoot writes a new photograph at the same cid. So every by-card URL
+ * carries `?v=<capture_id>`, the one field that moves with the bytes, and a by-card URL with no
+ * version is never built: it falls back to the slot, which revalidates. `photoUrl` is the only
+ * place a photo URL is built, and the only place that stamp is decided.
  *
  * THE SLOT ROUTE IS THE FALLBACK AND IT IS NOT DEPRECATION THEATRE. `runs/<n>/pricing.json`
  * holds 3,629 position records across 12 immutable files, 0 of which carry a cid, and
@@ -381,7 +384,16 @@ export function describeFailure(err: unknown): Failure {
  */
 const PHOTO_CID = /^[0-9a-f]{64}(?:-[1-9][0-9]*)?$/
 
-export function photoUrl(box: number, index: number, cid?: string | null): string {
+export type PhotoRef = { cid?: string | null; capture_id?: string | null }
+
+/* `ref` is any row that carries the card's name and its photograph's version: pass the row.
+ * `nonce` is a version newer than the row (a re-shoot's own response, a capture's revision). */
+export function photoUrl(
+  box: number,
+  index: number,
+  ref?: PhotoRef | null,
+  nonce?: string | null,
+): string {
   /* THE DEMO BUILD HAS NO PHOTO SERVICE, so the same address resolves to a bundled file.
    * `BASE_URL` rather than a leading slash: a static host serves the demo from a
    * subdirectory (`/banchi/` on GitHub Pages), and an absolute path would 404 on every
@@ -394,10 +406,13 @@ export function photoUrl(box: number, index: number, cid?: string | null): strin
    * 404 every photograph on the published page. Moving the demo onto the name is a
    * coordinated change to the seed and the recorded bundle, not a change to this line. */
   if (DEMO) return `${import.meta.env.BASE_URL}demo/photos/${box}/${index}.jpg`
-  if (cid !== undefined && cid !== null && PHOTO_CID.test(cid)) {
-    return `${base}/photo/by-card/${cid}`
+  const version = nonce ?? ref?.capture_id ?? null
+  const stamp = version === null ? '' : `?v=${encodeURIComponent(version)}`
+  const cid = ref?.cid
+  if (cid !== undefined && cid !== null && PHOTO_CID.test(cid) && version !== null) {
+    return `${base}/photo/by-card/${cid}${stamp}`
   }
-  return `${base}/photo/${box}/${index}`
+  return `${base}/photo/${box}/${index}${stamp}`
 }
 
 /**
@@ -3263,7 +3278,7 @@ export async function getHoldingsValue(range: HoldingsRange = 'month'): Promise<
 
 /** One SKU's answer from `getSkuPhotos` — the first on-hand copy of that SKU that still
  *  carries a photograph, exactly `photoUrl`'s own `(box, index, cid)` triple. */
-export type SkuPhotoEntry = { box: number; index: number; cid: string | null }
+export type SkuPhotoEntry = { box: number; index: number; cid: string | null; capture_id?: string | null }
 
 /** `getSkuPhotos`'s own answer, two fields so the caller knows which kind of photo it has
  *  (F2, the owner: "why does the sales page not pull the icons like you're able to do on

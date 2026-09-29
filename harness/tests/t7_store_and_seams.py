@@ -209,6 +209,7 @@ from decimal import Decimal
 from fractions import Fraction
 from http import HTTPStatus
 from pathlib import Path
+from unittest import mock
 from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -4721,6 +4722,7 @@ def check_queues(checks: Checks) -> None:
                 "age_days",
                 "box",
                 "candidates",
+                "capture_id",
                 "cid",
                 "cleared_by_human",
                 "confidence",
@@ -4735,7 +4737,7 @@ def check_queues(checks: Checks) -> None:
                 "reason",
             ],
             "a queue row is the whole QueueEntry record plus age_days, the card's place block "
-            "and its stable name (the review pill opens THIS card, LOC-12) — not a projection "
+            "its stable name (the review pill opens THIS card, LOC-12) and the photograph's version (`photoUrl`'s `?v=`) — not a projection "
             "the app has to hold against review.json field by field",
         )
         checks.equal(
@@ -12884,6 +12886,105 @@ def check_photo_cache(checks: Checks) -> None:
                 "under a new ETag, so the next request revalidates against the right "
                 "photograph rather than the one that was deleted",
             )
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
+
+    # -------------------------------------- by-card: versioned, 304 without a read, re-shoot
+    # `?v=<capture_id>` versions the address. A matching revalidation is a 304 that never READS
+    # the file. A D26 re-shoot writes new bytes under the SAME cid, and the new version must
+    # get the new bytes, with the OLD tag answered 200. No version means `no-cache` over a
+    # content digest, never `immutable`.
+    with isolated_home():
+        capture_server.do_capture(
+            {"box": 3, "capture_id": "q1", "image": blob(9), "set_hint": "sv9"}
+        )
+        cid = next(iter(Store().read().inventory.cards.values())).cid
+        httpd = capture_server.CaptureServer(("127.0.0.1", 0), QuietHandler)
+        port = httpd.server_address[1]
+        thread = _spawn_server(httpd)
+        reads: List[str] = []
+        real = Path.read_bytes
+
+        def counting(self: Path) -> bytes:
+            if cid[:16] in str(self):
+                reads.append(str(self))
+            return real(self)
+
+        url = f"/photo/by-card/{cid}"
+        try:
+            with mock.patch.object(Path, "read_bytes", counting):
+                status, body, headers = request(port, "GET", f"{url}?v=q1")
+                checks.equal(status, 200, "by-card with a version answers 200 with the bytes")
+                checks.ok(
+                    "immutable" in (headers.get("Cache-Control") or ""),
+                    "and is immutable, because the URL names the version",
+                )
+                old_tag = headers.get("ETag")
+                reads.clear()
+                status, body, headers = request(
+                    port, "GET", f"{url}?v=q1", extra_headers={"If-None-Match": old_tag}
+                )
+                checks.equal(status, 304, "a matching If-None-Match answers 304")
+                checks.equal(body, b"", "with no body")
+                checks.equal(reads, [], "and the 304 never READ the photograph")
+                checks.equal(
+                    (headers.get("Connection") or "").lower(),
+                    "close",
+                    "and still says Connection: close (DEBT11: a kept socket holds a worker)",
+                )
+                reshot = b"\xff\xd8\xff" + bytes([77]) * 64
+                capture_server.do_reshoot(
+                    3, 1, {"capture_id": "q2", "image": base64.b64encode(reshot).decode("ascii")}
+                )
+                status, body, headers = request(
+                    port, "GET", f"{url}?v=q2", extra_headers={"If-None-Match": old_tag}
+                )
+                checks.equal(
+                    status, 200, "AFTER A RE-SHOOT THE OLD TAG ON THE NEW VERSION IS 200, NOT 304"
+                )
+                checks.equal(body, reshot, "and the bytes are the new photograph's")
+                checks.ok(headers.get("ETag") not in (None, old_tag), "under a new ETag")
+                status, body, headers = request(port, "GET", url)
+                checks.equal(body, reshot, "an unversioned request gets the current bytes")
+                checks.equal(
+                    headers.get("Cache-Control"),
+                    "no-cache",
+                    "and is never immutable: it cannot say which version it means",
+                )
+                status, _, _ = request(
+                    port, "GET", url, extra_headers={"If-None-Match": headers.get("ETag")}
+                )
+                checks.equal(status, 304, "its digest tag still revalidates to 304")
+                # The id is the version in `?v=`: new bytes under the card's CURRENT id would
+                # sit behind an immutable URL for a year. Same bytes stay an idempotent replay.
+                caught = checks.raises(
+                    capture_server.BadRequest,
+                    lambda: capture_server.do_reshoot(
+                        3,
+                        1,
+                        {
+                            "capture_id": "q2",
+                            "image": base64.b64encode(b"\xff\xd8\xff" + bytes([88]) * 64).decode(
+                                "ascii"
+                            ),
+                        },
+                    ),
+                    "a re-shoot with the card's CURRENT capture_id and different bytes refuses",
+                )
+                if caught is not None:
+                    checks.equal(
+                        getattr(caught, "code", None), "capture_id_in_use", "in its own code"
+                    )
+                capture_server.do_reshoot(
+                    3, 1, {"capture_id": "q2", "image": base64.b64encode(reshot).decode("ascii")}
+                )
+                checks.equal(
+                    request(port, "GET", f"{url}?v=q2")[1],
+                    reshot,
+                    "and the same bytes replay cleanly",
+                )
         finally:
             httpd.shutdown()
             httpd.server_close()
