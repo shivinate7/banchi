@@ -1,3 +1,5 @@
+// Protects: The shipping export routes rows into three lanes and never reaches the capture server.
+// Governs: D16, D61, D63, D117, D196, D218, D292
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { batchOf, order as orderRow, payloadOf, shippingRow as row } from './routeFixtures'

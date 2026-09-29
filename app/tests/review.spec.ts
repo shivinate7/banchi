@@ -1,3 +1,5 @@
+// Protects: Review shows the photograph beside the choices and lets the owner resolve each card in the queue.
+// Governs: D23, D24, D28, D32, D46, D77, D118, D218
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'
@@ -1599,6 +1601,30 @@ test('a store with no recorded spend draws the strip with no figure rather than 
   await runsReads(page, [runRow({ usage: {} })], keysOf(1))
   await open(page)
   await expect(page.locator('.review-identify-strip-said')).toHaveText('Identify 1 card')
+})
+
+/* A REFUSED COUNT IS SAID, NOT SWALLOWED. The server refuses `/pipeline/waiting` over a claim it
+ * cannot read; the strip's place shows that sentence instead of vanishing. PROVED RED: with the
+ * old `.catch(() => setPending([]))` no `.review-identify-refusal` is drawn. */
+test('the Identify strip says why when the server refuses to count', async ({ page }) => {
+  await waiting(page, 3)
+  await runsReads(page, PAST, [])
+  await page.route(/\/pipeline\/waiting$/, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'claim_unreadable',
+          message: 'A live submission claim will not parse and would stop protecting its cards: sub-1. A claim that cannot be read cannot say which cards it holds, so no send can start until it is fixed. Nothing in this send was started.',
+        },
+      }),
+    }),
+  )
+  await open(page)
+  const notice = page.locator('.review-identify-refusal')
+  await expect(notice).toContainText('will not parse')
+  await expect(page.locator('.review-identify-strip')).toHaveCount(0)
 })
 
 /* THE STRIP COUNTS WHAT THE SPEND COUNTS. `/status` says 14 cards are in the captured state, but

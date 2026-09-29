@@ -995,6 +995,18 @@ export function Gallery() {
             </div>
           </Section>
 
+          <Section id="kit-icon-glyphs" data-kit-section="icon-glyphs" className="kit-section" title="Icon button, every glyph" lede="Each icon in the set at one face, so a glyph that sits off its button centre shows here.">
+            <div className="kit-grid">
+              <Spec label="the whole set">
+                <div className="kit-row kit-row-wrap" data-icon-glyphs>
+                  {ICON_NAMES.map((name: IconName) => (
+                    <IconButton key={name} icon={name} label={name} size="xl" />
+                  ))}
+                </div>
+              </Spec>
+            </div>
+          </Section>
+
           <Section id="kit-kbd" data-kit-section="kbd" className="kit-section" title="Keycaps" lede="A keycap sits after its label. On a touch screen a key hint leaves as a whole phrase.">
             <div className="kit-grid">
               <Spec label="kbd">

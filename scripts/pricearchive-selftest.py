@@ -2,6 +2,9 @@
 """`store/pricearchive.py` and `pipeline/pricearchive.py`, proved against a throwaway store
 (D219).
 
+Protects: The price-history archive sweeps, stores and reads back correctly with a fake market and no network call.
+Governs: D62, D219, D223, D247
+
 NO NETWORK CALL. `FakeMarket` below is a stand-in for `pipeline/pricehistory.py:Market`,
 duck-typed to the one method `pipeline/pricearchive.py:sweep` calls
 (`readings_for_rows(rows, ranges=...)`), and it answers out of canned

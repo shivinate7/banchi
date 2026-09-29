@@ -1,3 +1,5 @@
+// Protects: The pipeline (identify, join, emit, reconcile) is reachable from a screen, and the button that spends money does not exist until the free preview answers.
+// Governs: D32, D33, D36, D56, D64, D174, D180, D291
 import { test, expect, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { runRow } from './routeFixtures'

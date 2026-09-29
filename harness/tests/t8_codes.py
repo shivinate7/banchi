@@ -1,5 +1,7 @@
 """T8 — The code-card track: QR decode, the product tier, the ledger, and the seam.
 
+Protects: Code-card QR decode is exact, a code is never sold twice, and a premium code never lands in a bulk lot.
+
 NEW 2026-08-30, with C9-C11. It exists as its own failing test name for the reason every
 other one does: a code is a BEARER INSTRUMENT sold to a stranger, and the three ways this
 track can lose money are three different failures that must not hide inside one another.

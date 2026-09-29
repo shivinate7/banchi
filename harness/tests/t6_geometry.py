@@ -1,5 +1,7 @@
 """T6 — Card geometry.
 
+Protects: Card detection finds the card within tolerance across offset, scale and rotation, and refuses when no card is there.
+
 New with batch script v2. The crop-retry path is only as good as its ability to find the
 card in the frame: a wrong crop produces a miss indistinguishable from a bad read, and it
 does it confidently. So detection gets its own failing test name rather than hiding inside

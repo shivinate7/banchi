@@ -1,5 +1,8 @@
 """T11 — The order walk plan: the fewest drawers that fill a ticked set of orders.
 
+Protects: The order walk plan opens the fewest drawers that fill the ticked orders and never asks for a copy that is not in the drawer it names.
+Governs: D24
+
 NEW 2026-09-17, with `pipeline/walkplan.py` and `docs/specs/order-walk-plan.md`. It exists as
 its own failing test name because a solver is the kind of code that is confidently wrong in a
 way no screen reveals: a plan that is one drawer too long, or that asks for a copy that is not

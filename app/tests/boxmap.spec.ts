@@ -1,3 +1,5 @@
+// Protects: The box map edit mode queues every drag as a draft, writes nothing until Confirm, and then sends the whole draft as one request with fresh digests.
+// Governs: D264
 import { test, expect, type Page } from '@playwright/test'
 import type { BoxRecord, SectionDetail, SectionMoveBatchResult } from '../src/types'
 import { settleFonts } from './fontsReady'

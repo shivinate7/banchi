@@ -2,6 +2,8 @@
 """`pipeline/pricehistory.py`'s cache lifetimes, proved against a fake clock and a counting
 fetcher — no network, no disk cache directory (DEBT34).
 
+Protects: Catalog answers never expire from the cache while current prices keep their own finite lifetime.
+
 THE RULING THIS PROVES. The owner: the set of cards in a catalogue set does not change from
 pull to pull, so `CATALOG_TTL_SECONDS` (categories/groups/products) never expires.
 `Market.prices` answers CURRENT prices, which move daily, and keeps its own separate,

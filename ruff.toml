@@ -1,8 +1,6 @@
 # D82's config, not a default install. `target-version` matters more than the ruleset: it is
-# what makes pyupgrade-family rules (off, below) refuse to suggest PEP 604 syntax that is a
-# runtime TypeError on the 3.9.6 this repo pins (requirements.txt's zxing-cpp comment). Ruff's
-# own zero-config default assumes a newer interpreter and would mark those rewrites "safe."
-target-version = "py39"
+# what tells ruff which syntax the repo may use. It is py312 to match the venv (`make venv`) and CI.
+target-version = "py312"
 
 [lint]
 # pyflakes + the basic pycodestyle errors, plus bugbear and flake8-simplify. NOT ruff's
@@ -18,6 +16,10 @@ target-version = "py39"
 #           fix broke `make harness` (T3/T4/T7, `TypeError: 'module' object is not
 #           iterable`) before it was caught and reverted.
 select = ["E4", "E7", "E9", "F", "B", "SIM"]
+# B905 (zip without strict=) exists only under py310+. It is ignored on purpose: the stdlib-only
+# scripts run under a bare `python3` (the rig's 3.9.6 system Python), where `zip(strict=)` is a
+# TypeError (measured: scripts/docs-audit.py). 50 sites, all left with the old truncating behaviour.
+ignore = ["B905"]
 
 # scripts/ste/ste_lint.py is VENDORED, byte-for-byte, from $HOME/.claude/lint/ste_lint.py
 # (D226). Its rules are not edited by this repo, so a finding inside it is not

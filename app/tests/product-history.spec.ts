@@ -1,3 +1,5 @@
+// Protects: The product history draws market prices and the owner's own sales as two different shapes, and leaves the deep link cleanly.
+// Governs: D62, D227, D278
 import { test, expect, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 

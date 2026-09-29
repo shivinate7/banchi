@@ -1,3 +1,5 @@
+// Protects: The icon button keeps its 40px hit area, unclipped tooltip, no ghost click after a long press, readable toast close and correct glyph size.
+// Governs: D118, D288
 import { test, expect } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleMotion } from './motionSettled'
@@ -303,4 +305,52 @@ test('the anchor form draws the same face, hit area and tooltip as the button fo
   await popup.close()
   const clicks = await page.evaluate(() => window.__iconClicks)
   expect(clicks, 'a click just outside the visual face did not reach the anchor — the 40px floor is not there').toBe(1)
+})
+
+/* SIZE AND CENTRING, EVERY GLYPH (owner's word, 2026-09-29; F7 of PLAN-PR4-PR5). The gallery's
+ * `data-icon-glyphs` row draws every icon in the set in one xl IconButton. The glyph's centre
+ * is read two ways because neither alone is optical: the geometric centre of its bounding box,
+ * and the centroid of its ink (an alpha-weighted render, the measure the lock's re-centring
+ * used). The button centre must lie between the two, within GLYPH_TOL_PX. A triangle's ink
+ * sits off its box centre by design, so the pair brackets the answer where one number alone
+ * would fail `play`. A glyph that fails is fixed by a rigid shift of its path in `Icon.tsx`,
+ * the lock's mechanism, never by a per-screen nudge. */
+const GLYPH_TOL_PX = 0.3
+
+test('every glyph in an xl button: one box size, one glyph size, centre between its box centre and its ink centre', async ({ page }) => {
+  const rows = await page.evaluate(async () => {
+    const out: { n: string; w: number; h: number; gw: number; gh: number; ex: number; ey: number }[] = []
+    for (const b of document.querySelectorAll('[data-icon-glyphs] .bn-icon-btn')) {
+      const s = b.querySelector('svg') as SVGSVGElement
+      const r = b.getBoundingClientRect()
+      const sr = s.getBoundingClientRect()
+      const src = new XMLSerializer().serializeToString(s).replace('currentColor', '#000').replace(/width="[^"]*"/, 'width="240"').replace(/height="[^"]*"/, 'height="240"')
+      const img = new Image()
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(src)
+      await img.decode()
+      const c = document.createElement('canvas')
+      c.width = c.height = 240
+      const x = c.getContext('2d') as CanvasRenderingContext2D
+      x.drawImage(img, 0, 0)
+      const d = x.getImageData(0, 0, 240, 240).data
+      let m = 0, sx = 0, sy = 0
+      for (let j = 0; j < 240; j++) for (let i = 0; i < 240; i++) { const a = d[(j * 240 + i) * 4 + 3] ?? 0; m += a; sx += a * (i + 0.5); sy += a * (j + 0.5) }
+      const k = sr.width / 240
+      const kk = sr.width / 24
+      const bb = s.getBBox()
+      const ox = sr.x + sr.width / 2 - r.x - r.width / 2
+      const oy = sr.y + sr.height / 2 - r.y - r.height / 2
+      const cx = (sx / m - 120) * k + ox, cy = (sy / m - 120) * k + oy
+      const bx = (bb.x + bb.width / 2 - 12) * kk + ox, by = (bb.y + bb.height / 2 - 12) * kk + oy
+      // How far the button centre (0) lies outside the span of the two readings, per axis.
+      const out1 = (a: number, b2: number) => Math.max(0, Math.min(a, b2), -Math.max(a, b2))
+      out.push({ n: b.getAttribute('aria-label') ?? '?', w: Math.round(r.width), h: Math.round(r.height), gw: Math.round(sr.width), gh: Math.round(sr.height), ex: out1(cx, bx), ey: out1(cy, by) })
+    }
+    return out
+  })
+  expect(rows.length, 'the glyph row drew no buttons').toBeGreaterThan(50)
+  const odd = rows.filter((r) => r.w !== 40 || r.h !== 40 || r.gw !== 18 || r.gh !== 18)
+  expect(odd.map((r) => `${r.n} ${r.w}x${r.h} glyph ${r.gw}x${r.gh}`), 'a button or glyph off the xl size').toEqual([])
+  const off = rows.filter((r) => r.ex > GLYPH_TOL_PX || r.ey > GLYPH_TOL_PX)
+  expect(off.map((r) => `${r.n}: ${r.ex.toFixed(2)}px x, ${r.ey.toFixed(2)}px y outside`), 'glyphs sitting off their button centre').toEqual([])
 })

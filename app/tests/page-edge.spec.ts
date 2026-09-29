@@ -1,3 +1,5 @@
+// Protects: Every screen starts its content at one shared left edge, whatever its width cap.
+// Governs: D5, D197
 import { test, expect, type Page } from '@playwright/test'
 import { routesFromNav } from './routes'
 import { settleFonts } from './fontsReady'

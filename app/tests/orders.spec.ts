@@ -1,3 +1,5 @@
+// Protects: Orders groups by buyer, walks each order, sends a pull with the pressed row's capture id, and shows all six unfillable reasons.
+// Governs: D91, D96, D113, D114, D118, D132, D193, D203
 import { test, expect, type Locator, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { line, order, payloadOf, pick, place } from './routeFixtures'

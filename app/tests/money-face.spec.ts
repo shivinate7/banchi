@@ -1,3 +1,5 @@
+// Protects: Every dollar figure on every screen draws in the mono face.
+// Governs: D221
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'

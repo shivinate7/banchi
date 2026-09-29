@@ -1,3 +1,5 @@
+// Protects: Buttons of the same role that stack in one panel share one width.
+// Governs: D195
 import { test, expect } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { routesFromNav } from './routes'

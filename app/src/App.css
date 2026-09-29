@@ -227,7 +227,7 @@
    ancestor (`.bn-drawer` is a `.bn-sheet`) is exactly the shape that has a history of getting it
    wrong across engines. Explicit costs nothing and removes the dependency on the default. */
 .bn-nav { display: flex; flex-direction: column; gap: var(--bn-1); flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-top: var(--bn-2); }
-.bn-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.bn-nav-group { display: flex; flex-direction: column; gap: var(--bn-0-5); }
 .bn-nav-group + .bn-nav-group { margin-top: var(--bn-3); }
 .bn-nav-group-label {
   padding: var(--bn-1) var(--bn-3);
@@ -364,7 +364,7 @@
   left: calc(100% + 10px);
   top: 50%;
   transform: translateY(-50%) translateX(-4px);
-  padding: 4px 8px;
+  padding: var(--bn-1) var(--bn-2);
   border-radius: var(--bn-r-sm);
   background: var(--bn-ink);
   color: var(--bn-bg);
@@ -684,7 +684,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
   from { opacity: 0; transform: translateX(-50%) translateY(-4px) scale(0.98); }
   to { opacity: 1; transform: translateX(-50%); }
 }
-.bn-whichkey-title { font-size: var(--bn-fs-sm); opacity: 0.7; margin-bottom: var(--bn-2); display: flex; align-items: center; gap: 6px; }
+.bn-whichkey-title { font-size: var(--bn-fs-sm); opacity: 0.7; margin-bottom: var(--bn-2); display: flex; align-items: center; gap: var(--bn-1-5); }
 .bn-whichkey-grid { display: grid; grid-template-columns: repeat(5, auto); gap: var(--bn-2) var(--bn-4); }
 .bn-whichkey-item { display: inline-flex; align-items: center; gap: var(--bn-2); font-size: var(--bn-fs-md); font-weight: 500; white-space: nowrap; }
 .bn-whichkey .bn-kbd { background: transparent; color: var(--bn-accent); border-color: currentColor; }
@@ -722,7 +722,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 3px;
+    gap: var(--bn-0-75);
     color: var(--bn-ink-3);
     font-size: var(--bn-fs-2xs);
     font-weight: 600;
@@ -841,7 +841,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
 }
 .app-keys-group-title .bn-icon { color: var(--bn-ink-3); }
 .app-keys-where {
-  margin: 4px 0 var(--bn-3);
+  margin: var(--bn-1) 0 var(--bn-3);
   font-size: var(--bn-fs-xs);
   line-height: 1.5;
   color: var(--bn-ink-3);
@@ -849,7 +849,7 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
 .app-keys-goto {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--bn-0-75);
   color: var(--bn-accent);
   font-weight: 600;
   text-decoration: none;
@@ -865,8 +865,8 @@ button.bn-nav-link { width: 100%; text-align: left; cursor: pointer; }
   align-items: baseline;
 }
 .app-keys-row { display: contents; }
-.app-keys-caps { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.app-keys-cap { display: inline-flex; align-items: center; gap: 4px; }
+.app-keys-caps { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1); }
+.app-keys-cap { display: inline-flex; align-items: center; gap: var(--bn-1); }
 .app-keys-join { font-size: var(--bn-fs-2xs); color: var(--bn-ink-3); }
 .app-keys-does { font-size: var(--bn-fs-md); line-height: 1.45; color: var(--bn-ink-2); }
 .app-keys-when { display: block; font-size: var(--bn-fs-xs); color: var(--bn-ink-3); }

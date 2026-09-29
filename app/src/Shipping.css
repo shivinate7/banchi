@@ -137,7 +137,7 @@
 .shipping-file-title { font-family: var(--bn-font-mono); font-size: var(--bn-fs-base); font-weight: 600; color: var(--bn-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .shipping-file-meta { font-size: var(--bn-fs-sm); color: var(--bn-ink-3); line-height: 1.45; }
 /* D218: the count, the memory note and the disk note are sibling spans; the seam is CSS. */
-.shipping-file-meta > span:not(:first-child)::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.shipping-file-meta > span:not(:first-child)::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 .shipping-file-actions { grid-column: 2; display: flex; gap: var(--bn-2); flex-wrap: wrap; }
 .shipping-file-row { display: flex; align-items: baseline; gap: var(--bn-2); flex-wrap: wrap; }
 .shipping-file-name { font-family: var(--bn-font-mono); font-size: var(--bn-fs-base); font-weight: 600; color: var(--bn-ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -155,7 +155,7 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--bn-1-5);
   font-size: var(--bn-fs-sm);
   font-weight: 600;
   color: var(--bn-ink-2);
@@ -248,7 +248,7 @@
 .shipping-row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--bn-1-5);
   padding: var(--bn-3) var(--bn-4);
   border-radius: var(--bn-r-lg);
   background: var(--bn-surface);
@@ -259,7 +259,7 @@
 .shipping-row:hover { box-shadow: var(--bn-shadow-2); transform: translateY(-1px); }
 .shipping-row-unjudged { box-shadow: inset 3px 0 0 var(--bn-warn), var(--bn-shadow-1); }
 .shipping-row-unjudged:hover { box-shadow: inset 3px 0 0 var(--bn-warn), var(--bn-shadow-2); }
-.shipping-row-top { display: flex; align-items: center; justify-content: space-between; gap: 4px var(--bn-2); flex-wrap: wrap; }
+.shipping-row-top { display: flex; align-items: center; justify-content: space-between; gap: var(--bn-1) var(--bn-2); flex-wrap: wrap; }
 .shipping-order { font-family: var(--bn-font-mono); font-size: var(--bn-fs-sm); font-weight: 600; color: var(--bn-ink); overflow-wrap: anywhere; }
 /* TXT-03: the word moved off every card and into the legend above the lanes (`.shipping-quality-legend`)
    and this icon's own tooltip/accessible name. The icon alone is the face now. */
@@ -281,20 +281,20 @@
 }
 .shipping-quality-legend .bn-icon:first-child { color: var(--bn-ok); }
 .shipping-says { font-size: var(--bn-fs-md); color: var(--bn-ink-2); line-height: 1.4; }
-.shipping-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.shipping-figures { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.shipping-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--bn-1-5); }
+.shipping-figures { display: inline-flex; flex-wrap: wrap; gap: var(--bn-1-5); }
 .shipping-figure {
   font-size: var(--bn-fs-xs);
   font-weight: 600;
   color: var(--bn-ink);
   font-variant-numeric: tabular-nums;
-  padding: 3px 7px;
+  padding: var(--bn-0-75) 7px;
   border-radius: var(--bn-r-xs);
   background: var(--bn-surface-2);
   white-space: nowrap;
 }
-.shipping-row-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--bn-2); padding-top: 4px; border-top: 1px solid var(--bn-line); margin-top: 2px; }
-.shipping-stamp { display: inline-flex; align-items: center; gap: 6px; font-size: var(--bn-fs-sm); font-weight: 500; color: var(--bn-ink); }
+.shipping-row-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--bn-2); padding-top: var(--bn-1); border-top: 1px solid var(--bn-line); margin-top: var(--bn-0-5); }
+.shipping-stamp { display: inline-flex; align-items: center; gap: var(--bn-1-5); font-size: var(--bn-fs-sm); font-weight: 500; color: var(--bn-ink); }
 .shipping-stamp .bn-icon { color: var(--bn-accent); }
 .shipping-pull { display: inline-flex; align-items: center; gap: 5px; font-size: var(--bn-fs-xs); font-weight: 600; color: var(--bn-accent); white-space: nowrap; }
 .shipping-pull-done { color: var(--bn-ok); }

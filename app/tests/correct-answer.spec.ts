@@ -1,3 +1,5 @@
+// Protects: The "this answer was wrong" listing-correction control is reachable on Inventory and sends the correction.
+// Governs: D46, D252
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'

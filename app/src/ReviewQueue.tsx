@@ -764,6 +764,8 @@ export function ReviewQueue() {
    * waiting photograph and takes about a minute over five hundred cards. */
   const [status, setStatus] = useState<ServerStatus | null>(null)
   const [pending, setPending] = useState<readonly string[]>([])
+  /* A REFUSAL TO COUNT IS SAID IN THE STRIP'S OWN PLACE, never a silent empty list. */
+  const [pendingFailure, setPendingFailure] = useState<Failure | null>(null)
   const [rate, setRate] = useState<number | null>(null)
   useEffect(() => {
     let live = true
@@ -790,15 +792,20 @@ export function ReviewQueue() {
   useEffect(() => {
     if (!ask) {
       setPending([])
+      setPendingFailure(null)
       return
     }
     let live = true
     void waitingCards(openingSelection(carried))
       .then((answer) => {
-        if (live) setPending(answer.keys)
+        if (!live) return
+        setPending(answer.keys)
+        setPendingFailure(null)
       })
-      .catch(() => {
-        if (live) setPending([])
+      .catch((err: unknown) => {
+        if (!live) return
+        setPending([])
+        setPendingFailure(describeFailure(err))
       })
     return () => {
       live = false
@@ -1580,6 +1587,11 @@ export function ReviewQueue() {
           Both presses keep their words, because both are about money. "Identify now" takes
           the one solid fill, because it is the press that spends and must read as the loud
           one. "Check first" is ghost beside it. */}
+      {pendingFailure === null ? null : (
+        <Notice tone={failureTone(pendingFailure)} title={pendingFailure.message} code={pendingFailure.code} className="review-identify-refusal">
+          The cards waiting to be read could not be counted, so nothing can be identified from here yet.
+        </Notice>
+      )}
       {captured === 0 ? null : (
         <div className="review-identify-strip">
           <span className="review-identify-strip-said">

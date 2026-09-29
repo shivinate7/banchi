@@ -38,7 +38,7 @@
 .position-bar-track {
   position: relative;
   display: flex;
-  gap: 2px;
+  gap: var(--bn-0-5);
   width: 100%;
   height: var(--pb-track);
   min-width: 0;
@@ -177,7 +177,7 @@
 /* THE QUALIFIER BESIDE THE POSITION, drawn with a CSS dot rather than a typed one (D218) —
    `#20 · where this sits in the box is not known yet` and `#40 of 250 · 16% in` are each two
    facts, never one joined string. */
-.position-bar-text-detail::before { content: '·'; margin: 0 6px; color: var(--bn-ink-4); }
+.position-bar-text-detail::before { content: '·'; margin: 0 var(--bn-1-5); color: var(--bn-ink-4); }
 
 /* ---- the second scale: the section, as a ruler --------------------------------------------
    THE SECTION IS THE SUBJECT AND THE BOX IS THE CONTEXT. Four bands, and the visual order is
@@ -239,7 +239,7 @@
    `step` cards wide even where that division is fractional. */
 .position-bar-rule {
   position: absolute;
-  inset: 0 2px;
+  inset: 0 var(--bn-0-5);
   pointer-events: none;
   background-image:
     repeating-linear-gradient(
@@ -369,7 +369,7 @@
 .position-bar-cap-fact + .position-bar-cap-fact::before,
 .position-bar-cap-tail > .position-bar-cap-fact:first-child::before {
   content: '·';
-  margin: 0 6px;
+  margin: 0 var(--bn-1-5);
   color: var(--bn-ink-4);
 }
 /* NO DOT WITH NOTHING BEFORE IT. `.position-bar-cap-head` is omitted, not drawn empty, when the

@@ -1,3 +1,5 @@
+// Protects: The Inventory "By set" view shows one set at a time, switches by picker, takes quantity from the server, and opens the box walk on a tap.
+// Governs: D172, D264, D285, D293, D301
 import { test, expect } from '@playwright/test'
 
 import { sealEveryTest } from './shell'

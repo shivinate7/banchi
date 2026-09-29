@@ -1,5 +1,7 @@
 """T2 — Fixture round-trip.
 
+Protects: Writing an import file changes exactly the two writable fields and keeps the unquoted header, quoted fields and CRLF line ends.
+
 Load fixtures/sv09_export_untouched.csv, fill `Add to Quantity` and `TCG Marketplace Price`
 on sample rows, write, re-parse.
 

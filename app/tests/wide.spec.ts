@@ -1,3 +1,5 @@
+// Protects: Screens stay balanced at 1920px and 2560px wide, with no starved field or unbounded prose line.
+// Governs: D27, D123, D275
 import { test, expect, type Page } from '@playwright/test'
 import { routesFromNav } from './routes'
 import { settleFonts } from './fontsReady'

@@ -321,6 +321,37 @@ sheet now, it is reachable from the command palette (never the nav), and `make s
 renders it. `app/tests/fulfillment.spec.ts`'s pull-confirm describe block measures three of
 the Fulfillment floors on its pull-confirm specimens.
 
+## Spacing relations (F6, owner's word 2026-09-29)
+
+Measured over `app/src/**/*.css` on 2026-09-29, 40 stylesheets: 359 spacing literals sat on a
+`--bn-*` rung and are now `var(--bn-*)` (same pixels). 96 sit on no rung and stay pinned. The
+scale is `--bn-0-5` 2, `--bn-0-75` 3, `--bn-1` 4, `--bn-1-5` 6, `--bn-2` 8, `--bn-3` 12,
+`--bn-4` 16, `--bn-5` 20, `--bn-6` 24, `--bn-7` 32, `--bn-8` 40, `--bn-9` 48, `--bn-10` 64.
+
+Off the scale today, by value: 1px (24, hairline nudges), 10px (22), 5px (21), 7px (11),
+14px (4), 30px (4), 18px (2), and one each of 9, 19, 36, 60, 104, -9, -11, -12. Inline styles in
+`.tsx`: 3 spacing-shaped literals, measured and never gated.
+
+One rung per relation. A new rule picks the rung for its relation, never a nearby number:
+
+| Relation | Token | Px |
+|---|---|---|
+| icon to its text, inside one control | `--bn-1-5` | 6 |
+| label to its control (stacked) | `--bn-1` | 4 |
+| control to control, one row | `--bn-2` | 8 |
+| row to row, in a list or card | `--bn-3` | 12 |
+| block to block, in one section | `--bn-4` | 16 |
+| section to section | `--bn-6` | 24 |
+| optical nudge (a glyph, a badge) | `--bn-0-5`, `--bn-0-75` | 2, 3 |
+
+The rung a screen uses today is not always the rung its relation names (gap 6px is the most
+common today, 57 uses, far beyond icon-to-text). Moving one moves pixels, so it is a design
+pass on that screen, not a swap. That pass, and moving the off-scale values, waits for the
+final design review (owner's ruling, 2026-09-28). `make token-literal-check` fails a spacing literal on no rung
+(a `5px`, a `10px`), ratcheted per file in `scripts/token-literal-check.json` under
+`off_scale`, so the list only shrinks. A negative offset whose size is a rung (`-8px`) is on
+the scale. Fix an off-scale value by moving it to the relation's rung and looking at the screen.
+
 ## Motion, and what a control owes the person pressing it
 
 **The motion rule is in `kit.css`'s own header because it is a correctness rule, not a

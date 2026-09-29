@@ -1,3 +1,5 @@
+// Protects: The section ruler never passes its container and scrolls the current section into view.
+// Governs: D155
 import { test, expect, type Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 import { sealEveryTest } from './shell'

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # `make janitor-selftest` — scripts/janitor.py, proved against a throwaway clone.
+# Protects: The janitor removes only what a finished session left behind, proved on a throwaway clone with real worktrees and processes.
+# Governs: D18, D127
 #
 # WHY THIS EXISTS. The janitor deletes worktrees, branches and processes. It cannot be proved
 # against this repo, because the cases worth proving are the destructive ones and the fixture

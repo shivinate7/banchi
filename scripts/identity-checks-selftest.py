@@ -2,6 +2,9 @@
 """`pipeline/identity_checks.py`, proved against literal fixtures — no store, no network
 (D239).
 
+Protects: Each stored-data identity check goes red on its own named defect and stays quiet on clean data.
+Governs: D239, D247
+
 EACH CHECK IS PROVED THE WAY `CLAUDE.md` DEMANDS: shown to catch its own named defect, and
 shown NOT to fire on the clean data beside it. A guard that has never gone red on the thing
 it guards is not trusted here. Four positive arms (one per check, each built from the exact

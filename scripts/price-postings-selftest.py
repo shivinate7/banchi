@@ -2,6 +2,9 @@
 """`store/postings.py` and `store/db.py`'s `price_postings` table, proved against a throwaway
 store (D243).
 
+Protects: The price postings table is append-only, so posting one SKU twice keeps both rows.
+Governs: D243, D244, D247
+
 THE ARM THIS FILE EXISTS FOR is the append-only property itself — the whole value of this
 feature and the one way it silently becomes useless (the task brief's own words). It is proved
 two ways:

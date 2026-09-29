@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """`make cid-selftest` — the card's stable name and the photograph store, proved by violating them.
 
+Protects: A card keeps its stable name, and the photograph store refuses and saves work correctly on a throwaway store.
+Governs: D18, D172, D183
+
 WHY THIS EXISTS. D172 gives a card a name and
 `D183` files its photograph under that name. Both are
 worth exactly what their refusals and their WORK-SAVINGS are worth, and neither can be
@@ -382,7 +385,7 @@ def case_the_four_column_rosters_agree() -> None:
 
     NOTHING RECONCILED THEM AND ONE OF THEM HAD NO READER AT ALL, which is how this case came
     to exist: a mutation arm deleted `cid` from `Inventory.CARDS.column_names` and every
-    suite stayed green. `grep -rn "\.column_names"` across the whole repo returns nothing —
+    suite stayed green. `grep -rn "\\.column_names"` across the whole repo returns nothing —
     `SqliteSource` takes its columns from `db.TABLES[table]`, so that field is a DECLARATION
     with no consumer, on every `TableSpec` in the store and not just this one. D80's rule is
     that a claim with no reader has no way of ever being contradicted; this is the reader.

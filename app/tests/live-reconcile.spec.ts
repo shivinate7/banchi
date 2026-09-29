@@ -1,3 +1,5 @@
+// Protects: The store-wide reconcile against a live export is reachable from a screen, previews without writing, and settles only after the preview answers.
+// Governs: D33, D87, D118, D174, D218
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { settleMotion } from './motionSettled'

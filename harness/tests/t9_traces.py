@@ -1,5 +1,8 @@
 """T9 — The motion trigger against real recorded rig sessions.
 
+Protects: The motion trigger fires correctly on real recorded rig sessions, not only on synthetic frames.
+Governs: D81, D84, D131
+
 NEW 2026-08-31, with D81, and it exists because of one fact: `app/tests/motion.spec.ts` and
 `app/tests/motion-live.spec.ts` were GREEN through all three versions of the card-present
 gate, including the two that were losing cards. They could not have failed. Both draw their

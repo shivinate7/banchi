@@ -47,7 +47,7 @@ DELIBERATELY LEFT OUT, AND WHY (read before adding either back):
     the way `app_src_file_count` already proved it does; only the tokens-per-byte multiplier
     stays a stated, sourced approximation in the prose beside the derived byte count.
   - "218 references live in this tree" (build-order step ids, `n` in docs/map.py). Measured
-    three candidate definitions while building this registry — a bare `step \d+` scan across
+    three candidate definitions while building this registry — a bare `step \\d+` scan across
     tracked markdown alone (241), the same scan restricted to numbers that are actually valid
     `n` ids in docs/map.py (391, across the whole tracked tree) — and none of them lands
     anywhere near 218, because "step" is ordinary English: `docs/specs/store-scaling/

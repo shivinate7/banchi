@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """`make submission-selftest` — the claim table, proved by violating it.
 
+Protects: A second identify press over already-claimed cards is refused, including under concurrent presses.
+Governs: D18, D136
+
 WHY THIS EXISTS. `store/submissions.py` is the only binding in this pipeline that protects a
 dollar: it refuses a second `identify` press over cards a live run has already claimed. That
 claim is worth exactly what its REFUSALS are worth, and a refusal cannot be exercised against
@@ -801,7 +804,78 @@ def case_an_unparseable_live_row_is_refused_not_skipped() -> None:
     check(snap.submissions.unreadable() == [first["receipt"]], "unreadable() names the key")
 
 
+def case_the_press_precheck_refuses_an_unreadable_claim() -> None:
+    """THE COURTESY READ MUST NOT SWALLOW THE STORE'S REFUSAL. `_claim_conflict` once turned
+    the StoreError into "no conflict", so a send passed the pre-check over a claim it could not read."""
+    fresh_store()
+    import sqlite3
+    from http import HTTPStatus
+    from server import pipeline_routes as routes
+    from store import db, files
+
+    first, _ = claim(["6/1"])
+    conn = sqlite3.connect(str(db.path(files.inventory_dir())))
+    conn.execute("UPDATE submissions SET payload = '{\"keys\": 7}' WHERE key = ?", (first["receipt"],))
+    conn.commit()
+    conn.close()
+    try:
+        routes._claim_conflict([])
+        check(False, "_claim_conflict refuses over an unreadable claim (it returned instead)")
+    except routes.PipelineRefusal as exc:
+        check(
+            exc.status == HTTPStatus.CONFLICT and exc.code == "claim_unreadable" and "will not parse" in str(exc),
+            f"_claim_conflict refuses with claim_unreadable: {exc}",
+        )
+
+
+def case_the_waiting_read_refuses_only_for_an_unreadable_claim() -> None:
+    """`do_pipeline_waiting` (Review's Identify strip) must surface the claim refusal for an
+    unreadable claim, and must NOT dress any other StoreError up as one."""
+    fresh_store()
+    import sqlite3
+    from http import HTTPStatus
+    from server import pipeline_routes as routes
+    from store import db, files
+
+    first, _ = claim(["6/1"])
+    conn = sqlite3.connect(str(db.path(files.inventory_dir())))
+    conn.execute("UPDATE submissions SET payload = '{\"keys\": 7}' WHERE key = ?", (first["receipt"],))
+    conn.commit()
+    conn.close()
+    try:
+        routes.do_pipeline_waiting({"selection": {"keys": ["6/1"]}})
+        check(False, "do_pipeline_waiting refuses over an unreadable claim (it returned instead)")
+    except routes.PipelineRefusal as exc:
+        check(
+            exc.status == HTTPStatus.CONFLICT and exc.code == "claim_unreadable" and not str(exc).count(".."),
+            f"do_pipeline_waiting refuses with claim_unreadable: {exc}",
+        )
+
+    class Broken:
+        def read(self):
+            raise files.StoreError("History entry 4 could not be read")
+
+    real = routes.Store
+    routes.Store = Broken
+    try:
+        for label, call in (
+            ("_claim_conflict", lambda: routes._claim_conflict([])),
+            ("do_pipeline_waiting", lambda: routes.do_pipeline_waiting({"selection": {"keys": ["6/1"]}})),
+        ):
+            try:
+                call()
+                check(False, f"{label} lets another StoreError through (it returned instead)")
+            except files.StoreError as exc:
+                check(not isinstance(exc, files.UnreadableClaim), f"{label} leaves a non-claim StoreError alone: {exc}")
+            except routes.PipelineRefusal as exc:
+                check(False, f"{label} mislabelled a non-claim StoreError as {exc.code}")
+    finally:
+        routes.Store = real
+
+
 CASES = (
+    case_the_waiting_read_refuses_only_for_an_unreadable_claim,
+    case_the_press_precheck_refuses_an_unreadable_claim,
     case_an_unparseable_live_row_is_refused_not_skipped,
     case_disjoint_in_one_drawer,
     case_overlap_in_one_drawer,

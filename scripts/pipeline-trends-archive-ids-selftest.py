@@ -3,6 +3,9 @@
 productId per SKU into `Market.readings_for_rows`, and must never resolve a product from
 scratch for a SKU the archive already covers.
 
+Protects: The trends route reuses the archive's verified product ids and never resolves a product it already covers.
+Governs: D254
+
 WHAT THIS PROVES. Measured 2026-09-27 on a real demo-mirror recording: a
 `/pipeline/runs/<name>/trends` request over ~400 SKUs timed out at the client's 30s GET
 timeout. Reproduced in isolation: 400 failed `Market.category_id()` calls (the shape of

@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """`make subagent-override-selftest` — the `subagent override` row, proved by violating it.
 
+Protects: The subagent override row finds a forgotten model override, including one in a nested worktree's settings.
+Governs: D18, D161
+
 WHY THIS EXISTS. The row's whole claim is that it can tell a subagent-model override that is
 "set on purpose, right now" from one that is forgotten, and that its discovery reaches a
 nested git worktree's own settings file — the exact place the 2026-09-19 incident sat, which a

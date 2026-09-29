@@ -1,5 +1,8 @@
 """T3 — Join coverage.
 
+Protects: Every identified card matches exactly one export row, or is reported unmatched in both directions before any output is written.
+Governs: D25
+
 For a batch of identified cards, every card matches exactly one fixture row for its
 resolved condition string. Report unmatched in BOTH directions before any output is
 written.

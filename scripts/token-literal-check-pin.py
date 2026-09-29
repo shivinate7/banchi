@@ -57,10 +57,13 @@ def main() -> int:
             print(f"  {entry.file}  {entry.property}: {entry.value}  ({entry.reason})")
         return 1
 
+    off = [f for f in findings if f.family == tlc.OFF_SCALE]
+    findings = [f for f in findings if f.family != tlc.OFF_SCALE]
     counts = tlc.counts_by_file(findings)
     pin = {path: count for path, count in sorted(counts.items()) if count > 0}
+    off_pin = {p: c for p, c in sorted(tlc.counts_by_file(off).items()) if c > 0}
 
-    PIN_PATH.write_text(json.dumps({"files": pin}, indent=2) + "\n", encoding="utf-8")
+    PIN_PATH.write_text(json.dumps({"files": pin, "off_scale": off_pin}, indent=2) + "\n", encoding="utf-8")
     total = sum(pin.values())
     print(
         f"token-literal-check-pin: pinned {len(pin)} file(s), {total} finding(s) total, over "

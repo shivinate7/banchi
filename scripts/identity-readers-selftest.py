@@ -2,6 +2,9 @@
 """The evidence readers (docs/specs/identity-follows-sku.md §5.1, lane 4) — proved against
 the exact defect a review found in `c8cbb8a1`, HIGH, 2026-09-24.
 
+Protects: The identity evidence readers do not go silent when a card has no camera-read fields.
+Governs: D253
+
 THE DEFECT. Lane 4's first draft read `card.read_name`/`card.read_number`/
 `card.read_printed_total` unconditionally in both `cli/requeue.py:identified` and
 `cli/resolve.py:store_payload`. MEASURED on a copy of the owner's real store: every existing

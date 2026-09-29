@@ -1,3 +1,5 @@
+// Protects: Sales sorts, filters, cross-filters, drills down and deep-links over the orders payload, on a fixed fake clock.
+// Governs: D62, D201, D214, D217, D225, D281, D298
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 

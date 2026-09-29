@@ -54,6 +54,8 @@
     "054-capture-undo-13th-row-flake.md",
     "055-audit-self-test-no-node-modules.md",
     "056-provision-selftest-race-case.md",
-    "057-emit-buried-box.md"
+    "057-emit-buried-box.md",
+    "058-h-palettes-unlanded.md",
+    "059-unreadable-claim-no-remedy.md"
   ]
 }
