@@ -67,8 +67,8 @@ login: it is for your own desk and network. Every route is in `app/src/App.tsx`'
 | Screen | Route | What it does |
 |---|---|---|
 | Home | `#/` | Ranks what the store waits on and states the top item in one sentence, with one action. |
-| Capture | `#/capture` | Fires the shutter when a card settles in frame. Keeps setup across browser resets. Undoes per sitting. `S` cuts a section as the card enters the box. |
-| Review | `#/review` | Shows one card at a time, photo first. Prices the Identify run before it spends. "Check first" previews what would be sent. |
+| Capture | `#/capture` | In auto mode, fires the shutter when a card settles in frame. Keeps setup across browser resets. Undoes per sitting. `S` cuts a section as the card enters the box. |
+| Review | `#/review` | Shows one card at a time, photo first. Prices the Identify run before it spends. "Check first" opens a composer that picks which cards to identify before anything is spent. |
 | Pricing | `#/pricing` | Merges every unsent copy into one worklist keyed by SKU, rows that need you on top, and one Send bar. A Live tab re-prices stale listings and never deletes one to do it. |
 | Orders | `#/orders` | Groups open orders by buyer. Solves the pick list as the fewest drawers to open across the ticked orders, and holds that order still while positions refresh. |
 | Shipping | `#/shipping` | Routes each order to an envelope or a tracked parcel, by value and by contents. |
