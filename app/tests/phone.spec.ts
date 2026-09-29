@@ -408,7 +408,7 @@ test.describe('on a touch screen at 820', () => {
     const routes = await routesFromNav(page)
     const failures: string[] = []
     for (const hash of routes) {
-      if (hash === '#/fulfillment') continue // his screen draws no shell and holds its own 44px floor
+      if (hash.endsWith('/fulfillment')) continue // his screen draws no shell and holds its own 44px floor
       await page.goto(hash)
       await page.waitForTimeout(400)
       failures.push(...(await sweep(page, hash, 'box')))
