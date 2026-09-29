@@ -126,7 +126,7 @@
   min-height: 0;
   display: grid;
   /* The stage and the last capture each hug their 9:16 frame, so the rail takes what is left. */
-  grid-template-columns: minmax(var(--cap-rail-w), 1fr) var(--cap-stage-w) var(--cap-last-w);
+  grid-template-columns: minmax(var(--cap-rail-w), 1fr) minmax(0, var(--cap-stage-w)) minmax(0, var(--cap-last-w));
   grid-template-rows: auto auto auto minmax(0, 1fr);
   grid-template-areas:
     'run stage last'
