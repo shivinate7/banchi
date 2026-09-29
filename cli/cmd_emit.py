@@ -290,6 +290,15 @@ def _report_withheld(withheld: List[dict], say) -> None:
         say(f"                   ... and {len(withheld) - 8} more")
 
 
+def _report_unstamped(missed: List[str], say) -> None:
+    """A copy `set_state` could not stamp (no record at its position) is named, never silent."""
+    if not missed:
+        return
+    say("")
+    say(f"unstamped        {len(missed)} copy(ies) could not be marked as sent: "
+        f"{', '.join(missed[:8])}{f' ... and {len(missed) - 8} more' if len(missed) > 8 else ''}")
+
+
 def _queue_withheld(writable, withheld: List[dict]) -> None:
     """Upsert one review entry per withheld position (§4.1's own routing), reusing
     `store/queues.py:Queue.upsert` exactly as `cli/cmd_join.py` does — the same primitive,
@@ -1467,7 +1476,7 @@ def run(args, say) -> int:
     try:
         with store.write() as writable:
             _claim_or_refuse(writable, going, basis, args, [c.sku for c in changes])
-            pushed, pushed_skus = _stamp_single(
+            pushed, pushed_skus, unstamped = _stamp_single(
                 writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source
             )
             _record_prices(writable, changes, run_dir.name)
@@ -1478,17 +1487,18 @@ def run(args, say) -> int:
         return 1
     return _after_single(
         args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus,
-        queue_line, stages, len(changes), disputed_positions,
+        queue_line, stages, len(changes), disputed_positions, unstamped,
     )
 
 
 def _stamp_single(writable, resolved, emitted, priced_flat, run_dir, sku_game, sku_source):
-    """The single-run write: stamp every matched copy, count the sent ones. `(pushed, skus)`.
+    """The single-run write: stamp every matched copy, count the sent ones. `(pushed, skus, unstamped)`.
 
     `sku_game` and `sku_source` are `run`'s per-SKU game and export source, which `bind_sku`
     needs (identity-follows-sku.md §4.1)."""
     pushed = 0
     pushed_skus = 0
+    unstamped: List[str] = []
     for match in resolved.matches.values():
         # IDENTITY IS WRITTEN FOR EVERY MATCHED SKU; ONLY THE COUNT WAITS FOR A FILE.
         #
@@ -1619,6 +1629,8 @@ def _stamp_single(writable, resolved, emitted, priced_flat, run_dir, sku_game, s
                     number_strategy=entry["join_key"],
                     expected_product_line=entry.get("product_line") or None,
                 )
+            if not stamped:
+                unstamped.append(key)
             if stamped and key in live_keys:
                 copies += 1
         if copies and match.sku in emitted:
@@ -1644,12 +1656,12 @@ def _stamp_single(writable, resolved, emitted, priced_flat, run_dir, sku_game, s
                 source="emit",
                 run=run_dir.name,
             )
-    return pushed, pushed_skus
+    return pushed, pushed_skus, unstamped
 
 
 def _after_single(
     args, say, resolved, run_dir, listed_skus, sub_skus, pushed, pushed_skus, queue_line, stages,
-    repriced=0, disputed_positions=(),
+    repriced=0, disputed_positions=(), unstamped=(),
 ) -> int:
     """What the single-run path says once its write has committed."""
     # ONLY WHEN SOMETHING REACHED A FILE. D54: the record is created by the first emit that
@@ -1666,6 +1678,7 @@ def _after_single(
     say(f"pushed           {pushed} copy(ies) across {pushed_skus} SKU(s) -> "
         f"{master.PUSHED}")
     _report_withheld(disputed_positions, say)
+    _report_unstamped(list(unstamped), say)
     listings = ", ".join(f"{k} {v}" for k, v in stages.items() if v)
     if listings:
         say(f"listings         {listings}")
@@ -1810,6 +1823,12 @@ def _bucket_files(game, group, split_threshold):
 
 
 def run_merged(args, say) -> int:
+    """`emit` over several runs. The deleted-box events are read once for the whole send."""
+    with resolve.deleted_read_once():
+        return _run_merged(args, say)
+
+
+def _run_merged(args, say) -> int:
     """`pkmnscan emit <run> <run> ...` — one import file over several runs (D86).
 
     THE DEDUPE IS WHY THIS IS NOT A CONCATENATION OF THE FILES `emit` ALREADY WROTE, and the
@@ -2104,7 +2123,9 @@ def run_merged(args, say) -> int:
     try:
         with store.write() as writable:
             _claim_or_refuse(writable, going, basis, args, sorted(changed))
-            pushed, pushed_skus = _stamp_merged(writable, merged_plan, shipped, resolved_by_run)
+            pushed, pushed_skus, unstamped = _stamp_merged(
+                writable, merged_plan, shipped, resolved_by_run
+            )
             _record_prices(writable, changes, ",".join(d.name for d in dirs))
             queue_line = writable.queue_summary
             stages = writable.inventory.listing_counts()
@@ -2114,14 +2135,15 @@ def run_merged(args, say) -> int:
     # THE RUN'S EMIT RECORD NAMES THE SKUS THAT ADDED A COPY (D54), never a price-only row.
     copied = [(target, [row for row in group if row.sku not in changed]) for target, group in written]
     return _after_merged(
-        dirs, copied, pushed, pushed_skus, queue_line, stages, say, disputed_positions
+        dirs, copied, pushed, pushed_skus, queue_line, stages, say, disputed_positions, unstamped
     )
 
 
 def _stamp_merged(writable, merged_plan, shipped, resolved_by_run):
-    """The merged write: stamp every copy once, count the sent ones. `(pushed, skus)`."""
+    """The merged write: stamp every copy once, count the sent ones. `(pushed, skus, unstamped)`."""
     pushed = 0
     pushed_skus = 0
+    unstamped: List[str] = []
     for row in merged_plan.skus:
         if row.sku not in shipped:
             continue
@@ -2181,6 +2203,8 @@ def _stamp_merged(writable, merged_plan, shipped, resolved_by_run):
                     number_strategy=entry["join_key"],
                     expected_product_line=entry.get("product_line") or None,
                 )
+            if not stamped:
+                unstamped.append(key)
             if stamped and key in live_keys:
                 copies += 1
         if copies:
@@ -2199,11 +2223,11 @@ def _stamp_merged(writable, merged_plan, shipped, resolved_by_run):
                 source="emit-merged",
                 run=",".join(sorted({leg.run for leg in row.legs})),
             )
-    return pushed, pushed_skus
+    return pushed, pushed_skus, unstamped
 
 
 def _after_merged(
-    dirs, written, pushed, pushed_skus, queue_line, stages, say, disputed_positions=()
+    dirs, written, pushed, pushed_skus, queue_line, stages, say, disputed_positions=(), unstamped=()
 ) -> int:
     """What the merged path says once its write has committed."""
     # THE RECEIPT IS PER RUN AND ADDS, NEVER SUBTRACTS (D54). Each run in the send records the
@@ -2221,6 +2245,7 @@ def _after_merged(
     say("")
     say(f"pushed           {pushed} copy(ies) across {pushed_skus} SKU(s) -> {master.PUSHED}")
     _report_withheld(disputed_positions, say)
+    _report_unstamped(list(unstamped), say)
     listings = ", ".join(f"{k} {v}" for k, v in stages.items() if v)
     if listings:
         say(f"listings         {listings}")

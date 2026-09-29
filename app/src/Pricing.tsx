@@ -2795,9 +2795,9 @@ export function Pricing() {
               sort={{ options: SORT_OPTIONS, value: sort, onChange: setSort, defaultValue: SORT_AT_REST }}
             />
           )}
-          {filtering ? <p className="pricing-filter-note">Filters change what you see. Send still covers every row.</p> : null}
+          {filtering ? <p className="pricing-filter-note">Filters hide rows only. Send covers all.</p> : null}
           {filtering && drawn.length === 0 ? (
-            <EmptyState icon="search" title="Nothing matches" body="Loosen the search or a filter to see more rows." />
+            <EmptyState icon="search" title="Nothing matches" body="Loosen a filter." />
           ) : null}
           <div className="pricing-list" data-copies={source.copies ? 'some' : 'none'}>
             <div className="pricing-caption" aria-hidden="true">

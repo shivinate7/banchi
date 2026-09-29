@@ -138,6 +138,9 @@ RETIRED = "retired"
 # module's own `_log` writes the state name as the event name at every other transition —
 # reusing that convention here rather than minting a second word for one fact.
 MOVED = "moved"
+# The event a whole box leaving the store writes. One home: `server/capture_server.py`,
+# `cli/resolve.py`, `cli/cmd_rescue.py` and `server/pipeline_routes.py` all read it.
+BOX_DELETED = "box_deleted"
 
 # THE HISTORY EVENT A RECLAIMED PHOTOGRAPH WRITES (D89). An event and not a state: the card
 # stays `sold`, and what changed is that the bytes behind `photo` are gone. Not a member of

@@ -98,7 +98,7 @@ def _stranded_because(payload: dict, inventory: master.Inventory, run: runs.Run)
     deleted = None
     for box in boxes:
         if deleted is None and inventory.box(box) is None:
-            deleted = Store().named_events("box_deleted")
+            deleted = Store().named_events(master.BOX_DELETED)
         sentence = inventory.box_disowns_run(
             box, run.name, run.created_at, bid=bid, deleted=deleted or ()
         )

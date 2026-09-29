@@ -969,7 +969,7 @@ def _deleted_box_names() -> Dict[int, str]:
     """
     out: Dict[int, str] = {}
     try:
-        events = Store().named_events("box_deleted")
+        events = Store().named_events(master.BOX_DELETED)
     except Exception:  # noqa: BLE001
         return out
     # Newest first, so an id that somehow appears twice keeps the name it was last deleted
@@ -1015,12 +1015,12 @@ def _send_keys(captures: Sequence["sidecar.Capture"]) -> List[str]:
     return [capture.key for capture in captures if capture.has_position]
 
 
+UNREADABLE_CLAIM_SENTENCE = "Sending is paused because one saved record cannot be read. Nothing was sent."
+
+
 def _unreadable_claim_sentence(exc: Exception) -> str:
-    """The refusal for a live claim the store cannot read. Nothing was started."""
-    return (
-        f"{str(exc).rstrip('. ')}. A claim that cannot be read cannot say which cards it holds, so no send can start "
-        "until it is fixed. Nothing in this send was started."
-    )
+    """The refusal for a live claim the store cannot read. The detail stays in the log, not on screen."""
+    return UNREADABLE_CLAIM_SENTENCE
 
 
 def _claim_conflict(captures: Sequence["sidecar.Capture"]) -> Optional[dict]:

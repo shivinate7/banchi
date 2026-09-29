@@ -22,6 +22,7 @@ flags keeping.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -1865,6 +1866,29 @@ def follow_moved(
     return at, None
 
 
+_DELETED_ONCE: Optional[dict] = None
+
+
+def deleted_events():
+    """The store's `box_deleted` events. Inside `deleted_read_once` the scan happens once."""
+    if _DELETED_ONCE is None:
+        return Store().named_events(master.BOX_DELETED)
+    if "events" not in _DELETED_ONCE:
+        _DELETED_ONCE["events"] = Store().named_events(master.BOX_DELETED)
+    return _DELETED_ONCE["events"]
+
+
+@contextlib.contextmanager
+def deleted_read_once():
+    """One emit reads the events table at most once, however many runs it handles."""
+    global _DELETED_ONCE
+    _DELETED_ONCE = {}
+    try:
+        yield
+    finally:
+        _DELETED_ONCE = None
+
+
 class DisownedRun(runs.RunError):
     """A run over a box that was deleted or replaced. `sentence` is the owner's one line
     (plain words, no mechanism), which `cli/cmd_emit.py` hands the Send screen."""
@@ -1932,7 +1956,7 @@ def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run
     deleted = None
     for box in boxes:
         if deleted is None and inventory.box(box) is None:
-            deleted = Store().named_events("box_deleted")
+            deleted = deleted_events()
         sentence = inventory.box_disowns_run(
             box, run.name, run.created_at, bid=scope_bid, deleted=deleted or ()
         )
@@ -1946,7 +1970,7 @@ def refuse_reallocated(payload: dict, inventory: master.Inventory, run: runs.Run
             f"drawer and is left as it is.\n"
             f"Nothing was joined, nothing was written, and no queue was touched.",
             f"Run {run.name} was over box {box}, which has been deleted or replaced since, "
-            f"so nothing was sent.",
+            f"so nothing was sent. Re-identify that box, or send without this run.",
         )
 
 

@@ -764,6 +764,12 @@ export function SendCard({
         <SendStanding key={send.stamp} send={send} takeBack={(stamp) => void takeBack(stamp)} takingBack={takingBack} />
       ))}
 
+      {(live.status?.unreadable_claims ?? 0) > 0 ? (
+        <Notice tone="warn" compact className="send-standing send-unreadable" title="Sending is paused">
+          One saved record cannot be read, so this list may miss a send. Nothing was sent.
+        </Notice>
+      ) : null}
+
       {warned.map((send) => (
         <TakenBackWarning key={send.stamp} send={send} dismiss={(stamp) => void dismiss(stamp)} dismissing={dismissing} />
       ))}
