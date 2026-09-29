@@ -1339,7 +1339,7 @@ COMPONENTS = [
                                         "product-history-selftest`, PATH GATED and IN "
                                         "`make check` as of D247's twenty-first entry "
                                         "(owner's word, 2026-09-23)."},
-            # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/revenue-plan.md` section 1,
+            # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/sales-plan.md` section 1,
             # second half; `D236`). The position is the SKU
             # (D212); quantity is the `cards` table's own state, never the marketplace
             # mirror. The series source is the archive (D219), one range at a time,

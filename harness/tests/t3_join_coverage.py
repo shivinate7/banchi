@@ -3574,7 +3574,7 @@ def _near_mint_row(sku: str, set_name: str, condition: str) -> dict:
 
 
 def _check_near_mint_candidates(c: Checks) -> None:
-    """docs/specs/card-variants.md section 3b: the review queue's own candidates narrowed to
+    """docs/specs/card-printings.md section 3b: the review queue's own candidates narrowed to
     Near Mint (D12, D137), through `cli/resolve.py:_near_mint_candidates` /
     `pipeline/games.py:near_mint_conditions` — never a fourth inline copy of the condition
     set.

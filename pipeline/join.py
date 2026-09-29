@@ -1918,7 +1918,7 @@ class Catalog:
         # SEALED PRODUCT SURVIVES and is not an exception to the rule so much as outside it —
         # see `tcgcsv.SEALED_CONDITION`, which carries the argument and the measurement.
         # `games.near_mint_conditions`, not restated here — see its own docstring
-        # (docs/specs/card-variants.md section 3b) for why this expression now lives in
+        # (docs/specs/card-printings.md section 3b) for why this expression now lives in
         # exactly one place rather than three.
         conditions = games.near_mint_conditions(game)
         conditions.add(tcgcsv.SEALED_CONDITION)

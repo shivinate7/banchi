@@ -2230,7 +2230,7 @@ export type ProductHistoryRange = {
  *
  *  `history_begins` IS COMPUTED FROM WHAT WAS ACTUALLY READ, never from the 357-day constant
  *  — a year of local archive is not a year of market history, and the two must never be
- *  conflated (`docs/specs/revenue-next.md`). */
+ *  conflated (`docs/specs/sales-findings.md`). */
 export type ProductHistoryPayload = {
   sku: string
   product_id: number | null

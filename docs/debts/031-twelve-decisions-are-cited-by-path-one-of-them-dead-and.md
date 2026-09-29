@@ -8,7 +8,7 @@ finding that is lost.
 
 **What was measured.** Two shapes exist. Only the first is this repo's defect.
 
-One slug-form path citation, and it is the worked example. `docs/specs/revenue-plan.md`, line 139,
+One slug-form path citation, and it is the worked example. `docs/specs/sales-plan.md`, line 139,
 carried a path naming the price-history archive entry. That entry was still an unclaimed
 slug. The claim ran on 2026-09-19 and allocated D219. The claim step rewrote the path by
 substituting the token. That produced a path to a file that does not exist. The real file

@@ -7868,7 +7868,7 @@ def _split_catalog_query(
     query: str, catalog
 ) -> Tuple[str, FrozenSet[str], FrozenSet[str]]:
     """`query`, split into the words that identify a NAME and the words that identify a
-    printing — docs/specs/card-variants.md section 3a.
+    printing — docs/specs/card-printings.md section 3a.
 
     `Catalog.from_export`'s own `export.rows` carries `Set Name` and `Rarity` on every row,
     and `_catalog_matches` below never read either — a term matching neither a name nor a
@@ -7973,7 +7973,7 @@ def _catalog_matches(catalog, game: str, query: str, card=None) -> List[dict]:
     would have offered.
 
     SET/RARITY TERMS FILTER RATHER THAN BEING FOLDED INTO THE NAME TEST (D137,
-    docs/specs/card-variants.md section 3a) — see `_split_catalog_query`. `Calm Rune
+    docs/specs/card-printings.md section 3a) — see `_split_catalog_query`. `Calm Rune
     Spiritforged` now ranks on `Calm Rune` alone (unchanged) and then keeps only the
     Spiritforged row; `Spiritforged` alone carries no name term at all, so every condition-
     scoped row is a candidate before the filter narrows it to that set — a query that is
@@ -16454,7 +16454,7 @@ class CaptureHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK, pipeline_routes.do_pipeline_price_now(asked)
                 )
             if path == "/pipeline/holdings-value":
-                # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/revenue-plan.md` section 1,
+                # UNSOLD STOCK, VALUED OVER TIME (`docs/specs/sales-plan.md` section 1,
                 # second half). NOT YET REACHABLE FROM A SCREEN — see
                 # `do_pipeline_holdings_value`'s own header. `range` defaults to `month`,
                 # the finest range the archive keeps.

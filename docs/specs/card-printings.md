@@ -1,6 +1,6 @@
 # Reaching the right printing
 
-**Status: BUILT.** D213 (a card's set and rarity come from the SKU) is the governing entry. Five
+**Status: BUILT.** D213 (the set is a stored fact) is the governing entry. Five
 parts are built. They are the name-to-printing chooser, the set and rarity columns, the matcher,
 the Near Mint filter and the uncapped candidate list. The set backfill has run on the
 owner's store. `./pkmnscan cards variants` is retired, and `./pkmnscan cards identity --write`

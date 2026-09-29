@@ -1,7 +1,7 @@
 """The per-product view's own read: one SKU's market history, archive-first, live-fallback
 (D227).
 
-WHAT THIS ANSWERS. `docs/specs/revenue-plan.md` section 3: one page per product, showing what
+WHAT THIS ANSWERS. `docs/specs/sales-plan.md` section 3: one page per product, showing what
 it has been selling for, with the owner's own sales marked on it. The owner's fills are
 already on the wire — `GET /orders` carries every line's SKU, quantity and unit price, and
 `app/src/Revenue.tsx` already reshapes that same payload client-side. This module answers the
@@ -118,7 +118,7 @@ def archive_payload(archive: PriceArchive, sku: str) -> Optional[List[dict]]:
 def history_begins(ranges: List[dict]) -> Optional[str]:
     """The earliest bucket start across every range this payload carries — the date the
     chart states as where its own history begins, computed from what was actually read
-    rather than from the 357-day constant (`docs/specs/revenue-next.md`'s own rule: a year of
+    rather than from the 357-day constant (`docs/specs/sales-findings.md`'s own rule: a year of
     local archive is not a year of market history, and the two must never be conflated)."""
     starts = [r["from"] for r in ranges if r.get("from")]
     return min(starts) if starts else None

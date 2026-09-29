@@ -1,4 +1,4 @@
-"""Unsold stock, valued at market and drawn as a series over time (`docs/specs/revenue-plan.md`
+"""Unsold stock, valued at market and drawn as a series over time (`docs/specs/sales-plan.md`
 section 1, second half — the half `D225` did not build).
 
 THE POSITION IS THE SKU (D212): every copy is fungible and no order claims one, so a card's

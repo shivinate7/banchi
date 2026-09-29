@@ -3,8 +3,8 @@
 **Status: BUILT.** `#/revenue` is a nav row on purpose. It was tried off-nav and reversed on the
 owner's word. D214 (sales shows gross, never profit) records why it is its own route and why it is
 gross-only. D217 (sales sorts, filters and deep links) records the sort, filter, cross-filter,
-drill-down and URL work. `docs/specs/revenue-plan.md` holds what was built beside it, and
-`docs/specs/revenue-next.md` holds the open findings.
+drill-down and URL work. `docs/specs/sales-plan.md` holds what was built beside it, and
+`docs/specs/sales-findings.md` holds the open findings.
 
 ## What it answers
 

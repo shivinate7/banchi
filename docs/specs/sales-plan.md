@@ -1,7 +1,7 @@
 # Sales: the build plan
 
 **Status: MOSTLY BUILT.** The owner settled this plan by interview. Each section carries its own
-status. `docs/specs/revenue-next.md` holds the findings and the constraints. This file holds what
+status. `docs/specs/sales-findings.md` holds the findings and the constraints. This file holds what
 was built about them and what is still owed.
 
 | section | status |
@@ -84,7 +84,7 @@ screen is `app/src/ProductHistory.tsx`. `scripts/product-history-selftest.py` pr
 wired into `make check`, following `scripts/pricearchive-selftest.py`.
 
 It is off-nav. The route's own SKU field is the control a person finds without a query string.
-`docs/specs/revenue-next.md` holds the twelve constraints. Three decide the design:
+`docs/specs/sales-findings.md` holds the twelve constraints. Three decide the design:
 
 - **The market series and the owner's fills are two kinds of observation.** The series is an
   aggregate of many transactions. The fills are exact. They are never one continuous series.

@@ -115,7 +115,7 @@ PHOTOS_RELOCATED = "photos_relocated"
 # table holds, which grows from one run to the next, and a migration that ran once at open
 # time could never re-answer a card whose export arrived later.
 #
-# NINE, FOR D219 (`docs/specs/revenue-plan.md` §4). `_add_price_history`
+# NINE, FOR D219 (`docs/specs/sales-plan.md` §4). `_add_price_history`
 # adds `price_history` and `price_history_sources` — the same purely-additive shape
 # `_add_readings` used at 5, two tables nothing older has. `pkmnscan archive sweep --write`
 # is the only writer, and an upgraded store's archive is correctly empty until the first
@@ -1296,7 +1296,7 @@ def _add_set_columns(conn: sqlite3.Connection) -> None:
 
 def _add_price_history(conn: sqlite3.Connection) -> None:
     """Schema 9: `price_history` and `price_history_sources`
-    (D219, `docs/specs/revenue-plan.md` §4).
+    (D219, `docs/specs/sales-plan.md` §4).
 
     `_add_readings`'s case one version up — two tables nothing older has, so there is
     nothing to backfill and nothing to read wrong. No receipt file, for the same reason

@@ -2572,7 +2572,7 @@ def _resolve(
 
 def _near_mint_candidates(rows, game: str) -> Sequence[dict]:
     """`rows` narrowed to the game's own Near Mint strings (D12, D137), for the review
-    screen's own candidate list — docs/specs/card-variants.md section 3b.
+    screen's own candidate list — docs/specs/card-printings.md section 3b.
 
     THE CATALOGUE LOOKUP ALREADY FILTERS (`pipeline/join.py:Catalog.from_export`), AND THE
     QUEUE'S OWN CANDIDATES DID NOT. `Catalog.from_export` narrows what a FRESH join builds a
@@ -2636,7 +2636,7 @@ def _candidate_rows(
     evidence of nothing, which is exactly how D23's filter reads it, and a screen that drew
     an empty string there would be asserting the row is unrated.
 
-    `game`, NARROWED TO NEAR MINT FIRST WHEN GIVEN (D137, docs/specs/card-variants.md section
+    `game`, NARROWED TO NEAR MINT FIRST WHEN GIVEN (D137, docs/specs/card-printings.md section
     3b) — see `_near_mint_candidates`. Optional and defaulting to no filter rather than
     required, so the harness's own direct calls over a fixture built with no game in mind are
     unchanged; `queue_entry` below always has one and always passes it."""

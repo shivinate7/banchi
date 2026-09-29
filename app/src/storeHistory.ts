@@ -4,7 +4,7 @@ import type { InventoryCard, ServerStatus } from './types'
  *
  * Two things live here: how a SITTING is recovered from the card map, and how a sitting
  * becomes the geometry the foot of the Home hero draws. Both are policy and both were
- * measured rather than chosen; the numbers are in `docs/specs/home-hero.md`.
+ * measured rather than chosen; the numbers sit in the comments below.
  *
  * ─── THE UNIT IS A SITTING, NOT A DAY AND NOT A RUN ─────────────────────────────────────────
  *

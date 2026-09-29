@@ -15547,7 +15547,7 @@ def check_catalog_number_fields_round_trip(checks: Checks) -> None:
 
 def check_catalog_set_rarity_match(checks: Checks) -> None:
     """`server/capture_server.py:_catalog_matches` sees `Set Name`/`Rarity`
-    (docs/specs/card-variants.md section 3a).
+    (docs/specs/card-printings.md section 3a).
 
     THE REAL CASE, OFF THE COMMITTED EXPORT, NOT A HAND-BUILT ONE. `Calm Rune` in
     `fixtures/riftbound_export_untouched.csv` is wider than the owner's own quoted example —

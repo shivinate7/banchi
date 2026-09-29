@@ -3,7 +3,7 @@
 **Status: OPEN FINDINGS AND STANDING RULES.** Five independent reviews of the Sales screen produced
 this file. D214 (sales shows gross, never profit) records why the screen exists, and D217 (sales
 sorts, filters and deep links) records what made it interactive. D278 (one product view, two
-frames) holds the price-history rules that every chart inherits. `docs/specs/revenue-plan.md` holds
+frames) holds the price-history rules that every chart inherits. `docs/specs/sales-plan.md` holds
 what was built. Defects the plan fixed are gone from this file. The findings below are still open,
 or were not re-checked against the tree, and each says which.
 

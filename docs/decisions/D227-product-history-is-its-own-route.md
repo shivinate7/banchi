@@ -1,8 +1,8 @@
 ## D227 — Product history is its own route
 
 **THE VIEW.** One page per product, deep-linkable. It shows what that product has been
-selling for. It marks the owner's own sales on it. `docs/specs/revenue-plan.md` section 3
-and `docs/specs/revenue-next.md`'s "The per product view comes second" set the twelve
+selling for. It marks the owner's own sales on it. `docs/specs/sales-plan.md` section 3
+and `docs/specs/sales-findings.md`'s constraints on the per-product view set the twelve
 constraints. This entry argues two of them. Whether this is a route or a lens on
 `#/revenue`. And how the market series and the owner's own fills are kept apart on screen.
 
@@ -47,7 +47,7 @@ live-editing conflict, not a design decision.
 
 ### Two kinds of observation, archive-first, and no second network policy
 
-`docs/specs/revenue-next.md` states the rule. The market series is an aggregate over many
+`docs/specs/sales-findings.md` states the rule. The market series is an aggregate over many
 transactions this store never saw. The owner's own fills are exact — a price, a quantity, a
 date, each one real. They may never be drawn as one continuous series. This entry's own
 contribution is where that split falls on the READ side, given the archive
@@ -78,6 +78,6 @@ sale.
 
 Cost basis is out of scope, along with a counterfactual re-priced at today's figure. So is
 any verdict comparing a fill to its bucket. All three are
-`docs/specs/revenue-plan.md` section 1's questions, not this entry's. This view draws two
+`docs/specs/sales-plan.md` section 1's questions, not this entry's. This view draws two
 kinds of observation side by side. It states their limits. It computes no comparison between
 them.

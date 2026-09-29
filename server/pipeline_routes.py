@@ -3753,7 +3753,7 @@ def _holdings_total_payload(total: "holdings.TotalPoint") -> dict:
 
 def do_pipeline_holdings_value(range_: str) -> dict:
     """`GET /pipeline/holdings-value?range=<range>` — unsold stock, valued at market and
-    drawn as a series over time (`docs/specs/revenue-plan.md` section 1, second half; D225
+    drawn as a series over time (`docs/specs/sales-plan.md` section 1, second half; D225
     already built the sold-cards half above this one).
 
     REACHED BY `#/revenue`: `app/src/Revenue.tsx` calls it through `getHoldingsValue`.

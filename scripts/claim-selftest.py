@@ -1581,7 +1581,7 @@ def main() -> int:
         # was written — the unclaimed file really is named `{entry}-a-third-thing.md` — and
         # exactly what a blind token substitution turns into a path that has never existed,
         # because the claim also adds the number to the FILENAME in the same pass. This is
-        # `docs/specs/revenue-plan.md`'s own line, reproduced rather than invented.
+        # `docs/specs/sales-plan.md`'s own line, reproduced rather than invented.
         write(split, "docs/specs/example.md",
               f"`docs/decisions/{entry}-a-third-thing.md` argues the key in full.\n")
         git(split, "add", "-A")
