@@ -322,6 +322,20 @@ class Rows(MutableMapping):
                 out.pop(key, None)
         return [(key, out[key]) for key in sorted(out)]
 
+    def high_water(self, column: str, unreadable: Sequence[str], **equals) -> Optional[int]:
+        """`MAX(column)` over matching rows (0 when none), straight off the source's index,
+        or None when this mapping cannot answer that way and the caller must walk.
+
+        None means: memory-backed; a WRITE session (`track`), whose objects may be mutated
+        in place beyond the source's sight; anything written or deleted this session; or a
+        row anywhere with a NULL in `unreadable`, which the walk exists to refuse by name.
+        A lock-free read snapshot changes nothing, so the source's answer is the answer.
+        """
+        if self.source is None or self._track or self._touched or self._deleted:
+            return None
+        top, bad = self.source.high_water(column, equals, tuple(unreadable))
+        return None if bad else top
+
     def distinct(self, column: str) -> set:
         """Every value one indexed column takes, across stored and loaded rows."""
         values: set = set()

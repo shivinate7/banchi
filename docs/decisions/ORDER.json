@@ -311,6 +311,7 @@
     "D302-demo-stock-images.md",
     "D303-every-image-is-scanned.md",
     "D304-orders-walk-rejoins-inventory.md",
-    "D305-reap-stops-only-its-own.md"
+    "D305-reap-stops-only-its-own.md",
+    "D306-worktreeinclude-carries-env.md"
   ]
 }

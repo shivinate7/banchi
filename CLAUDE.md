@@ -392,7 +392,8 @@ not rendered — not focusable, not reachable by a screen reader).
 ### Verifying a screen
 
 - `cd app && npx tsc --noEmit` prints nothing.
-- Look at it at 1440, 820 and 390, in both themes. No horizontal scroll at 390.
+- Look at it at 1440 and 820, in both themes. Look at 390 only when the owner reports a
+  phone problem (owner's ruling, 2026-09-28). The specs that assert phone layout stay in CI.
 - Anything a thumb presses is 40px or more.
 - `make design-check` asserts `docs/DESIGN.md`'s Fulfillment floors in a real browser: 20px
   body, 32px position labels, 320px photograph, 44px targets, 7:1 contrast, no jargon, no
@@ -609,8 +610,8 @@ Rationale, sales strategy, and open questions: `docs/CODES-DECISIONS.md`.
   exceptions. It runs at commit. A dated record that must quote a line writes it in words, as
   in "line 182, column 81". A citation of a symbol that has moved stays invisible, which D149
   ruled no check can see.
-- **A screen answers to the system**: `--bn-*` tokens only, verified at 1440, 820 and 390,
-  light and dark. `docs/DESIGN.md` is the record. `make docs-audit`'s `design tokens` row
+- **A screen answers to the system**: `--bn-*` tokens only, verified at 1440 and 820,
+  light and dark (390 only on an owner phone report). `docs/DESIGN.md` is the record. `make docs-audit`'s `design tokens` row
   locks every name and hex both ways.
 - **Main moves by pull request. A session never commits to it and never pushes it** (D42). A
   session merges on the owner's WORD, both halves as one operation, when the owner NAMES the
@@ -687,7 +688,7 @@ Three practices settle a brief before it goes out.
   layout.
   **NOT MECHANIZED:** a machine cannot tell a fence drawn around behaviour from one drawn
   around files, because both are prose in a brief.
-- **Show the screen before saying it looks right.** Render at 1440, 820 and 390, both themes,
+- **Show the screen before saying it looks right.** Render at 1440 and 820, both themes (390 only on an owner phone report),
   and look at the images.
 - Read `docs/decisions/` before proposing an architecture change
   (`scripts/decision-context.py` finds the governing entry. `make map ARGS=--decisions`
