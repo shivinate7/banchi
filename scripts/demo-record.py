@@ -776,9 +776,11 @@ def sweep_coverage(server: Server, space: Dict[str, object], recorded: Dict[str,
         str(entry["key"]) for entry in listed
         if isinstance(entry, dict) and entry.get("open") and entry.get("key")
     )
+    body = recorded.get("/orders", {}).get("body") or {}
     screen_walkable_orders = default_view_walkable_orders(listed)
+    landing_orders = default_view_walkable_orders(listed, body.get("resolution") or {})
 
-    record_walk_plans(open_orders, screen_walkable_orders, take_post)
+    record_walk_plans(open_orders, screen_walkable_orders, take_post, landing_orders)
 
 
 def owns_a_walkable_body(entry: dict) -> bool:
@@ -802,7 +804,7 @@ def buyer_key_of(entry: dict) -> str:
     return "order:%s" % entry.get("key")
 
 
-def default_view_walkable_orders(listed: Sequence[dict]) -> List[str]:
+def default_view_walkable_orders(listed: Sequence[dict], resolution: Optional[dict] = None) -> List[str]:
     """The exact set `Orders.tsx`'s "Walk all N buyers" ticks on a FRESH page load: every
     walkable order (`owns_a_walkable_body`) belonging to a buyer group that holds at least
     one truly OPEN order (`inOpenBase`, `app/src/Orders.tsx`, with `finished` empty —
@@ -811,7 +813,26 @@ def default_view_walkable_orders(listed: Sequence[dict]) -> List[str]:
     is never ticked, even though each of its orders individually passes
     `owns_a_walkable_body` — the gap a store-wide walkable set (this function's own first
     version) missed, measured on the real mirror as 305 orders recorded against the 97 the
-    real press asked for (CI run 36322624741, 2026-09-27)."""
+    real press asked for (CI run 36322624741, 2026-09-27).
+
+    WITH `resolution` (`GET /orders`' own `resolution`), ONLY THE PULLABLE BUYERS, the screen's
+    landing since 2026-09-28 (`Orders.tsx`'s `groupPullable`: a buyer with an open order whose
+    line still owes a copy that is on hand, `owed - outstanding > 0`). Without it, every buyer
+    with an open order, the view with Hide unpullable off. Measured on the committed mirror:
+    35 of 70 buyers, 39 orders, the set "Walk 35" sends (DEBT60)."""
+    lines_of = {
+        str(one.get("key")): one.get("lines") or []
+        for one in ((resolution or {}).get("orders") or [])
+        if isinstance(one, dict)
+    }
+
+    def pullable(bucket: List[dict]) -> bool:
+        return any(
+            entry.get("open")
+            and any(max(0, line.get("owed", 0) - line.get("outstanding", 0)) > 0 for line in lines_of.get(str(entry["key"]), []))
+            for entry in bucket
+        )
+
     groups: Dict[str, List[dict]] = {}
     for entry in listed:
         if not isinstance(entry, dict) or not entry.get("key"):
@@ -820,13 +841,15 @@ def default_view_walkable_orders(listed: Sequence[dict]) -> List[str]:
     return sorted(
         str(entry["key"])
         for bucket in groups.values()
-        if any(entry.get("open") for entry in bucket)
+        if any(entry.get("open") for entry in bucket) and (resolution is None or pullable(bucket))
         for entry in bucket
         if owns_a_walkable_body(entry)
     )
 
 
-def record_walk_plans(open_orders: Sequence[str], walkable_orders: Sequence[str], take_post) -> None:
+def record_walk_plans(
+    open_orders: Sequence[str], walkable_orders: Sequence[str], take_post, landing_orders: Sequence[str] = ()
+) -> None:
     """The walk-plan subject list: every SINGLE walkable order, plus each screen's own
     full "walk all" set.
 
@@ -849,6 +872,9 @@ def record_walk_plans(open_orders: Sequence[str], walkable_orders: Sequence[str]
         take_post("/orders/walk-plan", {"keys": list(open_orders)})
     if walkable_orders and list(walkable_orders) != list(open_orders):
         take_post("/orders/walk-plan", {"keys": list(walkable_orders)})
+    # The landing view's own "Walk N" (Hide unpullable on), a subset of the set above.
+    if landing_orders and list(landing_orders) not in (list(open_orders), list(walkable_orders)):
+        take_post("/orders/walk-plan", {"keys": list(landing_orders)})
 
 
 HISTORIES_ROOT = REPO_ROOT / "fixtures" / "demo-price-history"

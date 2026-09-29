@@ -2859,7 +2859,15 @@ function PullStage({
      search) opens with the toggle off: the link's answer is never hidden by the default. Read
      once, at mount, so a pick made later never flips the rest state under the hand. */
   const viewQuery = useViewQuery()
-  const [pullableAtRest] = useState(() => !['show', 'status', 'buyer', 'order', 'q', 'unknown'].some((key) => viewQuery.has(key)))
+  /* NOT IN THE PUBLISHED DEMO (a stopgap, named): "Walk N" over the pullable buyers ticks a set
+     (39 orders on the mirror) that the recording holds no plan for, and the demo refuses any
+     other ticked set, so the walk drew "Could not read where the copies are". The recording
+     has the walk-all set of every open buyer, so the demo lands with the toggle off. The cause
+     is `scripts/demo-record.py:default_view_walkable_orders`, now fixed; the committed mirror
+     still lacks the plan until the owner's `make demo-mirror` (DEBT60,
+     the pullable set is not recorded), after which this line goes. Module-local, like `OrdersShipStage.tsx`'s own, so an ordinary build folds it. */
+  const IS_DEMO = __BN_DEMO__
+  const [pullableAtRest] = useState(() => !IS_DEMO && !['show', 'status', 'buyer', 'order', 'q', 'unknown'].some((key) => viewQuery.has(key)))
   const [hideUnpullable, setHideUnpullable] = useViewFlag('pullable', pullableAtRest)
 
   /* THE SECOND TIER'S CACHE: real picks and places, fetched on demand for exactly the orders

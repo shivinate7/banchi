@@ -361,7 +361,13 @@ test.describe('the published demo draws what reviewers grade', () => {
     // filling in. Wait for a row itself, web-first, before counting.
     const walkRows = walk.getByRole('button')
     await expect(walkRows.first()).toBeVisible()
-    expect(await walkRows.count()).toBeGreaterThan(0)
+    // THE LIST APPEARS BEFORE THE PRESS DOES ANYTHING (the selected buyer's own walk is
+    // already drawn), so "a row exists" passed on that list and raced the walk-all plan the
+    // press asks for (main's demo run 36599655970 caught the race under CI load). The
+    // walk-all plan is many rows and the single buyer's is a few: wait for the many. A plan
+    // the recording lacks replaces the list with a notice, and this then fails, on any speed.
+    await expect.poll(() => walkRows.count(), { message: 'the walk-all plan never replaced the single-buyer list' }).toBeGreaterThan(20)
+    await expect(page.getByText('Could not read where the copies are')).toHaveCount(0)
     await expect(page.getByText(REFUSAL)).toHaveCount(0)
   })
 
