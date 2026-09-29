@@ -555,7 +555,7 @@ export function PageHeader({
 
 /* ---- Empty frame -------------------------------------------------------------------- */
 /** The block an empty or lone state sits in: fills the frame to `--bn-empty-w`, centered
- *  (D-empty-state-fills-the-frame). A screen keeps no cap of its own. */
+ *  (D309). A screen keeps no cap of its own. */
 export function EmptyFrame({
   as: Tag = 'div',
   className,
