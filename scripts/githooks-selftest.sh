@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # The main guard checks itself, in a repository built and destroyed for the purpose.
+# Protects: The main-branch guard hooks refuse a local move and a push of main, proved in a throwaway repository.
+# Governs: D18, D42
 #
 # WHY THIS EXISTS. `scripts/githooks/reference-transaction` and its pre-push sibling cannot be
 # exercised in this repository without arming them here first, and `core.hooksPath` is stored

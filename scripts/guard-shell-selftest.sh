@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # `make guard-shell-selftest` — scripts/guard-shell.py, proved by committing its six mistakes.
+# Protects: The shell guard refuses each of its mistakes, proved by committing each mistake in a throwaway repository.
+# Governs: D18
 #
 # WHY IT IS NOT A TABLE OF ASSERTIONS. Every clause in that guard claims a command does
 # something a session did not intend, and this repo's standard for that kind of claim is

@@ -1,3 +1,4 @@
+// Protects: A section with no cards is hidden from the Inventory ruler, its caption and the box header, and stays reachable in the move picker.
 import { test, expect, type Page } from '@playwright/test'
 import type { GameRegistry } from '../src/types'
 import { sealEveryTest } from './shell'

@@ -1,3 +1,5 @@
+// Protects: Where a card sits reads the same on every screen: box by name, card number within its section, the exact card on the ruler.
+// Governs: D116, D259, D260
 import { test, expect, type Page, type Route } from '@playwright/test'
 
 import { settleFonts } from './fontsReady'

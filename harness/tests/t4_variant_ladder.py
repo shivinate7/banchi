@@ -1,5 +1,8 @@
 """T4 — Variant ladder.
 
+Protects: Each stage of the variant ladder picks the right condition string and price, and no flag ever overrides a recorded finish claim.
+Governs: D3
+
 For a card with normal, holo, and reverse rows in the fixture, assert each ladder stage
 resolves to the correct condition string and price.
 

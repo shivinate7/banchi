@@ -2,6 +2,9 @@
 """`pipeline/pricehistory.py:Market` fails fast once the network is genuinely unreachable,
 proved against a counting fetcher and a fake clock — no network, no sleep spent for real.
 
+Protects: The price-history market fails fast once the network is unreachable instead of sleeping through every retry.
+Governs: D62
+
 WHAT THIS PROVES. Measured 2026-09-27 on a real demo-mirror recording:
 `GET /pipeline/runs/<name>/trends` over 387 SKUs took 102.2s under the recorder's offline
 network guard — `cProfile` isolated `time.sleep` (95.85s of it, 613 calls) as the cause.

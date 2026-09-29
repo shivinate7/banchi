@@ -4,6 +4,9 @@ cache, and answers `None` with no cache at all — never a network call either w
 here is given no `fetcher`, so a miss that were to reach the network raises, which this test
 would surface as a crash rather than a silent pass).
 
+Protects: Stock images answer offline from a warmed disk cache and answer nothing, with no network call, when the cache is empty.
+Governs: D302
+
 Proves the one fact the demo mirror depends on: `pipeline/stockimages.py`'s own disk cache
 slug (`tcgcsv/<category>/<group>/products`) is the SAME one
 `cli/cmd_pricearchive.py:market_cache_dir` already warms on the owner's Mac, so copying that

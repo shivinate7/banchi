@@ -1,3 +1,5 @@
+// Protects: Review shows the photograph beside the choices and lets the owner resolve each card in the queue.
+// Governs: D23, D24, D28, D32, D46, D77, D118, D218
 import { test, expect, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { sealEveryTest } from './shell'

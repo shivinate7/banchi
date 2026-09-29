@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """`cli/archive_review.py`, proved against a throwaway store.
 
+Protects: The price-archive review command refuses each unresolvable case in its own words and writes nothing on a preview, with no network call.
+Governs: D234, D247
+
 NO NETWORK CALL. Every refusal below is a fabricated string, shaped exactly the way
 `pipeline/pricehistory.py:NotResolvable`, `Unreachable` and `Blocked` already write one —
 `cli/archive_review.py` never talks to a market, and neither does this test.

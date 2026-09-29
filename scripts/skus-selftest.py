@@ -2,6 +2,9 @@
 """`store/skus.py` and `pipeline/skus.py` proved against a throwaway store
 (docs/specs/identity-follows-sku.md §3.2, lane 0).
 
+Protects: The SKU table adopts files without letting an older file overwrite a newer one, and has no delete path.
+Governs: D18
+
 WHAT THIS PROVES. The four committed-fixture shapes the lane's own proof names — a second
 adopt over unchanged files, an older file that must never overwrite a newer one's facts, a
 changed fact that writes one `sku_facts_changed` event and keeps the row, and that

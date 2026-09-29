@@ -2,6 +2,9 @@
 """LANE 3B — the CLI writers move onto `Inventory.bind_sku`
 (docs/specs/identity-follows-sku.md §4.2, §3.2 item 3).
 
+Protects: The CLI writers bind a SKU through the one bind function, on a fresh store.
+Governs: D18, D137, D253
+
 WHAT THIS PROVES, the lane's own "done when" line (§11's table):
 
   1. `pkmnscan emit` (the join's commit, D253 comment: "identity is the row's by

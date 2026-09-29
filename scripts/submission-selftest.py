@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """`make submission-selftest` — the claim table, proved by violating it.
 
+Protects: A second identify press over already-claimed cards is refused, including under concurrent presses.
+Governs: D18, D136
+
 WHY THIS EXISTS. `store/submissions.py` is the only binding in this pipeline that protects a
 dollar: it refuses a second `identify` press over cards a live run has already claimed. That
 claim is worth exactly what its REFUSALS are worth, and a refusal cannot be exercised against

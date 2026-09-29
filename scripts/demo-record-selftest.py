@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """`scripts/demo-record.py`'s `Server`, proved against the hang measured 2026-09-26.
 
+Protects: The demo recorder's child server never hangs on a full output pipe during a long sweep.
+
 WHAT HUNG. `CaptureHandler.log_message` (`server/capture_server.py`) prints one line per
 request. `Server.__enter__` piped the child's stdout (`subprocess.PIPE`) but read it only
 once, at startup — for the rest of a real sweep (thousands of requests) nothing ever

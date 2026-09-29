@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # scripts/merge-pr.py's local half, in a repository built and destroyed for the purpose.
+# Protects: The local half of the merge command moves main only as intended, proved in a throwaway repository.
+# Governs: D18, D42
 #
 # WHY THIS EXISTS. The local half MOVES main. It cannot be exercised in this repository
 # without moving the main every live worktree is cut from, which is the incident D42 was built

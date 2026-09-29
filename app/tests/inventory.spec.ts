@@ -1,3 +1,5 @@
+// Protects: Every Inventory capability (walk, search, copies, box operations, claims, sold) is reachable from a screen and sends the right request.
+// Governs: D10
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import type { GameRegistry, ResolvedOrder } from '../src/types'
 import { settleFonts } from './fontsReady'

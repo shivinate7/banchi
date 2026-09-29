@@ -1,3 +1,5 @@
+// Protects: No screen repeats a sentence across many cards, states a fact twice, runs a sentence over 25 words, or repeats its own heading in a caption.
+// Governs: D18, D284
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'

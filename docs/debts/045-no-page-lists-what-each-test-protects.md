@@ -1,4 +1,4 @@
-## 45 — no page lists what each test protects, so the owner cannot confirm the tests are current
+## 45 — ~~no page lists what each test protects, so the owner cannot confirm the tests are current~~ — CLOSED 2026-09-29, `docs/TESTS.md`
 
 **The finding.** On 2026-09-26 the owner asked where to view the whole list of tests. The
 owner wants to confirm that each test is still current. No such view exists. The tests live
@@ -22,3 +22,11 @@ the page. The page is published privately for the owner.
 
 **Why it is not done now.** The cost is about one agent's full session of reading. PR 4
 changes several screens, so a page written now goes stale at once. Do it after PR 4 lands.
+
+**How it closed (2026-09-29, the owner's word).** Every test file carries a `Protects:` line and
+a `Governs:` line in its own header comment. `make tests-page ARGS=--write` writes
+`docs/TESTS.md` from them, grouped by area. The top of the page flags each test that cites a
+superseded decision. `make docs-audit`'s `test purposes` row fails a file with no `Protects:`
+line and fails a page that is stale against the headers. The second flag in "What would close
+it", a test that asserts text or layout the owner changed, is NOT built: no machine can see
+that. A person still reads the sentence and judges it.

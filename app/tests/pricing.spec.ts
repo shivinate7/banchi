@@ -1,3 +1,5 @@
+// Protects: Pricing shows every unsent copy, writes only what the owner sets, and sends only what the Send bar says.
+// Governs: D49, D59, D62, D79, D86, D118, D218, D277
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { settleFonts } from './fontsReady'
 import { settleMotion } from './motionSettled'

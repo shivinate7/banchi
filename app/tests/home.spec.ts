@@ -1,3 +1,5 @@
+// Protects: Home's "cannot be filled" figure never counts an order that the feed has already closed.
+// Governs: D63, D114, D121, D202, D218
 import { test, expect, type Route } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { runRow } from './routeFixtures'

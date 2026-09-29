@@ -1,5 +1,8 @@
 """T7's box map cases (D262, D264, D265): a section moves whole, and nothing it owns is lost.
 
+Protects: Moving a section moves it whole and loses nothing it owns.
+Governs: D165, D262, D264, D265
+
 A SIBLING OF `t7_store_and_seams.py`, NOT A NEW HARNESS TEST. `t7_store_and_seams.run()` calls
 every `check_*` here, so T7's verdict carries them and the harness still has ten tests. They
 live in their own file because they share one fixture (a box of named sections) and the

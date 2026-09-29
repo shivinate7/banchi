@@ -3,6 +3,9 @@
 store or kill signal — the way `demo-record-walkplan-selftest.py` proves its own subject,
 against the real functions with a fake recording collector.
 
+Protects: An interrupted demo recording resumes from its cache of answered routes instead of starting again.
+Governs: D193, D295
+
 WHAT THIS IS FOR. The owner: "is there anyway u can have it chunking so that way it's not
 starting from zero each time". A real mirror sweep touches hundreds of routes and can run
 for minutes; a build interrupted partway used to lose every route it had already answered.

@@ -1,3 +1,5 @@
+// Protects: Every row of the Fulfillment constraints table in DESIGN.md holds on the Fulfiller's screen, measured from the rendered page.
+// Governs: D5, D10, D13, D93, D115, D136, D212, D218
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import { settleFonts } from './fontsReady'

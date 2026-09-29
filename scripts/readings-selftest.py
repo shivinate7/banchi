@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """`store/readings.py` and `pipeline/readings.py` proved against a throwaway store (D189).
 
+Protects: The stored market readings equal an independent walk of every run, and refresh only what changed.
+Governs: D18, D189
+
 WHAT THIS PROVES AND WHY IT IS SEPARATE FROM A GOLDEN REIMPLEMENTATION. `_readings()` in
 `server/pipeline_routes.py` used to walk every run's `pricing.json` and the newest live
 export on every request; that walk moved to `pipeline/readings.py:collect()`, run once by

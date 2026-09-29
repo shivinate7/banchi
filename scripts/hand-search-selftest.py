@@ -2,6 +2,9 @@
 """`make hand-search-selftest` — proves `app/eslint.config.js`'s `HAND_SEARCH_RULES` sees the
 shape it is for, red on a hand-rolled search and green everywhere else.
 
+Protects: The lint rule against hand-rolled search goes red on each hand-rolled shape and stays green elsewhere.
+Governs: D247, D271
+
 WHY THIS EXISTS (F11c, the reviewer's own finding on lane F11b). The round-one rule matched
 one shape only, `x.toLowerCase().includes(y)`. It let three real shapes through silently:
 `.startsWith`/`.endsWith`/`.indexOf` beside `.includes`, `.toLocaleLowerCase()` beside

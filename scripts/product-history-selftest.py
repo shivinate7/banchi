@@ -2,6 +2,9 @@
 """`pipeline/productview.py` and `server/pipeline_routes.py:do_product_history`, proved
 against a throwaway store (D227).
 
+Protects: The product history route answers from the archive without a network call and falls back to the live market on a miss.
+Governs: D226, D227, D247
+
 NO NETWORK CALL for the archive-hit arm — the whole reason this route may answer without
 leaving the machine. The live-fallback arm is exercised with a `FakeMarket`, modelled on
 `scripts/pricearchive-selftest.py`'s own stand-in, so this file adds no network dependency

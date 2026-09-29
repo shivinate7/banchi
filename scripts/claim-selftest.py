@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """`scripts/claim-ids.py` proved against a throwaway repository (D140).
 
+Protects: Claiming a numbered record allocates above what main has taken, not above the branch's own copy.
+Governs: D18, D140
+
 THE ALLOCATION IS THE PART THAT CANNOT BE ASSERTED ABOUT. Everything else in that script is
 text substitution, and the one thing it must get right — allocating against what MAIN has
 taken rather than against the branch's own copy — is only visible when main and the branch

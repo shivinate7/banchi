@@ -3,6 +3,9 @@
 two failures: the `2^n` powerset explosion (2026-09-27, first round) and the two-screens-
 two-sets mismatch it left behind (2026-09-27, second round).
 
+Protects: The demo recorder picks a small walk-plan subject list and never grows it with the number of open orders.
+Governs: D269
+
 WHAT HUNG, FIRST ROUND. The old rule recorded every SUBSET of the ticked open orders (`2^n`
 sets), refusing outright past `WALK_PLAN_ORDERS = 7`. A 60-card sample never has more than a
 handful of open orders, so this never tripped in review. The owner's real store does: 71

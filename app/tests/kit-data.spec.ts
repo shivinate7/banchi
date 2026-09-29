@@ -1,3 +1,5 @@
+// Protects: The kit data primitives and the shared search matcher give the right output and draw right at four widths in both themes.
+// Governs: D118, D195, D288
 import { test, expect, type Page } from '@playwright/test'
 
 import { sealEveryTest } from './shell'

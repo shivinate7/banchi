@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """The primary checkout's self-sync, proved by violating it.
 
+Protects: The primary checkout syncs to main only when safe and refuses on uncommitted work, proved on a throwaway clone.
+Governs: D18, D42, D158
+
 A THROWAWAY CLONE WITH ITS OWN WORKTREES, AND NEVER THIS ONE. `scripts/serve-selftest.py` and
 `scripts/janitor-selftest.sh` both carry the reason and it is stronger here than in either:
 this thing SWITCHES BRANCHES AND MOVES `refs/heads/main`. Run against the real clone it would

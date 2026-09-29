@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """`make cid-selftest` — the card's stable name and the photograph store, proved by violating them.
 
+Protects: A card keeps its stable name, and the photograph store refuses and saves work correctly on a throwaway store.
+Governs: D18, D172, D183
+
 WHY THIS EXISTS. D172 gives a card a name and
 `D183` files its photograph under that name. Both are
 worth exactly what their refusals and their WORK-SAVINGS are worth, and neither can be

@@ -1,3 +1,5 @@
+// Protects: The published static demo build draws real data, photographs and controls on every screen a reviewer grades it on.
+// Governs: D183, D227, D271, D277, D282, D295, D301
 /**
  * The published demo, as built: every screen a reviewer grades on it must draw its data.
  *

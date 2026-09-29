@@ -1,3 +1,5 @@
+// Protects: The Capture section picker fills its row, steps with the bracket keys, sends S with the right section, falls back plainly on a stale pick, and never moves the shutter.
+// Governs: D118, D128, D164, D260, D264
 import { expect, test } from '@playwright/test'
 import { sealEveryTest } from './shell'
 import type { Page } from '@playwright/test'

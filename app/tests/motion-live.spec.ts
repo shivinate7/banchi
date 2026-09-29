@@ -1,3 +1,5 @@
+// Protects: The motion trigger's browser wiring arms on the mode toggle, reads real video frames, turns a settle into a capture, and counts a capture with no box as dropped.
+// Governs: D19, D81, D84, D218
 import { readFileSync } from 'node:fs'
 
 import { expect, test } from '@playwright/test'

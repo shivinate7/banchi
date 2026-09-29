@@ -1,3 +1,5 @@
+// Protects: The motion state machine gives the exact answer on hand-built frame sequences.
+// Governs: D81, D84, D131
 import { expect, test } from '@playwright/test'
 
 import { DEFAULT_PARAMS, MotionMachine } from '../src/motion'
