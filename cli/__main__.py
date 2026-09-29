@@ -514,6 +514,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="with --live: settle the ledger. Previews without it.",
     )
+    reconcile.add_argument(
+        "--phantoms",
+        help="a live export: list SKUs TCGplayer holds beyond what is really on hand "
+        "(ghost cards of a buried box). Read-only.",
+    )
+    reconcile.add_argument("--out", help="with --phantoms: write the worklist CSV here")
 
     # --------------------------------------------------------------------------- queue
     #
