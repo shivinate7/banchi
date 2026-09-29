@@ -120,7 +120,7 @@ from decimal import Decimal
 from http import HTTPStatus
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, FrozenSet, Iterable, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Any, Dict, FrozenSet, Iterable, List, NamedTuple, Optional, Sequence, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
